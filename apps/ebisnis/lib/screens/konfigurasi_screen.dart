@@ -1,0 +1,499 @@
+import 'package:core_device/core_device.dart';
+import 'package:flutter/material.dart';
+import '../api_client.dart';
+import '../sesi.dart';
+
+/// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
+/// Electron) -- 3 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
+/// (server, `toko_profil_ambil`/`_simpan`), Akun Pengguna (server,
+/// `pedagang_list`/`pedagang_ubah`/`akun_tambah`). Bagian "Tampilan Aplikasi"
+/// Electron (judul window/logo) sengaja TIDAK diporting -- itu chrome desktop,
+/// tak ada padanan di HP.
+class KonfigurasiScreen extends StatefulWidget {
+  const KonfigurasiScreen({super.key});
+  @override
+  State<KonfigurasiScreen> createState() => _KonfigurasiScreenState();
+}
+
+class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Konfigurasi'),
+        bottom: TabBar(controller: _tab, tabs: const [
+          Tab(text: 'Identitas Mesin'),
+          Tab(text: 'Profil Toko'),
+          Tab(text: 'Akun Pengguna'),
+        ]),
+      ),
+      body: TabBarView(controller: _tab, children: const [
+        _TabIdentitasMesin(),
+        _TabProfilToko(),
+        _TabAkunPengguna(),
+      ]),
+    );
+  }
+}
+
+class _TabIdentitasMesin extends StatefulWidget {
+  const _TabIdentitasMesin();
+  @override
+  State<_TabIdentitasMesin> createState() => _TabIdentitasMesinState();
+}
+
+class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
+  final _namaController = TextEditingController();
+  bool _memuat = true;
+  bool _menyimpan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    _namaController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    await IdentitasMesin.instance.muat();
+    if (mounted) {
+      setState(() {
+        _namaController.text = IdentitasMesin.instance.namaMesin;
+        _memuat = false;
+      });
+    }
+  }
+
+  Future<void> _simpan() async {
+    setState(() => _menyimpan = true);
+    await IdentitasMesin.instance.simpanNamaMesin(_namaController.text.trim());
+    if (mounted) {
+      setState(() => _menyimpan = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama mesin tersimpan.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Identitas fisik perangkat ini -- dikirim di setiap transaksi supaya laporan bisa membedakan mesin/HP kasir yang mana.',
+            style: TextStyle(fontSize: 12, color: Colors.black54)),
+        const SizedBox(height: 16),
+        TextField(
+          readOnly: true,
+          controller: TextEditingController(text: IdentitasMesin.instance.idMesin),
+          decoration: const InputDecoration(labelText: 'ID Mesin (permanen, otomatis)', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _namaController,
+          decoration: const InputDecoration(labelText: 'Nama Mesin (bisa diubah)', hintText: 'mis. Kasir Depan', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _menyimpan ? null : _simpan,
+            child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TabProfilToko extends StatefulWidget {
+  const _TabProfilToko();
+  @override
+  State<_TabProfilToko> createState() => _TabProfilTokoState();
+}
+
+class _TabProfilTokoState extends State<_TabProfilToko> {
+  bool _memuat = true;
+  bool _menyimpan = false;
+  String? _error;
+  bool _bolehUbah = false;
+  final _kode = TextEditingController();
+  final _nama = TextEditingController();
+  final _alamat = TextEditingController();
+  final _kota = TextEditingController();
+  final _kodePos = TextEditingController();
+  final _telp = TextEditingController();
+  final _email = TextEditingController();
+  final _picNama = TextEditingController();
+  final _picHp = TextEditingController();
+  final _npwp = TextEditingController();
+  final _jamOperasional = TextEditingController();
+  final _keterangan = TextEditingController();
+  final _pesanTerimaKasih = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_kode, _nama, _alamat, _kota, _kodePos, _telp, _email, _picNama, _picHp, _npwp, _jamOperasional, _keterangan, _pesanTerimaKasih]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    setState(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('toko_profil_ambil');
+      final d = (hasil['data'] as Map<String, dynamic>?) ?? {};
+      _kode.text = '${d['kode'] ?? ''}';
+      _nama.text = '${d['nama'] ?? ''}';
+      _alamat.text = '${d['alamat'] ?? ''}';
+      _kota.text = '${d['kota'] ?? ''}';
+      _kodePos.text = '${d['kodePos'] ?? ''}';
+      _telp.text = '${d['telp'] ?? ''}';
+      _email.text = '${d['email'] ?? ''}';
+      _picNama.text = '${d['picNama'] ?? ''}';
+      _picHp.text = '${d['picHp'] ?? ''}';
+      _npwp.text = '${d['npwp'] ?? ''}';
+      _jamOperasional.text = '${d['jamOperasional'] ?? ''}';
+      _keterangan.text = '${d['keterangan'] ?? ''}';
+      _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
+      setState(() => _bolehUbah = hasil['bolehUbah'] == true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  Future<void> _simpan() async {
+    setState(() {
+      _menyimpan = true;
+      _error = null;
+    });
+    try {
+      await ApiClient.instance.aksi('toko_profil_simpan', {
+        'nama': _nama.text.trim(),
+        'alamat': _alamat.text.trim(),
+        'kota': _kota.text.trim(),
+        'kode_pos': _kodePos.text.trim(),
+        'telp': _telp.text.trim(),
+        'email': _email.text.trim(),
+        'pic_nama': _picNama.text.trim(),
+        'pic_hp': _picHp.text.trim(),
+        'npwp': _npwp.text.trim(),
+        'jam_operasional': _jamOperasional.text.trim(),
+        'keterangan': _keterangan.text.trim(),
+        'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil toko tersimpan.')));
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
+
+  Widget _field(String label, TextEditingController c, {int maxLines = 1}) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: c,
+          maxLines: maxLines,
+          enabled: _bolehUbah,
+          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), const SizedBox(height: 12), ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))]),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (!_bolehUbah)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text('Hanya admin/supervisor toko yang dapat mengubah profil ini.', style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+          ),
+        TextField(controller: _kode, readOnly: true, decoration: const InputDecoration(labelText: 'Kode Toko', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        _field('Nama Toko', _nama),
+        _field('Alamat', _alamat, maxLines: 2),
+        _field('Kota', _kota),
+        _field('Kode Pos', _kodePos),
+        _field('Telepon', _telp),
+        _field('Email', _email),
+        _field('PIC Nama', _picNama),
+        _field('PIC HP', _picHp),
+        _field('NPWP', _npwp),
+        _field('Jam Operasional', _jamOperasional),
+        _field('Keterangan', _keterangan, maxLines: 2),
+        _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih, maxLines: 2),
+        if (_bolehUbah)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _menyimpan ? null : _simpan,
+              child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TabAkunPengguna extends StatefulWidget {
+  const _TabAkunPengguna();
+  @override
+  State<_TabAkunPengguna> createState() => _TabAkunPenggunaState();
+}
+
+class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  bool _bolehKelola = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setState(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('pedagang_list');
+      setState(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _bolehKelola = hasil['bolehKelola'] == true;
+      });
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  Future<void> _bukaForm({Map<String, dynamic>? akun}) async {
+    final tersimpan = await showModalBottomSheet<bool>(context: context, isScrollControlled: true, builder: (_) => _FormAkun(akun: akun));
+    if (tersimpan == true) await _muat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), const SizedBox(height: 12), ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))]),
+        ),
+      );
+    }
+    return Scaffold(
+      floatingActionButton: _bolehKelola ? FloatingActionButton.extended(onPressed: () => _bukaForm(), icon: const Icon(Icons.person_add), label: const Text('Tambah Akun')) : null,
+      body: RefreshIndicator(
+        onRefresh: _muat,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+          children: [
+            if (_data.isEmpty)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('Belum ada akun.')))
+            else
+              ..._data.map((a) => Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text('${a['nama']} (${a['userid']})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('${a['keterangan'] ?? ''}'),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (a['supervisor'] == true) const Text('Supervisor', style: TextStyle(fontSize: 10, color: Color(0xFF0284C7))),
+                          Text(a['aktif'] == true ? 'Aktif' : 'Nonaktif', style: TextStyle(fontSize: 10, color: a['aktif'] == true ? const Color(0xFF2E7D32) : Colors.red)),
+                        ],
+                      ),
+                      onTap: _bolehKelola ? () => _bukaForm(akun: a) : null,
+                    ),
+                  )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FormAkun extends StatefulWidget {
+  final Map<String, dynamic>? akun;
+  const _FormAkun({required this.akun});
+  @override
+  State<_FormAkun> createState() => _FormAkunState();
+}
+
+class _FormAkunState extends State<_FormAkun> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _userid;
+  late final TextEditingController _password;
+  late final TextEditingController _nama;
+  late final TextEditingController _keterangan;
+  bool _aktif = true;
+  bool _supervisor = false;
+  bool _menyimpan = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.akun;
+    _userid = TextEditingController(text: a?['userid'] ?? '');
+    _password = TextEditingController();
+    _nama = TextEditingController(text: a?['nama'] ?? '');
+    _keterangan = TextEditingController(text: a?['keterangan'] ?? '');
+    _aktif = a?['aktif'] ?? true;
+    _supervisor = a?['supervisor'] ?? false;
+  }
+
+  @override
+  void dispose() {
+    _userid.dispose();
+    _password.dispose();
+    _nama.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _menyimpan = true;
+      _error = null;
+    });
+    try {
+      final ubah = widget.akun != null;
+      if (ubah) {
+        await ApiClient.instance.aksi('pedagang_ubah', {
+          'id': widget.akun!['id'],
+          'nama': _nama.text.trim(),
+          'keterangan': _keterangan.text.trim(),
+          'aktif': _aktif,
+          'supervisor': _supervisor,
+          if (_password.text.isNotEmpty) 'password_baru': _password.text,
+        });
+      } else {
+        await ApiClient.instance.aksi('akun_tambah', {
+          'userid': _userid.text.trim(),
+          'password': _password.text,
+          'nama': _nama.text.trim(),
+          'toko_id': Sesi.instance.tokoId,
+          'keterangan': _keterangan.text.trim(),
+          'supervisor': _supervisor,
+        });
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ubah = widget.akun != null;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Form(
+          key: _formKey,
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Text(ubah ? 'Ubah Akun' : 'Tambah Akun', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              if (_error != null)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                  child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                ),
+              if (!ubah)
+                TextFormField(
+                  controller: _userid,
+                  decoration: const InputDecoration(labelText: 'User ID *', border: OutlineInputBorder()),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                ),
+              if (!ubah) const SizedBox(height: 12),
+              TextFormField(
+                controller: _nama,
+                decoration: const InputDecoration(labelText: 'Nama *', border: OutlineInputBorder()),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _password,
+                obscureText: true,
+                decoration: InputDecoration(labelText: ubah ? 'Password Baru (kosongkan jika tak diubah)' : 'Password *', border: const OutlineInputBorder()),
+                validator: (v) => (!ubah && (v == null || v.length < 6)) ? 'Minimal 6 karakter' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(controller: _keterangan, decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder())),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Supervisor'), value: _supervisor, onChanged: (v) => setState(() => _supervisor = v)),
+              if (ubah) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Aktif'), value: _aktif, onChanged: (v) => setState(() => _aktif = v)),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _menyimpan ? null : _simpan,
+                  child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

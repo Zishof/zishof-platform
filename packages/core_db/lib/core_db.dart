@@ -257,6 +257,71 @@ class CoreDb {
     });
   }
 
+  Future<List<Map<String, Object?>>> listErrorLog({String? tingkat, String? sumber, String? kataKunci, int limit = 100, int offset = 0}) async {
+    final database = await db;
+    final klausa = <String>[];
+    final args = <Object?>[];
+    if (tingkat != null && tingkat.isNotEmpty) {
+      klausa.add('tingkat = ?');
+      args.add(tingkat);
+    }
+    if (sumber != null && sumber.isNotEmpty) {
+      klausa.add('sumber = ?');
+      args.add(sumber);
+    }
+    if (kataKunci != null && kataKunci.isNotEmpty) {
+      klausa.add('pesan LIKE ?');
+      args.add('%$kataKunci%');
+    }
+    return database.query(
+      'error_log',
+      where: klausa.isEmpty ? null : klausa.join(' AND '),
+      whereArgs: klausa.isEmpty ? null : args,
+      orderBy: 'waktu DESC',
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  Future<int> jumlahErrorLog({String? tingkat}) async {
+    final database = await db;
+    final hasil = tingkat == null
+        ? await database.rawQuery('SELECT COUNT(*) AS n FROM error_log')
+        : await database.rawQuery('SELECT COUNT(*) AS n FROM error_log WHERE tingkat = ?', [tingkat]);
+    return (hasil.first['n'] as int?) ?? 0;
+  }
+
+  Future<void> hapusErrorLog(int id) async {
+    final database = await db;
+    await database.delete('error_log', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> bersihkanErrorLog() async {
+    final database = await db;
+    await database.delete('error_log');
+  }
+
+  // ============================== CACHE REFERENSI (generik) ==============================
+
+  Future<List<Map<String, Object?>>> listCacheReferensi() async {
+    final database = await db;
+    return database.query('cache_referensi', orderBy: 'kunci ASC');
+  }
+
+  // ============================== TRANSAKSI PENDING (lanjutan) ==============================
+
+  Future<({List<Map<String, Object?>> data, int total})> listTransaksiPending({int limit = 20, int offset = 0, String? status}) async {
+    final database = await db;
+    final where = status == null ? null : 'status = ?';
+    final whereArgs = status == null ? null : [status];
+    final data = await database.query('transaksi_pending', where: where, whereArgs: whereArgs, orderBy: 'id DESC', limit: limit, offset: offset);
+    final hasilTotal = status == null
+        ? await database.rawQuery('SELECT COUNT(*) AS n FROM transaksi_pending')
+        : await database.rawQuery('SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = ?', [status]);
+    final total = (hasilTotal.first['n'] as int?) ?? 0;
+    return (data: data, total: total);
+  }
+
   // ============================== SESI KAS LOKAL ==============================
 
   Future<Map<String, Object?>?> sesiKasAktif() async {
