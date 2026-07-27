@@ -7,6 +7,8 @@
 **/pubspec.lock
 !/pubspec.lock
 
+**/installer/dist/
+
 # Platform build outputs
 **/android/.gradle/
 **/android/app/build/
