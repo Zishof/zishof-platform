@@ -100,28 +100,55 @@ class ItemKeranjang {
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
 
-/// Anggota/member koperasi -- bentuk JSON mengikuti `jsonMember` di PosApi.java
-/// (dipakai aksi `cari_member`).
+/// Anggota/member koperasi -- superset bentuk JSON dari 3 aksi berbeda:
+/// `cari_member` (subset ringkas: id/nama/kodeIdentitas/wajibPin/minSaldo,
+/// dipakai picker Kasir), `anggota_list`/`anggota_sync_list` (lengkap, dipakai
+/// layar Anggota manajemen). Field yg tak dikirim salah satu aksi cukup
+/// default kosong/false/0 -- TIDAK error, krn semua factory pakai `??`.
 class Anggota {
   final int id;
   final String nama;
+  final String kode;
   final String kodeIdentitas;
+  final String hp;
+  final String telp;
+  final String email;
+  final String keterangan;
+  final int? jenisAnggotaKoperasiId;
+  final String jenisNama;
   final bool wajibPin;
+  final bool aktif;
   final double minSaldo;
 
   Anggota({
     required this.id,
     required this.nama,
+    this.kode = '',
     required this.kodeIdentitas,
+    this.hp = '',
+    this.telp = '',
+    this.email = '',
+    this.keterangan = '',
+    this.jenisAnggotaKoperasiId,
+    this.jenisNama = '',
     required this.wajibPin,
+    this.aktif = true,
     required this.minSaldo,
   });
 
   factory Anggota.fromJson(Map<String, dynamic> j) => Anggota(
         id: j['id'] as int,
         nama: (j['nama'] ?? '') as String,
+        kode: (j['kode'] ?? '') as String,
         kodeIdentitas: (j['kodeIdentitas'] ?? '') as String,
+        hp: (j['hp'] ?? '') as String,
+        telp: (j['telp'] ?? '') as String,
+        email: (j['email'] ?? '') as String,
+        keterangan: (j['keterangan'] ?? '') as String,
+        jenisAnggotaKoperasiId: j['jenisAnggotaKoperasiId'] as int?,
+        jenisNama: (j['jenisNama'] ?? '') as String,
         wajibPin: j['wajibPin'] == true,
+        aktif: j['aktif'] == null ? true : j['aktif'] == true,
         minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
       );
 
@@ -130,8 +157,23 @@ class Anggota {
   factory Anggota.fromCache(Map<String, Object?> b) => Anggota(
         id: b['id'] as int,
         nama: (b['nama'] ?? '') as String,
+        kode: (b['kode'] ?? '') as String,
         kodeIdentitas: (b['kode_identitas'] ?? '') as String,
+        hp: (b['hp'] ?? '') as String,
+        jenisNama: (b['jenis_nama'] ?? '') as String,
         wajibPin: (b['wajib_pin'] as int? ?? 0) == 1,
         minSaldo: 0,
       );
+
+  /// Baris utk `CoreDb.upsertAnggotaCache` dari respons `anggota_sync_list`.
+  static Map<String, Object?> keCacheRow(Map<String, dynamic> j) => {
+        'id': j['id'],
+        'kode': j['kode'] ?? '',
+        'nama': j['nama'] ?? '',
+        'kode_identitas': j['kodeIdentitas'] ?? '',
+        'hp': j['hp'] ?? '',
+        'jenis_nama': j['jenisNama'] ?? '',
+        'wajib_pin': (j['wajibPin'] == true) ? 1 : 0,
+        'foto_url': j['fotoUrl'],
+      };
 }
