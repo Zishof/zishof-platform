@@ -177,3 +177,102 @@ class Anggota {
         'foto_url': j['fotoUrl'],
       };
 }
+
+/// Satu item di dalam [Pesanan] -- bentuk sama dgn `transaksi`/keranjang saat
+/// checkout, dikembalikan lagi APA ADANYA dari draft oleh aksi `pesanan_list`.
+class ItemPesanan {
+  final int? produkId;
+  final String kode;
+  final String nama;
+  final double harga;
+  final double jumlah;
+  final double diskon;
+  final double cashback;
+  final int? aturanDiskonId;
+
+  ItemPesanan({
+    required this.produkId,
+    required this.kode,
+    required this.nama,
+    required this.harga,
+    required this.jumlah,
+    required this.diskon,
+    required this.cashback,
+    required this.aturanDiskonId,
+  });
+
+  factory ItemPesanan.fromJson(Map<String, dynamic> j) => ItemPesanan(
+        produkId: j['id'] as int?,
+        kode: (j['kode'] ?? '') as String,
+        nama: (j['nama'] ?? '') as String,
+        harga: (j['harga'] as num?)?.toDouble() ?? 0,
+        jumlah: (j['jumlah'] as num?)?.toDouble() ?? 0,
+        diskon: (j['diskon'] as num?)?.toDouble() ?? 0,
+        cashback: (j['cashback'] as num?)?.toDouble() ?? 0,
+        aturanDiskonId: j['aturanDiskon'] as int?,
+      );
+}
+
+/// Pesanan online (dibuat pembeli sendiri) ATAU Keranjang Tertahan (ditahan
+/// kasir lewat "Tahan") -- keduanya baris `DraftPembelianAnggotaKoperasi` yang
+/// SAMA, dibedakan lewat [dariPembeliOnline] (lihat JavaDoc `prosesPesananList`
+/// di PosApi.java). Bentuk JSON mengikuti aksi `pesanan_list`.
+class Pesanan {
+  final int id;
+  final String kode;
+  final String pemesan;
+  final int? anggotaId;
+  final double totalBiaya;
+  final bool lunas;
+  final int? lunasId;
+  final double totalDiskon;
+  final double totalCashback;
+  final String tokoNama;
+  final String keterangan;
+  final String tanggalPembayaran;
+  final int? caraBayarId;
+  final bool dariPembeliOnline;
+  final String kasirLoginNama;
+  final String? namaMesin;
+  final List<ItemPesanan> items;
+
+  Pesanan({
+    required this.id,
+    required this.kode,
+    required this.pemesan,
+    required this.anggotaId,
+    required this.totalBiaya,
+    required this.lunas,
+    required this.lunasId,
+    required this.totalDiskon,
+    required this.totalCashback,
+    required this.tokoNama,
+    required this.keterangan,
+    required this.tanggalPembayaran,
+    required this.caraBayarId,
+    required this.dariPembeliOnline,
+    required this.kasirLoginNama,
+    required this.namaMesin,
+    required this.items,
+  });
+
+  factory Pesanan.fromJson(Map<String, dynamic> j) => Pesanan(
+        id: j['id'] as int,
+        kode: (j['kode'] ?? '') as String,
+        pemesan: (j['pemesan'] ?? '') as String,
+        anggotaId: j['anggotaId'] as int?,
+        totalBiaya: (j['totalBiaya'] as num?)?.toDouble() ?? 0,
+        lunas: j['lunas'] == true,
+        lunasId: j['lunasId'] as int?,
+        totalDiskon: (j['totalDiskon'] as num?)?.toDouble() ?? 0,
+        totalCashback: (j['totalCashback'] as num?)?.toDouble() ?? 0,
+        tokoNama: (j['tokoNama'] ?? '') as String,
+        keterangan: (j['keterangan'] ?? '') as String,
+        tanggalPembayaran: (j['tanggalPembayaran'] ?? '') as String,
+        caraBayarId: j['caraBayarId'] as int?,
+        dariPembeliOnline: j['dariPembeliOnline'] == true,
+        kasirLoginNama: (j['kasirLoginNama'] ?? '') as String,
+        namaMesin: j['namaMesin'] as String?,
+        items: ((j['items'] as List?) ?? []).map((e) => ItemPesanan.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+}

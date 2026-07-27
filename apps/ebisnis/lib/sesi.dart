@@ -13,6 +13,15 @@ class Sesi {
   double pajakPersen = 0;
   List<CaraBayar> caraBayar = [];
   String pesanTerimaKasih = '';
+  bool wajibSesiKas = false;
+  bool isAdmin = false;
+  bool supervisorPedagang = false;
+
+  /// Boleh mengelola (ubah/hapus/batal) -- padanan gerbang client-side yang
+  /// sudah dipakai Electron/Android existing utk sembunyikan tombol destruktif
+  /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
+  /// ini hanya UI, lihat JavaDoc bolehSupervisorAtauAdmin di PosApi.java).
+  bool get bolehKelola => isAdmin || supervisorPedagang;
 
   void reset() {
     tokoNama = '';
@@ -21,5 +30,8 @@ class Sesi {
     pajakPersen = 0;
     caraBayar = [];
     pesanTerimaKasih = '';
+    wajibSesiKas = false;
+    isAdmin = false;
+    supervisorPedagang = false;
   }
 }

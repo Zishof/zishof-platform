@@ -25,7 +25,13 @@ final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', deci
 /// transaksi, hanya menunda sinkronisasinya).
 class KeranjangScreen extends StatefulWidget {
   final List<ItemKeranjang> keranjang;
-  const KeranjangScreen({super.key, required this.keranjang});
+  /// Diisi bila keranjang ini dimuat ulang dari Keranjang Tertahan (layar
+  /// Pesanan, "Muat ke Keranjang") -- dikirim sbg `draftPembelianAnggotaKoperasi`
+  /// saat Tahan/Bayar berikutnya supaya server MEMPERBARUI draft yang sama,
+  /// bukan membuat baris baru (lihat JavaDoc `_buatPayload` & KantinHelper.bayar).
+  final int? draftIdSumber;
+  final Anggota? memberAwal;
+  const KeranjangScreen({super.key, required this.keranjang, this.draftIdSumber, this.memberAwal});
 
   @override
   State<KeranjangScreen> createState() => _KeranjangScreenState();
@@ -44,6 +50,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
     if (Sesi.instance.caraBayar.isNotEmpty) {
       _caraBayarTerpilih = Sesi.instance.caraBayar.first;
     }
+    _memberTerpilih = widget.memberAwal;
   }
 
   @override
@@ -177,7 +184,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       'total': _total,
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
-      'draftPembelianAnggotaKoperasi': null,
+      'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
       'transaksi': widget.keranjang
           .map((i) => {
                 'id': i.produk.id,

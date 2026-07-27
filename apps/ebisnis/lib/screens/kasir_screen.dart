@@ -98,6 +98,9 @@ class _KasirScreenState extends State<KasirScreen> {
         ..userId = (konfig['userId'] ?? '') as String
         ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
         ..pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String
+        ..wajibSesiKas = konfig['wajibSesiKas'] == true
+        ..isAdmin = konfig['isAdmin'] == true
+        ..supervisorPedagang = konfig['supervisorPedagang'] == true
         ..caraBayar = ((konfig['caraBayar'] as List?) ?? [])
             .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -132,6 +135,12 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _periksaSesiKas() async {
+    if (!Sesi.instance.wajibSesiKas) {
+      // Toko ini belum mengaktifkan konfigurasi wajib-sesi-kas -- jangan
+      // memblokir kasir dgn overlay yg memang tidak berlaku utknya.
+      if (mounted) setState(() => _kasTerbuka = true);
+      return;
+    }
     try {
       final hasil = await ApiClient.instance.aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
       final terbuka = hasil['terbuka'] == true;
@@ -367,7 +376,7 @@ class _KasirScreenState extends State<KasirScreen> {
                         ),
                       ],
                     ),
-          if (_kasTerbuka == false)
+          if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
             _OverlayBukaKas(onBuka: (modal) {
               setState(() => _modalAwalKas = modal);
               _bukaKas(_modalAwalKas);
