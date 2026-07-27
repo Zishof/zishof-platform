@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
 
@@ -109,20 +110,8 @@ class _KasirScreenState extends State<KasirScreen> {
           .toList();
 
       await CoreDb.instance.replaceProdukCache(produkJson
-          .map((e) => {
-                'id': e['id'],
-                'kode': e['kode'] ?? '',
-                'barcode': e['barcode'] ?? '',
-                'nama': e['nama'] ?? '',
-                'harga_jual': e['hargaJual'] ?? 0,
-                'stok': e['stok'] ?? 0,
-                'kategori_id': e['kategoriId'],
-                'kategori_nama': e['kategoriNama'] ?? '',
-                'gambar_url': e['gambarUrl'],
-                'aktif': 1,
-              })
-          .toList()
-          .cast<Map<String, Object?>>());
+          .map((e) => Produk.baseKeCacheRow(e as Map<String, dynamic>))
+          .toList());
 
       if (mounted) {
         setState(() {
@@ -279,6 +268,7 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: Text(Sesi.instance.tokoNama.isEmpty ? 'eBisnis' : Sesi.instance.tokoNama),
         actions: [

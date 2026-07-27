@@ -10,6 +10,10 @@ class Produk {
   final int? kategoriId;
   final String kategoriNama;
   final String? gambarUrl;
+  final double hargaBeli;
+  final String keterangan;
+  final bool izinkanJualMinusStok;
+  final bool aktif;
 
   Produk({
     required this.id,
@@ -21,6 +25,10 @@ class Produk {
     required this.kategoriId,
     required this.kategoriNama,
     required this.gambarUrl,
+    this.hargaBeli = 0,
+    this.keterangan = '',
+    this.izinkanJualMinusStok = false,
+    this.aktif = true,
   });
 
   factory Produk.fromJson(Map<String, dynamic> j) => Produk(
@@ -33,7 +41,29 @@ class Produk {
         kategoriId: j['kategoriId'] as int?,
         kategoriNama: (j['kategoriNama'] ?? '') as String,
         gambarUrl: j['gambarUrl'] as String?,
+        hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
+        keterangan: (j['keterangan'] ?? '') as String,
+        izinkanJualMinusStok: j['izinkanJualMinusStok'] == true,
+        // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
+        // mode semuaToko) -- default true, dikoreksi lewat form Ubah bila memang dinonaktifkan.
+        aktif: j['aktif'] == null ? true : j['aktif'] == true,
       );
+
+  /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
+  /// dan ProdukScreen (keduanya menyegarkan cache lokal yg sama dari respons
+  /// `katalog` yang identik) supaya pemetaan JSON->kolom SQLite tidak dobel.
+  static Map<String, Object?> baseKeCacheRow(Map<String, dynamic> j) => {
+        'id': j['id'],
+        'kode': j['kode'] ?? '',
+        'barcode': j['barcode'] ?? '',
+        'nama': j['nama'] ?? '',
+        'harga_jual': j['hargaJual'] ?? 0,
+        'stok': j['stok'] ?? 0,
+        'kategori_id': j['kategoriId'],
+        'kategori_nama': j['kategoriNama'] ?? '',
+        'gambar_url': j['gambarUrl'],
+        'aktif': 1,
+      };
 }
 
 class Kategori {
