@@ -165,6 +165,64 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
     return '${pad(d.day)}-${pad(d.month)}-${d.year} ${pad(d.hour)}:${pad(d.minute)}:${pad(d.second)}';
   }
 
+  Map<String, dynamic> _buatPayload(String kodeUnik, DateTime waktu) {
+    return {
+      'kodeUnik': kodeUnik,
+      'clientTrxId': kodeUnik,
+      'idToko': Sesi.instance.tokoId,
+      'tokoId': Sesi.instance.tokoId,
+      'kasir': Sesi.instance.userId,
+      'waktu': _formatWaktuServer(waktu),
+      'caraBayar': _caraBayarTerpilih!.id,
+      'total': _total,
+      'id_member': _memberTerpilih?.id,
+      'nama_mesin': IdentitasMesin.instance.namaMesin,
+      'draftPembelianAnggotaKoperasi': null,
+      'transaksi': widget.keranjang
+          .map((i) => {
+                'id': i.produk.id,
+                'kode': i.produk.kode,
+                'nama': i.produk.nama,
+                'harga': i.produk.hargaJual,
+                'jumlah': i.jumlah,
+                'diskon': i.diskon,
+                'aturanDiskon': i.aturanDiskonId,
+                'cashback': i.cashback,
+              })
+          .toList(),
+    };
+  }
+
+  /// "Tahan" -- simpan keranjang sbg draft belum lunas (aksi `draft_bayar`,
+  /// bentuk payload SAMA dgn `bayar`) lalu kosongkan keranjang & kembali ke
+  /// Kasir. BEDA dari Bayar: TIDAK offline-first (draft yg gagal tersimpan
+  /// krn offline lebih baik gagal jelas drpd diam-diam antre lokal tanpa ada
+  /// layar Pesanan utk memuatnya kembali -- lihat task #184, "Muat ke
+  /// Keranjang" dari draft ini menyusul setelah layar Pesanan dibangun).
+  Future<void> _tahan() async {
+    if (widget.keranjang.isEmpty) return;
+    if (_caraBayarTerpilih == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Pilih metode pembayaran terlebih dahulu.')));
+      return;
+    }
+    setState(() => _memproses = true);
+    try {
+      final kodeUnik = _buatKodeUnik();
+      final payload = _buatPayload(kodeUnik, DateTime.now());
+      await ApiClient.instance.aksi('draft_bayar', payload);
+      widget.keranjang.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _memproses = false);
+    }
+  }
+
   Future<void> _bayar() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
@@ -179,31 +237,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
 
       final kodeUnik = _buatKodeUnik();
       final waktu = DateTime.now();
-      final payload = {
-        'kodeUnik': kodeUnik,
-        'clientTrxId': kodeUnik,
-        'idToko': Sesi.instance.tokoId,
-        'tokoId': Sesi.instance.tokoId,
-        'kasir': Sesi.instance.userId,
-        'waktu': _formatWaktuServer(waktu),
-        'caraBayar': _caraBayarTerpilih!.id,
-        'total': _total,
-        'id_member': _memberTerpilih?.id,
-        'nama_mesin': IdentitasMesin.instance.namaMesin,
-        'draftPembelianAnggotaKoperasi': null,
-        'transaksi': widget.keranjang
-            .map((i) => {
-                  'id': i.produk.id,
-                  'kode': i.produk.kode,
-                  'nama': i.produk.nama,
-                  'harga': i.produk.hargaJual,
-                  'jumlah': i.jumlah,
-                  'diskon': i.diskon,
-                  'aturanDiskon': i.aturanDiskonId,
-                  'cashback': i.cashback,
-                })
-            .toList(),
-      };
+      final payload = _buatPayload(kodeUnik, waktu);
 
       // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
       // jaringan di bawah tidak pernah membatalkan penjualan ini.
@@ -253,7 +287,17 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Keranjang')),
+      appBar: AppBar(
+        title: const Text('Keranjang'),
+        actions: [
+          if (widget.keranjang.isNotEmpty)
+            TextButton.icon(
+              onPressed: _memproses ? null : _tahan,
+              icon: const Icon(Icons.pause_circle_outline, color: Colors.white),
+              label: const Text('Tahan', style: TextStyle(color: Colors.white)),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
