@@ -1,0 +1,421 @@
+import 'package:core_hw/core_hw.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../api_client.dart';
+
+final _formatAngka = NumberFormat.decimalPattern('id_ID');
+
+/// Layar Stok Opname (padanan stokopname.html/stokopname-renderer.js Electron)
+/// -- 3 sub-tab: Kartu Mutasi Stok (dasbor), Stok Opname (input manual/scan
+/// kamera per satu produk). Beda dari Electron: kamera di sini NATIVE
+/// (mobile_scanner/MLKit lewat core_hw.BarcodeScannerScreen), bukan
+/// Html5Qrcode berbasis web -- pengalaman scan harusnya lebih responsif.
+///
+/// Belum ada di iterasi ini (menyusul): antrean "SO by Scan" batch (banyak
+/// baris sekaligus baru disimpan bersamaan) -- iterasi ini simpan LANGSUNG
+/// per scan/entry (lebih sederhana, cukup utk toko baru mulai opname).
+class StokOpnameScreen extends StatefulWidget {
+  const StokOpnameScreen({super.key});
+
+  @override
+  State<StokOpnameScreen> createState() => _StokOpnameScreenState();
+}
+
+class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Stok Opname'),
+        bottom: TabBar(controller: _tab, tabs: const [
+          Tab(text: 'Kartu Mutasi Stok'),
+          Tab(text: 'Input Opname'),
+        ]),
+      ),
+      body: TabBarView(controller: _tab, children: const [
+        _TabMutasiStok(),
+        _TabInputOpname(),
+      ]),
+    );
+  }
+}
+
+class _TabMutasiStok extends StatefulWidget {
+  const _TabMutasiStok();
+
+  @override
+  State<_TabMutasiStok> createState() => _TabMutasiStokState();
+}
+
+class _TabMutasiStokState extends State<_TabMutasiStok> {
+  bool _memuat = true;
+  String? _pesanError;
+  Map<String, dynamic>? _dasbor;
+  Map<String, dynamic>? _ringkasanHariIni;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setState(() {
+      _memuat = true;
+      _pesanError = null;
+    });
+    try {
+      final results = await Future.wait([
+        ApiClient.instance.aksi('stok_dashboard', {'periode': 'month'}),
+        ApiClient.instance.aksi('so_ringkasan'),
+      ]);
+      setState(() {
+        _dasbor = results[0];
+        _ringkasanHariIni = results[1];
+      });
+    } catch (e) {
+      setState(() => _pesanError = e.toString());
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    if (_pesanError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_pesanError!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+            ],
+          ),
+        ),
+      );
+    }
+    final d = _dasbor!;
+    final r = _ringkasanHariIni!;
+    final top5 = (d['top5Keluar'] as List?) ?? [];
+    final maksTop5 = top5.isEmpty ? 1.0 : top5.map((e) => (e['qty'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.2,
+            children: [
+              _kartu('Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0), const Color(0xFF2E7D32)),
+              _kartu('Barang Keluar', _formatAngka.format(d['barangKeluar'] ?? 0), const Color(0xFFC0563D)),
+              _kartu('Total Stok', _formatAngka.format(d['totalStok'] ?? 0), const Color(0xFF1E3A5F)),
+              _kartu('Stok Kritis (<10)', '${d['stokKritis'] ?? 0}', Colors.red),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Progres Opname Hari Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 8),
+                  Text('${r['jumlahProduk'] ?? 0} produk dicatat (${r['jumlahCatatan'] ?? 0} kali)'),
+                  Text('Selisih bersih: ${_formatAngka.format(r['selisihBersih'] ?? 0)} unit'),
+                  Text('Lebih: +${_formatAngka.format(r['totalLebih'] ?? 0)} · Kurang: -${_formatAngka.format(r['totalKurang'] ?? 0)}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (top5.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Top 5 Barang Keluar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 10),
+                    ...top5.map((e) {
+                      final qty = (e['qty'] as num).toDouble();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${e['nama']} (${_formatAngka.format(qty)})', style: const TextStyle(fontSize: 12)),
+                            const SizedBox(height: 2),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: qty / maksTop5,
+                                minHeight: 8,
+                                backgroundColor: Colors.grey.shade200,
+                                color: const Color(0xFF1E3A5F),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kartu(String label, String nilai, Color warna) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: warna.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: warna.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(nilai, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabInputOpname extends StatefulWidget {
+  const _TabInputOpname();
+
+  @override
+  State<_TabInputOpname> createState() => _TabInputOpnameState();
+}
+
+class _TabInputOpnameState extends State<_TabInputOpname> {
+  final _barcodeController = TextEditingController();
+  final _stokFisikController = TextEditingController();
+  final _keteranganController = TextEditingController();
+  bool _mencari = false;
+  bool _menyimpan = false;
+  String? _pesanError;
+  Map<String, dynamic>? _produkDitemukan;
+  List<Map<String, dynamic>> _riwayatHariIni = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _muatRiwayat();
+  }
+
+  @override
+  void dispose() {
+    _barcodeController.dispose();
+    _stokFisikController.dispose();
+    _keteranganController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muatRiwayat() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('so_riwayat', {'limit': 30});
+      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      if (mounted) setState(() => _riwayatHariIni = data);
+    } catch (_) {
+      // riwayat gagal dimuat bukan blocker utk input baru.
+    }
+  }
+
+  Future<void> _cariProduk(String barcode) async {
+    final kode = barcode.trim();
+    if (kode.isEmpty) return;
+    setState(() {
+      _mencari = true;
+      _pesanError = null;
+      _produkDitemukan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
+      setState(() {
+        _produkDitemukan = hasil;
+        _stokFisikController.text = '';
+        _keteranganController.text = '';
+      });
+    } catch (e) {
+      setState(() => _pesanError = e.toString());
+    } finally {
+      if (mounted) setState(() => _mencari = false);
+    }
+  }
+
+  Future<void> _scanKamera() async {
+    final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    if (kode != null) {
+      _barcodeController.text = kode;
+      await _cariProduk(kode);
+    }
+  }
+
+  Future<void> _simpanOpname() async {
+    final p = _produkDitemukan;
+    if (p == null) return;
+    final stokFisik = double.tryParse(_stokFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    if (stokFisik == null) {
+      setState(() => _pesanError = 'Stok fisik wajib diisi angka.');
+      return;
+    }
+    setState(() {
+      _menyimpan = true;
+      _pesanError = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('so_simpan', {
+        'produk_id': p['produkId'],
+        'stok_fisik': stokFisik,
+        'keterangan': _keteranganController.text.trim(),
+      });
+      final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Tersimpan. Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
+        ));
+      }
+      setState(() {
+        _produkDitemukan = null;
+        _barcodeController.clear();
+        _stokFisikController.clear();
+        _keteranganController.clear();
+      });
+      await _muatRiwayat();
+    } catch (e) {
+      setState(() => _pesanError = e.toString());
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _barcodeController,
+                decoration: const InputDecoration(
+                  labelText: 'Kode / Barcode Produk',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onSubmitted: _cariProduk,
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: _scanKamera,
+              icon: const Icon(Icons.qr_code_scanner),
+              tooltip: 'Scan pakai kamera',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_mencari) const Center(child: CircularProgressIndicator()),
+        if (_pesanError != null)
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+            child: Text(_pesanError!, style: TextStyle(color: Colors.red.shade700)),
+          ),
+        if (_produkDitemukan != null) ...[
+          Card(
+            color: const Color(0xFFFFF3E0),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_produkDitemukan!['nama'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Kode: ${_produkDitemukan!['kode'] ?? ''}'),
+                  Text('Stok Sistem: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _stokFisikController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Stok Fisik (hasil hitung) *', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _keteranganController,
+                    decoration: const InputDecoration(labelText: 'Keterangan (opsional)', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _menyimpan ? null : _simpanOpname,
+                      child: _menyimpan
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Simpan Hasil Opname'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        const Text('Riwayat Hari Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        if (_riwayatHariIni.isEmpty)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: Text('Belum ada catatan hari ini.')))
+        else
+          ..._riwayatHariIni.map((k) {
+            final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 6),
+              child: ListTile(
+                dense: true,
+                title: Text('${k['nama']}'),
+                subtitle: Text('${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
+                trailing: Text(
+                  '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: selisih == 0 ? Colors.black54 : (selisih > 0 ? Colors.green : Colors.red)),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+}

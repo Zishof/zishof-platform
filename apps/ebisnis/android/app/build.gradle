@@ -7,8 +7,12 @@ plugins {
 
 android {
     namespace = "id.zishof.ebisnis"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Eksplisit 36 (bukan flutter.compileSdkVersion bawaan) -- mobile_scanner (camera scan Stok
+    // Opname) butuh compileSdk 36+ krn dependensi androidx.camera 1.5.0-nya.
+    compileSdk = 36
+    // Eksplisit -- mobile_scanner/path_provider/shared_preferences/sqflite semua minta
+    // NDK 27.0.12077973, lebih tinggi dari default flutter.ndkVersion (26.x).
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -24,7 +28,9 @@ android {
         applicationId = "id.zishof.ebisnis"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 23 (bukan flutter.minSdkVersion bawaan, biasanya 21) -- mobile_scanner's androidx.camera
+        // 1.5.0 mensyaratkan Android 6.0+. Android <6.0 sudah sangat minoritas di 2026.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

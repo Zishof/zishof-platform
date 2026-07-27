@@ -3,6 +3,7 @@ import '../sesi.dart';
 import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/pesanan_screen.dart';
+import '../screens/stok_opname_screen.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -59,7 +60,14 @@ class AppDrawer extends StatelessWidget {
                       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProdukScreen()));
                     },
                   ),
-                  _ItemMenu(icon: Icons.fact_check_outlined, label: 'Stok Opname', segeraHadir: true),
+                  _ItemMenu(
+                    icon: Icons.fact_check_outlined,
+                    label: 'Stok Opname',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StokOpnameScreen()));
+                    },
+                  ),
                   _ItemMenu(icon: Icons.local_shipping_outlined, label: 'Kulakan', segeraHadir: true),
                   _ItemMenu(icon: Icons.sell_outlined, label: 'Aturan Diskon', segeraHadir: true),
                   _ItemMenu(icon: Icons.assessment_outlined, label: 'Laporan Transaksi', segeraHadir: true),
