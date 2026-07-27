@@ -1,0 +1,33 @@
+# Flutter/Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/pubspec.lock
+!/pubspec.lock
+
+# Platform build outputs
+**/android/.gradle/
+**/android/app/build/
+**/ios/Pods/
+**/ios/.symlinks/
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# SVN (dual-tracked in this working copy, git ignores its metadata)
+.svn/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env/secrets
+*.env
+.env.local
