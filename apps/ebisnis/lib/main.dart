@@ -1,3 +1,4 @@
+import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
@@ -44,6 +45,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
 
   Future<void> _periksaToken() async {
     await ApiClient.instance.muatTokenTersimpan();
+    await IdentitasMesin.instance.muat();
     if (mounted) setState(() => _memeriksa = false);
   }
 

@@ -3,10 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:core_device/core_device.dart';
 
 void main() {
-  test('adds one to input values', () {
-    final calculator = Calculator();
-    expect(calculator.addOne(2), 3);
-    expect(calculator.addOne(-7), -6);
-    expect(calculator.addOne(0), 1);
+  test('IdentitasMesin.instance singleton stabil', () {
+    expect(IdentitasMesin.instance, same(IdentitasMesin.instance));
   });
 }

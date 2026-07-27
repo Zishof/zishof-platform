@@ -57,9 +57,51 @@ class CaraBayar {
 }
 
 /// Satu baris di keranjang -- disalin dari [Produk] + jumlah yang dipilih kasir.
+/// [diskon]/[cashback]/[aturanDiskonId] diisi hasil `diskon_evaluasi` (lihat
+/// KeranjangScreen._evaluasiDiskon) -- default 0/null sebelum evaluasi pertama.
 class ItemKeranjang {
   final Produk produk;
   int jumlah;
-  ItemKeranjang({required this.produk, this.jumlah = 1});
+  double diskon;
+  double cashback;
+  int? aturanDiskonId;
+  ItemKeranjang({required this.produk, this.jumlah = 1, this.diskon = 0, this.cashback = 0, this.aturanDiskonId});
   double get subtotal => produk.hargaJual * jumlah;
+  double get subtotalSetelahDiskon => subtotal - diskon;
+}
+
+/// Anggota/member koperasi -- bentuk JSON mengikuti `jsonMember` di PosApi.java
+/// (dipakai aksi `cari_member`).
+class Anggota {
+  final int id;
+  final String nama;
+  final String kodeIdentitas;
+  final bool wajibPin;
+  final double minSaldo;
+
+  Anggota({
+    required this.id,
+    required this.nama,
+    required this.kodeIdentitas,
+    required this.wajibPin,
+    required this.minSaldo,
+  });
+
+  factory Anggota.fromJson(Map<String, dynamic> j) => Anggota(
+        id: j['id'] as int,
+        nama: (j['nama'] ?? '') as String,
+        kodeIdentitas: (j['kodeIdentitas'] ?? '') as String,
+        wajibPin: j['wajibPin'] == true,
+        minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
+      );
+
+  /// Dari baris cache lokal (anggota_cache, kolom snake_case SQLite) -- dipakai
+  /// picker member saat offline, lihat CoreDb.cariAnggotaCache.
+  factory Anggota.fromCache(Map<String, Object?> b) => Anggota(
+        id: b['id'] as int,
+        nama: (b['nama'] ?? '') as String,
+        kodeIdentitas: (b['kode_identitas'] ?? '') as String,
+        wajibPin: (b['wajib_pin'] as int? ?? 0) == 1,
+        minSaldo: 0,
+      );
 }

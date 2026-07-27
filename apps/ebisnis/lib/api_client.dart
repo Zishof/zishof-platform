@@ -10,7 +10,7 @@ class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  static const String baseUrl = 'https://dev.ecampus.id/ecampus/Api_eBisnis';
+  static const String baseUrl = 'https://ebisnis.id/ebisnis/Api_eBisnis';
 
   String? _token;
 
@@ -46,7 +46,7 @@ class ApiClient {
           .post(Uri.parse(baseUrl), headers: headers, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 30));
     } catch (e) {
-      throw ApiException('Tidak bisa menghubungi server. Periksa koneksi internet Anda.');
+      throw ApiException('Tidak bisa menghubungi server. Periksa koneksi internet Anda.', offline: true);
     }
 
     Map<String, dynamic> json;
@@ -65,7 +65,13 @@ class ApiClient {
 
 class ApiException implements Exception {
   final String pesan;
-  ApiException(this.pesan);
+  /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
+  /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
+  /// server, mis. saldo kurang). Dipakai alur offline-first (KeranjangScreen)
+  /// utk memutuskan "tetap simpan lokal & lanjut" (offline=true) vs "batalkan
+  /// & tampilkan pesan" (offline=false).
+  final bool offline;
+  ApiException(this.pesan, {this.offline = false});
   @override
   String toString() => pesan;
 }
