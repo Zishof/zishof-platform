@@ -2,6 +2,7 @@ import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -159,12 +160,14 @@ class _AnggotaScreenState extends State<AnggotaScreen> {
       scrollable: false,
       actionsAppBar: _tombolAksi,
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _bukaFormAnggota(),
-        icon: const Icon(Icons.person_add_alt),
-        label: const Text('Tambah Member'),
-        backgroundColor: AppColors.primary,
-      ),
+      floatingActionButton: Sesi.instance.bolehKelola
+          ? FloatingActionButton.extended(
+              onPressed: () => _bukaFormAnggota(),
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('Tambah Member'),
+              backgroundColor: AppColors.primary,
+            )
+          : null,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
@@ -224,7 +227,7 @@ class _AnggotaScreenState extends State<AnggotaScreen> {
                                     if (a.wajibPin) const Text('Wajib PIN', style: TextStyle(fontSize: 11, color: Colors.orange)),
                                   ],
                                 ),
-                                onTap: () => _bukaFormAnggota(anggota: a),
+                                onTap: Sesi.instance.bolehKelola ? () => _bukaFormAnggota(anggota: a) : null,
                               ),
                             )),
                       if (_total > _pageSize)

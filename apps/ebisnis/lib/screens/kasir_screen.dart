@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
@@ -50,6 +51,12 @@ class _KasirScreenState extends State<KasirScreen> {
   /// BOLEH mulai transaksi apa pun sebelum kas dibuka.
   bool? _kasTerbuka;
   double _modalAwalKas = 0;
+
+  /// Kas Sekarang -- pil saldo kas berjalan di toolbar (padanan indikator
+  /// "Rp 1.900.000" pada referensi Electron). `null` = belum diketahui/tak
+  /// relevan (mis. toko belum wajib-sesi-kas) -- pil disembunyikan saat itu,
+  /// BUKAN ditampilkan "Rp 0" yang menyesatkan.
+  double? _kasSaatIni;
 
   /// "Fokus Keranjang" (F7, padanan PERSIS `elBtnToggleFullLayarHeader` di
   /// pos-renderer.js) -- BUKAN fullscreen level-OS (percobaan sebelumnya
@@ -175,10 +182,24 @@ class _KasirScreenState extends State<KasirScreen> {
         );
       }
       if (mounted) setState(() => _kasTerbuka = terbuka);
+      if (mounted) setState(() => _kasSaatIni = terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null);
     } catch (_) {
       // Offline saat cek status -- pakai sumber lokal (local-first, sama spt Electron).
       final lokal = await CoreDb.instance.sesiKasAktif();
       if (mounted) setState(() => _kasTerbuka = lokal != null);
+    }
+  }
+
+  /// Muat ulang saldo Kas Sekarang saja (tanpa menyentuh gerbang buka/tutup
+  /// kas) -- dipanggil dari [_perbaruiJumlahPending] tiap kali transaksi
+  /// baru selesai (Bayar/Tahan/Sinkronkan) supaya pil toolbar selalu segar.
+  Future<void> _muatKasSaatIni() async {
+    if (!Sesi.instance.wajibSesiKas || _kasTerbuka != true) return;
+    try {
+      final hasil = await ApiClient.instance.aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+      if (mounted) setState(() => _kasSaatIni = (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0);
+    } catch (_) {
+      // Offline -- biarkan angka lama, jangan ganti dgn 0 yg menyesatkan.
     }
   }
 
@@ -275,6 +296,7 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _perbaruiJumlahPending() async {
     final n = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) setState(() => _jumlahPending = n);
+    unawaited(_muatKasSaatIni());
   }
 
   Future<void> _sinkronkanSekarang() async {
@@ -456,6 +478,25 @@ class _KasirScreenState extends State<KasirScreen> {
               label: Text(_fokusKeranjang ? 'Tampilan Normal' : 'Fokus Keranjang', style: const TextStyle(fontSize: 12)),
             ),
           ),
+          if (_kasSaatIni != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: 'Kas Sekarang (saldo kas berjalan sesi ini)',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.success), borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.payments_outlined, size: 14, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(_formatRupiah.format(_kasSaatIni), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           IconButton(icon: const Icon(Icons.account_circle_outlined), onPressed: _bukaAkunSaya, tooltip: 'Akun Saya'),
           IconButton(icon: const Icon(Icons.desktop_windows_outlined), onPressed: _bukaLayarPelanggan, tooltip: 'Layar Pelanggan (F9)'),
           IconButton(icon: const Icon(Icons.system_update_alt_outlined), onPressed: _cekUpdateManual, tooltip: 'Cek Update Sistem'),

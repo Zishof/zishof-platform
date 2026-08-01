@@ -401,6 +401,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           total: totalStruk,
           metode: metodeNama,
           pajak: pajakStruk,
+          tersinkron: pesanTundaMenuju == null,
         ),
       ));
     } finally {

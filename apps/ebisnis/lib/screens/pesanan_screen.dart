@@ -18,9 +18,6 @@ enum _Filter { semua, online, tertahan }
 /// Keranjang Tertahan (ditahan kasir lewat tombol "Tahan" di Keranjang,
 /// dilanjutkan lewat "Muat ke Keranjang" -- inilah bagian "resume" yang
 /// disebut di task #181).
-///
-/// Belum ada di iterasi ini (menyusul): filter tanggal/kode/pembeli/pedagang,
-/// "Bayar Semua" massal, Cetak Struk dari baris pesanan, Hitung Ulang diskon.
 class PesananScreen extends StatefulWidget {
   const PesananScreen({super.key});
 
@@ -34,11 +31,30 @@ class _PesananScreenState extends State<PesananScreen> {
   List<Pesanan> _semua = [];
   _Filter _filter = _Filter.semua;
 
+  // Filter tambahan -- padanan filter Mulai/Akhir/Kode/Pembeli/Pedagang di
+  // JSP `_draft_pesanan_anggota.jsp`, server (`prosesPesananList` PosApi.java)
+  // SUDAH mendukung semuanya sejak lama, hanya UI-nya yang belum dibangun.
+  bool _hanyaBelumLunas = false;
+  DateTime? _sejak;
+  DateTime? _sampai;
+  final _kodeController = TextEditingController();
+  final _pembeliController = TextEditingController();
+  final _pedagangController = TextEditingController();
+  bool _filterTerbuka = false;
+
   @override
   void initState() {
     super.initState();
     _muat();
     PesananPoller.instance.tandaiSudahDilihat();
+  }
+
+  @override
+  void dispose() {
+    _kodeController.dispose();
+    _pembeliController.dispose();
+    _pedagangController.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -47,7 +63,19 @@ class _PesananScreenState extends State<PesananScreen> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('pesanan_list', {'hanya_belum_lunas': true, 'limit': 200});
+      final payload = <String, dynamic>{'limit': 200};
+      // BUG LAMA (fixed): sebelumnya `hanya_belum_lunas` selalu true, jadi
+      // pesanan yang SUDAH lunas tak pernah ikut termuat sama sekali --
+      // sekarang opsional lewat chip filter, default menampilkan semua.
+      if (_hanyaBelumLunas) payload['hanya_belum_lunas'] = true;
+      if (_sejak != null) payload['sejak'] = _formatTanggalIso(_sejak!);
+      if (_sampai != null) payload['sampai'] = _formatTanggalIso(_sampai!);
+      if (_kodeController.text.trim().isNotEmpty) payload['kode'] = _kodeController.text.trim();
+      if (_pembeliController.text.trim().isNotEmpty) payload['pembeli'] = _pembeliController.text.trim();
+      if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
+        payload['pedagang'] = _pedagangController.text.trim();
+      }
+      final hasil = await ApiClient.instance.aksi('pesanan_list', payload);
       final data = ((hasil['pesanan'] as List?) ?? []).map((e) => Pesanan.fromJson(e as Map<String, dynamic>)).toList();
       setState(() => _semua = data);
     } catch (e) {
@@ -56,6 +84,89 @@ class _PesananScreenState extends State<PesananScreen> {
       if (mounted) setState(() => _memuat = false);
     }
   }
+
+  String _formatTanggalIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pilihTanggal({required bool mulai}) async {
+    final awal = (mulai ? _sejak : _sampai) ?? DateTime.now();
+    final hasil = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2020), lastDate: DateTime(2100));
+    if (hasil == null) return;
+    setState(() => mulai ? _sejak = hasil : _sampai = hasil);
+  }
+
+  Future<void> _hitungUlang(Pesanan p) async {
+    try {
+      final hasil = await ApiClient.instance.aksi('pesanan_hitung_ulang', {'draft_id': p.id});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(hasil['description']?.toString() ?? '${p.kode}: dihitung ulang.')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  /// "Bayar Semua" massal -- TIDAK ADA aksi batch di server, jadi cukup
+  /// panggil ulang [_verifikasiDanSelesaikan] (aksi `bayar` yg SUDAH ADA)
+  /// satu per satu utk tiap pesanan online yang masih belum lunas, dgn SATU
+  /// metode pembayaran yang dipilih di depan -- sama seperti kasir memproses
+  /// banyak pesanan manual berturut-turut, hanya diotomatisasi.
+  Future<void> _bayarSemua() async {
+    final belumLunas = _tersaring.where((p) => p.dariPembeliOnline).toList();
+    if (belumLunas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada pesanan online yang perlu dibayar.')));
+      return;
+    }
+    final caraBayar = await showDialog<CaraBayar>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: Text('Bayar Semua (${belumLunas.length} pesanan) -- Pilih Metode'),
+        children: Sesi.instance.caraBayar
+            .map((c) => SimpleDialogOption(onPressed: () => Navigator.of(context).pop(c), child: Text(c.nama)))
+            .toList(),
+      ),
+    );
+    if (caraBayar == null) return;
+
+    var berhasil = 0;
+    for (final p in belumLunas) {
+      try {
+        await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
+        berhasil++;
+      } catch (_) {
+        // Satu pesanan gagal (mis. stok berubah) -- lanjut ke berikutnya, jangan hentikan seluruh proses.
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${belumLunas.length} pesanan berhasil dibayar.')));
+    }
+    await _muat();
+  }
+
+  Map<String, dynamic> _payloadVerifikasi(Pesanan p, CaraBayar caraBayar) => {
+        'kodeUnik': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
+        'clientTrxId': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
+        'idToko': Sesi.instance.tokoId,
+        'tokoId': Sesi.instance.tokoId,
+        'kasir': Sesi.instance.userId,
+        'waktu': _formatWaktuServer(DateTime.now()),
+        'caraBayar': caraBayar.id,
+        'total': p.totalBiaya,
+        'id_member': p.anggotaId,
+        'draftPembelianAnggotaKoperasi': p.id,
+        'transaksi': p.items
+            .map((i) => {
+                  'id': i.produkId,
+                  'kode': i.kode,
+                  'nama': i.nama,
+                  'harga': i.harga,
+                  'jumlah': i.jumlah,
+                  'diskon': i.diskon,
+                  'aturanDiskon': i.aturanDiskonId,
+                  'cashback': i.cashback,
+                })
+            .toList(),
+      };
 
   List<Pesanan> get _tersaring {
     switch (_filter) {
@@ -159,30 +270,7 @@ class _PesananScreenState extends State<PesananScreen> {
     if (caraBayar == null) return;
 
     try {
-      await ApiClient.instance.aksi('bayar', {
-        'kodeUnik': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
-        'clientTrxId': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
-        'idToko': Sesi.instance.tokoId,
-        'tokoId': Sesi.instance.tokoId,
-        'kasir': Sesi.instance.userId,
-        'waktu': _formatWaktuServer(DateTime.now()),
-        'caraBayar': caraBayar.id,
-        'total': p.totalBiaya,
-        'id_member': p.anggotaId,
-        'draftPembelianAnggotaKoperasi': p.id,
-        'transaksi': p.items
-            .map((i) => {
-                  'id': i.produkId,
-                  'kode': i.kode,
-                  'nama': i.nama,
-                  'harga': i.harga,
-                  'jumlah': i.jumlah,
-                  'diskon': i.diskon,
-                  'aturanDiskon': i.aturanDiskonId,
-                  'cashback': i.cashback,
-                })
-            .toList(),
-      });
+      await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${p.kode} berhasil diselesaikan.')));
       }
@@ -230,8 +318,16 @@ class _PesananScreenState extends State<PesananScreen> {
       judul: 'Pesanan',
       subjudul: 'Pesanan online & transaksi yang ditahan',
       scrollable: false,
-      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      actionsAppBar: [
+        IconButton(icon: Icon(_filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined), onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka), tooltip: 'Filter'),
+        if (Sesi.instance.bolehKelola) IconButton(icon: const Icon(Icons.playlist_add_check), onPressed: _bayarSemua, tooltip: 'Bayar Semua'),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      ],
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(icon: Icon(_filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined), onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka), tooltip: 'Filter'),
+        if (Sesi.instance.bolehKelola) IconButton(icon: const Icon(Icons.playlist_add_check), onPressed: _bayarSemua, tooltip: 'Bayar Semua'),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      ]),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
@@ -271,6 +367,79 @@ class _PesananScreenState extends State<PesananScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      if (_filterTerbuka) ...[
+                        AppSectionCard(
+                          judul: 'Filter Pesanan',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  SizedBox(
+                                    width: 160,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _pilihTanggal(mulai: true),
+                                      icon: const Icon(Icons.date_range, size: 16),
+                                      label: Text(_sejak == null ? 'Sejak Tanggal' : _formatTanggalIso(_sejak!), style: const TextStyle(fontSize: 12)),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 160,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _pilihTanggal(mulai: false),
+                                      icon: const Icon(Icons.date_range, size: 16),
+                                      label: Text(_sampai == null ? 'Sampai Tanggal' : _formatTanggalIso(_sampai!), style: const TextStyle(fontSize: 12)),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 160,
+                                    child: TextField(controller: _kodeController, decoration: const InputDecoration(labelText: 'Kode', isDense: true, border: OutlineInputBorder())),
+                                  ),
+                                  SizedBox(
+                                    width: 200,
+                                    child: TextField(controller: _pembeliController, decoration: const InputDecoration(labelText: 'Nama Pembeli', isDense: true, border: OutlineInputBorder())),
+                                  ),
+                                  if (Sesi.instance.isAdmin)
+                                    SizedBox(
+                                      width: 200,
+                                      child: TextField(controller: _pedagangController, decoration: const InputDecoration(labelText: 'Toko/Pedagang', isDense: true, border: OutlineInputBorder())),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  FilterChip(
+                                    label: const Text('Hanya Belum Lunas'),
+                                    selected: _hanyaBelumLunas,
+                                    onSelected: (v) => setState(() => _hanyaBelumLunas = v),
+                                  ),
+                                  const Spacer(),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _sejak = null;
+                                        _sampai = null;
+                                        _hanyaBelumLunas = false;
+                                        _kodeController.clear();
+                                        _pembeliController.clear();
+                                        _pedagangController.clear();
+                                      });
+                                      _muat();
+                                    },
+                                    child: const Text('Reset'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(onPressed: _muat, child: const Text('Terapkan')),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Row(
                         children: [
                           ChoiceChip(
@@ -354,6 +523,15 @@ class _PesananScreenState extends State<PesananScreen> {
                 onTap: () {
                   Navigator.of(context).pop();
                   _muatKeKeranjang(p);
+                },
+              ),
+            if (Sesi.instance.bolehKelola)
+              ListTile(
+                leading: const Icon(Icons.calculate_outlined),
+                title: const Text('Hitung Ulang'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _hitungUlang(p);
                 },
               ),
             if (Sesi.instance.bolehKelola)

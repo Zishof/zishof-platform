@@ -199,6 +199,7 @@ class _FormDiskonState extends State<_FormDiskon> {
   late final TextEditingController _persentase;
   late final TextEditingController _nominal;
   late final TextEditingController _maksimalPotongan;
+  late final TextEditingController _tokoId;
   bool _berlakuSemuaProduk = true;
   bool _berlakuSemuaMember = true;
   bool _potonganLangsung = true;
@@ -208,6 +209,14 @@ class _FormDiskonState extends State<_FormDiskon> {
   int? _tipeAnggotaId;
   bool _menyimpan = false;
   String? _error;
+
+  // Masa Berlaku -- `null` = tanpa batas (dikirim kosong ke server, cocok
+  // dgn `diskonSimpan` yg menganggap tanggal_mulai/tanggal_selesai kosong
+  // sbg tak dibatasi). Toko-scoped user (bukan admin) SELALU dipaksa server
+  // ke tokonya sendiri (lihat JavaDoc `diskonSimpan`), jadi field Target Toko
+  // hanya relevan/ditampilkan utk admin global.
+  DateTime? _mulai;
+  DateTime? _selesai;
 
   @override
   void initState() {
@@ -219,9 +228,42 @@ class _FormDiskonState extends State<_FormDiskon> {
     _persentase = TextEditingController(text: '${a?['persentase'] ?? 0}');
     _nominal = TextEditingController(text: '${a?['nominal'] ?? 0}');
     _maksimalPotongan = TextEditingController();
+    _tokoId = TextEditingController();
     _potonganLangsung = a?['potonganLangsung'] ?? true;
     _aktif = a?['aktif'] ?? true;
     _berlakuSemuaProduk = (a?['produkNama'] as String?)?.isEmpty ?? true;
+    _mulai = _uraiTanggalServer(a?['tanggalMulai'] as String?);
+    _selesai = _uraiTanggalServer(a?['tanggalSelesai'] as String?);
+  }
+
+  /// Urai format tampilan server ("dd-MM-yyyy HH:mm" dari `diskon_list`) --
+  /// BEDA dari format yg diharapkan `diskon_simpan` ("yyyy-MM-ddTHH:mm"),
+  /// lihat [_formatUntukSimpan].
+  DateTime? _uraiTanggalServer(String? s) {
+    if (s == null || s.trim().isEmpty) return null;
+    try {
+      final bagian = s.trim().split(' ');
+      final tgl = bagian[0].split('-');
+      final jam = bagian.length > 1 ? bagian[1].split(':') : ['0', '0'];
+      return DateTime(int.parse(tgl[2]), int.parse(tgl[1]), int.parse(tgl[0]), int.parse(jam[0]), int.parse(jam[1]));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatUntukSimpan(DateTime d) {
+    String pad(int x) => x.toString().padLeft(2, '0');
+    return '${d.year}-${pad(d.month)}-${pad(d.day)}T${pad(d.hour)}:${pad(d.minute)}';
+  }
+
+  Future<void> _pilihTanggalJam({required bool mulai}) async {
+    final awal = (mulai ? _mulai : _selesai) ?? DateTime.now();
+    final tanggal = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2020), lastDate: DateTime(2100));
+    if (tanggal == null) return;
+    if (!mounted) return;
+    final jam = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(awal));
+    final hasil = DateTime(tanggal.year, tanggal.month, tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0);
+    setState(() => mulai ? _mulai = hasil : _selesai = hasil);
   }
 
   @override
@@ -232,6 +274,7 @@ class _FormDiskonState extends State<_FormDiskon> {
     _persentase.dispose();
     _nominal.dispose();
     _maksimalPotongan.dispose();
+    _tokoId.dispose();
     super.dispose();
   }
 
@@ -257,6 +300,9 @@ class _FormDiskonState extends State<_FormDiskon> {
         'potongan_langsung': _potonganLangsung,
         'berlaku_per_hari_dan_per_toko': _berlakuPerHariDanPerToko,
         'aktif': _aktif,
+        'tanggal_mulai': _mulai == null ? '' : _formatUntukSimpan(_mulai!),
+        'tanggal_selesai': _selesai == null ? '' : _formatUntukSimpan(_selesai!),
+        if (Sesi.instance.isAdmin) 'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -382,6 +428,43 @@ class _FormDiskonState extends State<_FormDiskon> {
                 value: _berlakuPerHariDanPerToko,
                 onChanged: (v) => setState(() => _berlakuPerHariDanPerToko = v),
               ),
+              const SizedBox(height: 12),
+              const Text('Masa Berlaku (kosongkan = tanpa batas)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pilihTanggalJam(mulai: true),
+                      icon: const Icon(Icons.event, size: 16),
+                      label: Text(_mulai == null ? 'Mulai' : '${_mulai!.day}-${_mulai!.month}-${_mulai!.year} ${_mulai!.hour.toString().padLeft(2, '0')}:${_mulai!.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  if (_mulai != null) IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() => _mulai = null)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pilihTanggalJam(mulai: false),
+                      icon: const Icon(Icons.event_busy, size: 16),
+                      label: Text(_selesai == null ? 'Selesai' : '${_selesai!.day}-${_selesai!.month}-${_selesai!.year} ${_selesai!.hour.toString().padLeft(2, '0')}:${_selesai!.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  if (_selesai != null) IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() => _selesai = null)),
+                ],
+              ),
+              if (Sesi.instance.isAdmin) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _tokoId,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Target Toko (ID, kosongkan = semua toko)',
+                    helperText: 'Hanya admin/manager yg bisa memilih toko tertentu -- akun toko selalu otomatis ke tokonya sendiri.',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Aktif'), value: _aktif, onChanged: (v) => setState(() => _aktif = v)),
               const SizedBox(height: 12),
               SizedBox(
