@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/layar_pelanggan_broadcaster.dart';
 import 'struk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -56,7 +57,28 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   @override
   void dispose() {
     _debounceDiskon?.cancel();
+    LayarPelangganBroadcaster.instance.berhenti();
     super.dispose();
+  }
+
+  /// Siarkan isi keranjang saat ini ke Layar Pelanggan (spec §16) --
+  /// dipanggil di tiap titik mutasi keranjang (qty/member/diskon), sama
+  /// dgn titik panggil `_jadwalkanEvaluasiDiskon()`.
+  void _siarkanKeranjang() {
+    LayarPelangganBroadcaster.instance.jadwalkanKirim(
+      items: widget.keranjang
+          .map((i) => {
+                'nama': i.produk.nama,
+                'jumlah': i.jumlah,
+                'harga': i.produk.hargaJual,
+                'subtotal': i.subtotalSetelahDiskon,
+              })
+          .toList(),
+      subtotal: _subtotal,
+      diskon: _totalDiskon,
+      total: _total,
+      memberNama: _memberTerpilih?.nama,
+    );
   }
 
   double get _subtotal => widget.keranjang.fold(0, (s, i) => s + i.subtotal);
@@ -78,6 +100,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
         widget.keranjang.remove(item);
       }
     });
+    _siarkanKeranjang();
     _jadwalkanEvaluasiDiskon();
   }
 
@@ -116,6 +139,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       // Evaluasi diskon gagal (mis. offline) -- keranjang tetap bisa dibayar
       // tanpa diskon otomatis, bukan alasan memblokir transaksi.
     }
+    _siarkanKeranjang();
   }
 
   Future<void> _pilihMember() async {
@@ -128,6 +152,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
         _memberTerpilih = terpilih;
         _saldoMember = null;
       });
+      _siarkanKeranjang();
       _jadwalkanEvaluasiDiskon();
       try {
         final hasil = await ApiClient.instance.aksi('saldo_member', {'id_member': terpilih.id});
@@ -143,6 +168,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       _memberTerpilih = null;
       _saldoMember = null;
     });
+    _siarkanKeranjang();
     _jadwalkanEvaluasiDiskon();
   }
 
@@ -227,6 +253,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       final payload = _buatPayload(kodeUnik, DateTime.now());
       await ApiClient.instance.aksi('draft_bayar', payload);
       widget.keranjang.clear();
+      LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
@@ -285,6 +312,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       final totalStruk = _total;
       final pajakStruk = _pajak;
       widget.keranjang.clear();
+      LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => StrukScreen(

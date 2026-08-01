@@ -14,6 +14,7 @@ import '../screens/log_error_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
+import '../screens/layar_pelanggan_screen.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -165,6 +166,14 @@ class AppDrawer extends StatelessWidget {
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KonfigurasiScreen()));
                       },
                     ),
+                  _ItemMenu(
+                    icon: Icons.desktop_windows_outlined,
+                    label: 'Layar Pelanggan',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+                    },
+                  ),
                 ],
               ),
             ),

@@ -18,6 +18,7 @@ import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
+import '../screens/layar_pelanggan_screen.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -29,7 +30,7 @@ const kAmbangLebarDesktop = 900.0;
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
 /// urutan/daftar menu tetap satu sumber kebenaran.
-enum MenuEBisnis { kasir, ringkasan, pesanan, anggota, produk, stokOpname, kulakan, diskon, returPenjualan, riwayatPenjualan, laporanTransaksi, laporanLaporan, riwayatSinkron, logError, konfigurasi }
+enum MenuEBisnis { kasir, ringkasan, pesanan, anggota, produk, stokOpname, kulakan, diskon, returPenjualan, riwayatPenjualan, laporanTransaksi, laporanLaporan, riwayatSinkron, logError, konfigurasi, layarPelanggan }
 
 class _ItemMenuShell {
   final MenuEBisnis kunci;
@@ -82,6 +83,7 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi', builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error', builder: _bangunLogError),
   _ItemMenuShell(MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi', builder: _bangunKonfigurasi),
+  _ItemMenuShell(MenuEBisnis.layarPelanggan, Icons.desktop_windows_outlined, 'Layar Pelanggan', builder: _bangunLayarPelanggan),
 ];
 
 Widget _bangunKasir(BuildContext c) => const KasirScreen();
@@ -98,6 +100,7 @@ Widget _bangunLaporanTransaksi(BuildContext c) => const LaporanTransaksiScreen()
 Widget _bangunRiwayatSinkron(BuildContext c) => const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
+Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 
 void _pindahMenu(BuildContext context, _ItemMenuShell item) {
   if (item.segeraHadir || item.builder == null) {
