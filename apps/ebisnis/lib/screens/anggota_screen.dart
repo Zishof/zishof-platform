@@ -6,6 +6,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/dashboard_charts.dart';
 
 /// Layar Customer/Anggota (padanan anggota.html/anggota-renderer.js Electron)
 /// -- BEDA dari Produk: daftarnya paginasi SERVER-SIDE (aksi `anggota_list`
@@ -267,17 +268,27 @@ class _KartuStatistikAnggota extends StatelessWidget {
       (Icons.pause_circle_outline, 'Nonaktif', '${statistik['totalNonaktif'] ?? 0}', AppColors.textSecondary),
       (Icons.lock_outline, 'Wajib PIN', '${statistik['totalWajibPin'] ?? 0}', AppColors.warning),
     ];
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: item.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final (icon, label, nilai, warna) = item[i];
-          return SizedBox(width: 130, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
-        },
-      ),
+    final byJenis = titikDariList(statistik['byJenis'] as List?, nilaiKey: 'jumlah');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: item.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final (icon, label, nilai, warna) = item[i];
+              return SizedBox(width: 130, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
+            },
+          ),
+        ),
+        if (byJenis.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          AppSectionCard(judul: 'Anggota per Jenis Keanggotaan', child: BarHorizontal(data: byJenis, tampilkanPeringkat: false)),
+        ],
+      ],
     );
   }
 }
