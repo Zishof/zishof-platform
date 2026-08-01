@@ -11,6 +11,8 @@ import 'package:window_manager/window_manager.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
+import 'screens/pengaturan_server_screen.dart';
+import 'services/server_config.dart';
 
 /// Penangkap error global (padanan error-capture.js Electron) -- setiap
 /// exception Flutter tak tertangani (widget build error) DAN setiap error
@@ -73,6 +75,7 @@ class _GerbangAwal extends StatefulWidget {
 
 class _GerbangAwalState extends State<_GerbangAwal> {
   bool _memeriksa = true;
+  bool _perluSetupServer = false;
   InfoUpdate? _infoUpdate;
 
   @override
@@ -83,6 +86,15 @@ class _GerbangAwalState extends State<_GerbangAwal> {
   }
 
   Future<void> _periksaToken() async {
+    // Alamat server WAJIB diatur dulu (sekali di awal) sebelum apa pun lain
+    // -- padanan gerbang setup.html/main.js desktop-pos-electron: satu
+    // APK/EXE eBisnis harus bisa dipakai institusi mana pun, jadi baseUrl
+    // TIDAK BOLEH hardcode (lihat ServerConfig/ApiClient.baseUrl).
+    await ServerConfig.instance.muat();
+    if (!ServerConfig.instance.sudahDiatur) {
+      if (mounted) setState(() => _perluSetupServer = true);
+      return;
+    }
     await ApiClient.instance.muatTokenTersimpan();
     await IdentitasMesin.instance.muat();
     if (mounted) setState(() => _memeriksa = false);
@@ -115,6 +127,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
 
   @override
   Widget build(BuildContext context) {
+    if (_perluSetupServer) {
+      return const PengaturanServerScreen(pertamaKali: true);
+    }
     if (_memeriksa) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

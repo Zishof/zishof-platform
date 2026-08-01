@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/server_config.dart';
 
 /// Klien HTTP untuk endpoint Api_eBisnis (branded alias PosApi.java, kontrak
 /// JSON identik -- lihat JavaDoc ais.action.servlet.ApiEBisnis di server).
@@ -10,7 +11,11 @@ class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  static const String baseUrl = 'https://ebisnis.id/ebisnis/Api_eBisnis';
+  /// Dulu `static const` hardcode `https://ebisnis.id/ebisnis/Api_eBisnis` --
+  /// sekarang dibangun dari [ServerConfig] (layar Pengaturan Alamat Server)
+  /// supaya satu build APK/EXE bisa dipakai institusi mana pun, padanan
+  /// setup.html/main.js desktop-pos-electron.
+  static String get baseUrl => ServerConfig.instance.apiBaseUrl;
 
   String? _token;
 

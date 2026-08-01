@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import 'kasir_screen.dart';
+import 'pengaturan_server_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -97,6 +98,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 20, height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Text('Masuk'),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PengaturanServerScreen())),
+                        child: const Text('Ubah Alamat Server'),
+                      ),
                     ),
                   ],
                 ),
