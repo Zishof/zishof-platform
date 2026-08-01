@@ -162,6 +162,80 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
+  /// Tutup Kas (spec §17) -- selisih SELALU dihitung server (`sesi_kas_tutup`),
+  /// klien tak pernah menghitung sendiri. Sukses -> tandai lokal tertutup,
+  /// gerbang Buka Kas otomatis muncul lagi utk sesi berikutnya, lalu tampilkan
+  /// modal "Produk Perlu Direstok" (stokMenipis) langsung tanpa langkah tambahan.
+  Future<void> _bukaDialogTutupKas() async {
+    Map<String, dynamic>? status;
+    try {
+      status = await ApiClient.instance.aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat status kas: $e')));
+      return;
+    }
+    if (status['terbuka'] != true) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada sesi kas yang terbuka.')));
+      return;
+    }
+    final kasSaatIni = (status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    if (!mounted) return;
+    final hasilTutup = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogTutupKas(status: status!),
+    );
+    if (hasilTutup == null) return;
+
+    final kodeLokal = (await CoreDb.instance.sesiKasAktif())?['kode'] as String?;
+    try {
+      final hasil = await ApiClient.instance.aksi('sesi_kas_tutup', {
+        'id_toko': Sesi.instance.tokoId,
+        'kode': kodeLokal,
+        'uang_fisik': hasilTutup['uangFisik'],
+        'keterangan': hasilTutup['keterangan'],
+      });
+      if (kodeLokal != null) await CoreDb.instance.tutupSesiKasLokal(kodeLokal);
+      if (mounted) setState(() => _kasTerbuka = false);
+      final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
+      final stokMenipis = ((hasil['stokMenipis'] as List?) ?? []).cast<Map<String, dynamic>>();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Kas Ditutup'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Kas Seharusnya: ${_formatRupiah.format(kasSaatIni)}'),
+              Text('Uang Fisik: ${_formatRupiah.format(hasilTutup['uangFisik'])}'),
+              const SizedBox(height: 8),
+              Text('Selisih: ${_formatRupiah.format(selisih)}', style: TextStyle(fontWeight: FontWeight.bold, color: selisih < 0 ? Colors.red : Colors.green.shade700)),
+              if (stokMenipis.isNotEmpty) ...[
+                const Divider(height: 24),
+                Text('${stokMenipis.length} Produk Perlu Direstok:', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: stokMenipis.map((p) => Text('• ${p['nama']} (stok ${p['stok']}, min ${p['stokMinimum']})', style: const TextStyle(fontSize: 12))).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+        ),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menutup kas: $e')));
+    }
+  }
+
   Future<void> _bukaKas(double modalAwal) async {
     final kode = 'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
     await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal);
@@ -291,6 +365,8 @@ class _KasirScreenState extends State<KasirScreen> {
           tooltip: 'Sinkronkan transaksi tertunda',
         ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
+        if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
+          IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Tutup Kas'),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
       ];
 
@@ -558,6 +634,99 @@ class _KartuProduk extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Form Tutup Kas -- KPI sesi (dari `sesi_kas_status`) + input Uang Fisik
+/// (pre-fill dgn Kas Seharusnya) + catatan wajib. Mengembalikan
+/// {uangFisik, keterangan} lewat Navigator.pop kalau dikonfirmasi, null kalau
+/// dibatalkan -- perhitungan selisih SENGAJA tidak dilakukan di sini (server
+/// yang menghitung dari riwayat transaksi lengkap, lihat _bukaDialogTutupKas).
+class _DialogTutupKas extends StatefulWidget {
+  final Map<String, dynamic> status;
+  const _DialogTutupKas({required this.status});
+
+  @override
+  State<_DialogTutupKas> createState() => _DialogTutupKasState();
+}
+
+class _DialogTutupKasState extends State<_DialogTutupKas> {
+  late final TextEditingController _uangFisikController;
+  final _keteranganController = TextEditingController();
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    _uangFisikController = TextEditingController(text: kasSaatIni.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _uangFisikController.dispose();
+    _keteranganController.dispose();
+    super.dispose();
+  }
+
+  void _konfirmasi() {
+    final uangFisik = double.tryParse(_uangFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    if (uangFisik == null) {
+      setState(() => _error = 'Uang fisik wajib diisi angka.');
+      return;
+    }
+    if (_keteranganController.text.trim().isEmpty) {
+      setState(() => _error = 'Catatan penutupan wajib diisi.');
+      return;
+    }
+    Navigator.of(context).pop({'uangFisik': uangFisik, 'keterangan': _keteranganController.text.trim()});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final totalTunai = (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
+    final totalNonTunai = (widget.status['totalNonTunai'] as num?)?.toDouble() ?? 0;
+    final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    return AlertDialog(
+      title: const Text('Tutup Kas'),
+      content: SizedBox(
+        width: 360,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Modal Awal'), Text(_formatRupiah.format(modalAwal))]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Penjualan Tunai'), Text(_formatRupiah.format(totalTunai))]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Penjualan Non-Tunai'), Text(_formatRupiah.format(totalNonTunai))]),
+              const Divider(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [const Text('Kas Seharusnya', style: TextStyle(fontWeight: FontWeight.bold)), Text(_formatRupiah.format(kasSaatIni), style: const TextStyle(fontWeight: FontWeight.bold))],
+              ),
+              const SizedBox(height: 16),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+              TextField(
+                controller: _uangFisikController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Uang Fisik (hasil hitung aktual) *', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _keteranganController,
+                decoration: const InputDecoration(labelText: 'Catatan Penutupan *', border: OutlineInputBorder()),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
+        ElevatedButton(onPressed: _konfirmasi, child: const Text('Tutup Kas')),
+      ],
     );
   }
 }
