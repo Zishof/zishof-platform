@@ -49,11 +49,26 @@ void main() {
 
     String argumenJendela = '';
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      try {
-        final controller = await WindowController.fromCurrentEngine();
-        argumenJendela = controller.arguments;
-      } catch (_) {
-        // Gagal tanya (mis. platform tak dukung channel ini) -- anggap jendela utama.
+      // BUG (fixed): native `MultiWindowManager::Create` (desktop_multi_window
+      // 0.3.0) mendaftarkan wrapper jendela baru DUA KALI -- sekali via
+      // `AttachFlutterMainWindow` (arguments KOSONG, dipanggil otomatis saat
+      // registrasi plugin standar di tengah `flutter_window->Create()`) lalu
+      // sekali lagi dgn arguments YANG BENAR (setelah `Create()` kembali).
+      // Dart `main()` jendela kedua bisa saja sempat memanggil
+      // `fromCurrentEngine()` di ANTARA kedua pendaftaran itu dan dapat
+      // arguments kosong -> keliru dianggap jendela utama, jadi malah
+      // menjalankan `EBisnisApp` penuh di jendela Layar Pelanggan. Coba
+      // ulang beberapa kali (jeda pendek) sampai arguments terisi ATAU
+      // batas percobaan habis (jendela utama memang SELALU kosong).
+      for (var percobaan = 0; percobaan < 4; percobaan++) {
+        try {
+          final controller = await WindowController.fromCurrentEngine();
+          argumenJendela = controller.arguments;
+        } catch (_) {
+          // Gagal tanya (mis. platform tak dukung channel ini) -- anggap jendela utama.
+        }
+        if (argumenJendela.isNotEmpty) break;
+        await Future.delayed(const Duration(milliseconds: 50));
       }
     }
 
