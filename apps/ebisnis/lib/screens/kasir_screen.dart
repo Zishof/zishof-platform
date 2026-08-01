@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/layar_kedua.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
@@ -464,7 +465,20 @@ class _KasirScreenState extends State<KasirScreen> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AkunSayaScreen()));
   }
 
-  void _bukaLayarPelanggan() {
+  /// Windows: jendela desktop KEDUA sungguhan (bisa diseret/otomatis pindah
+  /// ke monitor kedua) -- lihat JavaDoc `bukaLayarPelangganJendelaKedua`.
+  /// Android: tetap `Navigator.push` di jendela yg sama (multi-window
+  /// desktop tak berlaku di sana, layar ponsel cuma satu).
+  Future<void> _bukaLayarPelanggan() async {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        await bukaLayarPelangganJendelaKedua();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka Layar Pelanggan: $e')));
+      }
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
   }
 

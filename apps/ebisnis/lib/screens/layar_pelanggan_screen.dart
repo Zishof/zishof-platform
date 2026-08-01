@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:win32/win32.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import 'kasir_screen.dart';
@@ -19,7 +21,17 @@ final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', deci
 /// Idle otomatis begitu kasir berhenti menyiarkan (pindah layar/transaksi
 /// selesai) atau TTL kedaluwarsa.
 class LayarPelangganScreen extends StatefulWidget {
-  const LayarPelangganScreen({super.key});
+  /// Terisi HANYA saat layar ini berjalan sbg jendela desktop KEDUA sungguhan
+  /// (dibuat `desktop_multi_window` dari `kasir_screen.dart._bukaLayarPelanggan`)
+  /// -- dipakai [_keluar] utk menutup jendela via `WindowController` alih-alih
+  /// `Navigator.pop` (jendela ini bukan route di atas KasirScreen, melainkan
+  /// root App tersendiri di engine/proses window terpisah).
+  final int? windowId;
+  final int? tokoIdOverride;
+  final String? tokoNamaOverride;
+  final String? pesanTerimaKasihOverride;
+
+  const LayarPelangganScreen({super.key, this.windowId, this.tokoIdOverride, this.tokoNamaOverride, this.pesanTerimaKasihOverride});
 
   @override
   State<LayarPelangganScreen> createState() => _LayarPelangganScreenState();
@@ -50,7 +62,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
 
   Future<void> _ambil() async {
     try {
-      final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil', {'toko_id': Sesi.instance.tokoId});
+      final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil', {'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId});
       if (!mounted) return;
       final aktif = hasil['aktif'] == true;
       setState(() {
@@ -76,18 +88,28 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   }
 
   Future<void> _keluar() async {
+    final jendelaTerpisah = widget.windowId != null;
     final yakin = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Keluar dari Layar Pelanggan?'),
-        content: const Text('Perangkat ini akan kembali ke menu Kasir.'),
+        title: const Text('Tutup Layar Pelanggan?'),
+        content: Text(jendelaTerpisah ? 'Jendela ini akan ditutup.' : 'Perangkat ini akan kembali ke menu Kasir.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Keluar')),
+          ElevatedButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Tutup')),
         ],
       ),
     );
-    if (yakin == true && mounted) {
+    if (yakin != true || !mounted) return;
+    if (jendelaTerpisah) {
+      // `desktop_multi_window` v0.3.0 (Windows) TIDAK punya method "close"
+      // (cuma show/hide) -- kirim WM_CLOSE langsung ke jendela foreground
+      // (jendela ini, krn kasir baru saja mengklik tombol di dalamnya) lewat
+      // FFI, sama seperti kasir mengklik tombol X bawaan Windows.
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        PostMessage(GetForegroundWindow(), WM_CLOSE, 0, 0);
+      }
+    } else {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const KasirScreen()));
     }
   }
@@ -141,7 +163,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            Sesi.instance.tokoNama.isEmpty ? 'Selamat Datang' : Sesi.instance.tokoNama,
+            (widget.tokoNamaOverride ?? Sesi.instance.tokoNama).isEmpty ? 'Selamat Datang' : (widget.tokoNamaOverride ?? Sesi.instance.tokoNama),
             style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),

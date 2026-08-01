@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
@@ -10,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
+import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/server_config.dart';
 
@@ -18,9 +20,20 @@ import 'services/server_config.dart';
 /// async tak tertangani (Future/Stream/isolate) ditulis ke `error_log` lokal
 /// yang sama dgn yang dipakai LogErrorScreen, supaya sebelumnya app diam-diam
 /// menelan crash tanpa jejak sama sekali -- sekarang selalu ada catatannya.
-void main() {
+///
+/// `args` -- SATU exe yang sama dijalankan ulang oleh `desktop_multi_window`
+/// utk tiap jendela kedua (Layar Pelanggan) dgn `args[0] == 'multi_window'`;
+/// lihat JavaDoc `_LayarPelangganWindowApp` di bawah dan
+/// `kasir_screen.dart._bukaLayarPelanggan` (yg memicu pembuatan jendela ini).
+void main(List<String> args) {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (args.isNotEmpty && args.first == 'multi_window') {
+    final windowId = int.parse(args[1]);
+    final argumen = args.length > 2 && args[2].isNotEmpty ? jsonDecode(args[2]) as Map<String, dynamic> : <String, dynamic>{};
+    runApp(_LayarPelangganWindowApp(windowId: windowId, argumen: argumen));
+    return;
+  }
   runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       CoreDb.instance.catatErrorLog(
@@ -38,6 +51,54 @@ void main() {
   }, (error, stack) {
     CoreDb.instance.catatErrorLog(sumber: 'zone', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
   });
+}
+
+/// Aplikasi MINIMAL utk jendela desktop kedua (Layar Pelanggan) -- TIDAK
+/// lewat gerbang login/Sesi spt `EBisnisApp` biasa (jendela ini bukan sesi
+/// kasir baru, cuma menampilkan siaran dari jendela kasir yg sudah login).
+/// Memuat ulang `ServerConfig`+token tersimpan sendiri (engine terpisah tak
+/// mewarisi memori jendela utama) supaya `ApiClient.aksi('layar_pelanggan_ambil')`
+/// tetap terautentikasi; tokoId/tokoNama/pesanTerimaKasih dioper via
+/// `argumen` (JSON dari `WindowConfiguration.arguments`) drpd via Sesi.instance.
+class _LayarPelangganWindowApp extends StatefulWidget {
+  final int windowId;
+  final Map<String, dynamic> argumen;
+  const _LayarPelangganWindowApp({required this.windowId, required this.argumen});
+
+  @override
+  State<_LayarPelangganWindowApp> createState() => _LayarPelangganWindowAppState();
+}
+
+class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
+  bool _siap = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    await ServerConfig.instance.muat();
+    await ApiClient.instance.muatTokenTersimpan();
+    if (mounted) setState(() => _siap = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: const Color(0xFF1E3A5F), useMaterial3: true),
+      home: !_siap
+          ? const Scaffold(backgroundColor: Color(0xFF0F1C2E), body: Center(child: CircularProgressIndicator()))
+          : LayarPelangganScreen(
+              windowId: widget.windowId,
+              tokoIdOverride: widget.argumen['tokoId'] as int?,
+              tokoNamaOverride: widget.argumen['tokoNama'] as String?,
+              pesanTerimaKasihOverride: widget.argumen['pesanTerimaKasih'] as String?,
+            ),
+    );
+  }
 }
 
 class EBisnisApp extends StatelessWidget {
