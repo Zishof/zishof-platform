@@ -15,6 +15,7 @@ import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
+import '../screens/laporan_screen.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -138,7 +139,15 @@ class AppDrawer extends StatelessWidget {
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanTransaksiScreen()));
                       },
                     ),
-                  if (Sesi.instance.bolehMenu('laporan')) _ItemMenu(icon: Icons.folder_outlined, label: 'Laporan-Laporan', segeraHadir: true),
+                  if (Sesi.instance.bolehMenu('laporan'))
+                    _ItemMenu(
+                      icon: Icons.folder_outlined,
+                      label: 'Laporan-Laporan',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanScreen()));
+                      },
+                    ),
                   if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
                     _ItemMenu(
                       icon: Icons.sync,

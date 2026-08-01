@@ -19,6 +19,7 @@ import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
+import '../screens/laporan_screen.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -79,7 +80,7 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined, 'Retur Penjualan', builder: _bangunReturPenjualan),
   _ItemMenuShell(MenuEBisnis.riwayatPenjualan, Icons.history, 'Riwayat Penjualan', builder: _bangunRiwayatPenjualan),
   _ItemMenuShell(MenuEBisnis.laporanTransaksi, Icons.assessment_outlined, 'Laporan Transaksi', builder: _bangunLaporanTransaksi),
-  _ItemMenuShell(MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan', segeraHadir: true),
+  _ItemMenuShell(MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan', builder: _bangunLaporanLaporan),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi', builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error', builder: _bangunLogError),
   _ItemMenuShell(MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi', builder: _bangunKonfigurasi),
@@ -97,6 +98,7 @@ Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
 Widget _bangunReturPenjualan(BuildContext c) => const ReturPenjualanScreen();
 Widget _bangunRiwayatPenjualan(BuildContext c) => const RiwayatPenjualanScreen();
 Widget _bangunLaporanTransaksi(BuildContext c) => const LaporanTransaksiScreen();
+Widget _bangunLaporanLaporan(BuildContext c) => const LaporanScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) => const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
