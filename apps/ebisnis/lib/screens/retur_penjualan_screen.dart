@@ -165,6 +165,13 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       setState(() => _errorSimpan = 'Pilih minimal satu barang untuk diretur.');
       return;
     }
+    for (final b in dipilih) {
+      final qtyAsli = (b.item['qty'] as num?)?.toDouble() ?? 0;
+      if (b.qty <= 0 || b.qty > qtyAsli) {
+        setState(() => _errorSimpan = 'Qty Retur "${b.item['nama']}" harus antara 0 dan ${qtyAsli.toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2)} (jumlah asli dibeli).');
+        return;
+      }
+    }
     setState(() {
       _menyimpan = true;
       _errorSimpan = null;
@@ -278,12 +285,21 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
                       Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: b.qtyController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(labelText: 'Qty Retur (maks ${b.item['qty']})', border: const OutlineInputBorder(), isDense: true),
-                              onChanged: (_) => setBarisState(() {}),
-                            ),
+                            child: Builder(builder: (_) {
+                              final qtyAsli = (b.item['qty'] as num?)?.toDouble() ?? 0;
+                              final lebih = b.qty > qtyAsli;
+                              return TextField(
+                                controller: b.qtyController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Qty Retur (maks ${b.item['qty']})',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                  errorText: lebih ? 'Melebihi jumlah dibeli' : null,
+                                ),
+                                onChanged: (_) => setBarisState(() {}),
+                              );
+                            }),
                           ),
                           const SizedBox(width: 8),
                           Expanded(

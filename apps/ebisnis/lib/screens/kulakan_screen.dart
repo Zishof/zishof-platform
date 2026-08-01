@@ -39,6 +39,7 @@ class _KulakanScreenState extends State<KulakanScreen> {
   List<Map<String, dynamic>> _riwayat = [];
   int _halaman = 1;
   int _total = 0;
+  String _kataKunciRiwayat = '';
 
   @override
   void initState() {
@@ -63,7 +64,11 @@ class _KulakanScreenState extends State<KulakanScreen> {
       _errorRiwayat = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('kulakan_list', {'page': _halaman, 'page_size': _pageSize});
+      final hasil = await ApiClient.instance.aksi('kulakan_list', {
+        'page': _halaman,
+        'page_size': _pageSize,
+        if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
+      });
       setState(() {
         _riwayat = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
@@ -247,6 +252,15 @@ class _KulakanScreenState extends State<KulakanScreen> {
                     style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
               ),
             const Text('Riwayat Kulakan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
+            TextField(
+              decoration: const InputDecoration(hintText: 'Cari nama produk/faktur/supplier...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
+              onSubmitted: (v) {
+                _kataKunciRiwayat = v;
+                _halaman = 1;
+                _muatRiwayat();
+              },
+            ),
             const SizedBox(height: 8),
             if (_memuatRiwayat)
               const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
