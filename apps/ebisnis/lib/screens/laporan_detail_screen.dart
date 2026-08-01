@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
@@ -95,6 +97,47 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     }
   }
 
+  /// Ekspor CSV -- spec meminta CSV di samping PDF utk katalog Laporan-
+  /// Laporan (~150 laporan), yg sebelumnya HANYA punya PDF. Dibangun MURNI
+  /// client-side dari `_hasil` yg sudah dimuat lewat "Tampilkan" (kolom/baris
+  /// SAMA persis dgn yg dirender `_TabelLaporan`) -- tak perlu aksi server
+  /// baru, cukup satu kali `laporan_jalankan` melayani PDF (server) & CSV
+  /// (klien) sekaligus.
+  Future<void> _eksporCsv() async {
+    final hasil = _hasil;
+    if (hasil == null) return;
+    final kolom = ((hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final baris = ((hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
+    if (kolom.isEmpty) return;
+
+    String escapeCsv(String s) {
+      if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+        return '"${s.replaceAll('"', '""')}"';
+      }
+      return s;
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln(kolom.map((k) => escapeCsv((k['l'] as String?) ?? '')).join(','));
+    for (final r in baris) {
+      buffer.writeln(r.map((v) => escapeCsv(v?.toString() ?? '')).join(','));
+    }
+
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+      final namaFile = '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.csv';
+      final path = await FilePicker.platform.saveFile(dialogTitle: 'Simpan Laporan (CSV)', fileName: namaFile, bytes: bytes, type: FileType.custom, allowedExtensions: ['csv']);
+      if (path == null) return;
+      // Sama seperti ekspor Excel Produk -- Desktop hanya mengembalikan path,
+      // mobile sudah menulis via `bytes`; tulis ulang idempoten (isi sama).
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('CSV disimpan: $path')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengekspor CSV: $e')));
+    }
+  }
+
   Future<void> _pilihTanggal({required bool mulai}) async {
     final awal = (mulai ? _tglMulai : _tglSampai) ?? DateTime.now();
     final dipilih = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2015), lastDate: DateTime(2100));
@@ -164,6 +207,12 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
                         onPressed: _hasil == null || _memprosesPdf ? null : _cetakPdf,
                         icon: _memprosesPdf ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.picture_as_pdf_outlined),
                         label: const Text('PDF'),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: _hasil == null ? null : _eksporCsv,
+                        icon: const Icon(Icons.table_chart_outlined),
+                        label: const Text('CSV'),
                       ),
                     ],
                   ),
