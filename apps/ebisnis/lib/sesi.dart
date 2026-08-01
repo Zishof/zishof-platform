@@ -17,6 +17,13 @@ class Sesi {
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
+  /// Multi-toko (spec: akun boleh akses lebih dari satu toko, dipilih via
+  /// `Tbmrole.tokoAksesJson`) -- `konfigurasi` sudah lama mengembalikan
+  /// `multiToko`/`daftarToko`/`tokoAktifId`, hanya klien yang belum pernah
+  /// menampilkan pemilihnya. `daftarToko`: List of {id, nama}.
+  bool multiToko = false;
+  List<Map<String, dynamic>> daftarToko = [];
+
   /// Flag per-menu dari `konfigurasi.aksesMenu` (server, Tbmrole.ebisnisMenu) --
   /// mengontrol VISIBILITAS menu di drawer/sidebar (padanan akses-menu.js
   /// Electron). Ini murni UX; gerbang SEBENARNYA tetap ditegakkan server-side
@@ -41,5 +48,7 @@ class Sesi {
     isAdmin = false;
     supervisorPedagang = false;
     aksesMenu = {};
+    multiToko = false;
+    daftarToko = [];
   }
 }

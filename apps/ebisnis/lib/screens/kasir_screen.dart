@@ -120,22 +120,88 @@ class _KasirScreenState extends State<KasirScreen> {
         gambarUrl: b['gambar_url'] as String?,
       );
 
+  void _terapkanKonfig(Map<String, dynamic> konfig) {
+    Sesi.instance
+      ..tokoNama = (konfig['tokoNama'] ?? '') as String
+      ..tokoId = konfig['tokoId'] as int?
+      ..userId = (konfig['userId'] ?? '') as String
+      ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
+      ..pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String
+      ..wajibSesiKas = konfig['wajibSesiKas'] == true
+      ..isAdmin = konfig['isAdmin'] == true
+      ..supervisorPedagang = konfig['supervisorPedagang'] == true
+      ..caraBayar = ((konfig['caraBayar'] as List?) ?? [])
+          .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
+          .toList()
+      ..aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {}).map((k, v) => MapEntry(k, v == true))
+      ..multiToko = konfig['multiToko'] == true
+      ..daftarToko = ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  /// Multi-toko -- gerbang "pilih toko" WAJIB sebelum apa pun lain kalau akun
+  /// ini boleh akses >1 toko (`konfigurasi.multiToko`, lihat JavaDoc
+  /// `Sesi.multiToko`) dan belum pernah memilih (`tokoAktifId` null). Reuse
+  /// aksi `pilih_toko_aktif` yang SUDAH ADA server (padanan `konfigurasi.jsp`
+  /// gate multi-toko) -- setelah dipilih, `konfigurasi` diambil ULANG supaya
+  /// tokoId/tokoNama/dst mencerminkan toko yang baru dipilih.
+  Future<Map<String, dynamic>> _pastikanTokoDipilih(Map<String, dynamic> konfig) async {
+    if (konfig['multiToko'] != true || konfig['tokoAktifId'] != null) return konfig;
+    final daftar = ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (daftar.isEmpty || !mounted) return konfig;
+    final dipilih = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Pilih Toko'),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Akun ini memiliki akses ke lebih dari satu toko. Pilih toko yang akan dioperasikan.')),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: daftar
+                      .map((t) => ListTile(
+                            title: Text('${t['nama']}'),
+                            onTap: () => Navigator.of(context).pop(t['id'] as int?),
+                          ))
+                      .toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (dipilih == null) return konfig;
+    try {
+      await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': dipilih});
+      return await ApiClient.instance.aksi('konfigurasi');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memilih toko: $e')));
+      return konfig;
+    }
+  }
+
+  /// Panggil lagi gerbang pilih-toko kapan saja (mis. dari Konfigurasi, saat
+  /// kasir ingin PINDAH ke toko lain di tengah sesi -- bukan cuma sekali di
+  /// awal login).
+  Future<void> _gantiToko() async {
+    final konfig = await ApiClient.instance.aksi('konfigurasi');
+    final hasilBaru = await _pastikanTokoDipilih({...konfig, 'tokoAktifId': null});
+    _terapkanKonfig(hasilBaru);
+    if (mounted) setState(() {});
+    await _muatAwal();
+  }
+
   Future<void> _sinkronKatalogDanKonfigurasi({bool tampilkanErrorJikaKosong = false}) async {
     try {
-      final konfig = await ApiClient.instance.aksi('konfigurasi');
-      Sesi.instance
-        ..tokoNama = (konfig['tokoNama'] ?? '') as String
-        ..tokoId = konfig['tokoId'] as int?
-        ..userId = (konfig['userId'] ?? '') as String
-        ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
-        ..pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String
-        ..wajibSesiKas = konfig['wajibSesiKas'] == true
-        ..isAdmin = konfig['isAdmin'] == true
-        ..supervisorPedagang = konfig['supervisorPedagang'] == true
-        ..caraBayar = ((konfig['caraBayar'] as List?) ?? [])
-            .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
-            .toList()
-        ..aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {}).map((k, v) => MapEntry(k, v == true));
+      var konfig = await ApiClient.instance.aksi('konfigurasi');
+      konfig = await _pastikanTokoDipilih(konfig);
+      _terapkanKonfig(konfig);
 
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson = (katalog['produk'] as List?) ?? [];
@@ -515,6 +581,8 @@ class _KasirScreenState extends State<KasirScreen> {
                 ),
               ),
             ),
+          if (Sesi.instance.multiToko)
+            IconButton(icon: const Icon(Icons.storefront_outlined), onPressed: _gantiToko, tooltip: 'Ganti Toko'),
           IconButton(icon: const Icon(Icons.account_circle_outlined), onPressed: _bukaAkunSaya, tooltip: 'Akun Saya'),
           IconButton(icon: const Icon(Icons.desktop_windows_outlined), onPressed: _bukaLayarPelanggan, tooltip: 'Layar Pelanggan (F9)'),
           IconButton(icon: const Icon(Icons.system_update_alt_outlined), onPressed: _cekUpdateManual, tooltip: 'Cek Update Sistem'),
