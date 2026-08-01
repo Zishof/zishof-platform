@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
 import 'package:core_update/core_update.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -21,18 +22,16 @@ import 'services/server_config.dart';
 /// yang sama dgn yang dipakai LogErrorScreen, supaya sebelumnya app diam-diam
 /// menelan crash tanpa jejak sama sekali -- sekarang selalu ada catatannya.
 ///
-/// `args` -- SATU exe yang sama dijalankan ulang oleh `desktop_multi_window`
-/// utk tiap jendela kedua (Layar Pelanggan) dgn `args[0] == 'multi_window'`;
-/// lihat JavaDoc `_LayarPelangganWindowApp` di bawah dan
-/// `kasir_screen.dart._bukaLayarPelanggan` (yg memicu pembuatan jendela ini).
-void main(List<String> args) {
+/// `desktop_multi_window` (Windows) membuat jendela kedua (Layar Pelanggan)
+/// DALAM PROSES yang sama (engine Flutter terpisah, BUKAN exe/proses baru --
+/// dicek lewat native `multi_window_manager.cc`), jadi `main()` SELALU
+/// dijalankan tanpa argumen pembeda apa pun; satu-satunya cara tiap
+/// engine tahu "apakah aku jendela kedua" adalah bertanya ke native side lewat
+/// `WindowController.fromCurrentEngine()` -- jendela utama mendapat
+/// `arguments == ''`, jendela kedua mendapat JSON yg dikirim
+/// `kasir_screen.dart._bukaLayarPelanggan`/`layar_kedua.dart`.
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  if (args.isNotEmpty && args.first == 'multi_window') {
-    final windowId = int.parse(args[1]);
-    final argumen = args.length > 2 && args[2].isNotEmpty ? jsonDecode(args[2]) as Map<String, dynamic> : <String, dynamic>{};
-    runApp(_LayarPelangganWindowApp(windowId: windowId, argumen: argumen));
-    return;
-  }
   runZonedGuarded(() async {
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
@@ -47,6 +46,23 @@ void main(List<String> args) {
       CoreDb.instance.catatErrorLog(sumber: 'flutter', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
       return true;
     };
+
+    String argumenJendela = '';
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final controller = await WindowController.fromCurrentEngine();
+        argumenJendela = controller.arguments;
+      } catch (_) {
+        // Gagal tanya (mis. platform tak dukung channel ini) -- anggap jendela utama.
+      }
+    }
+
+    if (argumenJendela.isNotEmpty) {
+      final argumen = jsonDecode(argumenJendela) as Map<String, dynamic>;
+      runApp(_LayarPelangganWindowApp(argumen: argumen));
+      return;
+    }
+
     runApp(const EBisnisApp());
   }, (error, stack) {
     CoreDb.instance.catatErrorLog(sumber: 'zone', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
@@ -56,14 +72,14 @@ void main(List<String> args) {
 /// Aplikasi MINIMAL utk jendela desktop kedua (Layar Pelanggan) -- TIDAK
 /// lewat gerbang login/Sesi spt `EBisnisApp` biasa (jendela ini bukan sesi
 /// kasir baru, cuma menampilkan siaran dari jendela kasir yg sudah login).
-/// Memuat ulang `ServerConfig`+token tersimpan sendiri (engine terpisah tak
-/// mewarisi memori jendela utama) supaya `ApiClient.aksi('layar_pelanggan_ambil')`
-/// tetap terautentikasi; tokoId/tokoNama/pesanTerimaKasih dioper via
-/// `argumen` (JSON dari `WindowConfiguration.arguments`) drpd via Sesi.instance.
+/// Memuat ulang `ServerConfig`+token tersimpan sendiri (engine Flutter
+/// terpisah tak mewarisi memori/isolate jendela utama) supaya
+/// `ApiClient.aksi('layar_pelanggan_ambil')` tetap terautentikasi;
+/// tokoId/tokoNama/pesanTerimaKasih dioper via `argumen` (JSON dari
+/// `WindowConfiguration.arguments`) drpd via Sesi.instance.
 class _LayarPelangganWindowApp extends StatefulWidget {
-  final int windowId;
   final Map<String, dynamic> argumen;
-  const _LayarPelangganWindowApp({required this.windowId, required this.argumen});
+  const _LayarPelangganWindowApp({required this.argumen});
 
   @override
   State<_LayarPelangganWindowApp> createState() => _LayarPelangganWindowAppState();
@@ -92,7 +108,7 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
       home: !_siap
           ? const Scaffold(backgroundColor: Color(0xFF0F1C2E), body: Center(child: CircularProgressIndicator()))
           : LayarPelangganScreen(
-              windowId: widget.windowId,
+              jendelaKedua: true,
               tokoIdOverride: widget.argumen['tokoId'] as int?,
               tokoNamaOverride: widget.argumen['tokoNama'] as String?,
               pesanTerimaKasihOverride: widget.argumen['pesanTerimaKasih'] as String?,

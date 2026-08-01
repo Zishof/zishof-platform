@@ -21,17 +21,17 @@ final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', deci
 /// Idle otomatis begitu kasir berhenti menyiarkan (pindah layar/transaksi
 /// selesai) atau TTL kedaluwarsa.
 class LayarPelangganScreen extends StatefulWidget {
-  /// Terisi HANYA saat layar ini berjalan sbg jendela desktop KEDUA sungguhan
+  /// `true` HANYA saat layar ini berjalan sbg jendela desktop KEDUA sungguhan
   /// (dibuat `desktop_multi_window` dari `kasir_screen.dart._bukaLayarPelanggan`)
-  /// -- dipakai [_keluar] utk menutup jendela via `WindowController` alih-alih
+  /// -- dipakai [_keluar] utk menutup jendela via FFI (WM_CLOSE) alih-alih
   /// `Navigator.pop` (jendela ini bukan route di atas KasirScreen, melainkan
-  /// root App tersendiri di engine/proses window terpisah).
-  final int? windowId;
+  /// root App tersendiri di engine Flutter terpisah, lihat `main.dart`).
+  final bool jendelaKedua;
   final int? tokoIdOverride;
   final String? tokoNamaOverride;
   final String? pesanTerimaKasihOverride;
 
-  const LayarPelangganScreen({super.key, this.windowId, this.tokoIdOverride, this.tokoNamaOverride, this.pesanTerimaKasihOverride});
+  const LayarPelangganScreen({super.key, this.jendelaKedua = false, this.tokoIdOverride, this.tokoNamaOverride, this.pesanTerimaKasihOverride});
 
   @override
   State<LayarPelangganScreen> createState() => _LayarPelangganScreenState();
@@ -88,7 +88,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   }
 
   Future<void> _keluar() async {
-    final jendelaTerpisah = widget.windowId != null;
+    final jendelaTerpisah = widget.jendelaKedua;
     final yakin = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
