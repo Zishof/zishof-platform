@@ -278,7 +278,7 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
-  Future<void> _bukaKas(double modalAwal) async {
+  Future<void> _bukaKas(double modalAwal, String catatan) async {
     final kode = 'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
     await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal);
     if (mounted) setState(() => _kasTerbuka = true);
@@ -287,6 +287,10 @@ class _KasirScreenState extends State<KasirScreen> {
         'id_toko': Sesi.instance.tokoId,
         'kode': kode,
         'modal_awal': modalAwal,
+        // Server SUDAH menerima+menyimpan field ini sejak lama
+        // (KantinHelper.sesiKasBuka -> SesiKasUtil.buka -> setKeterangan) --
+        // hanya form Buka Kas yg belum pernah mengirimkannya.
+        'keterangan': catatan,
       });
     } catch (_) {
       // Gagal tersinkron ke server -- tetap dianggap terbuka secara lokal
@@ -630,9 +634,9 @@ class _KasirScreenState extends State<KasirScreen> {
                       ? _bodyDesktop()
                       : _kontenKatalog(),
           if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
-            _OverlayBukaKas(onBuka: (modal) {
+            _OverlayBukaKas(onBuka: (modal, catatan) {
               setState(() => _modalAwalKas = modal);
-              _bukaKas(_modalAwalKas);
+              _bukaKas(_modalAwalKas, catatan);
             }),
         ],
       ),
@@ -771,7 +775,7 @@ class _KasirScreenState extends State<KasirScreen> {
 /// full-screen di pos-renderer.js: menjual tanpa sesi kas terbuka berarti
 /// rekonsiliasi tutup-kas nanti tidak akan pernah cocok).
 class _OverlayBukaKas extends StatefulWidget {
-  final void Function(double modalAwal) onBuka;
+  final void Function(double modalAwal, String catatan) onBuka;
   const _OverlayBukaKas({required this.onBuka});
 
   @override
@@ -780,10 +784,12 @@ class _OverlayBukaKas extends StatefulWidget {
 
 class _OverlayBukaKasState extends State<_OverlayBukaKas> {
   final _controller = TextEditingController(text: '0');
+  final _catatanController = TextEditingController();
 
   @override
   void dispose() {
     _controller.dispose();
+    _catatanController.dispose();
     super.dispose();
   }
 
@@ -815,13 +821,19 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Modal Awal (Rp)', border: OutlineInputBorder()),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _catatanController,
+                    decoration: const InputDecoration(labelText: 'Catatan Pembukaan (opsional)', border: OutlineInputBorder()),
+                    maxLines: 2,
+                  ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
                         final modal = double.tryParse(_controller.text.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
-                        widget.onBuka(modal);
+                        widget.onBuka(modal, _catatanController.text.trim());
                       },
                       child: const Text('Buka Kas'),
                     ),

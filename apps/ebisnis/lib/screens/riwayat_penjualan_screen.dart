@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -7,6 +11,13 @@ import 'struk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
+
+/// Cache-first (spec: "Riwayat Penjualan online-only, tanpa cache lokal") --
+/// hanya utk tampilan DEFAULT tanpa filter halaman 1 (yg paling sering
+/// dibuka), disimpan lewat `cache_referensi` generik (kunci->JSON) yg SUDAH
+/// ADA di core_db, bukan tabel baru -- cukup utk "masih bisa lihat transaksi
+/// terakhir walau offline sesaat", bukan pengganti data real-time.
+const _kunciCacheRiwayat = 'riwayat_penjualan_default';
 
 String _formatWaktu(dynamic raw) {
   final s = raw?.toString() ?? '';
@@ -46,6 +57,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     _muat();
   }
 
+  bool get _defaultTanpaFilter => _mulai == null && _sampai == null && _cariPembeli.isEmpty && _halaman == 1;
+
   Future<void> _muat() async {
     setState(() {
       _memuat = true;
@@ -63,7 +76,25 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
+      if (_defaultTanpaFilter) {
+        unawaited(CoreDb.instance.simpanCacheReferensi(_kunciCacheRiwayat, jsonEncode(hasil)));
+      }
     } catch (e) {
+      // Offline & sedang melihat tampilan default (bukan hasil filter) --
+      // pakai snapshot terakhir yg tersimpan drpd layar kosong tak berguna.
+      if (_defaultTanpaFilter) {
+        final tersimpan = await CoreDb.instance.ambilCacheReferensi(_kunciCacheRiwayat);
+        if (tersimpan != null) {
+          final hasil = jsonDecode(tersimpan) as Map<String, dynamic>;
+          setState(() {
+            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _total = (hasil['total'] as num?)?.toInt() ?? 0;
+            _error = null;
+          });
+          if (mounted) setState(() => _memuat = false);
+          return;
+        }
+      }
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _memuat = false);
