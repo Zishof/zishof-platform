@@ -5,6 +5,7 @@ import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
+import 'hak_akses_screen.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
 /// Electron) -- 4 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
@@ -391,6 +392,17 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
           children: [
+            if (Sesi.instance.isAdmin)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('Hak Akses'),
+                  subtitle: const Text('Atur menu yang boleh diakses tiap Grup Pengguna'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HakAksesScreen())),
+                ),
+              ),
             if (_data.isEmpty)
               const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('Belum ada akun.')))
             else

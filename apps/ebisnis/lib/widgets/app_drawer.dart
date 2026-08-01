@@ -16,6 +16,7 @@ import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/hak_akses_screen.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -183,6 +184,15 @@ class AppDrawer extends StatelessWidget {
                       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
                     },
                   ),
+                  if (Sesi.instance.isAdmin)
+                    _ItemMenu(
+                      icon: Icons.admin_panel_settings_outlined,
+                      label: 'Hak Akses',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HakAksesScreen()));
+                      },
+                    ),
                 ],
               ),
             ),
