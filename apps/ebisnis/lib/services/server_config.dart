@@ -30,6 +30,14 @@ class ServerConfig {
     host = sp.getString(_kHost) ?? '';
     contextPath = sp.getString(_kContextPath) ?? '';
     https = sp.getBool(_kHttps) ?? true;
+    // Migrasi versi <1.5.0 (baseUrl dulu hardcode ebisnis.id/ebisnis) --
+    // perangkat yang SUDAH pernah login (ada token tersimpan) berarti sudah
+    // dipakai lewat server itu; jangan tiba-tiba disuruh Pengaturan Server
+    // stlh update. Instalasi benar-benar baru (tak ada token) TETAP diminta
+    // mengisi sendiri -- tak ada cara tahu institusi mana yang dituju.
+    if (host.trim().isEmpty && sp.getString('token') != null) {
+      await simpan(host: 'ebisnis.id', contextPath: 'ebisnis', https: true);
+    }
   }
 
   Future<void> simpan({required String host, required String contextPath, required bool https}) async {
