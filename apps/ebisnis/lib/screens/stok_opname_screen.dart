@@ -2,19 +2,19 @@ import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../sesi.dart';
 import '../widgets/app_shell.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
 /// Layar Stok Opname (padanan stokopname.html/stokopname-renderer.js Electron)
-/// -- 3 sub-tab: Kartu Mutasi Stok (dasbor), Stok Opname (input manual/scan
-/// kamera per satu produk). Beda dari Electron: kamera di sini NATIVE
+/// -- 3 sub-tab: Kartu Mutasi Stok (dasbor), Input Opname (satu produk per
+/// simpan), SO by Scan (antrean batch -- scan banyak produk berturut-turut,
+/// baru disimpan SEMUA sekaligus lewat tombol "Simpan Semua", padanan mode
+/// cepat versi Electron utk opname banyak barang tanpa menunggu round-trip
+/// server tiap satu scan). Beda dari Electron: kamera di sini NATIVE
 /// (mobile_scanner/MLKit lewat core_hw.BarcodeScannerScreen), bukan
 /// Html5Qrcode berbasis web -- pengalaman scan harusnya lebih responsif.
-///
-/// Belum ada di iterasi ini (menyusul): antrean "SO by Scan" batch (banyak
-/// baris sekaligus baru disimpan bersamaan) -- iterasi ini simpan LANGSUNG
-/// per scan/entry (lebih sederhana, cukup utk toko baru mulai opname).
 class StokOpnameScreen extends StatefulWidget {
   const StokOpnameScreen({super.key});
 
@@ -28,7 +28,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _tab = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -55,12 +55,14 @@ class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerPr
             tabs: const [
               Tab(text: 'Kartu Mutasi Stok'),
               Tab(text: 'Input Opname'),
+              Tab(text: 'SO by Scan'),
             ],
           ),
           Expanded(
             child: TabBarView(controller: _tab, children: const [
               _TabMutasiStok(),
               _TabInputOpname(),
+              _TabSoByScan(),
             ]),
           ),
         ],
@@ -339,6 +341,43 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
 
   @override
   Widget build(BuildContext context) {
+    if (!Sesi.instance.bolehKelola) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline, color: Colors.orange, size: 20),
+                SizedBox(width: 10),
+                Expanded(child: Text('Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.', style: TextStyle(fontSize: 12))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Riwayat Hari Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          if (_riwayatHariIni.isEmpty)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: Text('Belum ada catatan hari ini.')))
+          else
+            ..._riwayatHariIni.map((k) {
+              final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 6),
+                child: ListTile(
+                  dense: true,
+                  title: Text('${k['nama']}'),
+                  subtitle: Text('${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
+                  trailing: Text('${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: selisih == 0 ? Colors.black54 : (selisih > 0 ? Colors.green : Colors.red))),
+                ),
+              );
+            }),
+        ],
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -430,6 +469,212 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
               ),
             );
           }),
+      ],
+    );
+  }
+}
+
+/// "SO by Scan" -- antrean batch: tiap scan/entry kode HANYA ditambah ke
+/// daftar lokal (`_antrean`), stok fisik diisi INLINE per baris, dan baru
+/// dikirim ke server (satu panggilan `so_simpan` per baris, berurutan) saat
+/// kasir menekan "Simpan Semua" -- padanan mode cepat versi Electron utk
+/// menghitung banyak produk berturut-turut tanpa menunggu tiap simpan
+/// selesai sebelum scan berikutnya (beda dari _TabInputOpname yg simpan
+/// LANGSUNG per satu produk).
+class _TabSoByScan extends StatefulWidget {
+  const _TabSoByScan();
+
+  @override
+  State<_TabSoByScan> createState() => _TabSoByScanState();
+}
+
+class _AntreanSo {
+  final Map<String, dynamic> produk;
+  final TextEditingController stokFisik;
+  final TextEditingController keterangan;
+  String? statusKirim; // null=belum, 'ok', atau pesan error
+  _AntreanSo(this.produk)
+      : stokFisik = TextEditingController(),
+        keterangan = TextEditingController();
+}
+
+class _TabSoByScanState extends State<_TabSoByScan> {
+  final _barcodeController = TextEditingController();
+  bool _mencari = false;
+  bool _mengirim = false;
+  String? _pesanError;
+  final List<_AntreanSo> _antrean = [];
+
+  @override
+  void dispose() {
+    _barcodeController.dispose();
+    for (final a in _antrean) {
+      a.stokFisik.dispose();
+      a.keterangan.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _tambahKeAntrean(String barcode) async {
+    final kode = barcode.trim();
+    if (kode.isEmpty) return;
+    setState(() {
+      _mencari = true;
+      _pesanError = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
+      if (_antrean.any((a) => a.produk['produkId'] == hasil['produkId'])) {
+        setState(() => _pesanError = '${hasil['nama']} sudah ada di antrean.');
+      } else {
+        setState(() => _antrean.insert(0, _AntreanSo(hasil)));
+      }
+      _barcodeController.clear();
+    } catch (e) {
+      setState(() => _pesanError = e.toString());
+    } finally {
+      if (mounted) setState(() => _mencari = false);
+    }
+  }
+
+  Future<void> _scanKamera() async {
+    final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    if (kode != null) await _tambahKeAntrean(kode);
+  }
+
+  void _hapusDariAntrean(_AntreanSo a) {
+    setState(() => _antrean.remove(a));
+    a.stokFisik.dispose();
+    a.keterangan.dispose();
+  }
+
+  Future<void> _simpanSemua() async {
+    final belumDikirim = _antrean.where((a) => a.statusKirim != 'ok').toList();
+    if (belumDikirim.isEmpty) return;
+    setState(() => _mengirim = true);
+    var berhasil = 0;
+    for (final a in belumDikirim) {
+      final stok = double.tryParse(a.stokFisik.text.replaceAll(RegExp('[^0-9.]'), ''));
+      if (stok == null) {
+        setState(() => a.statusKirim = 'Stok fisik wajib diisi');
+        continue;
+      }
+      try {
+        await ApiClient.instance.aksi('so_simpan', {
+          'produk_id': a.produk['produkId'],
+          'stok_fisik': stok,
+          'keterangan': a.keterangan.text.trim(),
+        });
+        setState(() => a.statusKirim = 'ok');
+        berhasil++;
+      } catch (e) {
+        setState(() => a.statusKirim = e.toString());
+      }
+    }
+    setState(() => _mengirim = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
+      setState(() => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Sesi.instance.bolehKelola) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+      );
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _barcodeController,
+                  decoration: const InputDecoration(labelText: 'Scan / Ketik Kode Produk', border: OutlineInputBorder(), prefixIcon: Icon(Icons.qr_code)),
+                  onSubmitted: _tambahKeAntrean,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(onPressed: _mencari ? null : _scanKamera, icon: const Icon(Icons.camera_alt), tooltip: 'Scan pakai kamera'),
+            ],
+          ),
+        ),
+        if (_mencari) const LinearProgressIndicator(),
+        if (_pesanError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(_pesanError!, style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
+          ),
+        Expanded(
+          child: _antrean.isEmpty
+              ? const Center(child: Text('Antrean kosong -- scan produk utk mulai.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _antrean.length,
+                  itemBuilder: (context, i) {
+                    final a = _antrean[i];
+                    final sukses = a.statusKirim == 'ok';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: sukses ? Colors.green.shade50 : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text('${a.produk['nama']}  ·  Sistem ${_formatAngka.format(a.produk['stokSistem'] ?? 0)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                ),
+                                if (!sukses) IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _hapusDariAntrean(a)),
+                              ],
+                            ),
+                            if (a.statusKirim != null && !sukses) Text(a.statusKirim!, style: const TextStyle(color: Colors.red, fontSize: 11)),
+                            if (!sukses)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: a.stokFisik,
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(labelText: 'Stok Fisik', isDense: true, border: OutlineInputBorder()),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: a.keterangan,
+                                      decoration: const InputDecoration(labelText: 'Keterangan', isDense: true, border: OutlineInputBorder()),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        if (_antrean.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _mengirim ? null : _simpanSemua,
+                child: _mengirim
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text('Simpan Semua (${_antrean.length})'),
+              ),
+            ),
+          ),
       ],
     );
   }
