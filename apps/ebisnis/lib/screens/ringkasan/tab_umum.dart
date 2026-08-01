@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
@@ -178,43 +180,49 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               padding: EdgeInsets.only(bottom: 8),
               child: Text('Menampilkan data SEMUA toko (akun admin).', style: TextStyle(fontSize: 11, color: Colors.black54, fontStyle: FontStyle.italic)),
             ),
-          BarisKpi(kartu: [
-            KartuKpi(label: 'Hari Ini', nilai: '${k('hariIni')['trx'] ?? 0} trx', warna: const Color(0xFF1E3A5F)),
-            KartuKpi(label: 'Omzet Hari Ini', nilai: formatRupiahDasbor.format(k('hariIni')['rp'] ?? 0), warna: const Color(0xFF2E7D32)),
-            KartuKpi(label: 'Omzet Minggu Ini', nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0), warna: const Color(0xFF0284C7)),
-            KartuKpi(label: 'Omzet Bulan Ini', nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0), warna: const Color(0xFFC0563D)),
-            KartuKpi(label: 'Omzet Semester Ini', nilai: formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0), warna: const Color(0xFFB8860B)),
-          ]),
-          const SizedBox(height: 12),
-          PanelChart(
-            judul: 'Tren Omzet',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(builder: (context, c) {
+            final lebar = c.maxWidth;
+            final kolom = lebar >= 1000 ? 5 : (lebar >= 700 ? 3 : 2);
+            return GridView.count(
+              crossAxisCount: kolom,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.5,
               children: [
-                Wrap(
-                  spacing: 6,
-                  children: ['harian', 'mingguan', 'bulanan']
-                      .map((p) => ChoiceChip(
-                            label: Text(p),
-                            selected: _periodeTren == p,
-                            onSelected: (_) {
-                              setState(() => _periodeTren = p);
-                              _muat();
-                            },
-                          ))
-                      .toList(),
-                ),
-                const SizedBox(height: 8),
-                BarVertikal(data: titikDariList(d['tren'] as List?, labelKey: 'label', nilaiKey: 'jumlah')),
+                AppKpiCard(icon: Icons.receipt_long, warna: AppColors.primary, nilai: '${k('hariIni')['trx'] ?? 0}', label: 'Transaksi Hari Ini'),
+                AppKpiCard(icon: Icons.payments_outlined, warna: AppColors.success, nilai: formatRupiahDasbor.format(k('hariIni')['rp'] ?? 0), label: 'Omzet Hari Ini'),
+                AppKpiCard(icon: Icons.calendar_view_week_outlined, warna: AppColors.info, nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0), label: 'Omzet Minggu Ini'),
+                AppKpiCard(icon: Icons.calendar_month_outlined, warna: AppColors.warning, nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0), label: 'Omzet Bulan Ini'),
+                AppKpiCard(icon: Icons.stacked_line_chart, warna: AppColors.teal, nilai: formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0), label: 'Omzet Semester Ini'),
               ],
+            );
+          }),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            judul: 'Tren Omzet',
+            aksiJudul: Wrap(
+              spacing: 6,
+              children: ['harian', 'mingguan', 'bulanan']
+                  .map((p) => ChoiceChip(
+                        label: Text(p),
+                        selected: _periodeTren == p,
+                        onSelected: (_) {
+                          setState(() => _periodeTren = p);
+                          _muat();
+                        },
+                      ))
+                  .toList(),
             ),
+            child: BarVertikal(data: titikDariList(d['tren'] as List?, labelKey: 'label', nilaiKey: 'jumlah')),
           ),
-          const SizedBox(height: 12),
-          PanelChart(judul: 'Omzet per Kategori', child: BarHorizontal(data: titikDariList(d['omzetKategori'] as List?), formatNilai: formatRupiahDasbor.format)),
-          const SizedBox(height: 12),
-          PanelChart(judul: 'Komposisi Metode Bayar', child: StackProporsional(data: titikDariList(d['metodeBayar'] as List?))),
-          const SizedBox(height: 12),
-          PanelChart(judul: 'Jam Sibuk', child: BarHorizontal(data: titikDariList(d['jamSibuk'] as List?), warna: const Color(0xFFB8860B), tampilkanPeringkat: false)),
+          const SizedBox(height: 16),
+          AppSectionCard(judul: 'Omzet per Kategori', child: BarHorizontal(data: titikDariList(d['omzetKategori'] as List?), formatNilai: formatRupiahDasbor.format)),
+          const SizedBox(height: 16),
+          AppSectionCard(judul: 'Komposisi Metode Bayar', child: StackProporsional(data: titikDariList(d['metodeBayar'] as List?))),
+          const SizedBox(height: 16),
+          AppSectionCard(judul: 'Jam Sibuk', child: BarHorizontal(data: titikDariList(d['jamSibuk'] as List?), warna: AppColors.warning, tampilkanPeringkat: false)),
           const SizedBox(height: 16),
           Row(
             children: [

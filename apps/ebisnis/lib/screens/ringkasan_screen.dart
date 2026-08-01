@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_shell.dart';
 import 'ringkasan/tab_umum.dart';
 import 'ringkasan/tab_keuangan.dart';
 import 'ringkasan/tab_produk.dart';
@@ -39,36 +40,48 @@ class _RingkasanScreenState extends State<RingkasanScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ringkasan'),
-        bottom: TabBar(
-          controller: _tab,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'Ringkasan Umum'),
-            Tab(text: 'Keuangan & Kinerja'),
-            Tab(text: 'Produk & Inventaris'),
-            Tab(text: 'Perilaku Pelanggan'),
-            Tab(text: 'Peringkat Mitra'),
-            Tab(text: 'Resep, HPP & Margin'),
-            Tab(text: 'Ramalan Penjualan'),
-            Tab(text: 'Promo & Cashback'),
-            Tab(text: 'Kepatuhan Operasional'),
-          ],
-        ),
+    return AppShell(
+      menuAktif: MenuEBisnis.ringkasan,
+      judul: 'Dashboard Bisnis',
+      subjudul: 'Ringkasan performa bisnis Anda secara real-time',
+      scrollable: false,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            controller: _tab,
+            isScrollable: true,
+            labelColor: const Color(0xFF2563EB),
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: const Color(0xFF2563EB),
+            tabAlignment: TabAlignment.start,
+            tabs: const [
+              Tab(text: 'Ringkasan Umum'),
+              Tab(text: 'Keuangan & Kinerja'),
+              Tab(text: 'Produk & Inventaris'),
+              Tab(text: 'Perilaku Pelanggan'),
+              Tab(text: 'Peringkat Mitra'),
+              Tab(text: 'Resep, HPP & Margin'),
+              Tab(text: 'Ramalan Penjualan'),
+              Tab(text: 'Promo & Cashback'),
+              Tab(text: 'Kepatuhan Operasional'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(controller: _tab, children: const [
+              RingkasanTabUmum(),
+              RingkasanTabKeuangan(),
+              RingkasanTabProduk(),
+              RingkasanTabPelanggan(),
+              RingkasanTabPeringkat(),
+              RingkasanTabResep(),
+              RingkasanTabRamalan(),
+              RingkasanTabPromo(),
+              RingkasanTabKepatuhan(),
+            ]),
+          ),
+        ],
       ),
-      body: TabBarView(controller: _tab, children: const [
-        RingkasanTabUmum(),
-        RingkasanTabKeuangan(),
-        RingkasanTabProduk(),
-        RingkasanTabPelanggan(),
-        RingkasanTabPeringkat(),
-        RingkasanTabResep(),
-        RingkasanTabRamalan(),
-        RingkasanTabPromo(),
-        RingkasanTabKepatuhan(),
-      ]),
     );
   }
 }
