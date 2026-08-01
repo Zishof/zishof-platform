@@ -15,6 +15,14 @@ class Produk {
   final bool izinkanJualMinusStok;
   final bool aktif;
 
+  /// Resep/Bahan Baku (BOM) -- daftar komponen `{produkId, nama, qty, harga}`
+  /// dari field `bahanBaku` respons `katalog` (JSON string tersimpan apa
+  /// adanya di server, dibaca ulang array persis spt yg terakhir disimpan
+  /// lewat `produk_simpan`). Server HANYA menjumlahkan qty*harga tiap baris
+  /// utk hargaBeli (produkId/nama tak dipakai server, sekadar identitas
+  /// tampilan di form -- lihat JavaDoc `_FormProduk._BahanBakuEditor`).
+  final List<Map<String, dynamic>> bahanBaku;
+
   Produk({
     required this.id,
     required this.kode,
@@ -29,6 +37,7 @@ class Produk {
     this.keterangan = '',
     this.izinkanJualMinusStok = false,
     this.aktif = true,
+    this.bahanBaku = const [],
   });
 
   factory Produk.fromJson(Map<String, dynamic> j) => Produk(
@@ -47,6 +56,7 @@ class Produk {
         // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
         // mode semuaToko) -- default true, dikoreksi lewat form Ubah bila memang dinonaktifkan.
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
+        bahanBaku: ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen

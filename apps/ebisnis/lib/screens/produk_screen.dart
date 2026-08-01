@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -22,6 +23,16 @@ const _itemPerHalaman = 20;
 /// duplikasinya kecil (satu daftar warna, tak layak file baru sendiri).
 const _paletKartuProduk = [Color(0xFF2563EB), Color(0xFF0D9488), Color(0xFFC0563D), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF0284C7)];
 
+/// Mode pencocokan duplikat -- persis 5 mode yg didukung `produk_duplikat_cari`/
+/// `produk_duplikat_hapus` server (field `jenis`, BUKAN `mode`).
+const _labelJenisDuplikat = {
+  'kode': 'Berdasarkan Kode',
+  'barcode': 'Berdasarkan Barcode',
+  'nama': 'Berdasarkan Nama',
+  'kode_barcode': 'Kode + Barcode',
+  'kode_barcode_nama': 'Kode + Barcode + Nama',
+};
+
 /// Layar Produk (padanan produk.html/produk-renderer.js Electron) -- list+
 /// cari+filter kategori+paginasi 20/hal+dasbor KPI+tambah/ubah. Reuse aksi
 /// server yg SAMA dgn Kasir (`katalog`) utk daftar (lihat catatan di
@@ -32,11 +43,9 @@ const _paletKartuProduk = [Color(0xFF2563EB), Color(0xFF0D9488), Color(0xFFC0563
 /// admin/back-office, wajar diakses saat ada koneksi (kantor/wifi toko),
 /// jadi tidak menambah kompleksitas cache lokal khusus utk layar ini.
 ///
-/// Belum ada di iterasi ini (menyusul, lihat task #182 & README repo):
-/// resep/Bahan Baku & HPP otomatis, impor/ekspor Excel, pembersihan produk
-/// duplikat, cetak Price Tag/label -- semua itu perkakas admin lanjutan,
-/// bukan alur inti "tambah/ubah satu produk" yang sudah cukup utk toko baru
-/// mulai berjualan.
+/// Perkakas admin lanjutan yang sudah ada: resep/Bahan Baku & HPP otomatis
+/// (lihat `_FormProdukState._bahanBaku`), impor/ekspor Excel, pembersihan
+/// produk duplikat (5 mode, lihat `_labelJenisDuplikat`), cetak Price Tag/label.
 class ProdukScreen extends StatefulWidget {
   const ProdukScreen({super.key});
 
@@ -123,10 +132,76 @@ class _ProdukScreenState extends State<ProdukScreen> {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FormProduk(produk: produk, kategori: _kategori),
+      builder: (_) => _FormProduk(produk: produk, kategori: _kategori, semuaProduk: _semuaProduk),
     );
     if (tersimpan == true) {
       await _muatSemua();
+    }
+  }
+
+  /// Bersihkan Duplikat -- preview (`produk_duplikat_cari`) lalu konfirmasi
+  /// hapus (`produk_duplikat_hapus`), keduanya digerbang server-side ke
+  /// admin/supervisor toko. `jenis` menentukan kunci pencocokan duplikat.
+  Future<void> _bersihkanDuplikat(String jenis, String label) async {
+    Map<String, dynamic> hasil;
+    try {
+      hasil = await ApiClient.instance.aksi('produk_duplikat_cari', {'jenis': jenis});
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memeriksa duplikat: $e')));
+      return;
+    }
+    final grup = ((hasil['grup'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (grup.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tidak ada produk duplikat ($label).')));
+      return;
+    }
+    if (!mounted) return;
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('${grup.length} Grup Duplikat ($label)'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Total ${hasil['totalProdukTerlibat'] ?? 0} produk terlibat. Produk dgn transaksi terbanyak (atau id terlama) akan dipertahankan, sisanya digabung & dihapus.'),
+                const Divider(height: 20),
+                ...grup.take(10).map((g) {
+                  final items = ((g['items'] as List?) ?? []).cast<Map<String, dynamic>>();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Kunci: ${g['kunci']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ...items.map((it) => Text('  • ${it['nama']} (${it['kode']}) -- stok ${it['stok']}, transaksi ${it['jumlahTransaksi']}', style: const TextStyle(fontSize: 11))),
+                      ],
+                    ),
+                  );
+                }),
+                if (grup.length > 10) Text('... dan ${grup.length - 10} grup lainnya.', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Gabung & Hapus')),
+        ],
+      ),
+    );
+    if (konfirmasi != true) return;
+    try {
+      final hasilHapus = await ApiClient.instance.aksi('produk_duplikat_hapus', {'jenis': jenis});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(hasilHapus['description']?.toString() ?? 'Duplikat berhasil dibersihkan.')));
+      }
+      await _muatSemua();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membersihkan: $e')));
     }
   }
 
@@ -165,6 +240,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
       IconButton(icon: const Icon(Icons.sell_outlined), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PriceTagScreen())), tooltip: 'Cetak Price Tag'),
       IconButton(icon: const Icon(Icons.download_outlined), onPressed: _eksporExcel, tooltip: 'Ekspor Excel'),
       IconButton(icon: const Icon(Icons.upload_file_outlined), onPressed: _bukaImporExcel, tooltip: 'Impor Excel'),
+      if (Sesi.instance.bolehKelola)
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.cleaning_services_outlined),
+          tooltip: 'Bersihkan Duplikat',
+          onSelected: (jenis) => _bersihkanDuplikat(jenis, _labelJenisDuplikat[jenis]!),
+          itemBuilder: (_) => _labelJenisDuplikat.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(),
+        ),
       IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
     ];
     return AppShell(
@@ -450,10 +532,29 @@ class _BarisTabelProduk extends StatelessWidget {
 class _FormProduk extends StatefulWidget {
   final Produk? produk;
   final List<Kategori> kategori;
-  const _FormProduk({required this.produk, required this.kategori});
+  final List<Produk> semuaProduk;
+  const _FormProduk({required this.produk, required this.kategori, required this.semuaProduk});
 
   @override
   State<_FormProduk> createState() => _FormProdukState();
+}
+
+/// Satu baris Bahan Baku (komponen resep) -- `produkId`/`nama` sekadar
+/// identitas tampilan (server tak memakainya utk hitungan, lihat JavaDoc
+/// [Produk.bahanBaku]), `qty`/`harga` adalah yg benar-benar dijumlahkan
+/// server jadi hargaBeli produk induk.
+class _BahanBakuBaris {
+  int? produkId;
+  String nama;
+  final TextEditingController qty;
+  final TextEditingController harga;
+  _BahanBakuBaris({this.produkId, required this.nama, String qtyAwal = '1', String hargaAwal = '0'})
+      : qty = TextEditingController(text: qtyAwal),
+        harga = TextEditingController(text: hargaAwal);
+  void dispose() {
+    qty.dispose();
+    harga.dispose();
+  }
 }
 
 class _FormProdukState extends State<_FormProduk> {
@@ -470,6 +571,7 @@ class _FormProdukState extends State<_FormProduk> {
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
+  final List<_BahanBakuBaris> _bahanBaku = [];
 
   @override
   void initState() {
@@ -485,6 +587,14 @@ class _FormProdukState extends State<_FormProduk> {
     _kategoriId = p?.kategoriId;
     _izinkanJualMinusStok = p?.izinkanJualMinusStok ?? false;
     _aktif = p?.aktif ?? true;
+    for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
+      _bahanBaku.add(_BahanBakuBaris(
+        produkId: (b['produkId'] as num?)?.toInt(),
+        nama: (b['nama'] as String?) ?? '-',
+        qtyAwal: '${b['qty'] ?? 1}',
+        hargaAwal: '${b['harga'] ?? 0}',
+      ));
+    }
   }
 
   @override
@@ -496,10 +606,29 @@ class _FormProdukState extends State<_FormProduk> {
     _hargaJual.dispose();
     _stok.dispose();
     _keterangan.dispose();
+    for (final b in _bahanBaku) {
+      b.dispose();
+    }
     super.dispose();
   }
 
   double _angka(String s) => double.tryParse(s.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
+
+  double get _totalHpp => _bahanBaku.fold(0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
+
+  Future<void> _tambahBahanBaku() async {
+    final dipilih = await showDialog<Produk>(
+      context: context,
+      builder: (_) => _DialogPilihProduk(daftar: widget.semuaProduk.where((p) => p.id != widget.produk?.id).toList()),
+    );
+    if (dipilih == null) return;
+    setState(() => _bahanBaku.add(_BahanBakuBaris(produkId: dipilih.id, nama: dipilih.nama, hargaAwal: dipilih.hargaBeli.toStringAsFixed(0))));
+  }
+
+  void _hapusBahanBaku(_BahanBakuBaris b) {
+    setState(() => _bahanBaku.remove(b));
+    b.dispose();
+  }
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
@@ -513,13 +642,16 @@ class _FormProdukState extends State<_FormProduk> {
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
         'barcode': _barcode.text.trim(),
-        'harga_beli': _angka(_hargaBeli.text),
+        'harga_beli': _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
         'harga_jual': _angka(_hargaJual.text),
         'stok': _angka(_stok.text),
         'keterangan': _keterangan.text.trim(),
         'kategori_id': _kategoriId,
         'izinkan_jual_minus_stok': _izinkanJualMinusStok,
         'aktif': _aktif,
+        'bahan_baku': _bahanBaku
+            .map((b) => {'produk_id': b.produkId, 'nama': b.nama, 'qty': _angka(b.qty.text), 'harga': _angka(b.harga.text)})
+            .toList(),
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -587,8 +719,13 @@ class _FormProdukState extends State<_FormProduk> {
                   Expanded(
                     child: TextFormField(
                       controller: _hargaBeli,
+                      enabled: _bahanBaku.isEmpty,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Harga Beli', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                        labelText: 'Harga Beli',
+                        helperText: _bahanBaku.isNotEmpty ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})' : null,
+                        border: const OutlineInputBorder(),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -614,6 +751,55 @@ class _FormProdukState extends State<_FormProduk> {
                 decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder()),
                 maxLines: 2,
               ),
+              const SizedBox(height: 16),
+              AppSectionCard(
+                judul: 'Bahan Baku (Resep) & HPP Otomatis',
+                aksiJudul: TextButton.icon(onPressed: _tambahBahanBaku, icon: const Icon(Icons.add, size: 16), label: const Text('Tambah')),
+                child: _bahanBaku.isEmpty
+                    ? const Text('Belum ada resep -- Harga Beli diisi manual. Tambahkan komponen di sini kalau produk ini dirakit dari bahan lain (HPP dihitung otomatis).', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))
+                    : Column(
+                        children: [
+                          ..._bahanBaku.map((b) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(flex: 3, child: Text(b.nama, style: const TextStyle(fontSize: 13))),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 2,
+                                      child: TextField(
+                                        controller: b.qty,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(labelText: 'Qty', isDense: true, border: OutlineInputBorder()),
+                                        onChanged: (_) => setState(() {}),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 3,
+                                      child: TextField(
+                                        controller: b.harga,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(labelText: 'Harga Satuan', isDense: true, border: OutlineInputBorder()),
+                                        onChanged: (_) => setState(() {}),
+                                      ),
+                                    ),
+                                    IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _hapusBahanBaku(b)),
+                                  ],
+                                ),
+                              )),
+                          const Divider(),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Total HPP', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(_formatRupiah.format(_totalHpp), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                            ],
+                          ),
+                        ],
+                      ),
+              ),
+              const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Boleh dijual walau stok minus'),
@@ -641,6 +827,61 @@ class _FormProdukState extends State<_FormProduk> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Dialog pencarian produk sederhana -- dipakai [_FormProdukState._tambahBahanBaku]
+/// utk memilih komponen resep dari daftar produk yg SUDAH dimuat layar Produk
+/// (tak perlu round-trip server baru, katalog di memori sudah cukup).
+class _DialogPilihProduk extends StatefulWidget {
+  final List<Produk> daftar;
+  const _DialogPilihProduk({required this.daftar});
+
+  @override
+  State<_DialogPilihProduk> createState() => _DialogPilihProdukState();
+}
+
+class _DialogPilihProdukState extends State<_DialogPilihProduk> {
+  String _kataKunci = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final tersaring = widget.daftar.where((p) => _kataKunci.isEmpty || p.nama.toLowerCase().contains(_kataKunci.toLowerCase()) || p.kode.toLowerCase().contains(_kataKunci.toLowerCase())).take(50).toList();
+    return AlertDialog(
+      title: const Text('Pilih Bahan Baku'),
+      content: SizedBox(
+        width: 360,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Cari produk...', prefixIcon: Icon(Icons.search), isDense: true, border: OutlineInputBorder()),
+              onChanged: (v) => setState(() => _kataKunci = v),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: tersaring.isEmpty
+                  ? const Center(child: Text('Tidak ditemukan.'))
+                  : ListView.builder(
+                      itemCount: tersaring.length,
+                      itemBuilder: (context, i) {
+                        final p = tersaring[i];
+                        return ListTile(
+                          dense: true,
+                          title: Text(p.nama),
+                          subtitle: Text(p.kode),
+                          trailing: Text(_formatRupiah.format(p.hargaBeli)),
+                          onTap: () => Navigator.of(context).pop(p),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal'))],
     );
   }
 }
