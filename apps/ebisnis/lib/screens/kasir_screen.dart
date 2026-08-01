@@ -524,19 +524,30 @@ class _KasirScreenState extends State<KasirScreen> {
                         ),
                         const SizedBox(height: 4),
                         Expanded(
-                          child: GridView.builder(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.82,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                            ),
-                            itemCount: _produkTersaring.length,
-                            itemBuilder: (context, i) => _KartuProduk(
-                              produk: _produkTersaring[i],
-                              onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
-                            ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Kolom RESPONSIF thd lebar layar -- SEBELUMNYA
+                              // crossAxisCount tetap 2 apa pun lebar jendela,
+                              // jadi di Desktop lebar kartu jadi ratusan piksel
+                              // dan (krn childAspectRatio tetap) tingginya ikut
+                              // meregang sampai nama+harga terdorong keluar
+                              // area yang terlihat (tampak seperti kartu kosong).
+                              final kolom = (constraints.maxWidth / 190).floor().clamp(2, 6);
+                              return GridView.builder(
+                                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: kolom,
+                                  childAspectRatio: 0.92,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                ),
+                                itemCount: _produkTersaring.length,
+                                itemBuilder: (context, i) => _KartuProduk(
+                                  produk: _produkTersaring[i],
+                                  onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -623,6 +634,12 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
   }
 }
 
+/// Palet warna "foto placeholder" berputar per produk (deterministik dari
+/// nama, BUKAN acak tiap rebuild) -- sekadar variasi visual pengganti foto
+/// asli (`gambarUrl` API ini selalu null di data uji), padanan kesan kartu
+/// bergambar pada referensi tanpa berpura-pura ada foto sungguhan.
+const _paletKartuProduk = [Color(0xFF2563EB), Color(0xFF0D9488), Color(0xFFC0563D), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF0284C7)];
+
 class _KartuProduk extends StatelessWidget {
   final Produk produk;
   final VoidCallback onTap;
@@ -632,64 +649,76 @@ class _KartuProduk extends StatelessWidget {
   Widget build(BuildContext context) {
     final habis = produk.stok <= 0;
     final stokRendah = !habis && produk.stok <= 5;
+    final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty ? 0 : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
       ),
-      child: InkWell(
-        onTap: habis ? null : onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
+      child: Opacity(
+        opacity: habis ? 0.55 : 1,
+        child: InkWell(
+          onTap: habis ? null : onTap,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Center(
-                      child: CircleAvatar(
-                        radius: 28,
-                        backgroundColor: AppColors.primary,
+                    Container(
+                      decoration: BoxDecoration(color: AppColors.latarLembut(warnaAvatar), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))),
+                      child: Center(
                         child: Text(
                           produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?',
-                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: warnaAvatar, fontSize: 26, fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),
                     Positioned(
-                      top: 0,
-                      right: 0,
+                      top: 6,
+                      right: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.latarLembut(habis ? AppColors.danger : (stokRendah ? AppColors.warning : AppColors.success)),
+                          color: habis ? AppColors.danger : (stokRendah ? AppColors.warning : Colors.white),
                           borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3)],
                         ),
                         child: Text(
                           habis ? 'Habis' : 'Stok ${produk.stok}',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: habis ? AppColors.danger : (stokRendah ? AppColors.warning : AppColors.success)),
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: habis || stokRendah ? Colors.white : AppColors.textSecondary),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(produk.nama, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13))),
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                    child: const Icon(Icons.add, color: Colors.white, size: 16),
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(produk.nama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13))),
+                        Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(color: habis ? AppColors.border : AppColors.primary, shape: BoxShape.circle),
+                          child: Icon(Icons.add, color: habis ? AppColors.textSecondary : Colors.white, size: 16),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

@@ -16,6 +16,12 @@ import 'price_tag_screen.dart';
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 const _itemPerHalaman = 20;
 
+/// Palet warna avatar placeholder (foto belum ada) -- deterministik dari
+/// nama, sama persis dgn `_paletKartuProduk` di kasir_screen.dart, tapi
+/// diduplikasi (BUKAN diimpor) krn keduanya berdiri sendiri dan skala
+/// duplikasinya kecil (satu daftar warna, tak layak file baru sendiri).
+const _paletKartuProduk = [Color(0xFF2563EB), Color(0xFF0D9488), Color(0xFFC0563D), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF0284C7)];
+
 /// Layar Produk (padanan produk.html/produk-renderer.js Electron) -- list+
 /// cari+filter kategori+paginasi 20/hal+dasbor KPI+tambah/ubah. Reuse aksi
 /// server yg SAMA dgn Kasir (`katalog`) utk daftar (lihat catatan di
@@ -249,7 +255,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
                           child: Center(child: Text('Belum ada produk.')),
                         )
                       else
-                        ..._produkHalamanIni.map((p) => _BarisProduk(produk: p, onTap: () => _bukaFormProduk(produk: p))),
+                        LayoutBuilder(
+                          builder: (context, constraints) => constraints.maxWidth >= kAmbangLebarDesktop
+                              ? _TabelProduk(produkList: _produkHalamanIni, onTap: (p) => _bukaFormProduk(produk: p))
+                              : Column(children: _produkHalamanIni.map((p) => _BarisProduk(produk: p, onTap: () => _bukaFormProduk(produk: p))).toList()),
+                        ),
                       if (_produkTersaring.length > _itemPerHalaman)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -334,6 +344,102 @@ class _BarisProduk extends StatelessWidget {
             ],
           ),
           onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tampilan tabel padat (Desktop, lebar >= [kAmbangLebarDesktop]) -- padanan
+/// visual DataTable pada referensi (Produk|SKU/Barcode|Kategori|Harga
+/// Jual|Stok|Status), TANPA kolom Brand/Outlet/Channel krn data itu tak ada
+/// di model kita (single-outlet) -- lihat keputusan "visual style only" saat
+/// diminta menyamakan tampilan dgn mockup multi-outlet.
+class _TabelProduk extends StatelessWidget {
+  final List<Produk> produkList;
+  final void Function(Produk) onTap;
+  const _TabelProduk({required this.produkList, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSectionCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(color: AppColors.pageBg, borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
+            child: const Row(
+              children: [
+                Expanded(flex: 4, child: Text('PRODUK', style: _gayaHeaderTabel)),
+                Expanded(flex: 2, child: Text('SKU / BARCODE', style: _gayaHeaderTabel)),
+                Expanded(flex: 2, child: Text('KATEGORI', style: _gayaHeaderTabel)),
+                Expanded(flex: 2, child: Text('HARGA JUAL', textAlign: TextAlign.right, style: _gayaHeaderTabel)),
+                Expanded(flex: 2, child: Text('STOK', textAlign: TextAlign.center, style: _gayaHeaderTabel)),
+                Expanded(flex: 2, child: Text('STATUS', textAlign: TextAlign.center, style: _gayaHeaderTabel)),
+              ],
+            ),
+          ),
+          for (final p in produkList) _BarisTabelProduk(produk: p, onTap: () => onTap(p)),
+        ],
+      ),
+    );
+  }
+}
+
+const _gayaHeaderTabel = TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 0.4);
+
+class _BarisTabelProduk extends StatelessWidget {
+  final Produk produk;
+  final VoidCallback onTap;
+  const _BarisTabelProduk({required this.produk, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final habis = produk.stok <= 0;
+    final rendah = !habis && produk.stok <= 5;
+    final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty ? 0 : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.latarLembut(warnaAvatar),
+                    child: Text(produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?', style: TextStyle(color: warnaAvatar, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(produk.nama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(produk.kode, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'monospace')),
+            ),
+            Expanded(flex: 2, child: Text(produk.kategoriNama.isEmpty ? '-' : produk.kategoriNama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5))),
+            Expanded(flex: 2, child: Text(_formatRupiah.format(produk.hargaJual), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5))),
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: StatusPill(label: '${produk.stok}', warna: habis ? AppColors.danger : (rendah ? AppColors.warning : AppColors.success)),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: StatusPill(label: produk.aktif ? 'Aktif' : 'Nonaktif', warna: produk.aktif ? AppColors.success : AppColors.textSecondary),
+              ),
+            ),
+          ],
         ),
       ),
     );
