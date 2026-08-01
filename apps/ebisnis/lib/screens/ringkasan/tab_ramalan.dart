@@ -51,6 +51,20 @@ class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade200)),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.amber.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Angka di halaman ini adalah estimasi berdasarkan tren 14 hari terakhir, bukan jaminan.', style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900)),
+                ),
+              ],
+            ),
+          ),
           BarisKpi(kartu: [
             KartuKpi(label: 'Total Transaksi (14h)', nilai: '${(d['totalTransaksi'] as num?)?.toStringAsFixed(0) ?? 0}', warna: const Color(0xFF1E3A5F)),
             KartuKpi(label: 'Rata-rata/hari', nilai: '${(d['rataRata'] as num?)?.toStringAsFixed(1) ?? 0}', warna: const Color(0xFF0284C7)),

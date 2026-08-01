@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
@@ -111,6 +115,116 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+
+  /// Cetak Struk dari baris transaksi Ringkasan Umum -- gap-closure (tab ini
+  /// sebelumnya sama sekali tak punya aksi cetak/batal, padahal
+  /// `tab_kepatuhan.dart` sudah menampilkan hitungan "Pembatalan Transaksi"
+  /// yg mengisyaratkan aksinya ADA di server, hanya tak diekspos di sini).
+  /// Bangun PDF 80mm sendiri dari `detail_transaksi` (pola sama persis
+  /// `struk_screen.dart._cetakStruk`) -- bukan struk offline-first spt saat
+  /// checkout, ini reprint transaksi yg SUDAH final di server.
+  Future<void> _cetakStruk(Map<String, dynamic> row) async {
+    try {
+      final hasil = await ApiClient.instance.aksi('detail_transaksi', {'id': row['idTransaksi']});
+      final items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(80 * PdfPageFormat.mm, double.infinity, marginAll: 10 * PdfPageFormat.mm),
+          build: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Text('${hasil['kode'] ?? ''}', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+              pw.Text(_formatWaktu(row['waktu']), textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 9)),
+              pw.Divider(),
+              ...items.map((i) => pw.Row(
+                    children: [
+                      pw.Expanded(child: pw.Text('${i['nama']} x${(i['qty'] as num).toStringAsFixed(0)}', style: pw.TextStyle(fontSize: 9))),
+                      pw.Text(formatRupiahDasbor.format((i['harga'] as num) * (i['qty'] as num) - ((i['diskon'] as num?) ?? 0)), style: pw.TextStyle(fontSize: 9)),
+                    ],
+                  )),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                  pw.Text(formatRupiahDasbor.format(hasil['totalBiaya'] ?? 0), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'struk-${hasil['kode']}.pdf');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cetak: $e')));
+    }
+  }
+
+  Future<void> _batalkan(Map<String, dynamic> row) async {
+    final alasanController = TextEditingController();
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Batalkan Transaksi?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${row['pembeli']} · ${_formatWaktu(row['waktu'])} akan dibatalkan permanen.'),
+            const SizedBox(height: 12),
+            TextField(controller: alasanController, decoration: const InputDecoration(labelText: 'Alasan Pembatalan *', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Ya, Batalkan')),
+        ],
+      ),
+    );
+    if (konfirmasi != true) return;
+    if (alasanController.text.trim().isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
+      return;
+    }
+    try {
+      await ApiClient.instance.aksi('batalkan_transaksi', {'id': row['idTransaksi'], 'alasan': alasanController.text.trim()});
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaksi dibatalkan.')));
+      await _muat();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  Future<void> _tampilkanAksi(Map<String, dynamic> row) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.info_outline), title: const Text('Detail'), onTap: () {
+              Navigator.of(context).pop();
+              _lihatDetail(row['idTransaksi']);
+            }),
+            ListTile(leading: const Icon(Icons.print_outlined), title: const Text('Cetak Struk'), onTap: () {
+              Navigator.of(context).pop();
+              _cetakStruk(row);
+            }),
+            if (Sesi.instance.bolehKelola)
+              ListTile(
+                leading: const Icon(Icons.cancel_outlined, color: Colors.red),
+                title: const Text('Batalkan'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _batalkan(row);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _lihatDetail(dynamic idTransaksi) async {
@@ -295,6 +409,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                       ],
                     ),
                     onTap: () => _lihatDetail(row['idTransaksi']),
+                    onLongPress: () => _tampilkanAksi(row),
                   ),
                 )),
           if (total > _pageSize)
