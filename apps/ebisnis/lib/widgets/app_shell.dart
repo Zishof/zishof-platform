@@ -97,6 +97,18 @@ class AppShell extends StatelessWidget {
   /// batas tinggi).
   final bool scrollable;
 
+  /// Bar tetap di bawah (mis. ringkasan keranjang+tombol Bayar di Kasir) --
+  /// TIDAK ikut ter-scroll bersama [body].
+  final Widget? bottomBar;
+
+  /// Sembunyikan baris judul/subjudul halaman (dipakai layar spt Kasir yang
+  /// di referensi langsung ke pencarian tanpa judul besar).
+  final bool tampilkanJudul;
+
+  /// Tombol aksi di AppBar mobile (mis. sync/refresh/logout) -- di desktop,
+  /// [aksiHeader] yang dipakai utk slot setara.
+  final List<Widget>? actionsAppBar;
+
   const AppShell({
     super.key,
     required this.menuAktif,
@@ -106,6 +118,9 @@ class AppShell extends StatelessWidget {
     required this.body,
     this.floatingActionButton,
     this.scrollable = true,
+    this.bottomBar,
+    this.tampilkanJudul = true,
+    this.actionsAppBar,
   });
 
   @override
@@ -115,10 +130,11 @@ class AppShell extends StatelessWidget {
       if (!desktop) {
         return Scaffold(
           backgroundColor: AppColors.pageBg,
-          appBar: AppBar(title: Text(judul), backgroundColor: AppColors.sidebarBg, foregroundColor: Colors.white),
+          appBar: AppBar(title: Text(judul), backgroundColor: AppColors.sidebarBg, foregroundColor: Colors.white, actions: actionsAppBar),
           drawer: const AppDrawer(),
           floatingActionButton: floatingActionButton,
           body: body,
+          bottomNavigationBar: bottomBar,
         );
       }
       return Scaffold(
@@ -132,29 +148,31 @@ class AppShell extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const _AppTopbar(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(judul, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                              if (subjudul != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(subjudul!, style: const TextStyle(color: AppColors.textSecondary))),
-                            ],
+                  if (tampilkanJudul)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(judul, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                if (subjudul != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(subjudul!, style: const TextStyle(color: AppColors.textSecondary))),
+                              ],
+                            ),
                           ),
-                        ),
-                        if (aksiHeader != null) aksiHeader!,
-                      ],
+                          if (aksiHeader != null) aksiHeader!,
+                        ],
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: scrollable
                         ? SingleChildScrollView(padding: const EdgeInsets.all(24), child: body)
-                        : Padding(padding: const EdgeInsets.fromLTRB(24, 12, 24, 0), child: body),
+                        : Padding(padding: EdgeInsets.fromLTRB(24, tampilkanJudul ? 12 : 20, 24, 0), child: body),
                   ),
+                  if (bottomBar != null) bottomBar!,
                 ],
               ),
             ),

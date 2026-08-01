@@ -2,6 +2,7 @@ import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../widgets/app_shell.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
 /// Electron) -- 3 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
@@ -32,20 +33,34 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Konfigurasi'),
-        bottom: TabBar(controller: _tab, tabs: const [
-          Tab(text: 'Identitas Mesin'),
-          Tab(text: 'Profil Toko'),
-          Tab(text: 'Akun Pengguna'),
-        ]),
+    return AppShell(
+      menuAktif: MenuEBisnis.konfigurasi,
+      judul: 'Konfigurasi',
+      subjudul: 'Identitas mesin, profil toko, dan akun pengguna',
+      scrollable: false,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            controller: _tab,
+            labelColor: const Color(0xFF2563EB),
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: const Color(0xFF2563EB),
+            tabs: const [
+              Tab(text: 'Identitas Mesin'),
+              Tab(text: 'Profil Toko'),
+              Tab(text: 'Akun Pengguna'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(controller: _tab, children: const [
+              _TabIdentitasMesin(),
+              _TabProfilToko(),
+              _TabAkunPengguna(),
+            ]),
+          ),
+        ],
       ),
-      body: TabBarView(controller: _tab, children: const [
-        _TabIdentitasMesin(),
-        _TabProfilToko(),
-        _TabAkunPengguna(),
-      ]),
     );
   }
 }

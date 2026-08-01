@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
+import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 const _itemPerHalaman = 20;
@@ -117,15 +120,17 @@ class _ProdukScreenState extends State<ProdukScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Produk'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang')],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.produk,
+      judul: 'Manajemen Produk',
+      subjudul: 'Kelola katalog produk toko Anda',
+      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+      scrollable: false,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _bukaFormProduk(),
         icon: const Icon(Icons.add),
         label: const Text('Tambah Produk'),
+        backgroundColor: AppColors.primary,
       ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -234,39 +239,23 @@ class _KartuStatistik extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final item = <(String, String, Color)>[
-      ('Total', '${statistik['totalProduk'] ?? 0}', const Color(0xFF1E3A5F)),
-      ('Aktif', '${statistik['totalAktif'] ?? 0}', const Color(0xFF2E7D32)),
-      ('Nonaktif', '${statistik['totalNonaktif'] ?? 0}', Colors.black54),
-      ('Stok Habis', '${statistik['stokHabis'] ?? 0}', Colors.red),
-      ('Stok Rendah', '${statistik['stokRendah'] ?? 0}', Colors.orange),
-      ('Nilai Stok', _formatRupiah.format((statistik['totalNilaiStok'] as num?) ?? 0), const Color(0xFFC0563D)),
+    final item = <(IconData, String, String, Color)>[
+      (Icons.inventory_2_outlined, 'Total', '${statistik['totalProduk'] ?? 0}', AppColors.primary),
+      (Icons.check_circle_outline, 'Aktif', '${statistik['totalAktif'] ?? 0}', AppColors.success),
+      (Icons.pause_circle_outline, 'Nonaktif', '${statistik['totalNonaktif'] ?? 0}', AppColors.textSecondary),
+      (Icons.remove_shopping_cart_outlined, 'Stok Habis', '${statistik['stokHabis'] ?? 0}', AppColors.danger),
+      (Icons.warning_amber_outlined, 'Stok Rendah', '${statistik['stokRendah'] ?? 0}', AppColors.warning),
+      (Icons.payments_outlined, 'Nilai Stok', _formatRupiah.format((statistik['totalNilaiStok'] as num?) ?? 0), AppColors.teal),
     ];
     return SizedBox(
-      height: 84,
+      height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: item.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final (label, nilai, warna) = item[i];
-          return Container(
-            width: 130,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: warna.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: warna.withValues(alpha: 0.25)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(nilai, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
-                Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-              ],
-            ),
-          );
+          final (icon, label, nilai, warna) = item[i];
+          return SizedBox(width: 150, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
         },
       ),
     );
@@ -281,24 +270,29 @@ class _BarisProduk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final habis = produk.stok <= 0;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF1E3A5F),
-          child: Text(produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
+    final rendah = !habis && produk.stok <= 5;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: AppSectionCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: AppColors.primary,
+            child: Text(produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
+          ),
+          title: Text(produk.nama, style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text('${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              StatusPill(label: habis ? 'Habis' : 'Stok ${produk.stok}', warna: habis ? AppColors.danger : (rendah ? AppColors.warning : AppColors.success)),
+            ],
+          ),
+          onTap: onTap,
         ),
-        title: Text(produk.nama, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(habis ? 'Habis' : 'Stok ${produk.stok}', style: TextStyle(fontSize: 11, color: habis ? Colors.red : Colors.black54)),
-          ],
-        ),
-        onTap: onTap,
       ),
     );
   }

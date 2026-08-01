@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
@@ -56,18 +57,26 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen> with Si
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Laporan Transaksi'),
-        bottom: TabBar(controller: _tab, tabs: const [
-          Tab(text: 'Report Order'),
-          Tab(text: 'Report Sesi'),
-          Tab(text: 'Report Payment'),
-        ]),
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.laporanTransaksi,
+      judul: 'Laporan Transaksi',
+      subjudul: 'Analitik order, sesi kas, dan metode pembayaran',
+      scrollable: false,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_statistik != null) _KartuStatistikTransaksi(statistik: _statistik!),
+          TabBar(
+            controller: _tab,
+            labelColor: const Color(0xFF2563EB),
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: const Color(0xFF2563EB),
+            tabs: const [
+              Tab(text: 'Report Order'),
+              Tab(text: 'Report Sesi'),
+              Tab(text: 'Report Payment'),
+            ],
+          ),
           Expanded(
             child: TabBarView(controller: _tab, children: const [
               _TabOrder(),

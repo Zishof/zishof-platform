@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -107,8 +108,13 @@ class _DiskonScreenState extends State<DiskonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Aturan Diskon'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua)]),
+    return AppShell(
+      menuAktif: MenuEBisnis.diskon,
+      judul: 'Aturan Diskon',
+      subjudul: 'Kelola aturan diskon dan cashback',
+      scrollable: false,
+      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua)],
+      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua),
       floatingActionButton: Sesi.instance.bolehKelola
           ? FloatingActionButton.extended(onPressed: () => _bukaForm(), icon: const Icon(Icons.add), label: const Text('Tambah Aturan'))
           : null,

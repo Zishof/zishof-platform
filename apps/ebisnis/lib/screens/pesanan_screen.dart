@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../widgets/app_components.dart';
+import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -221,11 +223,13 @@ class _PesananScreenState extends State<PesananScreen> {
     final jumlahTertahan = semua.length - jumlahOnline;
     final nilaiMenunggu = semua.fold<double>(0, (s, p) => s + p.totalBiaya);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pesanan'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.pesanan,
+      judul: 'Pesanan',
+      subjudul: 'Pesanan online & transaksi yang ditahan',
+      scrollable: false,
+      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)],
+      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
@@ -254,13 +258,13 @@ class _PesananScreenState extends State<PesananScreen> {
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
-                            _kartuKpi('Total', '${semua.length}', const Color(0xFF1E3A5F)),
+                            _kartuKpi(Icons.receipt_long_outlined, 'Total', '${semua.length}', const Color(0xFF1E3A5F)),
                             const SizedBox(width: 8),
-                            _kartuKpi('Online', '$jumlahOnline', const Color(0xFF0284C7)),
+                            _kartuKpi(Icons.public, 'Online', '$jumlahOnline', const Color(0xFF0284C7)),
                             const SizedBox(width: 8),
-                            _kartuKpi('Tertahan', '$jumlahTertahan', const Color(0xFFB8860B)),
+                            _kartuKpi(Icons.pause_circle_outline, 'Tertahan', '$jumlahTertahan', const Color(0xFFB8860B)),
                             const SizedBox(width: 8),
-                            _kartuKpi('Nilai Menunggu', _formatRupiah.format(nilaiMenunggu), const Color(0xFFC0563D)),
+                            _kartuKpi(Icons.hourglass_empty, 'Nilai Menunggu', _formatRupiah.format(nilaiMenunggu), const Color(0xFFC0563D)),
                           ],
                         ),
                       ),
@@ -317,24 +321,8 @@ class _PesananScreenState extends State<PesananScreen> {
     );
   }
 
-  Widget _kartuKpi(String label, String nilai, Color warna) {
-    return Container(
-      width: 130,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: warna.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: warna.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(nilai, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: warna)),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-        ],
-      ),
-    );
+  Widget _kartuKpi(IconData icon, String label, String nilai, Color warna) {
+    return SizedBox(width: 140, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
   }
 
   Future<void> _tampilkanAksi(Pesanan p) async {

@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
-import '../widgets/app_drawer.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
 
@@ -274,28 +275,53 @@ class _KasirScreenState extends State<KasirScreen> {
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
+  List<Widget> get _tombolAksi => [
+        IconButton(
+          icon: Badge(
+            label: Text('$_jumlahPending'),
+            isLabelVisible: _jumlahPending > 0,
+            child: _sinkronBerjalan
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.sync),
+          ),
+          onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
+          tooltip: 'Sinkronkan transaksi tertunda',
+        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
+        IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: const AppDrawer(),
-      appBar: AppBar(
-        title: Text(Sesi.instance.tokoNama.isEmpty ? 'eBisnis' : Sesi.instance.tokoNama),
-        actions: [
-          IconButton(
-            icon: Badge(
-              label: Text('$_jumlahPending'),
-              isLabelVisible: _jumlahPending > 0,
-              child: _sinkronBerjalan
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sync),
+    return AppShell(
+      menuAktif: MenuEBisnis.kasir,
+      judul: 'Kasir / POS',
+      tampilkanJudul: false,
+      scrollable: false,
+      actionsAppBar: _tombolAksi,
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
+      bottomBar: _keranjang.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: ElevatedButton(
+                  onPressed: _bukaKeranjang,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Keranjang ($_jumlahItemKeranjang)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_formatRupiah.format(_totalKeranjang), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
-            tooltip: 'Sinkronkan transaksi tertunda',
-          ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
-        ],
-      ),
       body: Stack(
         children: [
           _memuat
@@ -383,28 +409,6 @@ class _KasirScreenState extends State<KasirScreen> {
             }),
         ],
       ),
-      bottomNavigationBar: _keranjang.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: ElevatedButton(
-                  onPressed: _bukaKeranjang,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFC0563D),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Keranjang ($_jumlahItemKeranjang)', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(_formatRupiah.format(_totalKeranjang), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
     );
   }
 }
@@ -443,7 +447,7 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.point_of_sale, size: 48, color: Color(0xFF1E3A5F)),
+                  const Icon(Icons.point_of_sale, size: 48, color: AppColors.primary),
                   const SizedBox(height: 12),
                   const Text('Buka Kas Terlebih Dahulu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -487,9 +491,14 @@ class _KartuProduk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final habis = produk.stok <= 0;
-    return Card(
+    final stokRendah = !habis && produk.stok <= 5;
+    return Container(
       clipBehavior: Clip.antiAlias,
-      elevation: 2,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
       child: InkWell(
         onTap: habis ? null : onTap,
         child: Padding(
@@ -498,21 +507,50 @@ class _KartuProduk extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Center(
-                  child: CircleAvatar(
-                    radius: 30,
-                    backgroundColor: const Color(0xFF1E3A5F),
-                    child: Text(
-                      produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?',
-                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                child: Stack(
+                  children: [
+                    Center(
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppColors.primary,
+                        child: Text(
+                          produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?',
+                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.latarLembut(habis ? AppColors.danger : (stokRendah ? AppColors.warning : AppColors.success)),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          habis ? 'Habis' : 'Stok ${produk.stok}',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: habis ? AppColors.danger : (stokRendah ? AppColors.warning : AppColors.success)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(produk.nama, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
-              Text(habis ? 'Habis' : 'Stok ${produk.stok}', style: TextStyle(fontSize: 11, color: habis ? Colors.red : Colors.black54)),
+              Text(produk.nama, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13))),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                    child: const Icon(Icons.add, color: Colors.white, size: 16),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

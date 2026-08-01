@@ -2,6 +2,9 @@ import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
+import '../widgets/app_shell.dart';
 
 /// Layar Customer/Anggota (padanan anggota.html/anggota-renderer.js Electron)
 /// -- BEDA dari Produk: daftarnya paginasi SERVER-SIDE (aksi `anggota_list`
@@ -136,26 +139,31 @@ class _AnggotaScreenState extends State<AnggotaScreen> {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  List<Widget> get _tombolAksi => [
+        IconButton(
+          icon: _sinkronBerjalan
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.cloud_sync_outlined),
+          onPressed: _sinkronBerjalan ? null : _sinkronkanCacheOffline,
+          tooltip: 'Sinkronkan ke cache offline (utk picker member Kasir)',
+        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Customer / Anggota'),
-        actions: [
-          IconButton(
-            icon: _sinkronBerjalan
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.cloud_sync_outlined),
-            onPressed: _sinkronBerjalan ? null : _sinkronkanCacheOffline,
-            tooltip: 'Sinkronkan ke cache offline (utk picker member Kasir)',
-          ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
-        ],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.anggota,
+      judul: 'Pelanggan',
+      subjudul: 'Kelola data member/pelanggan toko Anda',
+      scrollable: false,
+      actionsAppBar: _tombolAksi,
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _bukaFormAnggota(),
         icon: const Icon(Icons.person_add_alt),
         label: const Text('Tambah Member'),
+        backgroundColor: AppColors.primary,
       ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -250,37 +258,21 @@ class _KartuStatistikAnggota extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final item = <(String, String, Color)>[
-      ('Total', '${statistik['totalAnggota'] ?? 0}', const Color(0xFF1E3A5F)),
-      ('Aktif', '${statistik['totalAktif'] ?? 0}', const Color(0xFF2E7D32)),
-      ('Nonaktif', '${statistik['totalNonaktif'] ?? 0}', Colors.black54),
-      ('Wajib PIN', '${statistik['totalWajibPin'] ?? 0}', Colors.orange),
+    final item = <(IconData, String, String, Color)>[
+      (Icons.people_outline, 'Total', '${statistik['totalAnggota'] ?? 0}', AppColors.primary),
+      (Icons.check_circle_outline, 'Aktif', '${statistik['totalAktif'] ?? 0}', AppColors.success),
+      (Icons.pause_circle_outline, 'Nonaktif', '${statistik['totalNonaktif'] ?? 0}', AppColors.textSecondary),
+      (Icons.lock_outline, 'Wajib PIN', '${statistik['totalWajibPin'] ?? 0}', AppColors.warning),
     ];
     return SizedBox(
-      height: 84,
+      height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: item.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final (label, nilai, warna) = item[i];
-          return Container(
-            width: 120,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: warna.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: warna.withValues(alpha: 0.25)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(nilai, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: warna)),
-                Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-              ],
-            ),
-          );
+          final (icon, label, nilai, warna) = item[i];
+          return SizedBox(width: 130, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
         },
       ),
     );

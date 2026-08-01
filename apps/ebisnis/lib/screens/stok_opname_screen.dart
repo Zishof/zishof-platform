@@ -2,6 +2,7 @@ import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../widgets/app_shell.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -38,18 +39,32 @@ class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stok Opname'),
-        bottom: TabBar(controller: _tab, tabs: const [
-          Tab(text: 'Kartu Mutasi Stok'),
-          Tab(text: 'Input Opname'),
-        ]),
+    return AppShell(
+      menuAktif: MenuEBisnis.stokOpname,
+      judul: 'Stok Opname',
+      subjudul: 'Kartu mutasi stok & input hasil hitung fisik',
+      scrollable: false,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            controller: _tab,
+            labelColor: const Color(0xFF2563EB),
+            unselectedLabelColor: Colors.black54,
+            indicatorColor: const Color(0xFF2563EB),
+            tabs: const [
+              Tab(text: 'Kartu Mutasi Stok'),
+              Tab(text: 'Input Opname'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(controller: _tab, children: const [
+              _TabMutasiStok(),
+              _TabInputOpname(),
+            ]),
+          ),
+        ],
       ),
-      body: TabBarView(controller: _tab, children: const [
-        _TabMutasiStok(),
-        _TabInputOpname(),
-      ]),
     );
   }
 }

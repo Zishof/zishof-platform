@@ -62,7 +62,14 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   double get _subtotal => widget.keranjang.fold(0, (s, i) => s + i.subtotal);
   double get _totalDiskon => widget.keranjang.fold(0, (s, i) => s + i.diskon);
   double get _totalCashback => widget.keranjang.fold(0, (s, i) => s + i.cashback);
-  double get _total => _subtotal - _totalDiskon;
+
+  /// `basisPajak = subtotal - totalDiskon`; `pajak = basisPajak * pajakPersen%`;
+  /// `total = basisPajak + pajak` -- persis rumus Desktop (spesifikasi §3.3).
+  /// `pajakPersen` bernilai 0 utk toko yg tak mengaktifkan PPN, jadi rumus ini
+  /// otomatis identik dgn perilaku lama (tanpa pajak) tanpa perlu flag terpisah.
+  double get _basisPajak => _subtotal - _totalDiskon;
+  double get _pajak => _basisPajak * Sesi.instance.pajakPersen / 100;
+  double get _total => _basisPajak + _pajak;
 
   void _ubahJumlah(ItemKeranjang item, int delta) {
     setState(() {

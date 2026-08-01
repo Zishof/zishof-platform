@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -156,8 +157,11 @@ class _KulakanScreenState extends State<KulakanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kulakan')),
+    return AppShell(
+      menuAktif: MenuEBisnis.kulakan,
+      judul: 'Kulakan',
+      subjudul: 'Catat pengadaan/pembelian stok dari supplier',
+      scrollable: false,
       body: RefreshIndicator(
         onRefresh: _muatRiwayat,
         child: ListView(

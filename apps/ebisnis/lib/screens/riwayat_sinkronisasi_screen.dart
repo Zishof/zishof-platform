@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -122,8 +123,13 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Riwayat Sinkronisasi'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)]),
+    return AppShell(
+      menuAktif: MenuEBisnis.riwayatSinkron,
+      judul: 'Riwayat Sinkronisasi',
+      subjudul: 'Transaksi tertunda & cache lokal perangkat ini',
+      scrollable: false,
+      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)],
+      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

@@ -1,6 +1,7 @@
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../widgets/app_shell.dart';
 
 String _formatWaktu(String iso) {
   try {
@@ -107,13 +108,13 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Log Error'),
-        actions: [
-          IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
-        ],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.logError,
+      judul: 'Log Error',
+      subjudul: 'Riwayat error lokal perangkat ini',
+      scrollable: false,
+      actionsAppBar: [IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua')],
+      aksiHeader: IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
