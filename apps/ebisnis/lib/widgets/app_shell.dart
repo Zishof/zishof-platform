@@ -13,6 +13,8 @@ import '../screens/stok_opname_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
+import '../screens/retur_penjualan_screen.dart';
+import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
@@ -27,7 +29,7 @@ const kAmbangLebarDesktop = 900.0;
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
 /// urutan/daftar menu tetap satu sumber kebenaran.
-enum MenuEBisnis { kasir, ringkasan, pesanan, anggota, produk, stokOpname, kulakan, diskon, laporanTransaksi, laporanLaporan, riwayatSinkron, logError, konfigurasi }
+enum MenuEBisnis { kasir, ringkasan, pesanan, anggota, produk, stokOpname, kulakan, diskon, returPenjualan, riwayatPenjualan, laporanTransaksi, laporanLaporan, riwayatSinkron, logError, konfigurasi }
 
 class _ItemMenuShell {
   final MenuEBisnis kunci;
@@ -50,6 +52,8 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.stokOpname: 'stokopname',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.diskon: 'diskon',
+  MenuEBisnis.returPenjualan: 'returpenjualan',
+  MenuEBisnis.riwayatPenjualan: 'riwayatpenjualan',
   MenuEBisnis.laporanTransaksi: 'laporantransaksi',
   MenuEBisnis.laporanLaporan: 'laporan',
   MenuEBisnis.riwayatSinkron: 'riwayatsinkronisasi',
@@ -71,6 +75,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname', builder: _bangunStok),
   _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan', builder: _bangunKulakan),
   _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon', builder: _bangunDiskon),
+  _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined, 'Retur Penjualan', builder: _bangunReturPenjualan),
+  _ItemMenuShell(MenuEBisnis.riwayatPenjualan, Icons.history, 'Riwayat Penjualan', builder: _bangunRiwayatPenjualan),
   _ItemMenuShell(MenuEBisnis.laporanTransaksi, Icons.assessment_outlined, 'Laporan Transaksi', builder: _bangunLaporanTransaksi),
   _ItemMenuShell(MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan', segeraHadir: true),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi', builder: _bangunRiwayatSinkron),
@@ -86,6 +92,8 @@ Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
+Widget _bangunReturPenjualan(BuildContext c) => const ReturPenjualanScreen();
+Widget _bangunRiwayatPenjualan(BuildContext c) => const RiwayatPenjualanScreen();
 Widget _bangunLaporanTransaksi(BuildContext c) => const LaporanTransaksiScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) => const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
