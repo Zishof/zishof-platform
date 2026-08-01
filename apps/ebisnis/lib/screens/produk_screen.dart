@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:core_db/core_db.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -125,10 +129,35 @@ class _ProdukScreenState extends State<ProdukScreen> {
     await _muatSemua();
   }
 
+  /// "Unduh Excel" (spec §Produk, khusus supervisor/admin -- gerbang SAMA
+  /// dgn `produk_simpan` di server) -- format identik "Daftar Barang dan
+  /// Jasa" (Accurate) yg bisa diedit lalu diunggah kembali lewat Impor Excel
+  /// tanpa menata ulang kolom (lihat JavaDoc `produkEksporExcel` di server).
+  Future<void> _eksporExcel() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('produk_ekspor_excel', {'hanya_aktif': true});
+      final b64 = hasil['fileBase64'] as String?;
+      if (b64 == null || b64.isEmpty) throw Exception('Server tidak mengembalikan berkas.');
+      final bytes = base64Decode(b64);
+      final namaFile = (hasil['namaFile'] as String?) ?? 'Katalog.xlsx';
+      final path = await FilePicker.platform.saveFile(dialogTitle: 'Simpan Katalog Produk', fileName: namaFile, bytes: bytes, type: FileType.custom, allowedExtensions: ['xlsx']);
+      if (path == null) return;
+      // Di Desktop, saveFile HANYA mengembalikan path pilihan (belum menulis apa
+      // pun) -- mobile sudah menulis via `bytes`, tulis ulang di sini idempoten
+      // (byte sama) supaya satu jalur kode bekerja di kedua platform.
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Katalog disimpan: $path')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengekspor: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tombolAksi = [
       IconButton(icon: const Icon(Icons.sell_outlined), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PriceTagScreen())), tooltip: 'Cetak Price Tag'),
+      IconButton(icon: const Icon(Icons.download_outlined), onPressed: _eksporExcel, tooltip: 'Ekspor Excel'),
       IconButton(icon: const Icon(Icons.upload_file_outlined), onPressed: _bukaImporExcel, tooltip: 'Impor Excel'),
       IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
     ];
