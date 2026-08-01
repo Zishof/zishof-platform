@@ -13,6 +13,7 @@ import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import 'struk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -86,6 +87,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   double? _saldoMember;
   Timer? _debounceDiskon;
   final _uangDiterimaController = TextEditingController(text: '0');
+  final _fokusUangDiterima = FocusNode();
   bool _uangDiterimaManual = false;
 
   @override
@@ -96,12 +98,22 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
     _memberTerpilih = widget.memberAwal;
     _sinkronkanUangDiterima();
+    // Tanpa ini, ketikan pertama kasir MENYAMBUNG ke nilai auto-sync yang
+    // sudah ada (mis. total "10.000" lalu diketik "5" jadi "10.0005")
+    // krn kursor default berada di ujung teks, bukan MENIMPA -- pilih semua
+    // begitu field difokus supaya ketikan pertama otomatis menggantikannya.
+    _fokusUangDiterima.addListener(() {
+      if (_fokusUangDiterima.hasFocus) {
+        _uangDiterimaController.selection = TextSelection(baseOffset: 0, extentOffset: _uangDiterimaController.text.length);
+      }
+    });
   }
 
   @override
   void dispose() {
     _debounceDiskon?.cancel();
     _uangDiterimaController.dispose();
+    _fokusUangDiterima.dispose();
     LayarPelangganBroadcaster.instance.berhenti();
     super.dispose();
   }
@@ -445,114 +457,134 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return KeyEventResult.ignored;
   }
 
+  static const _radiusInput = OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)));
+
   @override
   Widget build(BuildContext context) {
     return Focus(
       autofocus: true,
       onKeyEvent: _tanganiTombolKeranjang,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (widget.tampilkanJudul)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Row(
-                children: [
-                  const Text('Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  if (widget.aksiHeader != null) widget.aksiHeader!,
-                ],
+      child: ColoredBox(
+        color: AppColors.pageBg,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.tampilkanJudul)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shopping_cart, size: 18, color: AppColors.textPrimary),
+                    const SizedBox(width: 8),
+                    const Text('Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    if (widget.aksiHeader != null) widget.aksiHeader!,
+                  ],
+                ),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: _memberTerpilih == null
+                  ? OutlinedButton.icon(
+                      onPressed: _pilihMember,
+                      icon: const Icon(Icons.person_add_alt, size: 18),
+                      label: const Text('Pilih Member (opsional) · F5'),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.warning), borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        leading: CircleAvatar(backgroundColor: AppColors.warning, foregroundColor: Colors.white, child: Text(_memberTerpilih!.nama.isNotEmpty ? _memberTerpilih!.nama[0].toUpperCase() : '?')),
+                        title: Text(_memberTerpilih!.nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text([
+                          if (_memberTerpilih!.kodeIdentitas.isNotEmpty) _memberTerpilih!.kodeIdentitas,
+                          'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
+                          if (_memberTerpilih!.wajibPin) 'Wajib PIN',
+                        ].join(' · '), style: const TextStyle(fontSize: 11.5)),
+                        trailing: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: _hapusMember),
+                      ),
+                    ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: _memberTerpilih == null
-                ? OutlinedButton.icon(
-                    onPressed: _pilihMember,
-                    icon: const Icon(Icons.person_add_alt),
-                    label: const Text('Pilih Member (opsional) · F5'),
-                  )
-                : Card(
-                    color: const Color(0xFFFFF3E0),
-                    child: ListTile(
-                      leading: const Icon(Icons.person, color: Color(0xFF1E3A5F)),
-                      title: Text(_memberTerpilih!.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text([
-                        if (_memberTerpilih!.kodeIdentitas.isNotEmpty) _memberTerpilih!.kodeIdentitas,
-                        'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
-                        if (_memberTerpilih!.wajibPin) 'Wajib PIN',
-                      ].join(' · ')),
-                      trailing: IconButton(icon: const Icon(Icons.close), onPressed: _hapusMember),
-                    ),
-                  ),
-          ),
-          Expanded(
-            child: widget.keranjang.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.shopping_cart_outlined, size: 40, color: AppColors.border),
-                        const SizedBox(height: 8),
-                        const Text('Belum ada produk dipilih.', style: TextStyle(color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: widget.keranjang.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final item = widget.keranjang[i];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+            Expanded(
+              child: widget.keranjang.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shopping_cart_outlined, size: 40, color: AppColors.border),
+                          const SizedBox(height: 8),
+                          const Text('Belum ada produk dipilih.', style: TextStyle(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: AppSectionCard(
+                        padding: EdgeInsets.zero,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          itemCount: widget.keranjang.length,
+                          separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+                          itemBuilder: (context, i) {
+                            final item = widget.keranjang[i];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
                                 children: [
-                                  Text(item.produk.nama, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  Text(_formatRupiah.format(item.produk.hargaJual), style: const TextStyle(color: Colors.black54)),
-                                  if (item.diskon > 0)
-                                    Text('Diskon ${_formatRupiah.format(item.diskon)}',
-                                        style: const TextStyle(color: Color(0xFFC0563D), fontSize: 12)),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item.produk.nama, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                                        Text(_formatRupiah.format(item.produk.hargaJual), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                        if (item.diskon > 0)
+                                          Text('Diskon ${_formatRupiah.format(item.diskon)}', style: const TextStyle(color: AppColors.warning, fontSize: 11.5)),
+                                      ],
+                                    ),
+                                  ),
+                                  _tombolBulat(Icons.remove, () => _ubahJumlah(item, -1)),
+                                  SizedBox(width: 28, child: Text('${item.jumlah}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold))),
+                                  _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
+                                  SizedBox(
+                                    width: 92,
+                                    child: Text(_formatRupiah.format(item.subtotalSetelahDiskon), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  ),
                                 ],
                               ),
-                            ),
-                            IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => _ubahJumlah(item, -1)),
-                            Text('${item.jumlah}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => _ubahJumlah(item, 1)),
-                            SizedBox(
-                              width: 96,
-                              child: Text(_formatRupiah.format(item.subtotalSetelahDiskon), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: _pilihMetode,
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Metode Pembayaran · F4', border: OutlineInputBorder(), isDense: true),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(_caraBayarTerpilih?.nama ?? 'Pilih ›'),
-                        const Icon(Icons.chevron_right, size: 18),
-                      ],
+                      ),
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18)),
+                border: Border(top: BorderSide(color: AppColors.border)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, -2))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: _pilihMetode,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Metode Pembayaran · F4', border: _radiusInput, isDense: true),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(_caraBayarTerpilih?.nama ?? 'Pilih ›'),
+                          const Icon(Icons.chevron_right, size: 18),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
                 if (_totalDiskon > 0)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
@@ -600,59 +632,75 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     Text(_formatRupiah.format(_total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _uangDiterimaController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Uang Diterima', border: OutlineInputBorder(), isDense: true),
-                  onChanged: (v) => setState(() => _uangDiterimaManual = true),
-                ),
-                if (_uangDiterima > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Kembalian', style: TextStyle(fontWeight: FontWeight.w600)),
-                        Text(
-                          _formatRupiah.format(_kembalian.abs()),
-                          style: TextStyle(fontWeight: FontWeight.bold, color: _kembalian < 0 ? AppColors.danger : AppColors.success),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _uangDiterimaController,
+                    focusNode: _fokusUangDiterima,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Uang Diterima', border: _radiusInput, isDense: true),
+                    onChanged: (v) => setState(() => _uangDiterimaManual = true),
                   ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _memproses || widget.keranjang.isEmpty ? null : _tahan,
-                        icon: const Icon(Icons.pause_circle_outline, size: 18),
-                        label: const Text('Tahan · F3'),
-                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                  if (_uangDiterima > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Kembalian', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(
+                            _formatRupiah.format(_kembalian.abs()),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: _kembalian < 0 ? AppColors.danger : AppColors.success),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: _memproses || widget.keranjang.isEmpty ? null : _bayar,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _memproses || widget.keranjang.isEmpty ? null : _tahan,
+                          icon: const Icon(Icons.pause_circle_outline, size: 18),
+                          label: const Text('Tahan · F3'),
+                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                         ),
-                        child: _memproses
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Bayar · F2', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _memproses || widget.keranjang.isEmpty ? null : _bayar,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: _memproses
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('Bayar · F2', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tombolBulat(IconData icon, VoidCallback onPressed) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, size: 16),
+        style: IconButton.styleFrom(backgroundColor: AppColors.pageBg, foregroundColor: AppColors.textPrimary, shape: const CircleBorder()),
+        onPressed: onPressed,
       ),
     );
   }

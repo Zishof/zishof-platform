@@ -508,7 +508,16 @@ class _KasirScreenState extends State<KasirScreen> {
         alignment: Alignment.topLeft,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          child: panel,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Fokus Keranjang TETAP butuh kotak cari/scan -- kasir masih
+              // bisa menambah barang lain (mis. pelanggan minta tambah satu)
+              // tanpa harus keluar dari mode ini dulu.
+              Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: _kotakPencarian()),
+              Expanded(child: panel),
+            ],
+          ),
         ),
       );
     }
@@ -522,22 +531,26 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  Widget _kotakPencarian() {
+    return TextField(
+      controller: _kataKunciController,
+      decoration: const InputDecoration(
+        hintText: 'Cari / scan barcode produk...',
+        prefixIcon: Icon(Icons.search),
+        border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+        isDense: true,
+      ),
+      onChanged: (v) => setState(() => _kataKunci = v),
+      onSubmitted: _submitPencarian,
+    );
+  }
+
   Widget _kontenKatalog() {
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: TextField(
-            controller: _kataKunciController,
-            decoration: const InputDecoration(
-              hintText: 'Cari / scan barcode produk...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            onChanged: (v) => setState(() => _kataKunci = v),
-            onSubmitted: _submitPencarian,
-          ),
+          child: _kotakPencarian(),
         ),
         SizedBox(
           height: 44,
