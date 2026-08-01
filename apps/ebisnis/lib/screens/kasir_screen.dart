@@ -1,10 +1,14 @@
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_hw/core_hw.dart';
+import 'package:core_update/core_update.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
@@ -14,6 +18,8 @@ import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
 import 'layar_pelanggan_screen.dart';
+import 'bantuan_screen.dart';
+import 'akun_saya_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -366,8 +372,82 @@ class _KasirScreenState extends State<KasirScreen> {
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
+  bool _bukaLaciBerjalan = false;
+
+  /// F6 Buka Laci -- padanan `pos:buka-laci-kasir` Electron (lihat JavaDoc
+  /// `core_hw.bukaLaciKasir`): kirim pulsa ESC/POS ke printer default Windows
+  /// yang laci fisiknya nyambung lewat kabelnya. Dipakai manual (mis. tukar
+  /// uang tanpa transaksi) -- BUKAN otomatis saat checkout (itu tanggung
+  /// jawab alur cetak struk terpisah, belum ada di Flutter).
+  Future<void> _bukaLaci() async {
+    if (_bukaLaciBerjalan) return;
+    setState(() => _bukaLaciBerjalan = true);
+    try {
+      await bukaLaciKasir();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laci kasir dibuka.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka laci: $e')));
+    } finally {
+      if (mounted) setState(() => _bukaLaciBerjalan = false);
+    }
+  }
+
+  /// "Update Sistem" -- pemicu MANUAL cek rilis GitHub terbaru (padanan
+  /// pengecekan otomatis di `_GerbangAwal._cekUpdate` pada main.dart, yang
+  /// hanya jalan sekali saat app baru dibuka) -- kasir bisa cek ulang kapan
+  /// saja lewat toolbar ini tanpa perlu restart aplikasi dulu.
+  Future<void> _cekUpdateManual() async {
+    if (!mounted) return;
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final hasil = await UpdateChecker.cekTerbaru(repoOwner: 'Zishof', repoName: 'zishof-platform', versiSaatIni: info.version);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // tutup loading
+      if (hasil == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sudah menggunakan versi terbaru.')));
+        return;
+      }
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Versi ${hasil.versi} Tersedia'),
+          content: Text(hasil.catatanRilis.isEmpty ? 'Versi baru telah dirilis.' : hasil.catatanRilis),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Nanti')),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                launchUrl(Uri.parse(hasil.urlExe ?? hasil.urlRilis), mode: LaunchMode.externalApplication);
+              },
+              child: const Text('Unduh'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memeriksa pembaruan: $e')));
+    }
+  }
+
+  void _bukaBantuan() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BantuanScreen()));
+  }
+
+  void _bukaAkunSaya() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AkunSayaScreen()));
+  }
+
+  void _bukaLayarPelanggan() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+  }
+
   List<Widget> get _tombolAksi => [
-        if (defaultTargetPlatform == TargetPlatform.windows)
+        if (defaultTargetPlatform == TargetPlatform.windows) ...[
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: OutlinedButton.icon(
@@ -376,6 +456,17 @@ class _KasirScreenState extends State<KasirScreen> {
               label: Text(_fokusKeranjang ? 'Tampilan Normal' : 'Fokus Keranjang', style: const TextStyle(fontSize: 12)),
             ),
           ),
+          IconButton(icon: const Icon(Icons.account_circle_outlined), onPressed: _bukaAkunSaya, tooltip: 'Akun Saya'),
+          IconButton(icon: const Icon(Icons.desktop_windows_outlined), onPressed: _bukaLayarPelanggan, tooltip: 'Layar Pelanggan (F9)'),
+          IconButton(icon: const Icon(Icons.system_update_alt_outlined), onPressed: _cekUpdateManual, tooltip: 'Cek Update Sistem'),
+          IconButton(
+            icon: _bukaLaciBerjalan
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.point_of_sale),
+            onPressed: _bukaLaciBerjalan ? null : _bukaLaci,
+            tooltip: 'Buka Laci (F6)',
+          ),
+        ],
         IconButton(
           icon: Badge(
             label: Text('$_jumlahPending'),
@@ -385,31 +476,38 @@ class _KasirScreenState extends State<KasirScreen> {
                 : const Icon(Icons.sync),
           ),
           onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
-          tooltip: 'Sinkronkan transaksi tertunda',
+          tooltip: 'Sinkronkan transaksi tertunda (F8)',
         ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
         if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
           IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Tutup Kas'),
+        if (defaultTargetPlatform == TargetPlatform.windows)
+          IconButton(icon: const Icon(Icons.help_outline), onPressed: _bukaBantuan, tooltip: 'Bantuan (F1)'),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
       ];
 
-  /// Pintasan keyboard F8 (Sinkronkan)/F9 (Layar Pelanggan) -- padanan
-  /// pos-renderer.js `PETA_TOMBOL_KASIR` (F1-F9), TAPI hanya subset yang
-  /// punya target nyata di layar ini (F1 Bantuan/F6 Buka Laci TIDAK
-  /// diaktifkan krn kedua fitur itu belum ada di Flutter -- lihat catatan
-  /// `layar_pelanggan_broadcaster.dart`; F2-F5 Bayar/Tahan/Metode/Member
-  /// milik KeranjangScreen, bukan layar ini, krn Kasir & Keranjang adalah
-  /// 2 layar terpisah di Flutter, beda dari satu-halaman Electron).
+  /// Pintasan keyboard F1-F9 -- padanan pos-renderer.js `PETA_TOMBOL_KASIR`
+  /// (F2-F5 Bayar/Tahan/Metode/Member milik KeranjangScreen, bukan layar ini,
+  /// krn Kasir & Keranjang adalah 2 layar terpisah di Flutter/Android --
+  /// hanya relevan di Windows lewat `PanelKeranjang` yang tertanam).
   /// Desktop-only (fisik keyboard) -- diam di Android via gerbang platform.
   KeyEventResult _tanganiTombolKasir(FocusNode node, KeyEvent event) {
     if (defaultTargetPlatform != TargetPlatform.windows) return KeyEventResult.ignored;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.f1) {
+      _bukaBantuan();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f6) {
+      if (!_bukaLaciBerjalan) _bukaLaci();
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.f8) {
       if (!_sinkronBerjalan) _sinkronkanSekarang();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f9) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+      _bukaLayarPelanggan();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f7) {
@@ -504,12 +602,16 @@ class _KasirScreenState extends State<KasirScreen> {
       onSelesai: _perbaruiJumlahPending,
     );
     if (_fokusKeranjang) {
-      return Align(
-        alignment: Alignment.topLeft,
+      // Di-TENGAH horizontal (bukan topLeft) -- padanan referensi Electron:
+      // saat katalog disembunyikan, panel Keranjang jadi satu-satunya fokus
+      // layar, jadi ditaruh di tengah spt kartu modal, bukan menempel kiri
+      // dgn area kosong besar di kanan.
+      return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.max,
             children: [
               // Fokus Keranjang TETAP butuh kotak cari/scan -- kasir masih
               // bisa menambah barang lain (mis. pelanggan minta tambah satu)

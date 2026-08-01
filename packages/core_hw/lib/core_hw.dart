@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+export 'src/buka_laci.dart' show bukaLaciKasir;
+
 /// Layar full-screen pemindai barcode/QR kamera (MLKit lewat `mobile_scanner`)
 /// -- padanan kamera scan Stok Opname "SO by Scan" versi Electron (yang
 /// memakai `Html5Qrcode` berbasis web); di sini native kamera Android/iOS.

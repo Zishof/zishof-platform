@@ -11,6 +11,11 @@ dependencies:
   flutter:
     sdk: flutter
   mobile_scanner: ^6.0.7
+  # WAJIB utk Buka Laci Windows (winspool.drv RAW-write via FFI) -- lihat
+  # cash_drawer_windows.dart. Tak dipakai di Android/iOS (dart:ffi platform-
+  # gated via defaultTargetPlatform check sebelum import dieksekusi).
+  win32: ^5.10.1
+  ffi: ^2.1.3
 
 dev_dependencies:
   flutter_test:
