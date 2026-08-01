@@ -4,12 +4,15 @@ import 'dart:math';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../theme/app_colors.dart';
 import 'struk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -329,9 +332,61 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
     }
   }
 
+  /// F4 "Pilih Metode Pembayaran" (padanan pos-renderer.js) -- di Electron
+  /// tombol ini membuka picker khusus; di sini kita reuse dropdown metode
+  /// yang sudah ada, cukup ditampilkan sbg bottom sheet supaya tetap ada
+  /// TARGET nyata utk pintasan F4 (bukan sekadar fokus ke dropdown).
+  Future<void> _pilihMetode() async {
+    if (Sesi.instance.caraBayar.isEmpty) return;
+    final dipilih = await showModalBottomSheet<CaraBayar>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: Sesi.instance.caraBayar
+              .map((c) => ListTile(
+                    title: Text(c.nama),
+                    trailing: c == _caraBayarTerpilih ? const Icon(Icons.check, color: AppColors.primary) : null,
+                    onTap: () => Navigator.of(context).pop(c),
+                  ))
+              .toList(),
+        ),
+      ),
+    );
+    if (dipilih != null) setState(() => _caraBayarTerpilih = dipilih);
+  }
+
+  /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
+  /// pos-renderer.js `PETA_TOMBOL_KASIR` (lihat kasir_screen.dart utk
+  /// F8/F9 yg tinggal di layar Kasir). Desktop-only; diam di Android.
+  KeyEventResult _tanganiTombolKeranjang(FocusNode node, KeyEvent event) {
+    if (defaultTargetPlatform != TargetPlatform.windows) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.f2) {
+      if (!_memproses) _bayar();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f3) {
+      if (!_memproses) _tahan();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f4) {
+      _pilihMetode();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f5) {
+      _pilihMember();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _tanganiTombolKeranjang,
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Keranjang'),
         actions: [
@@ -484,6 +539,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
                 ),
               ),
             ),
+      ),
     );
   }
 }

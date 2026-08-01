@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
@@ -11,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
+import 'layar_pelanggan_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -370,9 +373,34 @@ class _KasirScreenState extends State<KasirScreen> {
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
       ];
 
+  /// Pintasan keyboard F8 (Sinkronkan)/F9 (Layar Pelanggan) -- padanan
+  /// pos-renderer.js `PETA_TOMBOL_KASIR` (F1-F9), TAPI hanya subset yang
+  /// punya target nyata di layar ini (F1 Bantuan/F6 Buka Laci TIDAK
+  /// diaktifkan krn kedua fitur itu belum ada di Flutter -- lihat catatan
+  /// `layar_pelanggan_broadcaster.dart`; F2-F5 Bayar/Tahan/Metode/Member
+  /// milik KeranjangScreen, bukan layar ini, krn Kasir & Keranjang adalah
+  /// 2 layar terpisah di Flutter, beda dari satu-halaman Electron).
+  /// Desktop-only (fisik keyboard) -- diam di Android via gerbang platform.
+  KeyEventResult _tanganiTombolKasir(FocusNode node, KeyEvent event) {
+    if (defaultTargetPlatform != TargetPlatform.windows) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.f8) {
+      if (!_sinkronBerjalan) _sinkronkanSekarang();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f9) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppShell(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _tanganiTombolKasir,
+      child: AppShell(
       menuAktif: MenuEBisnis.kasir,
       judul: 'Kasir / POS',
       tampilkanJudul: false,
@@ -487,6 +515,7 @@ class _KasirScreenState extends State<KasirScreen> {
               _bukaKas(_modalAwalKas);
             }),
         ],
+      ),
       ),
     );
   }
