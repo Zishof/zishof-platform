@@ -17,17 +17,14 @@ import 'struk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-/// Layar Keranjang + Checkout -- menerima referensi list yang SAMA dengan
-/// KasirScreen (bukan salinan), jadi perubahan qty/hapus di sini otomatis
-/// tercermin balik ke KasirScreen begitu layar ini ditutup.
-///
-/// Alur checkout (padanan pos-renderer.js, minus fitur khusus hardware
-/// Desktop -- cetak struk/laci-kasir/layar-pelanggan sengaja ditunda, lihat
-/// task #178-180): pilih member (opsional) -> evaluasi diskon otomatis
-/// (debounced) -> gerbang PIN bila member wajib-PIN -> bayar offline-first
-/// (tulis lokal dulu, baru coba server; gagal jaringan TIDAK membatalkan
-/// transaksi, hanya menunda sinkronisasinya).
-class KeranjangScreen extends StatefulWidget {
+/// Layar Keranjang + Checkout, versi Mobile/Android -- bungkus tipis
+/// `Scaffold`+`AppBar` di sekitar [PanelKeranjang] (dipush via Navigator,
+/// full-screen, padanan pola lama). Di Windows Desktop, [PanelKeranjang]
+/// dipakai LANGSUNG tertanam di sisi kanan `kasir_screen.dart` (padanan
+/// tampilan referensi Electron: grid+keranjang berdampingan satu layar,
+/// bukan navigasi terpisah) -- lihat `kasir_screen.dart` utk mode "Fokus
+/// Keranjang" (F7) yg menyembunyikan grid & melebarkan panel ini.
+class KeranjangScreen extends StatelessWidget {
   final List<ItemKeranjang> keranjang;
   /// Diisi bila keranjang ini dimuat ulang dari Keranjang Tertahan (layar
   /// Pesanan, "Muat ke Keranjang") -- dikirim sbg `draftPembelianAnggotaKoperasi`
@@ -38,15 +35,58 @@ class KeranjangScreen extends StatefulWidget {
   const KeranjangScreen({super.key, required this.keranjang, this.draftIdSumber, this.memberAwal});
 
   @override
-  State<KeranjangScreen> createState() => _KeranjangScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Keranjang')),
+      body: PanelKeranjang(keranjang: keranjang, draftIdSumber: draftIdSumber, memberAwal: memberAwal),
+    );
+  }
 }
 
-class _KeranjangScreenState extends State<KeranjangScreen> {
+/// Isi Keranjang+Checkout (TANPA Scaffold/AppBar) -- lihat JavaDoc
+/// [KeranjangScreen]. Menerima referensi list yang SAMA dengan pemanggil
+/// (bukan salinan), jadi perubahan qty/hapus otomatis tercermin balik.
+///
+/// Alur checkout (padanan pos-renderer.js): pilih member (opsional) ->
+/// evaluasi diskon otomatis (debounced) -> gerbang PIN bila member wajib-PIN
+/// -> bayar offline-first (tulis lokal dulu, baru coba server; gagal jaringan
+/// TIDAK membatalkan transaksi, hanya menunda sinkronisasinya).
+class PanelKeranjang extends StatefulWidget {
+  final List<ItemKeranjang> keranjang;
+  final int? draftIdSumber;
+  final Anggota? memberAwal;
+  /// Header "Keranjang" + [aksiHeader] di kanannya (mis. tombol toggle Fokus
+  /// Keranjang di Desktop) -- disembunyikan di Mobile krn `AppBar` pembungkus
+  /// [KeranjangScreen] sudah menampilkan judul yang sama.
+  final bool tampilkanJudul;
+  final Widget? aksiHeader;
+  /// Dipanggil setelah Tahan/Bayar sukses (keranjang baru saja dikosongkan)
+  /// -- dipakai pemanggil yg TIDAK ikut navigasi pergi (mis. KasirScreen versi
+  /// Desktop yg menanamkan panel ini langsung) utk menyegarkan status lain
+  /// (mis. badge jumlah transaksi belum sinkron).
+  final VoidCallback? onSelesai;
+  const PanelKeranjang({
+    super.key,
+    required this.keranjang,
+    this.draftIdSumber,
+    this.memberAwal,
+    this.tampilkanJudul = false,
+    this.aksiHeader,
+    this.onSelesai,
+  });
+
+  @override
+  State<PanelKeranjang> createState() => _PanelKeranjangState();
+}
+
+class _PanelKeranjangState extends State<PanelKeranjang> {
   CaraBayar? _caraBayarTerpilih;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
   Timer? _debounceDiskon;
+  final _uangDiterimaController = TextEditingController(text: '0');
+  bool _uangDiterimaManual = false;
 
   @override
   void initState() {
@@ -55,11 +95,13 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       _caraBayarTerpilih = Sesi.instance.caraBayar.first;
     }
     _memberTerpilih = widget.memberAwal;
+    _sinkronkanUangDiterima();
   }
 
   @override
   void dispose() {
     _debounceDiskon?.cancel();
+    _uangDiterimaController.dispose();
     LayarPelangganBroadcaster.instance.berhenti();
     super.dispose();
   }
@@ -96,12 +138,26 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   double get _pajak => _basisPajak * Sesi.instance.pajakPersen / 100;
   double get _total => _basisPajak + _pajak;
 
+  double get _uangDiterima => double.tryParse(_uangDiterimaController.text.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
+  double get _kembalian => _uangDiterima - _total;
+
+  /// "Uang Diterima" default = total (spec §3.4) SELAMA kasir belum mengetik
+  /// nilai sendiri -- begitu kasir mengubahnya manual, berhenti auto-ikut
+  /// total (mis. saat menerima uang pas beda dari total, spt uang tunai fisik
+  /// yang dibulatkan).
+  void _sinkronkanUangDiterima() {
+    if (_uangDiterimaManual) return;
+    final teks = _total > 0 ? _total.toStringAsFixed(0) : '0';
+    if (_uangDiterimaController.text != teks) _uangDiterimaController.text = teks;
+  }
+
   void _ubahJumlah(ItemKeranjang item, int delta) {
     setState(() {
       item.jumlah += delta;
       if (item.jumlah <= 0) {
         widget.keranjang.remove(item);
       }
+      _sinkronkanUangDiterima();
     });
     _siarkanKeranjang();
     _jadwalkanEvaluasiDiskon();
@@ -137,6 +193,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
             ..cashback = (m['cashback'] as num?)?.toDouble() ?? 0
             ..aturanDiskonId = m['aturanDiskon'] as int?;
         }
+        _sinkronkanUangDiterima();
       });
     } catch (_) {
       // Evaluasi diskon gagal (mis. offline) -- keranjang tetap bisa dibayar
@@ -238,11 +295,10 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   }
 
   /// "Tahan" -- simpan keranjang sbg draft belum lunas (aksi `draft_bayar`,
-  /// bentuk payload SAMA dgn `bayar`) lalu kosongkan keranjang & kembali ke
-  /// Kasir. BEDA dari Bayar: TIDAK offline-first (draft yg gagal tersimpan
-  /// krn offline lebih baik gagal jelas drpd diam-diam antre lokal tanpa ada
-  /// layar Pesanan utk memuatnya kembali -- lihat task #184, "Muat ke
-  /// Keranjang" dari draft ini menyusul setelah layar Pesanan dibangun).
+  /// bentuk payload SAMA dgn `bayar`) lalu kosongkan keranjang. BEDA dari
+  /// Bayar: TIDAK offline-first (draft yg gagal tersimpan krn offline lebih
+  /// baik gagal jelas drpd diam-diam antre lokal tanpa ada layar Pesanan
+  /// utk memuatnya kembali).
   Future<void> _tahan() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
@@ -258,9 +314,16 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       if (!mounted) return;
+      setState(() {
+        _memberTerpilih = null;
+        _saldoMember = null;
+        _uangDiterimaManual = false;
+        _uangDiterimaController.text = '0';
+      });
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
-      Navigator.of(context).pop();
+      widget.onSelesai?.call();
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
@@ -316,6 +379,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       final pajakStruk = _pajak;
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+      widget.onSelesai?.call();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => StrukScreen(
@@ -358,7 +422,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
 
   /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
   /// pos-renderer.js `PETA_TOMBOL_KASIR` (lihat kasir_screen.dart utk
-  /// F8/F9 yg tinggal di layar Kasir). Desktop-only; diam di Android.
+  /// F7/F8/F9). Desktop-only; diam di Android.
   KeyEventResult _tanganiTombolKeranjang(FocusNode node, KeyEvent event) {
     if (defaultTargetPlatform != TargetPlatform.windows) return KeyEventResult.ignored;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -386,27 +450,27 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: _tanganiTombolKeranjang,
-      child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Keranjang'),
-        actions: [
-          if (widget.keranjang.isNotEmpty)
-            TextButton.icon(
-              onPressed: _memproses ? null : _tahan,
-              icon: const Icon(Icons.pause_circle_outline, color: Colors.white),
-              label: const Text('Tahan', style: TextStyle(color: Colors.white)),
-            ),
-        ],
-      ),
-      body: Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.tampilkanJudul)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Row(
+                children: [
+                  const Text('Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (widget.aksiHeader != null) widget.aksiHeader!,
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: _memberTerpilih == null
                 ? OutlinedButton.icon(
                     onPressed: _pilihMember,
                     icon: const Icon(Icons.person_add_alt),
-                    label: const Text('Pilih Member (opsional)'),
+                    label: const Text('Pilih Member (opsional) · F5'),
                   )
                 : Card(
                     color: const Color(0xFFFFF3E0),
@@ -424,7 +488,16 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
           ),
           Expanded(
             child: widget.keranjang.isEmpty
-                ? const Center(child: Text('Keranjang kosong.'))
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shopping_cart_outlined, size: 40, color: AppColors.border),
+                        const SizedBox(height: 8),
+                        const Text('Belum ada produk dipilih.', style: TextStyle(color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     itemCount: widget.keranjang.length,
@@ -460,71 +533,110 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
                     },
                   ),
           ),
-        ],
-      ),
-      bottomNavigationBar: widget.keranjang.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (Sesi.instance.caraBayar.isNotEmpty)
-                      DropdownButtonFormField<CaraBayar>(
-                        value: _caraBayarTerpilih,
-                        decoration: const InputDecoration(labelText: 'Metode Pembayaran', border: OutlineInputBorder()),
-                        items: Sesi.instance.caraBayar
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c.nama)))
-                            .toList(),
-                        onChanged: (v) => setState(() => _caraBayarTerpilih = v),
-                      ),
-                    const SizedBox(height: 10),
-                    if (_totalDiskon > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Diskon', style: TextStyle(color: Color(0xFFC0563D))),
-                            Text('-${_formatRupiah.format(_totalDiskon)}', style: const TextStyle(color: Color(0xFFC0563D))),
-                          ],
-                        ),
-                      ),
-                    if (_totalCashback > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Cashback (masuk saldo)', style: TextStyle(color: Color(0xFF2E7D32))),
-                            Text('+${_formatRupiah.format(_totalCashback)}', style: const TextStyle(color: Color(0xFF2E7D32))),
-                          ],
-                        ),
-                      ),
-                    if (_pajak > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)', style: const TextStyle(color: Colors.black54)),
-                            Text(_formatRupiah.format(_pajak), style: const TextStyle(color: Colors.black54)),
-                          ],
-                        ),
-                      ),
-                    Row(
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: _pilihMetode,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Metode Pembayaran · F4', border: OutlineInputBorder(), isDense: true),
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(_formatRupiah.format(_total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(_caraBayarTerpilih?.nama ?? 'Pilih ›'),
+                        const Icon(Icons.chevron_right, size: 18),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_totalDiskon > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Diskon', style: TextStyle(color: Color(0xFFC0563D))),
+                        Text('-${_formatRupiah.format(_totalDiskon)}', style: const TextStyle(color: Color(0xFFC0563D))),
+                      ],
+                    ),
+                  ),
+                if (_totalCashback > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Cashback (masuk saldo)', style: TextStyle(color: Color(0xFF2E7D32))),
+                        Text('+${_formatRupiah.format(_totalCashback)}', style: const TextStyle(color: Color(0xFF2E7D32))),
+                      ],
+                    ),
+                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Subtotal', style: TextStyle(color: Colors.black54)),
+                    Text(_formatRupiah.format(_subtotal), style: const TextStyle(color: Colors.black54)),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)', style: const TextStyle(color: Colors.black54)),
+                      Text(_formatRupiah.format(_pajak), style: const TextStyle(color: Colors.black54)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(_formatRupiah.format(_total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _uangDiterimaController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Uang Diterima', border: OutlineInputBorder(), isDense: true),
+                  onChanged: (v) => setState(() => _uangDiterimaManual = true),
+                ),
+                if (_uangDiterima > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Kembalian', style: TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          _formatRupiah.format(_kembalian.abs()),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: _kembalian < 0 ? AppColors.danger : AppColors.success),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _memproses || widget.keranjang.isEmpty ? null : _tahan,
+                        icon: const Icon(Icons.pause_circle_outline, size: 18),
+                        label: const Text('Tahan · F3'),
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
                       child: ElevatedButton(
-                        onPressed: _memproses ? null : _bayar,
+                        onPressed: _memproses || widget.keranjang.isEmpty ? null : _bayar,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2E7D32),
                           foregroundColor: Colors.white,
@@ -532,13 +644,15 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
                         ),
                         child: _memproses
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Bayar', style: TextStyle(fontWeight: FontWeight.bold)),
+                            : const Text('Bayar · F2', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
+          ),
+        ],
       ),
     );
   }

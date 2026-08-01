@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:window_manager/window_manager.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
@@ -35,12 +34,6 @@ void main() {
       CoreDb.instance.catatErrorLog(sumber: 'flutter', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
       return true;
     };
-    // window_manager cuma punya implementasi native utk Windows/macOS/Linux --
-    // TIDAK ada plugin Android, jadi WAJIB digerbang platform sebelum dipanggil
-    // sama sekali (bukan cuma di titik pakai F7) atau langsung MissingPluginException.
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      await windowManager.ensureInitialized();
-    }
     runApp(const EBisnisApp());
   }, (error, stack) {
     CoreDb.instance.catatErrorLog(sumber: 'zone', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());

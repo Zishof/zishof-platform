@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:window_manager/window_manager.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
@@ -46,31 +45,21 @@ class _KasirScreenState extends State<KasirScreen> {
   bool? _kasTerbuka;
   double _modalAwalKas = 0;
 
-  /// Status Full Layar (F7) -- HANYA relevan di Windows (window_manager tak
-  /// punya implementasi Android sama sekali, lihat gerbang platform di
-  /// main.dart). null = belum diketahui (belum sempat dicek/bukan Windows).
-  bool? _layarPenuh;
+  /// "Fokus Keranjang" (F7, padanan PERSIS `elBtnToggleFullLayarHeader` di
+  /// pos-renderer.js) -- BUKAN fullscreen level-OS (percobaan sebelumnya
+  /// salah tafsir spec ini), melainkan menyembunyikan pencarian+kategori+grid
+  /// produk supaya panel Keranjang melebar sendirian, dipakai saat kasir
+  /// cuma perlu menuntaskan pembayaran tanpa godaan menambah produk lagi.
+  /// Hanya relevan di Windows -- di Android, Kasir & Keranjang tetap 2 layar
+  /// terpisah (lihat `_bodyMobile`), konsep ini tak berlaku di sana.
+  bool _fokusKeranjang = false;
+
+  void _toggleFokusKeranjang() => setState(() => _fokusKeranjang = !_fokusKeranjang);
 
   @override
   void initState() {
     super.initState();
     _muatAwal();
-    _muatStatusLayarPenuh();
-  }
-
-  Future<void> _muatStatusLayarPenuh() async {
-    if (defaultTargetPlatform != TargetPlatform.windows) return;
-    final penuh = await windowManager.isFullScreen();
-    if (mounted) setState(() => _layarPenuh = penuh);
-  }
-
-  /// F7 "Full Layar"/"Tampilan Normal" (padanan pos-renderer.js
-  /// `elBtnToggleFullLayarHeader`) -- Desktop-only lewat window_manager.
-  Future<void> _toggleFullLayar() async {
-    if (defaultTargetPlatform != TargetPlatform.windows) return;
-    final baru = !(_layarPenuh ?? false);
-    await windowManager.setFullScreen(baru);
-    if (mounted) setState(() => _layarPenuh = baru);
   }
 
   @override
@@ -378,6 +367,15 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   List<Widget> get _tombolAksi => [
+        if (defaultTargetPlatform == TargetPlatform.windows)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: OutlinedButton.icon(
+              onPressed: _toggleFokusKeranjang,
+              icon: Icon(_fokusKeranjang ? Icons.grid_view_outlined : Icons.view_sidebar_outlined, size: 16),
+              label: Text(_fokusKeranjang ? 'Tampilan Normal' : 'Fokus Keranjang', style: const TextStyle(fontSize: 12)),
+            ),
+          ),
         IconButton(
           icon: Badge(
             label: Text('$_jumlahPending'),
@@ -390,12 +388,6 @@ class _KasirScreenState extends State<KasirScreen> {
           tooltip: 'Sinkronkan transaksi tertunda',
         ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
-        if (_layarPenuh != null)
-          IconButton(
-            icon: Icon(_layarPenuh! ? Icons.fullscreen_exit : Icons.fullscreen),
-            onPressed: _toggleFullLayar,
-            tooltip: _layarPenuh! ? 'Tampilan Normal (F7)' : 'Full Layar (F7)',
-          ),
         if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
           IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Tutup Kas'),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
@@ -421,7 +413,7 @@ class _KasirScreenState extends State<KasirScreen> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f7) {
-      _toggleFullLayar();
+      _toggleFokusKeranjang();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -439,7 +431,7 @@ class _KasirScreenState extends State<KasirScreen> {
       scrollable: false,
       actionsAppBar: _tombolAksi,
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
-      bottomBar: _keranjang.isEmpty
+      bottomBar: defaultTargetPlatform == TargetPlatform.windows || _keranjang.isEmpty
           ? null
           : SafeArea(
               child: Padding(
@@ -481,77 +473,9 @@ class _KasirScreenState extends State<KasirScreen> {
                         ),
                       ),
                     )
-                  : Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                          child: TextField(
-                            controller: _kataKunciController,
-                            decoration: const InputDecoration(
-                              hintText: 'Cari / scan barcode produk...',
-                              prefixIcon: Icon(Icons.search),
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            onChanged: (v) => setState(() => _kataKunci = v),
-                            onSubmitted: _submitPencarian,
-                          ),
-                        ),
-                        SizedBox(
-                          height: 44,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  label: const Text('Semua'),
-                                  selected: _kategoriTerpilih == null,
-                                  onSelected: (_) => setState(() => _kategoriTerpilih = null),
-                                ),
-                              ),
-                              ..._kategori.map((k) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(k.nama),
-                                      selected: _kategoriTerpilih == k.id,
-                                      onSelected: (_) => setState(() => _kategoriTerpilih = k.id),
-                                    ),
-                                  )),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              // Kolom RESPONSIF thd lebar layar -- SEBELUMNYA
-                              // crossAxisCount tetap 2 apa pun lebar jendela,
-                              // jadi di Desktop lebar kartu jadi ratusan piksel
-                              // dan (krn childAspectRatio tetap) tingginya ikut
-                              // meregang sampai nama+harga terdorong keluar
-                              // area yang terlihat (tampak seperti kartu kosong).
-                              final kolom = (constraints.maxWidth / 190).floor().clamp(2, 6);
-                              return GridView.builder(
-                                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: kolom,
-                                  childAspectRatio: 0.92,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                ),
-                                itemCount: _produkTersaring.length,
-                                itemBuilder: (context, i) => _KartuProduk(
-                                  produk: _produkTersaring[i],
-                                  onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                  : defaultTargetPlatform == TargetPlatform.windows
+                      ? _bodyDesktop()
+                      : _kontenKatalog(),
           if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
             _OverlayBukaKas(onBuka: (modal) {
               setState(() => _modalAwalKas = modal);
@@ -560,6 +484,114 @@ class _KasirScreenState extends State<KasirScreen> {
         ],
       ),
       ),
+    );
+  }
+
+  /// Kartu Keranjang tertanam LANGSUNG di sisi kanan (padanan tampilan
+  /// referensi Electron: grid+keranjang satu layar berdampingan, bukan
+  /// navigasi terpisah spt Android) -- lihat JavaDoc `_fokusKeranjang` utk
+  /// mode F7 yang menyembunyikan grid & melebarkan panel ini sendirian.
+  Widget _bodyDesktop() {
+    final panel = PanelKeranjang(
+      keranjang: _keranjang,
+      tampilkanJudul: true,
+      aksiHeader: OutlinedButton.icon(
+        onPressed: _toggleFokusKeranjang,
+        icon: Icon(_fokusKeranjang ? Icons.grid_view_outlined : Icons.fullscreen, size: 14),
+        label: Text(_fokusKeranjang ? 'Tampilan Normal (F7)' : 'Fokus Keranjang (F7)', style: const TextStyle(fontSize: 11)),
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero),
+      ),
+      onSelesai: _perbaruiJumlahPending,
+    );
+    if (_fokusKeranjang) {
+      return Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: panel,
+        ),
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: _kontenKatalog()),
+        const VerticalDivider(width: 1),
+        SizedBox(width: 420, child: panel),
+      ],
+    );
+  }
+
+  Widget _kontenKatalog() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          child: TextField(
+            controller: _kataKunciController,
+            decoration: const InputDecoration(
+              hintText: 'Cari / scan barcode produk...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (v) => setState(() => _kataKunci = v),
+            onSubmitted: _submitPencarian,
+          ),
+        ),
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: const Text('Semua'),
+                  selected: _kategoriTerpilih == null,
+                  onSelected: (_) => setState(() => _kategoriTerpilih = null),
+                ),
+              ),
+              ..._kategori.map((k) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(k.nama),
+                      selected: _kategoriTerpilih == k.id,
+                      onSelected: (_) => setState(() => _kategoriTerpilih = k.id),
+                    ),
+                  )),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Kolom RESPONSIF thd lebar layar -- SEBELUMNYA crossAxisCount
+              // tetap 2 apa pun lebar jendela, jadi di Desktop lebar kartu
+              // jadi ratusan piksel dan (krn childAspectRatio tetap)
+              // tingginya ikut meregang sampai nama+harga terdorong keluar
+              // area yang terlihat (tampak seperti kartu kosong).
+              final kolom = (constraints.maxWidth / 190).floor().clamp(2, 6);
+              return GridView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: kolom,
+                  childAspectRatio: 0.92,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: _produkTersaring.length,
+                itemBuilder: (context, i) => _KartuProduk(
+                  produk: _produkTersaring[i],
+                  onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
