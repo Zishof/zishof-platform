@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
+import 'login_screen.dart';
+import 'pengaturan_server_screen.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
-/// Electron) -- 3 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
+/// Electron) -- 4 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
 /// (server, `toko_profil_ambil`/`_simpan`), Akun Pengguna (server,
-/// `pedagang_list`/`pedagang_ubah`/`akun_tambah`). Bagian "Tampilan Aplikasi"
+/// `pedagang_list`/`pedagang_ubah`/`akun_tambah`), Alamat Server (lokal,
+/// `FormAlamatServer` yg sama dgn `PengaturanServerScreen` -- bisa diubah
+/// dari DALAM aplikasi tanpa perlu logout dulu). Bagian "Tampilan Aplikasi"
 /// Electron (judul window/logo) sengaja TIDAK diporting -- itu chrome desktop,
 /// tak ada padanan di HP.
 class KonfigurasiScreen extends StatefulWidget {
@@ -22,7 +26,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -31,18 +35,28 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
     super.dispose();
   }
 
+  Future<void> _logout() async {
+    await ApiClient.instance.hapusToken();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tombolLogout = IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar');
     return AppShell(
       menuAktif: MenuEBisnis.konfigurasi,
       judul: 'Konfigurasi',
-      subjudul: 'Identitas mesin, profil toko, dan akun pengguna',
+      subjudul: 'Identitas mesin, profil toko, akun pengguna, dan alamat server',
+      aksiHeader: tombolLogout,
+      actionsAppBar: [tombolLogout],
       scrollable: false,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TabBar(
             controller: _tab,
+            isScrollable: true,
             labelColor: const Color(0xFF2563EB),
             unselectedLabelColor: Colors.black54,
             indicatorColor: const Color(0xFF2563EB),
@@ -50,17 +64,44 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
               Tab(text: 'Identitas Mesin'),
               Tab(text: 'Profil Toko'),
               Tab(text: 'Akun Pengguna'),
+              Tab(text: 'Alamat Server'),
             ],
           ),
           Expanded(
-            child: TabBarView(controller: _tab, children: const [
-              _TabIdentitasMesin(),
-              _TabProfilToko(),
-              _TabAkunPengguna(),
+            child: TabBarView(controller: _tab, children: [
+              const _TabIdentitasMesin(),
+              const _TabProfilToko(),
+              const _TabAkunPengguna(),
+              _TabAlamatServer(onUbah: _logout),
             ]),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Tab "Alamat Server" -- reuse [FormAlamatServer], TAPI "Simpan" di sini
+/// (beda dari PengaturanServerScreen) memaksa keluar (logout) sekaligus
+/// membersihkan seluruh stack navigasi ke LoginScreen, krn seluruh layar di
+/// belakangnya (Kasir/Konfigurasi/dst) sudah terikat sesi server LAMA yang
+/// baru saja diganti.
+class _TabAlamatServer extends StatelessWidget {
+  final Future<void> Function() onUbah;
+  const _TabAlamatServer({required this.onUbah});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Mengubah alamat server akan mengeluarkan Anda dari akun saat ini -- masuk kembali di server yang baru setelah tersimpan.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 16),
+        FormAlamatServer(labelSimpan: 'Simpan & Keluar', onSelesai: onUbah),
+      ],
     );
   }
 }
