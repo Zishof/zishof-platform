@@ -1,11 +1,37 @@
+import 'dart:async';
+
+import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
 
+/// Penangkap error global (padanan error-capture.js Electron) -- setiap
+/// exception Flutter tak tertangani (widget build error) DAN setiap error
+/// async tak tertangani (Future/Stream/isolate) ditulis ke `error_log` lokal
+/// yang sama dgn yang dipakai LogErrorScreen, supaya sebelumnya app diam-diam
+/// menelan crash tanpa jejak sama sekali -- sekarang selalu ada catatannya.
 void main() {
-  runApp(const EBisnisApp());
+  runZonedGuarded(() {
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      CoreDb.instance.catatErrorLog(
+        sumber: 'flutter',
+        tingkat: 'ERROR',
+        pesan: details.exceptionAsString(),
+        detail: details.stack?.toString(),
+      );
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      CoreDb.instance.catatErrorLog(sumber: 'flutter', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
+      return true;
+    };
+    runApp(const EBisnisApp());
+  }, (error, stack) {
+    CoreDb.instance.catatErrorLog(sumber: 'zone', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
+  });
 }
 
 class EBisnisApp extends StatelessWidget {

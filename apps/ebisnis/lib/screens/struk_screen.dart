@@ -15,6 +15,7 @@ class StrukScreen extends StatelessWidget {
   final List<Map<String, dynamic>> item;
   final double total;
   final String metode;
+  final double pajak;
 
   const StrukScreen({
     super.key,
@@ -23,6 +24,7 @@ class StrukScreen extends StatelessWidget {
     required this.item,
     required this.total,
     required this.metode,
+    this.pajak = 0,
   });
 
   @override
@@ -57,6 +59,14 @@ class StrukScreen extends StatelessWidget {
                           ),
                         )),
                     const Divider(height: 24),
+                    if (pajak > 0)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Pajak', style: TextStyle(color: Colors.black54)),
+                          Text(_formatRupiah.format(pajak), style: const TextStyle(color: Colors.black54)),
+                        ],
+                      ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

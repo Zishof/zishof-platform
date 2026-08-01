@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
@@ -74,6 +75,7 @@ class _KasirScreenState extends State<KasirScreen> {
     await _perbaruiJumlahPending();
     await _sinkronKatalogDanKonfigurasi(tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
     await _periksaSesiKas();
+    PesananPoller.instance.mulai();
 
     if (mounted) setState(() => _memuat = false);
   }
@@ -104,7 +106,8 @@ class _KasirScreenState extends State<KasirScreen> {
         ..supervisorPedagang = konfig['supervisorPedagang'] == true
         ..caraBayar = ((konfig['caraBayar'] as List?) ?? [])
             .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
-            .toList();
+            .toList()
+        ..aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {}).map((k, v) => MapEntry(k, v == true));
 
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson = (katalog['produk'] as List?) ?? [];

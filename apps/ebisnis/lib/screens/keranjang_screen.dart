@@ -189,6 +189,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
       'waktu': _formatWaktuServer(waktu),
       'caraBayar': _caraBayarTerpilih!.id,
       'total': _total,
+      'pajak': _pajak,
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
@@ -282,6 +283,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
           .toList();
       final metodeNama = _caraBayarTerpilih!.nama;
       final totalStruk = _total;
+      final pajakStruk = _pajak;
       widget.keranjang.clear();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -291,6 +293,7 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
           item: itemStruk,
           total: totalStruk,
           metode: metodeNama,
+          pajak: pajakStruk,
         ),
       ));
     } finally {
@@ -413,6 +416,17 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
                           children: [
                             const Text('Cashback (masuk saldo)', style: TextStyle(color: Color(0xFF2E7D32))),
                             Text('+${_formatRupiah.format(_totalCashback)}', style: const TextStyle(color: Color(0xFF2E7D32))),
+                          ],
+                        ),
+                      ),
+                    if (_pajak > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)', style: const TextStyle(color: Colors.black54)),
+                            Text(_formatRupiah.format(_pajak), style: const TextStyle(color: Colors.black54)),
                           ],
                         ),
                       ),

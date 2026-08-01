@@ -1,6 +1,7 @@
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import '../sesi.dart';
+import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import 'app_drawer.dart';
 import '../screens/kasir_screen.dart';
@@ -35,6 +36,30 @@ class _ItemMenuShell {
   final bool segeraHadir;
   final WidgetBuilder? builder;
   const _ItemMenuShell(this.kunci, this.icon, this.label, {this.segeraHadir = false, this.builder});
+}
+
+/// Kunci `MenuEBisnis` -> kunci `konfigurasi.aksesMenu` server (lihat
+/// PosApi.java, Tbmrole.ebisnisMenu) -- dipakai [bolehTampilMenu] utk
+/// menyembunyikan item yg akunnya tak diberi akses (padanan akses-menu.js).
+const _kunciAksesMenu = <MenuEBisnis, String>{
+  MenuEBisnis.kasir: 'kasir',
+  MenuEBisnis.ringkasan: 'ringkasan',
+  MenuEBisnis.pesanan: 'pesanan',
+  MenuEBisnis.anggota: 'anggota',
+  MenuEBisnis.produk: 'produk',
+  MenuEBisnis.stokOpname: 'stokopname',
+  MenuEBisnis.kulakan: 'kulakan',
+  MenuEBisnis.diskon: 'diskon',
+  MenuEBisnis.laporanTransaksi: 'laporantransaksi',
+  MenuEBisnis.laporanLaporan: 'laporan',
+  MenuEBisnis.riwayatSinkron: 'riwayatsinkronisasi',
+  MenuEBisnis.logError: 'logerror',
+  MenuEBisnis.konfigurasi: 'konfigurasi',
+};
+
+bool bolehTampilMenu(MenuEBisnis kunci) {
+  final kunciServer = _kunciAksesMenu[kunci];
+  return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
 }
 
 const _daftarMenu = <_ItemMenuShell>[
@@ -209,7 +234,7 @@ class _AppSidebar extends StatelessWidget {
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
-                children: _daftarMenu.map((item) {
+                children: _daftarMenu.where((item) => bolehTampilMenu(item.kunci)).map((item) {
                   final aktif = item.kunci == menuAktif;
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -223,7 +248,16 @@ class _AppSidebar extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                           child: Row(
                             children: [
-                              Icon(item.icon, size: 19, color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText),
+                              item.kunci == MenuEBisnis.pesanan
+                                  ? ValueListenableBuilder<int>(
+                                      valueListenable: PesananPoller.instance.jumlahBaru,
+                                      builder: (context, jumlah, _) => Badge(
+                                        label: Text('$jumlah'),
+                                        isLabelVisible: jumlah > 0,
+                                        child: Icon(item.icon, size: 19, color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText),
+                                      ),
+                                    )
+                                  : Icon(item.icon, size: 19, color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(item.label,

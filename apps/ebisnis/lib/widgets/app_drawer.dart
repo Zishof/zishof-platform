@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../sesi.dart';
+import '../services/pesanan_poller.dart';
 import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/pesanan_screen.dart';
@@ -41,96 +42,109 @@ class AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  _ItemMenu(icon: Icons.point_of_sale, label: 'Kasir', aktif: true, onTap: () => Navigator.of(context).pop()),
-                  _ItemMenu(
-                    icon: Icons.bar_chart,
-                    label: 'Ringkasan',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RingkasanScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.receipt_long,
-                    label: 'Pesanan',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PesananScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.people_outline,
-                    label: 'Customer/Anggota',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnggotaScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.inventory_2_outlined,
-                    label: 'Produk',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProdukScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.fact_check_outlined,
-                    label: 'Stok Opname',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StokOpnameScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.local_shipping_outlined,
-                    label: 'Kulakan',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KulakanScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.sell_outlined,
-                    label: 'Aturan Diskon',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiskonScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.assessment_outlined,
-                    label: 'Laporan Transaksi',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanTransaksiScreen()));
-                    },
-                  ),
-                  _ItemMenu(icon: Icons.folder_outlined, label: 'Laporan-Laporan', segeraHadir: true),
-                  _ItemMenu(
-                    icon: Icons.sync,
-                    label: 'Riwayat Sinkronisasi',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiwayatSinkronisasiScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.error_outline,
-                    label: 'Log Error',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogErrorScreen()));
-                    },
-                  ),
-                  _ItemMenu(
-                    icon: Icons.settings_outlined,
-                    label: 'Konfigurasi',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KonfigurasiScreen()));
-                    },
-                  ),
+                  if (Sesi.instance.bolehMenu('kasir'))
+                    _ItemMenu(icon: Icons.point_of_sale, label: 'Kasir', aktif: true, onTap: () => Navigator.of(context).pop()),
+                  if (Sesi.instance.bolehMenu('ringkasan'))
+                    _ItemMenu(
+                      icon: Icons.bar_chart,
+                      label: 'Ringkasan',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RingkasanScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('pesanan'))
+                    _ItemMenu(
+                      icon: Icons.receipt_long,
+                      label: 'Pesanan',
+                      badge: PesananPoller.instance.jumlahBaru,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PesananScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('anggota'))
+                    _ItemMenu(
+                      icon: Icons.people_outline,
+                      label: 'Customer/Anggota',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnggotaScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('produk'))
+                    _ItemMenu(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Produk',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProdukScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('stokopname'))
+                    _ItemMenu(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Stok Opname',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StokOpnameScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('kulakan'))
+                    _ItemMenu(
+                      icon: Icons.local_shipping_outlined,
+                      label: 'Kulakan',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KulakanScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('diskon'))
+                    _ItemMenu(
+                      icon: Icons.sell_outlined,
+                      label: 'Aturan Diskon',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiskonScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('laporantransaksi'))
+                    _ItemMenu(
+                      icon: Icons.assessment_outlined,
+                      label: 'Laporan Transaksi',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanTransaksiScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('laporan')) _ItemMenu(icon: Icons.folder_outlined, label: 'Laporan-Laporan', segeraHadir: true),
+                  if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
+                    _ItemMenu(
+                      icon: Icons.sync,
+                      label: 'Riwayat Sinkronisasi',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiwayatSinkronisasiScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('logerror'))
+                    _ItemMenu(
+                      icon: Icons.error_outline,
+                      label: 'Log Error',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogErrorScreen()));
+                      },
+                    ),
+                  if (Sesi.instance.bolehMenu('konfigurasi'))
+                    _ItemMenu(
+                      icon: Icons.settings_outlined,
+                      label: 'Konfigurasi',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KonfigurasiScreen()));
+                      },
+                    ),
                 ],
               ),
             ),
@@ -147,12 +161,19 @@ class _ItemMenu extends StatelessWidget {
   final bool aktif;
   final bool segeraHadir;
   final VoidCallback? onTap;
-  const _ItemMenu({required this.icon, required this.label, this.aktif = false, this.segeraHadir = false, this.onTap});
+  final ValueNotifier<int>? badge;
+  const _ItemMenu({required this.icon, required this.label, this.aktif = false, this.segeraHadir = false, this.onTap, this.badge});
 
   @override
   Widget build(BuildContext context) {
+    final iconWidget = Icon(icon, color: segeraHadir ? Colors.black26 : (aktif ? const Color(0xFF1E3A5F) : Colors.black87));
     return ListTile(
-      leading: Icon(icon, color: segeraHadir ? Colors.black26 : (aktif ? const Color(0xFF1E3A5F) : Colors.black87)),
+      leading: badge == null
+          ? iconWidget
+          : ValueListenableBuilder<int>(
+              valueListenable: badge!,
+              builder: (context, jumlah, _) => Badge(label: Text('$jumlah'), isLabelVisible: jumlah > 0, child: iconWidget),
+            ),
       title: Text(label, style: TextStyle(color: segeraHadir ? Colors.black26 : Colors.black87)),
       trailing: segeraHadir
           ? const Text('Segera Hadir', style: TextStyle(fontSize: 11, color: Colors.black26, fontStyle: FontStyle.italic))

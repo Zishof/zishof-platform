@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/pesanan_poller.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
@@ -37,6 +38,7 @@ class _PesananScreenState extends State<PesananScreen> {
   void initState() {
     super.initState();
     _muat();
+    PesananPoller.instance.tandaiSudahDilihat();
   }
 
   Future<void> _muat() async {

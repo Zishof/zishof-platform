@@ -1,7 +1,11 @@
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/app_shell.dart';
+
+const _urlIssueBaruGithub = 'https://github.com/Zishof/zishof-platform/issues/new';
 
 String _formatWaktu(String iso) {
   try {
@@ -106,6 +110,76 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  String _teksSatuError(Map<String, dynamic> e) =>
+      '[${e['tingkat']}] ${_formatWaktu(e['waktu'] as String)} · ${e['sumber'] ?? '-'}\n${e['pesan']}${(e['detail'] as String?)?.isNotEmpty == true ? '\n${e['detail']}' : ''}';
+
+  Future<void> _salinSemua() async {
+    final teks = _data.map(_teksSatuError).join('\n\n---\n\n');
+    await Clipboard.setData(ClipboardData(text: teks));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_data.length} baris disalin ke clipboard.')));
+  }
+
+  Future<void> _laporkanKeGithub(Map<String, dynamic> e) async {
+    final judul = Uri.encodeComponent('[Error Log] ${e['pesan']}');
+    final body = Uri.encodeComponent(_teksSatuError(e));
+    final url = Uri.parse('$_urlIssueBaruGithub?title=$judul&body=$body');
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _tampilkanAksiBaris(Map<String, dynamic> e) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if ((e['detail'] as String?)?.isNotEmpty == true)
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Detail'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: Text('${e['pesan']}'),
+                      content: SingleChildScrollView(child: Text('${e['detail']}')),
+                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+                    ),
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Salin'),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await Clipboard.setData(ClipboardData(text: _teksSatuError(e)));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disalin ke clipboard.')));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Laporkan ke GitHub'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _laporkanKeGithub(e);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Hapus'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _hapus(e['id'] as int);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -113,8 +187,14 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       judul: 'Log Error',
       subjudul: 'Riwayat error lokal perangkat ini',
       scrollable: false,
-      actionsAppBar: [IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua')],
-      aksiHeader: IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
+      actionsAppBar: [
+        IconButton(icon: const Icon(Icons.copy_all_outlined), onPressed: _data.isEmpty ? null : _salinSemua, tooltip: 'Salin Semua Error'),
+        IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
+      ],
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(icon: const Icon(Icons.copy_all_outlined), onPressed: _data.isEmpty ? null : _salinSemua, tooltip: 'Salin Semua Error'),
+        IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
+      ]),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -175,16 +255,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                             title: Text('${e['pesan']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
                             subtitle: Text('${_formatWaktu(e['waktu'] as String)} · ${e['sumber'] ?? '-'}'),
                             trailing: IconButton(icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => _hapus(e['id'] as int)),
-                            onTap: (e['detail'] as String?)?.isNotEmpty == true
-                                ? () => showDialog(
-                                      context: context,
-                                      builder: (_) => AlertDialog(
-                                        title: Text('${e['pesan']}'),
-                                        content: SingleChildScrollView(child: Text('${e['detail']}')),
-                                        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
-                                      ),
-                                    )
-                                : null,
+                            onTap: () => _tampilkanAksiBaris(e),
                           ),
                         )),
                   if (_total > _pageSize)

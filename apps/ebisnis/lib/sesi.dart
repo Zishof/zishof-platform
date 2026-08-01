@@ -17,6 +17,13 @@ class Sesi {
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
+  /// Flag per-menu dari `konfigurasi.aksesMenu` (server, Tbmrole.ebisnisMenu) --
+  /// mengontrol VISIBILITAS menu di drawer/sidebar (padanan akses-menu.js
+  /// Electron). Ini murni UX; gerbang SEBENARNYA tetap ditegakkan server-side
+  /// di tiap aksi. Kunci hilang = boleh (sama seperti default server `true`).
+  Map<String, bool> aksesMenu = {};
+  bool bolehMenu(String kunci) => aksesMenu[kunci] ?? true;
+
   /// Boleh mengelola (ubah/hapus/batal) -- padanan gerbang client-side yang
   /// sudah dipakai Electron/Android existing utk sembunyikan tombol destruktif
   /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
@@ -33,5 +40,6 @@ class Sesi {
     wajibSesiKas = false;
     isAdmin = false;
     supervisorPedagang = false;
+    aksesMenu = {};
   }
 }
