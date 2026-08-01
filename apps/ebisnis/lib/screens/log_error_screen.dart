@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/app_components.dart';
+import '../theme/app_colors.dart';
 
 const _urlIssueBaruGithub = 'https://github.com/Zishof/zishof-platform/issues/new';
 
@@ -34,7 +36,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
   int _total = 0;
+  int _totalSemua = 0;
   int _totalError = 0;
+  int _totalPeringatan = 0;
+  int _totalInfo = 0;
   String? _tingkat;
   String _kataKunci = '';
 
@@ -53,12 +58,18 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       offset: (_halaman - 1) * _pageSize,
     );
     final total = await CoreDb.instance.jumlahErrorLog(tingkat: _tingkat);
+    final totalSemua = await CoreDb.instance.jumlahErrorLog();
     final totalError = await CoreDb.instance.jumlahErrorLog(tingkat: 'ERROR');
+    final totalPeringatan = await CoreDb.instance.jumlahErrorLog(tingkat: 'PERINGATAN');
+    final totalInfo = await CoreDb.instance.jumlahErrorLog(tingkat: 'INFO');
     if (mounted) {
       setState(() {
         _data = data.cast<Map<String, dynamic>>();
         _total = total;
+        _totalSemua = totalSemua;
         _totalError = totalError;
+        _totalPeringatan = totalPeringatan;
+        _totalInfo = totalInfo;
         _memuat = false;
       });
     }
@@ -202,20 +213,20 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                        child: Text('$_totalError Error', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 12)),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(color: const Color(0xFF1E3A5F).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                        child: Text('$_total Total', style: const TextStyle(color: Color(0xFF1E3A5F), fontWeight: FontWeight.w600, fontSize: 12)),
-                      ),
-                    ],
+                  SizedBox(
+                    height: 90,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.list_alt_outlined, warna: AppColors.primary, nilai: '$_totalSemua', label: 'Total Log')),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.error_outline, warna: AppColors.danger, nilai: '$_totalError', label: 'Error')),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.warning_amber_outlined, warna: AppColors.warning, nilai: '$_totalPeringatan', label: 'Peringatan')),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.info_outline, warna: AppColors.teal, nilai: '$_totalInfo', label: 'Info')),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Wrap(

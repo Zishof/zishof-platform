@@ -514,6 +514,26 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          SizedBox(
+            height: 90,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                SizedBox(width: 150, child: AppKpiCard(icon: Icons.assignment_return_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Retur')),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 150,
+                  child: AppKpiCard(
+                    icon: Icons.payments_outlined,
+                    warna: AppColors.danger,
+                    nilai: _formatRupiah.format(_data.fold<num>(0, (a, r) => a + (((r['qty'] as num?) ?? 0) * ((r['hargaSatuan'] as num?) ?? 0)))),
+                    label: 'Nilai (hal. ini)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             decoration: const InputDecoration(hintText: 'Cari produk/nomor nota/pembeli...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
             onSubmitted: _terapkanFilter,

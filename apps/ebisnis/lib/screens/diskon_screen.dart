@@ -4,6 +4,8 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/app_components.dart';
+import '../theme/app_colors.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -141,6 +143,36 @@ class _DiskonScreenState extends State<DiskonScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
                     children: [
+                      SizedBox(
+                        height: 90,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            SizedBox(width: 150, child: AppKpiCard(icon: Icons.sell_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Aturan')),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 150,
+                              child: AppKpiCard(
+                                icon: Icons.check_circle_outline,
+                                warna: AppColors.success,
+                                nilai: '${_data.where((a) => a['aktif'] == true).length}',
+                                label: 'Aktif (hal. ini)',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 150,
+                              child: AppKpiCard(
+                                icon: Icons.percent_outlined,
+                                warna: AppColors.teal,
+                                nilai: '${_data.where((a) => a['potonganLangsung'] == true).length}',
+                                label: 'Potong Struk (hal. ini)',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       TextField(
                         decoration: const InputDecoration(hintText: 'Cari nama aturan...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
                         onSubmitted: _cariUlang,

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -41,6 +43,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
   List<Map<String, dynamic>> _transaksi = [];
   int _halaman = 1;
   int _total = 0;
+  int _totalPending = 0;
   String? _statusFilter;
 
   @override
@@ -53,11 +56,13 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
     setState(() => _memuat = true);
     final cache = await CoreDb.instance.listCacheReferensi();
     final hasil = await CoreDb.instance.listTransaksiPending(limit: _pageSize, offset: (_halaman - 1) * _pageSize, status: _statusFilter);
+    final totalPending = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) {
       setState(() {
         _cache = cache.cast<Map<String, dynamic>>();
         _transaksi = hasil.data.cast<Map<String, dynamic>>();
         _total = hasil.total;
+        _totalPending = totalPending;
         _memuat = false;
       });
     }
@@ -137,6 +142,20 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                 children: [
+                  SizedBox(
+                    height: 90,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.cloud_download_outlined, warna: AppColors.primary, nilai: '${_cache.length}', label: 'Cache Lokal')),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.pending_actions_outlined, warna: AppColors.warning, nilai: '$_totalPending', label: 'Tertunda')),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.teal, nilai: '$_total', label: 'Total Transaksi')),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   const Text('Sinkron Masuk', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
                   if (_cache.isEmpty)

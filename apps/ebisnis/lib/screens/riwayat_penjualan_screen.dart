@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'struk_screen.dart';
 
@@ -213,6 +214,26 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 20),
           children: [
+            SizedBox(
+              height: 90,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  SizedBox(width: 150, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.primary, nilai: '$_total', label: 'Total Transaksi')),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 150,
+                    child: AppKpiCard(
+                      icon: Icons.payments_outlined,
+                      warna: AppColors.success,
+                      nilai: _formatRupiah.format(_data.fold<num>(0, (a, r) => a + ((r['totalBiaya'] as num?) ?? 0))),
+                      label: 'Omzet (hal. ini)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
               child: Column(

@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/app_components.dart';
+import '../theme/app_colors.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -253,6 +255,26 @@ class _KulakanScreenState extends State<KulakanScreen> {
               ),
             const Text('Riwayat Kulakan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 8),
+            SizedBox(
+              height: 90,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  SizedBox(width: 150, child: AppKpiCard(icon: Icons.local_shipping_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Kulakan')),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 150,
+                    child: AppKpiCard(
+                      icon: Icons.payments_outlined,
+                      warna: AppColors.teal,
+                      nilai: _formatRupiah.format(_riwayat.fold<num>(0, (a, k) => a + ((k['totalHarga'] as num?) ?? 0))),
+                      label: 'Nilai (hal. ini)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               decoration: const InputDecoration(hintText: 'Cari nama produk/faktur/supplier...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
               onSubmitted: (v) {
