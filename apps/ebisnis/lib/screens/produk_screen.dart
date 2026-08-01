@@ -6,6 +6,7 @@ import '../models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'impor_excel_produk_screen.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 const _itemPerHalaman = 20;
@@ -118,13 +119,23 @@ class _ProdukScreenState extends State<ProdukScreen> {
     }
   }
 
+  Future<void> _bukaImporExcel() async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImporExcelProdukScreen()));
+    await _muatSemua();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tombolAksi = [
+      IconButton(icon: const Icon(Icons.upload_file_outlined), onPressed: _bukaImporExcel, tooltip: 'Impor Excel'),
+      IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+    ];
     return AppShell(
       menuAktif: MenuEBisnis.produk,
       judul: 'Manajemen Produk',
       subjudul: 'Kelola katalog produk toko Anda',
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: tombolAksi),
+      actionsAppBar: tombolAksi,
       scrollable: false,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _bukaFormProduk(),

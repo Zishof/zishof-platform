@@ -39,6 +39,7 @@ dependencies:
   intl: ^0.19.0
   url_launcher: ^6.3.1
   package_info_plus: ^8.1.2
+  file_picker: ^8.1.6
 
   # Platform Core -- paket bersama dipakai ulang oleh apps/* lain ke depan
   # (lihat README.md root repo). Path deps, bukan pub.dev, karena semuanya

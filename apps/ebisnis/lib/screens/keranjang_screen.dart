@@ -472,15 +472,46 @@ class _DialogPilihMember extends StatefulWidget {
 class _DialogPilihMemberState extends State<_DialogPilihMember> {
   final _controller = TextEditingController();
   Timer? _debounce;
+  Timer? _penyegarTransaksiTerbaru;
   List<Anggota> _hasil = [];
   bool _mencari = false;
   bool _modeOffline = false;
+  bool _transaksiTerbaru = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _muatTransaksiTerbaru();
+    // Segarkan tiap 20 detik SELAMA kotak cari masih kosong (spec §3.5) --
+    // "pelanggan tadi" bisa berubah kalau kasir lain jg sedang transaksi.
+    _penyegarTransaksiTerbaru = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_controller.text.trim().isEmpty) _muatTransaksiTerbaru();
+    });
+  }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _penyegarTransaksiTerbaru?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _muatTransaksiTerbaru() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('anggota_transaksi_terbaru', {'id_toko': Sesi.instance.tokoId, 'limit': 10});
+      final arr = (hasil['data'] as List?) ?? [];
+      if (mounted && _controller.text.trim().isEmpty) {
+        setState(() {
+          _hasil = arr.map((e) => Anggota.fromJson(e as Map<String, dynamic>)).toList();
+          _transaksiTerbaru = true;
+          _modeOffline = false;
+        });
+      }
+    } catch (_) {
+      // Gagal muat "Transaksi Terbaru" (mis. offline) -- biarkan kotak cari
+      // tetap kosong bukan alasan mengganggu, kasir tinggal mengetik manual.
+    }
   }
 
   void _onBerubah(String v) {
@@ -490,10 +521,17 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
 
   Future<void> _cari(String kataKunci) async {
     if (kataKunci.trim().length < 2) {
-      setState(() => _hasil = []);
+      if (kataKunci.trim().isEmpty) {
+        await _muatTransaksiTerbaru();
+      } else {
+        setState(() => _hasil = []);
+      }
       return;
     }
-    setState(() => _mencari = true);
+    setState(() {
+      _mencari = true;
+      _transaksiTerbaru = false;
+    });
     try {
       final hasil = await ApiClient.instance.aksi('cari_member', {'keyword': kataKunci});
       final arr = (hasil['member'] as List?) ?? [];
@@ -535,6 +573,11 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
               const Padding(
                 padding: EdgeInsets.only(top: 6),
                 child: Text('Menampilkan data cache (offline)', style: TextStyle(color: Colors.orange, fontSize: 12)),
+              ),
+            if (_transaksiTerbaru && _hasil.isNotEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Align(alignment: Alignment.centerLeft, child: Text('Transaksi Terbaru', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54))),
               ),
             const SizedBox(height: 8),
             Expanded(
