@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:window_manager/window_manager.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
@@ -45,10 +46,31 @@ class _KasirScreenState extends State<KasirScreen> {
   bool? _kasTerbuka;
   double _modalAwalKas = 0;
 
+  /// Status Full Layar (F7) -- HANYA relevan di Windows (window_manager tak
+  /// punya implementasi Android sama sekali, lihat gerbang platform di
+  /// main.dart). null = belum diketahui (belum sempat dicek/bukan Windows).
+  bool? _layarPenuh;
+
   @override
   void initState() {
     super.initState();
     _muatAwal();
+    _muatStatusLayarPenuh();
+  }
+
+  Future<void> _muatStatusLayarPenuh() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) return;
+    final penuh = await windowManager.isFullScreen();
+    if (mounted) setState(() => _layarPenuh = penuh);
+  }
+
+  /// F7 "Full Layar"/"Tampilan Normal" (padanan pos-renderer.js
+  /// `elBtnToggleFullLayarHeader`) -- Desktop-only lewat window_manager.
+  Future<void> _toggleFullLayar() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) return;
+    final baru = !(_layarPenuh ?? false);
+    await windowManager.setFullScreen(baru);
+    if (mounted) setState(() => _layarPenuh = baru);
   }
 
   @override
@@ -368,6 +390,12 @@ class _KasirScreenState extends State<KasirScreen> {
           tooltip: 'Sinkronkan transaksi tertunda',
         ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
+        if (_layarPenuh != null)
+          IconButton(
+            icon: Icon(_layarPenuh! ? Icons.fullscreen_exit : Icons.fullscreen),
+            onPressed: _toggleFullLayar,
+            tooltip: _layarPenuh! ? 'Tampilan Normal (F7)' : 'Full Layar (F7)',
+          ),
         if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
           IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Tutup Kas'),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
@@ -390,6 +418,10 @@ class _KasirScreenState extends State<KasirScreen> {
     }
     if (event.logicalKey == LogicalKeyboardKey.f9) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f7) {
+      _toggleFullLayar();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
