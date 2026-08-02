@@ -889,6 +889,17 @@ class _KasirScreenState extends State<KasirScreen> {
     return TextField(
       controller: _kataKunciController,
       focusNode: _fokusKataKunci,
+      // Windows: matikan keyboard sentuh OTOMATIS utk kotak ini -- kotak ini
+      // isinya scan barcode (HID, bukan IME) di layar sentuh POS, tapi
+      // Windows tetap memunculkan touch-keyboard tiap kali kotak ini fokus.
+      // Kombinasi itu dgn auto-fokus scanner (lihat _tanganiTombolKasir)
+      // memicu keyboard sentuh muncul-hilang berulang (dilaporkan pengguna,
+      // terlihat di video). `TextInputType.none` memberi tahu Windows utk
+      // tak pernah memanggil touch-keyboard di kotak ini -- scan HID tetap
+      // masuk normal (lewat key event fisik, bukan lewat IME/touch-keyboard),
+      // kasir yg perlu ketik manual tanpa scanner masih bisa pakai keyboard
+      // sentuh Windows lewat taskbar secara manual.
+      keyboardType: defaultTargetPlatform == TargetPlatform.windows ? TextInputType.none : null,
       decoration: const InputDecoration(
         hintText: 'Cari / scan barcode produk...',
         prefixIcon: Icon(Icons.search),

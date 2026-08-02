@@ -35,6 +35,12 @@ Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Iko
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Microsoft Visual C++ 2015-2022 Redistributable (x64) -- WAJIB, Flutter Windows release
+; build TIDAK static-link MSVC runtime, jadi ebisnis.exe gagal start di Windows fresh-install
+; dgn "VCRUNTIME140.dll was not found" (gap-closure: sebelumnya pengguna harus unduh+pasang
+; manual sendiri). Diekstrak ke {tmp} (bukan {app}) -- cuma dipakai sekali sbg installer,
+; tak perlu menetap di folder aplikasi.
+Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\eBisnis"; Filename: "{app}\ebisnis.exe"
@@ -42,4 +48,23 @@ Name: "{group}\Uninstall eBisnis"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\eBisnis"; Filename: "{app}\ebisnis.exe"; Tasks: desktopicon
 
 [Run]
+; /install /quiet /norestart -- silent, tak butuh interaksi kasir. Digerbang VCRedistNeeded
+; (cek registry) supaya TIDAK dijalankan ulang di mesin yg sudah punya runtime ini (kebanyakan
+; Windows 10/11 modern sudah punya bawaan) -- hemat ~30-60 detik waktu instal per rilis.
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Memasang komponen Microsoft Visual C++ Runtime..."; Check: VCRedistNeeded; Flags: waituntilterminated
 Filename: "{app}\ebisnis.exe"; Description: "Jalankan eBisnis sekarang"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Deteksi Visual C++ 2015-2022 Redistributable (x64) via kunci registry resmi yg dipasang
+// installer Microsoft (Installed=1 + Bld menunjukkan versi build runtime terpasang).
+function VCRedistNeeded: Boolean;
+var
+  installed: Cardinal;
+begin
+  Result := True;
+  if RegQueryDWordValue(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64', 'Installed', installed) then
+  begin
+    if installed = 1 then
+      Result := False;
+  end;
+end;
