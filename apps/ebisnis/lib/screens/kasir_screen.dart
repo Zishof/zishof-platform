@@ -43,6 +43,7 @@ class _KasirScreenState extends State<KasirScreen> {
   int? _kategoriTerpilih; // null = "Semua"
   String _kataKunci = '';
   final _kataKunciController = TextEditingController();
+  final _fokusKataKunci = FocusNode();
 
   final List<ItemKeranjang> _keranjang = [];
 
@@ -79,6 +80,7 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void dispose() {
     _kataKunciController.dispose();
+    _fokusKataKunci.dispose();
     super.dispose();
   }
 
@@ -429,6 +431,24 @@ class _KasirScreenState extends State<KasirScreen> {
     });
   }
 
+  /// Dropdown hasil pencarian -- padanan `renderSearchDropdown` pos-renderer.js,
+  /// HANYA relevan di mode Fokus Keranjang (grid produk disembunyikan sehingga
+  /// kotak cari butuh umpan balik sendiri). Sama seperti Electron: dibatasi 30
+  /// baris, sumber sama dgn `_produkTersaring` (nama/kode/barcode, filter
+  /// kategori aktif ikut berlaku).
+  List<Produk> get _hasilPencarianDropdown => _produkTersaring.take(30).toList();
+
+  /// Dipanggil oleh klik-mouse ATAU pintasan keyboard Ctrl+angka -- padanan
+  /// persis `pilihHasilPencarian(p)`: tambah ke keranjang, bersihkan kotak,
+  /// tutup dropdown (otomatis krn kata kunci jadi kosong), kembalikan fokus
+  /// ke kotak cari supaya kasir bisa langsung mengetik/scan lagi.
+  void _pilihHasilPencarian(Produk p) {
+    _tambahKeKeranjang(p);
+    _kataKunciController.clear();
+    setState(() => _kataKunci = '');
+    _fokusKataKunci.requestFocus();
+  }
+
   /// Dipanggil saat kasir menekan Enter di kotak pencarian -- padanan
   /// "Enter-keystroke detection" pada scanner barcode HID di pos-renderer.js:
   /// kalau kode/barcode COCOK PERSIS satu produk, langsung tambah ke
@@ -641,7 +661,74 @@ class _KasirScreenState extends State<KasirScreen> {
       _toggleFokusKeranjang();
       return KeyEventResult.handled;
     }
+    // Ctrl+angka -- padanan persis `elCariProduk.addEventListener('keydown', ...)`
+    // pos-renderer.js: pilih baris ke-N dropdown hasil pencarian tanpa mouse.
+    // Sengaja CTRL+angka (bukan angka polos) supaya mengetik kode produk
+    // numerik di kotak cari tidak pernah tersandung jadi pintasan ini.
+    if (_fokusKeranjang && _kataKunci.isNotEmpty && HardwareKeyboard.instance.isControlPressed) {
+      final indeks = _indeksDariTombolAngka(event.logicalKey);
+      if (indeks != null) {
+        final hasil = _hasilPencarianDropdown;
+        if (indeks < hasil.length) {
+          _pilihHasilPencarian(hasil[indeks]);
+        }
+        return KeyEventResult.handled;
+      }
+    }
+    // Auto-fokus kotak cari saat scanner barcode (mengirim keystroke HID
+    // secepat mengetik) atau kasir langsung mengetik TANPA meng-klik kotak
+    // cari dulu -- padanan listener global Electron yang mengarahkan fokus
+    // ke #cariProduk kecuali activeElement SUDAH sebuah input lain (di sini:
+    // kecuali ada widget lebih spesifik yg sudah pegang fokus, mis. field
+    // "Uang Diterima" di panel Keranjang -- gerbang `primaryFocus == node`
+    // memastikan HANYA menyambar kalau tak ada apa pun yg lebih spesifik
+    // sedang fokus, supaya tidak merebut fokus dari pengetikan lain).
+    if (FocusManager.instance.primaryFocus == node &&
+        !_fokusKataKunci.hasFocus &&
+        event.logicalKey != LogicalKeyboardKey.enter &&
+        event.logicalKey != LogicalKeyboardKey.numpadEnter &&
+        event.logicalKey != LogicalKeyboardKey.tab &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed) {
+      final karakter = event.character;
+      if (karakter != null && karakter.isNotEmpty) {
+        _fokusKataKunci.requestFocus();
+        final teksBaru = _kataKunciController.text + karakter;
+        _kataKunciController.value = TextEditingValue(text: teksBaru, selection: TextSelection.collapsed(offset: teksBaru.length));
+        setState(() => _kataKunci = teksBaru);
+        return KeyEventResult.handled;
+      }
+    }
     return KeyEventResult.ignored;
+  }
+
+  /// Angka 1-9 -> indeks 0-8, angka 0 -> indeks 9 (baris ke-10) -- sama persis
+  /// urutan label nomor yang dirender `_BarisHasilPencarian`.
+  int? _indeksDariTombolAngka(LogicalKeyboardKey kunci) {
+    final peta = {
+      LogicalKeyboardKey.digit1: 0,
+      LogicalKeyboardKey.digit2: 1,
+      LogicalKeyboardKey.digit3: 2,
+      LogicalKeyboardKey.digit4: 3,
+      LogicalKeyboardKey.digit5: 4,
+      LogicalKeyboardKey.digit6: 5,
+      LogicalKeyboardKey.digit7: 6,
+      LogicalKeyboardKey.digit8: 7,
+      LogicalKeyboardKey.digit9: 8,
+      LogicalKeyboardKey.digit0: 9,
+      LogicalKeyboardKey.numpad1: 0,
+      LogicalKeyboardKey.numpad2: 1,
+      LogicalKeyboardKey.numpad3: 2,
+      LogicalKeyboardKey.numpad4: 3,
+      LogicalKeyboardKey.numpad5: 4,
+      LogicalKeyboardKey.numpad6: 5,
+      LogicalKeyboardKey.numpad7: 6,
+      LogicalKeyboardKey.numpad8: 7,
+      LogicalKeyboardKey.numpad9: 8,
+      LogicalKeyboardKey.numpad0: 9,
+    };
+    return peta[kunci];
   }
 
   @override
@@ -736,15 +823,29 @@ class _KasirScreenState extends State<KasirScreen> {
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.max,
+          // Stack (bukan Column polos) -- dropdown hasil pencarian WAJIB jadi
+          // child TERAKHIR di sini supaya urutan cat (paint order) Stack
+          // menaruhnya DI ATAS panel Keranjang. Kalau dropdown itu dibungkus
+          // Stack terpisah hanya di sekitar kotak cari, overflow-nya akan
+          // tertutup panel Keranjang yang dicat belakangan (sibling Column
+          // berikutnya) -- gap-closure: persis itu bug yang dilaporkan (kotak
+          // cari menyerap ketikan tapi tak ada umpan balik sama sekali).
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              // Fokus Keranjang TETAP butuh kotak cari/scan -- kasir masih
-              // bisa menambah barang lain (mis. pelanggan minta tambah satu)
-              // tanpa harus keluar dari mode ini dulu.
-              Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: _kotakPencarian()),
-              Expanded(child: panel),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  // Fokus Keranjang TETAP butuh kotak cari/scan -- kasir masih
+                  // bisa menambah barang lain (mis. pelanggan minta tambah
+                  // satu) tanpa harus keluar dari mode ini dulu.
+                  Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: _kotakPencarian()),
+                  Expanded(child: panel),
+                ],
+              ),
+              if (_kataKunci.isNotEmpty)
+                Positioned(top: 64, left: 16, right: 16, child: _dropdownHasilPencarian()),
             ],
           ),
         ),
@@ -763,6 +864,7 @@ class _KasirScreenState extends State<KasirScreen> {
   Widget _kotakPencarian() {
     return TextField(
       controller: _kataKunciController,
+      focusNode: _fokusKataKunci,
       decoration: const InputDecoration(
         hintText: 'Cari / scan barcode produk...',
         prefixIcon: Icon(Icons.search),
@@ -771,6 +873,37 @@ class _KasirScreenState extends State<KasirScreen> {
       ),
       onChanged: (v) => setState(() => _kataKunci = v),
       onSubmitted: _submitPencarian,
+    );
+  }
+
+  /// Dropdown hasil pencarian mode Fokus Keranjang -- padanan visual
+  /// `.search-dropdown` pos-renderer.js: kartu melayang di bawah kotak cari,
+  /// tiap baris bernomor 1-9 lalu 0 (Ctrl+angka utk pilih tanpa mouse, lihat
+  /// `_tanganiTombolKasir`), sisanya (baris ke-11 dst, maks 30) klik-mouse saja.
+  Widget _dropdownHasilPencarian() {
+    final hasil = _hasilPencarianDropdown;
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 340),
+        child: hasil.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Tidak ada produk cocok.', style: TextStyle(color: AppColors.textSecondary)),
+              )
+            : ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: hasil.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, i) => _BarisHasilPencarian(
+                  nomor: i < 9 ? '${i + 1}' : (i == 9 ? '0' : ''),
+                  produk: hasil[i],
+                  onTap: () => _pilihHasilPencarian(hasil[i]),
+                ),
+              ),
+      ),
     );
   }
 
@@ -921,6 +1054,57 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
 /// asli (`gambarUrl` API ini selalu null di data uji), padanan kesan kartu
 /// bergambar pada referensi tanpa berpura-pura ada foto sungguhan.
 const _paletKartuProduk = [Color(0xFF2563EB), Color(0xFF0D9488), Color(0xFFC0563D), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF0284C7)];
+
+/// Satu baris dropdown hasil pencarian (mode Fokus Keranjang) -- padanan
+/// `.baris-hasil` pos-renderer.js: badge nomor (Ctrl+angka), avatar inisial
+/// senada `_KartuProduk`, nama+kode (+" · Habis" kalau stok 0), harga di kanan.
+class _BarisHasilPencarian extends StatelessWidget {
+  final String nomor;
+  final Produk produk;
+  final VoidCallback onTap;
+  const _BarisHasilPencarian({required this.nomor, required this.produk, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final habis = produk.stok <= 0;
+    final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty ? 0 : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              child: nomor.isEmpty
+                  ? null
+                  : Text(nomor, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+            ),
+            const SizedBox(width: 8),
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: AppColors.latarLembut(warnaAvatar),
+              child: Text(produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?', style: TextStyle(color: warnaAvatar, fontWeight: FontWeight.w800, fontSize: 12)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(produk.nama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+                  Text('${produk.kode}${habis ? ' · Habis' : ''}', style: TextStyle(fontSize: 11, color: habis ? AppColors.danger : AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(_formatRupiah.format(produk.hargaJual), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _KartuProduk extends StatelessWidget {
   final Produk produk;
