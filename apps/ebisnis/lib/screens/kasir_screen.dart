@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../models.dart';
@@ -67,14 +68,33 @@ class _KasirScreenState extends State<KasirScreen> {
   /// cuma perlu menuntaskan pembayaran tanpa godaan menambah produk lagi.
   /// Hanya relevan di Windows -- di Android, Kasir & Keranjang tetap 2 layar
   /// terpisah (lihat `_bodyMobile`), konsep ini tak berlaku di sana.
+  ///
+  /// Disimpan ke SharedPreferences (device-level, bukan per-sesi-login) --
+  /// gap-closure: SEBELUMNYA kembali ke false setiap kali `KasirScreen`
+  /// dibuat ulang (mis. tombol "Transaksi Baru" di StrukScreen memanggil
+  /// `pushReplacement(KasirScreen())`, instance State lama dibuang total),
+  /// jadi preferensi kasir seakan "lupa" walau baru saja dipilih. Bertahan
+  /// lintas transaksi/logout/restart aplikasi sampai diubah manual.
   bool _fokusKeranjang = false;
+  static const _kKunciFokusKeranjang = 'kasir_fokus_keranjang';
 
-  void _toggleFokusKeranjang() => setState(() => _fokusKeranjang = !_fokusKeranjang);
+  Future<void> _toggleFokusKeranjang() async {
+    setState(() => _fokusKeranjang = !_fokusKeranjang);
+    final sp = await SharedPreferences.getInstance();
+    await sp.setBool(_kKunciFokusKeranjang, _fokusKeranjang);
+  }
 
   @override
   void initState() {
     super.initState();
+    _muatPreferensiTampilan();
     _muatAwal();
+  }
+
+  Future<void> _muatPreferensiTampilan() async {
+    final sp = await SharedPreferences.getInstance();
+    final tersimpan = sp.getBool(_kKunciFokusKeranjang);
+    if (tersimpan != null && mounted) setState(() => _fokusKeranjang = tersimpan);
   }
 
   @override
@@ -586,17 +606,21 @@ class _KasirScreenState extends State<KasirScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Tooltip(
-                message: 'Kas Sekarang (saldo kas berjalan sesi ini)',
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.success), borderRadius: BorderRadius.circular(20)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.payments_outlined, size: 14, color: AppColors.success),
-                      const SizedBox(width: 4),
-                      Text(_formatRupiah.format(_kasSaatIni), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
-                    ],
+                message: 'Sesi Kasir (ketuk utk lihat rincian & Tutup Kas)',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: _bukaDialogTutupKas,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.success), borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.payments_outlined, size: 14, color: AppColors.success),
+                        const SizedBox(width: 4),
+                        Text(_formatRupiah.format(_kasSaatIni), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -627,7 +651,7 @@ class _KasirScreenState extends State<KasirScreen> {
         ),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatAwal, tooltip: 'Muat ulang katalog'),
         if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
-          IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Tutup Kas'),
+          IconButton(icon: const Icon(Icons.point_of_sale_outlined), onPressed: _bukaDialogTutupKas, tooltip: 'Sesi Kasir / Tutup Kas'),
         if (defaultTargetPlatform == TargetPlatform.windows)
           IconButton(icon: const Icon(Icons.help_outline), onPressed: _bukaBantuan, tooltip: 'Bantuan (F1)'),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar'),
@@ -1239,40 +1263,69 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
     Navigator.of(context).pop({'uangFisik': uangFisik, 'keterangan': _keteranganController.text.trim()});
   }
 
+  String? get _waktuBukaFormatted {
+    final raw = widget.status['waktuBuka'] as String?;
+    if (raw == null) return null;
+    try {
+      final w = DateTime.parse(raw);
+      return DateFormat('dd/MM, HH:mm').format(w);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _kartuStat(String label, String nilai) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.pageBg, borderRadius: BorderRadius.circular(10)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.3)),
+            const SizedBox(height: 4),
+            Text(nilai, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
     final totalTunai = (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
     final totalNonTunai = (widget.status['totalNonTunai'] as num?)?.toDouble() ?? 0;
     final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final waktuBuka = _waktuBukaFormatted;
     return AlertDialog(
-      title: const Text('Tutup Kas'),
+      title: const Text('Sesi Kasir'),
       content: SizedBox(
-        width: 360,
+        width: 380,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Modal Awal'), Text(_formatRupiah.format(modalAwal))]),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Penjualan Tunai'), Text(_formatRupiah.format(totalTunai))]),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Penjualan Non-Tunai'), Text(_formatRupiah.format(totalNonTunai))]),
-              const Divider(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [const Text('Kas Seharusnya', style: TextStyle(fontWeight: FontWeight.bold)), Text(_formatRupiah.format(kasSaatIni), style: const TextStyle(fontWeight: FontWeight.bold))],
-              ),
+              if (waktuBuka != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('Kas terbuka sejak $waktuBuka', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w600, fontSize: 13)),
+                ),
+              Row(children: [_kartuStat('Modal Awal', _formatRupiah.format(modalAwal)), const SizedBox(width: 10), _kartuStat('Penjualan Tunai', _formatRupiah.format(totalTunai))]),
+              const SizedBox(height: 10),
+              Row(children: [_kartuStat('Non Tunai', _formatRupiah.format(totalNonTunai)), const SizedBox(width: 10), _kartuStat('Kas Seharusnya', _formatRupiah.format(kasSaatIni))]),
               const SizedBox(height: 16),
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
               TextField(
                 controller: _uangFisikController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Uang Fisik (hasil hitung aktual) *', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Uang Fisik (Rp) *', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _keteranganController,
-                decoration: const InputDecoration(labelText: 'Catatan Penutupan *', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Keterangan *', border: OutlineInputBorder()),
                 maxLines: 2,
               ),
             ],
