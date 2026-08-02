@@ -206,7 +206,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
           children: [
             ListTile(leading: const Icon(Icons.info_outline), title: const Text('Detail'), onTap: () {
               Navigator.of(context).pop();
-              _lihatDetail(row['idTransaksi']);
+              _lihatDetail(row);
             }),
             ListTile(leading: const Icon(Icons.print_outlined), title: const Text('Cetak Struk'), onTap: () {
               Navigator.of(context).pop();
@@ -227,9 +227,9 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     );
   }
 
-  Future<void> _lihatDetail(dynamic idTransaksi) async {
+  Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
-      final hasil = await ApiClient.instance.aksi('detail_transaksi', {'id': idTransaksi});
+      final hasil = await ApiClient.instance.aksi('detail_transaksi', {'id': row['idTransaksi']});
       final items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (!mounted) return;
       await showDialog(
@@ -264,7 +264,31 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               ),
             ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup')),
+            // Cetak Struk & Batalkan langsung di sini -- gap-closure: sebelumnya
+            // HANYA lewat menu tekan-tahan (_tampilkanAksi), tak lazim dipakai
+            // mouse desktop sehingga terkesan "cuma popup tanpa aksi" (bahkan
+            // utk supervisor yang harusnya boleh Batalkan).
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _cetakStruk(row);
+              },
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: const Text('Cetak Struk'),
+            ),
+            if (Sesi.instance.bolehKelola)
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _batalkan(row);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Batalkan'),
+              ),
+          ],
         ),
       );
     } catch (e) {
@@ -408,7 +432,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                           const Text('Terlayani', style: TextStyle(fontSize: 10, color: Color(0xFF2E7D32))),
                       ],
                     ),
-                    onTap: () => _lihatDetail(row['idTransaksi']),
+                    onTap: () => _lihatDetail(row),
                     onLongPress: () => _tampilkanAksi(row),
                   ),
                 )),

@@ -215,7 +215,32 @@ class _PesananScreenState extends State<PesananScreen> {
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup')),
+          // Keranjang Tertahan (draft lokal, BUKAN pesanan online) -- gap-closure:
+          // sebelumnya dialog ini murni tampilan, satu-satunya jalan lanjut
+          // (Muat ke Keranjang) tersembunyi di menu tekan-tahan yang tak lazim
+          // dipakai mouse desktop. Tombol ini langsung ke KeranjangScreen sama
+          // seperti _tampilkanAksi, bukan alur baru.
+          if (!p.dariPembeliOnline)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _muatKeKeranjang(p);
+              },
+              icon: const Icon(Icons.shopping_cart_checkout, size: 18),
+              label: const Text('Muat ke Keranjang'),
+            ),
+          if (p.dariPembeliOnline)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _verifikasiDanSelesaikan(p);
+              },
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Verifikasi & Selesaikan'),
+            ),
+        ],
       ),
     );
   }
