@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import '../services/print_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import 'kasir_screen.dart';
@@ -90,7 +90,7 @@ class StrukScreen extends StatelessWidget {
         ),
       ),
     );
-    await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'struk-$kode.pdf');
+    await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-$kode.pdf');
   }
 
   @override

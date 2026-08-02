@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../services/print_util.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -156,7 +156,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
           ),
         ),
       );
-      await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'struk-${hasil['kode']}.pdf');
+      await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-${hasil['kode']}.pdf');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cetak: $e')));
     }
