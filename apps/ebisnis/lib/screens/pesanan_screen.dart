@@ -4,6 +4,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
@@ -240,6 +241,16 @@ class _PesananScreenState extends State<PesananScreen> {
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: const Text('Verifikasi & Selesaikan'),
             ),
+          if (Sesi.instance.bolehKelola)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _batalkan(p);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+              icon: const Icon(Icons.cancel_outlined, size: 18),
+              label: const Text('Batalkan'),
+            ),
         ],
       ),
     );
@@ -311,11 +322,25 @@ class _PesananScreenState extends State<PesananScreen> {
   }
 
   Future<void> _batalkan(Pesanan p) async {
+    final alasanController = TextEditingController();
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Batalkan Pesanan?'),
-        content: Text('${p.kode} akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${p.kode} akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: alasanController,
+              decoration: const InputDecoration(labelText: 'Alasan Pembatalan *', border: OutlineInputBorder()),
+              maxLines: 2,
+              autofocus: true,
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
           FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Ya, Batalkan')),
@@ -323,8 +348,13 @@ class _PesananScreenState extends State<PesananScreen> {
       ),
     );
     if (konfirmasi != true) return;
+    final alasan = alasanController.text.trim();
+    if (alasan.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
+      return;
+    }
     try {
-      await ApiClient.instance.aksi('batal_pesanan', {'id': p.id});
+      await ApiClient.instance.aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
       await _muat();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
