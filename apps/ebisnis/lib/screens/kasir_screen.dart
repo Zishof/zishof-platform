@@ -15,6 +15,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_kedua.dart';
+import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
@@ -516,7 +517,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_bukaLaciBerjalan) return;
     setState(() => _bukaLaciBerjalan = true);
     try {
-      await bukaLaciKasir();
+      await PengaturanLaci.instance.muat();
+      await bukaLaciKasir(pinAlternatif: PengaturanLaci.instance.pinAlternatif, namaPrinter: PengaturanLaci.instance.namaPrinter);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laci kasir dibuka.')));
       }

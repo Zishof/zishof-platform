@@ -1,6 +1,10 @@
 import 'package:core_device/core_device.dart';
+import 'package:core_hw/core_hw.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../api_client.dart';
+import '../services/pengaturan_laci.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
@@ -118,6 +122,13 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   bool _memuat = true;
   bool _menyimpan = false;
 
+  // Cash Drawer (Windows-only) -- lihat services/pengaturan_laci.dart.
+  List<Printer> _daftarPrinter = [];
+  String? _printerLaci;
+  bool _pinAlternatif = false;
+  bool _menyimpanLaci = false;
+  bool _tesLaciBerjalan = false;
+
   @override
   void initState() {
     super.initState();
@@ -132,9 +143,19 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
 
   Future<void> _muat() async {
     await IdentitasMesin.instance.muat();
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await PengaturanLaci.instance.muat();
+      try {
+        _daftarPrinter = await Printing.listPrinters();
+      } catch (_) {
+        _daftarPrinter = [];
+      }
+    }
     if (mounted) {
       setState(() {
         _namaController.text = IdentitasMesin.instance.namaMesin;
+        _printerLaci = PengaturanLaci.instance.namaPrinter;
+        _pinAlternatif = PengaturanLaci.instance.pinAlternatif;
         _memuat = false;
       });
     }
@@ -146,6 +167,27 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     if (mounted) {
       setState(() => _menyimpan = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama mesin tersimpan.')));
+    }
+  }
+
+  Future<void> _simpanLaci() async {
+    setState(() => _menyimpanLaci = true);
+    await PengaturanLaci.instance.simpan(namaPrinter: _printerLaci, pinAlternatif: _pinAlternatif);
+    if (mounted) {
+      setState(() => _menyimpanLaci = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengaturan laci tersimpan.')));
+    }
+  }
+
+  Future<void> _tesLaci() async {
+    setState(() => _tesLaciBerjalan = true);
+    try {
+      await bukaLaciKasir(pinAlternatif: _pinAlternatif, namaPrinter: _printerLaci);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perintah buka laci terkirim.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e')));
+    } finally {
+      if (mounted) setState(() => _tesLaciBerjalan = false);
     }
   }
 
@@ -176,6 +218,52 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
             child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
           ),
         ),
+        if (defaultTargetPlatform == TargetPlatform.windows) ...[
+          const Divider(height: 40),
+          const Text('Cash Drawer (Buka Laci)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 4),
+          const Text(
+            'Laci kasir tidak punya driver sendiri -- ia tersambung via kabel ke printer struk thermal. '
+            'Kalau laci tidak terbuka, biasanya penyebabnya salah target printer (bukan berarti printer defaultnya) '
+            'atau salah pin (coba "Pin Alternatif" kalau pin biasa tak berhasil).',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            value: _daftarPrinter.any((p) => p.name == _printerLaci) ? _printerLaci : null,
+            decoration: const InputDecoration(labelText: 'Printer Laci', border: OutlineInputBorder(), isDense: true),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('(Ikut printer default Windows)')),
+              ..._daftarPrinter.map((p) => DropdownMenuItem<String?>(value: p.name, child: Text(p.name + (p.isDefault ? ' (default)' : '')))),
+            ],
+            onChanged: (v) => setState(() => _printerLaci = v),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Pin Alternatif (Pin 5)', style: TextStyle(fontSize: 13)),
+            subtitle: const Text('Aktifkan kalau laci tak terbuka dengan pengaturan pin biasa (Pin 2).', style: TextStyle(fontSize: 11)),
+            value: _pinAlternatif,
+            onChanged: (v) => setState(() => _pinAlternatif = v),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _menyimpanLaci ? null : _simpanLaci,
+                  child: _menyimpanLaci ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan Pengaturan Laci'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _tesLaciBerjalan ? null : _tesLaci,
+                  child: _tesLaciBerjalan ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Tes Buka Laci'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

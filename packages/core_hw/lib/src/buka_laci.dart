@@ -14,28 +14,27 @@ import 'package:win32/win32.dart';
 /// struk, lewat winspool.drv (`OpenPrinter`/`StartDocPrinter`/`WritePrinter`,
 /// pola RawPrinterHelper KB322091), BUKAN library node/plugin pihak ketiga.
 ///
-/// Referensi Electron TIDAK punya pengaturan nama printer/COM-port sendiri
-/// (selalu ikut default printer OS) -- disengaja disamakan di sini supaya
-/// perilaku identik: pengguna atur printer default lewat Windows Settings.
-///
-/// Melempar [Exception] berisi pesan Indonesia bila printer default tak ada
-/// atau spooler menolak (mis. driver bermasalah) -- pemanggil (UI) yang
-/// memutuskan cara menampilkannya (SnackBar/dialog), fungsi ini tak pernah
-/// menampilkan apa pun sendiri.
-Future<void> bukaLaciKasir({bool pinAlternatif = false}) async {
+/// [namaPrinter] -- OPSIONAL, gap-closure: laci fisik BELUM TENTU nyambung ke
+/// printer yang kebetulan jadi "default" Windows (mis. toko punya >1 printer,
+/// atau default-nya "Microsoft Print to PDF") -- laporan lapangan "Buka Laci
+/// tidak berfungsi" seringkali sebenarnya salah target printer, bukan salah
+/// perintah ESC/POS-nya. Kalau `null`/kosong, tetap fallback ke printer
+/// default Windows spt semula (perilaku lama TIDAK berubah kalau pengguna
+/// belum pernah mengatur printer laci secara eksplisit).
+Future<void> bukaLaciKasir({bool pinAlternatif = false, String? namaPrinter}) async {
   if (defaultTargetPlatform != TargetPlatform.windows) {
     throw Exception('Buka Laci hanya didukung di Windows.');
   }
 
-  final namaPrinter = _namaPrinterDefault();
-  if (namaPrinter == null || namaPrinter.isEmpty) {
+  final target = (namaPrinter != null && namaPrinter.trim().isNotEmpty) ? namaPrinter.trim() : _namaPrinterDefault();
+  if (target == null || target.isEmpty) {
     throw Exception('Tidak ada printer default yang terpasang di Windows. Atur printer default lalu coba lagi.');
   }
 
   final bytes = Uint8List.fromList(
     pinAlternatif ? [0x1B, 0x70, 0x01, 0x19, 0xFA] : [0x1B, 0x70, 0x00, 0x19, 0xFA],
   );
-  _tulisRawKePrinter(namaPrinter, bytes, 'Buka Laci Kasir');
+  _tulisRawKePrinter(target, bytes, 'Buka Laci Kasir');
 }
 
 String? _namaPrinterDefault() {

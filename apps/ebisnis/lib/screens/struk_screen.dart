@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../services/pengaturan_laci.dart';
 import '../services/print_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -186,7 +187,8 @@ class StrukScreen extends StatelessWidget {
                             child: OutlinedButton.icon(
                               onPressed: () async {
                                 try {
-                                  await bukaLaciKasir();
+                                  await PengaturanLaci.instance.muat();
+                                  await bukaLaciKasir(pinAlternatif: PengaturanLaci.instance.pinAlternatif, namaPrinter: PengaturanLaci.instance.namaPrinter);
                                 } catch (e) {
                                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka laci: $e')));
                                 }
