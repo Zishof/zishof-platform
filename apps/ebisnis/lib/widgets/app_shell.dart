@@ -204,6 +204,16 @@ class AppShell extends StatelessWidget {
                           if (aksiHeader != null) aksiHeader!,
                         ],
                       ),
+                    )
+                  else if (aksiHeader != null)
+                    // Layar spt Kasir sembunyikan judul besar (langsung ke pencarian), TAPI
+                    // aksiHeader (mis. toolbar Akun Saya/Layar Pelanggan/Buka Laci/Ganti Toko)
+                    // tetap wajib tampil -- gap-closure: sebelumnya baris ini terlewat total
+                    // kalau tampilkanJudul false, jadi tombol2 toolbar itu ada di kode tapi tak
+                    // pernah ter-render sama sekali di desktop.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                      child: Align(alignment: Alignment.centerRight, child: aksiHeader!),
                     ),
                   Expanded(
                     child: scrollable
