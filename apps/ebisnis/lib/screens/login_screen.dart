@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_variant.dart';
 import '../api_client.dart';
 import 'kasir_screen.dart';
 import 'pengaturan_server_screen.dart';
@@ -29,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final hasil = await ApiClient.instance.aksi('login', {
         'username': _userCtrl.text.trim(),
         'password': _passCtrl.text,
-        'labelPerangkat': 'eBisnis Flutter Pilot',
+        'labelPerangkat': AppVariant.labelPerangkat,
       });
       await ApiClient.instance.simpanToken(hasil['token'] as String);
       if (!mounted) return;
@@ -61,9 +62,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.storefront, size: 56, color: Color(0xFF1E3A5F)),
+                    if (AppVariant.logoAsset == null)
+                      const Icon(Icons.storefront,
+                          size: 56, color: Color(0xFF1E3A5F))
+                    else
+                      Image.asset(AppVariant.logoAsset!, height: 64),
                     const SizedBox(height: 12),
-                    const Text('eBisnis',
+                    const Text(AppVariant.namaAplikasi,
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F))),
                     const Text('Masuk sebagai Kasir',

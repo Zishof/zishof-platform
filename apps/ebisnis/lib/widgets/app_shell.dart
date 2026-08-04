@@ -1,5 +1,6 @@
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
+import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
@@ -20,6 +21,7 @@ import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/hak_akses_screen.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -28,18 +30,37 @@ import '../screens/laporan_screen.dart';
 /// landscape kecil.
 const kAmbangLebarDesktop = 900.0;
 
+final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(MenuEBisnis.kasir);
+
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
 /// urutan/daftar menu tetap satu sumber kebenaran.
-enum MenuEBisnis { kasir, ringkasan, pesanan, anggota, produk, stokOpname, kulakan, diskon, returPenjualan, riwayatPenjualan, laporanTransaksi, laporanLaporan, riwayatSinkron, logError, konfigurasi, layarPelanggan }
+enum MenuEBisnis {
+  kasir,
+  ringkasan,
+  pesanan,
+  anggota,
+  produk,
+  stokOpname,
+  kulakan,
+  diskon,
+  returPenjualan,
+  riwayatPenjualan,
+  laporanTransaksi,
+  laporanLaporan,
+  riwayatSinkron,
+  logError,
+  konfigurasi,
+  layarPelanggan,
+  hakAkses
+}
 
 class _ItemMenuShell {
   final MenuEBisnis kunci;
   final IconData icon;
   final String label;
-  final bool segeraHadir;
   final WidgetBuilder? builder;
-  const _ItemMenuShell(this.kunci, this.icon, this.label, {this.segeraHadir = false, this.builder});
+  const _ItemMenuShell(this.kunci, this.icon, this.label, {this.builder});
 }
 
 /// Kunci `MenuEBisnis` -> kunci `konfigurasi.aksesMenu` server (lihat
@@ -64,27 +85,54 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
 };
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
+  if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
 }
 
 const _daftarMenu = <_ItemMenuShell>[
-  _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS', builder: _bangunKasir),
-  _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard', builder: _bangunRingkasan),
-  _ItemMenuShell(MenuEBisnis.pesanan, Icons.receipt_long, 'Pesanan', builder: _bangunPesanan),
-  _ItemMenuShell(MenuEBisnis.anggota, Icons.people_outline, 'Pelanggan', builder: _bangunAnggota),
-  _ItemMenuShell(MenuEBisnis.produk, Icons.inventory_2_outlined, 'Produk', builder: _bangunProduk),
-  _ItemMenuShell(MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname', builder: _bangunStok),
-  _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan', builder: _bangunKulakan),
-  _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon', builder: _bangunDiskon),
-  _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined, 'Retur Penjualan', builder: _bangunReturPenjualan),
-  _ItemMenuShell(MenuEBisnis.riwayatPenjualan, Icons.history, 'Riwayat Penjualan', builder: _bangunRiwayatPenjualan),
-  _ItemMenuShell(MenuEBisnis.laporanTransaksi, Icons.assessment_outlined, 'Laporan Transaksi', builder: _bangunLaporanTransaksi),
-  _ItemMenuShell(MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan', builder: _bangunLaporanLaporan),
-  _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi', builder: _bangunRiwayatSinkron),
-  _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error', builder: _bangunLogError),
-  _ItemMenuShell(MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi', builder: _bangunKonfigurasi),
-  _ItemMenuShell(MenuEBisnis.layarPelanggan, Icons.desktop_windows_outlined, 'Layar Pelanggan', builder: _bangunLayarPelanggan),
+  _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
+      builder: _bangunKasir),
+  _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
+      builder: _bangunRingkasan),
+  _ItemMenuShell(MenuEBisnis.pesanan, Icons.receipt_long, 'Pesanan',
+      builder: _bangunPesanan),
+  _ItemMenuShell(MenuEBisnis.anggota, Icons.people_outline, 'Pelanggan',
+      builder: _bangunAnggota),
+  _ItemMenuShell(MenuEBisnis.produk, Icons.inventory_2_outlined, 'Produk',
+      builder: _bangunProduk),
+  _ItemMenuShell(
+      MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname',
+      builder: _bangunStok),
+  _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan',
+      builder: _bangunKulakan),
+  _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon',
+      builder: _bangunDiskon),
+  _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined,
+      'Retur Penjualan',
+      builder: _bangunReturPenjualan),
+  _ItemMenuShell(
+      MenuEBisnis.riwayatPenjualan, Icons.history, 'Riwayat Penjualan',
+      builder: _bangunRiwayatPenjualan),
+  _ItemMenuShell(MenuEBisnis.laporanTransaksi, Icons.assessment_outlined,
+      'Laporan Transaksi',
+      builder: _bangunLaporanTransaksi),
+  _ItemMenuShell(
+      MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan',
+      builder: _bangunLaporanLaporan),
+  _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
+      builder: _bangunRiwayatSinkron),
+  _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
+      builder: _bangunLogError),
+  _ItemMenuShell(
+      MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi',
+      builder: _bangunKonfigurasi),
+  _ItemMenuShell(MenuEBisnis.layarPelanggan, Icons.desktop_windows_outlined,
+      'Layar Pelanggan',
+      builder: _bangunLayarPelanggan),
+  _ItemMenuShell(
+      MenuEBisnis.hakAkses, Icons.admin_panel_settings_outlined, 'Hak Akses',
+      builder: _bangunHakAkses),
 ];
 
 Widget _bangunKasir(BuildContext c) => const KasirScreen();
@@ -96,20 +144,122 @@ Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
 Widget _bangunReturPenjualan(BuildContext c) => const ReturPenjualanScreen();
-Widget _bangunRiwayatPenjualan(BuildContext c) => const RiwayatPenjualanScreen();
-Widget _bangunLaporanTransaksi(BuildContext c) => const LaporanTransaksiScreen();
+Widget _bangunRiwayatPenjualan(BuildContext c) =>
+    const RiwayatPenjualanScreen();
+Widget _bangunLaporanTransaksi(BuildContext c) =>
+    const LaporanTransaksiScreen();
 Widget _bangunLaporanLaporan(BuildContext c) => const LaporanScreen();
-Widget _bangunRiwayatSinkron(BuildContext c) => const RiwayatSinkronisasiScreen();
+Widget _bangunRiwayatSinkron(BuildContext c) =>
+    const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
+Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
 
-void _pindahMenu(BuildContext context, _ItemMenuShell item) {
-  if (item.segeraHadir || item.builder == null) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item.label} sedang dikerjakan, menyusul di rilis berikutnya.')));
+_ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
+  for (final item in _daftarMenu) {
+    if (item.kunci == kunci) return item;
+  }
+  return null;
+}
+
+_ItemMenuShell? _itemMenuDariLabel(String label) {
+  final menu = _menuDariLabel(label);
+  return menu == null ? null : _itemMenu(menu);
+}
+
+void _pindahMenu(BuildContext context, _ItemMenuShell item,
+    {MenuEBisnis? menuSaatIni}) {
+  if (item.builder == null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '${item.label} sedang dikerjakan, menyusul di rilis berikutnya.')));
     return;
   }
-  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: item.builder!));
+  if (item.kunci == menuSaatIni || item.kunci == _menuAktifNotifier.value) {
+    return;
+  }
+  AppDrawer.menuAktifNotifier.value = _labelDrawer(item.kunci);
+  _menuAktifNotifier.value = item.kunci;
+}
+
+String _labelDrawer(MenuEBisnis kunci) {
+  switch (kunci) {
+    case MenuEBisnis.kasir:
+      return 'Kasir';
+    case MenuEBisnis.ringkasan:
+      return 'Ringkasan';
+    case MenuEBisnis.pesanan:
+      return 'Pesanan';
+    case MenuEBisnis.anggota:
+      return 'Customer/Anggota';
+    case MenuEBisnis.produk:
+      return 'Produk';
+    case MenuEBisnis.stokOpname:
+      return 'Stok Opname';
+    case MenuEBisnis.kulakan:
+      return 'Kulakan';
+    case MenuEBisnis.diskon:
+      return 'Aturan Diskon';
+    case MenuEBisnis.returPenjualan:
+      return 'Retur Penjualan';
+    case MenuEBisnis.riwayatPenjualan:
+      return 'Riwayat Penjualan';
+    case MenuEBisnis.laporanTransaksi:
+      return 'Laporan Transaksi';
+    case MenuEBisnis.laporanLaporan:
+      return 'Laporan-Laporan';
+    case MenuEBisnis.riwayatSinkron:
+      return 'Riwayat Sinkronisasi';
+    case MenuEBisnis.logError:
+      return 'Log Error';
+    case MenuEBisnis.konfigurasi:
+      return 'Konfigurasi';
+    case MenuEBisnis.layarPelanggan:
+      return 'Layar Pelanggan';
+    case MenuEBisnis.hakAkses:
+      return 'Hak Akses';
+  }
+}
+
+MenuEBisnis? _menuDariLabel(String label) {
+  switch (label) {
+    case 'Kasir':
+      return MenuEBisnis.kasir;
+    case 'Ringkasan':
+      return MenuEBisnis.ringkasan;
+    case 'Pesanan':
+      return MenuEBisnis.pesanan;
+    case 'Customer/Anggota':
+      return MenuEBisnis.anggota;
+    case 'Produk':
+      return MenuEBisnis.produk;
+    case 'Stok Opname':
+      return MenuEBisnis.stokOpname;
+    case 'Kulakan':
+      return MenuEBisnis.kulakan;
+    case 'Aturan Diskon':
+      return MenuEBisnis.diskon;
+    case 'Retur Penjualan':
+      return MenuEBisnis.returPenjualan;
+    case 'Riwayat Penjualan':
+      return MenuEBisnis.riwayatPenjualan;
+    case 'Laporan Transaksi':
+      return MenuEBisnis.laporanTransaksi;
+    case 'Laporan-Laporan':
+      return MenuEBisnis.laporanLaporan;
+    case 'Riwayat Sinkronisasi':
+      return MenuEBisnis.riwayatSinkron;
+    case 'Log Error':
+      return MenuEBisnis.logError;
+    case 'Konfigurasi':
+      return MenuEBisnis.konfigurasi;
+    case 'Layar Pelanggan':
+      return MenuEBisnis.layarPelanggan;
+    case 'Hak Akses':
+      return MenuEBisnis.hakAkses;
+  }
+  return null;
 }
 
 /// Bungkus setiap layar yang sudah di-reskin -- lebar >= [kAmbangLebarDesktop]
@@ -121,7 +271,7 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item) {
 /// [judul]/[subjudul] mengisi header halaman (spt "Dashboard Bisnis" pada
 /// referensi). [aksiHeader] utk tombol aksi khusus halaman (mis. date-range
 /// picker) diletakkan di kanan header, sebaris dgn judul.
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   final MenuEBisnis menuAktif;
   final String judul;
   final String? subjudul;
@@ -162,31 +312,68 @@ class AppShell extends StatelessWidget {
   });
 
   @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  @override
+  void initState() {
+    super.initState();
+    _menuAktifNotifier.value = widget.menuAktif;
+    AppDrawer.menuAktifNotifier.value = _labelDrawer(widget.menuAktif);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<MenuEBisnis>(
+      valueListenable: _menuAktifNotifier,
+      builder: (context, menuTerpilih, _) {
+        if (menuTerpilih != widget.menuAktif) {
+          final item = _itemMenu(menuTerpilih);
+          if (item?.builder != null) return item!.builder!(context);
+        }
+        return _buildShell(context);
+      },
+    );
+  }
+
+  Widget _buildShell(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final desktop = constraints.maxWidth >= kAmbangLebarDesktop;
       if (!desktop) {
         return Scaffold(
           backgroundColor: AppColors.pageBg,
-          appBar: AppBar(title: Text(judul), backgroundColor: AppColors.sidebarBg, foregroundColor: Colors.white, actions: actionsAppBar),
-          drawer: const AppDrawer(),
-          floatingActionButton: floatingActionButton,
-          body: body,
-          bottomNavigationBar: bottomBar,
+          appBar: AppBar(
+              title: Text(widget.judul),
+              backgroundColor: AppColors.sidebarBg,
+              foregroundColor: Colors.white,
+              actions: widget.actionsAppBar),
+          drawer: AppDrawer(
+            menuAktif: _labelDrawer(widget.menuAktif),
+            onPilihMenu: (label) {
+              final item = _itemMenuDariLabel(label);
+              if (item != null) {
+                _pindahMenu(context, item, menuSaatIni: widget.menuAktif);
+              }
+            },
+          ),
+          floatingActionButton: widget.floatingActionButton,
+          body: widget.body,
+          bottomNavigationBar: widget.bottomBar,
         );
       }
       return Scaffold(
         backgroundColor: AppColors.pageBg,
-        floatingActionButton: floatingActionButton,
+        floatingActionButton: widget.floatingActionButton,
         body: Row(
           children: [
-            _AppSidebar(menuAktif: menuAktif),
+            _AppSidebar(menuAktif: widget.menuAktif),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const _AppTopbar(),
-                  if (tampilkanJudul)
+                  if (widget.tampilkanJudul)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                       child: Row(
@@ -196,16 +383,25 @@ class AppShell extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(judul, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                if (subjudul != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(subjudul!, style: const TextStyle(color: AppColors.textSecondary))),
+                                Text(widget.judul,
+                                    style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary)),
+                                if (widget.subjudul != null)
+                                  Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(widget.subjudul!,
+                                          style: const TextStyle(
+                                              color: AppColors.textSecondary))),
                               ],
                             ),
                           ),
-                          if (aksiHeader != null) aksiHeader!,
+                          if (widget.aksiHeader != null) widget.aksiHeader!,
                         ],
                       ),
                     )
-                  else if (aksiHeader != null)
+                  else if (widget.aksiHeader != null)
                     // Layar spt Kasir sembunyikan judul besar (langsung ke pencarian), TAPI
                     // aksiHeader (mis. toolbar Akun Saya/Layar Pelanggan/Buka Laci/Ganti Toko)
                     // tetap wajib tampil -- gap-closure: sebelumnya baris ini terlewat total
@@ -213,14 +409,21 @@ class AppShell extends StatelessWidget {
                     // pernah ter-render sama sekali di desktop.
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                      child: Align(alignment: Alignment.centerRight, child: aksiHeader!),
+                      child: Align(
+                          alignment: Alignment.centerRight,
+                          child: widget.aksiHeader!),
                     ),
                   Expanded(
-                    child: scrollable
-                        ? SingleChildScrollView(padding: const EdgeInsets.all(24), child: body)
-                        : Padding(padding: EdgeInsets.fromLTRB(24, tampilkanJudul ? 12 : 20, 24, 0), child: body),
+                    child: widget.scrollable
+                        ? SingleChildScrollView(
+                            padding: const EdgeInsets.all(24),
+                            child: widget.body)
+                        : Padding(
+                            padding: EdgeInsets.fromLTRB(
+                                24, widget.tampilkanJudul ? 12 : 20, 24, 0),
+                            child: widget.body),
                   ),
-                  if (bottomBar != null) bottomBar!,
+                  if (widget.bottomBar != null) widget.bottomBar!,
                 ],
               ),
             ),
@@ -244,49 +447,78 @@ class _AppSidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 24),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               child: Row(
                 children: [
-                  Icon(Icons.link, color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text('eBisnis POS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Icon(Icons.link, color: Colors.white, size: 22),
+                  const SizedBox(width: 8),
+                  const Text(AppVariant.namaSidebar,
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ],
               ),
             ),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
-                children: _daftarMenu.where((item) => bolehTampilMenu(item.kunci)).map((item) {
+                children: _daftarMenu
+                    .where((item) => bolehTampilMenu(item.kunci))
+                    .map((item) {
                   final aktif = item.kunci == menuAktif;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     child: Material(
-                      color: aktif ? AppColors.sidebarBgActive : Colors.transparent,
+                      color: aktif
+                          ? AppColors.sidebarBgActive
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        onTap: () => _pindahMenu(context, item),
+                        onTap: () =>
+                            _pindahMenu(context, item, menuSaatIni: menuAktif),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 11),
                           child: Row(
                             children: [
                               item.kunci == MenuEBisnis.pesanan
                                   ? ValueListenableBuilder<int>(
-                                      valueListenable: PesananPoller.instance.jumlahBaru,
+                                      valueListenable:
+                                          PesananPoller.instance.jumlahBaru,
                                       builder: (context, jumlah, _) => Badge(
                                         label: Text('$jumlah'),
                                         isLabelVisible: jumlah > 0,
-                                        child: Icon(item.icon, size: 19, color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText),
+                                        child: Icon(item.icon,
+                                            size: 19,
+                                            color: aktif
+                                                ? AppColors.sidebarTextActive
+                                                : AppColors.sidebarText),
                                       ),
                                     )
-                                  : Icon(item.icon, size: 19, color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText),
+                                  : Icon(item.icon,
+                                      size: 19,
+                                      color: aktif
+                                          ? AppColors.sidebarTextActive
+                                          : AppColors.sidebarText),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(item.label,
-                                    style: TextStyle(color: aktif ? AppColors.sidebarTextActive : AppColors.sidebarText, fontSize: 13, fontWeight: aktif ? FontWeight.w600 : FontWeight.normal)),
+                                    style: TextStyle(
+                                        color: aktif
+                                            ? AppColors.sidebarTextActive
+                                            : AppColors.sidebarText,
+                                        fontSize: 13,
+                                        fontWeight: aktif
+                                            ? FontWeight.w600
+                                            : FontWeight.normal)),
                               ),
-                              if (item.segeraHadir) const Icon(Icons.lock_clock_outlined, size: 14, color: AppColors.sidebarText),
+                              if (item.builder == null)
+                                const Icon(Icons.lock_clock_outlined,
+                                    size: 14, color: AppColors.sidebarText),
                             ],
                           ),
                         ),
@@ -336,12 +568,20 @@ class _AppTopbarState extends State<_AppTopbar> {
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: AppColors.border))),
+      decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: AppColors.border))),
       child: Row(
         children: [
-          const Icon(Icons.storefront_outlined, color: AppColors.textSecondary, size: 18),
+          const Icon(Icons.storefront_outlined,
+              color: AppColors.textSecondary, size: 18),
           const SizedBox(width: 6),
-          Text(Sesi.instance.tokoNama.isEmpty ? 'eBisnis' : Sesi.instance.tokoNama, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text(
+              Sesi.instance.tokoNama.isEmpty
+                  ? AppVariant.namaAplikasi
+                  : Sesi.instance.tokoNama,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           const Spacer(),
           _chipStatus(
             icon: Icons.point_of_sale_outlined,
@@ -350,29 +590,45 @@ class _AppTopbarState extends State<_AppTopbar> {
           ),
           const SizedBox(width: 10),
           _chipStatus(
-            icon: _pendingSync == 0 ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined,
+            icon: _pendingSync == 0
+                ? Icons.cloud_done_outlined
+                : Icons.cloud_sync_outlined,
             label: _pendingSync == 0 ? 'Sync Online' : '$_pendingSync Tertunda',
             warna: _pendingSync == 0 ? AppColors.teal : AppColors.warning,
           ),
           const SizedBox(width: 16),
-          CircleAvatar(radius: 16, backgroundColor: AppColors.primary, child: Text(Sesi.instance.userId.isNotEmpty ? Sesi.instance.userId[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white, fontSize: 13))),
+          CircleAvatar(
+              radius: 16,
+              backgroundColor: AppColors.primary,
+              child: Text(
+                  Sesi.instance.userId.isNotEmpty
+                      ? Sesi.instance.userId[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(color: Colors.white, fontSize: 13))),
           const SizedBox(width: 8),
-          Text(Sesi.instance.userId, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text(Sesi.instance.userId,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ],
       ),
     );
   }
 
-  Widget _chipStatus({required IconData icon, required String label, required Color warna}) {
+  Widget _chipStatus(
+      {required IconData icon, required String label, required Color warna}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: AppColors.latarLembut(warna), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+          color: AppColors.latarLembut(warna),
+          borderRadius: BorderRadius.circular(8)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: warna),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: warna)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: warna)),
         ],
       ),
     );

@@ -214,17 +214,17 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                 children: [
                   SizedBox(
-                    height: 90,
+                    height: 96,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.list_alt_outlined, warna: AppColors.primary, nilai: '$_totalSemua', label: 'Total Log')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.list_alt_outlined, warna: AppColors.primary, nilai: '$_totalSemua', label: 'Total Log')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.error_outline, warna: AppColors.danger, nilai: '$_totalError', label: 'Error')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.error_outline, warna: AppColors.danger, nilai: '$_totalError', label: 'Error')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.warning_amber_outlined, warna: AppColors.warning, nilai: '$_totalPeringatan', label: 'Peringatan')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.warning_amber_outlined, warna: AppColors.warning, nilai: '$_totalPeringatan', label: 'Peringatan')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.info_outline, warna: AppColors.teal, nilai: '$_totalInfo', label: 'Info')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.info_outline, warna: AppColors.teal, nilai: '$_totalInfo', label: 'Info')),
                       ],
                     ),
                   ),

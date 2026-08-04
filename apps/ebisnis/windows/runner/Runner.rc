@@ -52,7 +52,11 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
+#ifdef EBISNIS_VARIANT_ALBAHJAH
+IDI_APP_ICON            ICON                    "..\\..\\assets\\images\\albahjah\\icon.ico"
+#else
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
+#endif
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -90,12 +94,19 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "id.zishof" "\0"
+#ifdef EBISNIS_VARIANT_ALBAHJAH
+            VALUE "FileDescription", "Al-Bahjah POS" "\0"
+            VALUE "InternalName", "albahjah-pos" "\0"
+            VALUE "OriginalFilename", "albahjah-pos.exe" "\0"
+            VALUE "ProductName", "Al-Bahjah POS" "\0"
+#else
             VALUE "FileDescription", "ebisnis" "\0"
-            VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "ebisnis" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 id.zishof. All rights reserved." "\0"
             VALUE "OriginalFilename", "ebisnis.exe" "\0"
             VALUE "ProductName", "ebisnis" "\0"
+#endif
+            VALUE "FileVersion", VERSION_AS_STRING "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 id.zishof. All rights reserved." "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

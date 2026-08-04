@@ -9,9 +9,12 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
 
-final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 enum _Filter { semua, online, tertahan }
+
+const _tinggiKartuKpiPesanan = 96.0;
 
 /// Layar Pesanan (padanan pesanan.html/pesanan-renderer.js Electron) --
 /// gabungan 2 jenis draft (lihat JavaDoc [Pesanan]): Pesanan Online (dibuat
@@ -71,13 +74,17 @@ class _PesananScreenState extends State<PesananScreen> {
       if (_hanyaBelumLunas) payload['hanya_belum_lunas'] = true;
       if (_sejak != null) payload['sejak'] = _formatTanggalIso(_sejak!);
       if (_sampai != null) payload['sampai'] = _formatTanggalIso(_sampai!);
-      if (_kodeController.text.trim().isNotEmpty) payload['kode'] = _kodeController.text.trim();
-      if (_pembeliController.text.trim().isNotEmpty) payload['pembeli'] = _pembeliController.text.trim();
+      if (_kodeController.text.trim().isNotEmpty)
+        payload['kode'] = _kodeController.text.trim();
+      if (_pembeliController.text.trim().isNotEmpty)
+        payload['pembeli'] = _pembeliController.text.trim();
       if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
         payload['pedagang'] = _pedagangController.text.trim();
       }
       final hasil = await ApiClient.instance.aksi('pesanan_list', payload);
-      final data = ((hasil['pesanan'] as List?) ?? []).map((e) => Pesanan.fromJson(e as Map<String, dynamic>)).toList();
+      final data = ((hasil['pesanan'] as List?) ?? [])
+          .map((e) => Pesanan.fromJson(e as Map<String, dynamic>))
+          .toList();
       setState(() => _semua = data);
     } catch (e) {
       setState(() => _pesanError = e.toString());
@@ -86,24 +93,34 @@ class _PesananScreenState extends State<PesananScreen> {
     }
   }
 
-  String _formatTanggalIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _formatTanggalIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _pilihTanggal({required bool mulai}) async {
     final awal = (mulai ? _sejak : _sampai) ?? DateTime.now();
-    final hasil = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2020), lastDate: DateTime(2100));
+    final hasil = await showDatePicker(
+        context: context,
+        initialDate: awal,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
     if (hasil == null) return;
     setState(() => mulai ? _sejak = hasil : _sampai = hasil);
   }
 
   Future<void> _hitungUlang(Pesanan p) async {
     try {
-      final hasil = await ApiClient.instance.aksi('pesanan_hitung_ulang', {'draft_id': p.id});
+      final hasil = await ApiClient.instance
+          .aksi('pesanan_hitung_ulang', {'draft_id': p.id});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(hasil['description']?.toString() ?? '${p.kode}: dihitung ulang.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(hasil['description']?.toString() ??
+                '${p.kode}: dihitung ulang.')));
       }
       await _muat();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -115,15 +132,19 @@ class _PesananScreenState extends State<PesananScreen> {
   Future<void> _bayarSemua() async {
     final belumLunas = _tersaring.where((p) => p.dariPembeliOnline).toList();
     if (belumLunas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada pesanan online yang perlu dibayar.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tidak ada pesanan online yang perlu dibayar.')));
       return;
     }
     final caraBayar = await showDialog<CaraBayar>(
       context: context,
       builder: (_) => SimpleDialog(
-        title: Text('Bayar Semua (${belumLunas.length} pesanan) -- Pilih Metode'),
+        title:
+            Text('Bayar Semua (${belumLunas.length} pesanan) -- Pilih Metode'),
         children: Sesi.instance.caraBayar
-            .map((c) => SimpleDialogOption(onPressed: () => Navigator.of(context).pop(c), child: Text(c.nama)))
+            .map((c) => SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(c),
+                child: Text(c.nama)))
             .toList(),
       ),
     );
@@ -132,21 +153,25 @@ class _PesananScreenState extends State<PesananScreen> {
     var berhasil = 0;
     for (final p in belumLunas) {
       try {
-        await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
+        await ApiClient.instance
+            .aksi('bayar', _payloadVerifikasi(p, caraBayar));
         berhasil++;
       } catch (_) {
         // Satu pesanan gagal (mis. stok berubah) -- lanjut ke berikutnya, jangan hentikan seluruh proses.
       }
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${belumLunas.length} pesanan berhasil dibayar.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$berhasil dari ${belumLunas.length} pesanan berhasil dibayar.')));
     }
     await _muat();
   }
 
   Map<String, dynamic> _payloadVerifikasi(Pesanan p, CaraBayar caraBayar) => {
         'kodeUnik': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
-        'clientTrxId': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
+        'clientTrxId':
+            '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
         'idToko': Sesi.instance.tokoId,
         'tokoId': Sesi.instance.tokoId,
         'kasir': Sesi.instance.userId,
@@ -193,15 +218,19 @@ class _PesananScreenState extends State<PesananScreen> {
             children: [
               Text('Pemesan: ${p.pemesan.isEmpty ? "-" : p.pemesan}'),
               if (p.namaMesin != null) Text('Mesin: ${p.namaMesin}'),
-              if (p.kasirLoginNama.isNotEmpty) Text('Kasir: ${p.kasirLoginNama}'),
+              if (p.kasirLoginNama.isNotEmpty)
+                Text('Kasir: ${p.kasirLoginNama}'),
               const Divider(),
               ...p.items.map((i) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text('${i.nama} x${i.jumlah.toStringAsFixed(0)}')),
-                        Text(_formatRupiah.format(i.harga * i.jumlah - i.diskon)),
+                        Expanded(
+                            child: Text(
+                                '${i.nama} x${i.jumlah.toStringAsFixed(0)}')),
+                        Text(_formatRupiah
+                            .format(i.harga * i.jumlah - i.diskon)),
                       ],
                     ),
                   )),
@@ -209,15 +238,19 @@ class _PesananScreenState extends State<PesananScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(_formatRupiah.format(p.totalBiaya), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Total',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(_formatRupiah.format(p.totalBiaya),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup')),
           // Keranjang Tertahan (draft lokal, BUKAN pesanan online) -- gap-closure:
           // sebelumnya dialog ini murni tampilan, satu-satunya jalan lanjut
           // (Muat ke Keranjang) tersembunyi di menu tekan-tahan yang tak lazim
@@ -247,7 +280,9 @@ class _PesananScreenState extends State<PesananScreen> {
                 Navigator.of(context).pop();
                 _batalkan(p);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
               icon: const Icon(Icons.cancel_outlined, size: 18),
               label: const Text('Batalkan'),
             ),
@@ -260,9 +295,11 @@ class _PesananScreenState extends State<PesananScreen> {
     Anggota? member;
     if (p.anggotaId != null) {
       try {
-        final hasil = await ApiClient.instance.aksi('cari_member', {'id': p.anggotaId});
+        final hasil =
+            await ApiClient.instance.aksi('cari_member', {'id': p.anggotaId});
         final arr = (hasil['member'] as List?) ?? [];
-        if (arr.isNotEmpty) member = Anggota.fromJson(arr.first as Map<String, dynamic>);
+        if (arr.isNotEmpty)
+          member = Anggota.fromJson(arr.first as Map<String, dynamic>);
       } catch (_) {
         // Gagal memuat detail member -- tetap lanjut memuat keranjang tanpa member (bukan blocker).
       }
@@ -288,7 +325,8 @@ class _PesananScreenState extends State<PesananScreen> {
         .toList();
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => KeranjangScreen(keranjang: keranjang, draftIdSumber: p.id, memberAwal: member),
+      builder: (_) => KeranjangScreen(
+          keranjang: keranjang, draftIdSumber: p.id, memberAwal: member),
     ));
     await _muat();
   }
@@ -299,7 +337,9 @@ class _PesananScreenState extends State<PesananScreen> {
       builder: (_) => SimpleDialog(
         title: const Text('Pilih Metode Pembayaran'),
         children: Sesi.instance.caraBayar
-            .map((c) => SimpleDialogOption(onPressed: () => Navigator.of(context).pop(c), child: Text(c.nama)))
+            .map((c) => SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(c),
+                child: Text(c.nama)))
             .toList(),
       ),
     );
@@ -308,11 +348,14 @@ class _PesananScreenState extends State<PesananScreen> {
     try {
       await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${p.kode} berhasil diselesaikan.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${p.kode} berhasil diselesaikan.')));
       }
       await _muat();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -331,33 +374,45 @@ class _PesananScreenState extends State<PesananScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${p.kode} akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.'),
+            Text(
+                '${p.kode} akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.'),
             const SizedBox(height: 12),
             TextField(
               controller: alasanController,
-              decoration: const InputDecoration(labelText: 'Alasan Pembatalan *', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Alasan Pembatalan *',
+                  border: OutlineInputBorder()),
               maxLines: 2,
               autofocus: true,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Ya, Batalkan')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Ya, Batalkan')),
         ],
       ),
     );
     if (konfirmasi != true) return;
     final alasan = alasanController.text.trim();
     if (alasan.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
       return;
     }
     try {
-      await ApiClient.instance.aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
+      await ApiClient.instance
+          .aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
       await _muat();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -367,22 +422,36 @@ class _PesananScreenState extends State<PesananScreen> {
     final jumlahOnline = semua.where((p) => p.dariPembeliOnline).length;
     final jumlahTertahan = semua.length - jumlahOnline;
     final nilaiMenunggu = semua.fold<double>(0, (s, p) => s + p.totalBiaya);
+    final tombolAksi = [
+      HeaderActionButton(
+        icon: _filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined,
+        label: 'Filter',
+        onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka),
+      ),
+      if (Sesi.instance.bolehKelola)
+        HeaderActionButton(
+          icon: Icons.playlist_add_check,
+          label: 'Bayar Semua',
+          onPressed: _bayarSemua,
+        ),
+      HeaderActionButton(
+        icon: Icons.refresh,
+        label: 'Muat Ulang',
+        onPressed: _muat,
+      ),
+    ];
 
     return AppShell(
       menuAktif: MenuEBisnis.pesanan,
       judul: 'Pesanan',
       subjudul: 'Pesanan online & transaksi yang ditahan',
       scrollable: false,
-      actionsAppBar: [
-        IconButton(icon: Icon(_filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined), onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka), tooltip: 'Filter'),
-        if (Sesi.instance.bolehKelola) IconButton(icon: const Icon(Icons.playlist_add_check), onPressed: _bayarSemua, tooltip: 'Bayar Semua'),
-        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      ],
-      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(icon: Icon(_filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined), onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka), tooltip: 'Filter'),
-        if (Sesi.instance.bolehKelola) IconButton(icon: const Icon(Icons.playlist_add_check), onPressed: _bayarSemua, tooltip: 'Bayar Semua'),
-        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      ]),
+      actionsAppBar: tombolAksi,
+      aksiHeader: Wrap(
+        alignment: WrapAlignment.end,
+        runSpacing: 8,
+        children: tombolAksi,
+      ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
@@ -392,11 +461,13 @@ class _PesananScreenState extends State<PesananScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const Icon(Icons.error_outline,
+                            size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_pesanError!, textAlign: TextAlign.center),
                         const SizedBox(height: 16),
-                        ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                        ElevatedButton(
+                            onPressed: _muat, child: const Text('Coba Lagi')),
                       ],
                     ),
                   ),
@@ -407,17 +478,24 @@ class _PesananScreenState extends State<PesananScreen> {
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                     children: [
                       SizedBox(
-                        height: 84,
+                        height: _tinggiKartuKpiPesanan,
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
-                            _kartuKpi(Icons.receipt_long_outlined, 'Total', '${semua.length}', const Color(0xFF1E3A5F)),
+                            _kartuKpi(Icons.receipt_long_outlined, 'Total',
+                                '${semua.length}', const Color(0xFF1E3A5F)),
                             const SizedBox(width: 8),
-                            _kartuKpi(Icons.public, 'Online', '$jumlahOnline', const Color(0xFF0284C7)),
+                            _kartuKpi(Icons.public, 'Online', '$jumlahOnline',
+                                const Color(0xFF0284C7)),
                             const SizedBox(width: 8),
-                            _kartuKpi(Icons.pause_circle_outline, 'Tertahan', '$jumlahTertahan', const Color(0xFFB8860B)),
+                            _kartuKpi(Icons.pause_circle_outline, 'Tertahan',
+                                '$jumlahTertahan', const Color(0xFFB8860B)),
                             const SizedBox(width: 8),
-                            _kartuKpi(Icons.hourglass_empty, 'Nilai Menunggu', _formatRupiah.format(nilaiMenunggu), const Color(0xFFC0563D)),
+                            _kartuKpi(
+                                Icons.hourglass_empty,
+                                'Nilai Menunggu',
+                                _formatRupiah.format(nilaiMenunggu),
+                                const Color(0xFFC0563D)),
                           ],
                         ),
                       ),
@@ -435,31 +513,58 @@ class _PesananScreenState extends State<PesananScreen> {
                                   SizedBox(
                                     width: 160,
                                     child: OutlinedButton.icon(
-                                      onPressed: () => _pilihTanggal(mulai: true),
-                                      icon: const Icon(Icons.date_range, size: 16),
-                                      label: Text(_sejak == null ? 'Sejak Tanggal' : _formatTanggalIso(_sejak!), style: const TextStyle(fontSize: 12)),
+                                      onPressed: () =>
+                                          _pilihTanggal(mulai: true),
+                                      icon: const Icon(Icons.date_range,
+                                          size: 16),
+                                      label: Text(
+                                          _sejak == null
+                                              ? 'Sejak Tanggal'
+                                              : _formatTanggalIso(_sejak!),
+                                          style: const TextStyle(fontSize: 12)),
                                     ),
                                   ),
                                   SizedBox(
                                     width: 160,
                                     child: OutlinedButton.icon(
-                                      onPressed: () => _pilihTanggal(mulai: false),
-                                      icon: const Icon(Icons.date_range, size: 16),
-                                      label: Text(_sampai == null ? 'Sampai Tanggal' : _formatTanggalIso(_sampai!), style: const TextStyle(fontSize: 12)),
+                                      onPressed: () =>
+                                          _pilihTanggal(mulai: false),
+                                      icon: const Icon(Icons.date_range,
+                                          size: 16),
+                                      label: Text(
+                                          _sampai == null
+                                              ? 'Sampai Tanggal'
+                                              : _formatTanggalIso(_sampai!),
+                                          style: const TextStyle(fontSize: 12)),
                                     ),
                                   ),
                                   SizedBox(
                                     width: 160,
-                                    child: TextField(controller: _kodeController, decoration: const InputDecoration(labelText: 'Kode', isDense: true, border: OutlineInputBorder())),
+                                    child: TextField(
+                                        controller: _kodeController,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Kode',
+                                            isDense: true,
+                                            border: OutlineInputBorder())),
                                   ),
                                   SizedBox(
                                     width: 200,
-                                    child: TextField(controller: _pembeliController, decoration: const InputDecoration(labelText: 'Nama Pembeli', isDense: true, border: OutlineInputBorder())),
+                                    child: TextField(
+                                        controller: _pembeliController,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Nama Pembeli',
+                                            isDense: true,
+                                            border: OutlineInputBorder())),
                                   ),
                                   if (Sesi.instance.isAdmin)
                                     SizedBox(
                                       width: 200,
-                                      child: TextField(controller: _pedagangController, decoration: const InputDecoration(labelText: 'Toko/Pedagang', isDense: true, border: OutlineInputBorder())),
+                                      child: TextField(
+                                          controller: _pedagangController,
+                                          decoration: const InputDecoration(
+                                              labelText: 'Toko/Pedagang',
+                                              isDense: true,
+                                              border: OutlineInputBorder())),
                                     ),
                                 ],
                               ),
@@ -469,7 +574,8 @@ class _PesananScreenState extends State<PesananScreen> {
                                   FilterChip(
                                     label: const Text('Hanya Belum Lunas'),
                                     selected: _hanyaBelumLunas,
-                                    onSelected: (v) => setState(() => _hanyaBelumLunas = v),
+                                    onSelected: (v) =>
+                                        setState(() => _hanyaBelumLunas = v),
                                   ),
                                   const Spacer(),
                                   TextButton(
@@ -487,7 +593,9 @@ class _PesananScreenState extends State<PesananScreen> {
                                     child: const Text('Reset'),
                                   ),
                                   const SizedBox(width: 8),
-                                  ElevatedButton(onPressed: _muat, child: const Text('Terapkan')),
+                                  ElevatedButton(
+                                      onPressed: _muat,
+                                      child: const Text('Terapkan')),
                                 ],
                               ),
                             ],
@@ -500,19 +608,22 @@ class _PesananScreenState extends State<PesananScreen> {
                           ChoiceChip(
                             label: const Text('Semua'),
                             selected: _filter == _Filter.semua,
-                            onSelected: (_) => setState(() => _filter = _Filter.semua),
+                            onSelected: (_) =>
+                                setState(() => _filter = _Filter.semua),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Online'),
                             selected: _filter == _Filter.online,
-                            onSelected: (_) => setState(() => _filter = _Filter.online),
+                            onSelected: (_) =>
+                                setState(() => _filter = _Filter.online),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Tertahan'),
                             selected: _filter == _Filter.tertahan,
-                            onSelected: (_) => setState(() => _filter = _Filter.tertahan),
+                            onSelected: (_) =>
+                                setState(() => _filter = _Filter.tertahan),
                           ),
                         ],
                       ),
@@ -526,15 +637,28 @@ class _PesananScreenState extends State<PesananScreen> {
                         ..._tersaring.map((p) => Card(
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
-                                title: Text(p.kode, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: Text(p.pemesan.isEmpty ? '(Tanpa member)' : p.pemesan),
+                                title: Text(p.kode,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
+                                subtitle: Text(p.pemesan.isEmpty
+                                    ? '(Tanpa member)'
+                                    : p.pemesan),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(_formatRupiah.format(p.totalBiaya), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text(p.dariPembeliOnline ? 'Online' : 'Tertahan',
-                                        style: TextStyle(fontSize: 11, color: p.dariPembeliOnline ? const Color(0xFF0284C7) : const Color(0xFFB8860B))),
+                                    Text(_formatRupiah.format(p.totalBiaya),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    Text(
+                                        p.dariPembeliOnline
+                                            ? 'Online'
+                                            : 'Tertahan',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: p.dariPembeliOnline
+                                                ? const Color(0xFF0284C7)
+                                                : const Color(0xFFB8860B))),
                                   ],
                                 ),
                                 onTap: () => _lihatDetail(p),
@@ -548,7 +672,11 @@ class _PesananScreenState extends State<PesananScreen> {
   }
 
   Widget _kartuKpi(IconData icon, String label, String nilai, Color warna) {
-    return SizedBox(width: 140, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
+    return SizedBox(
+        width: 140,
+        height: _tinggiKartuKpiPesanan,
+        child:
+            AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
   }
 
   Future<void> _tampilkanAksi(Pesanan p) async {
@@ -558,13 +686,17 @@ class _PesananScreenState extends State<PesananScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(leading: const Icon(Icons.info_outline), title: const Text('Detail'), onTap: () {
-              Navigator.of(context).pop();
-              _lihatDetail(p);
-            }),
+            ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Detail'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _lihatDetail(p);
+                }),
             if (p.dariPembeliOnline)
               ListTile(
-                leading: const Icon(Icons.check_circle_outline, color: Color(0xFF2E7D32)),
+                leading: const Icon(Icons.check_circle_outline,
+                    color: Color(0xFF2E7D32)),
                 title: const Text('Verifikasi & Selesaikan'),
                 onTap: () {
                   Navigator.of(context).pop();

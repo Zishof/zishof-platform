@@ -142,14 +142,27 @@ class _AnggotaScreenState extends State<AnggotaScreen> {
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
   List<Widget> get _tombolAksi => [
-        IconButton(
-          icon: _sinkronBerjalan
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.cloud_sync_outlined),
+        HeaderActionButton(
+          icon: Icons.cloud_sync_outlined,
+          label: 'Sinkron',
           onPressed: _sinkronBerjalan ? null : _sinkronkanCacheOffline,
           tooltip: 'Sinkronkan ke cache offline (utk picker member Kasir)',
+          loading: _sinkronBerjalan
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                )
+              : null,
         ),
-        IconButton(icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+        HeaderActionButton(
+          icon: Icons.refresh,
+          label: 'Muat Ulang',
+          onPressed: _muatSemua,
+        ),
       ];
 
   @override
@@ -160,7 +173,11 @@ class _AnggotaScreenState extends State<AnggotaScreen> {
       subjudul: 'Kelola data member/pelanggan toko Anda',
       scrollable: false,
       actionsAppBar: _tombolAksi,
-      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
+      aksiHeader: Wrap(
+        alignment: WrapAlignment.end,
+        runSpacing: 8,
+        children: _tombolAksi,
+      ),
       floatingActionButton: Sesi.instance.bolehKelola
           ? FloatingActionButton.extended(
               onPressed: () => _bukaFormAnggota(),
@@ -273,14 +290,17 @@ class _KartuStatistikAnggota extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: 90,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: item.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (context, i) {
               final (icon, label, nilai, warna) = item[i];
-              return SizedBox(width: 130, child: AppKpiCard(icon: icon, warna: warna, nilai: nilai, label: label));
+              return SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                      icon: icon, warna: warna, nilai: nilai, label: label));
             },
           ),
         ),

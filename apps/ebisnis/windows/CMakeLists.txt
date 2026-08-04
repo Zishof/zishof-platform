@@ -2,9 +2,16 @@
 cmake_minimum_required(VERSION 3.14)
 project(ebisnis LANGUAGES CXX)
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/variant.cmake")
+resolve_ebisnis_variant(EBISNIS_RESOLVED_VARIANT)
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "ebisnis")
+if(EBISNIS_RESOLVED_VARIANT STREQUAL "albahjah")
+  set(BINARY_NAME "albahjah-pos")
+else()
+  set(BINARY_NAME "ebisnis")
+endif()
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

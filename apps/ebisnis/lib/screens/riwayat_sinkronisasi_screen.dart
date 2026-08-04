@@ -143,15 +143,15 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                 children: [
                   SizedBox(
-                    height: 90,
+                    height: 96,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.cloud_download_outlined, warna: AppColors.primary, nilai: '${_cache.length}', label: 'Cache Lokal')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.cloud_download_outlined, warna: AppColors.primary, nilai: '${_cache.length}', label: 'Cache Lokal')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.pending_actions_outlined, warna: AppColors.warning, nilai: '$_totalPending', label: 'Tertunda')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.pending_actions_outlined, warna: AppColors.warning, nilai: '$_totalPending', label: 'Tertunda')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.teal, nilai: '$_total', label: 'Total Transaksi')),
+                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.teal, nilai: '$_total', label: 'Total Transaksi')),
                       ],
                     ),
                   ),

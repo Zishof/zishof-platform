@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'app_variant.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
@@ -31,8 +32,8 @@ import 'services/server_config.dart';
 /// `arguments == ''`, jendela kedua mendapat JSON yg dikirim
 /// `kasir_screen.dart._bukaLayarPelanggan`/`layar_kedua.dart`.
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
   runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       CoreDb.instance.catatErrorLog(
@@ -43,7 +44,11 @@ void main() {
       );
     };
     PlatformDispatcher.instance.onError = (error, stack) {
-      CoreDb.instance.catatErrorLog(sumber: 'flutter', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
+      CoreDb.instance.catatErrorLog(
+          sumber: 'flutter',
+          tingkat: 'ERROR',
+          pesan: error.toString(),
+          detail: stack.toString());
       return true;
     };
 
@@ -80,7 +85,11 @@ void main() {
 
     runApp(const EBisnisApp());
   }, (error, stack) {
-    CoreDb.instance.catatErrorLog(sumber: 'zone', tingkat: 'ERROR', pesan: error.toString(), detail: stack.toString());
+    CoreDb.instance.catatErrorLog(
+        sumber: 'zone',
+        tingkat: 'ERROR',
+        pesan: error.toString(),
+        detail: stack.toString());
   });
 }
 
@@ -97,7 +106,8 @@ class _LayarPelangganWindowApp extends StatefulWidget {
   const _LayarPelangganWindowApp({required this.argumen});
 
   @override
-  State<_LayarPelangganWindowApp> createState() => _LayarPelangganWindowAppState();
+  State<_LayarPelangganWindowApp> createState() =>
+      _LayarPelangganWindowAppState();
 }
 
 class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
@@ -119,14 +129,18 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF1E3A5F), useMaterial3: true),
+      theme: ThemeData(
+          colorSchemeSeed: const Color(0xFF1E3A5F), useMaterial3: true),
       home: !_siap
-          ? const Scaffold(backgroundColor: Color(0xFF0F1C2E), body: Center(child: CircularProgressIndicator()))
+          ? const Scaffold(
+              backgroundColor: Color(0xFF0F1C2E),
+              body: Center(child: CircularProgressIndicator()))
           : LayarPelangganScreen(
               jendelaKedua: true,
               tokoIdOverride: widget.argumen['tokoId'] as int?,
               tokoNamaOverride: widget.argumen['tokoNama'] as String?,
-              pesanTerimaKasihOverride: widget.argumen['pesanTerimaKasih'] as String?,
+              pesanTerimaKasihOverride:
+                  widget.argumen['pesanTerimaKasih'] as String?,
             ),
     );
   }
@@ -138,7 +152,7 @@ class EBisnisApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'eBisnis',
+      title: AppVariant.namaAplikasi,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF1E3A5F),
@@ -206,7 +220,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
   Future<void> _bukaUnduhan() async {
     final info = _infoUpdate;
     if (info == null) return;
-    final url = defaultTargetPlatform == TargetPlatform.android ? (info.urlApk ?? info.urlRilis) : (info.urlExe ?? info.urlRilis);
+    final url = defaultTargetPlatform == TargetPlatform.android
+        ? (info.urlApk ?? info.urlRilis)
+        : (info.urlExe ?? info.urlRilis);
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
@@ -218,7 +234,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     if (_memeriksa) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final layar = ApiClient.instance.sudahLogin ? const KasirScreen() : const LoginScreen();
+    final layar = ApiClient.instance.sudahLogin
+        ? const KasirScreen()
+        : const LoginScreen();
     if (_infoUpdate == null) return layar;
     return Stack(
       children: [
@@ -231,16 +249,27 @@ class _GerbangAwalState extends State<_GerbangAwal> {
             child: Material(
               color: const Color(0xFF1E3A5F),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
-                    const Icon(Icons.system_update_alt, color: Colors.white, size: 18),
+                    const Icon(Icons.system_update_alt,
+                        color: Colors.white, size: 18),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Versi ${_infoUpdate!.versi} tersedia', style: const TextStyle(color: Colors.white)),
+                      child: Text('Versi ${_infoUpdate!.versi} tersedia',
+                          style: const TextStyle(color: Colors.white)),
                     ),
-                    TextButton(onPressed: _bukaUnduhan, child: const Text('Unduh', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.white70, size: 18), onPressed: () => setState(() => _infoUpdate = null)),
+                    TextButton(
+                        onPressed: _bukaUnduhan,
+                        child: const Text('Unduh',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold))),
+                    IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.white70, size: 18),
+                        onPressed: () => setState(() => _infoUpdate = null)),
                   ],
                 ),
               ),

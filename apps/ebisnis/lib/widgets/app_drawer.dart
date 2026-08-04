@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
+import '../screens/kasir_screen.dart';
 import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/pesanan_screen.dart';
@@ -25,7 +27,33 @@ import '../screens/hak_akses_screen.dart';
 /// task #182-189 utk urutan pengerjaan, jangan hapus entrinya supaya progres
 /// tetap terlihat sambil layar-layar itu menyusul satu per satu.
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key});
+  final String menuAktif;
+  final ValueChanged<String>? onPilihMenu;
+  const AppDrawer({super.key, this.menuAktif = 'Kasir', this.onPilihMenu});
+
+  static final ValueNotifier<String> menuAktifNotifier =
+      ValueNotifier<String>('Kasir');
+
+  void _pindahMenu(
+    BuildContext context, {
+    required String label,
+    required WidgetBuilder builder,
+  }) {
+    if (menuAktif == label) {
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      return;
+    }
+    menuAktifNotifier.value = label;
+    if (onPilihMenu != null) {
+      onPilihMenu!(label);
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: builder));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,162 +66,211 @@ class AppDrawer extends StatelessWidget {
               child: Align(
                 alignment: Alignment.bottomLeft,
                 child: Text(
-                  Sesi.instance.tokoNama.isEmpty ? 'eBisnis' : Sesi.instance.tokoNama,
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  Sesi.instance.tokoNama.isEmpty
+                      ? AppVariant.namaAplikasi
+                      : Sesi.instance.tokoNama,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
             Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  if (Sesi.instance.bolehMenu('kasir'))
-                    _ItemMenu(icon: Icons.point_of_sale, label: 'Kasir', aktif: true, onTap: () => Navigator.of(context).pop()),
-                  if (Sesi.instance.bolehMenu('ringkasan'))
+              child: ValueListenableBuilder<String>(
+                valueListenable: menuAktifNotifier,
+                builder: (context, _, __) => ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    if (Sesi.instance.bolehMenu('kasir'))
+                      _ItemMenu(
+                        icon: Icons.point_of_sale,
+                        label: 'Kasir',
+                        aktif: menuAktif == 'Kasir',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Kasir',
+                          builder: (_) => const KasirScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('ringkasan'))
+                      _ItemMenu(
+                        icon: Icons.bar_chart,
+                        label: 'Ringkasan',
+                        aktif: menuAktif == 'Ringkasan',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Ringkasan',
+                          builder: (_) => const RingkasanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('pesanan'))
+                      _ItemMenu(
+                        icon: Icons.receipt_long,
+                        label: 'Pesanan',
+                        aktif: menuAktif == 'Pesanan',
+                        badge: PesananPoller.instance.jumlahBaru,
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Pesanan',
+                          builder: (_) => const PesananScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('anggota'))
+                      _ItemMenu(
+                        icon: Icons.people_outline,
+                        label: 'Customer/Anggota',
+                        aktif: menuAktif == 'Customer/Anggota',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Customer/Anggota',
+                          builder: (_) => const AnggotaScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('produk'))
+                      _ItemMenu(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'Produk',
+                        aktif: menuAktif == 'Produk',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Produk',
+                          builder: (_) => const ProdukScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('stokopname'))
+                      _ItemMenu(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Stok Opname',
+                        aktif: menuAktif == 'Stok Opname',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Stok Opname',
+                          builder: (_) => const StokOpnameScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('kulakan'))
+                      _ItemMenu(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Kulakan',
+                        aktif: menuAktif == 'Kulakan',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Kulakan',
+                          builder: (_) => const KulakanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('diskon'))
+                      _ItemMenu(
+                        icon: Icons.sell_outlined,
+                        label: 'Aturan Diskon',
+                        aktif: menuAktif == 'Aturan Diskon',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Aturan Diskon',
+                          builder: (_) => const DiskonScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('returpenjualan'))
+                      _ItemMenu(
+                        icon: Icons.assignment_return_outlined,
+                        label: 'Retur Penjualan',
+                        aktif: menuAktif == 'Retur Penjualan',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Retur Penjualan',
+                          builder: (_) => const ReturPenjualanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('riwayatpenjualan'))
+                      _ItemMenu(
+                        icon: Icons.history,
+                        label: 'Riwayat Penjualan',
+                        aktif: menuAktif == 'Riwayat Penjualan',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Riwayat Penjualan',
+                          builder: (_) => const RiwayatPenjualanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('laporantransaksi'))
+                      _ItemMenu(
+                        icon: Icons.assessment_outlined,
+                        label: 'Laporan Transaksi',
+                        aktif: menuAktif == 'Laporan Transaksi',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Laporan Transaksi',
+                          builder: (_) => const LaporanTransaksiScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('laporan'))
+                      _ItemMenu(
+                        icon: Icons.folder_outlined,
+                        label: 'Laporan-Laporan',
+                        aktif: menuAktif == 'Laporan-Laporan',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Laporan-Laporan',
+                          builder: (_) => const LaporanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
+                      _ItemMenu(
+                        icon: Icons.sync,
+                        label: 'Riwayat Sinkronisasi',
+                        aktif: menuAktif == 'Riwayat Sinkronisasi',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Riwayat Sinkronisasi',
+                          builder: (_) => const RiwayatSinkronisasiScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('logerror'))
+                      _ItemMenu(
+                        icon: Icons.error_outline,
+                        label: 'Log Error',
+                        aktif: menuAktif == 'Log Error',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Log Error',
+                          builder: (_) => const LogErrorScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('konfigurasi'))
+                      _ItemMenu(
+                        icon: Icons.settings_outlined,
+                        label: 'Konfigurasi',
+                        aktif: menuAktif == 'Konfigurasi',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Konfigurasi',
+                          builder: (_) => const KonfigurasiScreen(),
+                        ),
+                      ),
                     _ItemMenu(
-                      icon: Icons.bar_chart,
-                      label: 'Ringkasan',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RingkasanScreen()));
-                      },
+                      icon: Icons.desktop_windows_outlined,
+                      label: 'Layar Pelanggan',
+                      aktif: menuAktif == 'Layar Pelanggan',
+                      onTap: () => _pindahMenu(
+                        context,
+                        label: 'Layar Pelanggan',
+                        builder: (_) => const LayarPelangganScreen(),
+                      ),
                     ),
-                  if (Sesi.instance.bolehMenu('pesanan'))
-                    _ItemMenu(
-                      icon: Icons.receipt_long,
-                      label: 'Pesanan',
-                      badge: PesananPoller.instance.jumlahBaru,
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PesananScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('anggota'))
-                    _ItemMenu(
-                      icon: Icons.people_outline,
-                      label: 'Customer/Anggota',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnggotaScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('produk'))
-                    _ItemMenu(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Produk',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProdukScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('stokopname'))
-                    _ItemMenu(
-                      icon: Icons.fact_check_outlined,
-                      label: 'Stok Opname',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StokOpnameScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('kulakan'))
-                    _ItemMenu(
-                      icon: Icons.local_shipping_outlined,
-                      label: 'Kulakan',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KulakanScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('diskon'))
-                    _ItemMenu(
-                      icon: Icons.sell_outlined,
-                      label: 'Aturan Diskon',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiskonScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('returpenjualan'))
-                    _ItemMenu(
-                      icon: Icons.assignment_return_outlined,
-                      label: 'Retur Penjualan',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReturPenjualanScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('riwayatpenjualan'))
-                    _ItemMenu(
-                      icon: Icons.history,
-                      label: 'Riwayat Penjualan',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiwayatPenjualanScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('laporantransaksi'))
-                    _ItemMenu(
-                      icon: Icons.assessment_outlined,
-                      label: 'Laporan Transaksi',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanTransaksiScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('laporan'))
-                    _ItemMenu(
-                      icon: Icons.folder_outlined,
-                      label: 'Laporan-Laporan',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LaporanScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
-                    _ItemMenu(
-                      icon: Icons.sync,
-                      label: 'Riwayat Sinkronisasi',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiwayatSinkronisasiScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('logerror'))
-                    _ItemMenu(
-                      icon: Icons.error_outline,
-                      label: 'Log Error',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogErrorScreen()));
-                      },
-                    ),
-                  if (Sesi.instance.bolehMenu('konfigurasi'))
-                    _ItemMenu(
-                      icon: Icons.settings_outlined,
-                      label: 'Konfigurasi',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KonfigurasiScreen()));
-                      },
-                    ),
-                  _ItemMenu(
-                    icon: Icons.desktop_windows_outlined,
-                    label: 'Layar Pelanggan',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
-                    },
-                  ),
-                  if (Sesi.instance.isAdmin)
-                    _ItemMenu(
-                      icon: Icons.admin_panel_settings_outlined,
-                      label: 'Hak Akses',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HakAksesScreen()));
-                      },
-                    ),
-                ],
+                    if (Sesi.instance.isAdmin)
+                      _ItemMenu(
+                        icon: Icons.admin_panel_settings_outlined,
+                        label: 'Hak Akses',
+                        aktif: menuAktif == 'Hak Akses',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Hak Akses',
+                          builder: (_) => const HakAksesScreen(),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -207,30 +284,32 @@ class _ItemMenu extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool aktif;
-  final bool segeraHadir;
   final VoidCallback? onTap;
   final ValueNotifier<int>? badge;
-  const _ItemMenu({required this.icon, required this.label, this.aktif = false, this.segeraHadir = false, this.onTap, this.badge});
+  const _ItemMenu(
+      {required this.icon,
+      required this.label,
+      this.aktif = false,
+      this.onTap,
+      this.badge});
 
   @override
   Widget build(BuildContext context) {
-    final iconWidget = Icon(icon, color: segeraHadir ? Colors.black26 : (aktif ? const Color(0xFF1E3A5F) : Colors.black87));
+    final iconWidget =
+        Icon(icon, color: aktif ? const Color(0xFF1E3A5F) : Colors.black87);
     return ListTile(
       leading: badge == null
           ? iconWidget
           : ValueListenableBuilder<int>(
               valueListenable: badge!,
-              builder: (context, jumlah, _) => Badge(label: Text('$jumlah'), isLabelVisible: jumlah > 0, child: iconWidget),
+              builder: (context, jumlah, _) => Badge(
+                  label: Text('$jumlah'),
+                  isLabelVisible: jumlah > 0,
+                  child: iconWidget),
             ),
-      title: Text(label, style: TextStyle(color: segeraHadir ? Colors.black26 : Colors.black87)),
-      trailing: segeraHadir
-          ? const Text('Segera Hadir', style: TextStyle(fontSize: 11, color: Colors.black26, fontStyle: FontStyle.italic))
-          : null,
+      title: Text(label, style: const TextStyle(color: Colors.black87)),
       selected: aktif,
-      onTap: segeraHadir
-          ? () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$label sedang dikerjakan, menyusul di rilis berikutnya.')))
-          : onTap,
+      onTap: onTap,
     );
   }
 }

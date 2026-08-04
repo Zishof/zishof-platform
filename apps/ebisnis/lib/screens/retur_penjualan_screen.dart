@@ -515,14 +515,14 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
         padding: const EdgeInsets.all(16),
         children: [
           SizedBox(
-            height: 90,
+            height: 96,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                SizedBox(width: 150, child: AppKpiCard(icon: Icons.assignment_return_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Retur')),
+                SizedBox(width: 190, child: AppKpiCard(icon: Icons.assignment_return_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Retur')),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 150,
+                  width: 190,
                   child: AppKpiCard(
                     icon: Icons.payments_outlined,
                     warna: AppColors.danger,

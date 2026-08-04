@@ -215,14 +215,14 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           padding: const EdgeInsets.only(bottom: 20),
           children: [
             SizedBox(
-              height: 90,
+              height: 96,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  SizedBox(width: 150, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.primary, nilai: '$_total', label: 'Total Transaksi')),
+                  SizedBox(width: 190, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.primary, nilai: '$_total', label: 'Total Transaksi')),
                   const SizedBox(width: 8),
                   SizedBox(
-                    width: 150,
+                    width: 190,
                     child: AppKpiCard(
                       icon: Icons.payments_outlined,
                       warna: AppColors.success,

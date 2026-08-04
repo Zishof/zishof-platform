@@ -211,11 +211,37 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
           decoration: const InputDecoration(labelText: 'Nama Mesin (bisa diubah)', hintText: 'mis. Kasir Depan', border: OutlineInputBorder()),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _menyimpan ? null : _simpan,
-            child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: 180,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFF9DB7F3),
+                disabledForegroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _menyimpan ? null : _simpan,
+              child: _menyimpan
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Simpan'),
+            ),
           ),
         ),
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
@@ -246,19 +272,69 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
             onChanged: (v) => setState(() => _pinAlternatif = v),
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.start,
             children: [
-              Expanded(
-                child: OutlinedButton(
+              SizedBox(
+                width: 220,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F766E),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFF99C9C3),
+                    disabledForegroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                   onPressed: _menyimpanLaci ? null : _simpanLaci,
-                  child: _menyimpanLaci ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan Pengaturan Laci'),
+                  child: _menyimpanLaci
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Simpan Pengaturan Laci'),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
+              SizedBox(
+                width: 180,
                 child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF97316),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFF8B27C),
+                    disabledForegroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                   onPressed: _tesLaciBerjalan ? null : _tesLaci,
-                  child: _tesLaciBerjalan ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Tes Buka Laci'),
+                  child: _tesLaciBerjalan
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Tes Buka Laci'),
                 ),
               ),
             ],

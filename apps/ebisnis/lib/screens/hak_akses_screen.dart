@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../widgets/app_shell.dart';
 
 /// Layar admin "Hak Akses" -- editor 13 checkbox per-menu untuk Grup
 /// Pengguna (Tbmrole.ebisnisMenu), gap-closure: mekanisme ini sudah lama ada
@@ -33,7 +34,8 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
     });
     try {
       final hasil = await ApiClient.instance.aksi('ebisnis_role_list');
-      _daftarRole = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      _daftarRole =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
     } catch (e) {
       _error = '$e';
     } finally {
@@ -43,8 +45,10 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Hak Akses')),
+    return AppShell(
+      menuAktif: MenuEBisnis.hakAkses,
+      judul: 'Hak Akses',
+      scrollable: false,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -54,7 +58,8 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
                     children: [
                       Text('Gagal memuat: $_error'),
                       const SizedBox(height: 8),
-                      OutlinedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                      OutlinedButton(
+                          onPressed: _muat, child: const Text('Coba Lagi')),
                     ],
                   ),
                 )
@@ -75,7 +80,9 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => _EditHakAksesScreen(roleId: '${r['roleId']}', roleName: '${r['roleName']}'),
+                                  builder: (_) => _EditHakAksesScreen(
+                                      roleId: '${r['roleId']}',
+                                      roleName: '${r['roleName']}'),
                                 ),
                               ),
                             ),
@@ -114,7 +121,8 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('ebisnis_role_menu_ambil', {'role_id': widget.roleId});
+      final hasil = await ApiClient.instance
+          .aksi('ebisnis_role_menu_ambil', {'role_id': widget.roleId});
       _menu = ((hasil['menu'] as List?) ?? []).cast<Map<String, dynamic>>();
       _supervisor = hasil['supervisor'] == true;
     } catch (e) {
@@ -127,14 +135,21 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
   Future<void> _simpan() async {
     setState(() => _menyimpan = true);
     try {
-      final payload = <String, bool>{for (final m in _menu) '${m['kunci']}': m['boleh'] == true};
-      await ApiClient.instance.aksi('ebisnis_role_menu_simpan', {'role_id': widget.roleId, 'menu': payload});
+      final payload = <String, bool>{
+        for (final m in _menu) '${m['kunci']}': m['boleh'] == true
+      };
+      await ApiClient.instance.aksi('ebisnis_role_menu_simpan',
+          {'role_id': widget.roleId, 'menu': payload});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hak akses berhasil disimpan.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Hak akses berhasil disimpan.')));
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      }
     } finally {
       if (mounted) setState(() => _menyimpan = false);
     }
@@ -170,7 +185,8 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
                             value: m['boleh'] == true,
                             onChanged: _supervisor
                                 ? null
-                                : (v) => setState(() => _menu[i] = {...m, 'boleh': v == true}),
+                                : (v) => setState(() =>
+                                    _menu[i] = {...m, 'boleh': v == true}),
                           );
                         },
                       ),
@@ -182,7 +198,11 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
                         child: FilledButton(
                           onPressed: _menyimpan ? null : _simpan,
                           child: _menyimpan
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
                               : const Text('Simpan'),
                         ),
                       ),

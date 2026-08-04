@@ -13,10 +13,10 @@ import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../theme/app_colors.dart';
-import '../widgets/app_components.dart';
 import 'struk_screen.dart';
 
-final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// Layar Keranjang + Checkout, versi Mobile/Android -- bungkus tipis
 /// `Scaffold`+`AppBar` di sekitar [PanelKeranjang] (dipush via Navigator,
@@ -27,19 +27,27 @@ final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', deci
 /// Keranjang" (F7) yg menyembunyikan grid & melebarkan panel ini.
 class KeranjangScreen extends StatelessWidget {
   final List<ItemKeranjang> keranjang;
+
   /// Diisi bila keranjang ini dimuat ulang dari Keranjang Tertahan (layar
   /// Pesanan, "Muat ke Keranjang") -- dikirim sbg `draftPembelianAnggotaKoperasi`
   /// saat Tahan/Bayar berikutnya supaya server MEMPERBARUI draft yang sama,
   /// bukan membuat baris baru (lihat JavaDoc `_buatPayload` & KantinHelper.bayar).
   final int? draftIdSumber;
   final Anggota? memberAwal;
-  const KeranjangScreen({super.key, required this.keranjang, this.draftIdSumber, this.memberAwal});
+  const KeranjangScreen(
+      {super.key,
+      required this.keranjang,
+      this.draftIdSumber,
+      this.memberAwal});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Keranjang')),
-      body: PanelKeranjang(keranjang: keranjang, draftIdSumber: draftIdSumber, memberAwal: memberAwal),
+      body: PanelKeranjang(
+          keranjang: keranjang,
+          draftIdSumber: draftIdSumber,
+          memberAwal: memberAwal),
     );
   }
 }
@@ -56,11 +64,14 @@ class PanelKeranjang extends StatefulWidget {
   final List<ItemKeranjang> keranjang;
   final int? draftIdSumber;
   final Anggota? memberAwal;
+  final Widget? pencarianBarang;
+
   /// Header "Keranjang" + [aksiHeader] di kanannya (mis. tombol toggle Fokus
   /// Keranjang di Desktop) -- disembunyikan di Mobile krn `AppBar` pembungkus
   /// [KeranjangScreen] sudah menampilkan judul yang sama.
   final bool tampilkanJudul;
   final Widget? aksiHeader;
+
   /// Dipanggil setelah Tahan/Bayar sukses (keranjang baru saja dikosongkan)
   /// -- dipakai pemanggil yg TIDAK ikut navigasi pergi (mis. KasirScreen versi
   /// Desktop yg menanamkan panel ini langsung) utk menyegarkan status lain
@@ -71,6 +82,7 @@ class PanelKeranjang extends StatefulWidget {
     required this.keranjang,
     this.draftIdSumber,
     this.memberAwal,
+    this.pencarianBarang,
     this.tampilkanJudul = false,
     this.aksiHeader,
     this.onSelesai,
@@ -104,7 +116,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     // begitu field difokus supaya ketikan pertama otomatis menggantikannya.
     _fokusUangDiterima.addListener(() {
       if (_fokusUangDiterima.hasFocus) {
-        _uangDiterimaController.selection = TextSelection(baseOffset: 0, extentOffset: _uangDiterimaController.text.length);
+        _uangDiterimaController.selection = TextSelection(
+            baseOffset: 0, extentOffset: _uangDiterimaController.text.length);
       }
     });
   }
@@ -140,7 +153,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   double get _subtotal => widget.keranjang.fold(0, (s, i) => s + i.subtotal);
   double get _totalDiskon => widget.keranjang.fold(0, (s, i) => s + i.diskon);
-  double get _totalCashback => widget.keranjang.fold(0, (s, i) => s + i.cashback);
+  double get _totalCashback =>
+      widget.keranjang.fold(0, (s, i) => s + i.cashback);
 
   /// `basisPajak = subtotal - totalDiskon`; `pajak = basisPajak * pajakPersen%`;
   /// `total = basisPajak + pajak` -- persis rumus Desktop (spesifikasi §3.3).
@@ -150,7 +164,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   double get _pajak => _basisPajak * Sesi.instance.pajakPersen / 100;
   double get _total => _basisPajak + _pajak;
 
-  double get _uangDiterima => double.tryParse(_uangDiterimaController.text.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
+  double get _uangDiterima =>
+      double.tryParse(
+          _uangDiterimaController.text.replaceAll(RegExp('[^0-9.]'), '')) ??
+      0;
   double get _kembalian => _uangDiterima - _total;
 
   /// "Uang Diterima" default = total (spec §3.4) SELAMA kasir belum mengetik
@@ -160,7 +177,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   void _sinkronkanUangDiterima() {
     if (_uangDiterimaManual) return;
     final teks = _total > 0 ? _total.toStringAsFixed(0) : '0';
-    if (_uangDiterimaController.text != teks) _uangDiterimaController.text = teks;
+    if (_uangDiterimaController.text != teks)
+      _uangDiterimaController.text = teks;
   }
 
   void _ubahJumlah(ItemKeranjang item, int delta) {
@@ -189,7 +207,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
         'id_member': _memberTerpilih?.id,
         'items': widget.keranjang
-            .map((i) => {'id': i.produk.id, 'harga': i.produk.hargaJual, 'jumlah': i.jumlah})
+            .map((i) => {
+                  'id': i.produk.id,
+                  'harga': i.produk.hargaJual,
+                  'jumlah': i.jumlah
+                })
             .toList(),
       });
       final items = (hasil['items'] as List?) ?? [];
@@ -198,7 +220,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         for (final it in items) {
           final m = it as Map<String, dynamic>;
           final produkId = m['id'] as int;
-          final baris = widget.keranjang.where((i) => i.produk.id == produkId).toList();
+          final baris =
+              widget.keranjang.where((i) => i.produk.id == produkId).toList();
           if (baris.isEmpty) continue;
           baris.first
             ..diskon = (m['diskon'] as num?)?.toDouble() ?? 0
@@ -227,8 +250,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       _siarkanKeranjang();
       _jadwalkanEvaluasiDiskon();
       try {
-        final hasil = await ApiClient.instance.aksi('saldo_member', {'id_member': terpilih.id});
-        if (mounted) setState(() => _saldoMember = (hasil['data'] as num?)?.toDouble());
+        final hasil = await ApiClient.instance
+            .aksi('saldo_member', {'id_member': terpilih.id});
+        if (mounted)
+          setState(() => _saldoMember = (hasil['data'] as num?)?.toDouble());
       } catch (_) {
         // Saldo tak terambil (mis. offline) -- bukan alasan membatalkan pemilihan member.
       }
@@ -253,14 +278,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     );
     if (pin == null || pin.isEmpty) return false;
     try {
-      final hasil = await ApiClient.instance.aksi('verifikasi_pin', {'memberId': member.id, 'pin': pin});
+      final hasil = await ApiClient.instance
+          .aksi('verifikasi_pin', {'memberId': member.id, 'pin': pin});
       final ok = hasil['ok'] == true;
       if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN salah.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('PIN salah.')));
       }
       return ok;
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
       return false;
     }
   }
@@ -268,7 +297,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   String _buatKodeUnik() {
     final rand = Random();
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final acak = List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+    final acak =
+        List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
     return 'EBISNIS-${DateTime.now().millisecondsSinceEpoch}-$acak';
   }
 
@@ -314,8 +344,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _tahan() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Pilih metode pembayaran terlebih dahulu.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
     setState(() => _memproses = true);
@@ -324,7 +354,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final payload = _buatPayload(kodeUnik, DateTime.now());
       await ApiClient.instance.aksi('draft_bayar', payload);
       widget.keranjang.clear();
-      LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+      LayarPelangganBroadcaster.instance
+          .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       if (!mounted) return;
       setState(() {
         _memberTerpilih = null;
@@ -332,12 +363,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _uangDiterimaManual = false;
         _uangDiterimaController.text = '0';
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
       widget.onSelesai?.call();
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _memproses = false);
     }
@@ -346,8 +379,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _bayar() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih metode pembayaran terlebih dahulu.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
 
@@ -361,7 +394,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
       // jaringan di bawah tidak pernah membatalkan penjualan ini.
-      await CoreDb.instance.simpanTransaksiPending(kodeUnik, jsonEncode(payload));
+      await CoreDb.instance
+          .simpanTransaksiPending(kodeUnik, jsonEncode(payload));
 
       String? pesanTundaMenuju;
       try {
@@ -369,28 +403,37 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
       } catch (e) {
         if (e is ApiException && e.offline) {
-          pesanTundaMenuju = 'Tidak ada koneksi -- transaksi tersimpan & akan disinkron otomatis nanti.';
+          pesanTundaMenuju =
+              'Tidak ada koneksi -- transaksi tersimpan & akan disinkron otomatis nanti.';
         } else {
           // Server MENOLAK (bukan sekadar offline) -- batalkan, jangan lanjut ke struk.
           await CoreDb.instance.hapusTransaksiPending(kodeUnik);
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+          if (mounted)
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(e.toString())));
           return;
         }
       }
 
       if (!mounted) return;
       if (pesanTundaMenuju != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesanTundaMenuju)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(pesanTundaMenuju)));
       }
 
       final itemStruk = widget.keranjang
-          .map((i) => {'nama': i.produk.nama, 'qty': i.jumlah, 'harga': i.produk.hargaJual})
+          .map((i) => {
+                'nama': i.produk.nama,
+                'qty': i.jumlah,
+                'harga': i.produk.hargaJual
+              })
           .toList();
       final metodeNama = _caraBayarTerpilih!.nama;
       final totalStruk = _total;
       final pajakStruk = _pajak;
       widget.keranjang.clear();
-      LayarPelangganBroadcaster.instance.jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+      LayarPelangganBroadcaster.instance
+          .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       widget.onSelesai?.call();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -423,7 +466,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           children: Sesi.instance.caraBayar
               .map((c) => ListTile(
                     title: Text(c.nama),
-                    trailing: c == _caraBayarTerpilih ? const Icon(Icons.check, color: AppColors.primary) : null,
+                    trailing: c == _caraBayarTerpilih
+                        ? const Icon(Icons.check, color: AppColors.primary)
+                        : null,
                     onTap: () => Navigator.of(context).pop(c),
                   ))
               .toList(),
@@ -437,7 +482,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// pos-renderer.js `PETA_TOMBOL_KASIR` (lihat kasir_screen.dart utk
   /// F7/F8/F9). Desktop-only; diam di Android.
   KeyEventResult _tanganiTombolKeranjang(FocusNode node, KeyEvent event) {
-    if (defaultTargetPlatform != TargetPlatform.windows) return KeyEventResult.ignored;
+    if (defaultTargetPlatform != TargetPlatform.windows)
+      return KeyEventResult.ignored;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f2) {
       if (!_memproses) _bayar();
@@ -458,7 +504,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return KeyEventResult.ignored;
   }
 
-  static const _radiusInput = OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)));
+  static const _radiusInput =
+      OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)));
 
   @override
   Widget build(BuildContext context) {
@@ -470,222 +517,478 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.tampilkanJudul)
+            if (widget.tampilkanJudul && widget.pencarianBarang == null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.shopping_cart, size: 18, color: AppColors.textPrimary),
+                    const Icon(Icons.shopping_cart,
+                        size: 18, color: AppColors.textPrimary),
                     const SizedBox(width: 8),
-                    const Text('Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text('Keranjang',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     if (widget.aksiHeader != null) widget.aksiHeader!,
                   ],
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              child: _memberTerpilih == null
-                  ? OutlinedButton.icon(
-                      onPressed: _pilihMember,
-                      icon: const Icon(Icons.person_add_alt, size: 18),
-                      label: const Text('Pilih Member (opsional) · F5'),
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    )
-                  : Container(
-                      decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.warning), borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        leading: CircleAvatar(backgroundColor: AppColors.warning, foregroundColor: Colors.white, child: Text(_memberTerpilih!.nama.isNotEmpty ? _memberTerpilih!.nama[0].toUpperCase() : '?')),
-                        title: Text(_memberTerpilih!.nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: Text([
-                          if (_memberTerpilih!.kodeIdentitas.isNotEmpty) _memberTerpilih!.kodeIdentitas,
-                          'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
-                          if (_memberTerpilih!.wajibPin) 'Wajib PIN',
-                        ].join(' · '), style: const TextStyle(fontSize: 11.5)),
-                        trailing: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: _hapusMember),
-                      ),
-                    ),
-            ),
             Expanded(
-              child: widget.keranjang.isEmpty
-                  ? Center(
-                      child: Column(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final checkoutSamping = constraints.maxWidth >= 760;
+                  if (checkoutSamping) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _kartuManajemenItem()),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 360,
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: _panelCheckout(samping: true),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _daftarItemKeranjang()),
+                      _panelCheckout(samping: false),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pemilihMember() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _labelBagian('Ambil Data Member'),
+          const SizedBox(height: 8),
+          _memberTerpilih == null
+              ? SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _pilihMember,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shopping_cart_outlined, size: 40, color: AppColors.border),
-                          const SizedBox(height: 8),
-                          const Text('Belum ada produk dipilih.', style: TextStyle(color: AppColors.textSecondary)),
-                        ],
-                      ),
-                    )
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: AppSectionCard(
-                        padding: EdgeInsets.zero,
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                          itemCount: widget.keranjang.length,
-                          separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
-                          itemBuilder: (context, i) {
-                            final item = widget.keranjang[i];
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(item.produk.nama, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                                        Text(_formatRupiah.format(item.produk.hargaJual), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                        if (item.diskon > 0)
-                                          Text('Diskon ${_formatRupiah.format(item.diskon)}', style: const TextStyle(color: AppColors.warning, fontSize: 11.5)),
-                                      ],
-                                    ),
-                                  ),
-                                  _tombolBulat(Icons.remove, () => _ubahJumlah(item, -1)),
-                                  SizedBox(width: 28, child: Text('${item.jumlah}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold))),
-                                  _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
-                                  SizedBox(
-                                    width: 92,
-                                    child: Text(_formatRupiah.format(item.subtotalSetelahDiskon), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18)),
-                border: Border(top: BorderSide(color: AppColors.border)),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, -2))],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    onTap: _pilihMetode,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Metode Pembayaran · F4', border: _radiusInput, isDense: true),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(_caraBayarTerpilih?.nama ?? 'Pilih ›'),
-                          const Icon(Icons.chevron_right, size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                if (_totalDiskon > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Diskon', style: TextStyle(color: Color(0xFFC0563D))),
-                        Text('-${_formatRupiah.format(_totalDiskon)}', style: const TextStyle(color: Color(0xFFC0563D))),
-                      ],
-                    ),
-                  ),
-                if (_totalCashback > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Cashback (masuk saldo)', style: TextStyle(color: Color(0xFF2E7D32))),
-                        Text('+${_formatRupiah.format(_totalCashback)}', style: const TextStyle(color: Color(0xFF2E7D32))),
-                      ],
-                    ),
-                  ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Subtotal', style: TextStyle(color: Colors.black54)),
-                    Text(_formatRupiah.format(_subtotal), style: const TextStyle(color: Colors.black54)),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)', style: const TextStyle(color: Colors.black54)),
-                      Text(_formatRupiah.format(_pajak), style: const TextStyle(color: Colors.black54)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(_formatRupiah.format(_total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _uangDiterimaController,
-                    focusNode: _fokusUangDiterima,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Uang Diterima', border: _radiusInput, isDense: true),
-                    onChanged: (v) => setState(() => _uangDiterimaManual = true),
-                  ),
-                  if (_uangDiterima > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Kembalian', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Icon(Icons.person_add_alt, size: 18),
+                          SizedBox(width: 6),
                           Text(
-                            _formatRupiah.format(_kembalian.abs()),
-                            style: TextStyle(fontWeight: FontWeight.bold, color: _kembalian < 0 ? AppColors.danger : AppColors.success),
+                            'Pilih Member (opsional) - F5',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _memproses || widget.keranjang.isEmpty ? null : _tahan,
-                          icon: const Icon(Icons.pause_circle_outline, size: 18),
-                          label: const Text('Tahan · F3'),
-                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: _memproses || widget.keranjang.isEmpty ? null : _bayar,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: _memproses
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('Bayar · F2', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
                   ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.latarLembut(AppColors.warning),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.warning,
+                      foregroundColor: Colors.white,
+                      child: Text(_memberTerpilih!.nama.isNotEmpty
+                          ? _memberTerpilih!.nama[0].toUpperCase()
+                          : '?'),
+                    ),
+                    title: Text(_memberTerpilih!.nama,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text(
+                        [
+                          if (_memberTerpilih!.kodeIdentitas.isNotEmpty)
+                            _memberTerpilih!.kodeIdentitas,
+                          'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
+                          if (_memberTerpilih!.wajibPin) 'Wajib PIN',
+                        ].join(' - '),
+                        style: const TextStyle(fontSize: 11.5)),
+                    trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: _hapusMember),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _labelBagian(String teks) {
+    const warna = AppColors.sidebarBg;
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 16,
+          decoration: BoxDecoration(
+            color: warna,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          teks,
+          style: TextStyle(
+            color: warna,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _kartuManajemenItem() {
+    if (widget.pencarianBarang == null) return _daftarItemKeranjang();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 0, 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _labelBagian('Item yang dibeli'),
+                  const SizedBox(height: 10),
+                  widget.pencarianBarang!,
                 ],
               ),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Row(
+                children: const [
+                  Icon(Icons.shopping_cart,
+                      size: 18, color: AppColors.textPrimary),
+                  SizedBox(width: 8),
+                  Text('Keranjang',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            Expanded(child: _daftarItemKeranjang(dibungkusCard: false)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _daftarItemKeranjang({bool dibungkusCard = true}) {
+    if (widget.keranjang.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shopping_cart_outlined,
+                size: 40, color: AppColors.border),
+            const SizedBox(height: 8),
+            const Text('Belum ada produk dipilih.',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+    final daftar = ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      itemCount: widget.keranjang.length,
+      separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+      itemBuilder: (context, i) {
+        final item = widget.keranjang[i];
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.produk.nama,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13.5)),
+                    Text(_formatRupiah.format(item.produk.hargaJual),
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12)),
+                    if (item.diskon > 0)
+                      Text('Diskon ${_formatRupiah.format(item.diskon)}',
+                          style: const TextStyle(
+                              color: AppColors.warning, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              _tombolBulat(Icons.remove, () => _ubahJumlah(item, -1)),
+              SizedBox(
+                width: 32,
+                child: Text('${item.jumlah}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
+              SizedBox(
+                width: 116,
+                child: Text(
+                  _formatRupiah.format(item.subtotalSetelahDiskon),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!dibungkusCard) return daftar;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: daftar,
+      ),
+    );
+  }
+
+  Widget _panelCheckout({required bool samping}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: Offset(samping ? -2 : 0, samping ? 0 : -2),
+          )
+        ],
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pemilihMember(),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            _labelBagian('Pilih metode pembayaran'),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: _pilihMetode,
+              borderRadius: BorderRadius.circular(10),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                    labelText: 'Metode Pembayaran - F4',
+                    border: _radiusInput,
+                    isDense: true),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(_caraBayarTerpilih?.nama ?? 'Pilih',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    const Icon(Icons.chevron_right, size: 18),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            if (_totalDiskon > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Diskon',
+                        style: TextStyle(color: Color(0xFFC0563D))),
+                    Text('-${_formatRupiah.format(_totalDiskon)}',
+                        style: const TextStyle(color: Color(0xFFC0563D))),
+                  ],
+                ),
+              ),
+            if (_totalCashback > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Cashback (masuk saldo)',
+                        style: TextStyle(color: Color(0xFF2E7D32))),
+                    Text('+${_formatRupiah.format(_totalCashback)}',
+                        style: const TextStyle(color: Color(0xFF2E7D32))),
+                  ],
+                ),
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Subtotal', style: TextStyle(color: Colors.black54)),
+                Text(_formatRupiah.format(_subtotal),
+                    style: const TextStyle(color: Colors.black54)),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                      'Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)',
+                      style: const TextStyle(color: Colors.black54)),
+                  Text(_formatRupiah.format(_pajak),
+                      style: const TextStyle(color: Colors.black54)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(_formatRupiah.format(_total),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _uangDiterimaController,
+              focusNode: _fokusUangDiterima,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Uang Diterima',
+                  border: _radiusInput,
+                  isDense: true),
+              onChanged: (v) => setState(() => _uangDiterimaManual = true),
+            ),
+            if (_uangDiterima > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Kembalian',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      _formatRupiah.format(_kembalian.abs()),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _kembalian < 0
+                              ? AppColors.danger
+                              : AppColors.success),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _memproses || widget.keranjang.isEmpty ? null : _tahan,
+                    icon: const Icon(Icons.pause_circle_outline, size: 18),
+                    label: const Text('Tahan - F3',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed:
+                        _memproses || widget.keranjang.isEmpty ? null : _bayar,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: _memproses
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Bayar - F2',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -700,7 +1003,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       child: IconButton(
         padding: EdgeInsets.zero,
         icon: Icon(icon, size: 16),
-        style: IconButton.styleFrom(backgroundColor: AppColors.pageBg, foregroundColor: AppColors.textPrimary, shape: const CircleBorder()),
+        style: IconButton.styleFrom(
+            backgroundColor: AppColors.pageBg,
+            foregroundColor: AppColors.textPrimary,
+            shape: const CircleBorder()),
         onPressed: onPressed,
       ),
     );
@@ -731,7 +1037,8 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
     _muatTransaksiTerbaru();
     // Segarkan tiap 20 detik SELAMA kotak cari masih kosong (spec §3.5) --
     // "pelanggan tadi" bisa berubah kalau kasir lain jg sedang transaksi.
-    _penyegarTransaksiTerbaru = Timer.periodic(const Duration(seconds: 20), (_) {
+    _penyegarTransaksiTerbaru =
+        Timer.periodic(const Duration(seconds: 20), (_) {
       if (_controller.text.trim().isEmpty) _muatTransaksiTerbaru();
     });
   }
@@ -746,11 +1053,14 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
 
   Future<void> _muatTransaksiTerbaru() async {
     try {
-      final hasil = await ApiClient.instance.aksi('anggota_transaksi_terbaru', {'id_toko': Sesi.instance.tokoId, 'limit': 10});
+      final hasil = await ApiClient.instance.aksi('anggota_transaksi_terbaru',
+          {'id_toko': Sesi.instance.tokoId, 'limit': 10});
       final arr = (hasil['data'] as List?) ?? [];
       if (mounted && _controller.text.trim().isEmpty) {
         setState(() {
-          _hasil = arr.map((e) => Anggota.fromJson(e as Map<String, dynamic>)).toList();
+          _hasil = arr
+              .map((e) => Anggota.fromJson(e as Map<String, dynamic>))
+              .toList();
           _transaksiTerbaru = true;
           _modeOffline = false;
         });
@@ -780,11 +1090,14 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
       _transaksiTerbaru = false;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('cari_member', {'keyword': kataKunci});
+      final hasil =
+          await ApiClient.instance.aksi('cari_member', {'keyword': kataKunci});
       final arr = (hasil['member'] as List?) ?? [];
       if (mounted) {
         setState(() {
-          _hasil = arr.map((e) => Anggota.fromJson(e as Map<String, dynamic>)).toList();
+          _hasil = arr
+              .map((e) => Anggota.fromJson(e as Map<String, dynamic>))
+              .toList();
           _modeOffline = false;
         });
       }
@@ -813,18 +1126,27 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
             TextField(
               controller: _controller,
               autofocus: true,
-              decoration: const InputDecoration(hintText: 'Cari nama/kode identitas...', prefixIcon: Icon(Icons.search)),
+              decoration: const InputDecoration(
+                  hintText: 'Cari nama/kode identitas...',
+                  prefixIcon: Icon(Icons.search)),
               onChanged: _onBerubah,
             ),
             if (_modeOffline)
               const Padding(
                 padding: EdgeInsets.only(top: 6),
-                child: Text('Menampilkan data cache (offline)', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                child: Text('Menampilkan data cache (offline)',
+                    style: TextStyle(color: Colors.orange, fontSize: 12)),
               ),
             if (_transaksiTerbaru && _hasil.isNotEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Transaksi Terbaru', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54))),
+                child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Transaksi Terbaru',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black54))),
               ),
             const SizedBox(height: 8),
             Expanded(
@@ -838,7 +1160,10 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
                           leading: const Icon(Icons.person),
                           title: Text(a.nama),
                           subtitle: Text(a.kodeIdentitas),
-                          trailing: a.wajibPin ? const Icon(Icons.pin, size: 18, color: Colors.orange) : null,
+                          trailing: a.wajibPin
+                              ? const Icon(Icons.pin,
+                                  size: 18, color: Colors.orange)
+                              : null,
                           onTap: () => Navigator.of(context).pop(a),
                         );
                       },
@@ -848,7 +1173,9 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal')),
       ],
     );
   }
@@ -882,12 +1209,17 @@ class _DialogMasukkanPinState extends State<_DialogMasukkanPin> {
         autofocus: true,
         obscureText: true,
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(labelText: 'PIN', border: OutlineInputBorder()),
+        decoration: const InputDecoration(
+            labelText: 'PIN', border: OutlineInputBorder()),
         onSubmitted: (v) => Navigator.of(context).pop(v),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
-        ElevatedButton(onPressed: () => Navigator.of(context).pop(_controller.text.trim()), child: const Text('Verifikasi')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal')),
+        ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+            child: const Text('Verifikasi')),
       ],
     );
   }
