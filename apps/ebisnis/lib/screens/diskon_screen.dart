@@ -6,6 +6,7 @@ import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -44,14 +45,14 @@ class _DiskonScreenState extends State<DiskonScreen> {
   }
 
   Future<void> _muatSemua() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       await Future.wait([_muatDaftar(), _muatDropdown()]);
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -62,12 +63,12 @@ class _DiskonScreenState extends State<DiskonScreen> {
         'page': _halaman,
         'page_size': _pageSize,
       });
-      setState(() {
+      setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     }
   }
 
@@ -76,7 +77,7 @@ class _DiskonScreenState extends State<DiskonScreen> {
       final hasilJenis = await ApiClient.instance.aksi('jenis_anggota_list');
       final hasilTipe = await ApiClient.instance.aksi('tipe_anggota_list');
       if (mounted) {
-        setState(() {
+        setStateIfMounted(() {
           _jenisAnggota = ((hasilJenis['data'] as List?) ?? []).map((e) => Kategori.fromJson(e as Map<String, dynamic>)).toList();
           _tipeAnggota = ((hasilTipe['data'] as List?) ?? []).map((e) => Kategori.fromJson(e as Map<String, dynamic>)).toList();
         });
@@ -178,34 +179,46 @@ class _DiskonScreenState extends State<DiskonScreen> {
                         onSubmitted: _cariUlang,
                       ),
                       const SizedBox(height: 12),
-                      if (_data.isEmpty)
-                        const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('Belum ada aturan diskon.')))
-                      else
-                        ..._data.map((a) => Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                title: Text('${a['namaAturan']}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: Text(
-                                  '${(a['produkNama'] as String?)?.isNotEmpty == true ? a['produkNama'] : "Semua Produk"} · ${(a['tokoNama'] as String?)?.isNotEmpty == true ? a['tokoNama'] : "Semua Toko"}\n'
-                                  '${a['potonganLangsung'] == true ? "Potong Struk" : "Cashback"}: ${((a['persentase'] as num?) ?? 0) > 0 ? "${a['persentase']}%" : _formatRupiah.format(a['nominal'] ?? 0)}',
-                                ),
-                                isThreeLine: true,
-                                trailing: Text(a['aktif'] == true ? 'Aktif' : 'Nonaktif', style: TextStyle(color: a['aktif'] == true ? const Color(0xFF2E7D32) : Colors.red, fontSize: 12)),
-                                onTap: Sesi.instance.bolehKelola ? () => _bukaForm(aturan: a) : null,
+                      AppDataTable(
+                        minWidth: 920,
+                        emptyText: 'Belum ada aturan diskon.',
+                        columns: const [
+                          AppTableColumn('Aturan', flex: 3),
+                          AppTableColumn('Target', flex: 3),
+                          AppTableColumn('Jenis', flex: 2),
+                          AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                          AppTableColumn('Status', flex: 2, align: TextAlign.center),
+                        ],
+                        rows: _data.map((a) {
+                          final persen = ((a['persentase'] as num?) ?? 0);
+                          final nilai = persen > 0 ? '$persen%' : _formatRupiah.format(a['nominal'] ?? 0);
+                          final produk = (a['produkNama'] as String?)?.isNotEmpty == true ? a['produkNama'] : 'Semua Produk';
+                          final toko = (a['tokoNama'] as String?)?.isNotEmpty == true ? a['tokoNama'] : 'Semua Toko';
+                          final aktif = a['aktif'] == true;
+                          return AppTableRowData(
+                            onTap: Sesi.instance.bolehKelola ? () => _bukaForm(aturan: a) : null,
+                            cells: [
+                              AppTableCell.text('${a['namaAturan']}', flex: 3, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              AppTableCell.text('$produk - $toko', flex: 3, maxLines: 2),
+                              AppTableCell.text(a['potonganLangsung'] == true ? 'Potong Struk' : 'Cashback', flex: 2),
+                              AppTableCell.text(nilai, flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              AppTableCell(
+                                flex: 2,
+                                align: TextAlign.center,
+                                child: StatusPill(label: aktif ? 'Aktif' : 'Nonaktif', warna: aktif ? AppColors.success : AppColors.danger),
                               ),
-                            )),
-                      if (_total > _pageSize)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(icon: const Icon(Icons.chevron_left), onPressed: _halaman > 1 ? () => _pindah(_halaman - 1) : null),
-                              Text('Halaman $_halaman / $_totalHalaman ($_total aturan)'),
-                              IconButton(icon: const Icon(Icons.chevron_right), onPressed: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null),
                             ],
-                          ),
+                          );
+                        }).toList(),
+                        pagination: AppTablePagination(
+                          halaman: _halaman,
+                          totalHalaman: _totalHalaman,
+                          totalData: _total,
+                          labelData: 'aturan',
+                          onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                          onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -295,7 +308,7 @@ class _FormDiskonState extends State<_FormDiskon> {
     if (!mounted) return;
     final jam = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(awal));
     final hasil = DateTime(tanggal.year, tanggal.month, tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0);
-    setState(() => mulai ? _mulai = hasil : _selesai = hasil);
+    setStateIfMounted(() => mulai ? _mulai = hasil : _selesai = hasil);
   }
 
   @override
@@ -312,7 +325,7 @@ class _FormDiskonState extends State<_FormDiskon> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
     });
@@ -338,9 +351,9 @@ class _FormDiskonState extends State<_FormDiskon> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -355,156 +368,225 @@ class _FormDiskonState extends State<_FormDiskon> {
         expand: false,
         builder: (context, scrollController) => Form(
           key: _formKey,
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.all(20),
+          child: AppFormSheet(
+            scrollController: scrollController,
+            title: ubah ? 'Ubah Aturan Diskon' : 'Tambah Aturan Diskon',
+            subtitle: ubah
+                ? 'Target produk/member tidak ditampilkan ulang. Isi lagi bila ingin mengubah cakupannya.'
+                : 'Susun aturan potongan yang akan dipakai saat transaksi kasir.',
+            icon: ubah ? Icons.edit_calendar_outlined : Icons.discount_outlined,
+            errorText: _error,
             children: [
-              Text(ubah ? 'Ubah Aturan Diskon' : 'Tambah Aturan Diskon', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              if (ubah)
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text('Target produk/member tidak ditampilkan ulang -- isi lagi kalau ingin diubah.', style: TextStyle(fontSize: 11, color: Colors.black54, fontStyle: FontStyle.italic)),
-                ),
-              const SizedBox(height: 16),
-              if (_error != null)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
-                ),
-              TextFormField(
-                controller: _nama,
-                decoration: const InputDecoration(labelText: 'Nama Aturan *', border: OutlineInputBorder()),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(controller: _keterangan, decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder()), maxLines: 2),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Berlaku Semua Produk'),
-                value: _berlakuSemuaProduk,
-                onChanged: (v) => setState(() => _berlakuSemuaProduk = v),
-              ),
-              if (!_berlakuSemuaProduk)
-                TextFormField(
-                  controller: _kodeProduk,
-                  decoration: const InputDecoration(labelText: 'Kode Produk Target *', border: OutlineInputBorder()),
-                  validator: (v) => (!_berlakuSemuaProduk && (v == null || v.trim().isEmpty)) ? 'Wajib diisi' : null,
-                ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Berlaku Semua Member'),
-                value: _berlakuSemuaMember,
-                onChanged: (v) => setState(() => _berlakuSemuaMember = v),
-              ),
-              if (!_berlakuSemuaMember) ...[
-                DropdownButtonFormField<int?>(
-                  value: _jenisAnggotaId,
-                  decoration: const InputDecoration(labelText: 'Jenis Anggota', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('-- Semua Jenis --')),
-                    ...widget.jenisAnggota.map((k) => DropdownMenuItem<int?>(value: k.id, child: Text(k.nama))),
-                  ],
-                  onChanged: (v) => setState(() => _jenisAnggotaId = v),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  value: _tipeAnggotaId,
-                  decoration: const InputDecoration(labelText: 'Tipe Anggota', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('-- Semua Tipe --')),
-                    ...widget.tipeAnggota.map((k) => DropdownMenuItem<int?>(value: k.id, child: Text(k.nama))),
-                  ],
-                  onChanged: (v) => setState(() => _tipeAnggotaId = v),
-                ),
-              ],
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Potong Langsung di Struk'),
-                subtitle: const Text('Kalau mati, disimpan sbg cashback/saldo.', style: TextStyle(fontSize: 11)),
-                value: _potonganLangsung,
-                onChanged: (v) => setState(() => _potonganLangsung = v),
-              ),
-              Row(
+              AppFormSection(
+                judul: 'Informasi Aturan',
                 children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _persentase,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Persentase (%)', border: OutlineInputBorder()),
-                    ),
+                  AppFormTextField(
+                    label: 'Nama Aturan *',
+                    controller: _nama,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _nominal,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Nominal (Rp)', border: OutlineInputBorder()),
-                    ),
+                  AppFormTextField(
+                    label: 'Keterangan',
+                    controller: _keterangan,
+                    maxLines: 2,
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _maksimalPotongan,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Maksimal Potongan (Rp, 0=tanpa batas)', border: OutlineInputBorder()),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Berlaku Per Hari & Per Toko'),
-                value: _berlakuPerHariDanPerToko,
-                onChanged: (v) => setState(() => _berlakuPerHariDanPerToko = v),
-              ),
-              const SizedBox(height: 12),
-              const Text('Masa Berlaku (kosongkan = tanpa batas)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 8),
-              Row(
+              AppFormSection(
+                judul: 'Target Diskon',
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pilihTanggalJam(mulai: true),
-                      icon: const Icon(Icons.event, size: 16),
-                      label: Text(_mulai == null ? 'Mulai' : '${_mulai!.day}-${_mulai!.month}-${_mulai!.year} ${_mulai!.hour.toString().padLeft(2, '0')}:${_mulai!.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12)),
-                    ),
+                  AppFormSwitchTile(
+                    title: 'Berlaku Semua Produk',
+                    value: _berlakuSemuaProduk,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _berlakuSemuaProduk = v),
                   ),
-                  if (_mulai != null) IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() => _mulai = null)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pilihTanggalJam(mulai: false),
-                      icon: const Icon(Icons.event_busy, size: 16),
-                      label: Text(_selesai == null ? 'Selesai' : '${_selesai!.day}-${_selesai!.month}-${_selesai!.year} ${_selesai!.hour.toString().padLeft(2, '0')}:${_selesai!.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12)),
+                  if (!_berlakuSemuaProduk)
+                    AppFormTextField(
+                      label: 'Kode Produk Target *',
+                      controller: _kodeProduk,
+                      validator: (v) => (!_berlakuSemuaProduk &&
+                              (v == null || v.trim().isEmpty))
+                          ? 'Wajib diisi'
+                          : null,
                     ),
+                  AppFormSwitchTile(
+                    title: 'Berlaku Semua Member',
+                    value: _berlakuSemuaMember,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _berlakuSemuaMember = v),
                   ),
-                  if (_selesai != null) IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() => _selesai = null)),
+                  if (!_berlakuSemuaMember) ...[
+                    DropdownButtonFormField<int?>(
+                      value: _jenisAnggotaId,
+                      decoration: AppFormStyle.fieldDecoration(
+                        context,
+                        labelText: 'Jenis Anggota',
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('-- Semua Jenis --')),
+                        ...widget.jenisAnggota.map((k) =>
+                            DropdownMenuItem<int?>(
+                                value: k.id, child: Text(k.nama))),
+                      ],
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _jenisAnggotaId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      value: _tipeAnggotaId,
+                      decoration: AppFormStyle.fieldDecoration(
+                        context,
+                        labelText: 'Tipe Anggota',
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('-- Semua Tipe --')),
+                        ...widget.tipeAnggota.map((k) => DropdownMenuItem<int?>(
+                            value: k.id, child: Text(k.nama))),
+                      ],
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _tipeAnggotaId = v),
+                    ),
+                  ],
                 ],
               ),
-              if (Sesi.instance.isAdmin) ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _tokoId,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Target Toko (ID, kosongkan = semua toko)',
-                    helperText: 'Hanya admin/manager yg bisa memilih toko tertentu -- akun toko selalu otomatis ke tokonya sendiri.',
-                    helperMaxLines: 2,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Aktif'), value: _aktif, onChanged: (v) => setState(() => _aktif = v)),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _menyimpan ? null : _simpan,
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                  child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+              AppFormSection(
+                judul: 'Nilai Potongan',
+                children: [
+                  AppFormSwitchTile(
+                    title: 'Potong Langsung di Struk',
+                    subtitle: 'Kalau mati, disimpan sebagai cashback/saldo.',
+                    value: _potonganLangsung,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _potonganLangsung = v),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Persentase (%)',
+                          controller: _persentase,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(
+                                  decimal: true),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Nominal (Rp)',
+                          controller: _nominal,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(
+                                  decimal: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                  AppFormTextField(
+                    label: 'Maksimal Potongan (Rp, 0=tanpa batas)',
+                    controller: _maksimalPotongan,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Berlaku Per Hari & Per Toko',
+                    value: _berlakuPerHariDanPerToko,
+                    onChanged: (v) => setStateIfMounted(
+                        () => _berlakuPerHariDanPerToko = v),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Masa Berlaku',
+                deskripsi: 'Kosongkan tanggal untuk aturan tanpa batas waktu.',
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pilihTanggalJam(mulai: true),
+                          icon: const Icon(Icons.event, size: 16),
+                          label: Text(
+                            _mulai == null
+                                ? 'Mulai'
+                                : '${_mulai!.day}-${_mulai!.month}-${_mulai!.year} ${_mulai!.hour.toString().padLeft(2, '0')}:${_mulai!.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      if (_mulai != null)
+                        IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () =>
+                                setStateIfMounted(() => _mulai = null)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pilihTanggalJam(mulai: false),
+                          icon: const Icon(Icons.event_busy, size: 16),
+                          label: Text(
+                            _selesai == null
+                                ? 'Selesai'
+                                : '${_selesai!.day}-${_selesai!.month}-${_selesai!.year} ${_selesai!.hour.toString().padLeft(2, '0')}:${_selesai!.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      if (_selesai != null)
+                        IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () =>
+                                setStateIfMounted(() => _selesai = null)),
+                    ],
+                  ),
+                  if (Sesi.instance.isAdmin) ...[
+                    const SizedBox(height: 12),
+                    AppFormTextField(
+                      label: 'Target Toko (ID, kosongkan = semua toko)',
+                      controller: _tokoId,
+                      keyboardType: TextInputType.number,
+                      helperText:
+                          'Akun toko akan tetap otomatis diarahkan ke tokonya sendiri.',
+                    ),
+                  ],
+                  AppFormSwitchTile(
+                    title: 'Aktif',
+                    value: _aktif,
+                    onChanged: (v) => setStateIfMounted(() => _aktif = v),
+                  ),
+                ],
+              ),
+            ],
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
               ),
             ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
+import '../theme/app_colors.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
@@ -58,6 +59,7 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
+      backgroundColor: AppColors.cardBgOf(context),
       child: SafeArea(
         child: Column(
           children: [
@@ -295,8 +297,9 @@ class _ItemMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconWidget =
-        Icon(icon, color: aktif ? const Color(0xFF1E3A5F) : Colors.black87);
+    final warnaAktif = Theme.of(context).colorScheme.primary;
+    final warnaTeks = aktif ? warnaAktif : AppColors.textPrimaryOf(context);
+    final iconWidget = Icon(icon, color: warnaTeks);
     return ListTile(
       leading: badge == null
           ? iconWidget
@@ -307,8 +310,10 @@ class _ItemMenu extends StatelessWidget {
                   isLabelVisible: jumlah > 0,
                   child: iconWidget),
             ),
-      title: Text(label, style: const TextStyle(color: Colors.black87)),
+      title: Text(label, style: TextStyle(color: warnaTeks)),
       selected: aktif,
+      selectedTileColor: AppColors.latarLembut(warnaAktif),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       onTap: onTap,
     );
   }

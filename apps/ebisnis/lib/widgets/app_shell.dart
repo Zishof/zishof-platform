@@ -1,10 +1,14 @@
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
+import '../api_client.dart';
 import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
+import '../services/layar_pelanggan_launcher.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import 'app_drawer.dart';
+import '../screens/akun_saya_screen.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/pesanan_screen.dart';
@@ -22,6 +26,8 @@ import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
+import '../screens/login_screen.dart';
+import 'safe_state.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -61,6 +67,12 @@ class _ItemMenuShell {
   final String label;
   final WidgetBuilder? builder;
   const _ItemMenuShell(this.kunci, this.icon, this.label, {this.builder});
+}
+
+class _GrupMenuShell {
+  final String label;
+  final List<MenuEBisnis> items;
+  const _GrupMenuShell(this.label, this.items);
 }
 
 /// Kunci `MenuEBisnis` -> kunci `konfigurasi.aksesMenu` server (lihat
@@ -135,6 +147,36 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunHakAkses),
 ];
 
+const _grupMenu = <_GrupMenuShell>[
+  _GrupMenuShell('Operasional', [
+    MenuEBisnis.kasir,
+    MenuEBisnis.pesanan,
+    MenuEBisnis.layarPelanggan,
+  ]),
+  _GrupMenuShell('Dashboard', [
+    MenuEBisnis.ringkasan,
+  ]),
+  _GrupMenuShell('Master Data', [
+    MenuEBisnis.anggota,
+    MenuEBisnis.produk,
+    MenuEBisnis.stokOpname,
+    MenuEBisnis.kulakan,
+    MenuEBisnis.diskon,
+  ]),
+  _GrupMenuShell('Transaksi & Laporan', [
+    MenuEBisnis.returPenjualan,
+    MenuEBisnis.riwayatPenjualan,
+    MenuEBisnis.laporanTransaksi,
+    MenuEBisnis.laporanLaporan,
+  ]),
+  _GrupMenuShell('Sistem', [
+    MenuEBisnis.riwayatSinkron,
+    MenuEBisnis.logError,
+    MenuEBisnis.konfigurasi,
+    MenuEBisnis.hakAkses,
+  ]),
+];
+
 Widget _bangunKasir(BuildContext c) => const KasirScreen();
 Widget _bangunRingkasan(BuildContext c) => const RingkasanScreen();
 Widget _bangunPesanan(BuildContext c) => const PesananScreen();
@@ -170,6 +212,10 @@ _ItemMenuShell? _itemMenuDariLabel(String label) {
 
 void _pindahMenu(BuildContext context, _ItemMenuShell item,
     {MenuEBisnis? menuSaatIni}) {
+  if (item.kunci == MenuEBisnis.layarPelanggan) {
+    bukaLayarPelanggan(context);
+    return;
+  }
   if (item.builder == null) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
@@ -316,11 +362,21 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  bool _notifierSudahSinkron = false;
+
   @override
   void initState() {
     super.initState();
-    _menuAktifNotifier.value = widget.menuAktif;
-    AppDrawer.menuAktifNotifier.value = _labelDrawer(widget.menuAktif);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_menuAktifNotifier.value != widget.menuAktif) {
+        _menuAktifNotifier.value = widget.menuAktif;
+      }
+      AppDrawer.menuAktifNotifier.value = _labelDrawer(widget.menuAktif);
+      if (mounted) {
+        setStateIfMounted(() => _notifierSudahSinkron = true);
+      }
+    });
   }
 
   @override
@@ -328,7 +384,7 @@ class _AppShellState extends State<AppShell> {
     return ValueListenableBuilder<MenuEBisnis>(
       valueListenable: _menuAktifNotifier,
       builder: (context, menuTerpilih, _) {
-        if (menuTerpilih != widget.menuAktif) {
+        if (_notifierSudahSinkron && menuTerpilih != widget.menuAktif) {
           final item = _itemMenu(menuTerpilih);
           if (item?.builder != null) return item!.builder!(context);
         }
@@ -342,7 +398,7 @@ class _AppShellState extends State<AppShell> {
       final desktop = constraints.maxWidth >= kAmbangLebarDesktop;
       if (!desktop) {
         return Scaffold(
-          backgroundColor: AppColors.pageBg,
+          backgroundColor: AppColors.pageBgOf(context),
           appBar: AppBar(
               title: Text(widget.judul),
               backgroundColor: AppColors.sidebarBg,
@@ -363,7 +419,7 @@ class _AppShellState extends State<AppShell> {
         );
       }
       return Scaffold(
-        backgroundColor: AppColors.pageBg,
+        backgroundColor: AppColors.pageBgOf(context),
         floatingActionButton: widget.floatingActionButton,
         body: Row(
           children: [
@@ -384,16 +440,18 @@ class _AppShellState extends State<AppShell> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(widget.judul,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 22,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary)),
+                                        color:
+                                            AppColors.textPrimaryOf(context))),
                                 if (widget.subjudul != null)
                                   Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(widget.subjudul!,
-                                          style: const TextStyle(
-                                              color: AppColors.textSecondary))),
+                                          style: TextStyle(
+                                              color: AppColors.textSecondaryOf(
+                                                  context)))),
                               ],
                             ),
                           ),
@@ -463,72 +521,113 @@ class _AppSidebar extends StatelessWidget {
             ),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.zero,
-                children: _daftarMenu
-                    .where((item) => bolehTampilMenu(item.kunci))
-                    .map((item) {
-                  final aktif = item.kunci == menuAktif;
-                  return Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                    child: Material(
-                      color: aktif
-                          ? AppColors.sidebarBgActive
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () =>
-                            _pindahMenu(context, item, menuSaatIni: menuAktif),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 11),
-                          child: Row(
-                            children: [
-                              item.kunci == MenuEBisnis.pesanan
-                                  ? ValueListenableBuilder<int>(
-                                      valueListenable:
-                                          PesananPoller.instance.jumlahBaru,
-                                      builder: (context, jumlah, _) => Badge(
-                                        label: Text('$jumlah'),
-                                        isLabelVisible: jumlah > 0,
-                                        child: Icon(item.icon,
-                                            size: 19,
-                                            color: aktif
-                                                ? AppColors.sidebarTextActive
-                                                : AppColors.sidebarText),
-                                      ),
-                                    )
-                                  : Icon(item.icon,
-                                      size: 19,
-                                      color: aktif
-                                          ? AppColors.sidebarTextActive
-                                          : AppColors.sidebarText),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(item.label,
-                                    style: TextStyle(
-                                        color: aktif
-                                            ? AppColors.sidebarTextActive
-                                            : AppColors.sidebarText,
-                                        fontSize: 13,
-                                        fontWeight: aktif
-                                            ? FontWeight.w600
-                                            : FontWeight.normal)),
-                              ),
-                              if (item.builder == null)
-                                const Icon(Icons.lock_clock_outlined,
-                                    size: 14, color: AppColors.sidebarText),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                children: [
+                  for (final grup in _grupMenu)
+                    _SidebarGroup(grup: grup, menuAktif: menuAktif),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarGroup extends StatelessWidget {
+  final _GrupMenuShell grup;
+  final MenuEBisnis menuAktif;
+  const _SidebarGroup({required this.grup, required this.menuAktif});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = grup.items
+        .map(_itemMenu)
+        .whereType<_ItemMenuShell>()
+        .where((item) => bolehTampilMenu(item.kunci))
+        .toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 12, 7),
+            child: Text(
+              grup.label.toUpperCase(),
+              style: const TextStyle(
+                color: AppColors.sidebarText,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          ...items.map((item) => _SidebarItem(
+                item: item,
+                aktif: item.kunci == menuAktif,
+                menuAktif: menuAktif,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final _ItemMenuShell item;
+  final bool aktif;
+  final MenuEBisnis menuAktif;
+  const _SidebarItem({
+    required this.item,
+    required this.aktif,
+    required this.menuAktif,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final warna = aktif ? AppColors.sidebarTextActive : AppColors.sidebarText;
+    final icon = Icon(item.icon, size: 19, color: warna);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: aktif ? AppColors.sidebarBgActive : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _pindahMenu(context, item, menuSaatIni: menuAktif),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                item.kunci == MenuEBisnis.pesanan
+                    ? ValueListenableBuilder<int>(
+                        valueListenable: PesananPoller.instance.jumlahBaru,
+                        builder: (context, jumlah, _) => Badge(
+                          label: Text('$jumlah'),
+                          isLabelVisible: jumlah > 0,
+                          child: icon,
+                        ),
+                      )
+                    : icon,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      color: warna,
+                      fontSize: 13,
+                      fontWeight: aktif ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                if (item.builder == null)
+                  const Icon(Icons.lock_clock_outlined,
+                      size: 14, color: AppColors.sidebarText),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -548,47 +647,71 @@ class _AppTopbarState extends State<_AppTopbar> {
   @override
   void initState() {
     super.initState();
+    CoreDb.instance.sesiKasVersi.addListener(_muat);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    CoreDb.instance.sesiKasVersi.removeListener(_muat);
+    super.dispose();
   }
 
   Future<void> _muat() async {
     final kas = await CoreDb.instance.sesiKasAktif();
     final pending = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) {
-      setState(() {
+      setStateIfMounted(() {
         _kasAktif = kas;
         _pendingSync = pending;
       });
     }
   }
 
+  Future<void> _logout() async {
+    await ApiClient.instance.hapusToken();
+    Sesi.instance.reset();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final kasTerbuka = _kasAktif != null;
+    final tampilkanStatusKas = Sesi.instance.wajibSesiKas;
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: AppColors.border))),
+      decoration: BoxDecoration(
+        color: AppColors.cardBgOf(context),
+        border: Border(bottom: BorderSide(color: AppColors.borderOf(context))),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.storefront_outlined,
-              color: AppColors.textSecondary, size: 18),
+          Icon(Icons.storefront_outlined,
+              color: AppColors.textSecondaryOf(context), size: 18),
           const SizedBox(width: 6),
           Text(
               Sesi.instance.tokoNama.isEmpty
                   ? AppVariant.namaAplikasi
                   : Sesi.instance.tokoNama,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimaryOf(context))),
           const Spacer(),
-          _chipStatus(
-            icon: Icons.point_of_sale_outlined,
-            label: kasTerbuka ? 'Kas Terbuka' : 'Kas Tertutup',
-            warna: kasTerbuka ? AppColors.success : AppColors.textSecondary,
-          ),
-          const SizedBox(width: 10),
+          if (tampilkanStatusKas) ...[
+            _chipStatus(
+              icon: Icons.point_of_sale_outlined,
+              label: kasTerbuka ? 'Kas Terbuka' : 'Kas Tertutup',
+              warna: kasTerbuka
+                  ? AppColors.success
+                  : AppColors.textSecondaryOf(context),
+            ),
+            const SizedBox(width: 10),
+          ],
           _chipStatus(
             icon: _pendingSync == 0
                 ? Icons.cloud_done_outlined
@@ -597,18 +720,65 @@ class _AppTopbarState extends State<_AppTopbar> {
             warna: _pendingSync == 0 ? AppColors.teal : AppColors.warning,
           ),
           const SizedBox(width: 16),
-          CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary,
-              child: Text(
-                  Sesi.instance.userId.isNotEmpty
-                      ? Sesi.instance.userId[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(color: Colors.white, fontSize: 13))),
-          const SizedBox(width: 8),
-          Text(Sesi.instance.userId,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          IconButton(
+            tooltip: 'Segarkan Status',
+            icon: const Icon(Icons.refresh, size: 19),
+            onPressed: _muat,
+          ),
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: AppThemeController.instance.mode,
+            builder: (context, mode, _) => IconButton(
+              tooltip: mode == ThemeMode.dark ? 'Mode Terang' : 'Mode Gelap',
+              icon: Icon(mode == ThemeMode.dark
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined),
+              onPressed: AppThemeController.instance.toggle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          PopupMenuButton<String>(
+            tooltip: 'Menu Akun',
+            onSelected: (value) {
+              switch (value) {
+                case 'akun':
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const AkunSayaScreen()));
+                  break;
+                case 'konfigurasi':
+                  _pindahMenu(context, _itemMenu(MenuEBisnis.konfigurasi)!);
+                  break;
+                case 'logout':
+                  _logout();
+                  break;
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'akun', child: Text('Akun Saya')),
+              PopupMenuItem(value: 'konfigurasi', child: Text('Konfigurasi')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'logout', child: Text('Keluar')),
+            ],
+            child: Row(
+              children: [
+                CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.primary,
+                    child: Text(
+                        Sesi.instance.userId.isNotEmpty
+                            ? Sesi.instance.userId[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 13))),
+                const SizedBox(width: 8),
+                Text(Sesi.instance.userId,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimaryOf(context))),
+                Icon(Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondaryOf(context), size: 18),
+              ],
+            ),
+          ),
         ],
       ),
     );

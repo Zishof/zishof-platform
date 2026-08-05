@@ -14,16 +14,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
-import '../services/layar_kedua.dart';
+import '../services/layar_pelanggan_launcher.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
-import 'layar_pelanggan_screen.dart';
 import 'bantuan_screen.dart';
 import 'akun_saya_screen.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -81,7 +81,7 @@ class _KasirScreenState extends State<KasirScreen> {
   static const _kKunciFokusKeranjang = 'kasir_fokus_keranjang';
 
   Future<void> _toggleFokusKeranjang() async {
-    setState(() => _fokusKeranjang = !_fokusKeranjang);
+    setStateIfMounted(() => _fokusKeranjang = !_fokusKeranjang);
     final sp = await SharedPreferences.getInstance();
     await sp.setBool(_kKunciFokusKeranjang, _fokusKeranjang);
   }
@@ -96,8 +96,9 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _muatPreferensiTampilan() async {
     final sp = await SharedPreferences.getInstance();
     final tersimpan = sp.getBool(_kKunciFokusKeranjang);
-    if (tersimpan != null && mounted)
-      setState(() => _fokusKeranjang = tersimpan);
+    if (tersimpan != null && mounted) {
+      setStateIfMounted(() => _fokusKeranjang = tersimpan);
+    }
   }
 
   @override
@@ -108,7 +109,7 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _muatAwal() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
@@ -119,7 +120,8 @@ class _KasirScreenState extends State<KasirScreen> {
     try {
       final cache = await CoreDb.instance.produkCache();
       if (cache.isNotEmpty) {
-        setState(() => _semuaProduk = cache.map(_produkDariCache).toList());
+        setStateIfMounted(
+            () => _semuaProduk = cache.map(_produkDariCache).toList());
       }
     } catch (_) {
       // cache lokal gagal dibaca (mis. pertama kali install) -- lanjut ke jalur server saja.
@@ -131,7 +133,7 @@ class _KasirScreenState extends State<KasirScreen> {
     await _periksaSesiKas();
     PesananPoller.instance.mulai();
 
-    if (mounted) setState(() => _memuat = false);
+    if (mounted) setStateIfMounted(() => _memuat = false);
   }
 
   Produk _produkDariCache(Map<String, Object?> b) => Produk(
@@ -174,8 +176,9 @@ class _KasirScreenState extends State<KasirScreen> {
   /// tokoId/tokoNama/dst mencerminkan toko yang baru dipilih.
   Future<Map<String, dynamic>> _pastikanTokoDipilih(
       Map<String, dynamic> konfig) async {
-    if (konfig['multiToko'] != true || konfig['tokoAktifId'] != null)
+    if (konfig['multiToko'] != true || konfig['tokoAktifId'] != null) {
       return konfig;
+    }
     final daftar =
         ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
     if (daftar.isEmpty || !mounted) return konfig;
@@ -216,9 +219,10 @@ class _KasirScreenState extends State<KasirScreen> {
       await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': dipilih});
       return await ApiClient.instance.aksi('konfigurasi');
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal memilih toko: $e')));
+      }
       return konfig;
     }
   }
@@ -231,7 +235,7 @@ class _KasirScreenState extends State<KasirScreen> {
     final hasilBaru =
         await _pastikanTokoDipilih({...konfig, 'tokoAktifId': null});
     _terapkanKonfig(hasilBaru);
-    if (mounted) setState(() {});
+    if (mounted) setStateIfMounted(() {});
     await _muatAwal();
   }
 
@@ -256,7 +260,7 @@ class _KasirScreenState extends State<KasirScreen> {
           .toList());
 
       if (mounted) {
-        setState(() {
+        setStateIfMounted(() {
           _semuaProduk = produk;
           _kategori = kategori;
         });
@@ -264,7 +268,7 @@ class _KasirScreenState extends State<KasirScreen> {
     } catch (e) {
       final off = e is ApiException && e.offline;
       if (tampilkanErrorJikaKosong && _semuaProduk.isEmpty) {
-        setState(() => _pesanError = off
+        setStateIfMounted(() => _pesanError = off
             ? 'Belum ada data katalog tersimpan & server tidak terjangkau. Sambungkan internet lalu coba lagi.'
             : e.toString());
       }
@@ -277,7 +281,7 @@ class _KasirScreenState extends State<KasirScreen> {
     if (!Sesi.instance.wajibSesiKas) {
       // Toko ini belum mengaktifkan konfigurasi wajib-sesi-kas -- jangan
       // memblokir kasir dgn overlay yg memang tidak berlaku utknya.
-      if (mounted) setState(() => _kasTerbuka = true);
+      if (mounted) setStateIfMounted(() => _kasTerbuka = true);
       return;
     }
     try {
@@ -289,15 +293,18 @@ class _KasirScreenState extends State<KasirScreen> {
           'sesi-${Sesi.instance.tokoId}',
           (hasil['modalAwal'] as num?)?.toDouble() ?? 0,
         );
+      } else {
+        await CoreDb.instance.tutupSemuaSesiKasLokal();
       }
-      if (mounted) setState(() => _kasTerbuka = terbuka);
-      if (mounted)
-        setState(() => _kasSaatIni =
+      if (mounted) setStateIfMounted(() => _kasTerbuka = terbuka);
+      if (mounted) {
+        setStateIfMounted(() => _kasSaatIni =
             terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null);
+      }
     } catch (_) {
       // Offline saat cek status -- pakai sumber lokal (local-first, sama spt Electron).
       final lokal = await CoreDb.instance.sesiKasAktif();
-      if (mounted) setState(() => _kasTerbuka = lokal != null);
+      if (mounted) setStateIfMounted(() => _kasTerbuka = lokal != null);
     }
   }
 
@@ -309,9 +316,10 @@ class _KasirScreenState extends State<KasirScreen> {
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
-      if (mounted)
-        setState(
+      if (mounted) {
+        setStateIfMounted(
             () => _kasSaatIni = (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0);
+      }
     } catch (_) {
       // Offline -- biarkan angka lama, jangan ganti dgn 0 yg menyesatkan.
     }
@@ -327,15 +335,17 @@ class _KasirScreenState extends State<KasirScreen> {
       status = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Gagal memuat status kas: $e')));
+      }
       return;
     }
     if (status['terbuka'] != true) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Tidak ada sesi kas yang terbuka.')));
+      }
       return;
     }
     final kasSaatIni = (status['kasSaatIni'] as num?)?.toDouble() ?? 0;
@@ -357,7 +367,7 @@ class _KasirScreenState extends State<KasirScreen> {
         'keterangan': hasilTutup['keterangan'],
       });
       if (kodeLokal != null) await CoreDb.instance.tutupSesiKasLokal(kodeLokal);
-      if (mounted) setState(() => _kasTerbuka = false);
+      if (mounted) setStateIfMounted(() => _kasTerbuka = false);
       final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
       final stokMenipis =
           ((hasil['stokMenipis'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -407,9 +417,10 @@ class _KasirScreenState extends State<KasirScreen> {
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal menutup kas: $e')));
+      }
     }
   }
 
@@ -417,7 +428,7 @@ class _KasirScreenState extends State<KasirScreen> {
     final kode =
         'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
     await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal);
-    if (mounted) setState(() => _kasTerbuka = true);
+    if (mounted) setStateIfMounted(() => _kasTerbuka = true);
     try {
       await ApiClient.instance.aksi('sesi_kas_buka', {
         'id_toko': Sesi.instance.tokoId,
@@ -436,13 +447,13 @@ class _KasirScreenState extends State<KasirScreen> {
 
   Future<void> _perbaruiJumlahPending() async {
     final n = await CoreDb.instance.jumlahTransaksiPending();
-    if (mounted) setState(() => _jumlahPending = n);
+    if (mounted) setStateIfMounted(() => _jumlahPending = n);
     unawaited(_muatKasSaatIni());
   }
 
   Future<void> _sinkronkanSekarang() async {
     if (_sinkronBerjalan) return;
-    setState(() => _sinkronBerjalan = true);
+    setStateIfMounted(() => _sinkronBerjalan = true);
     try {
       final pending = await CoreDb.instance.transaksiPendingBelumSinkron();
       var berhasil = 0;
@@ -463,8 +474,9 @@ class _KasirScreenState extends State<KasirScreen> {
             berhasil++;
           } else {
             await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
-            if (e is ApiException && e.offline)
+            if (e is ApiException && e.offline) {
               break; // masih offline -- hentikan, coba lagi nanti
+            }
           }
         }
       }
@@ -477,7 +489,7 @@ class _KasirScreenState extends State<KasirScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _sinkronBerjalan = false);
+      if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);
     }
   }
 
@@ -494,7 +506,7 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   void _tambahKeKeranjang(Produk p) {
-    setState(() {
+    setStateIfMounted(() {
       final existing = _keranjang.where((i) => i.produk.id == p.id).toList();
       if (existing.isNotEmpty) {
         existing.first.jumlah++;
@@ -523,7 +535,7 @@ class _KasirScreenState extends State<KasirScreen> {
   void _pilihHasilPencarian(Produk p) {
     _tambahKeKeranjang(p);
     _kataKunciController.clear();
-    setState(() => _kataKunci = '');
+    setStateIfMounted(() => _kataKunci = '');
     _fokusKataKunci.requestFocus();
   }
 
@@ -545,7 +557,7 @@ class _KasirScreenState extends State<KasirScreen> {
             duration: const Duration(milliseconds: 700)),
       );
       _kataKunciController.clear();
-      setState(() => _kataKunci = '');
+      setStateIfMounted(() => _kataKunci = '');
     }
   }
 
@@ -557,7 +569,7 @@ class _KasirScreenState extends State<KasirScreen> {
       builder: (_) => KeranjangScreen(keranjang: _keranjang),
     ));
     await _perbaruiJumlahPending();
-    setState(() {});
+    setStateIfMounted(() {});
   }
 
   Future<void> _logout() async {
@@ -576,7 +588,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// jawab alur cetak struk terpisah, belum ada di Flutter).
   Future<void> _bukaLaci() async {
     if (_bukaLaciBerjalan) return;
-    setState(() => _bukaLaciBerjalan = true);
+    setStateIfMounted(() => _bukaLaciBerjalan = true);
     try {
       await PengaturanLaci.instance.muat();
       await bukaLaciKasir(
@@ -587,11 +599,12 @@ class _KasirScreenState extends State<KasirScreen> {
             .showSnackBar(const SnackBar(content: Text('Laci kasir dibuka.')));
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal membuka laci: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _bukaLaciBerjalan = false);
+      if (mounted) setStateIfMounted(() => _bukaLaciBerjalan = false);
     }
   }
 
@@ -663,19 +676,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// Android: tetap `Navigator.push` di jendela yg sama (multi-window
   /// desktop tak berlaku di sana, layar ponsel cuma satu).
   Future<void> _bukaLayarPelanggan() async {
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      try {
-        await bukaLayarPelangganJendelaKedua();
-      } catch (e) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Gagal membuka Layar Pelanggan: $e')));
-      }
-      return;
-    }
-    if (!mounted) return;
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const LayarPelangganScreen()));
+    await bukaLayarPelanggan(context);
   }
 
   Widget _tombolToolbar({
@@ -693,7 +694,7 @@ class _KasirScreenState extends State<KasirScreen> {
           icon: icon,
           label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.textPrimary,
+            foregroundColor: AppColors.textPrimaryOf(context),
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             textStyle:
@@ -829,8 +830,9 @@ class _KasirScreenState extends State<KasirScreen> {
   /// hanya relevan di Windows lewat `PanelKeranjang` yang tertanam).
   /// Desktop-only (fisik keyboard) -- diam di Android via gerbang platform.
   KeyEventResult _tanganiTombolKasir(FocusNode node, KeyEvent event) {
-    if (defaultTargetPlatform != TargetPlatform.windows)
+    if (defaultTargetPlatform != TargetPlatform.windows) {
       return KeyEventResult.ignored;
+    }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f1) {
       _bukaBantuan();
@@ -891,7 +893,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _kataKunciController.value = TextEditingValue(
             text: teksBaru,
             selection: TextSelection.collapsed(offset: teksBaru.length));
-        setState(() => _kataKunci = teksBaru);
+        setStateIfMounted(() => _kataKunci = teksBaru);
         return KeyEventResult.handled;
       }
     }
@@ -993,7 +995,7 @@ class _KasirScreenState extends State<KasirScreen> {
                         : _kontenKatalog(),
             if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
               _OverlayBukaKas(onBuka: (modal, catatan) {
-                setState(() => _modalAwalKas = modal);
+                setStateIfMounted(() => _modalAwalKas = modal);
                 _bukaKas(_modalAwalKas, catatan);
               }),
           ],
@@ -1026,32 +1028,23 @@ class _KasirScreenState extends State<KasirScreen> {
       onSelesai: _perbaruiJumlahPending,
     );
     if (_fokusKeranjang) {
-      // Di-TENGAH horizontal (bukan topLeft) -- padanan referensi Electron:
-      // saat katalog disembunyikan, panel Keranjang jadi satu-satunya fokus
-      // layar, jadi ditaruh di tengah spt kartu modal, bukan menempel kiri
-      // dgn area kosong besar di kanan.
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1220),
-          // Stack (bukan Column polos) -- dropdown hasil pencarian WAJIB jadi
-          // child TERAKHIR di sini supaya urutan cat (paint order) Stack
-          // menaruhnya DI ATAS panel Keranjang. Kalau dropdown itu dibungkus
-          // Stack terpisah hanya di sekitar kotak cari, overflow-nya akan
-          // tertutup panel Keranjang yang dicat belakangan (sibling Column
-          // berikutnya) -- gap-closure: persis itu bug yang dilaporkan (kotak
-          // cari menyerap ketikan tapi tak ada umpan balik sama sekali).
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(child: panel),
-              if (_kataKunci.isNotEmpty)
-                Positioned(
-                    top: 72,
-                    left: 16,
-                    right: 388,
-                    child: _dropdownHasilPencarian()),
-            ],
-          ),
+      // Stack (bukan Column polos) -- dropdown hasil pencarian WAJIB jadi
+      // child TERAKHIR di sini supaya urutan cat (paint order) Stack
+      // menaruhnya DI ATAS panel Keranjang. Mode Fokus Keranjang sengaja
+      // mengisi penuh lebar body supaya kolom item dan checkout tidak
+      // menyisakan ruang kosong di kiri/kanan pada layar lebar.
+      return SizedBox.expand(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: panel),
+            if (_kataKunci.isNotEmpty)
+              Positioned(
+                  top: 72,
+                  left: 16,
+                  right: 388,
+                  child: _dropdownHasilPencarian()),
+          ],
         ),
       );
     }
@@ -1089,7 +1082,7 @@ class _KasirScreenState extends State<KasirScreen> {
             borderRadius: BorderRadius.all(Radius.circular(10))),
         isDense: true,
       ),
-      onChanged: (v) => setState(() => _kataKunci = v),
+      onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
       onSubmitted: _submitPencarian,
     );
   }
@@ -1101,15 +1094,17 @@ class _KasirScreenState extends State<KasirScreen> {
   Widget _dropdownHasilPencarian() {
     final hasil = _hasilPencarianDropdown;
     return Material(
+      color: AppColors.cardBgOf(context),
       elevation: 8,
       borderRadius: BorderRadius.circular(10),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 340),
         child: hasil.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.all(16),
+            ? Padding(
+                padding: const EdgeInsets.all(16),
                 child: Text('Tidak ada produk cocok.',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                    style:
+                        TextStyle(color: AppColors.textSecondaryOf(context))),
               )
             : ListView.separated(
                 shrinkWrap: true,
@@ -1144,7 +1139,8 @@ class _KasirScreenState extends State<KasirScreen> {
                 child: ChoiceChip(
                   label: const Text('Semua'),
                   selected: _kategoriTerpilih == null,
-                  onSelected: (_) => setState(() => _kategoriTerpilih = null),
+                  onSelected: (_) =>
+                      setStateIfMounted(() => _kategoriTerpilih = null),
                 ),
               ),
               ..._kategori.map((k) => Padding(
@@ -1153,7 +1149,7 @@ class _KasirScreenState extends State<KasirScreen> {
                       label: Text(k.nama),
                       selected: _kategoriTerpilih == k.id,
                       onSelected: (_) =>
-                          setState(() => _kategoriTerpilih = k.id),
+                          setStateIfMounted(() => _kategoriTerpilih = k.id),
                     ),
                   )),
             ],
@@ -1234,10 +1230,10 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: AppColors.textSecondaryOf(context)),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -1319,10 +1315,10 @@ class _BarisHasilPencarian extends StatelessWidget {
                   ? null
                   : Text(nomor,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary)),
+                          color: AppColors.textSecondaryOf(context))),
             ),
             const SizedBox(width: 8),
             CircleAvatar(
@@ -1344,16 +1340,16 @@ class _BarisHasilPencarian extends StatelessWidget {
                   Text(produk.nama,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
-                          color: AppColors.textPrimary)),
+                          color: AppColors.textPrimaryOf(context))),
                   Text('${produk.kode}${habis ? ' · Habis' : ''}',
                       style: TextStyle(
                           fontSize: 11,
                           color: habis
                               ? AppColors.danger
-                              : AppColors.textSecondary)),
+                              : AppColors.textSecondaryOf(context))),
                 ],
               ),
             ),
@@ -1385,15 +1381,17 @@ class _KartuProduk extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
+        color: AppColors.cardBgOf(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
+        border: Border.all(color: AppColors.borderOf(context)),
+        boxShadow: AppColors.gelap(context)
+            ? const []
+            : [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2))
+              ],
       ),
       child: Opacity(
         opacity: habis ? 0.55 : 1,
@@ -1432,7 +1430,9 @@ class _KartuProduk extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: habis
                               ? AppColors.danger
-                              : (stokRendah ? AppColors.warning : Colors.white),
+                              : (stokRendah
+                                  ? AppColors.warning
+                                  : AppColors.cardBgOf(context)),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
@@ -1447,7 +1447,7 @@ class _KartuProduk extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                               color: habis || stokRendah
                                   ? Colors.white
-                                  : AppColors.textSecondary),
+                                  : AppColors.textSecondaryOf(context)),
                         ),
                       ),
                     ),
@@ -1463,10 +1463,10 @@ class _KartuProduk extends StatelessWidget {
                     Text(produk.nama,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
-                            color: AppColors.textPrimary)),
+                            color: AppColors.textPrimaryOf(context))),
                     const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1481,12 +1481,13 @@ class _KartuProduk extends StatelessWidget {
                           width: 26,
                           height: 26,
                           decoration: BoxDecoration(
-                              color:
-                                  habis ? AppColors.border : AppColors.primary,
+                              color: habis
+                                  ? AppColors.borderOf(context)
+                                  : AppColors.primary,
                               shape: BoxShape.circle),
                           child: Icon(Icons.add,
                               color: habis
-                                  ? AppColors.textSecondary
+                                  ? AppColors.textSecondaryOf(context)
                                   : Colors.white,
                               size: 16),
                         ),
@@ -1540,11 +1541,11 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
     final uangFisik = double.tryParse(
         _uangFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
     if (uangFisik == null) {
-      setState(() => _error = 'Uang fisik wajib diisi angka.');
+      setStateIfMounted(() => _error = 'Uang fisik wajib diisi angka.');
       return;
     }
     if (_keteranganController.text.trim().isEmpty) {
-      setState(() => _error = 'Catatan penutupan wajib diisi.');
+      setStateIfMounted(() => _error = 'Catatan penutupan wajib diisi.');
       return;
     }
     Navigator.of(context).pop({
@@ -1569,22 +1570,23 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: AppColors.pageBg, borderRadius: BorderRadius.circular(10)),
+            color: AppColors.pageBgOf(context),
+            borderRadius: BorderRadius.circular(10)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textSecondaryOf(context),
                     letterSpacing: 0.3)),
             const SizedBox(height: 4),
             Text(nilai,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary)),
+                    color: AppColors.textPrimaryOf(context))),
           ],
         ),
       ),

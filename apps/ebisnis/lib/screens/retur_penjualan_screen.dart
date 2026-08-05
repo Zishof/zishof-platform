@@ -5,6 +5,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -111,7 +112,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   Future<void> _cariTransaksi(String kataKunci) async {
     final v = kataKunci.trim();
     if (v.isEmpty) return;
-    setState(() {
+    setStateIfMounted(() {
       _mencari = true;
       _errorPencarian = null;
     });
@@ -124,16 +125,16 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
         final hasilNota = await ApiClient.instance.aksi('laporan_order_list', {'page': 1, 'pageSize': 100});
         data = ((hasilNota['data'] as List?) ?? []).cast<Map<String, dynamic>>().where((r) => '${r['nomorNota']}'.toLowerCase().contains(v.toLowerCase())).toList();
       }
-      setState(() => _hasilPencarian = data);
+      setStateIfMounted(() => _hasilPencarian = data);
     } catch (e) {
-      setState(() => _errorPencarian = e.toString());
+      setStateIfMounted(() => _errorPencarian = e.toString());
     } finally {
-      if (mounted) setState(() => _mencari = false);
+      if (mounted) setStateIfMounted(() => _mencari = false);
     }
   }
 
   Future<void> _pilihTransaksi(Map<String, dynamic> row) async {
-    setState(() {
+    setStateIfMounted(() {
       _transaksiTerpilih = row;
       _memuatDetail = true;
       _baris = [];
@@ -141,17 +142,17 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
     try {
       final hasil = await ApiClient.instance.aksi('detail_transaksi', {'id': row['idTransaksi']});
       final items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
-      setState(() => _baris = items.map((i) => _BarisRetur(i)).toList());
+      setStateIfMounted(() => _baris = items.map((i) => _BarisRetur(i)).toList());
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      setState(() => _transaksiTerpilih = null);
+      setStateIfMounted(() => _transaksiTerpilih = null);
     } finally {
-      if (mounted) setState(() => _memuatDetail = false);
+      if (mounted) setStateIfMounted(() => _memuatDetail = false);
     }
   }
 
   void _batalkanPemilihan() {
-    setState(() {
+    setStateIfMounted(() {
       _transaksiTerpilih = null;
       _baris = [];
     });
@@ -162,17 +163,17 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   Future<void> _simpanRetur() async {
     final dipilih = _baris.where((b) => b.disertakan).toList();
     if (dipilih.isEmpty) {
-      setState(() => _errorSimpan = 'Pilih minimal satu barang untuk diretur.');
+      setStateIfMounted(() => _errorSimpan = 'Pilih minimal satu barang untuk diretur.');
       return;
     }
     for (final b in dipilih) {
       final qtyAsli = (b.item['qty'] as num?)?.toDouble() ?? 0;
       if (b.qty <= 0 || b.qty > qtyAsli) {
-        setState(() => _errorSimpan = 'Qty Retur "${b.item['nama']}" harus antara 0 dan ${qtyAsli.toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2)} (jumlah asli dibeli).');
+        setStateIfMounted(() => _errorSimpan = 'Qty Retur "${b.item['nama']}" harus antara 0 dan ${qtyAsli.toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2)} (jumlah asli dibeli).');
         return;
       }
     }
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _errorSimpan = null;
     });
@@ -196,7 +197,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retur berhasil disimpan.')));
-        setState(() {
+        setStateIfMounted(() {
           _transaksiTerpilih = null;
           _baris = [];
           _hasilPencarian = [];
@@ -204,9 +205,9 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
         });
       }
     } catch (e) {
-      setState(() => _errorSimpan = e.toString());
+      setStateIfMounted(() => _errorSimpan = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -337,7 +338,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
         Wrap(
           spacing: 8,
           children: _daftarMetodePengembalian
-              .map((m) => ChoiceChip(label: Text(m), selected: _metodePengembalian == m, onSelected: (_) => setState(() => _metodePengembalian = m)))
+              .map((m) => ChoiceChip(label: Text(m), selected: _metodePengembalian == m, onSelected: (_) => setStateIfMounted(() => _metodePengembalian = m)))
               .toList(),
         ),
         const SizedBox(height: 16),
@@ -391,7 +392,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
@@ -401,14 +402,14 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
         'page': _halaman,
         'page_size': _pageSize,
       });
-      setState(() {
+      setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

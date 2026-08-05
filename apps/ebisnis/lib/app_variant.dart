@@ -7,6 +7,7 @@ class AppVariant {
   );
 
   static const isAlBahjah = kode == 'albahjah';
+  static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   static const namaAplikasi = isAlBahjah ? 'Al-Bahjah POS' : 'eBisnis';
   static const namaSidebar = isAlBahjah ? 'Al-Bahjah POS' : 'eBisnis POS';

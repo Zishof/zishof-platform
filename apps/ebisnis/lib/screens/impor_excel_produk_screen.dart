@@ -6,6 +6,7 @@ import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/safe_state.dart';
 
 /// Layar Impor Excel Produk (spec §7.5) -- format "Accurate" ("Daftar Barang
 /// dan Jasa"). BEDA dari deskripsi Electron: parsing 100% dilakukan SERVER
@@ -125,7 +126,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   }
 
   Future<void> _pilihBerkas() async {
-    setState(() {
+    setStateIfMounted(() {
       _error = null;
       _memproses = true;
     });
@@ -137,7 +138,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       if (hasilPilih == null ||
           hasilPilih.files.isEmpty ||
           hasilPilih.files.first.bytes == null) {
-        setState(() => _memproses = false);
+        setStateIfMounted(() => _memproses = false);
         return;
       }
       final bytes = hasilPilih.files.first.bytes!;
@@ -145,7 +146,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
           {'file_base64': base64Encode(bytes), 'format': 'accurate'});
       final barisJson =
           ((hasil['baris'] as List?) ?? []).cast<Map<String, dynamic>>();
-      setState(() {
+      setStateIfMounted(() {
         _kategoriDikenal = ((hasil['daftarKategori'] as List?) ?? [])
             .map((e) => '${(e as Map)['nama']}')
             .toList();
@@ -162,19 +163,20 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
         _tahap = _Tahap.tinjau;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 
   Future<void> _komitImpor() async {
     final terpilih = _baris.where((b) => b.disertakan).toList();
     if (terpilih.isEmpty) {
-      setState(() => _error = 'Tidak ada baris yang disertakan utk diimpor.');
+      setStateIfMounted(
+          () => _error = 'Tidak ada baris yang disertakan utk diimpor.');
       return;
     }
-    setState(() {
+    setStateIfMounted(() {
       _memproses = true;
       _error = null;
     });
@@ -205,8 +207,9 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
           batch[i].pesanKomit = '${r['pesan'] ?? ''}';
           batch[i].teknisKomit = r['teknis'] as String?;
           batch[i].solusiKomit = r['solusi'] as String?;
-          if (r['status'] == 'berhasil' && r['id'] != null)
+          if (r['status'] == 'berhasil' && r['id'] != null) {
             idBerhasilSemuaBatch.add((r['id'] as num).toInt());
+          }
         }
       }
 
@@ -217,11 +220,11 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
         _dinonaktifkan = (hasilNon['dinonaktifkan'] as num?)?.toInt();
       }
 
-      setState(() => _tahap = _Tahap.laporan);
+      setStateIfMounted(() => _tahap = _Tahap.laporan);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 
@@ -229,7 +232,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     for (final b in _baris) {
       b.dispose();
     }
-    setState(() {
+    setStateIfMounted(() {
       _baris = [];
       _tahap = _Tahap.pilihBerkas;
       _error = null;
@@ -240,11 +243,25 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tombolKembali = HeaderActionButton(
+      icon: Icons.arrow_back,
+      label: 'Kembali',
+      tooltip: 'Kembali ke Produk',
+      onPressed: () => Navigator.of(context).maybePop(),
+    );
     return AppShell(
       menuAktif: MenuEBisnis.produk,
       judul: 'Impor Excel Produk',
       subjudul: 'Format Accurate ("Daftar Barang dan Jasa")',
       scrollable: false,
+      aksiHeader: tombolKembali,
+      actionsAppBar: [
+        IconButton(
+          tooltip: 'Kembali ke Produk',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ],
       body: switch (_tahap) {
         _Tahap.pilihBerkas => _bodyPilihBerkas(),
         _Tahap.tinjau => _bodyTinjau(),
@@ -358,8 +375,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                   title: const Text(
                       'Nonaktifkan produk yang tidak ditemukan di file ini'),
                   value: _nonaktifkanTakDiimpor,
-                  onChanged: (v) =>
-                      setState(() => _nonaktifkanTakDiimpor = v ?? false),
+                  onChanged: (v) => setStateIfMounted(
+                      () => _nonaktifkanTakDiimpor = v ?? false),
                 ),
                 Row(
                   children: [
@@ -405,7 +422,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             children: [
               Checkbox(
                   value: b.disertakan,
-                  onChanged: (v) => setState(() => b.disertakan = v ?? true)),
+                  onChanged: (v) =>
+                      setStateIfMounted(() => b.disertakan = v ?? true)),
               Expanded(
                   child: Text('Baris ${b.no}',
                       style: const TextStyle(
@@ -501,45 +519,53 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          // mainAxisExtent: 96,
-          children: [
-            AppKpiCard(
-                icon: Icons.summarize_outlined,
-                warna: AppColors.primary,
-                nilai: '$_total',
-                label: 'Total Baris'),
-            AppKpiCard(
-                icon: Icons.add_circle_outline,
-                warna: AppColors.success,
-                nilai: '$_dibuat',
-                label: 'Dibuat'),
-            AppKpiCard(
-                icon: Icons.edit_outlined,
-                warna: AppColors.info,
-                nilai: '$_diperbarui',
-                label: 'Diperbarui'),
-            AppKpiCard(
-                icon: Icons.skip_next_outlined,
-                warna: AppColors.textSecondary,
-                nilai: '$_dilewati',
-                label: 'Dilewati'),
-            AppKpiCard(
-                icon: Icons.inventory_2_outlined,
-                warna: AppColors.teal,
-                nilai: '$_stokDiopname',
-                label: 'Stok Diopname'),
-            AppKpiCard(
-                icon: Icons.error_outline,
-                warna: AppColors.danger,
-                nilai: '${gagal.length}',
-                label: 'Gagal'),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const kolom = 2;
+            const jarak = 8.0;
+            final lebarKolom =
+                (constraints.maxWidth - (jarak * (kolom - 1))) / kolom;
+            return GridView.count(
+              crossAxisCount: kolom,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: jarak,
+              crossAxisSpacing: jarak,
+              childAspectRatio: lebarKolom / 96,
+              children: [
+                AppKpiCard(
+                    icon: Icons.summarize_outlined,
+                    warna: AppColors.primary,
+                    nilai: '$_total',
+                    label: 'Total Baris'),
+                AppKpiCard(
+                    icon: Icons.add_circle_outline,
+                    warna: AppColors.success,
+                    nilai: '$_dibuat',
+                    label: 'Dibuat'),
+                AppKpiCard(
+                    icon: Icons.edit_outlined,
+                    warna: AppColors.info,
+                    nilai: '$_diperbarui',
+                    label: 'Diperbarui'),
+                AppKpiCard(
+                    icon: Icons.skip_next_outlined,
+                    warna: AppColors.textSecondary,
+                    nilai: '$_dilewati',
+                    label: 'Dilewati'),
+                AppKpiCard(
+                    icon: Icons.inventory_2_outlined,
+                    warna: AppColors.teal,
+                    nilai: '$_stokDiopname',
+                    label: 'Stok Diopname'),
+                AppKpiCard(
+                    icon: Icons.error_outline,
+                    warna: AppColors.danger,
+                    nilai: '${gagal.length}',
+                    label: 'Gagal'),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         Text(

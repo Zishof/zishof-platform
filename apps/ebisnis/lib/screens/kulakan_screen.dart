@@ -6,6 +6,7 @@ import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -61,7 +62,8 @@ class _KulakanScreenState extends State<KulakanScreen> {
   }
 
   Future<void> _muatRiwayat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuatRiwayat = true;
       _errorRiwayat = null;
     });
@@ -71,14 +73,16 @@ class _KulakanScreenState extends State<KulakanScreen> {
         'page_size': _pageSize,
         if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
       });
-      setState(() {
+      if (!mounted) return;
+      setStateIfMounted(() {
         _riwayat = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setState(() => _errorRiwayat = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _errorRiwayat = e.toString());
     } finally {
-      if (mounted) setState(() => _memuatRiwayat = false);
+      if (mounted) setStateIfMounted(() => _memuatRiwayat = false);
     }
   }
 
@@ -90,14 +94,16 @@ class _KulakanScreenState extends State<KulakanScreen> {
   Future<void> _cariProduk(String barcode) async {
     final kode = barcode.trim();
     if (kode.isEmpty) return;
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _mencari = true;
       _errorForm = null;
       _produkDitemukan = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
-      setState(() {
+      if (!mounted) return;
+      setStateIfMounted(() {
         _produkDitemukan = hasil;
         _qtyController.clear();
         _hargaController.clear();
@@ -106,14 +112,16 @@ class _KulakanScreenState extends State<KulakanScreen> {
         _keteranganController.clear();
       });
     } catch (e) {
-      setState(() => _errorForm = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _errorForm = e.toString());
     } finally {
-      if (mounted) setState(() => _mencari = false);
+      if (mounted) setStateIfMounted(() => _mencari = false);
     }
   }
 
   Future<void> _scanKamera() async {
     final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    if (!mounted) return;
     if (kode != null) {
       _barcodeController.text = kode;
       await _cariProduk(kode);
@@ -126,14 +134,17 @@ class _KulakanScreenState extends State<KulakanScreen> {
     final qty = double.tryParse(_qtyController.text.replaceAll(',', '.'));
     final harga = double.tryParse(_hargaController.text.replaceAll(',', '.'));
     if (qty == null || qty <= 0) {
-      setState(() => _errorForm = 'Jumlah masuk harus lebih dari 0.');
+      if (!mounted) return;
+      setStateIfMounted(() => _errorForm = 'Jumlah masuk harus lebih dari 0.');
       return;
     }
     if (harga == null || harga <= 0) {
-      setState(() => _errorForm = 'Harga beli satuan harus lebih dari 0.');
+      if (!mounted) return;
+      setStateIfMounted(() => _errorForm = 'Harga beli satuan harus lebih dari 0.');
       return;
     }
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _menyimpan = true;
       _errorForm = null;
     });
@@ -147,17 +158,102 @@ class _KulakanScreenState extends State<KulakanScreen> {
         'keterangan': _keteranganController.text.trim(),
       });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kulakan tersimpan.')));
-      setState(() {
+      if (!mounted) return;
+      setStateIfMounted(() {
         _produkDitemukan = null;
         _barcodeController.clear();
       });
       _halaman = 1;
       await _muatRiwayat();
     } catch (e) {
-      setState(() => _errorForm = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _errorForm = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
+  }
+
+  Future<void> _lihatDetailKulakan(Map<String, dynamic> k) async {
+    final supplier =
+        (k['namaSupplier'] as String?)?.isNotEmpty == true ? '${k['namaSupplier']}' : '-';
+    final faktur =
+        (k['nomorFaktur'] as String?)?.isNotEmpty == true ? '${k['nomorFaktur']}' : '-';
+    final qty = (k['qty'] as num?) ?? 0;
+    final total = (k['totalHarga'] as num?) ?? 0;
+    final hargaSatuan = qty == 0 ? 0 : total / qty;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AppDetailDialogShell(
+        title: 'Detail Kulakan',
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              AppDetailChip(
+                icon: Icons.inventory_2_outlined,
+                label: '${k['namaProduk'] ?? '-'}',
+                color: AppColors.primary,
+              ),
+              AppDetailChip(
+                icon: Icons.schedule_outlined,
+                label: 'Waktu: ${k['waktuPengadaan'] ?? '-'}',
+              ),
+              AppDetailChip(
+                icon: Icons.local_shipping_outlined,
+                label: 'Supplier: $supplier',
+              ),
+              AppDetailChip(
+                icon: Icons.receipt_long_outlined,
+                label: 'Faktur: $faktur',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppSectionCard(
+            judul: 'Ringkasan Pengadaan',
+            child: Column(
+              children: [
+                _barisDetailKulakan('Jumlah Masuk', '${_formatAngka.format(qty)}x'),
+                _barisDetailKulakan(
+                    'Harga Beli Satuan', _formatRupiah.format(hargaSatuan)),
+                const Divider(height: 20),
+                _barisDetailKulakan(
+                  'Total',
+                  _formatRupiah.format(total),
+                  tebal: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _barisDetailKulakan(String label, String nilai, {bool tebal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: AppColors.textSecondaryOf(context))),
+          Text(
+            nilai,
+            style: TextStyle(
+              fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
+              color: tebal ? AppColors.primary : AppColors.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
@@ -180,7 +276,11 @@ class _KulakanScreenState extends State<KulakanScreen> {
                   Expanded(
                     child: TextField(
                       controller: _barcodeController,
-                      decoration: const InputDecoration(labelText: 'Kode / Barcode Produk', border: OutlineInputBorder(), prefixIcon: Icon(Icons.search)),
+                      decoration: AppFormStyle.fieldDecoration(
+                        context,
+                        labelText: 'Kode / Barcode Produk',
+                        prefixIcon: const Icon(Icons.search),
+                      ),
                       onSubmitted: _cariProduk,
                     ),
                   ),
@@ -198,23 +298,42 @@ class _KulakanScreenState extends State<KulakanScreen> {
                   child: Text(_errorForm!, style: TextStyle(color: Colors.red.shade700)),
                 ),
               if (_produkDitemukan != null) ...[
-                Card(
-                  color: const Color(0xFFFFF3E0),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                AppFormSection(
+                  judul: 'Tambah Kulakan',
+                  deskripsi:
+                      'Produk ditemukan. Lengkapi jumlah masuk, harga beli, dan catatan supplier.',
+                  aksiJudul: StatusPill(
+                    label:
+                        'Stok ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
+                    warna: AppColors.warning,
+                  ),
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Text(_produkDitemukan!['nama'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text('Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok Sistem: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}'),
-                        const SizedBox(height: 12),
-                        Row(
+                        AppDetailChip(
+                          icon: Icons.inventory_2_outlined,
+                          label: '${_produkDitemukan!['nama'] ?? ''}',
+                          color: AppColors.primary,
+                        ),
+                        AppDetailChip(
+                          icon: Icons.qr_code_2_outlined,
+                          label: 'Kode: ${_produkDitemukan!['kode'] ?? ''}',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
                           children: [
                             Expanded(
                               child: TextField(
                                 controller: _qtyController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: const InputDecoration(labelText: 'Jumlah Masuk *', border: OutlineInputBorder()),
+                                decoration: AppFormStyle.fieldDecoration(
+                                  context,
+                                  labelText: 'Jumlah Masuk *',
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -222,28 +341,62 @@ class _KulakanScreenState extends State<KulakanScreen> {
                               child: TextField(
                                 controller: _hargaController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: const InputDecoration(labelText: 'Harga Beli Satuan *', border: OutlineInputBorder()),
+                                decoration: AppFormStyle.fieldDecoration(
+                                  context,
+                                  labelText: 'Harga Beli Satuan *',
+                                ),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        TextField(controller: _fakturController, decoration: const InputDecoration(labelText: 'Nomor Faktur', border: OutlineInputBorder())),
-                        const SizedBox(height: 12),
-                        TextField(controller: _supplierController, decoration: const InputDecoration(labelText: 'Nama Supplier', border: OutlineInputBorder())),
-                        const SizedBox(height: 12),
-                        TextField(controller: _keteranganController, decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder())),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _menyimpan ? null : _simpanKulakan,
-                            child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan Kulakan'),
+                        TextField(
+                          controller: _fakturController,
+                          decoration: AppFormStyle.fieldDecoration(
+                            context,
+                            labelText: 'Nomor Faktur',
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _supplierController,
+                          decoration: AppFormStyle.fieldDecoration(
+                            context,
+                            labelText: 'Nama Supplier',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _keteranganController,
+                          decoration: AppFormStyle.fieldDecoration(
+                            context,
+                            labelText: 'Keterangan',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _menyimpan ? null : _simpanKulakan,
+                            icon: _menyimpan
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.save_outlined, size: 18),
+                            label: const Text('Simpan Kulakan'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 18, vertical: 12),
+                            ),
+                          ),
+                        ),
+                  ],
                 ),
                 const SizedBox(height: 16),
               ],
@@ -276,7 +429,13 @@ class _KulakanScreenState extends State<KulakanScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
-              decoration: const InputDecoration(hintText: 'Cari nama produk/faktur/supplier...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
+              decoration: AppFormStyle.fieldDecoration(
+                context,
+                labelText: 'Cari Riwayat',
+                hintText: 'Cari nama produk/faktur/supplier...',
+                prefixIcon: const Icon(Icons.search),
+                isDense: true,
+              ),
               onSubmitted: (v) {
                 _kataKunciRiwayat = v;
                 _halaman = 1;
@@ -288,38 +447,39 @@ class _KulakanScreenState extends State<KulakanScreen> {
               const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
             else if (_errorRiwayat != null)
               Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Text(_errorRiwayat!)))
-            else if (_riwayat.isEmpty)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 30), child: Center(child: Text('Belum ada riwayat kulakan.')))
-            else ...[
-              ..._riwayat.map((k) => Card(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    child: ListTile(
-                      dense: true,
-                      title: Text('${k['namaProduk']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                      subtitle: Text('${k['waktuPengadaan']} · ${(k['namaSupplier'] as String?)?.isNotEmpty == true ? k['namaSupplier'] : "-"}${(k['nomorFaktur'] as String?)?.isNotEmpty == true ? " · ${k['nomorFaktur']}" : ""}'),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('${_formatAngka.format(k['qty'] ?? 0)}x', style: const TextStyle(fontSize: 12)),
-                          Text(_formatRupiah.format(k['totalHarga'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  )),
-              if (_total > _pageSize)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(icon: const Icon(Icons.chevron_left), onPressed: _halaman > 1 ? () => _pindah(_halaman - 1) : null),
-                      Text('Halaman $_halaman / $_totalHalaman'),
-                      IconButton(icon: const Icon(Icons.chevron_right), onPressed: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null),
-                    ],
-                  ),
+            else
+              AppDataTable(
+                minWidth: 900,
+                emptyText: 'Belum ada riwayat kulakan.',
+                columns: const [
+                  AppTableColumn('Produk', flex: 3),
+                  AppTableColumn('Waktu', flex: 2),
+                  AppTableColumn('Supplier', flex: 2),
+                  AppTableColumn('Faktur', flex: 2),
+                  AppTableColumn('Qty', flex: 1, align: TextAlign.right),
+                  AppTableColumn('Total', flex: 2, align: TextAlign.right),
+                ],
+                rows: _riwayat.map((k) {
+                  final supplier = (k['namaSupplier'] as String?)?.isNotEmpty == true ? '${k['namaSupplier']}' : '-';
+                  final faktur = (k['nomorFaktur'] as String?)?.isNotEmpty == true ? '${k['nomorFaktur']}' : '-';
+                  return AppTableRowData(cells: [
+                    AppTableCell.text('${k['namaProduk']}', flex: 3, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    AppTableCell.text('${k['waktuPengadaan']}', flex: 2),
+                    AppTableCell.text(supplier, flex: 2),
+                    AppTableCell.text(faktur, flex: 2),
+                    AppTableCell.text('${_formatAngka.format(k['qty'] ?? 0)}x', flex: 1, align: TextAlign.right),
+                    AppTableCell.text(_formatRupiah.format(k['totalHarga'] ?? 0), flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  ], onTap: () => _lihatDetailKulakan(k));
+                }).toList(),
+                pagination: AppTablePagination(
+                  halaman: _halaman,
+                  totalHalaman: _totalHalaman,
+                  totalData: _total,
+                  labelData: 'kulakan',
+                  onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                  onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
                 ),
-            ],
+              ),
           ],
         ),
       ),

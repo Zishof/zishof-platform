@@ -21,6 +21,12 @@ class AppColors {
   static const textPrimary = Color(0xFF0F172A);
   static const textSecondary = Color(0xFF64748B);
 
+  static const darkPageBg = Color(0xFF0B1220);
+  static const darkCardBg = Color(0xFF111827);
+  static const darkBorder = Color(0xFF243044);
+  static const darkTextPrimary = Color(0xFFE5E7EB);
+  static const darkTextSecondary = Color(0xFF94A3B8);
+
   static const primary = Color(0xFF2563EB);
   static const success = Color(0xFF16A34A);
   static const danger = Color(0xFFDC2626);
@@ -31,4 +37,22 @@ class AppColors {
   /// Latar lembut proporsional dgn warna solid di atas -- dipakai lingkaran
   /// ikon kartu KPI & badge status (mis. `danger.withValues -> latarLembut(danger)`).
   static Color latarLembut(Color c) => c.withValues(alpha: 0.12);
+
+  static bool gelap(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  static Color pageBgOf(BuildContext context) =>
+      gelap(context) ? darkPageBg : pageBg;
+
+  static Color cardBgOf(BuildContext context) =>
+      gelap(context) ? darkCardBg : cardBg;
+
+  static Color borderOf(BuildContext context) =>
+      gelap(context) ? darkBorder : border;
+
+  static Color textPrimaryOf(BuildContext context) =>
+      gelap(context) ? darkTextPrimary : textPrimary;
+
+  static Color textSecondaryOf(BuildContext context) =>
+      gelap(context) ? darkTextSecondary : textSecondary;
 }

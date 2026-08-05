@@ -12,8 +12,11 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../services/pengaturan_pembayaran.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
+import '../widgets/safe_state.dart';
+import '../widgets/app_components.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -93,6 +96,7 @@ class PanelKeranjang extends StatefulWidget {
 }
 
 class _PanelKeranjangState extends State<PanelKeranjang> {
+  static const _pageSizeKeranjang = 12;
   CaraBayar? _caraBayarTerpilih;
   bool _memproses = false;
   Anggota? _memberTerpilih;
@@ -101,13 +105,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   final _uangDiterimaController = TextEditingController(text: '0');
   final _fokusUangDiterima = FocusNode();
   bool _uangDiterimaManual = false;
+  int _halamanKeranjang = 1;
 
   @override
   void initState() {
     super.initState();
     if (Sesi.instance.caraBayar.isNotEmpty) {
-      _caraBayarTerpilih = Sesi.instance.caraBayar.first;
+      _caraBayarTerpilih =
+          PengaturanPembayaran.instance.pilihDefault(Sesi.instance.caraBayar);
     }
+    _muatPreferensiPembayaran();
     _memberTerpilih = widget.memberAwal;
     _sinkronkanUangDiterima();
     // Tanpa ini, ketikan pertama kasir MENYAMBUNG ke nilai auto-sync yang
@@ -119,6 +126,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _uangDiterimaController.selection = TextSelection(
             baseOffset: 0, extentOffset: _uangDiterimaController.text.length);
       }
+    });
+  }
+
+  Future<void> _muatPreferensiPembayaran() async {
+    await PengaturanPembayaran.instance.muat();
+    if (!mounted || Sesi.instance.caraBayar.isEmpty) return;
+    setStateIfMounted(() {
+      _caraBayarTerpilih =
+          PengaturanPembayaran.instance.pilihDefault(Sesi.instance.caraBayar);
     });
   }
 
@@ -177,12 +193,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   void _sinkronkanUangDiterima() {
     if (_uangDiterimaManual) return;
     final teks = _total > 0 ? _total.toStringAsFixed(0) : '0';
-    if (_uangDiterimaController.text != teks)
+    if (_uangDiterimaController.text != teks) {
       _uangDiterimaController.text = teks;
+    }
   }
 
   void _ubahJumlah(ItemKeranjang item, int delta) {
-    setState(() {
+    setStateIfMounted(() {
       item.jumlah += delta;
       if (item.jumlah <= 0) {
         widget.keranjang.remove(item);
@@ -216,7 +233,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       });
       final items = (hasil['items'] as List?) ?? [];
       if (!mounted) return;
-      setState(() {
+      setStateIfMounted(() {
         for (final it in items) {
           final m = it as Map<String, dynamic>;
           final produkId = m['id'] as int;
@@ -243,7 +260,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       builder: (_) => const _DialogPilihMember(),
     );
     if (terpilih != null) {
-      setState(() {
+      setStateIfMounted(() {
         _memberTerpilih = terpilih;
         _saldoMember = null;
       });
@@ -252,8 +269,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       try {
         final hasil = await ApiClient.instance
             .aksi('saldo_member', {'id_member': terpilih.id});
-        if (mounted)
-          setState(() => _saldoMember = (hasil['data'] as num?)?.toDouble());
+        if (mounted) {
+          setStateIfMounted(
+              () => _saldoMember = (hasil['data'] as num?)?.toDouble());
+        }
       } catch (_) {
         // Saldo tak terambil (mis. offline) -- bukan alasan membatalkan pemilihan member.
       }
@@ -261,7 +280,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   void _hapusMember() {
-    setState(() {
+    setStateIfMounted(() {
       _memberTerpilih = null;
       _saldoMember = null;
     });
@@ -287,9 +306,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       }
       return ok;
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
       return false;
     }
   }
@@ -348,7 +368,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
-    setState(() => _memproses = true);
+    setStateIfMounted(() => _memproses = true);
     try {
       final kodeUnik = _buatKodeUnik();
       final payload = _buatPayload(kodeUnik, DateTime.now());
@@ -357,7 +377,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       LayarPelangganBroadcaster.instance
           .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
       if (!mounted) return;
-      setState(() {
+      setStateIfMounted(() {
         _memberTerpilih = null;
         _saldoMember = null;
         _uangDiterimaManual = false;
@@ -368,11 +388,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       widget.onSelesai?.call();
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 
@@ -384,7 +405,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return;
     }
 
-    setState(() => _memproses = true);
+    setStateIfMounted(() => _memproses = true);
     try {
       if (!await _verifikasiPinJikaPerlu()) return;
 
@@ -408,9 +429,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         } else {
           // Server MENOLAK (bukan sekadar offline) -- batalkan, jangan lanjut ke struk.
           await CoreDb.instance.hapusTransaksiPending(kodeUnik);
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context)
                 .showSnackBar(SnackBar(content: Text(e.toString())));
+          }
           return;
         }
       }
@@ -448,7 +470,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ),
       ));
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 
@@ -475,15 +497,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ),
       ),
     );
-    if (dipilih != null) setState(() => _caraBayarTerpilih = dipilih);
+    if (dipilih != null) setStateIfMounted(() => _caraBayarTerpilih = dipilih);
   }
 
   /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
   /// pos-renderer.js `PETA_TOMBOL_KASIR` (lihat kasir_screen.dart utk
   /// F7/F8/F9). Desktop-only; diam di Android.
   KeyEventResult _tanganiTombolKeranjang(FocusNode node, KeyEvent event) {
-    if (defaultTargetPlatform != TargetPlatform.windows)
+    if (defaultTargetPlatform != TargetPlatform.windows) {
       return KeyEventResult.ignored;
+    }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f2) {
       if (!_memproses) _bayar();
@@ -513,7 +536,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       autofocus: true,
       onKeyEvent: _tanganiTombolKeranjang,
       child: ColoredBox(
-        color: AppColors.pageBg,
+        color: AppColors.pageBgOf(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -522,12 +545,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.shopping_cart,
-                        size: 18, color: AppColors.textPrimary),
+                    Icon(Icons.shopping_cart,
+                        size: 18, color: AppColors.textPrimaryOf(context)),
                     const SizedBox(width: 8),
-                    const Text('Keranjang',
+                    Text('Keranjang',
                         style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                            color: AppColors.textPrimaryOf(context),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
                     const Spacer(),
                     if (widget.aksiHeader != null) widget.aksiHeader!,
                   ],
@@ -645,7 +670,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   Widget _labelBagian(String teks) {
-    const warna = AppColors.sidebarBg;
+    final warna = Theme.of(context).colorScheme.primary;
     return Row(
       children: [
         Container(
@@ -675,16 +700,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       padding: const EdgeInsets.fromLTRB(12, 0, 0, 12),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.cardBg,
+          color: AppColors.cardBgOf(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: Border.all(color: AppColors.borderOf(context)),
+          boxShadow: AppColors.gelap(context)
+              ? const []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -701,17 +728,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.borderOf(context)),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.shopping_cart,
-                      size: 18, color: AppColors.textPrimary),
-                  SizedBox(width: 8),
+                      size: 18, color: AppColors.textPrimaryOf(context)),
+                  const SizedBox(width: 8),
                   Text('Keranjang',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          color: AppColors.textPrimaryOf(context),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -729,78 +758,110 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.shopping_cart_outlined,
-                size: 40, color: AppColors.border),
+                size: 40, color: AppColors.borderOf(context)),
             const SizedBox(height: 8),
-            const Text('Belum ada produk dipilih.',
-                style: TextStyle(color: AppColors.textSecondary)),
+            Text('Belum ada produk dipilih.',
+                style: TextStyle(color: AppColors.textSecondaryOf(context))),
           ],
         ),
       );
     }
-    final daftar = ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      itemCount: widget.keranjang.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
-      itemBuilder: (context, i) {
-        final item = widget.keranjang[i];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.produk.nama,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13.5)),
-                    Text(_formatRupiah.format(item.produk.hargaJual),
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12)),
-                    if (item.diskon > 0)
-                      Text('Diskon ${_formatRupiah.format(item.diskon)}',
+    final totalHalaman = (widget.keranjang.length / _pageSizeKeranjang)
+        .ceil()
+        .clamp(1, 999999)
+        .toInt();
+    final halaman = _halamanKeranjang.clamp(1, totalHalaman).toInt();
+    final awal = (halaman - 1) * _pageSizeKeranjang;
+    final itemHalamanIni =
+        widget.keranjang.skip(awal).take(_pageSizeKeranjang).toList();
+    final tabel = AppDataTable(
+      minWidth: 620,
+      columns: const [
+        AppTableColumn('Item', flex: 4),
+        AppTableColumn('Harga', flex: 2, align: TextAlign.right),
+        AppTableColumn('Qty', width: 118, align: TextAlign.center),
+        AppTableColumn('Subtotal', flex: 2, align: TextAlign.right),
+      ],
+      rows: itemHalamanIni
+          .map((item) => AppTableRowData(cells: [
+                AppTableCell(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.produk.nama,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: AppColors.warning, fontSize: 11.5)),
-                  ],
+                              fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      if (item.diskon > 0)
+                        Text('Diskon ${_formatRupiah.format(item.diskon)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: AppColors.warning, fontSize: 11.5)),
+                    ],
+                  ),
                 ),
-              ),
-              _tombolBulat(Icons.remove, () => _ubahJumlah(item, -1)),
-              SizedBox(
-                width: 32,
-                child: Text('${item.jumlah}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
-              SizedBox(
-                width: 116,
-                child: Text(
-                  _formatRupiah.format(item.subtotalSetelahDiskon),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
+                AppTableCell.text(_formatRupiah.format(item.produk.hargaJual),
+                    flex: 2, align: TextAlign.right),
+                AppTableCell(
+                  width: 118,
+                  align: TextAlign.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _tombolBulat(Icons.remove, () => _ubahJumlah(item, -1)),
+                      SizedBox(
+                        width: 32,
+                        child: Text('${item.jumlah}',
+                            textAlign: TextAlign.center,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+                AppTableCell.text(
+                    _formatRupiah.format(item.subtotalSetelahDiskon),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+              ]))
+          .toList(),
+      pagination: AppTablePagination(
+        halaman: halaman,
+        totalHalaman: totalHalaman,
+        totalData: widget.keranjang.length,
+        labelData: 'item',
+        onSebelumnya: halaman > 1
+            ? () => setStateIfMounted(() => _halamanKeranjang = halaman - 1)
+            : null,
+        onBerikutnya: halaman < totalHalaman
+            ? () => setStateIfMounted(() => _halamanKeranjang = halaman + 1)
+            : null,
+      ),
     );
+    final daftar = SingleChildScrollView(child: tabel);
     if (!dibungkusCard) return daftar;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.cardBg,
+          color: AppColors.cardBgOf(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: Border.all(color: AppColors.borderOf(context)),
+          boxShadow: AppColors.gelap(context)
+              ? const []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         clipBehavior: Clip.antiAlias,
         child: daftar,
@@ -812,23 +873,25 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
+        color: AppColors.cardBgOf(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: Offset(samping ? -2 : 0, samping ? 0 : -2),
-          )
-        ],
+        border: Border.all(color: AppColors.borderOf(context)),
+        boxShadow: AppColors.gelap(context)
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: Offset(samping ? -2 : 0, samping ? 0 : -2),
+                )
+              ],
       ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _pemilihMember(),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
             _labelBagian('Pilih metode pembayaran'),
             const SizedBox(height: 8),
@@ -853,7 +916,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               ),
             ),
             const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
             if (_totalDiskon > 0)
               Padding(
@@ -884,9 +947,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Subtotal', style: TextStyle(color: Colors.black54)),
+                Text('Subtotal',
+                    style:
+                        TextStyle(color: AppColors.textSecondaryOf(context))),
                 Text(_formatRupiah.format(_subtotal),
-                    style: const TextStyle(color: Colors.black54)),
+                    style:
+                        TextStyle(color: AppColors.textSecondaryOf(context))),
               ],
             ),
             Padding(
@@ -896,9 +962,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 children: [
                   Text(
                       'Pajak (${Sesi.instance.pajakPersen.toStringAsFixed(0)}%)',
-                      style: const TextStyle(color: Colors.black54)),
+                      style:
+                          TextStyle(color: AppColors.textSecondaryOf(context))),
                   Text(_formatRupiah.format(_pajak),
-                      style: const TextStyle(color: Colors.black54)),
+                      style:
+                          TextStyle(color: AppColors.textSecondaryOf(context))),
                 ],
               ),
             ),
@@ -915,7 +983,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               ],
             ),
             const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
             TextField(
               controller: _uangDiterimaController,
@@ -925,7 +993,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   labelText: 'Uang Diterima',
                   border: _radiusInput,
                   isDense: true),
-              onChanged: (v) => setState(() => _uangDiterimaManual = true),
+              onChanged: (v) =>
+                  setStateIfMounted(() => _uangDiterimaManual = true),
             ),
             if (_uangDiterima > 0)
               Padding(
@@ -1004,8 +1073,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         padding: EdgeInsets.zero,
         icon: Icon(icon, size: 16),
         style: IconButton.styleFrom(
-            backgroundColor: AppColors.pageBg,
-            foregroundColor: AppColors.textPrimary,
+            backgroundColor: AppColors.pageBgOf(context),
+            foregroundColor: AppColors.textPrimaryOf(context),
             shape: const CircleBorder()),
         onPressed: onPressed,
       ),
@@ -1057,7 +1126,7 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
           {'id_toko': Sesi.instance.tokoId, 'limit': 10});
       final arr = (hasil['data'] as List?) ?? [];
       if (mounted && _controller.text.trim().isEmpty) {
-        setState(() {
+        setStateIfMounted(() {
           _hasil = arr
               .map((e) => Anggota.fromJson(e as Map<String, dynamic>))
               .toList();
@@ -1081,11 +1150,11 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
       if (kataKunci.trim().isEmpty) {
         await _muatTransaksiTerbaru();
       } else {
-        setState(() => _hasil = []);
+        setStateIfMounted(() => _hasil = []);
       }
       return;
     }
-    setState(() {
+    setStateIfMounted(() {
       _mencari = true;
       _transaksiTerbaru = false;
     });
@@ -1094,7 +1163,7 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
           await ApiClient.instance.aksi('cari_member', {'keyword': kataKunci});
       final arr = (hasil['member'] as List?) ?? [];
       if (mounted) {
-        setState(() {
+        setStateIfMounted(() {
           _hasil = arr
               .map((e) => Anggota.fromJson(e as Map<String, dynamic>))
               .toList();
@@ -1104,13 +1173,13 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
     } catch (_) {
       final cache = await CoreDb.instance.cariAnggotaCache(kataKunci);
       if (mounted) {
-        setState(() {
+        setStateIfMounted(() {
           _hasil = cache.map(Anggota.fromCache).toList();
           _modeOffline = true;
         });
       }
     } finally {
-      if (mounted) setState(() => _mencari = false);
+      if (mounted) setStateIfMounted(() => _mencari = false);
     }
   }
 
@@ -1138,15 +1207,15 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
                     style: TextStyle(color: Colors.orange, fontSize: 12)),
               ),
             if (_transaksiTerbaru && _hasil.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text('Transaksi Terbaru',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black54))),
+                            color: AppColors.textSecondaryOf(context)))),
               ),
             const SizedBox(height: 8),
             Expanded(

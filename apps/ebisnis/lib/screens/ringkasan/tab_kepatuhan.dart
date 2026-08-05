@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 String _formatTanggalJam(dynamic raw) {
   final s = raw?.toString() ?? '';
@@ -34,17 +35,20 @@ class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('kepatuhan_operasional');
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

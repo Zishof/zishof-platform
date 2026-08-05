@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../sesi.dart';
-import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/safe_state.dart';
 
 /// Akun Saya (self-service ganti password) -- memanggil aksi server
 /// `akun_ganti_password` (KantinHelper.gantiPasswordSendiri) yang SUDAH ADA
@@ -35,7 +35,7 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _menyimpan = true);
+    setStateIfMounted(() => _menyimpan = true);
     try {
       await ApiClient.instance.aksi('akun_ganti_password', {
         'password_lama': _lamaController.text,
@@ -50,9 +50,10 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
       _konfirmasiController.clear();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal: $e')));
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -70,68 +71,76 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AppSectionCard(
+                  AppFormSection(
                     judul: 'Pengguna Saat Ini',
-                    child: Row(
-                      children: [
-                        const CircleAvatar(child: Icon(Icons.person)),
-                        const SizedBox(width: 12),
-                        Text(Sesi.instance.userId.isNotEmpty ? Sesi.instance.userId : '-', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      ],
-                    ),
+                    children: [
+                      Row(
+                        children: [
+                          const CircleAvatar(child: Icon(Icons.person)),
+                          const SizedBox(width: 12),
+                          Text(
+                              Sesi.instance.userId.isNotEmpty
+                                  ? Sesi.instance.userId
+                                  : '-',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  AppSectionCard(
+                  AppFormSection(
                     judul: 'Ganti Password',
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: _lamaController,
-                          obscureText: !_lihatLama,
-                          decoration: InputDecoration(
-                            labelText: 'Password Lama',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(_lihatLama ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _lihatLama = !_lihatLama),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                    children: [
+                      AppFormTextField(
+                        label: 'Password Lama',
+                        controller: _lamaController,
+                        obscureText: !_lihatLama,
+                        suffixIcon: IconButton(
+                          icon: Icon(_lihatLama
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          onPressed: () =>
+                              setStateIfMounted(() => _lihatLama = !_lihatLama),
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _baruController,
-                          obscureText: !_lihatBaru,
-                          decoration: InputDecoration(
-                            labelText: 'Password Baru',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(_lihatBaru ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _lihatBaru = !_lihatBaru),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.length < 6) ? 'Minimal 6 karakter' : null,
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                      ),
+                      AppFormTextField(
+                        label: 'Password Baru',
+                        controller: _baruController,
+                        obscureText: !_lihatBaru,
+                        helperText: 'Minimal 6 karakter.',
+                        suffixIcon: IconButton(
+                          icon: Icon(_lihatBaru
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          onPressed: () =>
+                              setStateIfMounted(() => _lihatBaru = !_lihatBaru),
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _konfirmasiController,
-                          obscureText: !_lihatBaru,
-                          decoration: const InputDecoration(labelText: 'Konfirmasi Password Baru', border: OutlineInputBorder()),
-                          validator: (v) => (v != _baruController.text) ? 'Konfirmasi tidak cocok' : null,
+                        validator: (v) => (v == null || v.length < 6)
+                            ? 'Minimal 6 karakter'
+                            : null,
+                      ),
+                      AppFormTextField(
+                        label: 'Konfirmasi Password Baru',
+                        controller: _konfirmasiController,
+                        obscureText: !_lihatBaru,
+                        validator: (v) => (v != _baruController.text)
+                            ? 'Konfirmasi tidak cocok'
+                            : null,
+                      ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppTombolAksi(
+                          icon: Icons.save_outlined,
+                          label: _menyimpan
+                              ? 'Menyimpan...'
+                              : 'Simpan Password Baru',
+                          onPressed: _menyimpan ? null : _simpan,
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _menyimpan ? null : _simpan,
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
-                            child: _menyimpan
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Simpan Password Baru'),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),

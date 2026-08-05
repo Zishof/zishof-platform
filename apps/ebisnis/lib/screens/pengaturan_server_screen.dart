@@ -7,7 +7,9 @@ import 'package:http/http.dart' as http;
 import '../api_client.dart';
 import '../services/server_config.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import 'login_screen.dart';
+import '../widgets/safe_state.dart';
 
 /// Pengaturan Alamat Server, layar penuh (padanan `setup.html` -- dipakai
 /// SEKALI di awal, sebelum layar Masuk pernah tampil sama sekali, sehingga
@@ -22,7 +24,7 @@ class PengaturanServerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: AppColors.pageBgOf(context),
       appBar: pertamaKali
           ? null
           : AppBar(
@@ -65,11 +67,11 @@ class PengaturanServerScreen extends StatelessWidget {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 980),
                     child: Card(
-                      color: AppColors.cardBg,
+                      color: AppColors.cardBgOf(context),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: AppColors.border),
+                        side: BorderSide(color: AppColors.borderOf(context)),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(24),
@@ -163,7 +165,7 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
   }
 
   void _batalkanStatusTes() {
-    if (_tesBerhasil != null) setState(() => _tesBerhasil = null);
+    if (_tesBerhasil != null) setStateIfMounted(() => _tesBerhasil = null);
   }
 
   bool get _hostValid => ServerConfig.hostValid(_hostCtrl.text);
@@ -185,7 +187,7 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
 
   Future<void> _tesKoneksi() async {
     if (!_hostValid) return;
-    setState(() {
+    setStateIfMounted(() {
       _mengetes = true;
       _pesanTes = null;
       _tesBerhasil = null;
@@ -200,7 +202,7 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
       if (!mounted) return;
       // Server MENJAWAB (kode apa pun -- 302/401/404 termasuk) = tes sukses,
       // ini cuma cek server hidup, BUKAN validasi login/kredensial.
-      setState(() {
+      setStateIfMounted(() {
         _tesBerhasil = true;
         _pesanTes = 'Server menjawab (HTTP ${resp.statusCode}).';
         _hostDiuji = hostSaatIni;
@@ -209,35 +211,40 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
+      setStateIfMounted(() {
         _tesBerhasil = false;
         _pesanTes = _pesanDariError(e);
       });
     } finally {
-      if (mounted) setState(() => _mengetes = false);
+      if (mounted) setStateIfMounted(() => _mengetes = false);
     }
   }
 
   String _pesanDariError(Object e) {
-    if (e is TimeoutException)
+    if (e is TimeoutException) {
       return 'Waktu koneksi habis. Periksa alamat host & koneksi jaringan Anda.';
+    }
     if (e is SocketException) {
       final pesan = e.message.toLowerCase();
-      if (pesan.contains('failed host lookup'))
+      if (pesan.contains('failed host lookup')) {
         return 'Alamat host tidak ditemukan. Periksa ejaan alamat host.';
-      if (pesan.contains('connection refused'))
+      }
+      if (pesan.contains('connection refused')) {
         return 'Koneksi ditolak server. Periksa context path, atau hubungi admin sistem.';
-      if (pesan.contains('connection reset'))
+      }
+      if (pesan.contains('connection reset')) {
         return 'Koneksi terputus oleh server. Coba lagi.';
+      }
       return 'Gagal terhubung ke server: ${e.message}';
     }
-    if (e is HandshakeException)
+    if (e is HandshakeException) {
       return 'Gagal verifikasi sertifikat HTTPS. Jika server Anda memakai HTTP biasa, matikan opsi "Gunakan HTTPS".';
+    }
     return e.toString();
   }
 
   Future<void> _simpan() async {
-    setState(() => _menyimpan = true);
+    setStateIfMounted(() => _menyimpan = true);
     await ServerConfig.instance.simpan(
       host: ServerConfig.sanitizeHost(_hostCtrl.text),
       contextPath: ServerConfig.sanitizeContextPath(_ctxCtrl.text),
@@ -247,7 +254,7 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
     // supaya tidak dikira masih berlaku di server yang baru diatur.
     await ApiClient.instance.hapusToken();
     await widget.onSelesai();
-    if (mounted) setState(() => _menyimpan = false);
+    if (mounted) setStateIfMounted(() => _menyimpan = false);
   }
 
   @override
@@ -255,88 +262,37 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Alamat Host',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TextField(
+        AppFormTextField(
+          label: 'Alamat Host',
           controller: _hostCtrl,
-          decoration: const InputDecoration(
-              hintText: 'mis. ebisnis.id',
-              border: OutlineInputBorder(),
-              isDense: true),
+          hintText: 'mis. ebisnis.id',
+          helperText:
+              'Alamat domain/server AIS Anda, tanpa "https://" dan tanpa garis miring di akhir.',
           keyboardType: TextInputType.url,
         ),
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'Alamat domain/server AIS Anda, TANPA "https://" dan tanpa garis miring di akhir. Tanyakan ke admin sistem/IT institusi Anda bila belum tahu.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const Text('Context Path',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TextField(
+        AppFormTextField(
+          label: 'Context Path',
           controller: _ctxCtrl,
-          decoration: const InputDecoration(
-              hintText: 'mis. ebisnis (kosongkan bila tidak ada)',
-              border: OutlineInputBorder(),
-              isDense: true),
+          hintText: 'mis. ebisnis (kosongkan bila tidak ada)',
+          helperText:
+              'Bagian path setelah domain. Kosongkan bila server langsung di root domain.',
         ),
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'Bagian path setelah domain (bila ada). Kosongkan bila server Anda langsung di root domain.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
+        AppFormSwitchTile(
+          title: 'Gunakan HTTPS',
+          subtitle:
+              'Disarankan. Matikan hanya jika admin sistem mengarahkan memakai HTTP biasa.',
+          value: _https,
+          onChanged: (v) {
+            setStateIfMounted(() => _https = v);
+            _batalkanStatusTes();
+          },
         ),
-        const SizedBox(height: 20),
-        const Text('Protokol Koneksi',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(8)),
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _https,
-            onChanged: (v) {
-              setState(() => _https = v);
-              _batalkanStatusTes();
-            },
-            title: Row(children: [
-              const Text('Gunakan HTTPS'),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                    color: AppColors.latarLembut(AppColors.success),
-                    borderRadius: BorderRadius.circular(20)),
-                child: const Text('Disarankan',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.success,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ]),
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'Biarkan tercentang kecuali admin sistem Anda secara eksplisit mengarahkan memakai HTTP biasa. Koneksi tanpa HTTPS tidak terenkripsi.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ),
-        const SizedBox(height: 16),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
               color: AppColors.latarLembut(AppColors.info),
+              border: Border.all(color: AppColors.info.withValues(alpha: 0.18)),
               borderRadius: BorderRadius.circular(8)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,22 +304,20 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
                       color: AppColors.info)),
               const SizedBox(height: 4),
               Text(_previewUrl,
-                  style: const TextStyle(fontFamily: 'monospace')),
+                  style: TextStyle(
+                      fontFamily: 'monospace',
+                      color: AppColors.textPrimaryOf(context))),
             ],
           ),
         ),
         const SizedBox(height: 20),
         if (_pesanTes != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              _pesanTes!,
-              style: TextStyle(
-                  color: _tesBerhasil == true
-                      ? AppColors.success
-                      : AppColors.danger,
-                  fontSize: 13),
-            ),
+          AppInfoBanner(
+            icon: _tesBerhasil == true
+                ? Icons.check_circle_outline
+                : Icons.error_outline,
+            color: _tesBerhasil == true ? AppColors.success : AppColors.danger,
+            text: _pesanTes!,
           ),
         const SizedBox(height: 16),
         Center(
@@ -418,8 +372,8 @@ class _FormAlamatServerState extends State<FormAlamatServer> {
                 ? 'Pengaturan disimpan di perangkat ini saja dan tidak dikirim ke mana pun.'
                 : 'Tekan "Tes Koneksi" dan pastikan berhasil dulu sebelum bisa lanjut.',
             textAlign: TextAlign.center,
-            style:
-                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(
+                fontSize: 12, color: AppColors.textSecondaryOf(context)),
           ),
         ),
       ],

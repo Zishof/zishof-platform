@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/safe_state.dart';
 
 /// Layar admin "Hak Akses" -- editor 13 checkbox per-menu untuk Grup
 /// Pengguna (Tbmrole.ebisnisMenu), gap-closure: mekanisme ini sudah lama ada
@@ -28,7 +29,7 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
@@ -39,7 +40,7 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
     } catch (e) {
       _error = '$e';
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -116,7 +117,7 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
@@ -128,12 +129,12 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
     } catch (e) {
       _error = '$e';
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
   Future<void> _simpan() async {
-    setState(() => _menyimpan = true);
+    setStateIfMounted(() => _menyimpan = true);
     try {
       final payload = <String, bool>{
         for (final m in _menu) '${m['kunci']}': m['boleh'] == true
@@ -151,7 +152,7 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
             .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
       }
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -185,7 +186,7 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
                             value: m['boleh'] == true,
                             onChanged: _supervisor
                                 ? null
-                                : (v) => setState(() =>
+                                : (v) => setStateIfMounted(() =>
                                     _menu[i] = {...m, 'boleh': v == true}),
                           );
                         },

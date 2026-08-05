@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
+import '../services/pengaturan_pembayaran.dart';
 import '../sesi.dart';
+import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
 import 'hak_akses_screen.dart';
+import '../widgets/safe_state.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
 /// Electron) -- 4 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
@@ -25,7 +29,8 @@ class KonfigurasiScreen extends StatefulWidget {
   State<KonfigurasiScreen> createState() => _KonfigurasiScreenState();
 }
 
-class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTickerProviderStateMixin {
+class _KonfigurasiScreenState extends State<KonfigurasiScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -43,16 +48,21 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
   Future<void> _logout() async {
     await ApiClient.instance.hapusToken();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tombolLogout = IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar');
+    final tombolLogout = IconButton(
+        icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Keluar');
+    final warnaTeksSekunder = AppColors.textSecondaryOf(context);
     return AppShell(
       menuAktif: MenuEBisnis.konfigurasi,
       judul: 'Konfigurasi',
-      subjudul: 'Identitas mesin, profil toko, akun pengguna, dan alamat server',
+      subjudul:
+          'Identitas mesin, profil toko, akun pengguna, dan alamat server',
       aksiHeader: tombolLogout,
       actionsAppBar: [tombolLogout],
       scrollable: false,
@@ -63,7 +73,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen> with SingleTicker
             controller: _tab,
             isScrollable: true,
             labelColor: const Color(0xFF2563EB),
-            unselectedLabelColor: Colors.black54,
+            unselectedLabelColor: warnaTeksSekunder,
             indicatorColor: const Color(0xFF2563EB),
             tabs: const [
               Tab(text: 'Identitas Mesin'),
@@ -100,12 +110,21 @@ class _TabAlamatServer extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Mengubah alamat server akan mengeluarkan Anda dari akun saat ini -- masuk kembali di server yang baru setelah tersimpan.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+        const AppInfoBanner(
+          icon: Icons.logout_outlined,
+          color: AppColors.warning,
+          text:
+              'Mengubah alamat server akan mengeluarkan Anda dari akun saat ini. Setelah tersimpan, masuk kembali di server yang baru.',
         ),
         const SizedBox(height: 16),
-        FormAlamatServer(labelSimpan: 'Simpan & Keluar', onSelesai: onUbah),
+        AppFormSection(
+          judul: 'Alamat Server',
+          deskripsi:
+              'Atur host, context path, dan protokol koneksi aplikasi POS ini.',
+          children: [
+            FormAlamatServer(labelSimpan: 'Simpan & Keluar', onSelesai: onUbah),
+          ],
+        ),
       ],
     );
   }
@@ -128,6 +147,8 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   bool _pinAlternatif = false;
   bool _menyimpanLaci = false;
   bool _tesLaciBerjalan = false;
+  int? _caraBayarDefaultId;
+  bool _menyimpanPembayaran = false;
 
   @override
   void initState() {
@@ -143,6 +164,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
 
   Future<void> _muat() async {
     await IdentitasMesin.instance.muat();
+    await PengaturanPembayaran.instance.muat();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -152,42 +174,64 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
       }
     }
     if (mounted) {
-      setState(() {
+      setStateIfMounted(() {
         _namaController.text = IdentitasMesin.instance.namaMesin;
         _printerLaci = PengaturanLaci.instance.namaPrinter;
         _pinAlternatif = PengaturanLaci.instance.pinAlternatif;
+        _caraBayarDefaultId = PengaturanPembayaran.instance.caraBayarDefaultId;
         _memuat = false;
       });
     }
   }
 
   Future<void> _simpan() async {
-    setState(() => _menyimpan = true);
+    setStateIfMounted(() => _menyimpan = true);
     await IdentitasMesin.instance.simpanNamaMesin(_namaController.text.trim());
     if (mounted) {
-      setState(() => _menyimpan = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama mesin tersimpan.')));
+      setStateIfMounted(() => _menyimpan = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Nama mesin tersimpan.')));
     }
   }
 
   Future<void> _simpanLaci() async {
-    setState(() => _menyimpanLaci = true);
-    await PengaturanLaci.instance.simpan(namaPrinter: _printerLaci, pinAlternatif: _pinAlternatif);
+    setStateIfMounted(() => _menyimpanLaci = true);
+    await PengaturanLaci.instance
+        .simpan(namaPrinter: _printerLaci, pinAlternatif: _pinAlternatif);
     if (mounted) {
-      setState(() => _menyimpanLaci = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengaturan laci tersimpan.')));
+      setStateIfMounted(() => _menyimpanLaci = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pengaturan laci tersimpan.')));
+    }
+  }
+
+  Future<void> _simpanPembayaran() async {
+    setStateIfMounted(() => _menyimpanPembayaran = true);
+    await PengaturanPembayaran.instance
+        .simpan(caraBayarDefaultId: _caraBayarDefaultId);
+    if (mounted) {
+      setStateIfMounted(() => _menyimpanPembayaran = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Metode pembayaran default tersimpan.')));
     }
   }
 
   Future<void> _tesLaci() async {
-    setState(() => _tesLaciBerjalan = true);
+    setStateIfMounted(() => _tesLaciBerjalan = true);
     try {
-      await bukaLaciKasir(pinAlternatif: _pinAlternatif, namaPrinter: _printerLaci);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perintah buka laci terkirim.')));
+      await bukaLaciKasir(
+          pinAlternatif: _pinAlternatif, namaPrinter: _printerLaci);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Perintah buka laci terkirim.')));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _tesLaciBerjalan = false);
+      if (mounted) setStateIfMounted(() => _tesLaciBerjalan = false);
     }
   }
 
@@ -197,145 +241,119 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Identitas fisik perangkat ini -- dikirim di setiap transaksi supaya laporan bisa membedakan mesin/HP kasir yang mana.',
-            style: TextStyle(fontSize: 12, color: Colors.black54)),
-        const SizedBox(height: 16),
-        TextField(
-          readOnly: true,
-          controller: TextEditingController(text: IdentitasMesin.instance.idMesin),
-          decoration: const InputDecoration(labelText: 'ID Mesin (permanen, otomatis)', border: OutlineInputBorder()),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _namaController,
-          decoration: const InputDecoration(labelText: 'Nama Mesin (bisa diubah)', hintText: 'mis. Kasir Depan', border: OutlineInputBorder()),
-        ),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: 180,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFF9DB7F3),
-                disabledForegroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _menyimpan ? null : _simpan,
-              child: _menyimpan
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Simpan'),
+        AppFormSection(
+          judul: 'Identitas Mesin',
+          deskripsi:
+              'Identitas fisik perangkat ini dikirim di setiap transaksi supaya laporan bisa membedakan mesin atau HP kasir yang dipakai.',
+          children: [
+            AppReadonlyField(
+              label: 'ID Mesin',
+              value: IdentitasMesin.instance.idMesin,
+              helperText: 'Dibuat otomatis dan bersifat permanen.',
             ),
-          ),
+            AppFormTextField(
+              label: 'Nama Mesin',
+              controller: _namaController,
+              hintText: 'mis. Kasir Depan',
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppTombolAksi(
+                icon: Icons.save_outlined,
+                label: 'Simpan',
+                onPressed: _menyimpan ? null : _simpan,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppFormSection(
+          judul: 'Preferensi POS',
+          deskripsi:
+              'Atur pilihan awal di panel pembayaran. Preferensi ini hanya berlaku untuk perangkat ini.',
+          children: [
+            DropdownButtonFormField<int?>(
+              value: Sesi.instance.caraBayar
+                      .any((c) => c.id == _caraBayarDefaultId)
+                  ? _caraBayarDefaultId
+                  : null,
+              dropdownColor: AppColors.cardBgOf(context),
+              style: TextStyle(color: AppColors.textPrimaryOf(context)),
+              decoration:
+                  const InputDecoration(labelText: 'Metode Pembayaran Default'),
+              items: [
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Otomatis (Tunai jika ada)')),
+                ...Sesi.instance.caraBayar.map((c) =>
+                    DropdownMenuItem<int?>(value: c.id, child: Text(c.nama))),
+              ],
+              onChanged: (v) => setStateIfMounted(() {
+                _caraBayarDefaultId = v;
+              }),
+            ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppTombolAksi(
+                icon: Icons.save_outlined,
+                label: _menyimpanPembayaran
+                    ? 'Menyimpan...'
+                    : 'Simpan Preferensi POS',
+                onPressed: _menyimpanPembayaran ? null : _simpanPembayaran,
+              ),
+            ),
+          ],
         ),
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
-          const Divider(height: 40),
-          const Text('Cash Drawer (Buka Laci)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 4),
-          const Text(
-            'Laci kasir tidak punya driver sendiri -- ia tersambung via kabel ke printer struk thermal. '
-            'Kalau laci tidak terbuka, biasanya penyebabnya salah target printer (bukan berarti printer defaultnya) '
-            'atau salah pin (coba "Pin Alternatif" kalau pin biasa tak berhasil).',
-            style: TextStyle(fontSize: 12, color: Colors.black54),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String?>(
-            value: _daftarPrinter.any((p) => p.name == _printerLaci) ? _printerLaci : null,
-            decoration: const InputDecoration(labelText: 'Printer Laci', border: OutlineInputBorder(), isDense: true),
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('(Ikut printer default Windows)')),
-              ..._daftarPrinter.map((p) => DropdownMenuItem<String?>(value: p.name, child: Text(p.name + (p.isDefault ? ' (default)' : '')))),
-            ],
-            onChanged: (v) => setState(() => _printerLaci = v),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Pin Alternatif (Pin 5)', style: TextStyle(fontSize: 13)),
-            subtitle: const Text('Aktifkan kalau laci tak terbuka dengan pengaturan pin biasa (Pin 2).', style: TextStyle(fontSize: 11)),
-            value: _pinAlternatif,
-            onChanged: (v) => setState(() => _pinAlternatif = v),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            alignment: WrapAlignment.start,
+          const SizedBox(height: 16),
+          AppFormSection(
+            judul: 'Cash Drawer',
+            deskripsi:
+                'Laci kasir tersambung melalui printer struk thermal. Jika laci tidak terbuka, cek target printer atau coba pin alternatif.',
             children: [
-              SizedBox(
-                width: 220,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F766E),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFF99C9C3),
-                    disabledForegroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: _menyimpanLaci ? null : _simpanLaci,
-                  child: _menyimpanLaci
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Simpan Pengaturan Laci'),
-                ),
+              DropdownButtonFormField<String?>(
+                value: _daftarPrinter.any((p) => p.name == _printerLaci)
+                    ? _printerLaci
+                    : null,
+                dropdownColor: AppColors.cardBgOf(context),
+                style: TextStyle(color: AppColors.textPrimaryOf(context)),
+                decoration: const InputDecoration(labelText: 'Printer Laci'),
+                items: [
+                  const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('(Ikut printer default Windows)')),
+                  ..._daftarPrinter.map((p) => DropdownMenuItem<String?>(
+                      value: p.name,
+                      child: Text(p.name + (p.isDefault ? ' (default)' : '')))),
+                ],
+                onChanged: (v) => setStateIfMounted(() => _printerLaci = v),
               ),
-              SizedBox(
-                width: 180,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF97316),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFF8B27C),
-                    disabledForegroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+              const SizedBox(height: 14),
+              AppFormSwitchTile(
+                title: 'Pin Alternatif (Pin 5)',
+                subtitle:
+                    'Aktifkan kalau laci tidak terbuka dengan pengaturan pin biasa (Pin 2).',
+                value: _pinAlternatif,
+                onChanged: (v) => setStateIfMounted(() => _pinAlternatif = v),
+              ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                alignment: WrapAlignment.start,
+                children: [
+                  AppTombolAksi(
+                    icon: Icons.save_outlined,
+                    label: 'Simpan Pengaturan Laci',
+                    warna: AppColors.teal,
+                    onPressed: _menyimpanLaci ? null : _simpanLaci,
                   ),
-                  onPressed: _tesLaciBerjalan ? null : _tesLaci,
-                  child: _tesLaciBerjalan
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Tes Buka Laci'),
-                ),
+                  AppTombolAksi(
+                    icon: Icons.point_of_sale_outlined,
+                    label: 'Tes Buka Laci',
+                    warna: AppColors.warning,
+                    onPressed: _tesLaciBerjalan ? null : _tesLaci,
+                  ),
+                ],
               ),
             ],
           ),
@@ -378,14 +396,28 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
 
   @override
   void dispose() {
-    for (final c in [_kode, _nama, _alamat, _kota, _kodePos, _telp, _email, _picNama, _picHp, _npwp, _jamOperasional, _keterangan, _pesanTerimaKasih]) {
+    for (final c in [
+      _kode,
+      _nama,
+      _alamat,
+      _kota,
+      _kodePos,
+      _telp,
+      _email,
+      _picNama,
+      _picHp,
+      _npwp,
+      _jamOperasional,
+      _keterangan,
+      _pesanTerimaKasih
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
@@ -405,16 +437,16 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _jamOperasional.text = '${d['jamOperasional'] ?? ''}';
       _keterangan.text = '${d['keterangan'] ?? ''}';
       _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
-      setState(() => _bolehUbah = hasil['bolehUbah'] == true);
+      setStateIfMounted(() => _bolehUbah = hasil['bolehUbah'] == true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
   Future<void> _simpan() async {
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
     });
@@ -433,23 +465,40 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil toko tersimpan.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profil toko tersimpan.')));
+      }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
-  Widget _field(String label, TextEditingController c, {int maxLines = 1}) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextField(
-          controller: c,
-          maxLines: maxLines,
-          enabled: _bolehUbah,
-          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        ),
+  Widget _field(String label, TextEditingController c, {int maxLines = 1}) =>
+      AppFormTextField(
+        label: label,
+        controller: c,
+        maxLines: maxLines,
+        enabled: _bolehUbah,
       );
+
+  Widget _gridForm(List<Widget> children) {
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 720) return Column(children: children);
+      return Wrap(
+        spacing: 16,
+        runSpacing: 0,
+        children: children
+            .map((child) => SizedBox(
+                  width: (constraints.maxWidth - 16) / 2,
+                  child: child,
+                ))
+            .toList(),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -458,7 +507,12 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), const SizedBox(height: 12), ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_error!,
+                style: TextStyle(color: AppColors.textPrimaryOf(context))),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))
+          ]),
         ),
       );
     }
@@ -467,31 +521,46 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       children: [
         if (!_bolehUbah)
           const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text('Hanya admin/supervisor toko yang dapat mengubah profil ini.', style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
-          ),
-        TextField(controller: _kode, readOnly: true, decoration: const InputDecoration(labelText: 'Kode Toko', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        _field('Nama Toko', _nama),
-        _field('Alamat', _alamat, maxLines: 2),
-        _field('Kota', _kota),
-        _field('Kode Pos', _kodePos),
-        _field('Telepon', _telp),
-        _field('Email', _email),
-        _field('PIC Nama', _picNama),
-        _field('PIC HP', _picHp),
-        _field('NPWP', _npwp),
-        _field('Jam Operasional', _jamOperasional),
-        _field('Keterangan', _keterangan, maxLines: 2),
-        _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih, maxLines: 2),
-        if (_bolehUbah)
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _menyimpan ? null : _simpan,
-              child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
+            padding: EdgeInsets.only(bottom: 16),
+            child: AppInfoBanner(
+              icon: Icons.lock_outline,
+              color: AppColors.warning,
+              text:
+                  'Hanya admin atau supervisor toko yang dapat mengubah profil ini.',
             ),
           ),
+        AppFormSection(
+          judul: 'Profil Toko',
+          deskripsi:
+              'Data ini dipakai untuk informasi operasional, laporan, dan teks pada struk.',
+          children: [
+            AppReadonlyField(label: 'Kode Toko', value: _kode.text),
+            _gridForm([
+              _field('Nama Toko', _nama),
+              _field('Kota', _kota),
+              _field('Kode Pos', _kodePos),
+              _field('Telepon', _telp),
+              _field('Email', _email),
+              _field('PIC Nama', _picNama),
+              _field('PIC HP', _picHp),
+              _field('NPWP', _npwp),
+              _field('Jam Operasional', _jamOperasional),
+            ]),
+            _field('Alamat', _alamat, maxLines: 2),
+            _field('Keterangan', _keterangan, maxLines: 2),
+            _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
+                maxLines: 2),
+            if (_bolehUbah)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTombolAksi(
+                  icon: Icons.save_outlined,
+                  label: _menyimpan ? 'Menyimpan...' : 'Simpan Profil',
+                  onPressed: _menyimpan ? null : _simpan,
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -516,25 +585,28 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('pedagang_list');
-      setState(() {
+      setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _bolehKelola = hasil['bolehKelola'] == true;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
   Future<void> _bukaForm({Map<String, dynamic>? akun}) async {
-    final tersimpan = await showModalBottomSheet<bool>(context: context, isScrollControlled: true, builder: (_) => _FormAkun(akun: akun));
+    final tersimpan = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => _FormAkun(akun: akun));
     if (tersimpan == true) await _muat();
   }
 
@@ -545,47 +617,113 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), const SizedBox(height: 12), ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_error!,
+                style: TextStyle(color: AppColors.textPrimaryOf(context))),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))
+          ]),
         ),
       );
     }
     return Scaffold(
-      floatingActionButton: _bolehKelola ? FloatingActionButton.extended(onPressed: () => _bukaForm(), icon: const Icon(Icons.person_add), label: const Text('Tambah Akun')) : null,
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _bolehKelola
+          ? FloatingActionButton.extended(
+              onPressed: () => _bukaForm(),
+              icon: const Icon(Icons.person_add),
+              label: const Text('Tambah Akun'))
+          : null,
       body: RefreshIndicator(
         onRefresh: _muat,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
           children: [
             if (Sesi.instance.isAdmin)
-              Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.admin_panel_settings_outlined),
-                  title: const Text('Hak Akses'),
-                  subtitle: const Text('Atur menu yang boleh diakses tiap Grup Pengguna'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HakAksesScreen())),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: AppFormSection(
+                  judul: 'Hak Akses',
+                  deskripsi:
+                      'Atur menu yang boleh diakses oleh setiap grup pengguna.',
+                  aksiJudul: IconButton(
+                    tooltip: 'Buka Hak Akses',
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const HakAksesScreen())),
+                  ),
+                  children: const [
+                    AppInfoBanner(
+                      icon: Icons.admin_panel_settings_outlined,
+                      color: AppColors.primary,
+                      text: 'Pengaturan hak akses hanya tersedia untuk admin.',
+                    ),
+                  ],
                 ),
               ),
             if (_data.isEmpty)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('Belum ada akun.')))
+              Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                      child: Text('Belum ada akun.',
+                          style: TextStyle(
+                              color: AppColors.textSecondaryOf(context)))))
             else
-              ..._data.map((a) => Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      title: Text('${a['nama']} (${a['userid']})', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text('${a['keterangan'] ?? ''}'),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (a['supervisor'] == true) const Text('Supervisor', style: TextStyle(fontSize: 10, color: Color(0xFF0284C7))),
-                          Text(a['aktif'] == true ? 'Aktif' : 'Nonaktif', style: TextStyle(fontSize: 10, color: a['aktif'] == true ? const Color(0xFF2E7D32) : Colors.red)),
-                        ],
+              AppFormSection(
+                judul: 'Daftar Akun',
+                deskripsi:
+                    'Kelola akun pengguna POS dan status supervisor toko.',
+                children: [
+                  ..._data.map((a) {
+                    final aktif = a['aktif'] == true;
+                    final supervisor = a['supervisor'] == true;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Material(
+                        color: AppColors.cardBgOf(context),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: AppColors.borderOf(context)),
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.latarLembut(
+                                aktif ? AppColors.primary : AppColors.danger),
+                            child: Icon(Icons.person_outline,
+                                color: aktif
+                                    ? AppColors.primary
+                                    : AppColors.danger),
+                          ),
+                          title: Text('${a['nama']}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimaryOf(context))),
+                          subtitle: Text(
+                              '${a['userid']} · ${a['keterangan'] ?? ''}',
+                              style: TextStyle(
+                                  color: AppColors.textSecondaryOf(context))),
+                          trailing: Wrap(
+                            spacing: 6,
+                            children: [
+                              if (supervisor)
+                                const StatusPill(
+                                    label: 'Supervisor', warna: AppColors.info),
+                              StatusPill(
+                                label: aktif ? 'Aktif' : 'Nonaktif',
+                                warna: aktif
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                              ),
+                            ],
+                          ),
+                          onTap: _bolehKelola ? () => _bukaForm(akun: a) : null,
+                        ),
                       ),
-                      onTap: _bolehKelola ? () => _bukaForm(akun: a) : null,
-                    ),
-                  )),
+                    );
+                  }),
+                ],
+              ),
           ],
         ),
       ),
@@ -634,7 +772,7 @@ class _FormAkunState extends State<_FormAkun> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
     });
@@ -661,9 +799,9 @@ class _FormAkunState extends State<_FormAkun> {
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -671,7 +809,8 @@ class _FormAkunState extends State<_FormAkun> {
   Widget build(BuildContext context) {
     final ubah = widget.akun != null;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.75,
         maxChildSize: 0.95,
@@ -682,45 +821,70 @@ class _FormAkunState extends State<_FormAkun> {
             controller: scrollController,
             padding: const EdgeInsets.all(20),
             children: [
-              Text(ubah ? 'Ubah Akun' : 'Tambah Akun', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
               if (_error != null)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                AppInfoBanner(
+                  icon: Icons.error_outline,
+                  color: AppColors.danger,
+                  text: _error!,
                 ),
-              if (!ubah)
-                TextFormField(
-                  controller: _userid,
-                  decoration: const InputDecoration(labelText: 'User ID *', border: OutlineInputBorder()),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                ),
-              if (!ubah) const SizedBox(height: 12),
-              TextFormField(
-                controller: _nama,
-                decoration: const InputDecoration(labelText: 'Nama *', border: OutlineInputBorder()),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _password,
-                obscureText: true,
-                decoration: InputDecoration(labelText: ubah ? 'Password Baru (kosongkan jika tak diubah)' : 'Password *', border: const OutlineInputBorder()),
-                validator: (v) => (!ubah && (v == null || v.length < 6)) ? 'Minimal 6 karakter' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(controller: _keterangan, decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder())),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Supervisor'), value: _supervisor, onChanged: (v) => setState(() => _supervisor = v)),
-              if (ubah) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Aktif'), value: _aktif, onChanged: (v) => setState(() => _aktif = v)),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _menyimpan ? null : _simpan,
-                  child: _menyimpan ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Simpan'),
-                ),
+              if (_error != null) const SizedBox(height: 12),
+              AppFormSection(
+                judul: ubah ? 'Ubah Akun' : 'Tambah Akun',
+                deskripsi:
+                    'Lengkapi identitas pengguna dan peran operasionalnya.',
+                children: [
+                  if (!ubah)
+                    AppFormTextField(
+                      label: 'User ID',
+                      controller: _userid,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Wajib diisi'
+                          : null,
+                    ),
+                  AppFormTextField(
+                    label: 'Nama',
+                    controller: _nama,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                  ),
+                  AppFormTextField(
+                    label: ubah ? 'Password Baru' : 'Password',
+                    helperText: ubah
+                        ? 'Kosongkan jika password tidak diubah.'
+                        : 'Minimal 6 karakter.',
+                    controller: _password,
+                    obscureText: true,
+                    validator: (v) => (!ubah && (v == null || v.length < 6))
+                        ? 'Minimal 6 karakter'
+                        : null,
+                  ),
+                  AppFormTextField(
+                    label: 'Keterangan',
+                    controller: _keterangan,
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Supervisor',
+                    subtitle:
+                        'Supervisor dapat mengakses fitur pengelolaan tertentu sesuai izin server.',
+                    value: _supervisor,
+                    onChanged: (v) => setStateIfMounted(() => _supervisor = v),
+                  ),
+                  if (ubah)
+                    AppFormSwitchTile(
+                      title: 'Aktif',
+                      subtitle: 'Nonaktifkan untuk mencegah akun digunakan.',
+                      value: _aktif,
+                      onChanged: (v) => setStateIfMounted(() => _aktif = v),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppTombolAksi(
+                      icon: Icons.save_outlined,
+                      label: _menyimpan ? 'Menyimpan...' : 'Simpan',
+                      onPressed: _menyimpan ? null : _simpan,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

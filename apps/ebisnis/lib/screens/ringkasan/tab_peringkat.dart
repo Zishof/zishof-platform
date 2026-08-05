@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 /// Tab 5/9 "Peringkat Mitra" -- aksi `peringkat_mitra`. Lintas-toko utk akun
 /// admin (`semuaToko: true`), terbatas ke toko sendiri utk akun pedagang/kasir.
@@ -22,17 +23,20 @@ class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('peringkat_mitra');
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

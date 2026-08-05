@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../widgets/safe_state.dart';
 
 /// Cetak Price Tag / label harga (padanan produk-renderer.js Electron,
 /// fungsi `bangunHtmlPriceTag`/`...Sticker`/`...TextLabel`) -- 3 template:
@@ -57,20 +58,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('price_tag_list_produk', {});
       final arr = (hasil['data'] as List?) ?? [];
-      setState(() {
+      setStateIfMounted(() {
         _semuaProduk = arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       });
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -85,7 +86,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   void _pilihSemua(bool centang) {
-    setState(() {
+    setStateIfMounted(() {
       if (centang) {
         _idTerpilih.addAll(_terfilter.map((p) => p['id'] as int));
       } else {
@@ -102,7 +103,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih minimal satu produk.')));
       return;
     }
-    setState(() => _memproses = true);
+    setStateIfMounted(() => _memproses = true);
     try {
       final semuaTag = <Map<String, dynamic>>[];
       for (final p in terpilih) {
@@ -127,7 +128,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuat PDF: $e')));
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 
@@ -184,7 +185,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           child: TextField(
             controller: _controllerCari,
             decoration: const InputDecoration(hintText: 'Cari nama/kode produk...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => setStateIfMounted(() {}),
           ),
         ),
         CheckboxListTile(
@@ -202,7 +203,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               final id = p['id'] as int;
               return CheckboxListTile(
                 value: _idTerpilih.contains(id),
-                onChanged: (v) => setState(() => v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
+                onChanged: (v) => setStateIfMounted(() => v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
                 title: Text(p['nama'] as String? ?? '-'),
                 subtitle: Text('${p['kode'] ?? '-'} · Rp ${p['hargaJual'] ?? 0}'),
                 dense: true,
@@ -227,7 +228,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             ButtonSegment(value: TemplatePriceTag.textLabel, label: Text('Label Teks')),
           ],
           selected: {_template},
-          onSelectionChanged: (s) => setState(() => _template = s.first),
+          onSelectionChanged: (s) => setStateIfMounted(() => _template = s.first),
         ),
         const SizedBox(height: 20),
         if (_template == TemplatePriceTag.pop) ...[
@@ -240,7 +241,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               ButtonSegment(value: 'A5', label: Text('A5')),
             ],
             selected: {_ukuranKertas},
-            onSelectionChanged: (s) => setState(() => _ukuranKertas = s.first),
+            onSelectionChanged: (s) => setStateIfMounted(() => _ukuranKertas = s.first),
           ),
           const SizedBox(height: 16),
           const Text('Label per Halaman', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -252,7 +253,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               ButtonSegment(value: 4, label: Text('4')),
             ],
             selected: {_labelPerHalaman},
-            onSelectionChanged: (s) => setState(() => _labelPerHalaman = s.first),
+            onSelectionChanged: (s) => setStateIfMounted(() => _labelPerHalaman = s.first),
           ),
           const SizedBox(height: 16),
         ],
@@ -260,16 +261,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         const SizedBox(height: 8),
         Row(
           children: [
-            IconButton(onPressed: _copies > 1 ? () => setState(() => _copies--) : null, icon: const Icon(Icons.remove_circle_outline)),
+            IconButton(onPressed: _copies > 1 ? () => setStateIfMounted(() => _copies--) : null, icon: const Icon(Icons.remove_circle_outline)),
             Text('$_copies', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            IconButton(onPressed: () => setState(() => _copies++), icon: const Icon(Icons.add_circle_outline)),
+            IconButton(onPressed: () => setStateIfMounted(() => _copies++), icon: const Icon(Icons.add_circle_outline)),
           ],
         ),
         const SizedBox(height: 16),
         if (_template != TemplatePriceTag.textLabel)
-          CheckboxListTile(value: _tampilToko, onChanged: (v) => setState(() => _tampilToko = v ?? false), title: const Text('Tampilkan Nama Toko'), contentPadding: EdgeInsets.zero, dense: true),
-        CheckboxListTile(value: _tampilBarcode, onChanged: (v) => setState(() => _tampilBarcode = v ?? false), title: const Text('Tampilkan Barcode'), contentPadding: EdgeInsets.zero, dense: true),
-        CheckboxListTile(value: _tampilKode, onChanged: (v) => setState(() => _tampilKode = v ?? false), title: const Text('Tampilkan Kode'), contentPadding: EdgeInsets.zero, dense: true),
+          CheckboxListTile(value: _tampilToko, onChanged: (v) => setStateIfMounted(() => _tampilToko = v ?? false), title: const Text('Tampilkan Nama Toko'), contentPadding: EdgeInsets.zero, dense: true),
+        CheckboxListTile(value: _tampilBarcode, onChanged: (v) => setStateIfMounted(() => _tampilBarcode = v ?? false), title: const Text('Tampilkan Barcode'), contentPadding: EdgeInsets.zero, dense: true),
+        CheckboxListTile(value: _tampilKode, onChanged: (v) => setStateIfMounted(() => _tampilKode = v ?? false), title: const Text('Tampilkan Kode'), contentPadding: EdgeInsets.zero, dense: true),
         if (_template != TemplatePriceTag.textLabel) ...[
           const SizedBox(height: 8),
           const Text('Teks Promo', style: TextStyle(fontWeight: FontWeight.bold)),

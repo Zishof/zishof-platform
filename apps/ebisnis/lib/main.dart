@@ -16,6 +16,8 @@ import 'screens/kasir_screen.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/server_config.dart';
+import 'theme/app_theme.dart';
+import 'widgets/safe_state.dart';
 
 /// Penangkap error global (padanan error-capture.js Electron) -- setiap
 /// exception Flutter tak tertangani (widget build error) DAN setiap error
@@ -83,6 +85,7 @@ void main() {
       return;
     }
 
+    await AppThemeController.instance.muat();
     runApp(const EBisnisApp());
   }, (error, stack) {
     CoreDb.instance.catatErrorLog(
@@ -122,7 +125,7 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
   Future<void> _muat() async {
     await ServerConfig.instance.muat();
     await ApiClient.instance.muatTokenTersimpan();
-    if (mounted) setState(() => _siap = true);
+    if (mounted) setStateIfMounted(() => _siap = true);
   }
 
   @override
@@ -151,14 +154,16 @@ class EBisnisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppVariant.namaAplikasi,
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF1E3A5F),
-        useMaterial3: true,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppThemeController.instance.mode,
+      builder: (context, mode, _) => MaterialApp(
+        title: AppVariant.namaAplikasi,
+        debugShowCheckedModeBanner: false,
+        themeMode: mode,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        home: const _GerbangAwal(),
       ),
-      home: const _GerbangAwal(),
     );
   }
 }
@@ -191,12 +196,12 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     // TIDAK BOLEH hardcode (lihat ServerConfig/ApiClient.baseUrl).
     await ServerConfig.instance.muat();
     if (!ServerConfig.instance.sudahDiatur) {
-      if (mounted) setState(() => _perluSetupServer = true);
+      if (mounted) setStateIfMounted(() => _perluSetupServer = true);
       return;
     }
     await ApiClient.instance.muatTokenTersimpan();
     await IdentitasMesin.instance.muat();
-    if (mounted) setState(() => _memeriksa = false);
+    if (mounted) setStateIfMounted(() => _memeriksa = false);
   }
 
   /// Cek rilis GitHub terbaru sekali per buka-app (non-blocking, tak
@@ -211,7 +216,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         repoName: 'zishof-platform',
         versiSaatIni: info.version,
       );
-      if (mounted && hasil != null) setState(() => _infoUpdate = hasil);
+      if (mounted && hasil != null) setStateIfMounted(() => _infoUpdate = hasil);
     } catch (_) {
       // Gagal cek (offline/rate-limit) -- diam saja, bukan alasan mengganggu.
     }
@@ -269,7 +274,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
                     IconButton(
                         icon: const Icon(Icons.close,
                             color: Colors.white70, size: 18),
-                        onPressed: () => setState(() => _infoUpdate = null)),
+                        onPressed: () => setStateIfMounted(() => _infoUpdate = null)),
                   ],
                 ),
               ),

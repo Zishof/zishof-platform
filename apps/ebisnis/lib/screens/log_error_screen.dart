@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
+import '../widgets/safe_state.dart';
 
 const _urlIssueBaruGithub = 'https://github.com/Zishof/zishof-platform/issues/new';
 
@@ -50,7 +51,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() => _memuat = true);
+    setStateIfMounted(() => _memuat = true);
     final data = await CoreDb.instance.listErrorLog(
       tingkat: _tingkat,
       kataKunci: _kataKunci.isEmpty ? null : _kataKunci,
@@ -63,7 +64,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
     final totalPeringatan = await CoreDb.instance.jumlahErrorLog(tingkat: 'PERINGATAN');
     final totalInfo = await CoreDb.instance.jumlahErrorLog(tingkat: 'INFO');
     if (mounted) {
-      setState(() {
+      setStateIfMounted(() {
         _data = data.cast<Map<String, dynamic>>();
         _total = total;
         _totalSemua = totalSemua;
@@ -255,32 +256,51 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  if (_data.isEmpty)
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('Tidak ada log.')))
-                  else
-                    ..._data.map((e) => Card(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.circle, size: 10, color: _warnaTingkat(e['tingkat'] as String?)),
-                            title: Text('${e['pesan']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                            subtitle: Text('${_formatWaktu(e['waktu'] as String)} · ${e['sumber'] ?? '-'}'),
-                            trailing: IconButton(icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => _hapus(e['id'] as int)),
-                            onTap: () => _tampilkanAksiBaris(e),
-                          ),
-                        )),
-                  if (_total > _pageSize)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _halaman > 1 ? () => _pindah(_halaman - 1) : null),
-                          Text('Halaman $_halaman / $_totalHalaman'),
-                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null),
-                        ],
-                      ),
+                  AppDataTable(
+                    minWidth: 860,
+                    emptyText: 'Tidak ada log.',
+                    columns: const [
+                      AppTableColumn('Waktu', flex: 2),
+                      AppTableColumn('Tingkat', flex: 2),
+                      AppTableColumn('Sumber', flex: 2),
+                      AppTableColumn('Pesan', flex: 5),
+                      AppTableColumn('Aksi', width: 64, align: TextAlign.center),
+                    ],
+                    rows: _data
+                        .map((e) => AppTableRowData(
+                              onTap: () => _tampilkanAksiBaris(e),
+                              cells: [
+                                AppTableCell.text(_formatWaktu(e['waktu'] as String), flex: 2),
+                                AppTableCell(
+                                  flex: 2,
+                                  child: StatusPill(
+                                    label: '${e['tingkat'] ?? '-'}',
+                                    warna: _warnaTingkat(e['tingkat'] as String?),
+                                  ),
+                                ),
+                                AppTableCell.text('${e['sumber'] ?? '-'}', flex: 2),
+                                AppTableCell.text('${e['pesan']}', flex: 5, maxLines: 2),
+                                AppTableCell(
+                                  width: 64,
+                                  align: TextAlign.center,
+                                  child: IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: const Icon(Icons.delete_outline, size: 20),
+                                    onPressed: () => _hapus(e['id'] as int),
+                                  ),
+                                ),
+                              ],
+                            ))
+                        .toList(),
+                    pagination: AppTablePagination(
+                      halaman: _halaman,
+                      totalHalaman: _totalHalaman,
+                      totalData: _total,
+                      labelData: 'log',
+                      onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                      onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
                     ),
+                  ),
                 ],
               ),
             ),

@@ -13,6 +13,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -78,7 +79,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
   }
 
   Future<void> _muatSemua() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
@@ -105,16 +106,16 @@ class _ProdukScreenState extends State<ProdukScreen> {
         // dasbor KPI gagal muat bukan blocker -- daftar produk tetap tampil normal.
       }
 
-      setState(() {
+      setStateIfMounted(() {
         _semuaProduk = produk;
         _kategori = kategori;
         _statistik = statistik;
         _halaman = 0;
       });
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -339,8 +340,14 @@ class _ProdukScreenState extends State<ProdukScreen> {
       scrollable: false,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _bukaFormProduk(),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Produk'),
+        icon: const Icon(
+          Icons.add,
+          color: AppColors.darkTextPrimary,
+        ),
+        label: const Text(
+          'Tambah Produk',
+          style: TextStyle(color: AppColors.darkTextPrimary),
+        ),
         backgroundColor: AppColors.primary,
       ),
       body: _memuat
@@ -372,14 +379,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
                       if (_statistik != null)
                         _KartuStatistik(statistik: _statistik!),
                       const SizedBox(height: 12),
-                      TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Cari produk (nama/kode/barcode)...',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        onChanged: (v) => setState(() {
+                      AppSearchField(
+                        hintText: 'Cari produk (nama/kode/barcode)...',
+                        onChanged: (v) => setStateIfMounted(() {
                           _kataKunci = v;
                           _halaman = 0;
                         }),
@@ -395,7 +397,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
                               child: ChoiceChip(
                                 label: const Text('Semua'),
                                 selected: _kategoriTerpilih == null,
-                                onSelected: (_) => setState(() {
+                                onSelected: (_) => setStateIfMounted(() {
                                   _kategoriTerpilih = null;
                                   _halaman = 0;
                                 }),
@@ -406,7 +408,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                   child: ChoiceChip(
                                     label: Text(k.nama),
                                     selected: _kategoriTerpilih == k.id,
-                                    onSelected: (_) => setState(() {
+                                    onSelected: (_) => setStateIfMounted(() {
                                       _kategoriTerpilih = k.id;
                                       _halaman = 0;
                                     }),
@@ -445,14 +447,14 @@ class _ProdukScreenState extends State<ProdukScreen> {
                               IconButton(
                                 icon: const Icon(Icons.chevron_left),
                                 onPressed: _halaman > 0
-                                    ? () => setState(() => _halaman--)
+                                    ? () => setStateIfMounted(() => _halaman--)
                                     : null,
                               ),
                               Text('Halaman ${_halaman + 1} / $_totalHalaman'),
                               IconButton(
                                 icon: const Icon(Icons.chevron_right),
                                 onPressed: _halaman < _totalHalaman - 1
-                                    ? () => setState(() => _halaman++)
+                                    ? () => setStateIfMounted(() => _halaman++)
                                     : null,
                               ),
                             ],
@@ -490,7 +492,7 @@ class _KartuStatistik extends StatelessWidget {
         Icons.pause_circle_outline,
         'Nonaktif',
         '${statistik['totalNonaktif'] ?? 0}',
-        AppColors.textSecondary
+        AppColors.textSecondaryOf(context)
       ),
       (
         Icons.remove_shopping_cart_outlined,
@@ -587,6 +589,7 @@ class _TabelProduk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gayaHeaderTabel = _gayaHeaderTabel(context);
     return AppSectionCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -594,30 +597,31 @@ class _TabelProduk extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-                color: AppColors.pageBg,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
-            child: const Row(
+            decoration: BoxDecoration(
+                color: AppColors.pageBgOf(context),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12))),
+            child: Row(
               children: [
                 Expanded(
-                    flex: 4, child: Text('PRODUK', style: _gayaHeaderTabel)),
+                    flex: 4, child: Text('PRODUK', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
-                    child: Text('SKU / BARCODE', style: _gayaHeaderTabel)),
+                    child: Text('SKU / BARCODE', style: gayaHeaderTabel)),
                 Expanded(
-                    flex: 2, child: Text('KATEGORI', style: _gayaHeaderTabel)),
+                    flex: 2, child: Text('KATEGORI', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('HARGA JUAL',
-                        textAlign: TextAlign.right, style: _gayaHeaderTabel)),
+                        textAlign: TextAlign.right, style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('STOK',
-                        textAlign: TextAlign.center, style: _gayaHeaderTabel)),
+                        textAlign: TextAlign.center, style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('STATUS',
-                        textAlign: TextAlign.center, style: _gayaHeaderTabel)),
+                        textAlign: TextAlign.center, style: gayaHeaderTabel)),
               ],
             ),
           ),
@@ -629,10 +633,10 @@ class _TabelProduk extends StatelessWidget {
   }
 }
 
-const _gayaHeaderTabel = TextStyle(
+TextStyle _gayaHeaderTabel(BuildContext context) => TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.bold,
-    color: AppColors.textSecondary,
+    color: AppColors.textSecondaryOf(context),
     letterSpacing: 0.4);
 
 class _BarisTabelProduk extends StatelessWidget {
@@ -651,8 +655,9 @@ class _BarisTabelProduk extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppColors.border))),
+        decoration: BoxDecoration(
+            border:
+                Border(top: BorderSide(color: AppColors.borderOf(context)))),
         child: Row(
           children: [
             Expanded(
@@ -686,9 +691,9 @@ class _BarisTabelProduk extends StatelessWidget {
               child: Text(produk.kode,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondaryOf(context),
                       fontFamily: 'monospace')),
             ),
             Expanded(
@@ -721,7 +726,7 @@ class _BarisTabelProduk extends StatelessWidget {
                     label: produk.aktif ? 'Aktif' : 'Nonaktif',
                     warna: produk.aktif
                         ? AppColors.success
-                        : AppColors.textSecondary),
+                        : AppColors.textSecondaryOf(context)),
               ),
             ),
           ],
@@ -839,20 +844,20 @@ class _FormProdukState extends State<_FormProduk> {
               .toList()),
     );
     if (dipilih == null) return;
-    setState(() => _bahanBaku.add(_BahanBakuBaris(
+    setStateIfMounted(() => _bahanBaku.add(_BahanBakuBaris(
         produkId: dipilih.id,
         nama: dipilih.nama,
         hargaAwal: dipilih.hargaBeli.toStringAsFixed(0))));
   }
 
   void _hapusBahanBaku(_BahanBakuBaris b) {
-    setState(() => _bahanBaku.remove(b));
+    setStateIfMounted(() => _bahanBaku.remove(b));
     b.dispose();
   }
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
     });
@@ -881,9 +886,9 @@ class _FormProdukState extends State<_FormProduk> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -899,107 +904,93 @@ class _FormProdukState extends State<_FormProduk> {
         expand: false,
         builder: (context, scrollController) => Form(
           key: _formKey,
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.all(20),
+          child: AppFormSheet(
+            scrollController: scrollController,
+            title: ubah ? 'Ubah Produk' : 'Tambah Produk',
+            subtitle:
+                'Atur identitas, harga, stok, dan resep bahan baku produk.',
+            icon: ubah ? Icons.edit_note_outlined : Icons.add_box_outlined,
+            errorText: _pesanError,
             children: [
-              Text(ubah ? 'Ubah Produk' : 'Tambah Produk',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              if (_pesanError != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(_pesanError!,
-                        style: TextStyle(color: Colors.red.shade700)),
-                  ),
-                ),
-              TextFormField(
-                controller: _kode,
-                decoration: const InputDecoration(
-                    labelText: 'Kode Produk *', border: OutlineInputBorder()),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nama,
-                decoration: const InputDecoration(
-                    labelText: 'Nama Produk *', border: OutlineInputBorder()),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _barcode,
-                decoration: const InputDecoration(
-                    labelText: 'Barcode (opsional)',
-                    border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                value: _kategoriId,
-                decoration: const InputDecoration(
-                    labelText: 'Kategori', border: OutlineInputBorder()),
-                items: [
-                  const DropdownMenuItem<int?>(
-                      value: null, child: Text('-- Tanpa Kategori --')),
-                  ...widget.kategori.map((k) =>
-                      DropdownMenuItem<int?>(value: k.id, child: Text(k.nama))),
-                ],
-                onChanged: (v) => setState(() => _kategoriId = v),
-              ),
-              const SizedBox(height: 12),
-              Row(
+              AppFormSection(
+                judul: 'Identitas Produk',
+                deskripsi:
+                    'Kode dan nama produk digunakan di kasir, laporan, dan pencarian stok.',
                 children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _hargaBeli,
-                      enabled: _bahanBaku.isEmpty,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Harga Beli',
-                        helperText: _bahanBaku.isNotEmpty
-                            ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
-                            : null,
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
+                  AppFormTextField(
+                    label: 'Kode Produk *',
+                    controller: _kode,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _hargaJual,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Harga Jual *',
-                          border: OutlineInputBorder()),
-                      validator: (v) =>
-                          _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
+                  AppFormTextField(
+                    label: 'Nama Produk *',
+                    controller: _nama,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                  ),
+                  AppFormTextField(
+                    label: 'Barcode (opsional)',
+                    controller: _barcode,
+                  ),
+                  DropdownButtonFormField<int?>(
+                    value: _kategoriId,
+                    decoration: AppFormStyle.fieldDecoration(
+                      context,
+                      labelText: 'Kategori',
                     ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                          value: null, child: Text('-- Tanpa Kategori --')),
+                      ...widget.kategori.map((k) => DropdownMenuItem<int?>(
+                          value: k.id, child: Text(k.nama))),
+                    ],
+                    onChanged: (v) => setStateIfMounted(() => _kategoriId = v),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _stok,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Stok', border: OutlineInputBorder()),
+              AppFormSection(
+                judul: 'Harga & Stok',
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Harga Beli',
+                          controller: _hargaBeli,
+                          enabled: _bahanBaku.isEmpty,
+                          keyboardType: TextInputType.number,
+                          helperText: _bahanBaku.isNotEmpty
+                              ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Harga Jual *',
+                          controller: _hargaJual,
+                          keyboardType: TextInputType.number,
+                          validator: (v) =>
+                              _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  AppFormTextField(
+                    label: 'Stok',
+                    controller: _stok,
+                    keyboardType: TextInputType.number,
+                  ),
+                  AppFormTextField(
+                    label: 'Keterangan',
+                    controller: _keterangan,
+                    maxLines: 2,
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _keterangan,
-                decoration: const InputDecoration(
-                    labelText: 'Keterangan', border: OutlineInputBorder()),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
               AppSectionCard(
                 judul: 'Bahan Baku (Resep) & HPP Otomatis',
                 aksiJudul: TextButton.icon(
@@ -1007,10 +998,11 @@ class _FormProdukState extends State<_FormProduk> {
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Tambah')),
                 child: _bahanBaku.isEmpty
-                    ? const Text(
+                    ? Text(
                         'Belum ada resep -- Harga Beli diisi manual. Tambahkan komponen di sini kalau produk ini dirakit dari bahan lain (HPP dihitung otomatis).',
                         style: TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary))
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context)))
                     : Column(
                         children: [
                           ..._bahanBaku.map((b) => Padding(
@@ -1028,11 +1020,13 @@ class _FormProdukState extends State<_FormProduk> {
                                       child: TextField(
                                         controller: b.qty,
                                         keyboardType: TextInputType.number,
-                                        decoration: const InputDecoration(
-                                            labelText: 'Qty',
-                                            isDense: true,
-                                            border: OutlineInputBorder()),
-                                        onChanged: (_) => setState(() {}),
+                                        decoration: AppFormStyle.fieldDecoration(
+                                          context,
+                                          labelText: 'Qty',
+                                          isDense: true,
+                                        ),
+                                        onChanged: (_) =>
+                                            setStateIfMounted(() {}),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -1041,11 +1035,13 @@ class _FormProdukState extends State<_FormProduk> {
                                       child: TextField(
                                         controller: b.harga,
                                         keyboardType: TextInputType.number,
-                                        decoration: const InputDecoration(
-                                            labelText: 'Harga Satuan',
-                                            isDense: true,
-                                            border: OutlineInputBorder()),
-                                        onChanged: (_) => setState(() {}),
+                                        decoration: AppFormStyle.fieldDecoration(
+                                          context,
+                                          labelText: 'Harga Satuan',
+                                          isDense: true,
+                                        ),
+                                        onChanged: (_) =>
+                                            setStateIfMounted(() {}),
                                       ),
                                     ),
                                     IconButton(
@@ -1071,31 +1067,46 @@ class _FormProdukState extends State<_FormProduk> {
                       ),
               ),
               const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Boleh dijual walau stok minus'),
-                value: _izinkanJualMinusStok,
-                onChanged: (v) => setState(() => _izinkanJualMinusStok = v),
+              AppFormSection(
+                judul: 'Pengaturan',
+                children: [
+                  AppFormSwitchTile(
+                    title: 'Boleh dijual walau stok minus',
+                    value: _izinkanJualMinusStok,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _izinkanJualMinusStok = v),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Aktif (tampil di Kasir)',
+                    value: _aktif,
+                    onChanged: (v) => setStateIfMounted(() => _aktif = v),
+                  ),
+                ],
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Aktif (tampil di Kasir)'),
-                value: _aktif,
-                onChanged: (v) => setState(() => _aktif = v),
+            ],
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _menyimpan ? null : _simpan,
-                  style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14)),
-                  child: _menyimpan
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Simpan'),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
               ),
             ],
@@ -1129,43 +1140,55 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
             p.kode.toLowerCase().contains(_kataKunci.toLowerCase()))
         .take(50)
         .toList();
-    return AlertDialog(
-      title: const Text('Pilih Bahan Baku'),
-      content: SizedBox(
-        width: 360,
-        height: 420,
-        child: Column(
-          children: [
-            TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari produk...',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true,
-                  border: OutlineInputBorder()),
-              onChanged: (v) => setState(() => _kataKunci = v),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: tersaring.isEmpty
-                  ? const Center(child: Text('Tidak ditemukan.'))
-                  : ListView.builder(
-                      itemCount: tersaring.length,
-                      itemBuilder: (context, i) {
-                        final p = tersaring[i];
-                        return ListTile(
-                          dense: true,
-                          title: Text(p.nama),
-                          subtitle: Text(p.kode),
-                          trailing: Text(_formatRupiah.format(p.hargaBeli)),
-                          onTap: () => Navigator.of(context).pop(p),
-                        );
-                      },
-                    ),
-            ),
-          ],
+    return AppDetailDialogShell(
+      title: 'Pilih Bahan Baku',
+      children: [
+        TextField(
+          autofocus: true,
+          decoration: AppFormStyle.fieldDecoration(
+            context,
+            labelText: 'Cari Produk',
+            hintText: 'Cari produk...',
+            prefixIcon: const Icon(Icons.search),
+            isDense: true,
+          ),
+          onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
         ),
-      ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 420,
+          child: tersaring.isEmpty
+              ? Center(
+                  child: Text(
+                    'Tidak ditemukan.',
+                    style: TextStyle(color: AppColors.textSecondaryOf(context)),
+                  ),
+                )
+              : AppDataTable(
+                  minWidth: 620,
+                  emptyText: 'Tidak ditemukan.',
+                  columns: const [
+                    AppTableColumn('Produk', flex: 3),
+                    AppTableColumn('Kode', flex: 2),
+                    AppTableColumn('Harga Beli', flex: 2, align: TextAlign.right),
+                  ],
+                  rows: tersaring.map((p) {
+                    return AppTableRowData(
+                      cells: [
+                        AppTableCell.text(p.nama, flex: 3),
+                        AppTableCell.text(p.kode, flex: 2),
+                        AppTableCell.text(
+                          _formatRupiah.format(p.hargaBeli),
+                          flex: 2,
+                          align: TextAlign.right,
+                        ),
+                      ],
+                      onTap: () => Navigator.of(context).pop(p),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
       actions: [
         TextButton(
             onPressed: () => Navigator.of(context).pop(),

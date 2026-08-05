@@ -31,6 +31,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_PATCH=${FLUTT
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}")
 if(EBISNIS_RESOLVED_VARIANT STREQUAL "albahjah")
   target_compile_definitions(${BINARY_NAME} PRIVATE "EBISNIS_VARIANT_ALBAHJAH")
+  set_target_properties(${BINARY_NAME} PROPERTIES OUTPUT_NAME "albahjah-pos")
 endif()
 
 # Disable Windows macros that collide with C++ standard library functions.

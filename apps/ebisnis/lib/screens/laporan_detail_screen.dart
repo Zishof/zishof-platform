@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
+import '../widgets/safe_state.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
 /// form filter dibangun murni dari metadata katalog (`produk`/`pelanggan`/
@@ -67,22 +68,22 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
   }
 
   Future<void> _tampilkan() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('laporan_jalankan', _buatPayload());
-      setState(() => _hasil = hasil);
+      setStateIfMounted(() => _hasil = hasil);
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
   Future<void> _cetakPdf() async {
-    setState(() => _memprosesPdf = true);
+    setStateIfMounted(() => _memprosesPdf = true);
     try {
       final hasil = await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
       final b64 = hasil['pdfBase64'] as String?;
@@ -93,7 +94,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuat PDF: $e')));
     } finally {
-      if (mounted) setState(() => _memprosesPdf = false);
+      if (mounted) setStateIfMounted(() => _memprosesPdf = false);
     }
   }
 
@@ -142,7 +143,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     final awal = (mulai ? _tglMulai : _tglSampai) ?? DateTime.now();
     final dipilih = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2015), lastDate: DateTime(2100));
     if (dipilih != null) {
-      setState(() {
+      setStateIfMounted(() {
         if (mulai) {
           _tglMulai = dipilih;
         } else {
@@ -190,7 +191,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
                     TextField(controller: _controllerPelanggan, decoration: const InputDecoration(labelText: 'Cari Pelanggan', border: OutlineInputBorder(), isDense: true)),
                   ],
                   if (_adaFilterPerToko)
-                    CheckboxListTile(value: _perToko, onChanged: (v) => setState(() => _perToko = v ?? false), title: const Text('Tampilkan per Toko'), contentPadding: EdgeInsets.zero, dense: true),
+                    CheckboxListTile(value: _perToko, onChanged: (v) => setStateIfMounted(() => _perToko = v ?? false), title: const Text('Tampilkan per Toko'), contentPadding: EdgeInsets.zero, dense: true),
                   const SizedBox(height: 12),
                   Row(
                     children: [

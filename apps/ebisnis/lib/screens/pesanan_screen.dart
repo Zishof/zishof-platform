@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -15,6 +16,7 @@ final _formatRupiah =
 enum _Filter { semua, online, tertahan }
 
 const _tinggiKartuKpiPesanan = 96.0;
+const _pageSizePesanan = 20;
 
 /// Layar Pesanan (padanan pesanan.html/pesanan-renderer.js Electron) --
 /// gabungan 2 jenis draft (lihat JavaDoc [Pesanan]): Pesanan Online (dibuat
@@ -45,6 +47,7 @@ class _PesananScreenState extends State<PesananScreen> {
   final _pembeliController = TextEditingController();
   final _pedagangController = TextEditingController();
   bool _filterTerbuka = false;
+  int _halamanPesanan = 1;
 
   @override
   void initState() {
@@ -62,7 +65,7 @@ class _PesananScreenState extends State<PesananScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
@@ -74,10 +77,12 @@ class _PesananScreenState extends State<PesananScreen> {
       if (_hanyaBelumLunas) payload['hanya_belum_lunas'] = true;
       if (_sejak != null) payload['sejak'] = _formatTanggalIso(_sejak!);
       if (_sampai != null) payload['sampai'] = _formatTanggalIso(_sampai!);
-      if (_kodeController.text.trim().isNotEmpty)
+      if (_kodeController.text.trim().isNotEmpty) {
         payload['kode'] = _kodeController.text.trim();
-      if (_pembeliController.text.trim().isNotEmpty)
+      }
+      if (_pembeliController.text.trim().isNotEmpty) {
         payload['pembeli'] = _pembeliController.text.trim();
+      }
       if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
         payload['pedagang'] = _pedagangController.text.trim();
       }
@@ -85,11 +90,14 @@ class _PesananScreenState extends State<PesananScreen> {
       final data = ((hasil['pesanan'] as List?) ?? [])
           .map((e) => Pesanan.fromJson(e as Map<String, dynamic>))
           .toList();
-      setState(() => _semua = data);
+      setStateIfMounted(() {
+        _semua = data;
+        _halamanPesanan = 1;
+      });
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -104,7 +112,14 @@ class _PesananScreenState extends State<PesananScreen> {
         firstDate: DateTime(2020),
         lastDate: DateTime(2100));
     if (hasil == null) return;
-    setState(() => mulai ? _sejak = hasil : _sampai = hasil);
+    setStateIfMounted(() {
+      if (mulai) {
+        _sejak = hasil;
+      } else {
+        _sampai = hasil;
+      }
+      _halamanPesanan = 1;
+    });
   }
 
   Future<void> _hitungUlang(Pesanan p) async {
@@ -118,9 +133,10 @@ class _PesananScreenState extends State<PesananScreen> {
       }
       await _muat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -211,40 +227,24 @@ class _PesananScreenState extends State<PesananScreen> {
       builder: (_) => AlertDialog(
         title: Text('Detail ${p.kode}'),
         content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Pemesan: ${p.pemesan.isEmpty ? "-" : p.pemesan}'),
-              if (p.namaMesin != null) Text('Mesin: ${p.namaMesin}'),
-              if (p.kasirLoginNama.isNotEmpty)
-                Text('Kasir: ${p.kasirLoginNama}'),
-              const Divider(),
-              ...p.items.map((i) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                            child: Text(
-                                '${i.nama} x${i.jumlah.toStringAsFixed(0)}')),
-                        Text(_formatRupiah
-                            .format(i.harga * i.jumlah - i.diskon)),
-                      ],
-                    ),
-                  )),
-              const Divider(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          width: 820,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Total',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(_formatRupiah.format(p.totalBiaya),
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  _ringkasanDetailPesanan(p),
+                  const SizedBox(height: 12),
+                  _tabelDetailPesanan(p),
+                  const SizedBox(height: 12),
+                  _totalDetailPesanan(p),
                 ],
               ),
-            ],
+            ),
           ),
         ),
         actions: [
@@ -291,6 +291,176 @@ class _PesananScreenState extends State<PesananScreen> {
     );
   }
 
+  Widget _ringkasanDetailPesanan(Pesanan p) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _chipDetail(Icons.person_outline,
+            'Pemesan: ${p.pemesan.isEmpty ? "-" : p.pemesan}'),
+        if (p.namaMesin != null)
+          _chipDetail(Icons.devices_outlined, 'Mesin: ${p.namaMesin}'),
+        if (p.kasirLoginNama.isNotEmpty)
+          _chipDetail(Icons.badge_outlined, 'Kasir: ${p.kasirLoginNama}'),
+        _chipDetail(
+          p.dariPembeliOnline ? Icons.public : Icons.pause_circle_outline,
+          p.dariPembeliOnline ? 'Pesanan Online' : 'Keranjang Tertahan',
+        ),
+      ],
+    );
+  }
+
+  Widget _chipDetail(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.pageBgOf(context),
+        border: Border.all(color: AppColors.borderOf(context)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondaryOf(context)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabelDetailPesanan(Pesanan p) {
+    String formatJumlah(double jumlah) =>
+        jumlah.toStringAsFixed(jumlah == jumlah.roundToDouble() ? 0 : 2);
+
+    return AppDataTable(
+      minWidth: 760,
+      emptyText: 'Tidak ada item pesanan.',
+      columns: const [
+        AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Kode', flex: 2),
+        AppTableColumn('Qty', width: 72, align: TextAlign.center),
+        AppTableColumn('Harga', flex: 2, align: TextAlign.right),
+        AppTableColumn('Diskon', flex: 2, align: TextAlign.right),
+        AppTableColumn('Subtotal', flex: 2, align: TextAlign.right),
+      ],
+      rows: p.items.map((item) {
+        final subtotal = item.harga * item.jumlah - item.diskon;
+        return AppTableRowData(cells: [
+          AppTableCell.text(
+            item.nama,
+            flex: 4,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+          AppTableCell.text(
+            item.kode.isEmpty ? '-' : item.kode,
+            flex: 2,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondaryOf(context),
+              fontFamily: 'monospace',
+            ),
+          ),
+          AppTableCell.text(
+            formatJumlah(item.jumlah),
+            width: 72,
+            align: TextAlign.center,
+          ),
+          AppTableCell.text(
+            _formatRupiah.format(item.harga),
+            flex: 2,
+            align: TextAlign.right,
+          ),
+          AppTableCell.text(
+            item.diskon <= 0 ? '-' : _formatRupiah.format(item.diskon),
+            flex: 2,
+            align: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: item.diskon <= 0
+                  ? AppColors.textSecondaryOf(context)
+                  : AppColors.warning,
+            ),
+          ),
+          AppTableCell.text(
+            _formatRupiah.format(subtotal),
+            flex: 2,
+            align: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+        ]);
+      }).toList(),
+    );
+  }
+
+  Widget _totalDetailPesanan(Pesanan p) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: AppSectionCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (p.totalDiskon > 0)
+                _barisTotalDetail(
+                    'Diskon', '-${_formatRupiah.format(p.totalDiskon)}',
+                    warna: AppColors.warning),
+              if (p.totalCashback > 0)
+                _barisTotalDetail(
+                    'Cashback', '+${_formatRupiah.format(p.totalCashback)}',
+                    warna: AppColors.success),
+              _barisTotalDetail(
+                'Total',
+                _formatRupiah.format(p.totalBiaya),
+                tebal: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _barisTotalDetail(
+    String label,
+    String nilai, {
+    bool tebal = false,
+    Color? warna,
+  }) {
+    final gaya = TextStyle(
+      fontSize: tebal ? 16 : 12.5,
+      fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
+      color: warna ?? AppColors.textPrimaryOf(context),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: gaya),
+          Text(nilai, style: gaya),
+        ],
+      ),
+    );
+  }
+
   Future<void> _muatKeKeranjang(Pesanan p) async {
     Anggota? member;
     if (p.anggotaId != null) {
@@ -298,8 +468,9 @@ class _PesananScreenState extends State<PesananScreen> {
         final hasil =
             await ApiClient.instance.aksi('cari_member', {'id': p.anggotaId});
         final arr = (hasil['member'] as List?) ?? [];
-        if (arr.isNotEmpty)
+        if (arr.isNotEmpty) {
           member = Anggota.fromJson(arr.first as Map<String, dynamic>);
+        }
       } catch (_) {
         // Gagal memuat detail member -- tetap lanjut memuat keranjang tanpa member (bukan blocker).
       }
@@ -353,9 +524,10 @@ class _PesananScreenState extends State<PesananScreen> {
       }
       await _muat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -400,9 +572,10 @@ class _PesananScreenState extends State<PesananScreen> {
     if (konfirmasi != true) return;
     final alasan = alasanController.text.trim();
     if (alasan.isEmpty) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
+      }
       return;
     }
     try {
@@ -410,15 +583,26 @@ class _PesananScreenState extends State<PesananScreen> {
           .aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
       await _muat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final semua = _semua;
+    final pesananTersaring = _tersaring;
+    final totalHalamanPesanan = (pesananTersaring.length / _pageSizePesanan)
+        .ceil()
+        .clamp(1, 999999)
+        .toInt();
+    final halamanPesanan =
+        _halamanPesanan.clamp(1, totalHalamanPesanan).toInt();
+    final awalPesanan = (halamanPesanan - 1) * _pageSizePesanan;
+    final pesananHalamanIni =
+        pesananTersaring.skip(awalPesanan).take(_pageSizePesanan).toList();
     final jumlahOnline = semua.where((p) => p.dariPembeliOnline).length;
     final jumlahTertahan = semua.length - jumlahOnline;
     final nilaiMenunggu = semua.fold<double>(0, (s, p) => s + p.totalBiaya);
@@ -426,7 +610,8 @@ class _PesananScreenState extends State<PesananScreen> {
       HeaderActionButton(
         icon: _filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined,
         label: 'Filter',
-        onPressed: () => setState(() => _filterTerbuka = !_filterTerbuka),
+        onPressed: () =>
+            setStateIfMounted(() => _filterTerbuka = !_filterTerbuka),
       ),
       if (Sesi.instance.bolehKelola)
         HeaderActionButton(
@@ -574,16 +759,19 @@ class _PesananScreenState extends State<PesananScreen> {
                                   FilterChip(
                                     label: const Text('Hanya Belum Lunas'),
                                     selected: _hanyaBelumLunas,
-                                    onSelected: (v) =>
-                                        setState(() => _hanyaBelumLunas = v),
+                                    onSelected: (v) => setStateIfMounted(() {
+                                      _hanyaBelumLunas = v;
+                                      _halamanPesanan = 1;
+                                    }),
                                   ),
                                   const Spacer(),
                                   TextButton(
                                     onPressed: () {
-                                      setState(() {
+                                      setStateIfMounted(() {
                                         _sejak = null;
                                         _sampai = null;
                                         _hanyaBelumLunas = false;
+                                        _halamanPesanan = 1;
                                         _kodeController.clear();
                                         _pembeliController.clear();
                                         _pedagangController.clear();
@@ -608,63 +796,151 @@ class _PesananScreenState extends State<PesananScreen> {
                           ChoiceChip(
                             label: const Text('Semua'),
                             selected: _filter == _Filter.semua,
-                            onSelected: (_) =>
-                                setState(() => _filter = _Filter.semua),
+                            onSelected: (_) => setStateIfMounted(() {
+                              _filter = _Filter.semua;
+                              _halamanPesanan = 1;
+                            }),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Online'),
                             selected: _filter == _Filter.online,
-                            onSelected: (_) =>
-                                setState(() => _filter = _Filter.online),
+                            onSelected: (_) => setStateIfMounted(() {
+                              _filter = _Filter.online;
+                              _halamanPesanan = 1;
+                            }),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Tertahan'),
                             selected: _filter == _Filter.tertahan,
-                            onSelected: (_) =>
-                                setState(() => _filter = _Filter.tertahan),
+                            onSelected: (_) => setStateIfMounted(() {
+                              _filter = _Filter.tertahan;
+                              _halamanPesanan = 1;
+                            }),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      if (_tersaring.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(child: Text('Tidak ada pesanan.')),
-                        )
-                      else
-                        ..._tersaring.map((p) => Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                title: Text(p.kode,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                                subtitle: Text(p.pemesan.isEmpty
+                      AppDataTable(
+                        minWidth: 960,
+                        emptyText: 'Tidak ada pesanan.',
+                        columns: const [
+                          AppTableColumn('Kode', flex: 2),
+                          AppTableColumn('Pemesan', flex: 3),
+                          AppTableColumn('Tipe',
+                              flex: 2, align: TextAlign.center),
+                          AppTableColumn('Item', flex: 4),
+                          AppTableColumn('Total',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Aksi',
+                              width: 96, align: TextAlign.center),
+                        ],
+                        rows: pesananHalamanIni.map((p) {
+                          final warnaStatus = p.dariPembeliOnline
+                              ? const Color(0xFF0284C7)
+                              : const Color(0xFFB8860B);
+                          final ringkasanItem = p.items.isEmpty
+                              ? '-'
+                              : p.items.take(3).map((item) {
+                                  final jumlah = item.jumlah.toStringAsFixed(
+                                      item.jumlah == item.jumlah.roundToDouble()
+                                          ? 0
+                                          : 2);
+                                  return '${item.nama} x$jumlah';
+                                }).join(', ');
+                          final sisaItem = p.items.length > 3
+                              ? ' +${p.items.length - 3} item'
+                              : '';
+
+                          return AppTableRowData(
+                            onTap: () => _lihatDetail(p),
+                            cells: [
+                              AppTableCell.text(
+                                p.kode,
+                                flex: 2,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimaryOf(context),
+                                ),
+                              ),
+                              AppTableCell.text(
+                                p.pemesan.isEmpty
                                     ? '(Tanpa member)'
-                                    : p.pemesan),
-                                trailing: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                    : p.pemesan,
+                                flex: 3,
+                              ),
+                              AppTableCell(
+                                flex: 2,
+                                align: TextAlign.center,
+                                child: Align(
+                                  alignment: Alignment.center,
+                                  child: StatusPill(
+                                    label: p.dariPembeliOnline
+                                        ? 'Online'
+                                        : 'Tertahan',
+                                    warna: warnaStatus,
+                                  ),
+                                ),
+                              ),
+                              AppTableCell.text(
+                                '$ringkasanItem$sisaItem',
+                                flex: 4,
+                                maxLines: 2,
+                              ),
+                              AppTableCell.text(
+                                _formatRupiah.format(p.totalBiaya),
+                                flex: 2,
+                                align: TextAlign.right,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimaryOf(context),
+                                ),
+                              ),
+                              AppTableCell(
+                                width: 96,
+                                align: TextAlign.center,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(_formatRupiah.format(p.totalBiaya),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    Text(
-                                        p.dariPembeliOnline
-                                            ? 'Online'
-                                            : 'Tertahan',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: p.dariPembeliOnline
-                                                ? const Color(0xFF0284C7)
-                                                : const Color(0xFFB8860B))),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Detail',
+                                      icon: const Icon(
+                                          Icons.visibility_outlined,
+                                          size: 20),
+                                      onPressed: () => _lihatDetail(p),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Aksi',
+                                      icon: const Icon(Icons.more_horiz,
+                                          size: 20),
+                                      onPressed: () => _tampilkanAksi(p),
+                                    ),
                                   ],
                                 ),
-                                onTap: () => _lihatDetail(p),
-                                onLongPress: () => _tampilkanAksi(p),
                               ),
-                            )),
+                            ],
+                          );
+                        }).toList(),
+                        pagination: AppTablePagination(
+                          halaman: halamanPesanan,
+                          totalHalaman: totalHalamanPesanan,
+                          totalData: pesananTersaring.length,
+                          labelData: 'pesanan',
+                          onSebelumnya: halamanPesanan > 1
+                              ? () => setStateIfMounted(
+                                  () => _halamanPesanan = halamanPesanan - 1)
+                              : null,
+                          onBerikutnya: halamanPesanan < totalHalamanPesanan
+                              ? () => setStateIfMounted(
+                                  () => _halamanPesanan = halamanPesanan + 1)
+                              : null,
+                        ),
+                      ),
                     ],
                   ),
                 ),

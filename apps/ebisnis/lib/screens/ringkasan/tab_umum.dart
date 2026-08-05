@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
@@ -8,6 +10,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../../widgets/safe_state.dart';
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
@@ -36,6 +39,7 @@ class _TabelTransaksiUmum extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gayaHeaderTabel = _gayaHeaderTabelUmum(context);
     return AppSectionCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -43,36 +47,31 @@ class _TabelTransaksiUmum extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: AppColors.pageBg,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+            decoration: BoxDecoration(
+              color: AppColors.pageBgOf(context),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Expanded(
-                    flex: 2, child: Text('WAKTU', style: _gayaHeaderTabelUmum)),
+                Expanded(flex: 2, child: Text('WAKTU', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 4,
-                    child:
-                        Text('PEMBELI / BARANG', style: _gayaHeaderTabelUmum)),
+                    child: Text('PEMBELI / BARANG', style: gayaHeaderTabel)),
                 Expanded(
-                    flex: 2,
-                    child: Text('METODE', style: _gayaHeaderTabelUmum)),
+                    flex: 2, child: Text('METODE', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('TOTAL',
-                        textAlign: TextAlign.right,
-                        style: _gayaHeaderTabelUmum)),
+                        textAlign: TextAlign.right, style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('STATUS',
-                        textAlign: TextAlign.center,
-                        style: _gayaHeaderTabelUmum)),
+                        textAlign: TextAlign.center, style: gayaHeaderTabel)),
                 SizedBox(
                     width: 88,
                     child: Text('AKSI',
-                        textAlign: TextAlign.center,
-                        style: _gayaHeaderTabelUmum)),
+                        textAlign: TextAlign.center, style: gayaHeaderTabel)),
               ],
             ),
           ),
@@ -89,12 +88,12 @@ class _TabelTransaksiUmum extends StatelessWidget {
   }
 }
 
-const _gayaHeaderTabelUmum = TextStyle(
-  fontSize: 11,
-  fontWeight: FontWeight.bold,
-  color: AppColors.textSecondary,
-  letterSpacing: 0.4,
-);
+TextStyle _gayaHeaderTabelUmum(BuildContext context) => TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.bold,
+      color: AppColors.textSecondaryOf(context),
+      letterSpacing: 0.4,
+    );
 
 class _BarisTabelTransaksiUmum extends StatelessWidget {
   final Map<String, dynamic> row;
@@ -117,8 +116,8 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
       onLongPress: onLongPress,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border)),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.borderOf(context))),
         ),
         child: Row(
           children: [
@@ -128,8 +127,8 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
                 _formatWaktu(row['waktu']),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context)),
               ),
             ),
             Expanded(
@@ -148,8 +147,9 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
                     '${row['barang'] ?? '-'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryOf(context)),
                   ),
                 ],
               ),
@@ -225,6 +225,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   final _pembeliController = TextEditingController();
   int _halaman = 1;
   bool _grafikTerlihat = false;
+  String? _logApiTerakhir;
 
   @override
   void initState() {
@@ -238,31 +239,68 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     super.dispose();
   }
 
-  Future<void> _muat() async {
-    setState(() {
+  Map<String, String> _payloadRentangTanggal() {
+    final mulai = _mulai;
+    final sampai = _sampai;
+    if (mulai == null && sampai == null) return {};
+
+    final awal = mulai ?? sampai!;
+    final akhir = sampai ?? mulai!;
+    final tanggalAwal = awal.isAfter(akhir) ? akhir : awal;
+    final tanggalAkhir = awal.isAfter(akhir) ? awal : akhir;
+    return {
+      'tglMulai': _formatTanggalServer.format(tanggalAwal),
+      'tglSampai': _formatTanggalServer.format(tanggalAkhir),
+    };
+  }
+
+  Map<String, dynamic> _payloadDashboardUmum() {
+    return {
+      'periodeTren': _periodeTren,
+      ..._payloadRentangTanggal(),
+      if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+      'page': _halaman,
+      'pageSize': _pageSize,
+    };
+  }
+
+  Future<void> _muat({bool simpanLog = false}) async {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
+    final namaApi = 'dashboard_umum';
+    final payload = _payloadDashboardUmum();
+    Map<String, dynamic>? response;
+    Object? error;
     try {
-      final hasil = await ApiClient.instance.aksi('dashboard_umum', {
-        'periodeTren': _periodeTren,
-        if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
-        if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
-        if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
-        'page': _halaman,
-        'pageSize': _pageSize,
-      });
-      setState(() => _d = hasil);
+      final hasil = await ApiClient.instance.aksi(namaApi, payload);
+      response = hasil;
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      error = e;
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+    if (simpanLog && mounted) {
+      setStateIfMounted(() {
+        _logApiTerakhir = _formatLogApi(
+          namaApi: namaApi,
+          payload: payload,
+          response: response,
+          error: error,
+        );
+      });
     }
   }
 
-  Future<void> _terapkan() async {
+  Future<void> _terapkan({bool simpanLog = false}) async {
     _halaman = 1;
-    await _muat();
+    await _muat(simpanLog: simpanLog);
   }
 
   Future<void> _pindah(int h) async {
@@ -277,12 +315,109 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         firstDate: DateTime(2020),
         lastDate: DateTime.now());
     if (v == null) return;
-    if (mulai) {
-      _mulai = v;
-    } else {
-      _sampai = v;
+    if (!mounted) return;
+    setStateIfMounted(() {
+      if (mulai) {
+        _mulai = v;
+        if (_sampai != null && _sampai!.isBefore(v)) _sampai = v;
+      } else {
+        _sampai = v;
+        if (_mulai != null && _mulai!.isAfter(v)) _mulai = v;
+      }
+    });
+    await _terapkan(simpanLog: true);
+  }
+
+  String _formatLogApi({
+    required String namaApi,
+    required Map<String, dynamic> payload,
+    Map<String, dynamic>? response,
+    Object? error,
+  }) {
+    final encoder = const JsonEncoder.withIndent('  ');
+    final request = {'action': namaApi, ...payload};
+    return (StringBuffer()
+          ..writeln('API')
+          ..writeln(namaApi)
+          ..writeln()
+          ..writeln('URL')
+          ..writeln(ApiClient.baseUrl)
+          ..writeln()
+          ..writeln('REQUEST')
+          ..writeln(encoder.convert(request))
+          ..writeln()
+          ..writeln(error == null ? 'RESPONSE' : 'ERROR')
+          ..writeln(
+              error == null ? encoder.convert(response) : error.toString()))
+        .toString();
+  }
+
+  Future<void> _tampilkanLogApi() async {
+    final isi = _logApiTerakhir;
+    if (isi == null || isi.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Log API Dashboard Umum'),
+        content: SizedBox(
+          width: 720,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              isi,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusMuatDenganLog() {
+    if (_memuat) {
+      return statusMuatDasbor(
+        memuat: true,
+        error: _error,
+        onCoba: () => _muat(),
+      );
     }
-    await _terapkan();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 40, color: Colors.red),
+            const SizedBox(height: 8),
+            Text(_error ?? 'Gagal memuat.', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () => _muat(simpanLog: true),
+                  child: const Text('Coba Lagi'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _logApiTerakhir == null ? null : _tampilkanLogApi,
+                  icon: const Icon(Icons.article_outlined, size: 18),
+                  label: const Text('Lihat Log'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _terapkanCariPembeli() async {
@@ -322,8 +457,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     if (konfirmasi != true) return;
     try {
       final hasil = await ApiClient.instance.aksi('layani_semua_transaksi', {
-        if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
-        if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
+        ..._payloadRentangTanggal(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -509,36 +643,23 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         builder: (_) => AlertDialog(
           title: Text('Detail ${hasil['kode'] ?? ''}'),
           content: SizedBox(
-            width: 360,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...items.map((i) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                                child: Text(
-                                    '${i['nama']} x${(i['qty'] as num).toStringAsFixed(0)}')),
-                            Text(formatRupiahDasbor.format(
-                                (i['harga'] as num) * (i['qty'] as num) -
-                                    ((i['diskon'] as num?) ?? 0))),
-                          ],
-                        ),
-                      )),
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Total',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(formatRupiahDasbor.format(hasil['totalBiaya'] ?? 0),
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ],
+            width: 820,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ringkasanDetailTransaksi(row, hasil),
+                    const SizedBox(height: 12),
+                    _tabelDetailTransaksi(items),
+                    const SizedBox(height: 12),
+                    _totalDetailTransaksi(hasil),
+                  ],
+                ),
               ),
             ),
           ),
@@ -581,6 +702,172 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     }
   }
 
+  Widget _ringkasanDetailTransaksi(
+    Map<String, dynamic> row,
+    Map<String, dynamic> hasil,
+  ) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _chipDetailTransaksi(
+            Icons.schedule_outlined, 'Waktu: ${_formatWaktu(row['waktu'])}'),
+        _chipDetailTransaksi(Icons.person_outline,
+            'Pembeli: ${row['pembeli'] ?? hasil['pembeli'] ?? '-'}'),
+        _chipDetailTransaksi(Icons.payments_outlined,
+            'Metode: ${row['metode'] ?? hasil['metode'] ?? '-'}'),
+        _chipDetailTransaksi(
+          row['terlayani'] == true
+              ? Icons.check_circle_outline
+              : Icons.hourglass_empty,
+          row['terlayani'] == true ? 'Terlayani' : 'Menunggu',
+        ),
+      ],
+    );
+  }
+
+  Widget _chipDetailTransaksi(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.pageBgOf(context),
+        border: Border.all(color: AppColors.borderOf(context)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondaryOf(context)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabelDetailTransaksi(List<Map<String, dynamic>> items) {
+    String formatQty(dynamic raw) {
+      final qty = (raw as num?)?.toDouble() ?? 0;
+      return qty.toStringAsFixed(qty == qty.roundToDouble() ? 0 : 2);
+    }
+
+    return AppDataTable(
+      minWidth: 760,
+      emptyText: 'Tidak ada item transaksi.',
+      columns: const [
+        AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Kode', flex: 2),
+        AppTableColumn('Qty', width: 72, align: TextAlign.center),
+        AppTableColumn('Harga', flex: 2, align: TextAlign.right),
+        AppTableColumn('Diskon', flex: 2, align: TextAlign.right),
+        AppTableColumn('Subtotal', flex: 2, align: TextAlign.right),
+      ],
+      rows: items.map((item) {
+        final qty = (item['qty'] as num?) ?? 0;
+        final harga = (item['harga'] as num?) ?? 0;
+        final diskon = (item['diskon'] as num?) ?? 0;
+        final subtotal = harga * qty - diskon;
+        return AppTableRowData(cells: [
+          AppTableCell.text(
+            '${item['nama'] ?? '-'}',
+            flex: 4,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+          AppTableCell.text(
+            '${item['kode'] ?? '-'}',
+            flex: 2,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondaryOf(context),
+              fontFamily: 'monospace',
+            ),
+          ),
+          AppTableCell.text(
+            formatQty(item['qty']),
+            width: 72,
+            align: TextAlign.center,
+          ),
+          AppTableCell.text(
+            formatRupiahDasbor.format(harga),
+            flex: 2,
+            align: TextAlign.right,
+          ),
+          AppTableCell.text(
+            diskon == 0 ? '-' : formatRupiahDasbor.format(diskon),
+            flex: 2,
+            align: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: diskon == 0
+                  ? AppColors.textSecondaryOf(context)
+                  : AppColors.warning,
+            ),
+          ),
+          AppTableCell.text(
+            formatRupiahDasbor.format(subtotal),
+            flex: 2,
+            align: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+        ]);
+      }).toList(),
+    );
+  }
+
+  Widget _totalDetailTransaksi(Map<String, dynamic> hasil) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: AppSectionCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: _barisTotalDetailTransaksi(
+            'Total',
+            formatRupiahDasbor.format(hasil['totalBiaya'] ?? 0),
+            tebal: true,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _barisTotalDetailTransaksi(
+    String label,
+    String nilai, {
+    bool tebal = false,
+  }) {
+    final gaya = TextStyle(
+      fontSize: tebal ? 16 : 12.5,
+      fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
+      color: AppColors.textPrimaryOf(context),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: gaya),
+          Text(nilai, style: gaya),
+        ],
+      ),
+    );
+  }
+
   Widget _bangunPanelFilterPembelian() {
     final warnaTeks = Theme.of(context).colorScheme.primary;
     final warnaBorder = Theme.of(context).colorScheme.outline;
@@ -602,21 +889,11 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 820;
               final controls = <Widget>[
-                _labelFilterPembelian(
-                  'Tanggal',
-                  warnaTeks: warnaTeks,
-                  warnaBorder: warnaBorder,
-                ),
                 _tombolTanggalPembelian(
                   label: _mulai == null
                       ? 'Dari Tanggal'
                       : _formatTanggalServer.format(_mulai!),
                   onPressed: () => _pilihTanggal(mulai: true),
-                  warnaTeks: warnaTeks,
-                  warnaBorder: warnaBorder,
-                ),
-                _labelFilterPembelian(
-                  'Tanggal',
                   warnaTeks: warnaTeks,
                   warnaBorder: warnaBorder,
                 ),
@@ -679,35 +956,6 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             },
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _labelFilterPembelian(
-    String label, {
-    required Color warnaTeks,
-    required Color warnaBorder,
-  }) {
-    return SizedBox(
-      width: 96,
-      height: 38,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: warnaBorder),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: warnaTeks,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -783,7 +1031,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   @override
   Widget build(BuildContext context) {
     if (_memuat || _error != null) {
-      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+      return _statusMuatDenganLog();
     }
     final d = _d!;
     final kpi = (d['kpi'] as Map<String, dynamic>?) ?? {};
@@ -802,24 +1050,25 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
           if (d['semuaToko'] == true)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
               child: Text('Menampilkan data SEMUA toko (akun admin).',
                   style: TextStyle(
                       fontSize: 11,
-                      color: Colors.black54,
+                      color: AppColors.textSecondaryOf(context),
                       fontStyle: FontStyle.italic)),
             ),
           LayoutBuilder(builder: (context, c) {
             final lebar = c.maxWidth;
             final kolom = lebar >= 1000 ? 5 : (lebar >= 700 ? 3 : 2);
+            final lebarKolom = (lebar - (12 * (kolom - 1))) / kolom;
             return GridView.count(
               crossAxisCount: kolom,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              // mainAxisExtent: 96,
+              childAspectRatio: lebarKolom / 96,
               children: [
                 AppKpiCard(
                     icon: Icons.receipt_long,
@@ -862,7 +1111,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               label: Text(
                   _grafikTerlihat ? 'Sembunyikan Grafik' : 'Tampilkan Grafik'),
               onPressed: () =>
-                  setState(() => _grafikTerlihat = !_grafikTerlihat),
+                  setStateIfMounted(() => _grafikTerlihat = !_grafikTerlihat),
             ),
           ),
           if (_grafikTerlihat) ...[
@@ -876,7 +1125,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                           label: Text(p),
                           selected: _periodeTren == p,
                           onSelected: (_) {
-                            setState(() => _periodeTren = p);
+                            setStateIfMounted(() => _periodeTren = p);
                             _muat();
                           },
                         ))

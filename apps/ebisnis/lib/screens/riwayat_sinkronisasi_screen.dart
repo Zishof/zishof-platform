@@ -8,6 +8,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -53,12 +54,12 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() => _memuat = true);
+    setStateIfMounted(() => _memuat = true);
     final cache = await CoreDb.instance.listCacheReferensi();
     final hasil = await CoreDb.instance.listTransaksiPending(limit: _pageSize, offset: (_halaman - 1) * _pageSize, status: _statusFilter);
     final totalPending = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) {
-      setState(() {
+      setStateIfMounted(() {
         _cache = cache.cast<Map<String, dynamic>>();
         _transaksi = hasil.data.cast<Map<String, dynamic>>();
         _total = hasil.total;
@@ -80,7 +81,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
 
   Future<void> _sinkronkanSekarang() async {
     if (_sinkronBerjalan) return;
-    setState(() => _sinkronBerjalan = true);
+    setStateIfMounted(() => _sinkronBerjalan = true);
     try {
       final pending = await CoreDb.instance.transaksiPendingBelumSinkron();
       var berhasil = 0;
@@ -105,7 +106,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${pending.length} transaksi berhasil disinkron.')));
       await _muat();
     } finally {
-      if (mounted) setState(() => _sinkronBerjalan = false);
+      if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);
     }
   }
 
@@ -158,18 +159,29 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                   const SizedBox(height: 12),
                   const Text('Sinkron Masuk', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
-                  if (_cache.isEmpty)
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Belum ada data cache tersimpan.', style: TextStyle(color: Colors.black45)))
-                  else
-                    ..._cache.map((c) => Card(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7)),
-                            title: Text(_labelKunci('${c['kunci']}'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                            subtitle: Text('Diperbarui ${_formatWaktu('${c['diperbarui_pada']}')}'),
-                          ),
-                        )),
+                  AppDataTable(
+                    minWidth: 720,
+                    emptyText: 'Belum ada data cache tersimpan.',
+                    columns: const [
+                      AppTableColumn('Jenis Cache', flex: 3),
+                      AppTableColumn('Diperbarui', flex: 3),
+                    ],
+                    rows: _cache
+                        .map((c) => AppTableRowData(cells: [
+                              AppTableCell(
+                                flex: 3,
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7), size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(_labelKunci('${c['kunci']}'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                                  ],
+                                ),
+                              ),
+                              AppTableCell.text(_formatWaktu('${c['diperbarui_pada']}'), flex: 3),
+                            ]))
+                        .toList(),
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -200,46 +212,46 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_transaksi.isEmpty)
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 30), child: Center(child: Text('Tidak ada riwayat transaksi.')))
-                  else
-                    ..._transaksi.map((t) {
+                  AppDataTable(
+                    minWidth: 940,
+                    emptyText: 'Tidak ada riwayat transaksi.',
+                    columns: const [
+                      AppTableColumn('Kode', flex: 3),
+                      AppTableColumn('Waktu', flex: 2),
+                      AppTableColumn('Kasir', flex: 2),
+                      AppTableColumn('Metode', flex: 2),
+                      AppTableColumn('Total', flex: 2, align: TextAlign.right),
+                      AppTableColumn('Status', flex: 2, align: TextAlign.center),
+                    ],
+                    rows: _transaksi.map((t) {
                       final payload = jsonDecode(t['payload_json'] as String) as Map<String, dynamic>;
                       final caraBayarId = payload['caraBayar'];
                       final cocok = Sesi.instance.caraBayar.where((c) => c.id == caraBayarId);
                       final namaCaraBayar = cocok.isEmpty ? '-' : cocok.first.nama;
                       final synced = t['status'] == 'SYNCED';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        child: ListTile(
-                          dense: true,
-                          title: Text('${payload['kodeUnik'] ?? t['kode_unik']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                          subtitle: Text('${_formatWaktu('${t['dibuat_pada']}')} · Kasir ${payload['kasir'] ?? '-'} · $namaCaraBayar'
-                              '${(t['pesan_error'] as String?)?.isNotEmpty == true ? "\nError: ${t['pesan_error']}" : ""}'),
-                          isThreeLine: (t['pesan_error'] as String?)?.isNotEmpty == true,
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(_formatRupiah.format(payload['total'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              Text(synced ? 'Tersinkron' : 'Tertunda', style: TextStyle(fontSize: 10, color: synced ? const Color(0xFF2E7D32) : Colors.orange)),
-                            ],
-                          ),
+                      final pesanError = (t['pesan_error'] as String?) ?? '';
+                      return AppTableRowData(cells: [
+                        AppTableCell.text('${payload['kodeUnik'] ?? t['kode_unik']}', flex: 3),
+                        AppTableCell.text(_formatWaktu('${t['dibuat_pada']}'), flex: 2),
+                        AppTableCell.text('${payload['kasir'] ?? '-'}', flex: 2),
+                        AppTableCell.text(pesanError.isEmpty ? namaCaraBayar : '$namaCaraBayar - $pesanError', flex: 2, maxLines: 2),
+                        AppTableCell.text(_formatRupiah.format(payload['total'] ?? 0), flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                        AppTableCell(
+                          flex: 2,
+                          align: TextAlign.center,
+                          child: StatusPill(label: synced ? 'Tersinkron' : 'Tertunda', warna: synced ? AppColors.success : AppColors.warning),
                         ),
-                      );
-                    }),
-                  if (_total > _pageSize)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _halaman > 1 ? () => _pindah(_halaman - 1) : null),
-                          Text('Halaman $_halaman / $_totalHalaman'),
-                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null),
-                        ],
-                      ),
+                      ]);
+                    }).toList(),
+                    pagination: AppTablePagination(
+                      halaman: _halaman,
+                      totalHalaman: _totalHalaman,
+                      totalData: _total,
+                      labelData: 'transaksi',
+                      onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                      onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
                     ),
+                  ),
                 ],
               ),
             ),

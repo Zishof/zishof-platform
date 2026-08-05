@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 /// Tab 2/9 "Keuangan & Kinerja" -- aksi `dashboard_keuangan` (tanpa filter,
 /// window tetap 14 hari utk tren laba). Berisi 3 sub-bagian: laba (KPI+tren),
@@ -24,17 +25,20 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('dashboard_keuangan');
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

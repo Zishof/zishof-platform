@@ -7,6 +7,7 @@ import 'package:win32/win32.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import 'kasir_screen.dart';
+import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -65,7 +66,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil', {'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId});
       if (!mounted) return;
       final aktif = hasil['aktif'] == true;
-      setState(() {
+      setStateIfMounted(() {
         _koneksiBermasalah = false;
         _aktif = aktif;
         if (aktif) {
@@ -83,7 +84,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     } catch (_) {
       // Gagal poll (mis. offline sesaat) -- biarkan tampilan terakhir yang
       // masih ada, cukup tandai indikator koneksi, jangan kedip ke Idle.
-      if (mounted) setState(() => _koneksiBermasalah = true);
+      if (mounted) setStateIfMounted(() => _koneksiBermasalah = true);
     }
   }
 

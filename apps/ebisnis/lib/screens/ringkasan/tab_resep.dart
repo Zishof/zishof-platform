@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 /// Tab 6/9 "Resep, HPP & Margin" -- aksi `resep_hpp_margin`.
 ///
@@ -27,17 +28,20 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('resep_hpp_margin');
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 /// Tab 7/9 "Ramalan Penjualan" -- aksi `ramalan_penjualan`. Prediksi dihitung
 /// SERVER-SIDE (regresi linear sederhana atas 14 titik transaksi harian) --
@@ -23,17 +24,20 @@ class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('ramalan_penjualan');
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 

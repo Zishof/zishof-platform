@@ -3,6 +3,7 @@ import '../app_variant.dart';
 import '../api_client.dart';
 import 'kasir_screen.dart';
 import 'pengaturan_server_screen.dart';
+import '../widgets/safe_state.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,10 +20,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (_userCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
-      setState(() => _pesanError = 'Username dan password wajib diisi.');
+      setStateIfMounted(() => _pesanError = 'Username dan password wajib diisi.');
       return;
     }
-    setState(() {
+    setStateIfMounted(() {
       _memproses = true;
       _pesanError = null;
     });
@@ -38,9 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const KasirScreen()),
       );
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memproses = false);
+      if (mounted) setStateIfMounted(() => _memproses = false);
     }
   }
 

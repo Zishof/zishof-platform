@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/safe_state.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -91,7 +92,7 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
@@ -100,14 +101,14 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
         ApiClient.instance.aksi('stok_dashboard', {'periode': 'month'}),
         ApiClient.instance.aksi('so_ringkasan'),
       ]);
-      setState(() {
+      setStateIfMounted(() {
         _dasbor = results[0];
         _ringkasanHariIni = results[1];
       });
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -265,7 +266,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
     try {
       final hasil = await ApiClient.instance.aksi('so_riwayat', {'limit': 30});
       final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) setState(() => _riwayatHariIni = data);
+      if (mounted) setStateIfMounted(() => _riwayatHariIni = data);
     } catch (_) {
       // riwayat gagal dimuat bukan blocker utk input baru.
     }
@@ -274,22 +275,22 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   Future<void> _cariProduk(String barcode) async {
     final kode = barcode.trim();
     if (kode.isEmpty) return;
-    setState(() {
+    setStateIfMounted(() {
       _mencari = true;
       _pesanError = null;
       _produkDitemukan = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
-      setState(() {
+      setStateIfMounted(() {
         _produkDitemukan = hasil;
         _stokFisikController.text = '';
         _keteranganController.text = '';
       });
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _mencari = false);
+      if (mounted) setStateIfMounted(() => _mencari = false);
     }
   }
 
@@ -306,10 +307,10 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
     if (p == null) return;
     final stokFisik = double.tryParse(_stokFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
     if (stokFisik == null) {
-      setState(() => _pesanError = 'Stok fisik wajib diisi angka.');
+      setStateIfMounted(() => _pesanError = 'Stok fisik wajib diisi angka.');
       return;
     }
-    setState(() {
+    setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
     });
@@ -325,7 +326,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
           content: Text('Tersimpan. Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
         ));
       }
-      setState(() {
+      setStateIfMounted(() {
         _produkDitemukan = null;
         _barcodeController.clear();
         _stokFisikController.clear();
@@ -333,9 +334,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
       });
       await _muatRiwayat();
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _menyimpan = false);
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
   }
 
@@ -518,22 +519,22 @@ class _TabSoByScanState extends State<_TabSoByScan> {
   Future<void> _tambahKeAntrean(String barcode) async {
     final kode = barcode.trim();
     if (kode.isEmpty) return;
-    setState(() {
+    setStateIfMounted(() {
       _mencari = true;
       _pesanError = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       if (_antrean.any((a) => a.produk['produkId'] == hasil['produkId'])) {
-        setState(() => _pesanError = '${hasil['nama']} sudah ada di antrean.');
+        setStateIfMounted(() => _pesanError = '${hasil['nama']} sudah ada di antrean.');
       } else {
-        setState(() => _antrean.insert(0, _AntreanSo(hasil)));
+        setStateIfMounted(() => _antrean.insert(0, _AntreanSo(hasil)));
       }
       _barcodeController.clear();
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _mencari = false);
+      if (mounted) setStateIfMounted(() => _mencari = false);
     }
   }
 
@@ -543,7 +544,7 @@ class _TabSoByScanState extends State<_TabSoByScan> {
   }
 
   void _hapusDariAntrean(_AntreanSo a) {
-    setState(() => _antrean.remove(a));
+    setStateIfMounted(() => _antrean.remove(a));
     a.stokFisik.dispose();
     a.keterangan.dispose();
   }
@@ -551,12 +552,12 @@ class _TabSoByScanState extends State<_TabSoByScan> {
   Future<void> _simpanSemua() async {
     final belumDikirim = _antrean.where((a) => a.statusKirim != 'ok').toList();
     if (belumDikirim.isEmpty) return;
-    setState(() => _mengirim = true);
+    setStateIfMounted(() => _mengirim = true);
     var berhasil = 0;
     for (final a in belumDikirim) {
       final stok = double.tryParse(a.stokFisik.text.replaceAll(RegExp('[^0-9.]'), ''));
       if (stok == null) {
-        setState(() => a.statusKirim = 'Stok fisik wajib diisi');
+        setStateIfMounted(() => a.statusKirim = 'Stok fisik wajib diisi');
         continue;
       }
       try {
@@ -565,16 +566,16 @@ class _TabSoByScanState extends State<_TabSoByScan> {
           'stok_fisik': stok,
           'keterangan': a.keterangan.text.trim(),
         });
-        setState(() => a.statusKirim = 'ok');
+        setStateIfMounted(() => a.statusKirim = 'ok');
         berhasil++;
       } catch (e) {
-        setState(() => a.statusKirim = e.toString());
+        setStateIfMounted(() => a.statusKirim = e.toString());
       }
     }
-    setState(() => _mengirim = false);
+    setStateIfMounted(() => _mengirim = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
-      setState(() => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
+      setStateIfMounted(() => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
     }
   }
 

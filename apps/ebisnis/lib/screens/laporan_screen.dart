@@ -4,6 +4,7 @@ import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'laporan_detail_screen.dart';
+import '../widgets/safe_state.dart';
 
 /// Katalog ~150 laporan (32 kategori) -- padanan `laporan.html`/`laporan-renderer.js`
 /// Electron & `laporan_laporan.jsp`. Metadata katalog (`laporan_katalog`) SEPENUHNYA
@@ -38,18 +39,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('laporan_katalog');
       final arr = (hasil['kategori'] as List?) ?? [];
-      setState(() => _kategori = arr.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      setStateIfMounted(() => _kategori = arr.map((e) => Map<String, dynamic>.from(e as Map)).toList());
     } catch (e) {
-      setState(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -111,7 +112,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       child: TextField(
                         controller: _controllerCari,
                         decoration: const InputDecoration(hintText: 'Cari laporan...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) => setStateIfMounted(() {}),
                       ),
                     ),
                     Expanded(

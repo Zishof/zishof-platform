@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/safe_state.dart';
 
 const _periodeOpsi = ['harian', 'mingguan', 'bulanan', 'semester', 'tahunan'];
 
@@ -27,17 +28,20 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
   }
 
   Future<void> _muat() async {
-    setState(() {
+    if (!mounted) return;
+    setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
       final hasil = await ApiClient.instance.aksi('dashboard_pelanggan', {'periode': _periode});
-      setState(() => _d = hasil);
+      if (!mounted) return;
+      setStateIfMounted(() => _d = hasil);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setStateIfMounted(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _memuat = false);
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -75,7 +79,7 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
                         items: _periodeOpsi.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12)))).toList(),
                         onChanged: (v) {
                           if (v != null) {
-                            setState(() => _periode = v);
+                            setStateIfMounted(() => _periode = v);
                             _muat();
                           }
                         },
