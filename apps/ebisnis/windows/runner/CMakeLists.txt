@@ -31,7 +31,10 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_PATCH=${FLUTT
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}")
 if(EBISNIS_RESOLVED_VARIANT STREQUAL "albahjah")
   target_compile_definitions(${BINARY_NAME} PRIVATE "EBISNIS_VARIANT_ALBAHJAH")
-  set_target_properties(${BINARY_NAME} PROPERTIES OUTPUT_NAME "albahjah-pos")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:${BINARY_NAME}>"
+      "$<TARGET_FILE_DIR:${BINARY_NAME}>/ebisnis_albahjah.exe")
 endif()
 
 # Disable Windows macros that collide with C++ standard library functions.

@@ -278,12 +278,6 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _periksaSesiKas() async {
-    if (!Sesi.instance.wajibSesiKas) {
-      // Toko ini belum mengaktifkan konfigurasi wajib-sesi-kas -- jangan
-      // memblokir kasir dgn overlay yg memang tidak berlaku utknya.
-      if (mounted) setStateIfMounted(() => _kasTerbuka = true);
-      return;
-    }
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
@@ -304,7 +298,10 @@ class _KasirScreenState extends State<KasirScreen> {
     } catch (_) {
       // Offline saat cek status -- pakai sumber lokal (local-first, sama spt Electron).
       final lokal = await CoreDb.instance.sesiKasAktif();
-      if (mounted) setStateIfMounted(() => _kasTerbuka = lokal != null);
+      if (mounted) {
+        setStateIfMounted(
+            () => _kasTerbuka = lokal != null || !Sesi.instance.wajibSesiKas);
+      }
     }
   }
 
@@ -312,7 +309,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// kas) -- dipanggil dari [_perbaruiJumlahPending] tiap kali transaksi
   /// baru selesai (Bayar/Tahan/Sinkronkan) supaya pil toolbar selalu segar.
   Future<void> _muatKasSaatIni() async {
-    if (!Sesi.instance.wajibSesiKas || _kasTerbuka != true) return;
+    if (_kasTerbuka != true) return;
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
@@ -443,6 +440,19 @@ class _KasirScreenState extends State<KasirScreen> {
       // Gagal tersinkron ke server -- tetap dianggap terbuka secara lokal
       // (local-first), akan disinkron ulang saat "Sinkronkan Sekarang".
     }
+  }
+
+  Future<void> _bukaDialogBukaKas() async {
+    final hasil = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DialogBukaKas(),
+    );
+    if (hasil == null) return;
+    await _bukaKas(
+      (hasil['modalAwal'] as num?)?.toDouble() ?? 0,
+      (hasil['keterangan'] ?? '') as String,
+    );
   }
 
   Future<void> _perbaruiJumlahPending() async {
@@ -781,6 +791,20 @@ class _KasirScreenState extends State<KasirScreen> {
           ),
         ],
         _tombolToolbar(
+          icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+          label: _kasTerbuka == true
+              ? 'Kas'
+              : (_kasTerbuka == null ? 'Cek Kas' : 'Buka Kas'),
+          onPressed: _kasTerbuka == null
+              ? null
+              : (_kasTerbuka == true
+                  ? _bukaDialogTutupKas
+                  : _bukaDialogBukaKas),
+          tooltip: _kasTerbuka == true
+              ? 'Sesi Kasir / Tutup Kas'
+              : 'Buka sesi kasir',
+        ),
+        _tombolToolbar(
           icon: Badge(
             label: Text('$_jumlahPending'),
             isLabelVisible: _jumlahPending > 0,
@@ -800,12 +824,6 @@ class _KasirScreenState extends State<KasirScreen> {
             label: 'Muat Ulang',
             onPressed: _muatAwal,
             tooltip: 'Muat ulang katalog'),
-        if (Sesi.instance.wajibSesiKas && _kasTerbuka == true)
-          _tombolToolbar(
-              icon: const Icon(Icons.point_of_sale_outlined, size: 18),
-              label: 'Kas',
-              onPressed: _bukaDialogTutupKas,
-              tooltip: 'Sesi Kasir / Tutup Kas'),
         if (defaultTargetPlatform == TargetPlatform.windows)
           _tombolToolbar(
               icon: const Icon(Icons.help_outline, size: 18),
@@ -1191,6 +1209,76 @@ class _KasirScreenState extends State<KasirScreen> {
 /// overlay ini sampai mengisi modal awal & menekan "Buka Kas" (padanan gerbang
 /// full-screen di pos-renderer.js: menjual tanpa sesi kas terbuka berarti
 /// rekonsiliasi tutup-kas nanti tidak akan pernah cocok).
+class _DialogBukaKas extends StatefulWidget {
+  const _DialogBukaKas();
+
+  @override
+  State<_DialogBukaKas> createState() => _DialogBukaKasState();
+}
+
+class _DialogBukaKasState extends State<_DialogBukaKas> {
+  final _controller = TextEditingController(text: '0');
+  final _catatanController = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _catatanController.dispose();
+    super.dispose();
+  }
+
+  void _konfirmasi() {
+    final modal = double.tryParse(
+            _controller.text.replaceAll(RegExp('[^0-9.]'), '')) ??
+        0;
+    Navigator.of(context).pop({
+      'modalAwal': modal,
+      'keterangan': _catatanController.text.trim(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Buka Kasir'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Isi modal awal untuk memulai sesi kasir.',
+              style: TextStyle(color: AppColors.textSecondaryOf(context)),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Modal Awal (Rp)', border: OutlineInputBorder()),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _catatanController,
+              decoration: const InputDecoration(
+                  labelText: 'Catatan Pembukaan (opsional)',
+                  border: OutlineInputBorder()),
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal')),
+        ElevatedButton(onPressed: _konfirmasi, child: const Text('Buka Kas')),
+      ],
+    );
+  }
+}
+
 class _OverlayBukaKas extends StatefulWidget {
   final void Function(double modalAwal, String catatan) onBuka;
   const _OverlayBukaKas({required this.onBuka});

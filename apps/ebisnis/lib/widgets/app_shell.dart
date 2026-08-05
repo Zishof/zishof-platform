@@ -681,7 +681,7 @@ class _AppTopbarState extends State<_AppTopbar> {
   @override
   Widget build(BuildContext context) {
     final kasTerbuka = _kasAktif != null;
-    final tampilkanStatusKas = Sesi.instance.wajibSesiKas;
+    final tampilkanStatusKas = Sesi.instance.wajibSesiKas || kasTerbuka;
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),

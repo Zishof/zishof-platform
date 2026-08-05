@@ -96,8 +96,8 @@ BEGIN
             VALUE "CompanyName", "id.zishof" "\0"
 #ifdef EBISNIS_VARIANT_ALBAHJAH
             VALUE "FileDescription", "Al-Bahjah POS" "\0"
-            VALUE "InternalName", "albahjah-pos" "\0"
-            VALUE "OriginalFilename", "albahjah-pos.exe" "\0"
+            VALUE "InternalName", "ebisnis_albahjah" "\0"
+            VALUE "OriginalFilename", "ebisnis_albahjah.exe" "\0"
             VALUE "ProductName", "Al-Bahjah POS" "\0"
 #else
             VALUE "FileDescription", "ebisnis" "\0"
