@@ -106,6 +106,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   final _fokusUangDiterima = FocusNode();
   bool _uangDiterimaManual = false;
   int _halamanKeranjang = 1;
+  bool _langsungTerlayani = true;
 
   @override
   void initState() {
@@ -327,7 +328,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return '${pad(d.day)}-${pad(d.month)}-${d.year} ${pad(d.hour)}:${pad(d.minute)}:${pad(d.second)}';
   }
 
-  Map<String, dynamic> _buatPayload(String kodeUnik, DateTime waktu) {
+  Map<String, dynamic> _buatPayload(
+    String kodeUnik,
+    DateTime waktu, {
+    bool sertakanStatusPelayanan = false,
+  }) {
     return {
       'kodeUnik': kodeUnik,
       'clientTrxId': kodeUnik,
@@ -341,6 +346,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
+      if (sertakanStatusPelayanan) 'terlayani': _langsungTerlayani,
       'transaksi': widget.keranjang
           .map((i) => {
                 'id': i.produk.id,
@@ -380,6 +386,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _memberTerpilih = null;
         _saldoMember = null;
+        _langsungTerlayani = true;
         _uangDiterimaManual = false;
         _uangDiterimaController.text = '0';
       });
@@ -411,7 +418,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       final kodeUnik = _buatKodeUnik();
       final waktu = DateTime.now();
-      final payload = _buatPayload(kodeUnik, waktu);
+      final payload =
+          _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
 
       // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
       // jaringan di bawah tidak pernah membatalkan penjualan ini.
@@ -456,6 +464,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance
           .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+      setStateIfMounted(() => _langsungTerlayani = true);
       widget.onSelesai?.call();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -1016,6 +1025,27 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ),
               ),
             const SizedBox(height: 14),
+            CheckboxListTile(
+              value: _langsungTerlayani,
+              onChanged: _memproses
+                  ? null
+                  : (v) =>
+                      setStateIfMounted(() => _langsungTerlayani = v ?? true),
+              title: const Text(
+                'Langsung terlayani',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                _langsungTerlayani
+                    ? 'Riwayat tersimpan sebagai Terlayani'
+                    : 'Riwayat tersimpan sebagai Menunggu',
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(

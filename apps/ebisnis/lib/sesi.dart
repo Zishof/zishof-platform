@@ -8,6 +8,8 @@ class Sesi {
   static final Sesi instance = Sesi._();
 
   String tokoNama = '';
+  String tokoAlamat = '';
+  String tokoTelp = '';
   int? tokoId;
   String userId = '';
   double pajakPersen = 0;
@@ -39,6 +41,8 @@ class Sesi {
 
   void reset() {
     tokoNama = '';
+    tokoAlamat = '';
+    tokoTelp = '';
     tokoId = null;
     userId = '';
     pajakPersen = 0;

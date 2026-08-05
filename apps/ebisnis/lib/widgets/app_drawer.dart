@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_variant.dart';
 import '../sesi.dart';
+import '../services/layar_pelanggan_launcher.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../screens/kasir_screen.dart';
@@ -17,7 +18,6 @@ import '../screens/log_error_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
-import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
 
@@ -254,11 +254,12 @@ class AppDrawer extends StatelessWidget {
                       icon: Icons.desktop_windows_outlined,
                       label: 'Layar Pelanggan',
                       aktif: menuAktif == 'Layar Pelanggan',
-                      onTap: () => _pindahMenu(
-                        context,
-                        label: 'Layar Pelanggan',
-                        builder: (_) => const LayarPelangganScreen(),
-                      ),
+                      onTap: () {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                        bukaLayarPelanggan(context);
+                      },
                     ),
                     if (Sesi.instance.isAdmin)
                       _ItemMenu(

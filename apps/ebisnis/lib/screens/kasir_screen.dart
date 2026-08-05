@@ -84,6 +84,7 @@ class _KasirScreenState extends State<KasirScreen> {
     setStateIfMounted(() => _fokusKeranjang = !_fokusKeranjang);
     final sp = await SharedPreferences.getInstance();
     await sp.setBool(_kKunciFokusKeranjang, _fokusKeranjang);
+    _jadwalkanFokusCariItem();
   }
 
   @override
@@ -91,6 +92,7 @@ class _KasirScreenState extends State<KasirScreen> {
     super.initState();
     _muatPreferensiTampilan();
     _muatAwal();
+    _jadwalkanFokusCariItem();
   }
 
   Future<void> _muatPreferensiTampilan() async {
@@ -98,6 +100,7 @@ class _KasirScreenState extends State<KasirScreen> {
     final tersimpan = sp.getBool(_kKunciFokusKeranjang);
     if (tersimpan != null && mounted) {
       setStateIfMounted(() => _fokusKeranjang = tersimpan);
+      _jadwalkanFokusCariItem();
     }
   }
 
@@ -133,7 +136,22 @@ class _KasirScreenState extends State<KasirScreen> {
     await _periksaSesiKas();
     PesananPoller.instance.mulai();
 
-    if (mounted) setStateIfMounted(() => _memuat = false);
+    if (mounted) {
+      setStateIfMounted(() => _memuat = false);
+      _jadwalkanFokusCariItem();
+    }
+  }
+
+  void _jadwalkanFokusCariItem() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _memuat || _pesanError != null) return;
+      if (Sesi.instance.wajibSesiKas && _kasTerbuka != true) return;
+      if (!_fokusKataKunci.canRequestFocus) return;
+      _fokusKataKunci.requestFocus();
+      _kataKunciController.selection = TextSelection.collapsed(
+        offset: _kataKunciController.text.length,
+      );
+    });
   }
 
   Produk _produkDariCache(Map<String, Object?> b) => Produk(
@@ -151,6 +169,9 @@ class _KasirScreenState extends State<KasirScreen> {
   void _terapkanKonfig(Map<String, dynamic> konfig) {
     Sesi.instance
       ..tokoNama = (konfig['tokoNama'] ?? '') as String
+      ..tokoAlamat =
+          '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim()
+      ..tokoTelp = '${konfig['tokoTelp'] ?? konfig['telp'] ?? ''}'.trim()
       ..tokoId = konfig['tokoId'] as int?
       ..userId = (konfig['userId'] ?? '') as String
       ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
@@ -294,6 +315,7 @@ class _KasirScreenState extends State<KasirScreen> {
       if (mounted) {
         setStateIfMounted(() => _kasSaatIni =
             terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null);
+        if (terbuka) _jadwalkanFokusCariItem();
       }
     } catch (_) {
       // Offline saat cek status -- pakai sumber lokal (local-first, sama spt Electron).
@@ -301,6 +323,9 @@ class _KasirScreenState extends State<KasirScreen> {
       if (mounted) {
         setStateIfMounted(
             () => _kasTerbuka = lokal != null || !Sesi.instance.wajibSesiKas);
+        if (lokal != null || !Sesi.instance.wajibSesiKas) {
+          _jadwalkanFokusCariItem();
+        }
       }
     }
   }
@@ -425,7 +450,10 @@ class _KasirScreenState extends State<KasirScreen> {
     final kode =
         'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
     await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal);
-    if (mounted) setStateIfMounted(() => _kasTerbuka = true);
+    if (mounted) {
+      setStateIfMounted(() => _kasTerbuka = true);
+      _jadwalkanFokusCariItem();
+    }
     try {
       await ApiClient.instance.aksi('sesi_kas_buka', {
         'id_toko': Sesi.instance.tokoId,
@@ -459,6 +487,11 @@ class _KasirScreenState extends State<KasirScreen> {
     final n = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) setStateIfMounted(() => _jumlahPending = n);
     unawaited(_muatKasSaatIni());
+  }
+
+  void _setelahTransaksiSelesai() {
+    unawaited(_perbaruiJumlahPending());
+    _jadwalkanFokusCariItem();
   }
 
   Future<void> _sinkronkanSekarang() async {
@@ -528,6 +561,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _kataKunci = '';
       }
     });
+    _jadwalkanFokusCariItem();
   }
 
   /// Dropdown hasil pencarian -- padanan `renderSearchDropdown` pos-renderer.js,
@@ -546,7 +580,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _tambahKeKeranjang(p);
     _kataKunciController.clear();
     setStateIfMounted(() => _kataKunci = '');
-    _fokusKataKunci.requestFocus();
+    _jadwalkanFokusCariItem();
   }
 
   /// Dipanggil saat kasir menekan Enter di kotak pencarian -- padanan
@@ -568,6 +602,7 @@ class _KasirScreenState extends State<KasirScreen> {
       );
       _kataKunciController.clear();
       setStateIfMounted(() => _kataKunci = '');
+      _jadwalkanFokusCariItem();
     }
   }
 
@@ -580,6 +615,7 @@ class _KasirScreenState extends State<KasirScreen> {
     ));
     await _perbaruiJumlahPending();
     setStateIfMounted(() {});
+    _jadwalkanFokusCariItem();
   }
 
   Future<void> _logout() async {
@@ -1043,7 +1079,7 @@ class _KasirScreenState extends State<KasirScreen> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   minimumSize: Size.zero),
             ),
-      onSelesai: _perbaruiJumlahPending,
+      onSelesai: _setelahTransaksiSelesai,
     );
     if (_fokusKeranjang) {
       // Stack (bukan Column polos) -- dropdown hasil pencarian WAJIB jadi
@@ -1080,6 +1116,7 @@ class _KasirScreenState extends State<KasirScreen> {
     return TextField(
       controller: _kataKunciController,
       focusNode: _fokusKataKunci,
+      autofocus: true,
       // Windows: matikan keyboard sentuh OTOMATIS utk kotak ini -- kotak ini
       // isinya scan barcode (HID, bukan IME) di layar sentuh POS, tapi
       // Windows tetap memunculkan touch-keyboard tiap kali kotak ini fokus.

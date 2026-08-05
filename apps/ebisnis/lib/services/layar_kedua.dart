@@ -8,6 +8,8 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:win32/win32.dart';
 import '../sesi.dart';
 
+int? _hwndLayarPelanggan;
+
 /// Buka Layar Pelanggan sbg jendela desktop KEDUA sungguhan (padanan
 /// `new BrowserWindow` + `screen.getAllDisplays()` di main.js Electron) --
 /// BUKAN `Navigator.push` di jendela yang sama spt sebelumnya. Windows-only;
@@ -18,7 +20,17 @@ import '../sesi.dart';
 /// `SetWindowPos` (paket `win32`, sudah dipakai Buka Laci), HWND-nya
 /// ditemukan dgn membandingkan daftar jendela proses ini SEBELUM & SESUDAH
 /// `WindowController.create` (selisihnya = jendela yang baru dibuat).
+Future<void> toggleLayarPelangganJendelaKedua() async {
+  if (tutupLayarPelangganJendelaKedua()) return;
+  await bukaLayarPelangganJendelaKedua();
+}
+
 Future<void> bukaLayarPelangganJendelaKedua() async {
+  if (_hwndLayarPelanggan != null && IsWindow(_hwndLayarPelanggan!) != 0) {
+    SetForegroundWindow(_hwndLayarPelanggan!);
+    return;
+  }
+
   final argumen = jsonEncode({
     'tokoId': Sesi.instance.tokoId,
     'tokoNama': Sesi.instance.tokoNama,
@@ -26,7 +38,8 @@ Future<void> bukaLayarPelangganJendelaKedua() async {
   });
 
   final sebelum = _semuaHwndProsesIni();
-  final controller = await WindowController.create(WindowConfiguration(arguments: argumen, hiddenAtLaunch: true));
+  final controller = await WindowController.create(
+      WindowConfiguration(arguments: argumen, hiddenAtLaunch: true));
   // Beri waktu proses native window (thread pesan Win32 + engine Flutter
   // barunya) benar-benar terbentuk sebelum di-enumerasi ulang.
   await Future.delayed(const Duration(milliseconds: 400));
@@ -35,36 +48,55 @@ Future<void> bukaLayarPelangganJendelaKedua() async {
 
   if (hwndBaru.isNotEmpty) {
     final hwnd = hwndBaru.first;
+    _hwndLayarPelanggan = hwnd;
     try {
-      final displays = await screenRetriever.getAllDisplays();
-      final primary = await screenRetriever.getPrimaryDisplay();
-      final sekunder = displays.where((d) => d.id != primary.id).toList();
-      if (sekunder.isNotEmpty) {
-        // Ada monitor kedua -- isi PERSIS bounds-nya, padanan
-        // `hitungBoundsMonitorKedua`+`fullScreen(true)` di Electron.
-        final d = sekunder.first;
-        final skala = (d.scaleFactor ?? 1).toDouble();
-        final posisi = d.visiblePosition ?? Offset.zero;
-        final ukuran = d.visibleSize ?? d.size;
-        SetWindowPos(
-          hwnd,
-          0,
-          (posisi.dx * skala).round(),
-          (posisi.dy * skala).round(),
-          (ukuran.width * skala).round(),
-          (ukuran.height * skala).round(),
-          SET_WINDOW_POS_FLAGS.SWP_NOZORDER,
-        );
-      } else {
-        // Cuma satu monitor -- jendela normal yg bisa diseret manual ke
-        // monitor kedua nanti, sama seperti fallback Electron saat testing.
-        SetWindowPos(hwnd, 0, 100, 100, 1280, 800, SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
-      }
+      await _posisikanFullscreenTanpaFrame(hwnd);
     } catch (_) {
       // Gagal deteksi monitor -- tetap tampilkan jendela apa adanya drpd gagal total.
     }
   }
   await controller.show();
+}
+
+bool tutupLayarPelangganJendelaKedua() {
+  final hwnd = _hwndLayarPelanggan;
+  if (hwnd == null || IsWindow(hwnd) == 0) {
+    _hwndLayarPelanggan = null;
+    return false;
+  }
+  PostMessage(hwnd, WM_CLOSE, 0, 0);
+  _hwndLayarPelanggan = null;
+  return true;
+}
+
+Future<void> _posisikanFullscreenTanpaFrame(int hwnd) async {
+  final displays = await screenRetriever.getAllDisplays();
+  final primary = await screenRetriever.getPrimaryDisplay();
+  final sekunder = displays.where((d) => d.id != primary.id).toList();
+  final target = sekunder.isNotEmpty ? sekunder.first : primary;
+
+  // Borderless fullscreen: hilangkan title bar, border, resize handle, dan
+  // caption Windows. Window tetap milik proses yang sama, hanya framenya
+  // dibuang supaya customer display tampil seperti kiosk.
+  SetWindowLongPtr(
+    hwnd,
+    WINDOW_LONG_PTR_INDEX.GWL_STYLE,
+    WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
+  );
+
+  final skala = (target.scaleFactor ?? 1).toDouble();
+  final posisi = target.visiblePosition ?? Offset.zero;
+  final ukuran = target.size;
+  SetWindowPos(
+    hwnd,
+    0,
+    (posisi.dx * skala).round(),
+    (posisi.dy * skala).round(),
+    (ukuran.width * skala).round(),
+    (ukuran.height * skala).round(),
+    SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED | SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW,
+  );
+  ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOWMAXIMIZED);
 }
 
 List<int> _hasilEnumHwnd = [];
