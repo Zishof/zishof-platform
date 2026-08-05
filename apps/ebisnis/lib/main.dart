@@ -253,6 +253,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         repoOwner: 'Zishof',
         repoName: 'zishof-platform',
         versiSaatIni: info.version,
+        assetKeyword: AppVariant.updateAssetKeyword,
       );
       if (mounted && hasil != null) {
         setStateIfMounted(() => _infoUpdate = hasil);

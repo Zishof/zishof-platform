@@ -12,6 +12,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
+import '../app_variant.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
@@ -715,7 +716,8 @@ class _KasirScreenState extends State<KasirScreen> {
       final hasil = await UpdateChecker.cekTerbaru(
           repoOwner: 'Zishof',
           repoName: 'zishof-platform',
-          versiSaatIni: info.version);
+          versiSaatIni: info.version,
+          assetKeyword: AppVariant.updateAssetKeyword);
       if (!mounted) return;
       Navigator.of(context).pop(); // tutup loading
       if (hasil == null) {
@@ -737,7 +739,10 @@ class _KasirScreenState extends State<KasirScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                launchUrl(Uri.parse(hasil.urlExe ?? hasil.urlRilis),
+                final url = defaultTargetPlatform == TargetPlatform.android
+                    ? (hasil.urlApk ?? hasil.urlRilis)
+                    : (hasil.urlExe ?? hasil.urlRilis);
+                launchUrl(Uri.parse(url),
                     mode: LaunchMode.externalApplication);
               },
               child: const Text('Unduh'),

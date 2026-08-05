@@ -11,6 +11,7 @@ class AppVariant {
 
   static const namaAplikasi = isAlBahjah ? 'Al-Bahjah POS' : 'eBisnis';
   static const namaSidebar = isAlBahjah ? 'Al-Bahjah POS' : 'eBisnis POS';
+  static const updateAssetKeyword = isAlBahjah ? 'albahjah' : 'ebisnis';
   static const labelPerangkat =
       isAlBahjah ? 'Al-Bahjah POS Flutter Pilot' : 'eBisnis Flutter Pilot';
   static const logoAsset =
