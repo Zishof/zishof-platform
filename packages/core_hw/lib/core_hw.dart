@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -20,10 +21,32 @@ class BarcodeScannerScreen extends StatefulWidget {
   State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
 
   /// Buka layar scan, kembalikan kode hasil scan (atau null bila dibatalkan).
-  static Future<String?> pindai(BuildContext context, {String judul = 'Scan Barcode'}) {
+  static Future<String?> pindai(BuildContext context,
+      {String judul = 'Scan Barcode'}) {
+    if (!_kameraScannerDidukung) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Scan kamera hanya tersedia di Android/iOS. Gunakan scanner barcode USB atau ketik kode produk.')),
+      );
+      return Future.value();
+    }
     return Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => BarcodeScannerScreen(judul: judul)),
     );
+  }
+}
+
+bool get _kameraScannerDidukung {
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+      return true;
+    case TargetPlatform.fuchsia:
+    case TargetPlatform.linux:
+    case TargetPlatform.macOS:
+    case TargetPlatform.windows:
+      return false;
   }
 }
 
@@ -58,7 +81,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           IconButton(
             icon: ValueListenableBuilder(
               valueListenable: _controller,
-              builder: (context, state, child) => Icon(state.torchState == TorchState.on ? Icons.flash_on : Icons.flash_off),
+              builder: (context, state, child) => Icon(
+                  state.torchState == TorchState.on
+                      ? Icons.flash_on
+                      : Icons.flash_off),
             ),
             onPressed: () => _controller.toggleTorch(),
           ),

@@ -24,11 +24,27 @@ class CoreDb {
   CoreDb._();
   static final CoreDb instance = CoreDb._();
 
+  /// Naik setiap status sesi kas lokal berubah. UI seperti topbar memakai ini
+  /// untuk refresh chip "Kas Terbuka/Tertutup" tanpa menunggu rebuild layar.
+  final ValueNotifier<int> sesiKasVersi = ValueNotifier<int>(0);
+
   Database? _db;
+  Future<Database>? _openingDb;
+  Future<void> _errorLogTail = Future.value();
+  String? _lastErrorLogKey;
+  DateTime? _lastErrorLogAt;
 
   Future<Database> get db async {
-    _db ??= await _buka();
-    return _db!;
+    final currentDb = _db;
+    if (currentDb != null) return currentDb;
+
+    final openingDb = _openingDb ??= _buka();
+    try {
+      _db = await openingDb;
+      return _db!;
+    } finally {
+      _openingDb = null;
+    }
   }
 
   Future<Database> _buka() async {
@@ -45,8 +61,17 @@ class CoreDb {
     }
     return factory.openDatabase(
       path,
-      options: OpenDatabaseOptions(version: 1, onCreate: _buatSkema),
+      options: OpenDatabaseOptions(
+        version: 1,
+        onConfigure: _konfigurasiDb,
+        onCreate: _buatSkema,
+      ),
     );
+  }
+
+  Future<void> _konfigurasiDb(Database db) async {
+    await db.execute('PRAGMA busy_timeout = 5000');
+    await db.execute('PRAGMA journal_mode = WAL');
   }
 
   Future<void> _buatSkema(Database db, int versi) async {
@@ -246,15 +271,51 @@ class CoreDb {
     required String pesan,
     String? detail,
   }) async {
-    final database = await db;
-    await database.insert('error_log', {
-      'waktu': DateTime.now().toIso8601String(),
-      'sumber': sumber,
-      'tingkat': tingkat,
-      'pesan': pesan,
-      'detail': detail,
-      'disinkronkan': 0,
-    });
+    final now = DateTime.now();
+    final key = '$sumber|$tingkat|$pesan';
+    final lastAt = _lastErrorLogAt;
+    if (_lastErrorLogKey == key &&
+        lastAt != null &&
+        now.difference(lastAt) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastErrorLogKey = key;
+    _lastErrorLogAt = now;
+
+    _errorLogTail = _errorLogTail
+        .catchError((_) {})
+        .then((_) => _catatErrorLogLangsung(
+              waktu: now,
+              sumber: sumber,
+              tingkat: tingkat,
+              pesan: pesan,
+              detail: detail,
+            ));
+    return _errorLogTail;
+  }
+
+  Future<void> _catatErrorLogLangsung({
+    required DateTime waktu,
+    required String sumber,
+    required String tingkat,
+    required String pesan,
+    String? detail,
+  }) async {
+    try {
+      final database = await db;
+      await database.insert('error_log', {
+        'waktu': waktu.toIso8601String(),
+        'sumber': sumber,
+        'tingkat': tingkat,
+        'pesan': pesan,
+        'detail': detail,
+        'disinkronkan': 0,
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Gagal mencatat error_log lokal: $e');
+      }
+    }
   }
 
   Future<List<Map<String, Object?>>> listErrorLog({String? tingkat, String? sumber, String? kataKunci, int limit = 100, int offset = 0}) async {
@@ -344,6 +405,7 @@ class CoreDb {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    sesiKasVersi.value++;
   }
 
   Future<void> tutupSesiKasLokal(String kode) async {
@@ -354,5 +416,16 @@ class CoreDb {
       where: 'kode = ?',
       whereArgs: [kode],
     );
+    sesiKasVersi.value++;
+  }
+
+  Future<void> tutupSemuaSesiKasLokal() async {
+    final database = await db;
+    final jumlah = await database.update(
+      'sesi_kas_lokal',
+      {'status': 'TUTUP', 'ditutup_pada': DateTime.now().toIso8601String()},
+      where: "status = 'BUKA'",
+    );
+    if (jumlah > 0) sesiKasVersi.value++;
   }
 }
