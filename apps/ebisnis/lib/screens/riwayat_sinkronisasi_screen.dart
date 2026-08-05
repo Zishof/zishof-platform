@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../services/pelayanan_transaksi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -79,6 +80,15 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
     await _muat();
   }
 
+  Future<void> _tandaiTerlayaniJikaPerlu(
+      Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
+    await PelayananTransaksi.tandaiJikaPerlu(
+      payload: payload,
+      hasilBayar: hasil,
+      percobaanCari: 1,
+    );
+  }
+
   Future<void> _sinkronkanSekarang() async {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
@@ -89,7 +99,8 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
         final kodeUnik = row['kode_unik'] as String;
         final payload = jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         try {
-          await ApiClient.instance.aksi('bayar', payload);
+          final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+          await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
           await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
           berhasil++;
         } catch (e) {

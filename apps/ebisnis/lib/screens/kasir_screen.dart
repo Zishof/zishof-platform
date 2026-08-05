@@ -14,7 +14,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/layar_pelanggan_launcher.dart';
+import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
@@ -95,6 +97,12 @@ class _KasirScreenState extends State<KasirScreen> {
     _jadwalkanFokusCariItem();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _jadwalkanFokusCariItem();
+  }
+
   Future<void> _muatPreferensiTampilan() async {
     final sp = await SharedPreferences.getInstance();
     final tersimpan = sp.getBool(_kKunciFokusKeranjang);
@@ -147,6 +155,11 @@ class _KasirScreenState extends State<KasirScreen> {
       if (!mounted || _memuat || _pesanError != null) return;
       if (Sesi.instance.wajibSesiKas && _kasTerbuka != true) return;
       if (!_fokusKataKunci.canRequestFocus) return;
+      final fokusAktif = FocusManager.instance.primaryFocus;
+      final widgetFokus = fokusAktif?.context?.widget;
+      if (fokusAktif != _fokusKataKunci && widgetFokus is EditableText) {
+        return;
+      }
       _fokusKataKunci.requestFocus();
       _kataKunciController.selection = TextSelection.collapsed(
         offset: _kataKunciController.text.length,
@@ -171,7 +184,9 @@ class _KasirScreenState extends State<KasirScreen> {
       ..tokoNama = (konfig['tokoNama'] ?? '') as String
       ..tokoAlamat =
           '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim()
-      ..tokoTelp = '${konfig['tokoTelp'] ?? konfig['telp'] ?? ''}'.trim()
+      ..tokoTelp =
+          '${konfig['tokoTelp'] ?? konfig['telp'] ?? konfig['picHp'] ?? konfig['kontak'] ?? ''}'
+              .trim()
       ..tokoId = konfig['tokoId'] as int?
       ..userId = (konfig['userId'] ?? '') as String
       ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
@@ -489,6 +504,15 @@ class _KasirScreenState extends State<KasirScreen> {
     unawaited(_muatKasSaatIni());
   }
 
+  Future<void> _tandaiTerlayaniJikaPerlu(
+      Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
+    await PelayananTransaksi.tandaiJikaPerlu(
+      payload: payload,
+      hasilBayar: hasil,
+      percobaanCari: 1,
+    );
+  }
+
   void _setelahTransaksiSelesai() {
     unawaited(_perbaruiJumlahPending());
     _jadwalkanFokusCariItem();
@@ -505,7 +529,8 @@ class _KasirScreenState extends State<KasirScreen> {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         try {
-          await ApiClient.instance.aksi('bayar', payload);
+          final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+          await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
           await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
           berhasil++;
         } catch (e) {
@@ -561,6 +586,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _kataKunci = '';
       }
     });
+    _siarkanKeranjangKasir();
     _jadwalkanFokusCariItem();
   }
 
@@ -608,6 +634,26 @@ class _KasirScreenState extends State<KasirScreen> {
 
   double get _totalKeranjang => _keranjang.fold(0, (s, i) => s + i.subtotal);
   int get _jumlahItemKeranjang => _keranjang.fold(0, (s, i) => s + i.jumlah);
+
+  void _siarkanKeranjangKasir() {
+    final subtotal = _keranjang.fold<double>(0, (s, i) => s + i.subtotal);
+    final diskon = _keranjang.fold<double>(0, (s, i) => s + i.diskon);
+    final basisPajak = subtotal - diskon;
+    final pajak = basisPajak * Sesi.instance.pajakPersen / 100;
+    LayarPelangganBroadcaster.instance.jadwalkanKirim(
+      items: _keranjang
+          .map((i) => {
+                'nama': i.produk.nama,
+                'jumlah': i.jumlah,
+                'harga': i.produk.hargaJual,
+                'subtotal': i.subtotalSetelahDiskon,
+              })
+          .toList(),
+      subtotal: subtotal,
+      diskon: diskon,
+      total: basisPajak + pajak,
+    );
+  }
 
   Future<void> _bukaKeranjang() async {
     await Navigator.of(context).push(MaterialPageRoute(
@@ -987,7 +1033,10 @@ class _KasirScreenState extends State<KasirScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: _tanganiTombolKasir,
-      child: AppShell(
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerUp: (_) => _jadwalkanFokusCariItem(),
+        child: AppShell(
         menuAktif: MenuEBisnis.kasir,
         judul: 'Kasir / POS',
         tampilkanJudul: false,
@@ -1053,6 +1102,7 @@ class _KasirScreenState extends State<KasirScreen> {
                 _bukaKas(_modalAwalKas, catatan);
               }),
           ],
+        ),
         ),
       ),
     );

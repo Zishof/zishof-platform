@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/pengaturan_sesi_lokal.dart';
 import 'services/server_config.dart';
 
 /// Klien HTTP untuk endpoint Api_eBisnis (branded alias PosApi.java, kontrak
@@ -28,19 +29,22 @@ class ApiClient {
     _token = token;
     final sp = await SharedPreferences.getInstance();
     await sp.setString('token', token);
+    await PengaturanSesiLokal.instance.catatAktifSekarang();
   }
 
   Future<void> hapusToken() async {
     _token = null;
     final sp = await SharedPreferences.getInstance();
     await sp.remove('token');
+    await PengaturanSesiLokal.instance.hapusCatatanAktif();
   }
 
   bool get sudahLogin => _token != null;
 
   /// Memanggil satu aksi Api_eBisnis. [body] digabung dengan {action: aksi}.
   /// Melempar [ApiException] bila status bukan "success" ATAU permintaan HTTP gagal.
-  Future<Map<String, dynamic>> aksi(String namaAksi, [Map<String, dynamic>? body]) async {
+  Future<Map<String, dynamic>> aksi(String namaAksi,
+      [Map<String, dynamic>? body]) async {
     final payload = <String, dynamic>{'action': namaAksi, ...?body};
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
@@ -51,18 +55,22 @@ class ApiClient {
           .post(Uri.parse(baseUrl), headers: headers, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 30));
     } catch (e) {
-      throw ApiException('Tidak bisa menghubungi server. Periksa koneksi internet Anda.', offline: true);
+      throw ApiException(
+          'Tidak bisa menghubungi server. Periksa koneksi internet Anda.',
+          offline: true);
     }
 
     Map<String, dynamic> json;
     try {
       json = jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (e) {
-      throw ApiException('Balasan server tidak valid (HTTP ${resp.statusCode}).');
+      throw ApiException(
+          'Balasan server tidak valid (HTTP ${resp.statusCode}).');
     }
 
     if (json['status'] != 'success') {
-      throw ApiException((json['message'] ?? 'Terjadi kesalahan yang tidak diketahui.') as String);
+      throw ApiException((json['message'] ??
+          'Terjadi kesalahan yang tidak diketahui.') as String);
     }
     return json;
   }
@@ -70,6 +78,7 @@ class ApiClient {
 
 class ApiException implements Exception {
   final String pesan;
+
   /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
   /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
   /// server, mis. saldo kurang). Dipakai alur offline-first (KeranjangScreen)

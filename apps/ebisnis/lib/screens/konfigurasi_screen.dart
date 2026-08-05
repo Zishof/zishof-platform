@@ -2,10 +2,12 @@ import 'package:core_device/core_device.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../services/pengaturan_sesi_lokal.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -138,6 +140,7 @@ class _TabIdentitasMesin extends StatefulWidget {
 
 class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   final _namaController = TextEditingController();
+  final _timeoutSesiController = TextEditingController();
   bool _memuat = true;
   bool _menyimpan = false;
 
@@ -159,12 +162,14 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   @override
   void dispose() {
     _namaController.dispose();
+    _timeoutSesiController.dispose();
     super.dispose();
   }
 
   Future<void> _muat() async {
     await IdentitasMesin.instance.muat();
     await PengaturanPembayaran.instance.muat();
+    await PengaturanSesiLokal.instance.muat();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -179,6 +184,8 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         _printerLaci = PengaturanLaci.instance.namaPrinter;
         _pinAlternatif = PengaturanLaci.instance.pinAlternatif;
         _caraBayarDefaultId = PengaturanPembayaran.instance.caraBayarDefaultId;
+        _timeoutSesiController.text =
+            PengaturanSesiLokal.instance.timeoutMenit.toString();
         _memuat = false;
       });
     }
@@ -206,13 +213,26 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   }
 
   Future<void> _simpanPembayaran() async {
+    final menit = int.tryParse(_timeoutSesiController.text.trim());
+    if (menit == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Timeout sesi wajib diisi dalam angka menit.')));
+      return;
+    }
+
     setStateIfMounted(() => _menyimpanPembayaran = true);
     await PengaturanPembayaran.instance
         .simpan(caraBayarDefaultId: _caraBayarDefaultId);
+    await PengaturanSesiLokal.instance.simpanTimeoutMenit(menit);
     if (mounted) {
-      setStateIfMounted(() => _menyimpanPembayaran = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Metode pembayaran default tersimpan.')));
+      setStateIfMounted(() {
+        _menyimpanPembayaran = false;
+        _timeoutSesiController.text =
+            PengaturanSesiLokal.instance.timeoutMenit.toString();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Preferensi POS tersimpan. Timeout sesi: ${PengaturanSesiLokal.instance.timeoutMenit} menit.')));
     }
   }
 
@@ -290,6 +310,20 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
               onChanged: (v) => setStateIfMounted(() {
                 _caraBayarDefaultId = v;
               }),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _timeoutSesiController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: 'Timeout Sesi Lokal (menit)',
+                helperText:
+                    'Setelah aplikasi ditutup/background melebihi nilai ini, pengguna wajib login ulang.',
+                suffixText: 'menit',
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
             ),
             const SizedBox(height: 14),
             Align(
@@ -437,6 +471,17 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _jamOperasional.text = '${d['jamOperasional'] ?? ''}';
       _keterangan.text = '${d['keterangan'] ?? ''}';
       _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
+      Sesi.instance
+        ..tokoNama = _nama.text.trim().isEmpty
+            ? Sesi.instance.tokoNama
+            : _nama.text.trim()
+        ..tokoAlamat = [
+          if (_alamat.text.trim().isNotEmpty) _alamat.text.trim(),
+          if (_kota.text.trim().isNotEmpty) _kota.text.trim(),
+          if (_kodePos.text.trim().isNotEmpty) _kodePos.text.trim(),
+        ].join(', ')
+        ..tokoTelp =
+            _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim();
       setStateIfMounted(() => _bolehUbah = hasil['bolehUbah'] == true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -466,6 +511,16 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
       });
       if (mounted) {
+        Sesi.instance
+          ..tokoNama = _nama.text.trim()
+          ..tokoAlamat = [
+            if (_alamat.text.trim().isNotEmpty) _alamat.text.trim(),
+            if (_kota.text.trim().isNotEmpty) _kota.text.trim(),
+            if (_kodePos.text.trim().isNotEmpty) _kodePos.text.trim(),
+          ].join(', ')
+          ..tokoTelp =
+              _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
+          ..pesanTerimaKasih = _pesanTerimaKasih.text.trim();
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profil toko tersimpan.')));
       }

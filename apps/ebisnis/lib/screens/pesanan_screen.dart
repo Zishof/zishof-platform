@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'keranjang_screen.dart';
+import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -251,6 +252,15 @@ class _PesananScreenState extends State<PesananScreen> {
           TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Tutup')),
+          if (!p.dariPembeliOnline)
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _cetakStrukTertahan(p);
+              },
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: const Text('Cetak Struk'),
+            ),
           // Keranjang Tertahan (draft lokal, BUKAN pesanan online) -- gap-closure:
           // sebelumnya dialog ini murni tampilan, satu-satunya jalan lanjut
           // (Muat ke Keranjang) tersembunyi di menu tekan-tahan yang tak lazim
@@ -287,6 +297,29 @@ class _PesananScreenState extends State<PesananScreen> {
               label: const Text('Batalkan'),
             ),
         ],
+      ),
+    );
+  }
+
+  void _cetakStrukTertahan(Pesanan p) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StrukScreen(
+          kode: p.kode,
+          waktu: p.tanggalPembayaran.isEmpty ? '-' : p.tanggalPembayaran,
+          item: p.items
+              .map((i) => {
+                    'nama': i.nama,
+                    'qty': i.jumlah,
+                    'harga': i.harga,
+                  })
+              .toList(),
+          total: p.totalBiaya,
+          metode: 'Tertahan',
+          pajak: 0,
+          tersinkron: true,
+          statusLabel: 'Tertahan (On Hold)',
+        ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
@@ -187,6 +188,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       0;
   double get _kembalian => _uangDiterima - _total;
 
+  Future<void> _tandaiTerlayaniJikaPerlu(
+      Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
+    await PelayananTransaksi.tandaiJikaPerlu(
+      payload: payload,
+      hasilBayar: hasil,
+      percobaanCari: 1,
+    );
+  }
+
   /// "Uang Diterima" default = total (spec §3.4) SELAMA kasir belum mengetik
   /// nilai sendiri -- begitu kasir mengubahnya manual, berhenti auto-ikut
   /// total (mis. saat menerima uang pas beda dari total, spt uang tunai fisik
@@ -346,7 +356,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
-      if (sertakanStatusPelayanan) 'terlayani': _langsungTerlayani,
+      if (sertakanStatusPelayanan) ...{
+        'terlayani': _langsungTerlayani,
+        'langsungTerlayani': _langsungTerlayani,
+        'statusTerlayani': _langsungTerlayani,
+        'langsungDilayani': _langsungTerlayani,
+        'sudahTerlayani': _langsungTerlayani,
+        'dilayani': _langsungTerlayani,
+        'statusPelayanan': _langsungTerlayani ? 'TERLAYANI' : 'MENUNGGU',
+      },
       'transaksi': widget.keranjang
           .map((i) => {
                 'id': i.produk.id,
@@ -428,7 +446,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       String? pesanTundaMenuju;
       try {
-        await ApiClient.instance.aksi('bayar', payload);
+        final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+        await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
       } catch (e) {
         if (e is ApiException && e.offline) {

@@ -15,6 +15,7 @@ import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
+import 'services/pengaturan_sesi_lokal.dart';
 import 'services/server_config.dart';
 import 'theme/app_theme.dart';
 import 'widgets/safe_state.dart';
@@ -149,8 +150,37 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
   }
 }
 
-class EBisnisApp extends StatelessWidget {
+class EBisnisApp extends StatefulWidget {
   const EBisnisApp({super.key});
+
+  @override
+  State<EBisnisApp> createState() => _EBisnisAppState();
+}
+
+class _EBisnisAppState extends State<EBisnisApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      if (ApiClient.instance.sudahLogin) {
+        unawaited(PengaturanSesiLokal.instance.catatAktifSekarang());
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +230,14 @@ class _GerbangAwalState extends State<_GerbangAwal> {
       return;
     }
     await ApiClient.instance.muatTokenTersimpan();
+    if (ApiClient.instance.sudahLogin) {
+      final kedaluwarsa = await PengaturanSesiLokal.instance.sudahKedaluwarsa();
+      if (kedaluwarsa) {
+        await ApiClient.instance.hapusToken();
+      } else {
+        await PengaturanSesiLokal.instance.catatAktifSekarang();
+      }
+    }
     await IdentitasMesin.instance.muat();
     if (mounted) setStateIfMounted(() => _memeriksa = false);
   }
@@ -216,7 +254,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         repoName: 'zishof-platform',
         versiSaatIni: info.version,
       );
-      if (mounted && hasil != null) setStateIfMounted(() => _infoUpdate = hasil);
+      if (mounted && hasil != null) {
+        setStateIfMounted(() => _infoUpdate = hasil);
+      }
     } catch (_) {
       // Gagal cek (offline/rate-limit) -- diam saja, bukan alasan mengganggu.
     }
@@ -274,7 +314,8 @@ class _GerbangAwalState extends State<_GerbangAwal> {
                     IconButton(
                         icon: const Icon(Icons.close,
                             color: Colors.white70, size: 18),
-                        onPressed: () => setStateIfMounted(() => _infoUpdate = null)),
+                        onPressed: () =>
+                            setStateIfMounted(() => _infoUpdate = null)),
                   ],
                 ),
               ),

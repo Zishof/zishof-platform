@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../services/layar_pelanggan_broadcaster.dart';
 import '../sesi.dart';
 import '../widgets/safe_state.dart';
 
@@ -48,46 +49,86 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   double _diskon = 0;
   double _total = 0;
   String? _memberNama;
+  bool _sedangAmbil = false;
+  int _versiTerakhir = 0;
+  DateTime? _liveUpdateTerakhir;
 
   @override
   void initState() {
     super.initState();
+    _daftarkanLiveChannel();
     _ambil();
     _timer =
-        Timer.periodic(const Duration(milliseconds: 1500), (_) => _ambil());
+        Timer.periodic(const Duration(milliseconds: 500), (_) => _ambil());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(LayarPelangganBroadcaster.channel.setMethodCallHandler(null));
     super.dispose();
   }
 
+  Future<void> _daftarkanLiveChannel() async {
+    try {
+      await LayarPelangganBroadcaster.channel.setMethodCallHandler((call) async {
+        if (call.method != 'update') return null;
+        final data = Map<String, dynamic>.from(call.arguments as Map);
+        _terapkanData(data, dariLive: true);
+        return true;
+      });
+    } catch (_) {
+      // Jika channel tidak tersedia (mis. fallback mobile), polling tetap jalan.
+    }
+  }
+
+  void _terapkanData(Map<String, dynamic> hasil, {bool dariLive = false}) {
+    if (!mounted) return;
+    if (dariLive) {
+      _liveUpdateTerakhir = DateTime.now();
+    } else {
+      final liveUpdateTerakhir = _liveUpdateTerakhir;
+      if (liveUpdateTerakhir != null &&
+          DateTime.now().difference(liveUpdateTerakhir) <
+              const Duration(milliseconds: 900)) {
+        return;
+      }
+    }
+    final versi = (hasil['versi'] as num?)?.toInt();
+    if (versi != null && versi < _versiTerakhir) return;
+    if (versi != null) _versiTerakhir = versi;
+    final aktif = hasil['aktif'] == true;
+    setStateIfMounted(() {
+      _aktif = aktif;
+      if (aktif) {
+        _items = ((hasil['items'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _subtotal = (hasil['subtotal'] as num?)?.toDouble() ?? 0;
+        _diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
+        _total = (hasil['total'] as num?)?.toDouble() ?? 0;
+        final nama =
+            (hasil['memberNama'] ?? hasil['member_nama']) as String?;
+        _memberNama = (nama == null || nama.isEmpty) ? null : nama;
+      } else {
+        _items = [];
+        _memberNama = null;
+      }
+    });
+  }
+
   Future<void> _ambil() async {
+    if (_sedangAmbil) return;
+    _sedangAmbil = true;
     try {
       final hasil = await ApiClient.instance.aksi('layar_pelanggan_ambil',
           {'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId});
-      if (!mounted) return;
-      final aktif = hasil['aktif'] == true;
-      setStateIfMounted(() {
-        _aktif = aktif;
-        if (aktif) {
-          _items = ((hasil['items'] as List?) ?? [])
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-          _subtotal = (hasil['subtotal'] as num?)?.toDouble() ?? 0;
-          _diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
-          _total = (hasil['total'] as num?)?.toDouble() ?? 0;
-          final nama = hasil['memberNama'] as String?;
-          _memberNama = (nama == null || nama.isEmpty) ? null : nama;
-        } else {
-          _items = [];
-          _memberNama = null;
-        }
-      });
+      _terapkanData(hasil);
     } catch (_) {
       // Gagal poll (mis. offline sesaat) -- biarkan tampilan terakhir yang
       // masih ada, jangan kedip ke Idle.
+    } finally {
+      _sedangAmbil = false;
     }
   }
 

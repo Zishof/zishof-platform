@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../app_variant.dart';
+import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/print_util.dart';
 import '../sesi.dart';
@@ -25,6 +26,7 @@ class StrukScreen extends StatelessWidget {
   final String metode;
   final double pajak;
   final bool tersinkron;
+  final String? statusLabel;
 
   const StrukScreen({
     super.key,
@@ -35,6 +37,7 @@ class StrukScreen extends StatelessWidget {
     required this.metode,
     this.pajak = 0,
     this.tersinkron = true,
+    this.statusLabel,
   });
 
   double get _subtotalItem => item.fold<double>(
@@ -67,6 +70,34 @@ class StrukScreen extends StatelessWidget {
     return user.isEmpty ? '-' : user;
   }
 
+  Future<void> _pastikanProfilToko() async {
+    if (Sesi.instance.tokoAlamat.trim().isNotEmpty &&
+        Sesi.instance.tokoTelp.trim().isNotEmpty) {
+      return;
+    }
+    try {
+      final hasil = await ApiClient.instance.aksi('toko_profil_ambil');
+      final data = (hasil['data'] as Map<String, dynamic>?) ?? {};
+      final nama = '${data['nama'] ?? ''}'.trim();
+      final alamat = '${data['alamat'] ?? ''}'.trim();
+      final kota = '${data['kota'] ?? ''}'.trim();
+      final kodePos = '${data['kodePos'] ?? ''}'.trim();
+      final telp = '${data['telp'] ?? ''}'.trim();
+      final picHp = '${data['picHp'] ?? ''}'.trim();
+      final pesan = '${data['pesanTerimaKasih'] ?? ''}'.trim();
+      if (nama.isNotEmpty) Sesi.instance.tokoNama = nama;
+      Sesi.instance.tokoAlamat = [
+        if (alamat.isNotEmpty) alamat,
+        if (kota.isNotEmpty) kota,
+        if (kodePos.isNotEmpty) kodePos,
+      ].join(', ');
+      Sesi.instance.tokoTelp = telp.isEmpty ? picHp : telp;
+      if (pesan.isNotEmpty) Sesi.instance.pesanTerimaKasih = pesan;
+    } catch (_) {
+      // Struk tetap tampil dengan data sesi yang sudah ada jika profil gagal dimuat.
+    }
+  }
+
   Future<pw.ImageProvider?> _logoPdf() async {
     if (AppVariant.logoAsset == null) return null;
     try {
@@ -78,6 +109,7 @@ class StrukScreen extends StatelessWidget {
   }
 
   Future<void> _cetakStruk() async {
+    await _pastikanProfilToko();
     final logo = await _logoPdf();
     final doc = pw.Document();
     doc.addPage(
@@ -131,6 +163,8 @@ class StrukScreen extends StatelessWidget {
           _infoPdf('No', kode),
           _infoPdf('Tanggal', waktu),
           _infoPdf('Kasir', _labelKasir()),
+          if (statusLabel != null && statusLabel!.trim().isNotEmpty)
+            _infoPdf('Status', statusLabel!.trim()),
           _garisPdf(),
           ...item.map(_itemPdf),
           _garisPdf(),
@@ -209,9 +243,9 @@ class StrukScreen extends StatelessWidget {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.SizedBox(width: 44, child: pw.Text(label)),
+          pw.SizedBox(width: 38, child: pw.Text(label)),
           pw.Text(':'),
-          pw.SizedBox(width: 6),
+          pw.SizedBox(width: 4),
           pw.Expanded(child: pw.Text(value.isEmpty ? '-' : value)),
         ],
       ),
@@ -286,33 +320,38 @@ class StrukScreen extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              children: [
-                _StatusTransaksi(tersinkron: tersinkron),
-                const SizedBox(height: 14),
-                _StrukPreview(
-                  kode: kode,
-                  waktu: waktu,
-                  item: item,
-                  total: total,
-                  pajak: pajak,
-                  metode: metode,
-                  tersinkron: tersinkron,
-                  subtotal: _subtotal,
-                  jumlahItem: _jumlahItem,
-                  kasir: _labelKasir(),
-                  formatUang: _formatUang,
-                  formatAngka: (v) => _formatAngka.format(v),
-                  formatQty: _formatQty,
-                ),
-                const SizedBox(height: 16),
-                _TombolStruk(
-                  onCetak: _cetakStruk,
-                  onTransaksiBaru: () => Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const KasirScreen()),
+            child: FutureBuilder<void>(
+              future: _pastikanProfilToko(),
+              builder: (context, _) => Column(
+                children: [
+                  _StatusTransaksi(tersinkron: tersinkron),
+                  const SizedBox(height: 14),
+                  _StrukPreview(
+                    kode: kode,
+                    waktu: waktu,
+                    item: item,
+                    total: total,
+                    pajak: pajak,
+                    metode: metode,
+                    tersinkron: tersinkron,
+                    subtotal: _subtotal,
+                    jumlahItem: _jumlahItem,
+                    kasir: _labelKasir(),
+                    statusLabel: statusLabel,
+                    formatUang: _formatUang,
+                    formatAngka: (v) => _formatAngka.format(v),
+                    formatQty: _formatQty,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  _TombolStruk(
+                    onCetak: _cetakStruk,
+                    onTransaksiBaru: () =>
+                        Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(builder: (_) => const KasirScreen()),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -370,6 +409,7 @@ class _StrukPreview extends StatelessWidget {
   final double subtotal;
   final int jumlahItem;
   final String kasir;
+  final String? statusLabel;
   final String Function(num nilai) formatUang;
   final String Function(num nilai) formatAngka;
   final String Function(num nilai) formatQty;
@@ -385,6 +425,7 @@ class _StrukPreview extends StatelessWidget {
     required this.subtotal,
     required this.jumlahItem,
     required this.kasir,
+    required this.statusLabel,
     required this.formatUang,
     required this.formatAngka,
     required this.formatQty,
@@ -445,6 +486,8 @@ class _StrukPreview extends StatelessWidget {
               _InfoStruk(label: 'No', value: kode),
               _InfoStruk(label: 'Tanggal', value: waktu),
               _InfoStruk(label: 'Kasir', value: kasir),
+              if (statusLabel != null && statusLabel!.trim().isNotEmpty)
+                _InfoStruk(label: 'Status', value: statusLabel!.trim()),
               const _GarisStruk(),
               ...item.map(
                 (i) => _ItemStruk(
@@ -557,9 +600,9 @@ class _InfoStruk extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 70, child: Text(label)),
+          SizedBox(width: 54, child: Text(label)),
           const Text(':'),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(child: Text(value.isEmpty ? '-' : value)),
         ],
       ),
