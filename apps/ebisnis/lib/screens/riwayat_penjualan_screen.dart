@@ -236,6 +236,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             0,
         metode: '${row['metode'] ?? ''}',
         pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
+        pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
       ),
     ));
   }

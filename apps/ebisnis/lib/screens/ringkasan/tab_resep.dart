@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 
@@ -47,11 +48,15 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
 
   @override
   Widget build(BuildContext context) {
-    if (_memuat || _error != null) return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+    if (_memuat || _error != null)
+      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
     final d = _d!;
-    final byBahanBaku = titikDariList(d['byBahanBaku'] as List?, labelKey: 'label', nilaiKey: 'jumlah');
-    final topMargin = ((d['topMargin'] as List?) ?? []).cast<Map<String, dynamic>>();
-    final daftarMenu = ((d['daftarMenu'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final byBahanBaku = titikDariList(d['byBahanBaku'] as List?,
+        labelKey: 'label', nilaiKey: 'jumlah');
+    final topMargin =
+        ((d['topMargin'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final daftarMenu =
+        ((d['daftarMenu'] as List?) ?? []).cast<Map<String, dynamic>>();
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -59,15 +64,40 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
           BarisKpi(kartu: [
-            KartuKpi(label: 'Total Menu', nilai: '${d['totalMenu'] ?? 0}', warna: const Color(0xFF1E3A5F)),
-            KartuKpi(label: 'Rata Margin', nilai: '${((d['rataMargin'] as num?) ?? 0).toStringAsFixed(1)}%', warna: const Color(0xFF2E7D32)),
-            KartuKpi(label: 'Margin Terendah', nilai: '${d['namaMarginTerendah'] ?? '-'}', warna: Colors.red),
-            KartuKpi(label: 'Bahan Terpakai (30h)', nilai: formatRupiahDasbor.format(d['nilaiBahanTerpakai'] ?? 0), warna: const Color(0xFFB8860B)),
+            KartuKpi(
+                label: 'Total Menu',
+                nilai: '${d['totalMenu'] ?? 0}',
+                warna: const Color(0xFF1E3A5F)),
+            KartuKpi(
+                label: 'Rata Margin',
+                nilai:
+                    '${((d['rataMargin'] as num?) ?? 0).toStringAsFixed(1)}%',
+                warna: const Color(0xFF2E7D32)),
+            KartuKpi(
+                label: 'Margin Terendah',
+                nilai: '${d['namaMarginTerendah'] ?? '-'}',
+                warna: Colors.red),
+            KartuKpi(
+                label: 'Bahan Terpakai (30h)',
+                nilai: formatRupiahDasbor.format(d['nilaiBahanTerpakai'] ?? 0),
+                warna: const Color(0xFFB8860B)),
           ]),
           const SizedBox(height: 12),
-          PanelChart(judul: 'Top 12 Margin Menu', child: BarHorizontal(data: topMargin.map((m) => (label: '${m['nama']}', nilai: (m['margin'] as num?)?.toDouble() ?? 0)).toList(), formatNilai: (v) => '${v.toStringAsFixed(0)}%')),
+          PanelChart(
+              judul: 'Top 12 Margin Menu',
+              child: BarHorizontal(
+                  data: topMargin
+                      .map((m) => (
+                            label: '${m['nama']}',
+                            nilai: (m['margin'] as num?)?.toDouble() ?? 0
+                          ))
+                      .toList(),
+                  formatNilai: (v) => '${v.toStringAsFixed(0)}%')),
           const SizedBox(height: 12),
-          PanelChart(judul: 'Bahan Baku Paling Banyak Terpakai (30 hari)', child: BarHorizontal(data: byBahanBaku, warna: const Color(0xFFB8860B))),
+          PanelChart(
+              judul: 'Bahan Baku Paling Banyak Terpakai (30 hari)',
+              child: BarHorizontal(
+                  data: byBahanBaku, warna: const Color(0xFFB8860B))),
           const SizedBox(height: 12),
           if (daftarMenu.isNotEmpty)
             Card(
@@ -76,7 +106,9 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Semua Menu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text('Semua Menu',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     ...daftarMenu.map((m) => Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -84,10 +116,25 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
                             children: [
                               Expanded(
                                 flex: 2,
-                                child: Text('${m['nama']} · ${m['kategori']}', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                child: Text('${m['nama']} · ${m['kategori']}',
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
                               ),
-                              Expanded(child: Text('HPP ${formatRupiahDasbor.format(m['hpp'] ?? 0)}', style: const TextStyle(fontSize: 11, color: Colors.black54))),
-                              Text('${((m['margin'] as num?) ?? 0).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              Expanded(
+                                child: Text(
+                                  'HPP ${formatRupiahDasbor.format(m['hpp'] ?? 0)}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color:
+                                          AppColors.textSecondaryOf(context)),
+                                ),
+                              ),
+                              Text(
+                                  '${((m['margin'] as num?) ?? 0).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         )),

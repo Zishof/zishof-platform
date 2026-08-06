@@ -83,6 +83,14 @@ class AppTheme {
             brightness == Brightness.dark ? AppColors.sidebarBg : Colors.white,
         foregroundColor: onSurface,
       ),
+      tabBarTheme: TabBarTheme(
+        labelColor: AppColors.primary,
+        unselectedLabelColor: brightness == Brightness.dark
+            ? AppColors.darkTextSecondary
+            : AppColors.textSecondary,
+        indicatorColor: AppColors.primary,
+        dividerColor: border,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,

@@ -56,7 +56,8 @@ class Produk {
         // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
         // mode semuaToko) -- default true, dikoreksi lewat form Ubah bila memang dinonaktifkan.
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
-        bahanBaku: ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
+        bahanBaku:
+            ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
@@ -105,7 +106,12 @@ class ItemKeranjang {
   double diskon;
   double cashback;
   int? aturanDiskonId;
-  ItemKeranjang({required this.produk, this.jumlah = 1, this.diskon = 0, this.cashback = 0, this.aturanDiskonId});
+  ItemKeranjang(
+      {required this.produk,
+      this.jumlah = 1,
+      this.diskon = 0,
+      this.cashback = 0,
+      this.aturanDiskonId});
   double get subtotal => produk.hargaJual * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
@@ -212,15 +218,31 @@ class ItemPesanan {
   });
 
   factory ItemPesanan.fromJson(Map<String, dynamic> j) => ItemPesanan(
-        produkId: j['id'] as int?,
+        produkId: _intNullable(j['id'] ??
+            j['produkId'] ??
+            j['idProduk'] ??
+            j['produk_id'] ??
+            j['barangId'] ??
+            j['idBarang'] ??
+            j['barang_id']),
         kode: (j['kode'] ?? '') as String,
         nama: (j['nama'] ?? '') as String,
         harga: (j['harga'] as num?)?.toDouble() ?? 0,
         jumlah: (j['jumlah'] as num?)?.toDouble() ?? 0,
         diskon: (j['diskon'] as num?)?.toDouble() ?? 0,
         cashback: (j['cashback'] as num?)?.toDouble() ?? 0,
-        aturanDiskonId: j['aturanDiskon'] as int?,
+        aturanDiskonId: _intNullable(j['aturanDiskon'] ??
+            j['aturanDiskonId'] ??
+            j['aturan_diskon'] ??
+            j['aturan_diskon_id']),
       );
+}
+
+int? _intNullable(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
 }
 
 /// Pesanan online (dibuat pembeli sendiri) ATAU Keranjang Tertahan (ditahan
@@ -283,6 +305,8 @@ class Pesanan {
         dariPembeliOnline: j['dariPembeliOnline'] == true,
         kasirLoginNama: (j['kasirLoginNama'] ?? '') as String,
         namaMesin: j['namaMesin'] as String?,
-        items: ((j['items'] as List?) ?? []).map((e) => ItemPesanan.fromJson(e as Map<String, dynamic>)).toList(),
+        items: ((j['items'] as List?) ?? [])
+            .map((e) => ItemPesanan.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }

@@ -87,19 +87,26 @@ class UpdateChecker {
     String? keyword,
   }) {
     String? fallback;
-    for (final a in assets) {
-      final m = a as Map<String, dynamic>;
-      final nama = (m['name'] as String? ?? '').toLowerCase();
-      final url = m['browser_download_url'] as String?;
-      if (url == null) continue;
-      if (!ekstensi.any((e) => nama.endsWith(e))) continue;
-      fallback ??= url;
-      if (keyword == null || keyword.isEmpty || nama.contains(keyword)) {
-        return url;
+    final keywordNormal = _normalisasiNamaAsset(keyword ?? '');
+    for (final ekst in ekstensi) {
+      for (final a in assets) {
+        final m = a as Map<String, dynamic>;
+        final nama = (m['name'] as String? ?? '').toLowerCase();
+        final url = m['browser_download_url'] as String?;
+        if (url == null) continue;
+        if (!nama.endsWith(ekst)) continue;
+        fallback ??= url;
+        if (keywordNormal.isEmpty ||
+            _normalisasiNamaAsset(nama).contains(keywordNormal)) {
+          return url;
+        }
       }
     }
     return fallback;
   }
+
+  static String _normalisasiNamaAsset(String nilai) =>
+      nilai.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
   static bool _lebihBaru(String a, String b) {
     final pa = _pecahVersi(a);

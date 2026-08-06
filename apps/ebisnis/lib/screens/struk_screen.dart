@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
+import '../services/pengaturan_struk.dart';
 import '../services/print_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -27,6 +30,9 @@ class StrukScreen extends StatelessWidget {
   final double pajak;
   final bool tersinkron;
   final String? statusLabel;
+  final String? pelanggan;
+  final double? uangDiterima;
+  final double? kembalian;
 
   const StrukScreen({
     super.key,
@@ -38,6 +44,9 @@ class StrukScreen extends StatelessWidget {
     this.pajak = 0,
     this.tersinkron = true,
     this.statusLabel,
+    this.pelanggan,
+    this.uangDiterima,
+    this.kembalian,
   });
 
   double get _subtotalItem => item.fold<double>(
@@ -70,7 +79,13 @@ class StrukScreen extends StatelessWidget {
     return user.isEmpty ? '-' : user;
   }
 
+  String _labelPelanggan() {
+    final nama = pelanggan?.trim() ?? '';
+    return nama.isEmpty ? 'Umum' : nama;
+  }
+
   Future<void> _pastikanProfilToko() async {
+    await PengaturanStruk.instance.muat();
     if (Sesi.instance.tokoAlamat.trim().isNotEmpty &&
         Sesi.instance.tokoTelp.trim().isNotEmpty) {
       return;
@@ -99,9 +114,17 @@ class StrukScreen extends StatelessWidget {
   }
 
   Future<pw.ImageProvider?> _logoPdf() async {
-    if (AppVariant.logoAsset == null) return null;
+    await PengaturanStruk.instance.muat();
+    final path = PengaturanStruk.instance.logoPath;
+    if (path != null) {
+      try {
+        return pw.MemoryImage(await File(path).readAsBytes());
+      } catch (_) {
+        // Fallback ke logo aplikasi kalau file lokal tidak bisa dibaca.
+      }
+    }
     try {
-      final data = await rootBundle.load(AppVariant.logoAsset!);
+      final data = await rootBundle.load(AppVariant.logoAsset);
       return pw.MemoryImage(data.buffer.asUint8List());
     } catch (_) {
       return null;
@@ -111,19 +134,27 @@ class StrukScreen extends StatelessWidget {
   Future<void> _cetakStruk() async {
     await _pastikanProfilToko();
     final logo = await _logoPdf();
+    final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
     final doc = pw.Document();
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat(
-          80 * PdfPageFormat.mm,
+          lebarKertasMm * PdfPageFormat.mm,
           double.infinity,
-          marginAll: 6 * PdfPageFormat.mm,
+          marginLeft: 3 * PdfPageFormat.mm,
+          marginRight: 3 * PdfPageFormat.mm,
+          marginTop: 5 * PdfPageFormat.mm,
+          marginBottom: 5 * PdfPageFormat.mm,
         ),
         build: (_) => _strukPdf(logo),
       ),
     );
     await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-$kode.pdf');
   }
+
+  /// Dipakai halaman lain untuk mencetak ulang tanpa membuka preview, dengan
+  /// layout yang sama persis seperti tombol Cetak Struk di layar ini.
+  Future<void> cetakLangsung() => _cetakStruk();
 
   pw.Widget _strukPdf(pw.ImageProvider? logo) {
     return pw.DefaultTextStyle(
@@ -134,18 +165,13 @@ class StrukScreen extends StatelessWidget {
           pw.Center(child: _logoPdfWidget(logo)),
           pw.SizedBox(height: 8),
           pw.Text(
-            Sesi.instance.tokoNama.isEmpty ? 'Nama Toko' : Sesi.instance.tokoNama,
+            Sesi.instance.tokoNama.isEmpty
+                ? 'Nama Toko'
+                : Sesi.instance.tokoNama,
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 2),
-          pw.Text(
-            Sesi.instance.pesanTerimaKasih.isEmpty
-                ? 'Moto Bisnis atau Toko'
-                : Sesi.instance.pesanTerimaKasih,
-            textAlign: pw.TextAlign.center,
-            style: const pw.TextStyle(fontSize: 8),
-          ),
           pw.Text(
             Sesi.instance.tokoAlamat.isEmpty
                 ? 'Alamat toko'
@@ -163,6 +189,7 @@ class StrukScreen extends StatelessWidget {
           _infoPdf('No', kode),
           _infoPdf('Tanggal', waktu),
           _infoPdf('Kasir', _labelKasir()),
+          _infoPdf('Pelanggan', _labelPelanggan()),
           if (statusLabel != null && statusLabel!.trim().isNotEmpty)
             _infoPdf('Status', statusLabel!.trim()),
           _garisPdf(),
@@ -177,6 +204,9 @@ class StrukScreen extends StatelessWidget {
             _formatUang(total),
             besar: true,
           ),
+          if (uangDiterima != null)
+            _totalPdf('Tunai', _formatUang(uangDiterima!)),
+          if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
           _totalPdf('Metode', metode),
           _garisPdf(),
           pw.SizedBox(height: 4),
@@ -201,16 +231,20 @@ class StrukScreen extends StatelessWidget {
   }
 
   pw.Widget _logoPdfWidget(pw.ImageProvider? logo) {
+    final landscape = PengaturanStruk.instance.logoLandscape;
+    final skala = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
+    final lebar = (landscape ? 112.0 : 52.0) * skala;
+    final tinggi = (landscape ? 52.0 : 52.0) * skala;
     if (logo != null) {
       return pw.Container(
-        width: 52,
-        height: 52,
+        width: lebar,
+        height: tinggi,
         child: pw.Image(logo, fit: pw.BoxFit.contain),
       );
     }
     return pw.Container(
-      width: 52,
-      height: 52,
+      width: lebar,
+      height: tinggi,
       alignment: pw.Alignment.center,
       decoration: pw.BoxDecoration(
         color: PdfColor.fromHex('#4A78D0'),
@@ -230,10 +264,13 @@ class StrukScreen extends StatelessWidget {
 
   pw.Widget _garisPdf() => pw.Padding(
         padding: const pw.EdgeInsets.symmetric(vertical: 8),
-        child: pw.Text(
-          '--------------------------------',
-          textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 8),
+        child: pw.Container(
+          height: 0.5,
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              top: pw.BorderSide(width: 0.5, color: PdfColors.grey700),
+            ),
+          ),
         ),
       );
 
@@ -243,7 +280,7 @@ class StrukScreen extends StatelessWidget {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.SizedBox(width: 38, child: pw.Text(label)),
+          pw.SizedBox(width: 46, child: pw.Text(label)),
           pw.Text(':'),
           pw.SizedBox(width: 4),
           pw.Expanded(child: pw.Text(value.isEmpty ? '-' : value)),
@@ -260,7 +297,8 @@ class StrukScreen extends StatelessWidget {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          pw.Text('${i['nama']}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.Text('${i['nama']}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 1),
           pw.Row(
             children: [
@@ -318,41 +356,47 @@ class StrukScreen extends StatelessWidget {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: FutureBuilder<void>(
-              future: _pastikanProfilToko(),
-              builder: (context, _) => Column(
-                children: [
-                  _StatusTransaksi(tersinkron: tersinkron),
-                  const SizedBox(height: 14),
-                  _StrukPreview(
-                    kode: kode,
-                    waktu: waktu,
-                    item: item,
-                    total: total,
-                    pajak: pajak,
-                    metode: metode,
-                    tersinkron: tersinkron,
-                    subtotal: _subtotal,
-                    jumlahItem: _jumlahItem,
-                    kasir: _labelKasir(),
-                    statusLabel: statusLabel,
-                    formatUang: _formatUang,
-                    formatAngka: (v) => _formatAngka.format(v),
-                    formatQty: _formatQty,
-                  ),
-                  const SizedBox(height: 16),
-                  _TombolStruk(
-                    onCetak: _cetakStruk,
-                    onTransaksiBaru: () =>
-                        Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const KasirScreen()),
+          child: FutureBuilder<void>(
+            future: _pastikanProfilToko(),
+            builder: (context, _) {
+              final lebarPreview = PengaturanStruk.instance.lebarPreviewPx;
+              return ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: lebarPreview),
+                child: Column(
+                  children: [
+                    _StatusTransaksi(tersinkron: tersinkron),
+                    const SizedBox(height: 14),
+                    _StrukPreview(
+                      kode: kode,
+                      waktu: waktu,
+                      item: item,
+                      total: total,
+                      pajak: pajak,
+                      metode: metode,
+                      tersinkron: tersinkron,
+                      subtotal: _subtotal,
+                      jumlahItem: _jumlahItem,
+                      kasir: _labelKasir(),
+                      pelanggan: _labelPelanggan(),
+                      uangDiterima: uangDiterima,
+                      kembalian: kembalian,
+                      statusLabel: statusLabel,
+                      formatUang: _formatUang,
+                      formatAngka: (v) => _formatAngka.format(v),
+                      formatQty: _formatQty,
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(height: 16),
+                    _TombolStruk(
+                      onCetak: _cetakStruk,
+                      onTransaksiBaru: () =>
+                          Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const KasirScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -409,6 +453,9 @@ class _StrukPreview extends StatelessWidget {
   final double subtotal;
   final int jumlahItem;
   final String kasir;
+  final String pelanggan;
+  final double? uangDiterima;
+  final double? kembalian;
   final String? statusLabel;
   final String Function(num nilai) formatUang;
   final String Function(num nilai) formatAngka;
@@ -425,6 +472,9 @@ class _StrukPreview extends StatelessWidget {
     required this.subtotal,
     required this.jumlahItem,
     required this.kasir,
+    required this.pelanggan,
+    required this.uangDiterima,
+    required this.kembalian,
     required this.statusLabel,
     required this.formatUang,
     required this.formatAngka,
@@ -438,7 +488,7 @@ class _StrukPreview extends StatelessWidget {
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+        padding: const EdgeInsets.fromLTRB(14, 20, 14, 20),
         child: DefaultTextStyle(
           style: const TextStyle(
             color: Color(0xFF1F2937),
@@ -463,13 +513,6 @@ class _StrukPreview extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                Sesi.instance.pesanTerimaKasih.isEmpty
-                    ? 'Moto Bisnis atau Toko'
-                    : Sesi.instance.pesanTerimaKasih,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11),
-              ),
-              Text(
                 Sesi.instance.tokoAlamat.isEmpty
                     ? 'Alamat toko'
                     : Sesi.instance.tokoAlamat,
@@ -486,6 +529,7 @@ class _StrukPreview extends StatelessWidget {
               _InfoStruk(label: 'No', value: kode),
               _InfoStruk(label: 'Tanggal', value: waktu),
               _InfoStruk(label: 'Kasir', value: kasir),
+              _InfoStruk(label: 'Pelanggan', value: pelanggan),
               if (statusLabel != null && statusLabel!.trim().isNotEmpty)
                 _InfoStruk(label: 'Status', value: statusLabel!.trim()),
               const _GarisStruk(),
@@ -503,12 +547,17 @@ class _StrukPreview extends StatelessWidget {
               Text('$jumlahItem item'),
               const SizedBox(height: 8),
               _TotalStruk(label: 'Subtotal', value: formatUang(subtotal)),
-              if (pajak > 0) _TotalStruk(label: 'Pajak', value: formatUang(pajak)),
+              if (pajak > 0)
+                _TotalStruk(label: 'Pajak', value: formatUang(pajak)),
               _TotalStruk(
                 label: 'Grand Total',
                 value: formatUang(total),
                 emphasized: true,
               ),
+              if (uangDiterima != null)
+                _TotalStruk(label: 'Tunai', value: formatUang(uangDiterima!)),
+              if (kembalian != null)
+                _TotalStruk(label: 'Kembali', value: formatUang(kembalian!)),
               _TotalStruk(label: 'Metode', value: metode),
               const _GarisStruk(),
               Text(
@@ -539,12 +588,26 @@ class _LogoToko extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (AppVariant.logoAsset != null) {
+    final path = PengaturanStruk.instance.logoPath;
+    final landscape = PengaturanStruk.instance.logoLandscape;
+    final skala = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
+    final lebar = (landscape ? 170.0 : 78.0) * skala;
+    final tinggi = (landscape ? 78.0 : 78.0) * skala;
+    if (path != null) {
       return Center(
         child: SizedBox(
-          width: 78,
-          height: 78,
-          child: Image.asset(AppVariant.logoAsset!, fit: BoxFit.contain),
+          width: lebar,
+          height: tinggi,
+          child: Image.file(File(path), fit: BoxFit.contain),
+        ),
+      );
+    }
+    if (AppVariant.logoAsset.isNotEmpty) {
+      return Center(
+        child: SizedBox(
+          width: lebar,
+          height: tinggi,
+          child: Image.asset(AppVariant.logoAsset, fit: BoxFit.contain),
         ),
       );
     }
@@ -578,10 +641,10 @@ class _GarisStruk extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 12),
-      child: Text(
-        '--------------------------------',
-        textAlign: TextAlign.center,
-        style: TextStyle(letterSpacing: 0, color: Colors.black87),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: Colors.black54,
       ),
     );
   }
@@ -600,7 +663,7 @@ class _InfoStruk extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 54, child: Text(label)),
+          SizedBox(width: 68, child: Text(label, softWrap: false)),
           const Text(':'),
           const SizedBox(width: 6),
           Expanded(child: Text(value.isEmpty ? '-' : value)),

@@ -1,3 +1,4 @@
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -147,7 +148,9 @@ class _PesananScreenState extends State<PesananScreen> {
   /// metode pembayaran yang dipilih di depan -- sama seperti kasir memproses
   /// banyak pesanan manual berturut-turut, hanya diotomatisasi.
   Future<void> _bayarSemua() async {
-    final belumLunas = _tersaring.where((p) => p.dariPembeliOnline).toList();
+    final belumLunas = _tersaring
+        .where((p) => p.dariPembeliOnline && !_sudahTerbayar(p))
+        .toList();
     if (belumLunas.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tidak ada pesanan online yang perlu dibayar.')));
@@ -185,41 +188,75 @@ class _PesananScreenState extends State<PesananScreen> {
     await _muat();
   }
 
-  Map<String, dynamic> _payloadVerifikasi(Pesanan p, CaraBayar caraBayar) => {
-        'kodeUnik': '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
-        'clientTrxId':
-            '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}',
-        'idToko': Sesi.instance.tokoId,
-        'tokoId': Sesi.instance.tokoId,
-        'kasir': Sesi.instance.userId,
-        'waktu': _formatWaktuServer(DateTime.now()),
-        'caraBayar': caraBayar.id,
-        'total': p.totalBiaya,
-        'id_member': p.anggotaId,
-        'draftPembelianAnggotaKoperasi': p.id,
-        'transaksi': p.items
-            .map((i) => {
-                  'id': i.produkId,
-                  'kode': i.kode,
-                  'nama': i.nama,
-                  'harga': i.harga,
-                  'jumlah': i.jumlah,
-                  'diskon': i.diskon,
-                  'aturanDiskon': i.aturanDiskonId,
-                  'cashback': i.cashback,
-                })
-            .toList(),
-      };
+  Map<String, dynamic> _payloadVerifikasi(Pesanan p, CaraBayar caraBayar) {
+    final kodeUnik = '${p.kode}-VERIF-${DateTime.now().millisecondsSinceEpoch}';
+    return {
+      'kodeUnik': kodeUnik,
+      'clientTrxId': kodeUnik,
+      'idToko': Sesi.instance.tokoId,
+      'tokoId': Sesi.instance.tokoId,
+      'kasir': Sesi.instance.userId,
+      'waktu': _formatWaktuServer(DateTime.now()),
+      'caraBayar': caraBayar.id,
+      'total': p.totalBiaya,
+      'id_member': p.anggotaId,
+      'draftPembelianAnggotaKoperasi': p.id,
+      'draftPembelianAnggotaKoperasiId': p.id,
+      'idDraftPembelianAnggotaKoperasi': p.id,
+      'draft_pembelian_anggota_koperasi': p.id,
+      'draft_pembelian_anggota_koperasi_id': p.id,
+      'id_draft_pembelian_anggota_koperasi': p.id,
+      'draftPembelianId': p.id,
+      'draft_pembelian_id': p.id,
+      'draftId': p.id,
+      'draft_id': p.id,
+      'idDraft': p.id,
+      'kodeDraft': p.kode,
+      'draftKode': p.kode,
+      'kodeDraftPembelianAnggotaKoperasi': p.kode,
+      'kode_draft_pembelian_anggota_koperasi': p.kode,
+      'transaksi': p.items
+          .map((i) => {
+                'id': i.produkId,
+                'kode': i.kode,
+                'nama': i.nama,
+                'harga': i.harga,
+                'jumlah': i.jumlah,
+                'diskon': i.diskon,
+                'aturanDiskon': i.aturanDiskonId,
+                'cashback': i.cashback,
+              })
+          .toList(),
+    };
+  }
 
   List<Pesanan> get _tersaring {
     switch (_filter) {
       case _Filter.online:
-        return _semua.where((p) => p.dariPembeliOnline).toList();
+        return _semua
+            .where((p) => p.dariPembeliOnline && !_sudahTerbayar(p))
+            .toList();
       case _Filter.tertahan:
-        return _semua.where((p) => !p.dariPembeliOnline).toList();
+        return _semua
+            .where((p) => !p.dariPembeliOnline && !_sudahTerbayar(p))
+            .toList();
       case _Filter.semua:
         return _semua;
     }
+  }
+
+  bool _sudahTerbayar(Pesanan p) => p.lunas || p.lunasId != null;
+
+  String _labelStatus(Pesanan p) {
+    if (_sudahTerbayar(p)) return 'Terbayar';
+    return p.dariPembeliOnline ? 'Online' : 'Tertahan';
+  }
+
+  Color _warnaStatus(Pesanan p) {
+    if (_sudahTerbayar(p)) return AppColors.success;
+    return p.dariPembeliOnline
+        ? const Color(0xFF0284C7)
+        : const Color(0xFFB8860B);
   }
 
   Future<void> _lihatDetail(Pesanan p) async {
@@ -266,7 +303,7 @@ class _PesananScreenState extends State<PesananScreen> {
           // (Muat ke Keranjang) tersembunyi di menu tekan-tahan yang tak lazim
           // dipakai mouse desktop. Tombol ini langsung ke KeranjangScreen sama
           // seperti _tampilkanAksi, bukan alur baru.
-          if (!p.dariPembeliOnline)
+          if (!p.dariPembeliOnline && !_sudahTerbayar(p))
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -275,7 +312,7 @@ class _PesananScreenState extends State<PesananScreen> {
               icon: const Icon(Icons.shopping_cart_checkout, size: 18),
               label: const Text('Muat ke Keranjang'),
             ),
-          if (p.dariPembeliOnline)
+          if (p.dariPembeliOnline && !_sudahTerbayar(p))
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -284,7 +321,7 @@ class _PesananScreenState extends State<PesananScreen> {
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: const Text('Verifikasi & Selesaikan'),
             ),
-          if (Sesi.instance.bolehKelola)
+          if (Sesi.instance.bolehKelola && !_sudahTerbayar(p))
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -315,10 +352,11 @@ class _PesananScreenState extends State<PesananScreen> {
                   })
               .toList(),
           total: p.totalBiaya,
-          metode: 'Tertahan',
+          metode: _sudahTerbayar(p) ? 'Terbayar' : 'Tertahan',
           pajak: 0,
           tersinkron: true,
-          statusLabel: 'Tertahan (On Hold)',
+          statusLabel: _sudahTerbayar(p) ? 'Terbayar' : 'Tertahan (On Hold)',
+          pelanggan: p.pemesan,
         ),
       ),
     );
@@ -338,6 +376,12 @@ class _PesananScreenState extends State<PesananScreen> {
         _chipDetail(
           p.dariPembeliOnline ? Icons.public : Icons.pause_circle_outline,
           p.dariPembeliOnline ? 'Pesanan Online' : 'Keranjang Tertahan',
+        ),
+        _chipDetail(
+          _sudahTerbayar(p)
+              ? Icons.check_circle_outline
+              : Icons.hourglass_empty,
+          'Status: ${_labelStatus(p)}',
         ),
       ],
     );
@@ -508,29 +552,68 @@ class _PesananScreenState extends State<PesananScreen> {
         // Gagal memuat detail member -- tetap lanjut memuat keranjang tanpa member (bukan blocker).
       }
     }
-    final keranjang = p.items
-        .map((i) => ItemKeranjang(
-              produk: Produk(
-                id: i.produkId ?? -1,
-                kode: i.kode,
-                barcode: '',
-                nama: i.nama,
-                hargaJual: i.harga,
-                stok: 999999,
-                kategoriId: null,
-                kategoriNama: '',
-                gambarUrl: null,
-              ),
-              jumlah: i.jumlah.round(),
-              diskon: i.diskon,
-              cashback: i.cashback,
-              aturanDiskonId: i.aturanDiskonId,
-            ))
-        .toList();
+    final produkCache = await CoreDb.instance.produkCache();
+    int? idProduk(ItemPesanan item) {
+      if (item.produkId != null && item.produkId! > 0) return item.produkId;
+      final kode = item.kode.trim();
+      if (kode.isEmpty) return null;
+      for (final row in produkCache) {
+        if ('${row['kode'] ?? ''}'.trim() == kode) {
+          final id = row['id'];
+          if (id is int) return id;
+          if (id is num) return id.toInt();
+          return int.tryParse('${id ?? ''}');
+        }
+      }
+      return null;
+    }
+
+    final itemTanpaId = <ItemPesanan>[];
+    final keranjang = <ItemKeranjang>[];
+    for (final i in p.items) {
+      final produkId = idProduk(i);
+      if (produkId == null || produkId <= 0) {
+        itemTanpaId.add(i);
+        continue;
+      }
+      keranjang.add(
+        ItemKeranjang(
+          produk: Produk(
+            id: produkId,
+            kode: i.kode,
+            barcode: '',
+            nama: i.nama,
+            hargaJual: i.harga,
+            stok: 999999,
+            kategoriId: null,
+            kategoriNama: '',
+            gambarUrl: null,
+          ),
+          jumlah: i.jumlah.round(),
+          diskon: i.diskon,
+          cashback: i.cashback,
+          aturanDiskonId: i.aturanDiskonId,
+        ),
+      );
+    }
+    if (itemTanpaId.isNotEmpty) {
+      if (mounted) {
+        final daftar =
+            itemTanpaId.map((i) => i.kode.isEmpty ? i.nama : i.kode).join(', ');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Tidak bisa memuat ke keranjang. ID produk tidak ditemukan untuk: $daftar')));
+      }
+      return;
+    }
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => KeranjangScreen(
-          keranjang: keranjang, draftIdSumber: p.id, memberAwal: member),
+        keranjang: keranjang,
+        draftIdSumber: p.id,
+        draftKodeSumber: p.kode,
+        memberAwal: member,
+      ),
     ));
     await _muat();
   }
@@ -636,9 +719,13 @@ class _PesananScreenState extends State<PesananScreen> {
     final awalPesanan = (halamanPesanan - 1) * _pageSizePesanan;
     final pesananHalamanIni =
         pesananTersaring.skip(awalPesanan).take(_pageSizePesanan).toList();
-    final jumlahOnline = semua.where((p) => p.dariPembeliOnline).length;
-    final jumlahTertahan = semua.length - jumlahOnline;
-    final nilaiMenunggu = semua.fold<double>(0, (s, p) => s + p.totalBiaya);
+    final belumTerbayar = semua.where((p) => !_sudahTerbayar(p)).toList();
+    final jumlahOnline = belumTerbayar.where((p) => p.dariPembeliOnline).length;
+    final jumlahTertahan =
+        belumTerbayar.where((p) => !p.dariPembeliOnline).length;
+    final jumlahTerbayar = semua.where(_sudahTerbayar).length;
+    final nilaiMenunggu =
+        belumTerbayar.fold<double>(0, (s, p) => s + p.totalBiaya);
     final tombolAksi = [
       HeaderActionButton(
         icon: _filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined,
@@ -708,6 +795,9 @@ class _PesananScreenState extends State<PesananScreen> {
                             const SizedBox(width: 8),
                             _kartuKpi(Icons.pause_circle_outline, 'Tertahan',
                                 '$jumlahTertahan', const Color(0xFFB8860B)),
+                            const SizedBox(width: 8),
+                            _kartuKpi(Icons.check_circle_outline, 'Terbayar',
+                                '$jumlahTerbayar', AppColors.success),
                             const SizedBox(width: 8),
                             _kartuKpi(
                                 Icons.hourglass_empty,
@@ -861,7 +951,7 @@ class _PesananScreenState extends State<PesananScreen> {
                         columns: const [
                           AppTableColumn('Kode', flex: 2),
                           AppTableColumn('Pemesan', flex: 3),
-                          AppTableColumn('Tipe',
+                          AppTableColumn('Status',
                               flex: 2, align: TextAlign.center),
                           AppTableColumn('Item', flex: 4),
                           AppTableColumn('Total',
@@ -870,9 +960,7 @@ class _PesananScreenState extends State<PesananScreen> {
                               width: 96, align: TextAlign.center),
                         ],
                         rows: pesananHalamanIni.map((p) {
-                          final warnaStatus = p.dariPembeliOnline
-                              ? const Color(0xFF0284C7)
-                              : const Color(0xFFB8860B);
+                          final warnaStatus = _warnaStatus(p);
                           final ringkasanItem = p.items.isEmpty
                               ? '-'
                               : p.items.take(3).map((item) {
@@ -910,9 +998,7 @@ class _PesananScreenState extends State<PesananScreen> {
                                 child: Align(
                                   alignment: Alignment.center,
                                   child: StatusPill(
-                                    label: p.dariPembeliOnline
-                                        ? 'Online'
-                                        : 'Tertahan',
+                                    label: _labelStatus(p),
                                     warna: warnaStatus,
                                   ),
                                 ),
@@ -1002,7 +1088,7 @@ class _PesananScreenState extends State<PesananScreen> {
                   Navigator.of(context).pop();
                   _lihatDetail(p);
                 }),
-            if (p.dariPembeliOnline)
+            if (p.dariPembeliOnline && !_sudahTerbayar(p))
               ListTile(
                 leading: const Icon(Icons.check_circle_outline,
                     color: Color(0xFF2E7D32)),
@@ -1012,7 +1098,7 @@ class _PesananScreenState extends State<PesananScreen> {
                   _verifikasiDanSelesaikan(p);
                 },
               ),
-            if (!p.dariPembeliOnline)
+            if (!p.dariPembeliOnline && !_sudahTerbayar(p))
               ListTile(
                 leading: const Icon(Icons.shopping_cart_checkout),
                 title: const Text('Muat ke Keranjang'),
@@ -1021,7 +1107,7 @@ class _PesananScreenState extends State<PesananScreen> {
                   _muatKeKeranjang(p);
                 },
               ),
-            if (Sesi.instance.bolehKelola)
+            if (Sesi.instance.bolehKelola && !_sudahTerbayar(p))
               ListTile(
                 leading: const Icon(Icons.calculate_outlined),
                 title: const Text('Hitung Ulang'),
@@ -1030,7 +1116,7 @@ class _PesananScreenState extends State<PesananScreen> {
                   _hitungUlang(p);
                 },
               ),
-            if (Sesi.instance.bolehKelola)
+            if (Sesi.instance.bolehKelola && !_sudahTerbayar(p))
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: const Text('Batalkan'),

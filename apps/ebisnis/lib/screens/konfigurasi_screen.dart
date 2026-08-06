@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:core_device/core_device.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
+import '../app_variant.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
+import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../services/pengaturan_struk.dart';
 import '../services/pengaturan_sesi_lokal.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -74,9 +79,9 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
           TabBar(
             controller: _tab,
             isScrollable: true,
-            labelColor: const Color(0xFF2563EB),
+            labelColor: AppColors.primary,
             unselectedLabelColor: warnaTeksSekunder,
-            indicatorColor: const Color(0xFF2563EB),
+            indicatorColor: AppColors.primary,
             tabs: const [
               Tab(text: 'Identitas Mesin'),
               Tab(text: 'Profil Toko'),
@@ -141,6 +146,7 @@ class _TabIdentitasMesin extends StatefulWidget {
 class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   final _namaController = TextEditingController();
   final _timeoutSesiController = TextEditingController();
+  final _kodeDeviceStrukController = TextEditingController();
   bool _memuat = true;
   bool _menyimpan = false;
 
@@ -151,11 +157,13 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   bool _menyimpanLaci = false;
   bool _tesLaciBerjalan = false;
   int? _caraBayarDefaultId;
+  FormatNomorStruk _formatNomorStruk = FormatNomorStruk.defaultPos;
   bool _menyimpanPembayaran = false;
 
   @override
   void initState() {
     super.initState();
+    _kodeDeviceStrukController.addListener(_segarkanContohNomorStruk);
     _muat();
   }
 
@@ -163,12 +171,15 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   void dispose() {
     _namaController.dispose();
     _timeoutSesiController.dispose();
+    _kodeDeviceStrukController.removeListener(_segarkanContohNomorStruk);
+    _kodeDeviceStrukController.dispose();
     super.dispose();
   }
 
   Future<void> _muat() async {
     await IdentitasMesin.instance.muat();
     await PengaturanPembayaran.instance.muat();
+    await PengaturanNomorStruk.instance.muat();
     await PengaturanSesiLokal.instance.muat();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
@@ -184,11 +195,32 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         _printerLaci = PengaturanLaci.instance.namaPrinter;
         _pinAlternatif = PengaturanLaci.instance.pinAlternatif;
         _caraBayarDefaultId = PengaturanPembayaran.instance.caraBayarDefaultId;
+        _formatNomorStruk = PengaturanNomorStruk.instance.format;
+        _kodeDeviceStrukController.text =
+            PengaturanNomorStruk.instance.kodeDeviceKustom ??
+                PengaturanNomorStruk.kodeDeviceDariId(
+                    IdentitasMesin.instance.idMesin);
         _timeoutSesiController.text =
             PengaturanSesiLokal.instance.timeoutMenit.toString();
         _memuat = false;
       });
     }
+  }
+
+  void _segarkanContohNomorStruk() {
+    if (mounted) setStateIfMounted(() {});
+  }
+
+  String _contohNomorStruk(FormatNomorStruk format) {
+    if (format != FormatNomorStruk.deviceTanggalUrut) return format.contoh;
+    final kodeDevice = _kodeDeviceStrukController.text
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final kode = kodeDevice.isEmpty
+        ? PengaturanNomorStruk.kodeDeviceDariId(IdentitasMesin.instance.idMesin)
+        : kodeDevice;
+    return '${kode}0608202600001';
   }
 
   Future<void> _simpan() async {
@@ -223,10 +255,18 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     setStateIfMounted(() => _menyimpanPembayaran = true);
     await PengaturanPembayaran.instance
         .simpan(caraBayarDefaultId: _caraBayarDefaultId);
+    await PengaturanNomorStruk.instance.simpan(
+      format: _formatNomorStruk,
+      kodeDevice: _kodeDeviceStrukController.text,
+    );
     await PengaturanSesiLokal.instance.simpanTimeoutMenit(menit);
     if (mounted) {
       setStateIfMounted(() {
         _menyimpanPembayaran = false;
+        _kodeDeviceStrukController.text =
+            PengaturanNomorStruk.instance.kodeDeviceKustom ??
+                PengaturanNomorStruk.kodeDeviceDariId(
+                    IdentitasMesin.instance.idMesin);
         _timeoutSesiController.text =
             PengaturanSesiLokal.instance.timeoutMenit.toString();
       });
@@ -310,6 +350,51 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
               onChanged: (v) => setStateIfMounted(() {
                 _caraBayarDefaultId = v;
               }),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<FormatNomorStruk>(
+              value: _formatNomorStruk,
+              dropdownColor: AppColors.cardBgOf(context),
+              style: TextStyle(color: AppColors.textPrimaryOf(context)),
+              decoration:
+                  const InputDecoration(labelText: 'Format Nomor Struk'),
+              items: FormatNomorStruk.values
+                  .map(
+                    (format) => DropdownMenuItem(
+                      value: format,
+                      child: Text(
+                          '${format.label} (${_contohNomorStruk(format)})'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setStateIfMounted(() {
+                _formatNomorStruk = v ?? FormatNomorStruk.defaultPos;
+              }),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _kodeDeviceStrukController,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                LengthLimitingTextInputFormatter(8),
+              ],
+              decoration: InputDecoration(
+                labelText: 'Kode Device Struk',
+                helperText:
+                    'Default dari ID Mesin. Dipakai pada format kode device + tanggal + nomor urut.',
+                suffixIcon: IconButton(
+                  tooltip: 'Kembalikan ke kode dari ID Mesin',
+                  icon: const Icon(Icons.restore_outlined),
+                  onPressed: () => setStateIfMounted(() {
+                    _kodeDeviceStrukController.text =
+                        PengaturanNomorStruk.kodeDeviceDariId(
+                            IdentitasMesin.instance.idMesin);
+                  }),
+                ),
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
             ),
             const SizedBox(height: 14),
             TextFormField(
@@ -406,8 +491,13 @@ class _TabProfilToko extends StatefulWidget {
 class _TabProfilTokoState extends State<_TabProfilToko> {
   bool _memuat = true;
   bool _menyimpan = false;
+  bool _memilihLogo = false;
   String? _error;
   bool _bolehUbah = false;
+  String? _logoStrukPath;
+  String _logoStrukMode = 'persegi';
+  double _logoStrukSkala = 1;
+  double _lebarKertasStrukMm = 80;
   final _kode = TextEditingController();
   final _nama = TextEditingController();
   final _alamat = TextEditingController();
@@ -456,6 +546,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _error = null;
     });
     try {
+      await PengaturanStruk.instance.muat();
       final hasil = await ApiClient.instance.aksi('toko_profil_ambil');
       final d = (hasil['data'] as Map<String, dynamic>?) ?? {};
       _kode.text = '${d['kode'] ?? ''}';
@@ -482,11 +573,65 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         ].join(', ')
         ..tokoTelp =
             _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim();
-      setStateIfMounted(() => _bolehUbah = hasil['bolehUbah'] == true);
+      setStateIfMounted(() {
+        _bolehUbah = hasil['bolehUbah'] == true;
+        _logoStrukPath = PengaturanStruk.instance.logoPath;
+        _logoStrukMode = PengaturanStruk.instance.logoMode;
+        _logoStrukSkala = PengaturanStruk.instance.logoSkala;
+        _lebarKertasStrukMm = PengaturanStruk.instance.lebarKertasMm;
+      });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _pilihLogoStruk() async {
+    setStateIfMounted(() => _memilihLogo = true);
+    try {
+      final path = await PengaturanStruk.instance.pilihDanSimpanLogo();
+      if (path != null && mounted) {
+        setStateIfMounted(() => _logoStrukPath = path);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Logo struk tersimpan lokal.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memilih logo: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memilihLogo = false);
+    }
+  }
+
+  Future<void> _hapusLogoStruk() async {
+    await PengaturanStruk.instance.hapusLogo();
+    if (mounted) {
+      setStateIfMounted(() => _logoStrukPath = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Logo struk dikembalikan ke logo aplikasi.')));
+    }
+  }
+
+  Future<void> _simpanTampilanLogoStruk() async {
+    await PengaturanStruk.instance.simpanTampilanLogo(
+      mode: _logoStrukMode,
+      skala: _logoStrukSkala,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tampilan logo struk tersimpan.')));
+    }
+  }
+
+  Future<void> _simpanLebarKertasStruk() async {
+    await PengaturanStruk.instance.simpanLebarKertas(_lebarKertasStrukMm);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ukuran kertas struk tersimpan.')),
+      );
     }
   }
 
@@ -555,6 +700,176 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
     });
   }
 
+  Widget _previewLogoStruk() {
+    final path = _logoStrukPath;
+    final logo = path != null
+        ? Image.file(File(path), fit: BoxFit.contain)
+        : Image.asset(AppVariant.logoAsset, fit: BoxFit.contain);
+    final lebar = (_logoStrukMode == 'landscape' ? 180.0 : 96.0) *
+        _logoStrukSkala.clamp(0.8, 1.8);
+    final tinggi = (_logoStrukMode == 'landscape' ? 84.0 : 96.0) *
+        _logoStrukSkala.clamp(0.8, 1.8);
+    return Container(
+      width: lebar,
+      height: tinggi,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.pageBgOf(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: logo,
+    );
+  }
+
+  Widget _pengaturanLogoStruk() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.pageBgOf(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _previewLogoStruk(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Logo Struk',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimaryOf(context),
+                    )),
+                const SizedBox(height: 4),
+                Text(
+                  _logoStrukPath == null
+                      ? 'Saat ini memakai logo aplikasi. Pilih PNG/JPG jika struk perlu logo toko khusus di perangkat ini.'
+                      : 'Memakai logo khusus lokal. File asli sudah disalin ke data aplikasi perangkat ini.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryOf(context),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    AppTombolAksi(
+                      icon: Icons.upload_file_outlined,
+                      label: _memilihLogo
+                          ? 'Memilih...'
+                          : (_logoStrukPath == null
+                              ? 'Upload Logo Struk'
+                              : 'Ganti Logo Struk'),
+                      warna: AppColors.teal,
+                      onPressed: _memilihLogo ? null : _pilihLogoStruk,
+                    ),
+                    if (_logoStrukPath != null)
+                      AppTombolAksi(
+                        icon: Icons.restore_outlined,
+                        label: 'Gunakan Logo Aplikasi',
+                        warna: AppColors.warning,
+                        onPressed: _hapusLogoStruk,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _logoStrukMode,
+                  dropdownColor: AppColors.cardBgOf(context),
+                  style: TextStyle(color: AppColors.textPrimaryOf(context)),
+                  decoration:
+                      const InputDecoration(labelText: 'Rasio Logo Struk'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'persegi', child: Text('1 x 1 / Persegi')),
+                    DropdownMenuItem(
+                        value: 'landscape',
+                        child: Text('Persegi panjang / Landscape')),
+                  ],
+                  onChanged: (v) => setStateIfMounted(() {
+                    _logoStrukMode = v ?? 'persegi';
+                  }),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Ukuran Logo: ${(_logoStrukSkala * 100).round()}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimaryOf(context),
+                  ),
+                ),
+                Slider(
+                  value: _logoStrukSkala.clamp(0.8, 1.8),
+                  min: 0.8,
+                  max: 1.8,
+                  divisions: 10,
+                  label: '${(_logoStrukSkala * 100).round()}%',
+                  onChanged: (v) =>
+                      setStateIfMounted(() => _logoStrukSkala = v),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTombolAksi(
+                    icon: Icons.tune_outlined,
+                    label: 'Simpan Tampilan Logo',
+                    warna: AppColors.primary,
+                    onPressed: _simpanTampilanLogoStruk,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<double>(
+                  value: _lebarKertasStrukMm,
+                  dropdownColor: AppColors.cardBgOf(context),
+                  style: TextStyle(color: AppColors.textPrimaryOf(context)),
+                  decoration:
+                      const InputDecoration(labelText: 'Ukuran Kertas Struk'),
+                  items: PengaturanStruk.opsiLebarKertasMm
+                      .map(
+                        (lebar) => DropdownMenuItem<double>(
+                          value: lebar,
+                          child: Text('${lebar.toStringAsFixed(0)} mm'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setStateIfMounted(() {
+                    _lebarKertasStrukMm = v ?? 80;
+                  }),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Preview dan hasil cetak struk akan mengikuti lebar kertas ini.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryOf(context),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTombolAksi(
+                    icon: Icons.receipt_long_outlined,
+                    label: 'Simpan Ukuran Kertas',
+                    warna: AppColors.teal,
+                    onPressed: _simpanLebarKertasStruk,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
@@ -605,6 +920,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Keterangan', _keterangan, maxLines: 2),
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
+            _pengaturanLogoStruk(),
             if (_bolehUbah)
               Align(
                 alignment: Alignment.centerLeft,

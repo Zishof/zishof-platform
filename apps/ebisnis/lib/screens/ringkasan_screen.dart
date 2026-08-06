@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'ringkasan/tab_umum.dart';
 import 'ringkasan/tab_keuangan.dart';
@@ -23,7 +24,8 @@ class RingkasanScreen extends StatefulWidget {
   State<RingkasanScreen> createState() => _RingkasanScreenState();
 }
 
-class _RingkasanScreenState extends State<RingkasanScreen> with SingleTickerProviderStateMixin {
+class _RingkasanScreenState extends State<RingkasanScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -51,9 +53,9 @@ class _RingkasanScreenState extends State<RingkasanScreen> with SingleTickerProv
           TabBar(
             controller: _tab,
             isScrollable: true,
-            labelColor: const Color(0xFF2563EB),
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: const Color(0xFF2563EB),
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondaryOf(context),
+            indicatorColor: AppColors.primary,
             tabAlignment: TabAlignment.start,
             tabs: const [
               Tab(text: 'Ringkasan Umum'),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 
@@ -43,7 +44,8 @@ class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
 
   @override
   Widget build(BuildContext context) {
-    if (_memuat || _error != null) return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+    if (_memuat || _error != null)
+      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
     final d = _d!;
     final naik = d['naik'] == true;
     final trenTransaksi = titikDariList(d['trenTransaksi'] as List?);
@@ -58,33 +60,68 @@ class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade200)),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.warning),
+              borderRadius: BorderRadius.circular(8),
+              border:
+                  Border.all(color: AppColors.warning.withValues(alpha: 0.22)),
+            ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, size: 16, color: Colors.amber.shade800),
+                const Icon(Icons.info_outline,
+                    size: 16, color: AppColors.warning),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Angka di halaman ini adalah estimasi berdasarkan tren 14 hari terakhir, bukan jaminan.', style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900)),
+                  child: Text(
+                    'Angka di halaman ini adalah estimasi berdasarkan tren 14 hari terakhir, bukan jaminan.',
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textPrimaryOf(context)),
+                  ),
                 ),
               ],
             ),
           ),
           BarisKpi(kartu: [
-            KartuKpi(label: 'Total Transaksi (14h)', nilai: '${(d['totalTransaksi'] as num?)?.toStringAsFixed(0) ?? 0}', warna: const Color(0xFF1E3A5F)),
-            KartuKpi(label: 'Rata-rata/hari', nilai: '${(d['rataRata'] as num?)?.toStringAsFixed(1) ?? 0}', warna: const Color(0xFF0284C7)),
-            KartuKpi(label: 'Prediksi Besok', nilai: '${(d['prediksiBerikutnya'] as num?)?.toStringAsFixed(0) ?? 0}', warna: const Color(0xFF2E7D32)),
+            KartuKpi(
+                label: 'Total Transaksi (14h)',
+                nilai:
+                    '${(d['totalTransaksi'] as num?)?.toStringAsFixed(0) ?? 0}',
+                warna: const Color(0xFF1E3A5F)),
+            KartuKpi(
+                label: 'Rata-rata/hari',
+                nilai: '${(d['rataRata'] as num?)?.toStringAsFixed(1) ?? 0}',
+                warna: const Color(0xFF0284C7)),
+            KartuKpi(
+                label: 'Prediksi Besok',
+                nilai:
+                    '${(d['prediksiBerikutnya'] as num?)?.toStringAsFixed(0) ?? 0}',
+                warna: const Color(0xFF2E7D32)),
             KartuKpi(
               label: 'Arah Tren',
-              nilai: '${naik ? "Naik" : "Turun"} ${((d['persenTren'] as num?) ?? 0).toStringAsFixed(1)}%',
+              nilai:
+                  '${naik ? "Naik" : "Turun"} ${((d['persenTren'] as num?) ?? 0).toStringAsFixed(1)}%',
               warna: naik ? const Color(0xFF2E7D32) : Colors.red,
             ),
           ]),
           const SizedBox(height: 12),
-          PanelChart(judul: 'Tren Jumlah Transaksi (14 hari)', child: BarVertikal(data: trenTransaksi)),
+          PanelChart(
+              judul: 'Tren Jumlah Transaksi (14 hari)',
+              child: BarVertikal(data: trenTransaksi)),
           const SizedBox(height: 12),
-          PanelChart(judul: 'Tren Omzet (14 hari)', child: BarVertikal(data: trenOmzet, warna: const Color(0xFF2E7D32), formatNilai: formatRupiahDasbor.format)),
+          PanelChart(
+              judul: 'Tren Omzet (14 hari)',
+              child: BarVertikal(
+                  data: trenOmzet,
+                  warna: const Color(0xFF2E7D32),
+                  formatNilai: formatRupiahDasbor.format)),
           const SizedBox(height: 12),
-          PanelChart(judul: 'Proyeksi 3 Hari ke Depan', child: BarHorizontal(data: proyeksi, warna: const Color(0xFFB8860B), tampilkanPeringkat: false)),
+          PanelChart(
+              judul: 'Proyeksi 3 Hari ke Depan',
+              child: BarHorizontal(
+                  data: proyeksi,
+                  warna: const Color(0xFFB8860B),
+                  tampilkanPeringkat: false)),
         ],
       ),
     );

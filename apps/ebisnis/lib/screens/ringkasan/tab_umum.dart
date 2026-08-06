@@ -3,14 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
-import '../../services/print_util.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../widgets/safe_state.dart';
+import '../struk_screen.dart';
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
@@ -222,7 +220,9 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   DateTime? _mulai;
   DateTime? _sampai;
   String _cariPembeli = '';
+  String _kodeTransaksi = '';
   final _pembeliController = TextEditingController();
+  final _kodeTransaksiController = TextEditingController();
   int _halaman = 1;
   bool _grafikTerlihat = false;
   String? _logApiTerakhir;
@@ -236,6 +236,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   @override
   void dispose() {
     _pembeliController.dispose();
+    _kodeTransaksiController.dispose();
     super.dispose();
   }
 
@@ -259,6 +260,10 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       'periodeTren': _periodeTren,
       ..._payloadRentangTanggal(),
       if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+      if (_kodeTransaksi.isNotEmpty) ...{
+        'kodeTransaksi': _kodeTransaksi,
+        'kode': _kodeTransaksi,
+      },
       'page': _halaman,
       'pageSize': _pageSize,
     };
@@ -407,8 +412,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                   child: const Text('Coba Lagi'),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _logApiTerakhir == null ? null : _tampilkanLogApi,
+                  onPressed: _logApiTerakhir == null ? null : _tampilkanLogApi,
                   icon: const Icon(Icons.article_outlined, size: 18),
                   label: const Text('Lihat Log'),
                 ),
@@ -420,8 +424,9 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     );
   }
 
-  Future<void> _terapkanCariPembeli() async {
+  Future<void> _terapkanPencarianPembelian() async {
     _cariPembeli = _pembeliController.text.trim();
+    _kodeTransaksi = _kodeTransaksiController.text.trim();
     await _terapkan();
   }
 
@@ -473,66 +478,35 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     }
   }
 
-  /// Cetak Struk dari baris transaksi Ringkasan Umum -- gap-closure (tab ini
-  /// sebelumnya sama sekali tak punya aksi cetak/batal, padahal
-  /// `tab_kepatuhan.dart` sudah menampilkan hitungan "Pembatalan Transaksi"
-  /// yg mengisyaratkan aksinya ADA di server, hanya tak diekspos di sini).
-  /// Bangun PDF 80mm sendiri dari `detail_transaksi` (pola sama persis
-  /// `struk_screen.dart._cetakStruk`) -- bukan struk offline-first spt saat
-  /// checkout, ini reprint transaksi yg SUDAH final di server.
+  /// Cetak Struk dari baris transaksi Ringkasan Umum. Layout sengaja reuse
+  /// [StrukScreen] supaya sama dengan cetak dari Kasir, Pesanan, dan Riwayat.
   Future<void> _cetakStruk(Map<String, dynamic> row) async {
     try {
       final hasil = await ApiClient.instance
           .aksi('detail_transaksi', {'id': row['idTransaksi']});
       final items =
           ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
-      final doc = pw.Document();
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat(80 * PdfPageFormat.mm, double.infinity,
-              marginAll: 10 * PdfPageFormat.mm),
-          build: (_) => pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              pw.Text('${hasil['kode'] ?? ''}',
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold, fontSize: 12)),
-              pw.Text(_formatWaktu(row['waktu']),
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(fontSize: 9)),
-              pw.Divider(),
-              ...items.map((i) => pw.Row(
-                    children: [
-                      pw.Expanded(
-                          child: pw.Text(
-                              '${i['nama']} x${(i['qty'] as num).toStringAsFixed(0)}',
-                              style: pw.TextStyle(fontSize: 9))),
-                      pw.Text(
-                          formatRupiahDasbor.format(
-                              (i['harga'] as num) * (i['qty'] as num) -
-                                  ((i['diskon'] as num?) ?? 0)),
-                          style: pw.TextStyle(fontSize: 9)),
-                    ],
-                  )),
-              pw.Divider(),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Total',
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                  pw.Text(formatRupiahDasbor.format(hasil['totalBiaya'] ?? 0),
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                ],
-              ),
-            ],
-          ),
-        ),
+      final struk = StrukScreen(
+        kode:
+            '${hasil['kode'] ?? row['nomorNota'] ?? row['kode'] ?? row['kodeTransaksi'] ?? ''}',
+        waktu: _formatWaktu(row['waktu'] ?? hasil['waktu']),
+        item: items
+            .map((i) => {
+                  'nama': i['nama'],
+                  'qty': i['qty'],
+                  'harga': i['harga'],
+                })
+            .toList(),
+        total: (hasil['totalBiaya'] as num?)?.toDouble() ??
+            (row['totalBiaya'] as num?)?.toDouble() ??
+            0,
+        metode: '${hasil['metode'] ?? row['metode'] ?? ''}',
+        pajak: (hasil['pajak'] as num?)?.toDouble() ??
+            (row['pajak'] as num?)?.toDouble() ??
+            0,
+        pelanggan: '${hasil['pembeli'] ?? row['pembeli'] ?? ''}',
       );
-      await cetakLangsungKePrinterDefault(
-          dokumen: doc, nama: 'struk-${hasil['kode']}.pdf');
+      await struk.cetakLangsung();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -916,7 +890,13 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     ...controls,
                     SizedBox(
                       width: constraints.maxWidth,
-                      child: _fieldCariPembelian(
+                      child: _fieldCariPembeli(
+                        warnaBorder: warnaBorder,
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: _fieldCariKodeTransaksi(
                         warnaBorder: warnaBorder,
                       ),
                     ),
@@ -943,7 +923,13 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                   ...dateControls,
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _fieldCariPembelian(
+                    child: _fieldCariPembeli(
+                      warnaBorder: warnaBorder,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _fieldCariKodeTransaksi(
                       warnaBorder: warnaBorder,
                     ),
                   ),
@@ -983,17 +969,42 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     );
   }
 
+  Widget _fieldCariPembeli({
+    required Color warnaBorder,
+  }) {
+    return _fieldCariPembelian(
+      controller: _pembeliController,
+      hintText: 'Cari Pembeli',
+      icon: Icons.search,
+      warnaBorder: warnaBorder,
+    );
+  }
+
+  Widget _fieldCariKodeTransaksi({
+    required Color warnaBorder,
+  }) {
+    return _fieldCariPembelian(
+      controller: _kodeTransaksiController,
+      hintText: 'Cari Kode Transaksi',
+      icon: Icons.receipt_long_outlined,
+      warnaBorder: warnaBorder,
+    );
+  }
+
   Widget _fieldCariPembelian({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
     required Color warnaBorder,
   }) {
     return SizedBox(
       height: 38,
       child: TextField(
-        controller: _pembeliController,
+        controller: controller,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Cari Pembeli',
-          prefixIcon: const Icon(Icons.search, size: 18),
+          hintText: hintText,
+          prefixIcon: Icon(icon, size: 18),
           isDense: true,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1006,7 +1017,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
         ),
-        onSubmitted: (_) => _terapkanCariPembeli(),
+        onSubmitted: (_) => _terapkanPencarianPembelian(),
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
@@ -13,6 +12,7 @@ import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pelayanan_transaksi.dart';
+import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
@@ -37,11 +37,13 @@ class KeranjangScreen extends StatelessWidget {
   /// saat Tahan/Bayar berikutnya supaya server MEMPERBARUI draft yang sama,
   /// bukan membuat baris baru (lihat JavaDoc `_buatPayload` & KantinHelper.bayar).
   final int? draftIdSumber;
+  final String? draftKodeSumber;
   final Anggota? memberAwal;
   const KeranjangScreen(
       {super.key,
       required this.keranjang,
       this.draftIdSumber,
+      this.draftKodeSumber,
       this.memberAwal});
 
   @override
@@ -51,6 +53,7 @@ class KeranjangScreen extends StatelessWidget {
       body: PanelKeranjang(
           keranjang: keranjang,
           draftIdSumber: draftIdSumber,
+          draftKodeSumber: draftKodeSumber,
           memberAwal: memberAwal),
     );
   }
@@ -67,6 +70,7 @@ class KeranjangScreen extends StatelessWidget {
 class PanelKeranjang extends StatefulWidget {
   final List<ItemKeranjang> keranjang;
   final int? draftIdSumber;
+  final String? draftKodeSumber;
   final Anggota? memberAwal;
   final Widget? pencarianBarang;
 
@@ -85,6 +89,7 @@ class PanelKeranjang extends StatefulWidget {
     super.key,
     required this.keranjang,
     this.draftIdSumber,
+    this.draftKodeSumber,
     this.memberAwal,
     this.pencarianBarang,
     this.tampilkanJudul = false,
@@ -104,7 +109,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   double? _saldoMember;
   Timer? _debounceDiskon;
   final _uangDiterimaController = TextEditingController(text: '0');
-  final _fokusUangDiterima = FocusNode();
   bool _uangDiterimaManual = false;
   int _halamanKeranjang = 1;
   bool _langsungTerlayani = true;
@@ -119,16 +123,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     _muatPreferensiPembayaran();
     _memberTerpilih = widget.memberAwal;
     _sinkronkanUangDiterima();
-    // Tanpa ini, ketikan pertama kasir MENYAMBUNG ke nilai auto-sync yang
-    // sudah ada (mis. total "10.000" lalu diketik "5" jadi "10.0005")
-    // krn kursor default berada di ujung teks, bukan MENIMPA -- pilih semua
-    // begitu field difokus supaya ketikan pertama otomatis menggantikannya.
-    _fokusUangDiterima.addListener(() {
-      if (_fokusUangDiterima.hasFocus) {
-        _uangDiterimaController.selection = TextSelection(
-            baseOffset: 0, extentOffset: _uangDiterimaController.text.length);
-      }
-    });
   }
 
   Future<void> _muatPreferensiPembayaran() async {
@@ -144,7 +138,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   void dispose() {
     _debounceDiskon?.cancel();
     _uangDiterimaController.dispose();
-    _fokusUangDiterima.dispose();
     LayarPelangganBroadcaster.instance.berhenti();
     super.dispose();
   }
@@ -187,6 +180,38 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           _uangDiterimaController.text.replaceAll(RegExp('[^0-9.]'), '')) ??
       0;
   double get _kembalian => _uangDiterima - _total;
+  bool get _metodeTunai {
+    final caraBayar = _caraBayarTerpilih;
+    if (caraBayar == null) return false;
+    final nama = caraBayar.nama.toLowerCase();
+    return caraBayar.manual ||
+        nama.contains('tunai') ||
+        nama.contains('cash') ||
+        nama.contains('kas');
+  }
+
+  bool get _uangTunaiKurang => _metodeTunai && _uangDiterima + 0.0001 < _total;
+  bool get _bisaBayar =>
+      !_memproses && widget.keranjang.isNotEmpty && !_uangTunaiKurang;
+
+  void _aturUangDiterima(double nilai) {
+    setStateIfMounted(() {
+      _uangDiterimaManual = true;
+      _uangDiterimaController.text =
+          nilai <= 0 ? '0' : nilai.toStringAsFixed(0);
+    });
+  }
+
+  Future<void> _bukaDialogUangDiterima() async {
+    final nilai = await showDialog<double>(
+      context: context,
+      builder: (_) => _DialogUangDiterima(
+        nilaiAwal: _uangDiterima,
+        total: _total,
+      ),
+    );
+    if (nilai != null) _aturUangDiterima(nilai);
+  }
 
   Future<void> _tandaiTerlayaniJikaPerlu(
       Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
@@ -325,12 +350,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
-  String _buatKodeUnik() {
-    final rand = Random();
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final acak =
-        List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
-    return 'EBISNIS-${DateTime.now().millisecondsSinceEpoch}-$acak';
+  Future<String> _buatKodeUnik() async {
+    final kodeDraft = widget.draftKodeSumber?.trim();
+    if (widget.draftIdSumber != null &&
+        kodeDraft != null &&
+        kodeDraft.isNotEmpty) {
+      return kodeDraft;
+    }
+    return PengaturanNomorStruk.instance.buatNomor();
   }
 
   String _formatWaktuServer(DateTime d) {
@@ -355,7 +382,26 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'pajak': _pajak,
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
-      'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
+      if (widget.draftIdSumber != null) ...{
+        'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
+        'draftPembelianAnggotaKoperasiId': widget.draftIdSumber,
+        'idDraftPembelianAnggotaKoperasi': widget.draftIdSumber,
+        'draft_pembelian_anggota_koperasi': widget.draftIdSumber,
+        'draft_pembelian_anggota_koperasi_id': widget.draftIdSumber,
+        'id_draft_pembelian_anggota_koperasi': widget.draftIdSumber,
+        'draftPembelianId': widget.draftIdSumber,
+        'draft_pembelian_id': widget.draftIdSumber,
+        'draftId': widget.draftIdSumber,
+        'draft_id': widget.draftIdSumber,
+        'idDraft': widget.draftIdSumber,
+      },
+      if (widget.draftKodeSumber != null &&
+          widget.draftKodeSumber!.trim().isNotEmpty) ...{
+        'kodeDraft': widget.draftKodeSumber!.trim(),
+        'draftKode': widget.draftKodeSumber!.trim(),
+        'kodeDraftPembelianAnggotaKoperasi': widget.draftKodeSumber!.trim(),
+        'kode_draft_pembelian_anggota_koperasi': widget.draftKodeSumber!.trim(),
+      },
       if (sertakanStatusPelayanan) ...{
         'terlayani': _langsungTerlayani,
         'langsungTerlayani': _langsungTerlayani,
@@ -394,7 +440,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
     setStateIfMounted(() => _memproses = true);
     try {
-      final kodeUnik = _buatKodeUnik();
+      final kodeUnik = await _buatKodeUnik();
       final payload = _buatPayload(kodeUnik, DateTime.now());
       await ApiClient.instance.aksi('draft_bayar', payload);
       widget.keranjang.clear();
@@ -429,12 +475,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
+    if (_uangTunaiKurang) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.')));
+      return;
+    }
 
     setStateIfMounted(() => _memproses = true);
     try {
       if (!await _verifikasiPinJikaPerlu()) return;
 
-      final kodeUnik = _buatKodeUnik();
+      final kodeUnik = await _buatKodeUnik();
       final waktu = DateTime.now();
       final payload =
           _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
@@ -478,8 +530,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               })
           .toList();
       final metodeNama = _caraBayarTerpilih!.nama;
+      final pelangganStruk = _memberTerpilih?.nama;
       final totalStruk = _total;
       final pajakStruk = _pajak;
+      final uangDiterimaStruk = _uangDiterima;
+      final kembalianStruk = _kembalian < 0 ? 0.0 : _kembalian;
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance
           .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
@@ -495,6 +550,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           metode: metodeNama,
           pajak: pajakStruk,
           tersinkron: pesanTundaMenuju == null,
+          pelanggan: pelangganStruk,
+          uangDiterima: uangDiterimaStruk,
+          kembalian: kembalianStruk,
         ),
       ));
     } finally {
@@ -1013,16 +1071,48 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             const SizedBox(height: 12),
             Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
-            TextField(
-              controller: _uangDiterimaController,
-              focusNode: _fokusUangDiterima,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+            InkWell(
+              onTap: _memproses ? null : _bukaDialogUangDiterima,
+              borderRadius: BorderRadius.circular(10),
+              child: InputDecorator(
+                decoration: const InputDecoration(
                   labelText: 'Uang Diterima',
                   border: _radiusInput,
-                  isDense: true),
-              onChanged: (v) =>
-                  setStateIfMounted(() => _uangDiterimaManual = true),
+                  isDense: true,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _formatRupiah.format(_uangDiterima),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.payments_outlined,
+                      size: 18,
+                      color: AppColors.textSecondaryOf(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _memproses ? null : _bukaDialogUangDiterima,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Input Uang Diterima'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
             ),
             if (_uangDiterima > 0)
               Padding(
@@ -1041,6 +1131,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                               : AppColors.success),
                     ),
                   ],
+                ),
+              ),
+            if (_uangTunaiKurang)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: AppInfoBanner(
+                  icon: Icons.warning_amber_outlined,
+                  color: AppColors.danger,
+                  text:
+                      'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.',
                 ),
               ),
             const SizedBox(height: 14),
@@ -1085,8 +1185,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed:
-                        _memproses || widget.keranjang.isEmpty ? null : _bayar,
+                    onPressed: _bisaBayar ? _bayar : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
@@ -1294,6 +1393,153 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Batal')),
+      ],
+    );
+  }
+}
+
+class _DialogUangDiterima extends StatefulWidget {
+  final double nilaiAwal;
+  final double total;
+
+  const _DialogUangDiterima({
+    required this.nilaiAwal,
+    required this.total,
+  });
+
+  @override
+  State<_DialogUangDiterima> createState() => _DialogUangDiterimaState();
+}
+
+class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
+  static const _nominalCepat = <int>[
+    5000,
+    10000,
+    15000,
+    20000,
+    25000,
+    30000,
+    50000,
+    100000,
+    150000,
+  ];
+
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final nilai =
+        widget.nilaiAwal > 0 ? widget.nilaiAwal : widget.total.ceilToDouble();
+    _controller = TextEditingController(
+      text: nilai <= 0 ? '' : nilai.toStringAsFixed(0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double get _nilai {
+    final teks = _controller.text.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(teks) ?? 0;
+  }
+
+  void _pilihNominal(int nominal) {
+    setState(() {
+      _controller.text = nominal.toString();
+      _controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _controller.text.length,
+      );
+    });
+  }
+
+  void _simpan() => Navigator.of(context).pop(_nilai);
+
+  @override
+  Widget build(BuildContext context) {
+    final nilai = _nilai;
+    final kembalian = nilai - widget.total;
+    return AlertDialog(
+      title: const Text('Uang Diterima'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Nominal Uang',
+                prefixText: 'Rp ',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _simpan(),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _nominalCepat
+                  .map(
+                    (nominal) => OutlinedButton(
+                      onPressed: () => _pilihNominal(nominal),
+                      child: Text(_formatRupiah.format(nominal)),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total',
+                  style: TextStyle(color: AppColors.textSecondaryOf(context)),
+                ),
+                Text(
+                  _formatRupiah.format(widget.total),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  kembalian < 0 ? 'Kurang' : 'Kembalian',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  _formatRupiah.format(kembalian.abs()),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: kembalian < 0 ? AppColors.danger : AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: _simpan,
+          child: const Text('Gunakan Nominal'),
+        ),
       ],
     );
   }

@@ -183,8 +183,7 @@ class _KasirScreenState extends State<KasirScreen> {
   void _terapkanKonfig(Map<String, dynamic> konfig) {
     Sesi.instance
       ..tokoNama = (konfig['tokoNama'] ?? '') as String
-      ..tokoAlamat =
-          '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim()
+      ..tokoAlamat = '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim()
       ..tokoTelp =
           '${konfig['tokoTelp'] ?? konfig['telp'] ?? konfig['picHp'] ?? konfig['kontak'] ?? ''}'
               .trim()
@@ -630,7 +629,17 @@ class _KasirScreenState extends State<KasirScreen> {
       _kataKunciController.clear();
       setStateIfMounted(() => _kataKunci = '');
       _jadwalkanFokusCariItem();
+      return;
     }
+    _kataKunciController.clear();
+    setStateIfMounted(() => _kataKunci = '');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Item tidak ditemukan'),
+        duration: Duration(milliseconds: 900),
+      ),
+    );
+    _jadwalkanFokusCariItem();
   }
 
   double get _totalKeranjang => _keranjang.fold(0, (s, i) => s + i.subtotal);
@@ -742,8 +751,7 @@ class _KasirScreenState extends State<KasirScreen> {
                 final url = defaultTargetPlatform == TargetPlatform.android
                     ? (hasil.urlApk ?? hasil.urlRilis)
                     : (hasil.urlExe ?? hasil.urlRilis);
-                launchUrl(Uri.parse(url),
-                    mode: LaunchMode.externalApplication);
+                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
               },
               child: const Text('Unduh'),
             ),
@@ -1042,72 +1050,73 @@ class _KasirScreenState extends State<KasirScreen> {
         behavior: HitTestBehavior.translucent,
         onPointerUp: (_) => _jadwalkanFokusCariItem(),
         child: AppShell(
-        menuAktif: MenuEBisnis.kasir,
-        judul: 'Kasir / POS',
-        tampilkanJudul: false,
-        scrollable: false,
-        actionsAppBar: _tombolAksi,
-        aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
-        bottomBar: defaultTargetPlatform == TargetPlatform.windows ||
-                _keranjang.isEmpty
-            ? null
-            : SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: ElevatedButton(
-                    onPressed: _bukaKeranjang,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Keranjang ($_jumlahItemKeranjang)',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(_formatRupiah.format(_totalKeranjang),
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
+          menuAktif: MenuEBisnis.kasir,
+          judul: 'Kasir / POS',
+          tampilkanJudul: false,
+          scrollable: false,
+          actionsAppBar: _tombolAksi,
+          aksiHeader:
+              Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
+          bottomBar: defaultTargetPlatform == TargetPlatform.windows ||
+                  _keranjang.isEmpty
+              ? null
+              : SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: ElevatedButton(
+                      onPressed: _bukaKeranjang,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Keranjang ($_jumlahItemKeranjang)',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(_formatRupiah.format(_totalKeranjang),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-        body: Stack(
-          children: [
-            _memuat
-                ? const Center(child: CircularProgressIndicator())
-                : _pesanError != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.error_outline,
-                                  size: 48, color: Colors.red),
-                              const SizedBox(height: 12),
-                              Text(_pesanError!, textAlign: TextAlign.center),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                  onPressed: _muatAwal,
-                                  child: const Text('Coba Lagi')),
-                            ],
+          body: Stack(
+            children: [
+              _memuat
+                  ? const Center(child: CircularProgressIndicator())
+                  : _pesanError != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    size: 48, color: Colors.red),
+                                const SizedBox(height: 12),
+                                Text(_pesanError!, textAlign: TextAlign.center),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                    onPressed: _muatAwal,
+                                    child: const Text('Coba Lagi')),
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                    : defaultTargetPlatform == TargetPlatform.windows
-                        ? _bodyDesktop()
-                        : _kontenKatalog(),
-            if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
-              _OverlayBukaKas(onBuka: (modal, catatan) {
-                setStateIfMounted(() => _modalAwalKas = modal);
-                _bukaKas(_modalAwalKas, catatan);
-              }),
-          ],
-        ),
+                        )
+                      : defaultTargetPlatform == TargetPlatform.windows
+                          ? _bodyDesktop()
+                          : _kontenKatalog(),
+              if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
+                _OverlayBukaKas(onBuka: (modal, catatan) {
+                  setStateIfMounted(() => _modalAwalKas = modal);
+                  _bukaKas(_modalAwalKas, catatan);
+                }),
+            ],
+          ),
         ),
       ),
     );
@@ -1320,9 +1329,9 @@ class _DialogBukaKasState extends State<_DialogBukaKas> {
   }
 
   void _konfirmasi() {
-    final modal = double.tryParse(
-            _controller.text.replaceAll(RegExp('[^0-9.]'), '')) ??
-        0;
+    final modal =
+        double.tryParse(_controller.text.replaceAll(RegExp('[^0-9.]'), '')) ??
+            0;
     Navigator.of(context).pop({
       'modalAwal': modal,
       'keterangan': _catatanController.text.trim(),

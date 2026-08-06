@@ -15,5 +15,5 @@ class AppVariant {
   static const labelPerangkat =
       isAlBahjah ? 'Al-Bahjah POS Flutter Pilot' : 'eBisnis Flutter Pilot';
   static const logoAsset =
-      isAlBahjah ? 'assets/images/albahjah/icon.png' : null;
+      isAlBahjah ? 'assets/images/albahjah/icon.png' : 'web/icons/Icon-512.png';
 }

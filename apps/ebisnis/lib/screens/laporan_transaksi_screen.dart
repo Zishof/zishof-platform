@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
@@ -73,9 +74,9 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
             _KartuStatistikTransaksi(statistik: _statistik!),
           TabBar(
             controller: _tab,
-            labelColor: const Color(0xFF2563EB),
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: const Color(0xFF2563EB),
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondaryOf(context),
+            indicatorColor: AppColors.primary,
             tabs: const [
               Tab(text: 'Report Order'),
               Tab(text: 'Report Sesi'),
@@ -157,9 +158,12 @@ class _KartuStatistikTransaksi extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                               color: warna)),
-                      Text(label,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.black54)),
+                      Text(
+                        label,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondaryOf(context)),
+                      ),
                     ],
                   ),
                 );
@@ -175,13 +179,13 @@ class _KartuStatistikTransaksi extends StatelessWidget {
                   if (byKasir.isNotEmpty)
                     Expanded(
                         child: _panelPeringkat(
-                            'Omzet per Kasir (30 hari)', byKasir)),
+                            context, 'Omzet per Kasir (30 hari)', byKasir)),
                   if (byKasir.isNotEmpty && byMesin.isNotEmpty)
                     const SizedBox(width: 8),
                   if (byMesin.isNotEmpty)
                     Expanded(
                         child: _panelPeringkat(
-                            'Omzet per Mesin (30 hari)', byMesin)),
+                            context, 'Omzet per Mesin (30 hari)', byMesin)),
                 ],
               ),
             ),
@@ -190,7 +194,8 @@ class _KartuStatistikTransaksi extends StatelessWidget {
     );
   }
 
-  Widget _panelPeringkat(String judul, List<Map<String, dynamic>> data) {
+  Widget _panelPeringkat(
+      BuildContext context, String judul, List<Map<String, dynamic>> data) {
     final maksNilai = data
         .map((e) => (e['nilai'] as num).toDouble())
         .reduce((a, b) => a > b ? a : b);
@@ -218,7 +223,7 @@ class _KartuStatistikTransaksi extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: maksNilai > 0 ? nilai / maksNilai : 0,
                         minHeight: 6,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: AppColors.borderOf(context),
                         color: const Color(0xFF1E3A5F),
                       ),
                     ),
@@ -480,8 +485,10 @@ class _TabOrderState extends State<_TabOrder> {
                                   const TextStyle(fontWeight: FontWeight.w600)),
                           Text(
                             'Harga ${_formatRupiah.format(i['harga'])} · Diskon ${_formatRupiah.format(i['diskon'] ?? 0)} · Pajak ${_formatRupiah.format(pajakBaris)} · Subtotal ${_formatRupiah.format(subtotal)}',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.black54),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondaryOf(context),
+                            ),
                           ),
                         ],
                       ),
@@ -677,7 +684,7 @@ class _TabSesiState extends State<_TabSesi> {
                           style: TextStyle(
                               fontSize: 11,
                               color: tutup
-                                  ? Colors.black54
+                                  ? AppColors.textSecondaryOf(context)
                                   : const Color(0xFF2E7D32))),
                     ],
                   ),

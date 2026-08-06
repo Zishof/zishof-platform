@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 
@@ -34,7 +35,8 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('dashboard_pelanggan', {'periode': _periode});
+      final hasil = await ApiClient.instance
+          .aksi('dashboard_pelanggan', {'periode': _periode});
       if (!mounted) return;
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
@@ -47,22 +49,36 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
 
   @override
   Widget build(BuildContext context) {
-    if (_memuat || _error != null) return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+    if (_memuat || _error != null)
+      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
     final d = _d!;
-    final jamSibukMentah = ((d['jamSibuk'] as List?) ?? []).cast<Map<String, dynamic>>();
-    final petaJam = {for (final e in jamSibukMentah) (e['jam'] as num).toInt(): (e['jumlah'] as num).toDouble()};
-    final jamSibuk = List.generate(24, (jam) => (label: '$jam', nilai: petaJam[jam] ?? 0.0));
-    final terloyal = titikDariList(d['pembeliTerloyal'] as List?, labelKey: 'nama', nilaiKey: 'total');
-    final rekapTerloyal = ((d['rekapPelangganTerloyal'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final jamSibukMentah =
+        ((d['jamSibuk'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final petaJam = {
+      for (final e in jamSibukMentah)
+        (e['jam'] as num).toInt(): (e['jumlah'] as num).toDouble()
+    };
+    final jamSibuk =
+        List.generate(24, (jam) => (label: '$jam', nilai: petaJam[jam] ?? 0.0));
+    final terloyal = titikDariList(d['pembeliTerloyal'] as List?,
+        labelKey: 'nama', nilaiKey: 'total');
+    final rekapTerloyal = ((d['rekapPelangganTerloyal'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
 
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
-          PanelChart(judul: 'Jam Sibuk (30 hari)', child: BarVertikal(data: jamSibuk, warna: const Color(0xFFB8860B))),
+          PanelChart(
+              judul: 'Jam Sibuk (30 hari)',
+              child:
+                  BarVertikal(data: jamSibuk, warna: const Color(0xFFB8860B))),
           const SizedBox(height: 12),
-          PanelChart(judul: '10 Pembeli Terloyal (30 hari)', child: BarHorizontal(data: terloyal, formatNilai: formatRupiahDasbor.format)),
+          PanelChart(
+              judul: '10 Pembeli Terloyal (30 hari)',
+              child: BarHorizontal(
+                  data: terloyal, formatNilai: formatRupiahDasbor.format)),
           const SizedBox(height: 12),
           Card(
             child: Padding(
@@ -73,10 +89,17 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Rekap Pelanggan Terloyal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Text('Rekap Pelanggan Terloyal',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13)),
                       DropdownButton<String>(
                         value: _periode,
-                        items: _periodeOpsi.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12)))).toList(),
+                        items: _periodeOpsi
+                            .map((p) => DropdownMenuItem(
+                                value: p,
+                                child: Text(p,
+                                    style: const TextStyle(fontSize: 12))))
+                            .toList(),
                         onChanged: (v) {
                           if (v != null) {
                             setStateIfMounted(() => _periode = v);
@@ -88,16 +111,31 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
                   ),
                   const SizedBox(height: 8),
                   if (rekapTerloyal.isEmpty)
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Belum ada data.', style: TextStyle(color: Colors.black45)))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Belum ada data.',
+                        style: TextStyle(
+                            color: AppColors.textSecondaryOf(context)),
+                      ),
+                    )
                   else
                     ...rekapTerloyal.take(30).map((r) => Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3),
                           child: Row(
                             children: [
-                              Expanded(child: Text('${r['nama']}', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                              Text('${r['frekuensi']}x', style: const TextStyle(fontSize: 12)),
+                              Expanded(
+                                  child: Text('${r['nama']}',
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis)),
+                              Text('${r['frekuensi']}x',
+                                  style: const TextStyle(fontSize: 12)),
                               const SizedBox(width: 8),
-                              Text(formatRupiahDasbor.format(r['total'] ?? 0), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(formatRupiahDasbor.format(r['total'] ?? 0),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         )),

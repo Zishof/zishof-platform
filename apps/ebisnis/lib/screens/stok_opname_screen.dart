@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
@@ -23,7 +24,8 @@ class StokOpnameScreen extends StatefulWidget {
   State<StokOpnameScreen> createState() => _StokOpnameScreenState();
 }
 
-class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerProviderStateMixin {
+class _StokOpnameScreenState extends State<StokOpnameScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -50,9 +52,9 @@ class _StokOpnameScreenState extends State<StokOpnameScreen> with SingleTickerPr
         children: [
           TabBar(
             controller: _tab,
-            labelColor: const Color(0xFF2563EB),
-            unselectedLabelColor: Colors.black54,
-            indicatorColor: const Color(0xFF2563EB),
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondaryOf(context),
+            indicatorColor: AppColors.primary,
             tabs: const [
               Tab(text: 'Kartu Mutasi Stok'),
               Tab(text: 'Input Opname'),
@@ -133,7 +135,11 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
     final d = _dasbor!;
     final r = _ringkasanHariIni!;
     final top5 = (d['top5Keluar'] as List?) ?? [];
-    final maksTop5 = top5.isEmpty ? 1.0 : top5.map((e) => (e['qty'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+    final maksTop5 = top5.isEmpty
+        ? 1.0
+        : top5
+            .map((e) => (e['qty'] as num).toDouble())
+            .reduce((a, b) => a > b ? a : b);
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -148,10 +154,16 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
             crossAxisSpacing: 8,
             childAspectRatio: 2.2,
             children: [
-              _kartu('Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0), const Color(0xFF2E7D32)),
-              _kartu('Barang Keluar', _formatAngka.format(d['barangKeluar'] ?? 0), const Color(0xFFC0563D)),
-              _kartu('Total Stok', _formatAngka.format(d['totalStok'] ?? 0), const Color(0xFF1E3A5F)),
-              _kartu('Stok Kritis (<10)', '${d['stokKritis'] ?? 0}', Colors.red),
+              _kartu('Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0),
+                  const Color(0xFF2E7D32)),
+              _kartu(
+                  'Barang Keluar',
+                  _formatAngka.format(d['barangKeluar'] ?? 0),
+                  const Color(0xFFC0563D)),
+              _kartu('Total Stok', _formatAngka.format(d['totalStok'] ?? 0),
+                  const Color(0xFF1E3A5F)),
+              _kartu(
+                  'Stok Kritis (<10)', '${d['stokKritis'] ?? 0}', Colors.red),
             ],
           ),
           const SizedBox(height: 16),
@@ -161,11 +173,16 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Progres Opname Hari Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('Progres Opname Hari Ini',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
-                  Text('${r['jumlahProduk'] ?? 0} produk dicatat (${r['jumlahCatatan'] ?? 0} kali)'),
-                  Text('Selisih bersih: ${_formatAngka.format(r['selisihBersih'] ?? 0)} unit'),
-                  Text('Lebih: +${_formatAngka.format(r['totalLebih'] ?? 0)} · Kurang: -${_formatAngka.format(r['totalKurang'] ?? 0)}'),
+                  Text(
+                      '${r['jumlahProduk'] ?? 0} produk dicatat (${r['jumlahCatatan'] ?? 0} kali)'),
+                  Text(
+                      'Selisih bersih: ${_formatAngka.format(r['selisihBersih'] ?? 0)} unit'),
+                  Text(
+                      'Lebih: +${_formatAngka.format(r['totalLebih'] ?? 0)} · Kurang: -${_formatAngka.format(r['totalKurang'] ?? 0)}'),
                 ],
               ),
             ),
@@ -178,7 +195,9 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Top 5 Barang Keluar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const Text('Top 5 Barang Keluar',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
                     const SizedBox(height: 10),
                     ...top5.map((e) {
                       final qty = (e['qty'] as num).toDouble();
@@ -187,14 +206,15 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${e['nama']} (${_formatAngka.format(qty)})', style: const TextStyle(fontSize: 12)),
+                            Text('${e['nama']} (${_formatAngka.format(qty)})',
+                                style: const TextStyle(fontSize: 12)),
                             const SizedBox(height: 2),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
                                 value: qty / maksTop5,
                                 minHeight: 8,
-                                backgroundColor: Colors.grey.shade200,
+                                backgroundColor: AppColors.borderOf(context),
                                 color: const Color(0xFF1E3A5F),
                               ),
                             ),
@@ -223,8 +243,14 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(nilai, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(nilai,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
+          Text(
+            label,
+            style: TextStyle(
+                fontSize: 11, color: AppColors.textSecondaryOf(context)),
+          ),
         ],
       ),
     );
@@ -265,7 +291,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   Future<void> _muatRiwayat() async {
     try {
       final hasil = await ApiClient.instance.aksi('so_riwayat', {'limit': 30});
-      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) setStateIfMounted(() => _riwayatHariIni = data);
     } catch (_) {
       // riwayat gagal dimuat bukan blocker utk input baru.
@@ -281,7 +308,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
       _produkDitemukan = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
+      final hasil =
+          await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       setStateIfMounted(() {
         _produkDitemukan = hasil;
         _stokFisikController.text = '';
@@ -295,7 +323,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   }
 
   Future<void> _scanKamera() async {
-    final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    final kode = await BarcodeScannerScreen.pindai(context,
+        judul: 'Scan Barcode Produk');
     if (kode != null) {
       _barcodeController.text = kode;
       await _cariProduk(kode);
@@ -305,7 +334,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   Future<void> _simpanOpname() async {
     final p = _produkDitemukan;
     if (p == null) return;
-    final stokFisik = double.tryParse(_stokFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    final stokFisik = double.tryParse(
+        _stokFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
     if (stokFisik == null) {
       setStateIfMounted(() => _pesanError = 'Stok fisik wajib diisi angka.');
       return;
@@ -323,7 +353,8 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
       final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Tersimpan. Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
+          content: Text(
+              'Tersimpan. Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
         ));
       }
       setStateIfMounted(() {
@@ -348,20 +379,34 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         children: [
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
-            child: const Row(
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.warning),
+              borderRadius: BorderRadius.circular(10),
+              border:
+                  Border.all(color: AppColors.warning.withValues(alpha: 0.22)),
+            ),
+            child: Row(
               children: [
-                Icon(Icons.lock_outline, color: Colors.orange, size: 20),
-                SizedBox(width: 10),
-                Expanded(child: Text('Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.', style: TextStyle(fontSize: 12))),
+                const Icon(Icons.lock_outline,
+                    color: AppColors.warning, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Text(
+                        'Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textPrimaryOf(context)))),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Riwayat Hari Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('Riwayat Hari Ini',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           if (_riwayatHariIni.isEmpty)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: Text('Belum ada catatan hari ini.')))
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: Text('Belum ada catatan hari ini.')))
           else
             ..._riwayatHariIni.map((k) {
               final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
@@ -370,9 +415,16 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
                 child: ListTile(
                   dense: true,
                   title: Text('${k['nama']}'),
-                  subtitle: Text('${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
-                  trailing: Text('${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: selisih == 0 ? Colors.black54 : (selisih > 0 ? Colors.green : Colors.red))),
+                  subtitle: Text(
+                      '${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
+                  trailing: Text(
+                    '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: selisih == 0
+                            ? AppColors.textSecondaryOf(context)
+                            : (selisih > 0 ? Colors.green : Colors.red)),
+                  ),
                 ),
               );
             }),
@@ -409,30 +461,40 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
           Container(
             padding: const EdgeInsets.all(10),
             margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-            child: Text(_pesanError!, style: TextStyle(color: Colors.red.shade700)),
+            decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8)),
+            child: Text(_pesanError!,
+                style: TextStyle(color: Colors.red.shade700)),
           ),
         if (_produkDitemukan != null) ...[
           Card(
-            color: const Color(0xFFFFF3E0),
+            color: AppColors.latarLembut(AppColors.warning),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_produkDitemukan!['nama'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(_produkDitemukan!['nama'] ?? '',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
                   Text('Kode: ${_produkDitemukan!['kode'] ?? ''}'),
-                  Text('Stok Sistem: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}'),
+                  Text(
+                      'Stok Sistem: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}'),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _stokFisikController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Stok Fisik (hasil hitung) *', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                        labelText: 'Stok Fisik (hasil hitung) *',
+                        border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _keteranganController,
-                    decoration: const InputDecoration(labelText: 'Keterangan (opsional)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                        labelText: 'Keterangan (opsional)',
+                        border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -440,7 +502,10 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
                     child: ElevatedButton(
                       onPressed: _menyimpan ? null : _simpanOpname,
                       child: _menyimpan
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Text('Simpan Hasil Opname'),
                     ),
                   ),
@@ -450,10 +515,13 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
           ),
           const SizedBox(height: 16),
         ],
-        const Text('Riwayat Hari Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Riwayat Hari Ini',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         if (_riwayatHariIni.isEmpty)
-          const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: Text('Belum ada catatan hari ini.')))
+          const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('Belum ada catatan hari ini.')))
         else
           ..._riwayatHariIni.map((k) {
             final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
@@ -462,10 +530,16 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
               child: ListTile(
                 dense: true,
                 title: Text('${k['nama']}'),
-                subtitle: Text('${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
+                subtitle: Text(
+                    '${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
                 trailing: Text(
                   '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: selisih == 0 ? Colors.black54 : (selisih > 0 ? Colors.green : Colors.red)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: selisih == 0
+                        ? AppColors.textSecondaryOf(context)
+                        : (selisih > 0 ? Colors.green : Colors.red),
+                  ),
                 ),
               ),
             );
@@ -524,9 +598,11 @@ class _TabSoByScanState extends State<_TabSoByScan> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
+      final hasil =
+          await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       if (_antrean.any((a) => a.produk['produkId'] == hasil['produkId'])) {
-        setStateIfMounted(() => _pesanError = '${hasil['nama']} sudah ada di antrean.');
+        setStateIfMounted(
+            () => _pesanError = '${hasil['nama']} sudah ada di antrean.');
       } else {
         setStateIfMounted(() => _antrean.insert(0, _AntreanSo(hasil)));
       }
@@ -539,7 +615,8 @@ class _TabSoByScanState extends State<_TabSoByScan> {
   }
 
   Future<void> _scanKamera() async {
-    final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    final kode = await BarcodeScannerScreen.pindai(context,
+        judul: 'Scan Barcode Produk');
     if (kode != null) await _tambahKeAntrean(kode);
   }
 
@@ -555,7 +632,8 @@ class _TabSoByScanState extends State<_TabSoByScan> {
     setStateIfMounted(() => _mengirim = true);
     var berhasil = 0;
     for (final a in belumDikirim) {
-      final stok = double.tryParse(a.stokFisik.text.replaceAll(RegExp('[^0-9.]'), ''));
+      final stok =
+          double.tryParse(a.stokFisik.text.replaceAll(RegExp('[^0-9.]'), ''));
       if (stok == null) {
         setStateIfMounted(() => a.statusKirim = 'Stok fisik wajib diisi');
         continue;
@@ -574,17 +652,24 @@ class _TabSoByScanState extends State<_TabSoByScan> {
     }
     setStateIfMounted(() => _mengirim = false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
-      setStateIfMounted(() => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
+      setStateIfMounted(
+          () => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!Sesi.instance.bolehKelola) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          'Hanya admin/manager atau supervisor toko yang bisa mencatat hasil Stok Opname.',
+          style: TextStyle(
+              fontSize: 12, color: AppColors.textSecondaryOf(context)),
+        ),
       );
     }
     return Column(
@@ -596,12 +681,18 @@ class _TabSoByScanState extends State<_TabSoByScan> {
               Expanded(
                 child: TextField(
                   controller: _barcodeController,
-                  decoration: const InputDecoration(labelText: 'Scan / Ketik Kode Produk', border: OutlineInputBorder(), prefixIcon: Icon(Icons.qr_code)),
+                  decoration: const InputDecoration(
+                      labelText: 'Scan / Ketik Kode Produk',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.qr_code)),
                   onSubmitted: _tambahKeAntrean,
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(onPressed: _mencari ? null : _scanKamera, icon: const Icon(Icons.camera_alt), tooltip: 'Scan pakai kamera'),
+              IconButton.filled(
+                  onPressed: _mencari ? null : _scanKamera,
+                  icon: const Icon(Icons.camera_alt),
+                  tooltip: 'Scan pakai kamera'),
             ],
           ),
         ),
@@ -609,11 +700,13 @@ class _TabSoByScanState extends State<_TabSoByScan> {
         if (_pesanError != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(_pesanError!, style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
+            child: Text(_pesanError!,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
           ),
         Expanded(
           child: _antrean.isEmpty
-              ? const Center(child: Text('Antrean kosong -- scan produk utk mulai.'))
+              ? const Center(
+                  child: Text('Antrean kosong -- scan produk utk mulai.'))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _antrean.length,
@@ -631,12 +724,22 @@ class _TabSoByScanState extends State<_TabSoByScan> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text('${a.produk['nama']}  ·  Sistem ${_formatAngka.format(a.produk['stokSistem'] ?? 0)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                  child: Text(
+                                      '${a.produk['nama']}  ·  Sistem ${_formatAngka.format(a.produk['stokSistem'] ?? 0)}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13)),
                                 ),
-                                if (!sukses) IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _hapusDariAntrean(a)),
+                                if (!sukses)
+                                  IconButton(
+                                      icon: const Icon(Icons.close, size: 18),
+                                      onPressed: () => _hapusDariAntrean(a)),
                               ],
                             ),
-                            if (a.statusKirim != null && !sukses) Text(a.statusKirim!, style: const TextStyle(color: Colors.red, fontSize: 11)),
+                            if (a.statusKirim != null && !sukses)
+                              Text(a.statusKirim!,
+                                  style: const TextStyle(
+                                      color: Colors.red, fontSize: 11)),
                             if (!sukses)
                               Row(
                                 children: [
@@ -644,14 +747,20 @@ class _TabSoByScanState extends State<_TabSoByScan> {
                                     child: TextField(
                                       controller: a.stokFisik,
                                       keyboardType: TextInputType.number,
-                                      decoration: const InputDecoration(labelText: 'Stok Fisik', isDense: true, border: OutlineInputBorder()),
+                                      decoration: const InputDecoration(
+                                          labelText: 'Stok Fisik',
+                                          isDense: true,
+                                          border: OutlineInputBorder()),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: TextField(
                                       controller: a.keterangan,
-                                      decoration: const InputDecoration(labelText: 'Keterangan', isDense: true, border: OutlineInputBorder()),
+                                      decoration: const InputDecoration(
+                                          labelText: 'Keterangan',
+                                          isDense: true,
+                                          border: OutlineInputBorder()),
                                     ),
                                   ),
                                 ],
@@ -671,7 +780,10 @@ class _TabSoByScanState extends State<_TabSoByScan> {
               child: ElevatedButton(
                 onPressed: _mengirim ? null : _simpanSemua,
                 child: _mengirim
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : Text('Simpan Semua (${_antrean.length})'),
               ),
             ),
