@@ -103,7 +103,10 @@ class PanelKeranjang extends StatefulWidget {
 
 class _PanelKeranjangState extends State<PanelKeranjang> {
   static const _pageSizeKeranjang = 12;
+  List<CaraBayar> _caraBayarTersedia = [];
   CaraBayar? _caraBayarTerpilih;
+  bool _memuatCaraBayar = false;
+  int _versiPermintaanCaraBayar = 0;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
@@ -116,22 +119,73 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   @override
   void initState() {
     super.initState();
-    if (Sesi.instance.caraBayar.isNotEmpty) {
-      _caraBayarTerpilih =
-          PengaturanPembayaran.instance.pilihDefault(Sesi.instance.caraBayar);
-    }
-    _muatPreferensiPembayaran();
     _memberTerpilih = widget.memberAwal;
+    _caraBayarTersedia = List<CaraBayar>.of(Sesi.instance.caraBayar);
+    if (_caraBayarTersedia.isNotEmpty) {
+      _caraBayarTerpilih =
+          PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
+    }
+    _muatPreferensiDanCaraBayar();
     _sinkronkanUangDiterima();
   }
 
-  Future<void> _muatPreferensiPembayaran() async {
+  Future<void> _muatPreferensiDanCaraBayar() async {
     await PengaturanPembayaran.instance.muat();
-    if (!mounted || Sesi.instance.caraBayar.isEmpty) return;
-    setStateIfMounted(() {
-      _caraBayarTerpilih =
-          PengaturanPembayaran.instance.pilihDefault(Sesi.instance.caraBayar);
-    });
+    if (!mounted) return;
+    if (_caraBayarTersedia.isNotEmpty) {
+      setStateIfMounted(() {
+        _caraBayarTerpilih =
+            PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
+      });
+    }
+    await _muatCaraBayarUntukMember(_memberTerpilih?.id);
+  }
+
+  /// Memuat ulang metode pembayaran setiap kali member berubah, sama seperti
+  /// `loadMetodePembayaranPOS` di `_pos.jsp`. Tanpa member server mengembalikan
+  /// semua cara bayar aktif; dengan member server memfilter berdasarkan
+  /// `jenis_anggota_koperasi.daftar_cara_pembayaran_yang_boleh_di_pilih`.
+  ///
+  /// Nomor versi mencegah respons lama menimpa pilihan member yang lebih baru
+  /// bila kasir mengganti member ketika permintaan sebelumnya masih berjalan.
+  /// Saat offline daftar terakhir dipertahankan, mengikuti perilaku POS desktop
+  /// agar checkout offline tidak kehilangan metode yang sudah tersedia.
+  Future<void> _muatCaraBayarUntukMember(int? memberId) async {
+    final versi = ++_versiPermintaanCaraBayar;
+    if (mounted) setStateIfMounted(() => _memuatCaraBayar = true);
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('cara_bayar_list', {'id_member': memberId});
+      final daftar = ((hasil['caraBayar'] as List?) ?? const [])
+          .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted || versi != _versiPermintaanCaraBayar) return;
+
+      final idTerpilih = _caraBayarTerpilih?.id;
+      CaraBayar? pilihan;
+      if (idTerpilih != null) {
+        for (final cara in daftar) {
+          if (cara.id == idTerpilih) {
+            pilihan = cara;
+            break;
+          }
+        }
+      }
+      // _pos.jsp otomatis memilih bila hasil filter hanya satu. Untuk daftar
+      // lebih dari satu, pertahankan pilihan lama hanya jika masih diizinkan.
+      if (pilihan == null && daftar.length == 1) pilihan = daftar.first;
+
+      setStateIfMounted(() {
+        _caraBayarTersedia = daftar;
+        _caraBayarTerpilih = pilihan;
+        _memuatCaraBayar = false;
+        _sinkronkanUangDiterima();
+      });
+    } catch (_) {
+      if (!mounted || versi != _versiPermintaanCaraBayar) return;
+      // Gagal jaringan: pertahankan snapshot terakhir untuk mode offline.
+      setStateIfMounted(() => _memuatCaraBayar = false);
+    }
   }
 
   @override
@@ -192,7 +246,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   bool get _uangTunaiKurang => _metodeTunai && _uangDiterima + 0.0001 < _total;
   bool get _bisaBayar =>
-      !_memproses && widget.keranjang.isNotEmpty && !_uangTunaiKurang;
+      !_memproses &&
+      !_memuatCaraBayar &&
+      _caraBayarTerpilih != null &&
+      widget.keranjang.isNotEmpty &&
+      !_uangTunaiKurang;
 
   void _aturUangDiterima(double nilai) {
     setStateIfMounted(() {
@@ -300,6 +358,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _memberTerpilih = terpilih;
         _saldoMember = null;
       });
+      unawaited(_muatCaraBayarUntukMember(terpilih.id));
       _siarkanKeranjang();
       _jadwalkanEvaluasiDiskon();
       try {
@@ -320,6 +379,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       _memberTerpilih = null;
       _saldoMember = null;
     });
+    unawaited(_muatCaraBayarUntukMember(null));
     _siarkanKeranjang();
     _jadwalkanEvaluasiDiskon();
   }
@@ -454,6 +514,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _uangDiterimaManual = false;
         _uangDiterimaController.text = '0';
       });
+      unawaited(_muatCaraBayarUntukMember(null));
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
       widget.onSelesai?.call();
@@ -565,13 +626,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// yang sudah ada, cukup ditampilkan sbg bottom sheet supaya tetap ada
   /// TARGET nyata utk pintasan F4 (bukan sekadar fokus ke dropdown).
   Future<void> _pilihMetode() async {
-    if (Sesi.instance.caraBayar.isEmpty) return;
+    if (_memuatCaraBayar || _caraBayarTersedia.isEmpty) return;
     final dipilih = await showModalBottomSheet<CaraBayar>(
       context: context,
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: Sesi.instance.caraBayar
+          children: _caraBayarTersedia
               .map((c) => ListTile(
                     title: Text(c.nama),
                     trailing: c == _caraBayarTerpilih
@@ -982,7 +1043,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             _labelBagian('Pilih metode pembayaran'),
             const SizedBox(height: 8),
             InkWell(
-              onTap: _pilihMetode,
+              onTap: _memuatCaraBayar || _caraBayarTersedia.isEmpty
+                  ? null
+                  : _pilihMetode,
               borderRadius: BorderRadius.circular(10),
               child: InputDecorator(
                 decoration: const InputDecoration(
@@ -993,10 +1056,24 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Flexible(
-                      child: Text(_caraBayarTerpilih?.nama ?? 'Pilih',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                          _memuatCaraBayar
+                              ? 'Memuat metode...'
+                              : _caraBayarTersedia.isEmpty
+                                  ? (_memberTerpilih == null
+                                      ? 'Tidak ada metode aktif'
+                                      : 'Tidak ada metode yang diizinkan')
+                                  : _caraBayarTerpilih?.nama ?? 'Pilih',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                     ),
-                    const Icon(Icons.chevron_right, size: 18),
+                    if (_memuatCaraBayar)
+                      const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                    else
+                      const Icon(Icons.chevron_right, size: 18),
                   ],
                 ),
               ),
