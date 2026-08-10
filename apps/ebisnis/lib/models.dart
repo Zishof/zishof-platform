@@ -135,6 +135,10 @@ class Anggota {
   final bool wajibPin;
   final bool aktif;
   final double minSaldo;
+  final int? tipeAnggotaKoperasiId;
+  final String tipeNama;
+  final String? tanggalKadaluarsa;
+  final String userid;
 
   Anggota({
     required this.id,
@@ -150,6 +154,10 @@ class Anggota {
     required this.wajibPin,
     this.aktif = true,
     required this.minSaldo,
+    this.tipeAnggotaKoperasiId,
+    this.tipeNama = '',
+    this.tanggalKadaluarsa,
+    this.userid = '',
   });
 
   factory Anggota.fromJson(Map<String, dynamic> j) => Anggota(
@@ -166,6 +174,10 @@ class Anggota {
         wajibPin: j['wajibPin'] == true,
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
         minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
+        tipeAnggotaKoperasiId: j['tipeAnggotaKoperasiId'] as int?,
+        tipeNama: (j['tipeNama'] ?? '') as String,
+        tanggalKadaluarsa: j['tanggalKadaluarsa'] as String?,
+        userid: (j['userid'] ?? '') as String,
       );
 
   /// Dari baris cache lokal (anggota_cache, kolom snake_case SQLite) -- dipakai
