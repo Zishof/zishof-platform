@@ -17,6 +17,7 @@ import '../screens/produk_screen.dart';
 import '../screens/stok_opname_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/diskon_screen.dart';
+import '../screens/cara_bayar_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -50,6 +51,7 @@ enum MenuEBisnis {
   stokOpname,
   kulakan,
   diskon,
+  caraBayar,
   returPenjualan,
   riwayatPenjualan,
   laporanTransaksi,
@@ -87,6 +89,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.stokOpname: 'stokopname',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.diskon: 'diskon',
+  MenuEBisnis.caraBayar: 'pembayaran',
   MenuEBisnis.returPenjualan: 'returpenjualan',
   MenuEBisnis.riwayatPenjualan: 'riwayatpenjualan',
   MenuEBisnis.laporanTransaksi: 'laporantransaksi',
@@ -120,6 +123,9 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunKulakan),
   _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon',
       builder: _bangunDiskon),
+  _ItemMenuShell(MenuEBisnis.caraBayar, Icons.payments_outlined,
+      'Cara Pembayaran',
+      builder: _bangunCaraBayar),
   _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined,
       'Retur Penjualan',
       builder: _bangunReturPenjualan),
@@ -162,6 +168,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.stokOpname,
     MenuEBisnis.kulakan,
     MenuEBisnis.diskon,
+    MenuEBisnis.caraBayar,
   ]),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
@@ -185,6 +192,7 @@ Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
+Widget _bangunCaraBayar(BuildContext c) => const CaraBayarScreen();
 Widget _bangunReturPenjualan(BuildContext c) => const ReturPenjualanScreen();
 Widget _bangunRiwayatPenjualan(BuildContext c) =>
     const RiwayatPenjualanScreen();
@@ -247,6 +255,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Kulakan';
     case MenuEBisnis.diskon:
       return 'Aturan Diskon';
+    case MenuEBisnis.caraBayar:
+      return 'Cara Pembayaran';
     case MenuEBisnis.returPenjualan:
       return 'Retur Penjualan';
     case MenuEBisnis.riwayatPenjualan:
@@ -286,6 +296,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.kulakan;
     case 'Aturan Diskon':
       return MenuEBisnis.diskon;
+    case 'Cara Pembayaran':
+      return MenuEBisnis.caraBayar;
     case 'Retur Penjualan':
       return MenuEBisnis.returPenjualan;
     case 'Riwayat Penjualan':

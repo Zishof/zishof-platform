@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+
+final _formatRpTipeMember =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// Tab "Tipe Member" (padanan `tipe_anggota_koperasi.jsp`) -- kategori TIPIS
 /// (kode/nama/keterangan/aktif SAJA, tanpa aturan bisnis) yg di layar "Data
@@ -170,6 +174,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
               const AppTableColumn('Kode', flex: 1),
               const AppTableColumn('Nama Tipe', flex: 2),
               const AppTableColumn('Keterangan', flex: 3),
+              const AppTableColumn('Maks. Utang', flex: 2, align: TextAlign.right),
               const AppTableColumn('Status', flex: 1, align: TextAlign.center),
               AppTableColumn('Aksi',
                   width: Sesi.instance.bolehKelola ? 88 : 56,
@@ -186,6 +191,20 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
                   AppTableCell.text('${t['nama'] ?? ''}', flex: 2),
                   AppTableCell.text('${t['keterangan'] ?? '-'}',
                       flex: 3, maxLines: 2),
+                  AppTableCell.text(
+                    (((t['maksimalBolehUtang'] as num?) ?? 0) > 0)
+                        ? _formatRpTipeMember
+                            .format((t['maksimalBolehUtang'] as num?) ?? 0)
+                        : 'Tidak boleh',
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: (((t['maksimalBolehUtang'] as num?) ?? 0) > 0)
+                          ? AppColors.danger
+                          : AppColors.textSecondary,
+                    ),
+                  ),
                   AppTableCell(
                     flex: 1,
                     align: TextAlign.center,
@@ -250,6 +269,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
   late final TextEditingController _kode;
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
+  late final TextEditingController _maksimalBolehUtang;
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
@@ -261,6 +281,9 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
     _kode = TextEditingController(text: '${t?['kode'] ?? ''}');
     _nama = TextEditingController(text: '${t?['nama'] ?? ''}');
     _keterangan = TextEditingController(text: '${t?['keterangan'] ?? ''}');
+    final maksUtang = (t?['maksimalBolehUtang'] as num?) ?? 0;
+    _maksimalBolehUtang =
+        TextEditingController(text: maksUtang == 0 ? '' : '$maksUtang');
     _aktif = t?['aktif'] ?? true;
   }
 
@@ -269,6 +292,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
     _kode.dispose();
     _nama.dispose();
     _keterangan.dispose();
+    _maksimalBolehUtang.dispose();
     super.dispose();
   }
 
@@ -285,6 +309,9 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
         'nama': _nama.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'aktif': _aktif,
+        'maksimalBolehUtang': double.tryParse(
+                _maksimalBolehUtang.text.trim().replaceAll(',', '.')) ??
+            0,
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -326,6 +353,12 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
                   ),
                   AppFormTextField(
                       label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                  AppFormTextField(
+                    label: 'Maksimal Boleh Utang',
+                    controller: _maksimalBolehUtang,
+                    hintText: '0 = tidak boleh berhutang',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
                   AppFormSwitchTile(
                       title: 'Aktif',
                       value: _aktif,
