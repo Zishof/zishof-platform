@@ -19,6 +19,13 @@ class Sesi {
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
+  /// Fitur "Topup" (tab Pelanggan) -- padanan `Tbmrole.bolehEntryTopup` JSP,
+  /// gerbang SENDIRI (bukan turunan `bolehKelola`) krn di JSP kasir non-
+  /// supervisor pun BISA diberi hak ini secara granular per-role, terpisah
+  /// dari hak kelola CRUD member. Server tetap menegakkan gerbang sungguhan
+  /// di `KantinHelper.topupSaldo/depositUbah/depositHapus` -- ini murni UI.
+  bool bolehEntryTopup = false;
+
   /// Multi-toko (spec: akun boleh akses lebih dari satu toko, dipilih via
   /// `Tbmrole.tokoAksesJson`) -- `konfigurasi` sudah lama mengembalikan
   /// `multiToko`/`daftarToko`/`tokoAktifId`, hanya klien yang belum pernah
@@ -51,6 +58,7 @@ class Sesi {
     wajibSesiKas = false;
     isAdmin = false;
     supervisorPedagang = false;
+    bolehEntryTopup = false;
     aksesMenu = {};
     multiToko = false;
     daftarToko = [];

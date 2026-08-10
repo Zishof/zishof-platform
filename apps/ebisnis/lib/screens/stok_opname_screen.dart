@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -146,25 +148,52 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 2.2,
-            children: [
-              _kartu('Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0),
-                  const Color(0xFF2E7D32)),
-              _kartu(
-                  'Barang Keluar',
-                  _formatAngka.format(d['barangKeluar'] ?? 0),
-                  const Color(0xFFC0563D)),
-              _kartu('Total Stok', _formatAngka.format(d['totalStok'] ?? 0),
-                  const Color(0xFF1E3A5F)),
-              _kartu(
-                  'Stok Kritis (<10)', '${d['stokKritis'] ?? 0}', Colors.red),
-            ],
+          SizedBox(
+            height: 96,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.call_received,
+                    warna: const Color(0xFF2E7D32),
+                    nilai: _formatAngka.format(d['barangMasuk'] ?? 0),
+                    label: 'Barang Masuk',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.call_made,
+                    warna: const Color(0xFFC0563D),
+                    nilai: _formatAngka.format(d['barangKeluar'] ?? 0),
+                    label: 'Barang Keluar',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.inventory_2_outlined,
+                    warna: const Color(0xFF1E3A5F),
+                    nilai: _formatAngka.format(d['totalStok'] ?? 0),
+                    label: 'Total Stok',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.warning_amber_rounded,
+                    warna: Colors.red,
+                    nilai: '${d['stokKritis'] ?? 0}',
+                    label: 'Stok Kritis (<10)',
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Card(
@@ -231,30 +260,6 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
     );
   }
 
-  Widget _kartu(String label, String nilai, Color warna) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: warna.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: warna.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(nilai,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 11, color: AppColors.textSecondaryOf(context)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _TabInputOpname extends StatefulWidget {
@@ -437,14 +442,11 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: PencarianProdukBanbox(
                 controller: _barcodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Kode / Barcode Produk',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onSubmitted: _cariProduk,
+                label: 'Kode / Barcode / Nama Produk',
+                icon: Icons.search,
+                onPilih: _cariProduk,
               ),
             ),
             const SizedBox(width: 8),
@@ -679,13 +681,12 @@ class _TabSoByScanState extends State<_TabSoByScan> {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: PencarianProdukBanbox(
                   controller: _barcodeController,
-                  decoration: const InputDecoration(
-                      labelText: 'Scan / Ketik Kode Produk',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.qr_code)),
-                  onSubmitted: _tambahKeAntrean,
+                  label: 'Scan / Ketik Kode / Nama Produk',
+                  icon: Icons.qr_code,
+                  aktif: !_mencari,
+                  onPilih: _tambahKeAntrean,
                 ),
               ),
               const SizedBox(width: 8),
