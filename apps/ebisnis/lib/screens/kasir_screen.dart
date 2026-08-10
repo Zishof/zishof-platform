@@ -20,6 +20,7 @@ import '../services/layar_pelanggan_launcher.dart';
 import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
+import '../services/toko_aktif_lokal.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
@@ -204,6 +205,60 @@ class _KasirScreenState extends State<KasirScreen> {
           ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
   }
 
+  /// Bungkus [_terapkanKonfig] dengan penjagaan toko-per-perangkat -- lihat
+  /// JavaDoc [TokoAktifLokal]. Panggil ini (BUKAN [_terapkanKonfig] langsung)
+  /// di setiap alur yang mengambil `konfigurasi` dari server.
+  ///
+  /// [klaimBaru] = true HANYA dari alur pemilihan toko EKSPLISIT oleh kasir
+  /// di perangkat ini ([_gantiToko]/[_pastikanTokoDipilih]) -- perangkat ini
+  /// "mengklaim" toko yang baru dipilih, menimpa klaim lama bila ada.
+  ///
+  /// [klaimBaru] = false (default, dipakai refresh biasa) -- kalau perangkat
+  /// ini SUDAH punya klaim toko yang masih valid (ada di `daftarToko` toko
+  /// yang boleh diakses akun ini), klaim lokal itu yang menang, BUKAN
+  /// saran/perubahan dari server (yang bisa saja berasal dari jendela/mesin
+  /// LAIN yang berbagi akun sama). Kalau belum punya klaim sama sekali
+  /// (mis. baru pertama kali login di perangkat ini), saran server diterima
+  /// APA ADANYA dan langsung dijadikan klaim baru perangkat ini.
+  Future<void> _terapkanKonfigDenganGuardToko(Map<String, dynamic> konfig,
+      {bool klaimBaru = false}) async {
+    _terapkanKonfig(konfig);
+    if (!Sesi.instance.multiToko) return;
+
+    if (klaimBaru) {
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+      }
+      return;
+    }
+
+    final idKlaimLokal = await TokoAktifLokal.instance.muat();
+    if (idKlaimLokal == null) {
+      // Belum ada klaim di perangkat ini -- saran server jadi klaim awal.
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+      }
+      return;
+    }
+
+    final tokoKlaim = Sesi.instance.daftarToko.where((t) => t['id'] == idKlaimLokal);
+    if (tokoKlaim.isEmpty) {
+      // Klaim lama sudah tak berlaku (mis. akses toko itu dicabut) -- lepas
+      // klaim lama, terima saran server sbg klaim baru.
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+      } else {
+        await TokoAktifLokal.instance.hapus();
+      }
+      return;
+    }
+
+    // Klaim lokal masih valid -- MENANG atas saran server, apa pun toko yang
+    // server sarankan (bisa jadi hasil pilihan jendela/mesin lain).
+    Sesi.instance.tokoId = idKlaimLokal;
+    Sesi.instance.tokoNama = '${tokoKlaim.first['nama'] ?? ''}';
+  }
+
   /// Multi-toko -- gerbang "pilih toko" WAJIB sebelum apa pun lain kalau akun
   /// ini boleh akses >1 toko (`konfigurasi.multiToko`, lihat JavaDoc
   /// `Sesi.multiToko`) dan belum pernah memilih (`tokoAktifId` null). Reuse
@@ -270,7 +325,7 @@ class _KasirScreenState extends State<KasirScreen> {
     final konfig = await ApiClient.instance.aksi('konfigurasi');
     final hasilBaru =
         await _pastikanTokoDipilih({...konfig, 'tokoAktifId': null});
-    _terapkanKonfig(hasilBaru);
+    await _terapkanKonfigDenganGuardToko(hasilBaru, klaimBaru: true);
     if (mounted) setStateIfMounted(() {});
     await _muatAwal();
   }
@@ -280,7 +335,7 @@ class _KasirScreenState extends State<KasirScreen> {
     try {
       var konfig = await ApiClient.instance.aksi('konfigurasi');
       konfig = await _pastikanTokoDipilih(konfig);
-      _terapkanKonfig(konfig);
+      await _terapkanKonfigDenganGuardToko(konfig);
 
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson = (katalog['produk'] as List?) ?? [];

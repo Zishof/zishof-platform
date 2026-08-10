@@ -105,6 +105,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   static const _pageSizeKeranjang = 12;
   List<CaraBayar> _caraBayarTersedia = [];
   CaraBayar? _caraBayarTerpilih;
+
+  /// Split pembayaran (s/d 5 metode/transaksi, mis. separuh Transfer + separuh
+  /// Tunai): kosong ATAU 1 elemen = mode lama satu-metode (identik perilaku
+  /// sebelum fitur ini ada, `_caraBayarTerpilih` tetap sumber kebenaran).
+  /// >=2 elemen = mode split aktif; elemen pertama SELALU sama dgn
+  /// `_caraBayarTerpilih` (slot 1 di payload/server), sisanya dikirim sbg
+  /// `caraBayarTambahan`. Lihat `_SheetPilihMetodeSplit`.
+  List<_SlotBayar> _splitBayar = [];
   bool _memuatCaraBayar = false;
   int _versiPermintaanCaraBayar = 0;
   bool _memproses = false;
@@ -178,6 +186,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _caraBayarTersedia = daftar;
         _caraBayarTerpilih = pilihan;
+        // Daftar metode berganti (member baru punya izin metode berbeda) --
+        // split lama bisa memuat metode yg kini tak berlaku, reset drpd
+        // membawa entri tak valid ke payload checkout.
+        _splitBayar = [];
         _memuatCaraBayar = false;
         _sinkronkanUangDiterima();
       });
@@ -244,7 +256,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         nama.contains('kas');
   }
 
-  bool get _uangTunaiKurang => _metodeTunai && _uangDiterima + 0.0001 < _total;
+  bool get _splitAktif => _splitBayar.length >= 2;
+
+  // Saat split aktif, "Uang Diterima" mengacu ke TOTAL transaksi tapi kasir
+  // membaginya ke beberapa metode -- validasi "uang kurang dari total" tidak
+  // relevan lagi (kasir bisa saja terima Rp0 tunai kalau semua slot non-tunai),
+  // jadi gerbang ini dilewati saat split aktif; nominal per slot sudah
+  // divalidasi seimbang dgn total di `_SheetPilihMetodeSplit` sendiri.
+  bool get _uangTunaiKurang =>
+      !_splitAktif && _metodeTunai && _uangDiterima + 0.0001 < _total;
   bool get _bisaBayar =>
       !_memproses &&
       !_memuatCaraBayar &&
@@ -438,6 +458,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'kasir': Sesi.instance.userId,
       'waktu': _formatWaktuServer(waktu),
       'caraBayar': _caraBayarTerpilih!.id,
+      if (_splitAktif)
+        'caraBayarTambahan': _splitBayar
+            .skip(1)
+            .map((s) => {'caraBayar': s.caraBayar.id, 'nominal': s.nominal})
+            .toList(),
       'total': _total,
       'pajak': _pajak,
       'id_member': _memberTerpilih?.id,
@@ -513,6 +538,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _langsungTerlayani = true;
         _uangDiterimaManual = false;
         _uangDiterimaController.text = '0';
+        _splitBayar = [];
       });
       unawaited(_muatCaraBayarUntukMember(null));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -599,7 +625,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance
           .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
-      setStateIfMounted(() => _langsungTerlayani = true);
+      setStateIfMounted(() {
+        _langsungTerlayani = true;
+        _splitBayar = [];
+      });
       widget.onSelesai?.call();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -627,24 +656,25 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// TARGET nyata utk pintasan F4 (bukan sekadar fokus ke dropdown).
   Future<void> _pilihMetode() async {
     if (_memuatCaraBayar || _caraBayarTersedia.isEmpty) return;
-    final dipilih = await showModalBottomSheet<CaraBayar>(
+    final awal = _splitBayar.isNotEmpty
+        ? _splitBayar
+        : (_caraBayarTerpilih != null
+            ? [_SlotBayar(_caraBayarTerpilih!, _total)]
+            : <_SlotBayar>[]);
+    final hasil = await showModalBottomSheet<List<_SlotBayar>>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _caraBayarTersedia
-              .map((c) => ListTile(
-                    title: Text(c.nama),
-                    trailing: c == _caraBayarTerpilih
-                        ? const Icon(Icons.check, color: AppColors.primary)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(c),
-                  ))
-              .toList(),
-        ),
+      isScrollControlled: true,
+      builder: (_) => _SheetPilihMetodeSplit(
+        daftarMetode: _caraBayarTersedia,
+        terpilihAwal: awal,
+        total: _total,
       ),
     );
-    if (dipilih != null) setStateIfMounted(() => _caraBayarTerpilih = dipilih);
+    if (hasil == null || hasil.isEmpty) return;
+    setStateIfMounted(() {
+      _caraBayarTerpilih = hasil.first.caraBayar;
+      _splitBayar = hasil.length >= 2 ? hasil : [];
+    });
   }
 
   /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
@@ -1063,7 +1093,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                                   ? (_memberTerpilih == null
                                       ? 'Tidak ada metode aktif'
                                       : 'Tidak ada metode yang diizinkan')
-                                  : _caraBayarTerpilih?.nama ?? 'Pilih',
+                                  : _splitAktif
+                                      ? '${_splitBayar.length} Metode (Split)'
+                                      : _caraBayarTerpilih?.nama ?? 'Pilih',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                     ),
@@ -1302,6 +1334,178 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             foregroundColor: AppColors.textPrimaryOf(context),
             shape: const CircleBorder()),
         onPressed: onPressed,
+      ),
+    );
+  }
+}
+
+/// Satu slot pembayaran (metode + nominal) dlm split pembayaran s/d 5
+/// metode/transaksi. Lihat JavaDoc `_PanelKeranjangState._splitBayar`.
+class _SlotBayar {
+  final CaraBayar caraBayar;
+  double nominal;
+  _SlotBayar(this.caraBayar, this.nominal);
+}
+
+/// Bottom sheet pilih metode pembayaran -- padanan `_pos.jsp` modal "Pilih
+/// Metode Pembayaran": tap BARIS (di luar checkbox) = pilih SATU metode utk
+/// bayar penuh & langsung tutup (perilaku lama, zero-friction utk kasus
+/// mayoritas satu-metode); centang ikon checkbox = gabungkan s/d 5 metode
+/// (split pembayaran), memunculkan panel bagi nominal di bawah daftar.
+class _SheetPilihMetodeSplit extends StatefulWidget {
+  final List<CaraBayar> daftarMetode;
+  final List<_SlotBayar> terpilihAwal;
+  final double total;
+  const _SheetPilihMetodeSplit({
+    required this.daftarMetode,
+    required this.terpilihAwal,
+    required this.total,
+  });
+
+  @override
+  State<_SheetPilihMetodeSplit> createState() =>
+      _SheetPilihMetodeSplitState();
+}
+
+class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
+  late List<_SlotBayar> _terpilih;
+
+  @override
+  void initState() {
+    super.initState();
+    _terpilih = widget.terpilihAwal
+        .map((s) => _SlotBayar(s.caraBayar, s.nominal))
+        .toList();
+  }
+
+  void _toggle(CaraBayar c) {
+    final idx = _terpilih.indexWhere((s) => s.caraBayar.id == c.id);
+    if (idx >= 0) {
+      setState(() => _terpilih.removeAt(idx));
+      return;
+    }
+    if (_terpilih.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Maksimal 5 metode pembayaran per transaksi.')));
+      return;
+    }
+    setState(() {
+      _terpilih.add(_SlotBayar(c, 0));
+      _bagiRataJikaKosong();
+    });
+  }
+
+  /// Default bagi rata SEKALI saat jumlah slot berubah (semua nominal masih
+  /// 0) -- tidak dijalankan ulang tiap render supaya angka yg sudah diedit
+  /// manual kasir tidak direset.
+  void _bagiRataJikaKosong() {
+    if (_terpilih.length < 2 || widget.total <= 0) return;
+    if (!_terpilih.every((s) => s.nominal == 0)) return;
+    final n = _terpilih.length;
+    final rata = (widget.total / n).floorToDouble();
+    for (var i = 0; i < n; i++) {
+      _terpilih[i].nominal = (i == n - 1) ? (widget.total - rata * (n - 1)) : rata;
+    }
+  }
+
+  double get _totalDialokasikan =>
+      _terpilih.fold(0.0, (sum, s) => sum + s.nominal);
+  double get _sisa => widget.total - _totalDialokasikan;
+  bool get _seimbang => _sisa.abs() < 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                    'Ketuk baris utk bayar penuh 1 metode, atau centang kotak utk gabungkan s/d 5 metode (split bayar).',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+              ...widget.daftarMetode.map((c) {
+                final aktif = _terpilih.any((s) => s.caraBayar.id == c.id);
+                return ListTile(
+                  leading: Checkbox(
+                    value: aktif,
+                    onChanged: (_) => _toggle(c),
+                  ),
+                  title: Text(c.nama),
+                  onTap: () =>
+                      Navigator.of(context).pop([_SlotBayar(c, widget.total)]),
+                );
+              }),
+              if (_terpilih.length >= 2) ...[
+                const Divider(height: 1),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text('Bagi Nominal per Metode',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                ..._terpilih.map((s) => Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                              child: Text(s.caraBayar.nama,
+                                  overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 140,
+                            child: TextFormField(
+                              key: ValueKey('nominal-split-${s.caraBayar.id}'),
+                              initialValue: s.nominal.toStringAsFixed(0),
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.end,
+                              decoration: const InputDecoration(
+                                prefixText: 'Rp ',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (v) =>
+                                  setState(() => s.nominal = double.tryParse(v) ?? 0),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Sisa belum dialokasikan',
+                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        NumberFormat.currency(
+                                locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0)
+                            .format(_sisa),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _seimbang ? Colors.green : Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: ElevatedButton(
+                    onPressed:
+                        _seimbang ? () => Navigator.of(context).pop(_terpilih) : null,
+                    child: const Text('Terapkan Split Pembayaran'),
+                  ),
+                ),
+              ] else
+                const SizedBox(height: 8),
+            ],
+          ),
+        ),
       ),
     );
   }

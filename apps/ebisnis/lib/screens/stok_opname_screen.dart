@@ -1,3 +1,4 @@
+import 'package:core_db/core_db.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -257,6 +258,132 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
   }
 }
 
+/// Kotak cari produk bergaya "Banbox" (padanan picker `AmbilData...Banbox`
+/// versi ZK/JSP: ketik sebagian kata -> daftar saran tampil di bawah kotak,
+/// klik salah satu utk memilih) -- gap-closure: sebelumnya kotak pencarian
+/// Stok Opname HANYA menerima kode/barcode PERSIS (cocok utk hasil scan,
+/// tapi kasir yang mengetik manual tanpa tahu kode persis harus buka layar
+/// Produk dulu). Saran dicari dari cache produk lokal (offline-first, sumber
+/// sama dgn katalog Kasir) supaya responsif tanpa round-trip server tiap
+/// ketukan; produk yang BENAR-BENAR dipilih tetap dikirim ke [onPilih] sbg
+/// kode -- pemanggil (existing `_cariProduk`/`_tambahKeAntrean`) tetap
+/// memverifikasi ulang ke server lewat `so_produk_scan`, jadi stok yang
+/// ditampilkan selalu data terkini, bukan cache.
+///
+/// Enter-langsung (jalur scanner fisik: keystroke kode lalu Enter) SENGAJA
+/// tidak lewat mekanisme seleksi bawaan `RawAutocomplete` -- disambungkan
+/// LANGSUNG ke [onPilih] apa pun isi teksnya, supaya alur scan yang sudah
+/// berfungsi TIDAK berubah sama sekali; dropdown saran murni tambahan utk
+/// pencarian manual by nama.
+class _PencarianProdukBanbox extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool aktif;
+  final ValueChanged<String> onPilih;
+  const _PencarianProdukBanbox({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.onPilih,
+    this.aktif = true,
+  });
+
+  @override
+  State<_PencarianProdukBanbox> createState() =>
+      _PencarianProdukBanboxState();
+}
+
+class _PencarianProdukBanboxState extends State<_PencarianProdukBanbox> {
+  List<Map<String, Object?>> _semuaProduk = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _muatCache();
+  }
+
+  Future<void> _muatCache() async {
+    try {
+      final data = await CoreDb.instance.produkCache();
+      if (mounted) setStateIfMounted(() => _semuaProduk = data);
+    } catch (_) {
+      // Pencarian nama sekadar pelengkap -- kalau cache lokal gagal dimuat,
+      // kotak tetap berfungsi spt biasa (ketik/scan kode persis + Enter).
+    }
+  }
+
+  Iterable<Map<String, Object?>> _cariSaran(String kataKunci) {
+    final q = kataKunci.trim().toLowerCase();
+    if (q.isEmpty) return const Iterable<Map<String, Object?>>.empty();
+    return _semuaProduk.where((p) {
+      final nama = '${p['nama'] ?? ''}'.toLowerCase();
+      final kode = '${p['kode'] ?? ''}'.toLowerCase();
+      final barcode = '${p['barcode'] ?? ''}'.toLowerCase();
+      return nama.contains(q) || kode.contains(q) || barcode.contains(q);
+    }).take(15);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<Map<String, Object?>>(
+      textEditingController: widget.controller,
+      focusNode: FocusNode(),
+      optionsBuilder: (value) => _cariSaran(value.text),
+      displayStringForOption: (p) => '${p['kode'] ?? p['barcode'] ?? ''}',
+      onSelected: (p) {
+        final kode = '${p['kode'] ?? p['barcode'] ?? ''}'.trim();
+        if (kode.isNotEmpty) widget.onPilih(kode);
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: widget.aktif,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            border: const OutlineInputBorder(),
+            prefixIcon: Icon(widget.icon),
+          ),
+          // Enter = cari LANGSUNG apa pun teksnya (jalur scanner), bukan
+          // menyeleksi opsi dropdown -- lihat JavaDoc kelas.
+          onSubmitted: widget.onPilih,
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(10),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280, minWidth: 320),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, i) {
+                  final p = options.elementAt(i);
+                  final barcode = '${p['barcode'] ?? ''}';
+                  return ListTile(
+                    dense: true,
+                    title: Text('${p['nama'] ?? ''}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(barcode.isEmpty
+                        ? '${p['kode'] ?? ''}'
+                        : '${p['kode'] ?? ''} · $barcode'),
+                    onTap: () => onSelected(p),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _TabInputOpname extends StatefulWidget {
   const _TabInputOpname();
 
@@ -437,14 +564,11 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: _PencarianProdukBanbox(
                 controller: _barcodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Kode / Barcode Produk',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onSubmitted: _cariProduk,
+                label: 'Kode / Barcode / Nama Produk',
+                icon: Icons.search,
+                onPilih: _cariProduk,
               ),
             ),
             const SizedBox(width: 8),
@@ -679,13 +803,12 @@ class _TabSoByScanState extends State<_TabSoByScan> {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: _PencarianProdukBanbox(
                   controller: _barcodeController,
-                  decoration: const InputDecoration(
-                      labelText: 'Scan / Ketik Kode Produk',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.qr_code)),
-                  onSubmitted: _tambahKeAntrean,
+                  label: 'Scan / Ketik Kode / Nama Produk',
+                  icon: Icons.qr_code,
+                  aktif: !_mencari,
+                  onPilih: _tambahKeAntrean,
                 ),
               ),
               const SizedBox(width: 8),
