@@ -1,11 +1,12 @@
-import 'package:core_db/core_db.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -147,25 +148,52 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 2.2,
-            children: [
-              _kartu('Barang Masuk', _formatAngka.format(d['barangMasuk'] ?? 0),
-                  const Color(0xFF2E7D32)),
-              _kartu(
-                  'Barang Keluar',
-                  _formatAngka.format(d['barangKeluar'] ?? 0),
-                  const Color(0xFFC0563D)),
-              _kartu('Total Stok', _formatAngka.format(d['totalStok'] ?? 0),
-                  const Color(0xFF1E3A5F)),
-              _kartu(
-                  'Stok Kritis (<10)', '${d['stokKritis'] ?? 0}', Colors.red),
-            ],
+          SizedBox(
+            height: 96,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.call_received,
+                    warna: const Color(0xFF2E7D32),
+                    nilai: _formatAngka.format(d['barangMasuk'] ?? 0),
+                    label: 'Barang Masuk',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.call_made,
+                    warna: const Color(0xFFC0563D),
+                    nilai: _formatAngka.format(d['barangKeluar'] ?? 0),
+                    label: 'Barang Keluar',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.inventory_2_outlined,
+                    warna: const Color(0xFF1E3A5F),
+                    nilai: _formatAngka.format(d['totalStok'] ?? 0),
+                    label: 'Total Stok',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: AppKpiCard(
+                    icon: Icons.warning_amber_rounded,
+                    warna: Colors.red,
+                    nilai: '${d['stokKritis'] ?? 0}',
+                    label: 'Stok Kritis (<10)',
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Card(
@@ -232,156 +260,6 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
     );
   }
 
-  Widget _kartu(String label, String nilai, Color warna) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: warna.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: warna.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(nilai,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16, color: warna)),
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 11, color: AppColors.textSecondaryOf(context)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Kotak cari produk bergaya "Banbox" (padanan picker `AmbilData...Banbox`
-/// versi ZK/JSP: ketik sebagian kata -> daftar saran tampil di bawah kotak,
-/// klik salah satu utk memilih) -- gap-closure: sebelumnya kotak pencarian
-/// Stok Opname HANYA menerima kode/barcode PERSIS (cocok utk hasil scan,
-/// tapi kasir yang mengetik manual tanpa tahu kode persis harus buka layar
-/// Produk dulu). Saran dicari dari cache produk lokal (offline-first, sumber
-/// sama dgn katalog Kasir) supaya responsif tanpa round-trip server tiap
-/// ketukan; produk yang BENAR-BENAR dipilih tetap dikirim ke [onPilih] sbg
-/// kode -- pemanggil (existing `_cariProduk`/`_tambahKeAntrean`) tetap
-/// memverifikasi ulang ke server lewat `so_produk_scan`, jadi stok yang
-/// ditampilkan selalu data terkini, bukan cache.
-///
-/// Enter-langsung (jalur scanner fisik: keystroke kode lalu Enter) SENGAJA
-/// tidak lewat mekanisme seleksi bawaan `RawAutocomplete` -- disambungkan
-/// LANGSUNG ke [onPilih] apa pun isi teksnya, supaya alur scan yang sudah
-/// berfungsi TIDAK berubah sama sekali; dropdown saran murni tambahan utk
-/// pencarian manual by nama.
-class _PencarianProdukBanbox extends StatefulWidget {
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final bool aktif;
-  final ValueChanged<String> onPilih;
-  const _PencarianProdukBanbox({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    required this.onPilih,
-    this.aktif = true,
-  });
-
-  @override
-  State<_PencarianProdukBanbox> createState() =>
-      _PencarianProdukBanboxState();
-}
-
-class _PencarianProdukBanboxState extends State<_PencarianProdukBanbox> {
-  List<Map<String, Object?>> _semuaProduk = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _muatCache();
-  }
-
-  Future<void> _muatCache() async {
-    try {
-      final data = await CoreDb.instance.produkCache();
-      if (mounted) setStateIfMounted(() => _semuaProduk = data);
-    } catch (_) {
-      // Pencarian nama sekadar pelengkap -- kalau cache lokal gagal dimuat,
-      // kotak tetap berfungsi spt biasa (ketik/scan kode persis + Enter).
-    }
-  }
-
-  Iterable<Map<String, Object?>> _cariSaran(String kataKunci) {
-    final q = kataKunci.trim().toLowerCase();
-    if (q.isEmpty) return const Iterable<Map<String, Object?>>.empty();
-    return _semuaProduk.where((p) {
-      final nama = '${p['nama'] ?? ''}'.toLowerCase();
-      final kode = '${p['kode'] ?? ''}'.toLowerCase();
-      final barcode = '${p['barcode'] ?? ''}'.toLowerCase();
-      return nama.contains(q) || kode.contains(q) || barcode.contains(q);
-    }).take(15);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RawAutocomplete<Map<String, Object?>>(
-      textEditingController: widget.controller,
-      focusNode: FocusNode(),
-      optionsBuilder: (value) => _cariSaran(value.text),
-      displayStringForOption: (p) => '${p['kode'] ?? p['barcode'] ?? ''}',
-      onSelected: (p) {
-        final kode = '${p['kode'] ?? p['barcode'] ?? ''}'.trim();
-        if (kode.isNotEmpty) widget.onPilih(kode);
-      },
-      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-        return TextField(
-          controller: controller,
-          focusNode: focusNode,
-          enabled: widget.aktif,
-          decoration: InputDecoration(
-            labelText: widget.label,
-            border: const OutlineInputBorder(),
-            prefixIcon: Icon(widget.icon),
-          ),
-          // Enter = cari LANGSUNG apa pun teksnya (jalur scanner), bukan
-          // menyeleksi opsi dropdown -- lihat JavaDoc kelas.
-          onSubmitted: widget.onPilih,
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(10),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280, minWidth: 320),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, i) {
-                  final p = options.elementAt(i);
-                  final barcode = '${p['barcode'] ?? ''}';
-                  return ListTile(
-                    dense: true,
-                    title: Text('${p['nama'] ?? ''}',
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(barcode.isEmpty
-                        ? '${p['kode'] ?? ''}'
-                        : '${p['kode'] ?? ''} · $barcode'),
-                    onTap: () => onSelected(p),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _TabInputOpname extends StatefulWidget {
@@ -564,7 +442,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         Row(
           children: [
             Expanded(
-              child: _PencarianProdukBanbox(
+              child: PencarianProdukBanbox(
                 controller: _barcodeController,
                 label: 'Kode / Barcode / Nama Produk',
                 icon: Icons.search,
@@ -803,7 +681,7 @@ class _TabSoByScanState extends State<_TabSoByScan> {
           child: Row(
             children: [
               Expanded(
-                child: _PencarianProdukBanbox(
+                child: PencarianProdukBanbox(
                   controller: _barcodeController,
                   label: 'Scan / Ketik Kode / Nama Produk',
                   icon: Icons.qr_code,

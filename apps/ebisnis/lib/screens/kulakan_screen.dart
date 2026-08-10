@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -274,14 +275,16 @@ class _KulakanScreenState extends State<KulakanScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: PencarianProdukBanbox(
                       controller: _barcodeController,
-                      decoration: AppFormStyle.fieldDecoration(
+                      label: 'Kode / Barcode / Nama Produk',
+                      icon: Icons.search,
+                      onPilih: _cariProduk,
+                      decorationBuilder: (context) => AppFormStyle.fieldDecoration(
                         context,
-                        labelText: 'Kode / Barcode Produk',
+                        labelText: 'Kode / Barcode / Nama Produk',
                         prefixIcon: const Icon(Icons.search),
                       ),
-                      onSubmitted: _cariProduk,
                     ),
                   ),
                   const SizedBox(width: 8),
