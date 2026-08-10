@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'laporan_detail_screen.dart';
 import '../widgets/safe_state.dart';
@@ -25,6 +26,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
   String? _pesanError;
   List<Map<String, dynamic>> _kategori = [];
   final _controllerCari = TextEditingController();
+  String _kategoriDipilih = '';
+  int _halaman = 1;
+  static const int _pageSize = 10;
 
   @override
   void initState() {
@@ -46,7 +50,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
     try {
       final hasil = await ApiClient.instance.aksi('laporan_katalog');
       final arr = (hasil['kategori'] as List?) ?? [];
-      setStateIfMounted(() => _kategori = arr.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      setStateIfMounted(() {
+        _kategori =
+            arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (_kategoriDipilih.isNotEmpty &&
+            !_kategori.any((e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
+          _kategoriDipilih = '';
+        }
+        _halaman = 1;
+      });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -68,27 +80,57 @@ class _LaporanScreenState extends State<LaporanScreen> {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
   }
 
-  List<MapEntry<String, List<Map<String, dynamic>>>> get _terfilter {
+  List<_LaporanKatalogBaris> get _terfilter {
     final kw = _controllerCari.text.trim().toLowerCase();
-    final hasil = <MapEntry<String, List<Map<String, dynamic>>>>[];
+    final hasil = <_LaporanKatalogBaris>[];
     for (final k in _kategori) {
       final kat = k['kat'] as String? ?? '';
-      final items = ((k['items'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      if (kw.isEmpty) {
-        hasil.add(MapEntry(kat, items));
+      final items = ((k['items'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (_kategoriDipilih.isNotEmpty && kat != _kategoriDipilih) {
         continue;
       }
       final cocokKategori = kat.toLowerCase().contains(kw);
-      final itemCocok = cocokKategori
-          ? items
-          : items.where((it) {
-              final judul = (it['judul'] as String? ?? '').toLowerCase();
-              final ket = (it['ket'] as String? ?? '').toLowerCase();
-              return judul.contains(kw) || ket.contains(kw);
-            }).toList();
-      if (itemCocok.isNotEmpty) hasil.add(MapEntry(kat, itemCocok));
+      for (final item in items) {
+        final judul = (item['judul'] as String? ?? '').toLowerCase();
+        final ket = (item['ket'] as String? ?? '').toLowerCase();
+        if (kw.isEmpty ||
+            cocokKategori ||
+            judul.contains(kw) ||
+            ket.contains(kw)) {
+          hasil.add(_LaporanKatalogBaris(kategori: kat, item: item));
+        }
+      }
     }
     return hasil;
+  }
+
+  int _totalHalaman(int total) {
+    if (total <= 0) return 1;
+    return ((total - 1) ~/ _pageSize) + 1;
+  }
+
+  List<_LaporanKatalogBaris> _halamanData(List<_LaporanKatalogBaris> data) {
+    final totalHalaman = _totalHalaman(data.length);
+    if (_halaman > totalHalaman) _halaman = totalHalaman;
+    final mulai = (_halaman - 1) * _pageSize;
+    final sampai = (mulai + _pageSize).clamp(0, data.length) as int;
+    if (mulai >= data.length) return const [];
+    return data.sublist(mulai, sampai);
+  }
+
+  Color _warnaBiruGelap(BuildContext context) =>
+      AppColors.gelap(context) ? AppColors.darkTextPrimary : AppColors.sidebarBg;
+
+  List<String> get _opsiKategori {
+    final kategori = _kategori
+        .map((e) => e['kat'] as String? ?? '')
+        .where((e) => e.trim().isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return kategori;
   }
 
   @override
@@ -99,49 +141,183 @@ class _LaporanScreenState extends State<LaporanScreen> {
       subjudul: 'Katalog laporan siap pakai',
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat, tooltip: 'Muat ulang'),
       actionsAppBar: [IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _muat, tooltip: 'Muat ulang')],
-      scrollable: false,
+      scrollable: true,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
               ? Center(child: Text('Gagal memuat: $_pesanError'))
-              : Column(
+              : Builder(
+                  builder: (context) {
+                    final data = _terfilter;
+                    final totalHalaman = _totalHalaman(data.length);
+                    final halamanData = _halamanData(data);
+                    return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: TextField(
-                        controller: _controllerCari,
-                        decoration: const InputDecoration(hintText: 'Cari laporan...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
-                        onChanged: (_) => setStateIfMounted(() {}),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final sempit = constraints.maxWidth < 720;
+                          final kategoriDropdown = DropdownButtonFormField<String>(
+                            value: _kategoriDipilih,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Kategori',
+                              prefixIcon: Icon(Icons.category_outlined),
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: '',
+                                child: Text('Semua kategori'),
+                              ),
+                              ..._opsiKategori.map(
+                                (kategori) => DropdownMenuItem(
+                                  value: kategori,
+                                  child: Text(
+                                    kategori,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) => setStateIfMounted(() {
+                              _kategoriDipilih = value ?? '';
+                              _halaman = 1;
+                            }),
+                          );
+                          final pencarian = TextField(
+                            controller: _controllerCari,
+                            decoration: const InputDecoration(
+                                hintText: 'Cari laporan...',
+                                prefixIcon: Icon(Icons.search),
+                                border: OutlineInputBorder(),
+                                isDense: true),
+                            onChanged: (_) =>
+                                setStateIfMounted(() => _halaman = 1),
+                          );
+                          if (sempit) {
+                            return Column(
+                              children: [
+                                kategoriDropdown,
+                                const SizedBox(height: 8),
+                                pencarian,
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              SizedBox(width: 320, child: kategoriDropdown),
+                              const SizedBox(width: 10),
+                              Expanded(child: pencarian),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                    Expanded(
-                      child: ListView(
-                        children: _terfilter.map((entri) => _panelKategori(entri.key, entri.value)).toList(),
+                    AppDataTable(
+                      minWidth: 920,
+                      emptyText: 'Tidak ada laporan yang cocok.',
+                      columns: const [
+                        AppTableColumn('Kategori', flex: 2),
+                        AppTableColumn('Laporan', flex: 3),
+                        AppTableColumn('Keterangan', flex: 4),
+                        AppTableColumn('Format', width: 96, align: TextAlign.center),
+                        AppTableColumn('Aksi', width: 82, align: TextAlign.center),
+                      ],
+                      rows: halamanData.map((baris) {
+                        final item = baris.item;
+                        final adaUrl =
+                            (item['url'] as String? ?? '').isNotEmpty;
+                        return AppTableRowData(
+                          onTap: () => _bukaItem(item),
+                          cells: [
+                            AppTableCell.text(
+                              baris.kategori,
+                              flex: 2,
+                              maxLines: 2,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimaryOf(context),
+                              ),
+                            ),
+                            AppTableCell.text(
+                              item['judul'] as String? ?? '-',
+                              flex: 3,
+                              maxLines: 2,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: _warnaBiruGelap(context),
+                              ),
+                            ),
+                            AppTableCell.text(
+                              item['ket'] as String? ?? '-',
+                              flex: 4,
+                              maxLines: 2,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondaryOf(context),
+                              ),
+                            ),
+                            AppTableCell(
+                              width: 96,
+                              align: TextAlign.center,
+                              child: StatusPill(
+                                label: adaUrl ? 'Link' : 'Data',
+                                warna: adaUrl ? AppColors.info : AppColors.primary,
+                              ),
+                            ),
+                            AppTableCell(
+                              width: 82,
+                              align: TextAlign.center,
+                              child: IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: adaUrl ? 'Buka laporan' : 'Jalankan laporan',
+                                icon: Icon(
+                                  adaUrl
+                                      ? Icons.open_in_new
+                                      : Icons.chevron_right,
+                                  size: 20,
+                                  color: _warnaBiruGelap(context),
+                                ),
+                                onPressed: () => _bukaItem(item),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                      pagination: AppTablePagination(
+                        halaman: _halaman,
+                        totalHalaman: totalHalaman,
+                        totalData: data.length,
+                        labelData: 'laporan',
+                        onSebelumnya: _halaman > 1
+                            ? () => setStateIfMounted(() => _halaman--)
+                            : null,
+                        onBerikutnya: _halaman < totalHalaman
+                            ? () => setStateIfMounted(() => _halaman++)
+                            : null,
                       ),
                     ),
                   ],
+                    );
+                  },
                 ),
     );
   }
+}
 
-  Widget _panelKategori(String kategori, List<Map<String, dynamic>> items) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ExpansionTile(
-        title: Text(kategori, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('${items.length} laporan'),
-        initiallyExpanded: _controllerCari.text.trim().isNotEmpty,
-        children: items.map((item) {
-          final adaUrl = (item['url'] as String? ?? '').isNotEmpty;
-          return ListTile(
-            title: Text(item['judul'] as String? ?? '-'),
-            subtitle: (item['ket'] as String? ?? '').isNotEmpty ? Text(item['ket'] as String) : null,
-            trailing: Icon(adaUrl ? Icons.open_in_new : Icons.chevron_right, color: adaUrl ? AppColors.info : AppColors.textSecondary, size: 18),
-            onTap: () => _bukaItem(item),
-          );
-        }).toList(),
-      ),
-    );
-  }
+class _LaporanKatalogBaris {
+  final String kategori;
+  final Map<String, dynamic> item;
+
+  const _LaporanKatalogBaris({
+    required this.kategori,
+    required this.item,
+  });
 }

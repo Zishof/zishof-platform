@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
@@ -156,7 +157,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
         title: Text(widget.item['judul'] as String? ?? 'Laporan', overflow: TextOverflow.ellipsis),
         backgroundColor: AppColors.sidebarBg,
@@ -168,10 +169,12 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if ((widget.item['ket'] as String? ?? '').isNotEmpty)
-              Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(widget.item['ket'] as String, style: const TextStyle(color: AppColors.textSecondary))),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+              Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(widget.item['ket'] as String,
+                      style:
+                          TextStyle(color: AppColors.textSecondaryOf(context)))),
+            AppSectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -252,11 +255,30 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
 /// (integer utk label berawalan Jml/Jumlah, 2 desimal lainnya, negatif
 /// dikurung). Kolom `grup>=0` memicu baris header-grup + subtotal per
 /// perubahan nilai; `grandTotal` menambah baris total keseluruhan di akhir.
-class _TabelLaporan extends StatelessWidget {
+class _TabelLaporan extends StatefulWidget {
   final Map<String, dynamic> hasil;
   const _TabelLaporan({required this.hasil});
 
+  @override
+  State<_TabelLaporan> createState() => _TabelLaporanState();
+}
+
+class _TabelLaporanState extends State<_TabelLaporan> {
   static const _lebarKolom = 150.0;
+  static const _pageSize = 15;
+
+  int _halaman = 1;
+
+  @override
+  void didUpdateWidget(covariant _TabelLaporan oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.hasil, widget.hasil)) _halaman = 1;
+  }
+
+  int _totalHalaman(int total) {
+    if (total <= 0) return 1;
+    return ((total - 1) ~/ _pageSize) + 1;
+  }
 
   bool _isHitungKolom(String label) {
     final l = label.trim().toLowerCase();
@@ -278,61 +300,106 @@ class _TabelLaporan extends StatelessWidget {
     return v.toString();
   }
 
+  Color _warnaBiruGelap(BuildContext context) =>
+      AppColors.gelap(context) ? AppColors.darkTextPrimary : AppColors.sidebarBg;
+
   @override
   Widget build(BuildContext context) {
-    final kolom = ((hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    final baris = ((hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
-    final catatan = hasil['catatan'] as String?;
-    final grup = (hasil['grup'] as num?)?.toInt() ?? -1;
-    final grandTotal = hasil['grandTotal'] == true;
-    final judul = hasil['judul'] as String?;
+    final kolom = ((widget.hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final baris = ((widget.hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
+    final catatan = widget.hasil['catatan'] as String?;
+    final grup = (widget.hasil['grup'] as num?)?.toInt() ?? -1;
+    final grandTotal = widget.hasil['grandTotal'] == true;
+    final judul = widget.hasil['judul'] as String?;
 
     if (kolom.isEmpty) {
-      return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('Tidak ada kolom pada laporan ini.')));
+      return AppSectionCard(
+        child: Center(
+          child: Text(
+            'Tidak ada kolom pada laporan ini.',
+            style: TextStyle(color: AppColors.textSecondaryOf(context)),
+          ),
+        ),
+      );
     }
     if (baris.isEmpty) {
-      return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('Tidak ada data untuk filter yang dipilih.')));
+      return AppSectionCard(
+        child: Center(
+          child: Text(
+            'Tidak ada data untuk filter yang dipilih.',
+            style: TextStyle(color: AppColors.textSecondaryOf(context)),
+          ),
+        ),
+      );
     }
 
-    final lebarTotal = _lebarKolom * kolom.length;
     final numIdx = <int>[for (var i = 0; i < kolom.length; i++) if (kolom[i]['t'] == 'num') i];
+    final semuaBaris = <AppTableRowData>[];
 
-    final List<Widget> baruBaris = [];
+    List<AppTableCell> selKosong({String? labelAwal, TextStyle? styleAwal}) {
+      return List.generate(kolom.length, (i) {
+        return AppTableCell.text(
+          i == 0 ? (labelAwal ?? '') : '',
+          width: _lebarKolom,
+          maxLines: 2,
+          style: i == 0 ? styleAwal : null,
+        );
+      });
+    }
 
-    void tambahBarisData(List<dynamic> r) {
-      baruBaris.add(Row(
-        children: List.generate(kolom.length, (i) {
+    AppTableRowData barisData(List<dynamic> r) {
+      return AppTableRowData(
+        cells: List.generate(kolom.length, (i) {
           final tipe = kolom[i]['t'] as String? ?? 'text';
           final label = kolom[i]['l'] as String? ?? '';
-          return SizedBox(width: _lebarKolom, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text(_fmtSel(r[i], tipe, label), style: TextStyle(fontFamily: tipe == 'num' ? 'monospace' : null))));
+          final isNum = tipe == 'num';
+          return AppTableCell.text(
+            i < r.length ? _fmtSel(r[i], tipe, label) : '',
+            width: _lebarKolom,
+            align: isNum ? TextAlign.right : TextAlign.left,
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textPrimaryOf(context),
+              fontFamily: isNum ? 'monospace' : null,
+            ),
+          );
         }),
-      ));
+      );
     }
 
-    void tambahBarisPita(String teks, {Color? warna}) {
-      baruBaris.add(Container(
-        width: lebarTotal,
-        color: warna ?? AppColors.latarLembut(AppColors.info),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Text(teks, style: const TextStyle(fontWeight: FontWeight.bold)),
+    void tambahBarisPita(String teks) {
+      semuaBaris.add(AppTableRowData(
+        cells: selKosong(
+          labelAwal: teks,
+          styleAwal: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: _warnaBiruGelap(context),
+          ),
+        ),
       ));
     }
 
     void tambahBarisSubtotal(String key, Map<int, double> sums) {
-      baruBaris.add(Row(
-        children: List.generate(kolom.length, (i) {
+      semuaBaris.add(AppTableRowData(
+        cells: List.generate(kolom.length, (i) {
           String teks = '';
           if (i == grup) {
             teks = 'Subtotal $key';
           } else if (sums.containsKey(i)) {
             teks = _fmtNum(sums[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
-          return SizedBox(
+          final isNum = kolom[i]['t'] == 'num';
+          return AppTableCell.text(
+            teks,
             width: _lebarKolom,
-            child: Container(
-              color: AppColors.latarLembut(AppColors.textSecondary),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(teks, style: const TextStyle(fontWeight: FontWeight.bold)),
+            align: isNum ? TextAlign.right : TextAlign.left,
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimaryOf(context),
             ),
           );
         }),
@@ -358,12 +425,12 @@ class _TabelLaporan extends StatelessWidget {
         }
         final rSalinan = List<dynamic>.from(r);
         rSalinan[grup] = null;
-        tambahBarisData(rSalinan);
+        semuaBaris.add(barisData(rSalinan));
       }
       if (kunciSaatIni != null) tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
     } else {
       for (final r in baris) {
-        tambahBarisData(r);
+        semuaBaris.add(barisData(r));
       }
     }
 
@@ -374,64 +441,97 @@ class _TabelLaporan extends StatelessWidget {
           total[i] = (total[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
         }
       }
-      baruBaris.add(Row(
-        children: List.generate(kolom.length, (i) {
+      semuaBaris.add(AppTableRowData(
+        cells: List.generate(kolom.length, (i) {
           String teks = '';
           if (i == 0) {
             teks = 'TOTAL';
           } else if (total.containsKey(i)) {
             teks = _fmtNum(total[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
-          return SizedBox(
+          final isNum = kolom[i]['t'] == 'num';
+          return AppTableCell.text(
+            teks,
             width: _lebarKolom,
-            child: Container(
-              color: AppColors.latarLembut(AppColors.primary),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Text(teks, style: const TextStyle(fontWeight: FontWeight.bold)),
+            align: isNum ? TextAlign.right : TextAlign.left,
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+              color: _warnaBiruGelap(context),
             ),
           );
         }),
       ));
     }
 
-    return Container(
-      decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (judul != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-          if (catatan != null && catatan.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(catatan, style: const TextStyle(fontStyle: FontStyle.italic, color: AppColors.textSecondary, fontSize: 12))),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: lebarTotal,
+    final totalHalaman = _totalHalaman(semuaBaris.length);
+    if (_halaman > totalHalaman) _halaman = totalHalaman;
+    final mulai = (_halaman - 1) * _pageSize;
+    final sampai = (mulai + _pageSize).clamp(0, semuaBaris.length) as int;
+    final rows = mulai >= semuaBaris.length ? <AppTableRowData>[] : semuaBaris.sublist(mulai, sampai);
+    final minWidth = (_lebarKolom * kolom.length) < 760 ? 760.0 : _lebarKolom * kolom.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (judul != null || (catatan != null && catatan.isNotEmpty))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: AppSectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    color: AppColors.pageBg,
-                    child: Row(
-                      children: kolom
-                          .map((k) => SizedBox(
-                                width: _lebarKolom,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                  child: Text(k['l'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ))
-                          .toList(),
+                  if (judul != null)
+                    Text(
+                      judul,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.textPrimaryOf(context),
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1),
-                  ...baruBaris,
+                  if (catatan != null && catatan.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        catatan,
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textSecondaryOf(context),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        AppDataTable(
+          minWidth: minWidth,
+          emptyText: 'Tidak ada data untuk halaman ini.',
+          columns: kolom
+              .map((k) => AppTableColumn(
+                    k['l'] as String? ?? '',
+                    width: _lebarKolom,
+                    align: k['t'] == 'num' ? TextAlign.right : TextAlign.left,
+                  ))
+              .toList(),
+          rows: rows,
+          pagination: AppTablePagination(
+            halaman: _halaman,
+            totalHalaman: totalHalaman,
+            totalData: baris.length,
+            labelData: 'baris',
+            onSebelumnya: _halaman > 1
+                ? () => setStateIfMounted(() => _halaman--)
+                : null,
+            onBerikutnya: _halaman < totalHalaman
+                ? () => setStateIfMounted(() => _halaman++)
+                : null,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -26,7 +26,7 @@ const _daftarMetodePengembalian = [
   'Tanpa Pengembalian'
 ];
 
-/// Layar Retur Penjualan (spec §10) -- wizard 3 langkah (cari transaksi ->
+/// Layar Retur Penjualan -- wizard 3 langkah (cari transaksi ->
 /// pilih barang -> metode pengembalian) + riwayat/edit/hapus (supervisor).
 /// Aksi server: retur_penjualan_list (view, siapa saja) dan
 /// retur_penjualan_simpan/_ubah/_hapus (gated supervisor/admin, sama pola
@@ -84,7 +84,7 @@ class _ReturPenjualanScreenState extends State<ReturPenjualanScreen>
 class _BarisRetur {
   final Map<String, dynamic>
       item; // dari detail_transaksi: {nama, qty, harga, diskon, cashback, produkId}
-  bool disertakan = true;
+  bool disertakan = false;
   late final TextEditingController qtyController;
   String alasan = _daftarAlasan.first;
   String kondisi = _daftarKondisi.first;
@@ -139,19 +139,9 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
     });
     try {
       final hasil = await ApiClient.instance.aksi(
-          'laporan_order_list', {'cariPembeli': v, 'page': 1, 'pageSize': 30});
-      var data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      // laporan_order_list hanya menyaring server-side by nama pembeli -- tambahkan
-      // penyaringan client-side by nomor nota supaya "cari nomor nota" spt di spesifikasi tetap kena.
-      if (data.isEmpty) {
-        final hasilNota = await ApiClient.instance
-            .aksi('laporan_order_list', {'page': 1, 'pageSize': 100});
-        data = ((hasilNota['data'] as List?) ?? [])
-            .cast<Map<String, dynamic>>()
-            .where((r) =>
-                '${r['nomorNota']}'.toLowerCase().contains(v.toLowerCase()))
-            .toList();
-      }
+          'laporan_order_list', {'keyword': v, 'page': 1, 'pageSize': 30});
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() => _hasilPencarian = data);
     } catch (e) {
       setStateIfMounted(() => _errorPencarian = e.toString());
@@ -174,9 +164,10 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       setStateIfMounted(
           () => _baris = items.map((i) => _BarisRetur(i)).toList());
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
       setStateIfMounted(() => _transaksiTerpilih = null);
     } finally {
       if (mounted) setStateIfMounted(() => _memuatDetail = false);
@@ -250,12 +241,15 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   @override
   Widget build(BuildContext context) {
     if (!Sesi.instance.bolehKelola) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-              'Hanya admin/supervisor toko yang dapat mencatat retur penjualan.',
-              textAlign: TextAlign.center),
+          padding: const EdgeInsets.all(24),
+          child: AppInfoBanner(
+            icon: Icons.lock_outline,
+            color: AppColors.warning,
+            text:
+                'Hanya admin/supervisor toko yang dapat mencatat retur penjualan.',
+          ),
         ),
       );
     }
@@ -264,39 +258,49 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Langkah 1: Cari Transaksi Asal',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _kataKunciController,
-            decoration: const InputDecoration(
-                hintText: 'Cari nomor nota / nama pembeli...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder()),
-            onSubmitted: _cariTransaksi,
+          AppFormSection(
+            judul: 'Cari Transaksi Asal',
+            deskripsi:
+                'Masukkan nomor nota, kode transaksi, atau nama pelanggan untuk memilih transaksi yang akan diretur.',
+            children: [
+              TextField(
+                controller: _kataKunciController,
+                decoration: AppFormStyle.fieldDecoration(
+                  context,
+                  labelText: 'Cari nota',
+                  hintText: 'Nomor nota / kode transaksi / nama pelanggan',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    tooltip: 'Cari',
+                    icon: const Icon(Icons.arrow_forward),
+                    onPressed: _mencari
+                        ? null
+                        : () => _cariTransaksi(_kataKunciController.text),
+                  ),
+                ),
+                onSubmitted: _cariTransaksi,
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           if (_mencari) const Center(child: CircularProgressIndicator()),
           if (_errorPencarian != null)
-            Text(_errorPencarian!, style: const TextStyle(color: Colors.red)),
-          if (!_mencari && _hasilPencarian.isEmpty && _errorPencarian == null)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(
-                    child:
-                        Text('Ketik lalu tekan Enter utk mencari transaksi.'))),
-          ..._hasilPencarian.map((r) => Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  title: Text('${r['nomorNota']}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text('${r['waktu']} · ${r['pembeli']}'),
-                  trailing: Text(_formatRupiah.format(r['totalBiaya'] ?? 0),
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  onTap: () => _pilihTransaksi(r),
-                ),
-              )),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: AppInfoBanner(
+                icon: Icons.error_outline,
+                color: AppColors.danger,
+                text: _errorPencarian!,
+              ),
+            ),
+          if (!_mencari)
+            _TabelTransaksiRetur(
+              data: _hasilPencarian,
+              onPilih: _pilihTransaksi,
+              emptyText: _kataKunciController.text.trim().isEmpty
+                  ? 'Ketik kata kunci lalu tekan Enter untuk mencari transaksi.'
+                  : 'Transaksi tidak ditemukan.',
+            ),
         ],
       );
     }
@@ -306,134 +310,79 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            IconButton(
+        AppSectionCard(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Kembali ke pencarian',
                 icon: const Icon(Icons.arrow_back),
-                onPressed: _batalkanPemilihan),
-            Expanded(
-              child: Text(
-                  '${_transaksiTerpilih!['nomorNota']} · ${_transaksiTerpilih!['pembeli']}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const Text('Langkah 2: Pilih Barang & Kondisi',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        const SizedBox(height: 8),
-        ..._baris.map((b) => AppSectionCard(
-              padding: const EdgeInsets.all(12),
-              child: StatefulBuilder(
-                builder: (context, setBarisState) => Column(
+                onPressed: _batalkanPemilihan,
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.latarLembut(AppColors.primary),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Checkbox(
-                            value: b.disertakan,
-                            onChanged: (v) =>
-                                setBarisState(() => b.disertakan = v ?? true)),
-                        Expanded(
-                            child: Text('${b.item['nama']}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600))),
-                        Text(
-                          _formatRupiah.format(b.hargaSatuan),
-                          style: TextStyle(
-                            color: AppColors.textSecondaryOf(context),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      "${_transaksiTerpilih!['nomorNota']}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimaryOf(context),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (b.disertakan) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Builder(builder: (_) {
-                              final qtyAsli =
-                                  (b.item['qty'] as num?)?.toDouble() ?? 0;
-                              final lebih = b.qty > qtyAsli;
-                              return TextField(
-                                controller: b.qtyController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration: InputDecoration(
-                                  labelText:
-                                      'Qty Retur (maks ${b.item['qty']})',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                  errorText:
-                                      lebih ? 'Melebihi jumlah dibeli' : null,
-                                ),
-                                onChanged: (_) => setBarisState(() {}),
-                              );
-                            }),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: b.alasan,
-                              decoration: const InputDecoration(
-                                  labelText: 'Alasan',
-                                  border: OutlineInputBorder(),
-                                  isDense: true),
-                              items: _daftarAlasan
-                                  .map((a) => DropdownMenuItem(
-                                      value: a,
-                                      child: Text(a,
-                                          style:
-                                              const TextStyle(fontSize: 12))))
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setBarisState(() => b.alasan = v ?? b.alasan),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 3),
+                    Text(
+                      "${_transaksiTerpilih!['pembeli'] ?? 'Umum'}",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryOf(context),
                       ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: b.kondisi,
-                        decoration: const InputDecoration(
-                            labelText: 'Kondisi Barang',
-                            border: OutlineInputBorder(),
-                            isDense: true),
-                        items: _daftarKondisi
-                            .map((k) => DropdownMenuItem(
-                                value: k,
-                                child: Text(k,
-                                    style: const TextStyle(fontSize: 12))))
-                            .toList(),
-                        onChanged: (v) =>
-                            setBarisState(() => b.kondisi = v ?? b.kondisi),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        b.kembalikanKeStok
-                            ? 'Stok akan dikembalikan.'
-                            : 'Stok TIDAK dikembalikan (kondisi rusak).',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: b.kembalikanKeStok
-                                ? AppColors.success
-                                : AppColors.danger),
-                      ),
-                      const SizedBox(height: 4),
-                      Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                              'Subtotal: ${_formatRupiah.format(b.subtotal)}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold))),
-                    ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
-            )),
+              const SizedBox(width: 12),
+              Text(
+                _formatRupiah.format(_transaksiTerpilih!['totalBiaya'] ?? 0),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimaryOf(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppInfoBanner(
+          icon: Icons.assignment_return_outlined,
+          text:
+              'Langkah 2: pilih barang yang diretur, lalu lengkapi jumlah, alasan, dan kondisi barang.',
+        ),
+        const SizedBox(height: 12),
+        ..._baris.map(
+          (b) => _KartuBarangRetur(
+            baris: b,
+            onChanged: () => setStateIfMounted(() {}),
+          ),
+        ),
         const SizedBox(height: 8),
         const Text('Langkah 3: Metode Pengembalian',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -492,10 +441,315 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   }
 }
 
+class _KartuBarangRetur extends StatelessWidget {
+  final _BarisRetur baris;
+  final VoidCallback onChanged;
+
+  const _KartuBarangRetur({
+    required this.baris,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppSectionCard(
+        padding: const EdgeInsets.all(14),
+        child: StatefulBuilder(
+          builder: (context, setBarisState) {
+            final qtyAsli = (baris.item['qty'] as num?)?.toDouble() ?? 0;
+            final qtyLebih = baris.qty > qtyAsli;
+            final statusColor =
+                baris.kembalikanKeStok ? AppColors.success : AppColors.danger;
+            final statusIcon = baris.kembalikanKeStok
+                ? Icons.inventory_2_outlined
+                : Icons.block_outlined;
+
+            void ubahBaris(VoidCallback perubahan) {
+              setBarisState(perubahan);
+              onChanged();
+            }
+
+            Widget bidangInput(Widget child, double width) {
+              return SizedBox(width: width, child: child);
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: baris.disertakan,
+                      onChanged: (v) =>
+                          ubahBaris(() => baris.disertakan = v ?? true),
+                    ),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      margin: const EdgeInsets.only(top: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(AppColors.teal),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_bag_outlined,
+                        color: AppColors.teal,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${baris.item['nama']}",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimaryOf(context),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                'Dibeli: ${baris.item['qty']}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondaryOf(context),
+                                ),
+                              ),
+                              Text(
+                                'Harga: ${_formatRupiah.format(baris.hargaSatuan)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondaryOf(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _formatRupiah.format(baris.subtotal),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimaryOf(context),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.latarLembut(baris.disertakan
+                                ? AppColors.primary
+                                : AppColors.warning),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            baris.disertakan ? 'Dipilih' : 'Dilewati',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: baris.disertakan
+                                  ? AppColors.primary
+                                  : AppColors.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (baris.disertakan) ...[
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final lebarPenuh = constraints.maxWidth;
+                      final lebarField = lebarPenuh >= 780
+                          ? (lebarPenuh - 24) / 3
+                          : lebarPenuh;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          bidangInput(
+                            TextField(
+                              controller: baris.qtyController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: AppFormStyle.fieldDecoration(
+                                context,
+                                labelText: 'Qty Retur',
+                                helperText: 'Maks ${baris.item['qty']}',
+                                isDense: true,
+                              ).copyWith(
+                                errorText:
+                                    qtyLebih ? 'Melebihi jumlah dibeli' : null,
+                              ),
+                              onChanged: (_) => ubahBaris(() {}),
+                            ),
+                            lebarField,
+                          ),
+                          bidangInput(
+                            DropdownButtonFormField<String>(
+                              value: baris.alasan,
+                              isExpanded: true,
+                              decoration: AppFormStyle.fieldDecoration(
+                                context,
+                                labelText: 'Alasan',
+                                isDense: true,
+                              ),
+                              items: _daftarAlasan
+                                  .map((a) => DropdownMenuItem(
+                                        value: a,
+                                        child: Text(
+                                          a,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => ubahBaris(
+                                  () => baris.alasan = v ?? baris.alasan),
+                            ),
+                            lebarField,
+                          ),
+                          bidangInput(
+                            DropdownButtonFormField<String>(
+                              value: baris.kondisi,
+                              isExpanded: true,
+                              decoration: AppFormStyle.fieldDecoration(
+                                context,
+                                labelText: 'Kondisi Barang',
+                                isDense: true,
+                              ),
+                              items: _daftarKondisi
+                                  .map((k) => DropdownMenuItem(
+                                        value: k,
+                                        child: Text(
+                                          k,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => ubahBaris(
+                                  () => baris.kondisi = v ?? baris.kondisi),
+                            ),
+                            lebarField,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.latarLembut(statusColor),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(statusIcon, size: 18, color: statusColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            baris.kembalikanKeStok
+                                ? 'Stok akan dikembalikan.'
+                                : 'Stok tidak dikembalikan karena kondisi rusak.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Barang ini tidak disertakan dalam retur.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondaryOf(context),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _TabRiwayatRetur extends StatefulWidget {
   const _TabRiwayatRetur();
   @override
   State<_TabRiwayatRetur> createState() => _TabRiwayatReturState();
+}
+
+class _TabelTransaksiRetur extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final ValueChanged<Map<String, dynamic>> onPilih;
+  final String emptyText;
+
+  const _TabelTransaksiRetur({
+    required this.data,
+    required this.onPilih,
+    required this.emptyText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDataTable(
+      minWidth: 860,
+      emptyText: emptyText,
+      columns: const [
+        AppTableColumn('Nomor Nota', flex: 4),
+        AppTableColumn('Tanggal', flex: 2),
+        AppTableColumn('Pelanggan', flex: 2),
+        AppTableColumn('Kasir', flex: 2),
+        AppTableColumn('Total', flex: 2, align: TextAlign.right),
+      ],
+      rows: data
+          .map((r) => AppTableRowData(
+                onTap: () => onPilih(r),
+                cells: [
+                  AppTableCell.text('${r['nomorNota']}', flex: 4),
+                  AppTableCell.text('${r['waktu']}', flex: 2),
+                  AppTableCell.text('${r['pembeli'] ?? 'Umum'}', flex: 2),
+                  AppTableCell.text('${r['kasir'] ?? '-'}', flex: 2),
+                  AppTableCell.text(
+                    _formatRupiah.format(r['totalBiaya'] ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimaryOf(context),
+                    ),
+                  ),
+                ],
+              ))
+          .toList(),
+    );
+  }
 }
 
 class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
@@ -568,9 +822,10 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       await ApiClient.instance.aksi('retur_penjualan_hapus', {'id': r['id']});
       await _muat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -605,20 +860,20 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
                   controller: qtyController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                      labelText: 'Qty', border: OutlineInputBorder())),
+                  decoration: AppFormStyle.fieldDecoration(context,
+                      labelText: 'Qty', isDense: true)),
               const SizedBox(height: 12),
               TextField(
                   controller: hargaController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                      labelText: 'Harga Satuan', border: OutlineInputBorder())),
+                  decoration: AppFormStyle.fieldDecoration(context,
+                      labelText: 'Harga Satuan', isDense: true)),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: alasan,
-                decoration: const InputDecoration(
-                    labelText: 'Alasan', border: OutlineInputBorder()),
+                decoration: AppFormStyle.fieldDecoration(context,
+                    labelText: 'Alasan', isDense: true),
                 items: _daftarAlasan
                     .map((a) => DropdownMenuItem(value: a, child: Text(a)))
                     .toList(),
@@ -627,8 +882,8 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: kondisi,
-                decoration: const InputDecoration(
-                    labelText: 'Kondisi Barang', border: OutlineInputBorder()),
+                decoration: AppFormStyle.fieldDecoration(context,
+                    labelText: 'Kondisi Barang', isDense: true),
                 items: _daftarKondisi
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),
@@ -637,9 +892,10 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: FilledButton.icon(
                     onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Simpan Perubahan')),
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Simpan Perubahan')),
               ),
               const SizedBox(height: 16),
             ],
@@ -660,9 +916,10 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       });
       await _muat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -706,13 +963,9 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            decoration: const InputDecoration(
-                hintText: 'Cari produk/nomor nota/pembeli...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true),
-            onSubmitted: _terapkanFilter,
+          AppSearchField(
+            hintText: 'Cari produk / nomor nota / pelanggan...',
+            onChanged: _terapkanFilter,
           ),
           const SizedBox(height: 12),
           if (_memuat)
@@ -720,88 +973,119 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
                 padding: EdgeInsets.symmetric(vertical: 60),
                 child: Center(child: CircularProgressIndicator()))
           else if (_error != null)
-            Center(
-                child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    child: Text(_error!)))
-          else if (_data.isEmpty)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(child: Text('Belum ada riwayat retur.')))
-          else ...[
-            ..._data.map((r) => Card(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  child: ListTile(
-                    title: Text('${r['namaProduk']}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    subtitle: Text(
-                        '${r['waktu']} · ${r['kodeTransaksiAsal']} · ${r['namaPembeli']}\n${r['alasan']} · ${r['kondisiBarang']} · ${r['metodePengembalian']}'),
-                    isThreeLine: true,
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('${r['qty']}x',
-                            style: const TextStyle(fontSize: 12)),
-                        Text(_formatRupiah.format(r['totalNilai'] ?? 0),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                    onTap: Sesi.instance.bolehKelola
-                        ? () => showModalBottomSheet(
-                              context: context,
-                              builder: (_) => SafeArea(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ListTile(
-                                        leading:
-                                            const Icon(Icons.edit_outlined),
-                                        title: const Text('Ubah'),
-                                        onTap: () {
-                                          Navigator.of(context).pop();
-                                          _ubah(r);
-                                        }),
-                                    ListTile(
-                                      leading: const Icon(Icons.delete_outline,
-                                          color: Colors.red),
-                                      title: const Text('Hapus'),
-                                      onTap: () {
-                                        Navigator.of(context).pop();
-                                        _hapus(r);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                        : null,
-                  ),
-                )),
-            if (_total > _pageSize)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: AppInfoBanner(
+                icon: Icons.error_outline,
+                color: AppColors.danger,
+                text: _error!,
+              ),
+            )
+          else
+            _TabelRiwayatRetur(
+              data: _data,
+              bolehKelola: Sesi.instance.bolehKelola,
+              onUbah: _ubah,
+              onHapus: _hapus,
+              pagination: _total > _pageSize
+                  ? AppTablePagination(
+                      halaman: _halaman,
+                      totalHalaman: _totalHalaman,
+                      totalData: _total,
+                      labelData: 'retur',
+                      onSebelumnya:
+                          _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                      onBerikutnya: _halaman < _totalHalaman
+                          ? () => _pindah(_halaman + 1)
+                          : null,
+                    )
+                  : null,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabelRiwayatRetur extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final bool bolehKelola;
+  final ValueChanged<Map<String, dynamic>> onUbah;
+  final ValueChanged<Map<String, dynamic>> onHapus;
+  final AppTablePagination? pagination;
+
+  const _TabelRiwayatRetur({
+    required this.data,
+    required this.bolehKelola,
+    required this.onUbah,
+    required this.onHapus,
+    this.pagination,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDataTable(
+      minWidth: bolehKelola ? 1120 : 1040,
+      emptyText: 'Belum ada riwayat retur.',
+      pagination: pagination,
+      columns: [
+        const AppTableColumn('Waktu', flex: 2),
+        const AppTableColumn('Nomor Nota', flex: 3),
+        const AppTableColumn('Produk', flex: 3),
+        const AppTableColumn('Pelanggan', flex: 2),
+        const AppTableColumn('Qty', flex: 1, align: TextAlign.center),
+        const AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+        const AppTableColumn('Kondisi', flex: 2),
+        const AppTableColumn('Metode', flex: 2),
+        if (bolehKelola)
+          const AppTableColumn('Aksi', width: 92, align: TextAlign.center),
+      ],
+      rows: data.map((r) {
+        final totalNilai = (r['totalNilai'] as num?) ??
+            (((r['qty'] as num?) ?? 0) * ((r['hargaSatuan'] as num?) ?? 0));
+        return AppTableRowData(
+          cells: [
+            AppTableCell.text('${r['waktu']}', flex: 2),
+            AppTableCell.text('${r['kodeTransaksiAsal']}', flex: 3),
+            AppTableCell.text('${r['namaProduk']}', flex: 3),
+            AppTableCell.text('${r['namaPembeli'] ?? 'Umum'}', flex: 2),
+            AppTableCell.text('${r['qty']}x', flex: 1, align: TextAlign.center),
+            AppTableCell.text(
+              _formatRupiah.format(totalNilai),
+              flex: 2,
+              align: TextAlign.right,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimaryOf(context),
+              ),
+            ),
+            AppTableCell.text('${r['kondisiBarang']}', flex: 2),
+            AppTableCell.text('${r['metodePengembalian']}', flex: 2),
+            if (bolehKelola)
+              AppTableCell(
+                width: 92,
+                align: TextAlign.center,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _halaman > 1 ? () => _pindah(_halaman - 1) : null),
-                    Text('Halaman $_halaman / $_totalHalaman'),
+                      tooltip: 'Ubah',
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      color: AppColors.primary,
+                      onPressed: () => onUbah(r),
+                    ),
                     IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: _halaman < _totalHalaman
-                            ? () => _pindah(_halaman + 1)
-                            : null),
+                      tooltip: 'Hapus',
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      color: AppColors.danger,
+                      onPressed: () => onHapus(r),
+                    ),
                   ],
                 ),
               ),
           ],
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 }

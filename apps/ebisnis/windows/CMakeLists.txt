@@ -55,6 +55,15 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# The printing plugin downloads PDFium into the local build directory, then
+# PDFiumConfig.cmake uses find_* calls whose results are cached by CMake. If a
+# previous configure cached a machine-specific path (for example an installed
+# app under Program Files), the install step later tries to copy that stale
+# dll and fails. Clear those entries before plugins are configured so PDFium is
+# resolved from the freshly downloaded build copy.
+unset(PDFium_LIBRARY CACHE)
+unset(PDFium_IMPLIB CACHE)
+unset(PDFium_INCLUDE_DIR CACHE)
 include(flutter/generated_plugins.cmake)
 
 

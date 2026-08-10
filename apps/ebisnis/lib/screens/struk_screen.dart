@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
+import 'package:barcode/barcode.dart' as bc;
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -225,8 +227,35 @@ class StrukScreen extends StatelessWidget {
               style: const pw.TextStyle(fontSize: 8),
             ),
           ],
+          pw.SizedBox(height: 8),
+          _barcodePdf(),
         ],
       ),
+    );
+  }
+
+  pw.Widget _barcodePdf() {
+    final data = kode.trim();
+    if (data.isEmpty) return pw.SizedBox();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Center(
+          child: pw.BarcodeWidget(
+            barcode: bc.Barcode.code128(),
+            data: data,
+            drawText: false,
+            width: 150,
+            height: 34,
+          ),
+        ),
+        pw.SizedBox(height: 3),
+        pw.Text(
+          data,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 7),
+        ),
+      ],
     );
   }
 
@@ -575,6 +604,8 @@ class _StrukPreview extends StatelessWidget {
                   style: TextStyle(fontSize: 11, color: AppColors.warning),
                 ),
               ],
+              const SizedBox(height: 12),
+              _BarcodeStruk(data: kode),
             ],
           ),
         ),
@@ -631,6 +662,92 @@ class _LogoToko extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _BarcodeStruk extends StatelessWidget {
+  final String data;
+
+  const _BarcodeStruk({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final nilai = data.trim();
+    if (nilai.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        SizedBox(
+          width: 220,
+          height: 46,
+          child: CustomPaint(
+            painter: _BarcodePainter(nilai),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          nilai,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.black,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BarcodePainter extends CustomPainter {
+  final String data;
+
+  const _BarcodePainter(this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.black;
+    try {
+      final barcode = bc.Barcode.code128();
+      final elements = barcode.make(
+        data,
+        width: size.width,
+        height: size.height,
+        drawText: false,
+      );
+      for (final element in elements) {
+        if (element is bc.BarcodeBar && element.black) {
+          canvas.drawRect(
+            Rect.fromLTWH(
+              element.left,
+              element.top,
+              element.width,
+              element.height,
+            ),
+            paint,
+          );
+        }
+      }
+    } catch (_) {
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'BARCODE',
+          style: TextStyle(color: Colors.black, fontSize: 12),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      )..layout(maxWidth: size.width);
+      textPainter.paint(
+        canvas,
+        Offset(
+          (size.width - textPainter.width) / 2,
+          (size.height - textPainter.height) / 2,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BarcodePainter oldDelegate) {
+    return oldDelegate.data != data;
   }
 }
 
