@@ -157,6 +157,13 @@ class ItemEkstra {
 /// [ekstra] diisi lewat picker "Pilih Ekstra" (KasirScreen._tambahKeKeranjang)
 /// saat [produk] punya [Produk.ekstraPilihan] -- kosong (default) utk mayoritas
 /// baris biasa tanpa add-on.
+///
+/// [promoManual]/[promoManualAturanId] (gap-closure "Aktivasi Manual", Fase 2
+/// Stretch) -- diisi KeranjangScreen._terapkanPromoManual saat kasir sengaja
+/// memilih satu AturanDiskon lewat picker "Promo Manual" (BUKAN hasil
+/// auto-apply biasa). [promoManual]=true menggerbangi _evaluasiDiskon
+/// (debounced auto-recalc tiap perubahan keranjang) supaya baris ini TIDAK
+/// ditimpa balik ke mode auto-apply -- lihat JavaDoc _evaluasiDiskon.
 class ItemKeranjang {
   final Produk produk;
   int jumlah;
@@ -164,13 +171,17 @@ class ItemKeranjang {
   double cashback;
   int? aturanDiskonId;
   final List<ItemEkstra> ekstra;
+  bool promoManual;
+  int? promoManualAturanId;
   ItemKeranjang(
       {required this.produk,
       this.jumlah = 1,
       this.diskon = 0,
       this.cashback = 0,
       this.aturanDiskonId,
-      this.ekstra = const []});
+      this.ekstra = const [],
+      this.promoManual = false,
+      this.promoManualAturanId});
 
   /// Harga ekstra dijumlahkan PER UNIT produk induk (padanan cara server
   /// mengalikan `ekstra` dgn qty induk saat checkout, lihat JavaDoc

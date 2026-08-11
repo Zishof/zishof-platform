@@ -54,6 +54,21 @@ class _KasirScreenState extends State<KasirScreen> {
 
   final List<ItemKeranjang> _keranjang = [];
 
+  /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
+  /// produkId->nominal diskon dari evaluasi PUBLIK (`diskon_evaluasi` TANPA
+  /// `id_member`, lihat JavaDoc [_evaluasiHargaCoret]). Hanya diisi utk
+  /// produk dgn `diskon > 0` (potongan langsung nyata) -- produk dgn
+  /// `cashback > 0` saja SENGAJA tidak masuk sini krn harga stiker tidak
+  /// berubah. Dibaca [_KartuProduk] lewat `_diskonKatalog[produk.id]`.
+  Map<int, double> _diskonKatalog = {};
+  Timer? _debounceHargaCoret;
+
+  /// Batas jumlah produk yg dievaluasi sekali panggil -- grid Kasir TIDAK
+  /// paginasi sungguhan (GridView.builder lazy-build semua `_produkTersaring`),
+  /// jadi batas ini berperan sbg pengganti "halaman aktif" spy panggilan
+  /// tetap murah (spec: jangan evaluasi seluruh katalog sekaligus).
+  static const _batasPreviewHargaCoret = 60;
+
   /// null = belum diketahui (masih memeriksa), false = kas tertutup (blokir
   /// layar), true = kas terbuka (boleh jualan) -- lihat _periksaSesiKas &
   /// _OverlayBukaKas. Sengaja gerbang KERAS spt versi Electron: kasir TIDAK
@@ -116,6 +131,7 @@ class _KasirScreenState extends State<KasirScreen> {
 
   @override
   void dispose() {
+    _debounceHargaCoret?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
@@ -135,6 +151,7 @@ class _KasirScreenState extends State<KasirScreen> {
       if (cache.isNotEmpty) {
         setStateIfMounted(
             () => _semuaProduk = cache.map(_produkDariCache).toList());
+        _jadwalkanEvaluasiHargaCoret();
       }
     } catch (_) {
       // cache lokal gagal dibaca (mis. pertama kali install) -- lanjut ke jalur server saja.
@@ -380,6 +397,7 @@ class _KasirScreenState extends State<KasirScreen> {
           _semuaProduk = produk;
           _kategori = kategori;
         });
+        _jadwalkanEvaluasiHargaCoret();
       }
     } catch (e) {
       final off = e is ApiException && e.offline;
@@ -653,6 +671,56 @@ class _KasirScreenState extends State<KasirScreen> {
     }).toList();
   }
 
+  /// Debounce 300ms (padanan pola [PanelKeranjang._jadwalkanEvaluasiDiskon])
+  /// -- dipanggil tiap kali himpunan produk yg TERLIHAT di grid bisa berubah
+  /// (katalog baru dimuat/disinkron, kategori diganti, kata kunci diketik)
+  /// supaya tidak memanggil server di setiap ketukan/klik.
+  void _jadwalkanEvaluasiHargaCoret() {
+    _debounceHargaCoret?.cancel();
+    _debounceHargaCoret =
+        Timer(const Duration(milliseconds: 300), _evaluasiHargaCoret);
+  }
+
+  /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- evaluasi
+  /// `diskon_evaluasi` PUBLIK (SENGAJA tanpa `id_member` -- belum ada member
+  /// dipilih di tahap lihat-katalog, jadi hanya promo `berlakuSemuaMember=true`
+  /// yg akan preview benar di sini; promo khusus member tetap menunggu
+  /// keranjang+member spt perilaku lama, TIDAK berubah) HANYA utk produk yg
+  /// sedang terlihat (dibatasi [_batasPreviewHargaCoret], bukan seluruh
+  /// katalog) supaya panggilan tetap murah. Gagal/offline -> lewati diam-diam
+  /// (murni enhancement visual di atas katalog offline-first yg sudah
+  /// berjalan, BUKAN alasan memblokir/mengganggu render katalog).
+  Future<void> _evaluasiHargaCoret() async {
+    final tokoId = Sesi.instance.tokoId;
+    if (tokoId == null) return;
+    final tampil = _produkTersaring.take(_batasPreviewHargaCoret).toList();
+    if (tampil.isEmpty) {
+      if (_diskonKatalog.isNotEmpty) {
+        setStateIfMounted(() => _diskonKatalog = {});
+      }
+      return;
+    }
+    try {
+      final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
+        'toko_id': tokoId,
+        'items': tampil
+            .map((p) => {'id': p.id, 'harga': p.hargaJual, 'jumlah': 1})
+            .toList(),
+      });
+      final items = (hasil['items'] as List?) ?? [];
+      if (!mounted) return;
+      final peta = <int, double>{};
+      for (final it in items) {
+        final m = it as Map<String, dynamic>;
+        final diskon = (m['diskon'] as num?)?.toDouble() ?? 0;
+        if (diskon > 0) peta[m['id'] as int] = diskon;
+      }
+      setStateIfMounted(() => _diskonKatalog = peta);
+    } catch (_) {
+      // Offline/gagal -- biarkan katalog tampil harga normal, bukan error.
+    }
+  }
+
   /// Produk dgn [Produk.ekstraPilihan] wajib lewat picker "Pilih Ekstra"
   /// (checkbox, lihat [_bukaPickerEkstra]) SEBELUM masuk keranjang -- gerbang
   /// dilewati (jalur lama persis, tanpa perubahan) utk mayoritas produk tanpa
@@ -678,6 +746,7 @@ class _KasirScreenState extends State<KasirScreen> {
     });
     _siarkanKeranjangKasir();
     _jadwalkanFokusCariItem();
+    _jadwalkanEvaluasiHargaCoret();
   }
 
   /// Alur "Pilih Ekstra" -- buka bottom sheet checkbox (batal = tidak ada apa
@@ -704,6 +773,7 @@ class _KasirScreenState extends State<KasirScreen> {
     });
     _siarkanKeranjangKasir();
     _jadwalkanFokusCariItem();
+    _jadwalkanEvaluasiHargaCoret();
   }
 
   /// Resolusi [Produk.ekstraPilihan] jadi baris nama/harga siap tampil lewat
@@ -1399,7 +1469,10 @@ class _KasirScreenState extends State<KasirScreen> {
             borderRadius: BorderRadius.all(Radius.circular(10))),
         isDense: true,
       ),
-      onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
+      onChanged: (v) {
+        setStateIfMounted(() => _kataKunci = v);
+        _jadwalkanEvaluasiHargaCoret();
+      },
       onSubmitted: _submitPencarian,
     );
   }
@@ -1456,8 +1529,10 @@ class _KasirScreenState extends State<KasirScreen> {
                 child: ChoiceChip(
                   label: const Text('Semua'),
                   selected: _kategoriTerpilih == null,
-                  onSelected: (_) =>
-                      setStateIfMounted(() => _kategoriTerpilih = null),
+                  onSelected: (_) {
+                    setStateIfMounted(() => _kategoriTerpilih = null);
+                    _jadwalkanEvaluasiHargaCoret();
+                  },
                 ),
               ),
               ..._kategori.map((k) => Padding(
@@ -1465,8 +1540,10 @@ class _KasirScreenState extends State<KasirScreen> {
                     child: ChoiceChip(
                       label: Text(k.nama),
                       selected: _kategoriTerpilih == k.id,
-                      onSelected: (_) =>
-                          setStateIfMounted(() => _kategoriTerpilih = k.id),
+                      onSelected: (_) {
+                        setStateIfMounted(() => _kategoriTerpilih = k.id);
+                        _jadwalkanEvaluasiHargaCoret();
+                      },
                     ),
                   )),
             ],
@@ -1494,6 +1571,7 @@ class _KasirScreenState extends State<KasirScreen> {
                 itemBuilder: (context, i) => _KartuProduk(
                   produk: _produkTersaring[i],
                   onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
+                  diskon: _diskonKatalog[_produkTersaring[i].id],
                 ),
               );
             },
@@ -1756,7 +1834,15 @@ class _BarisHasilPencarian extends StatelessWidget {
 class _KartuProduk extends StatelessWidget {
   final Produk produk;
   final VoidCallback onTap;
-  const _KartuProduk({required this.produk, required this.onTap});
+
+  /// "Harga Coret" (gap-closure Fase 2 Stretch) -- nominal diskon dari preview
+  /// katalog PUBLIK ([_KasirScreenState._evaluasiHargaCoret]), `null`/`0` utk
+  /// mayoritas produk tanpa promo publik aktif (rendering harga tunggal lama,
+  /// TIDAK berubah). Hanya diisi pemanggil utk `diskon > 0` (lihat filter di
+  /// [_KasirScreenState._evaluasiHargaCoret]) -- kartu ini sendiri tetap jaga
+  /// gerbang `> 0` supaya aman dipanggil apa adanya.
+  final double? diskon;
+  const _KartuProduk({required this.produk, required this.onTap, this.diskon});
 
   @override
   Widget build(BuildContext context) {
@@ -1765,6 +1851,8 @@ class _KartuProduk extends StatelessWidget {
     final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty
         ? 0
         : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
+    final adaPromo = (diskon ?? 0) > 0;
+    final hargaPromo = adaPromo ? produk.hargaJual - diskon! : produk.hargaJual;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -1859,11 +1947,37 @@ class _KartuProduk extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                            child: Text(_formatRupiah.format(produk.hargaJual),
-                                style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13))),
+                            child: adaPromo
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                          _formatRupiah
+                                              .format(produk.hargaJual),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: AppColors
+                                                  .textSecondaryOf(context),
+                                              decoration:
+                                                  TextDecoration.lineThrough,
+                                              fontSize: 11)),
+                                      Text(_formatRupiah.format(hargaPromo),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              color: AppColors.danger,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13)),
+                                    ],
+                                  )
+                                : Text(_formatRupiah.format(produk.hargaJual),
+                                    style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13))),
                         Container(
                           width: 26,
                           height: 26,
