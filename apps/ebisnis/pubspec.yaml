@@ -108,6 +108,7 @@ flutter:
     - assets/images/ebisnis/icon.png
     - assets/images/albahjah/icon.png
     - assets/images/inventory_sales/icon.png
+    - assets/images/apotik/icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

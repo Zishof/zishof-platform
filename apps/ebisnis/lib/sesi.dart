@@ -40,6 +40,15 @@ class Sesi {
   Map<String, bool> aksesMenu = {};
   bool bolehMenu(String kunci) => aksesMenu[kunci] ?? true;
 
+  /// Gerbang menu KUNCI VARIAN BARU (apotik_/emedik_/kunci fail-closed lain di
+  /// `aksesMenu`) -- KEBALIKAN [bolehMenu]: kunci hilang = TIDAK boleh.
+  /// Padanan server: `EbisnisMenuKatalog.KUNCI_DEFAULT_NONAKTIF` (PosApi selalu
+  /// mengirim kunci itu eksplisit; `?? false` di sini menjaga sisi klien bila
+  /// server LAMA belum mengirimnya -- jangan pernah pakai [bolehMenu] untuk
+  /// kunci varian baru). Admin selalu boleh.
+  bool bolehMenuVarianBaru(String kunci) =>
+      isAdmin || (aksesMenu[kunci] ?? false);
+
   // ---------------------------------------------------------------------------
   // Konteks aktor varian "eBisnis Inventory & Sales" -- dari blok ADITIF
   // `konfigurasi.aktorInventorySales` (server: EbisnisActorContextResolver,

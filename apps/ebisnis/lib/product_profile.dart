@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'app_variant.dart';
 import 'screens/kasir_screen.dart';
 import 'screens/inventory_sales/beranda_is_screen.dart';
+import 'screens/apotik/beranda_apotik_screen.dart';
 import 'sesi.dart';
 
 /// Grup fitur yang bisa diaktifkan per produk -- gerbang level VARIAN (bukan
@@ -14,6 +15,7 @@ class FiturGrup {
 
   static const pos = 'pos';
   static const inventorySales = 'inventory_sales';
+  static const apotik = 'apotik';
 }
 
 /// <h3>Profil produk -- SATU deskriptor per varian build (PERINTAH_MASTER §4.1).</h3>
@@ -72,6 +74,21 @@ class AppProductProfile {
           fiturGrup: const {FiturGrup.pos, FiturGrup.inventorySales},
         );
 
+  /// Varian "POS Apotik" (eFarmasi, JALAN 1: backend Java AIS + modul SIRS).
+  /// FiturGrup.pos ikut dirakit: cangkang/menu POS existing tetap berfungsi
+  /// untuk Admin -- role "apotik" hasil seed server memang mematikan seluruh
+  /// menu POS lama lewat aksesMenu (fail-closed), jadi kasir apotek TIDAK
+  /// melihatnya walau dirakit.
+  const AppProductProfile.apotik()
+      : this._(
+          kode: 'apotik',
+          namaAplikasi: 'eBisnis POS Apotik',
+          namaSidebar: 'POS Apotik',
+          updateAssetKeyword: 'apotik',
+          logoAsset: 'assets/images/apotik/icon.png',
+          fiturGrup: const {FiturGrup.pos, FiturGrup.apotik},
+        );
+
   /// Profil yang cocok dgn `--dart-define=EBISNIS_VARIANT` build ini -- dipakai
   /// `main.dart` (entrypoint default melayani ebisnis & albahjah sekaligus).
   factory AppProductProfile.dariDartDefine() {
@@ -79,6 +96,7 @@ class AppProductProfile {
     if (AppVariant.isInventorySales) {
       return const AppProductProfile.inventorySales();
     }
+    if (AppVariant.isApotik) return const AppProductProfile.apotik();
     return const AppProductProfile.ebisnis();
   }
 
@@ -89,6 +107,8 @@ class AppProductProfile {
 
   bool get isInventorySales => fiturGrup.contains(FiturGrup.inventorySales);
 
+  bool get isApotik => fiturGrup.contains(FiturGrup.apotik);
+
   bool cocokDenganDartDefine() => kode == AppProductProfile.dariDartDefine().kode;
 
   /// Layar pertama setelah login sukses. Varian Inventory & Sales SELALU lewat
@@ -98,14 +118,20 @@ class AppProductProfile {
     if (isInventorySales) {
       return const BerandaInventorySalesScreen();
     }
+    if (isApotik) {
+      return const BerandaApotikScreen();
+    }
     return const KasirScreen();
   }
 
   /// Gerbang menu level-varian (dipanggil `bolehTampilMenu` app_shell) --
-  /// kunci menu khusus Inventory & Sales tidak pernah dirakit ke varian POS.
+  /// kunci menu khusus satu varian tidak pernah dirakit ke varian lain.
   bool bolehMenuVarian(String kunciMenuVarian) {
     if (kunciMenuVarian == FiturGrup.inventorySales) {
       return isInventorySales;
+    }
+    if (kunciMenuVarian == FiturGrup.apotik) {
+      return isApotik;
     }
     return true;
   }

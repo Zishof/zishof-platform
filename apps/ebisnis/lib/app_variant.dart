@@ -15,24 +15,36 @@ class AppVariant {
   /// Windows; entrypoint menggerakkan AppProductProfile runtime).
   static const isInventorySales = kode == 'inventory_sales';
 
+  /// Varian "POS Apotik" (eFarmasi) -- penjualan obat resep/bebas dgn batch-
+  /// kedaluwarsa & obat terkendali; backend Java AIS + modul SIRS (JALAN 1).
+  /// Build: `-t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik`.
+  static const isApotik = kode == 'apotik';
+
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
-      : (isInventorySales ? 'eBisnis Inventory & Sales' : 'eBisnis');
+      : (isInventorySales
+          ? 'eBisnis Inventory & Sales'
+          : (isApotik ? 'eBisnis POS Apotik' : 'eBisnis'));
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
-      : (isInventorySales ? 'Inventory & Sales' : 'eBisnis POS');
-  static const updateAssetKeyword =
-      isAlBahjah ? 'albahjah' : (isInventorySales ? 'inventorysales' : 'ebisnis');
+      : (isInventorySales
+          ? 'Inventory & Sales'
+          : (isApotik ? 'POS Apotik' : 'eBisnis POS'));
+  static const updateAssetKeyword = isAlBahjah
+      ? 'albahjah'
+      : (isInventorySales ? 'inventorysales' : (isApotik ? 'apotik' : 'ebisnis'));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isInventorySales
           ? 'eBisnis Inventory & Sales Flutter'
-          : 'eBisnis Flutter Pilot');
+          : (isApotik ? 'eBisnis POS Apotik Flutter' : 'eBisnis Flutter Pilot'));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isInventorySales
           ? 'assets/images/inventory_sales/icon.png'
-          : 'assets/images/ebisnis/icon.png');
+          : (isApotik
+              ? 'assets/images/apotik/icon.png'
+              : 'assets/images/ebisnis/icon.png'));
 }
