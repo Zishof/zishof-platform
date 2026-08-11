@@ -183,6 +183,8 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                               flex: 1, align: TextAlign.center),
                           const AppTableColumn('Hutang',
                               flex: 1, align: TextAlign.center),
+                          const AppTableColumn('Kembalian',
+                              flex: 1, align: TextAlign.center),
                           const AppTableColumn('Status',
                               flex: 1, align: TextAlign.center),
                           AppTableColumn('Aksi',
@@ -193,6 +195,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                           final aktif = c['aktif'] == true;
                           final memotong = c['memotongDeposit'] == true;
                           final hutang = c['masukSebagaiHutang'] == true;
+                          final kembalian = c['adaKembalian'] == true;
                           return AppTableRowData(
                             onTap: Sesi.instance.bolehKelola
                                 ? () => _bukaForm(cara: c)
@@ -217,6 +220,16 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                                   label: hutang ? 'Ya' : 'Tidak',
                                   warna: hutang
                                       ? AppColors.danger
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                              AppTableCell(
+                                flex: 1,
+                                align: TextAlign.center,
+                                child: StatusPill(
+                                  label: kembalian ? 'Ya' : 'Tidak',
+                                  warna: kembalian
+                                      ? AppColors.success
                                       : AppColors.textSecondary,
                                 ),
                               ),
@@ -296,9 +309,15 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
   bool _online = false;
   bool _memotongDeposit = false;
   bool _masukSebagaiHutang = false;
+  bool _adaKembalian = false;
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
+
+  // Gap-closure "Ada Kembalian" -- selama admin belum menyentuh switch-nya sendiri di form Tambah,
+  // ikuti field Nama secara live (ilike "tunai" -> Ya). Sekali disentuh manual (atau form Ubah
+  // dibuka dgn data existing), berhenti auto-mengikuti -- pola sama dgn JSP/Electron.
+  bool _kembalianDisentuhManual = false;
 
   @override
   void initState() {
@@ -311,7 +330,21 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
     _online = c?['online'] == true;
     _memotongDeposit = c?['memotongDeposit'] == true;
     _masukSebagaiHutang = c?['masukSebagaiHutang'] == true;
+    if (c == null) {
+      _adaKembalian = false; // nama masih kosong -- mengikuti field Nama begitu diketik
+    } else {
+      _adaKembalian = c['adaKembalian'] == true; // nilai final dari server (sudah di-COALESCE)
+      _kembalianDisentuhManual = true;
+    }
     _aktif = c == null ? true : (c['aktif'] != false);
+    _nama.addListener(() {
+      if (!_kembalianDisentuhManual) {
+        final ikutTunai = _nama.text.trim().toLowerCase().contains('tunai');
+        if (ikutTunai != _adaKembalian) {
+          setStateIfMounted(() => _adaKembalian = ikutTunai);
+        }
+      }
+    });
   }
 
   @override
@@ -338,6 +371,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
         'online': _online,
         'memotongDeposit': _memotongDeposit,
         'masukSebagaiHutang': _masukSebagaiHutang,
+        'adaKembalian': _adaKembalian,
         'aktif': _aktif,
       });
       if (mounted) Navigator.of(context).pop(true);
@@ -411,6 +445,21 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
                     value: _masukSebagaiHutang,
                     onChanged: (v) =>
                         setStateIfMounted(() => _masukSebagaiHutang = v),
+                  ),
+                ],
+              ),
+              AppFormSection(
+                judul: 'Kembalian',
+                children: [
+                  AppFormSwitchTile(
+                    title: 'Ada Kembalian',
+                    subtitle:
+                        'Aktif = kasir boleh menerima uang lebih dari total lalu mengembalikan sisanya (spt Tunai). Nonaktif = pembayaran wajib pas, tanpa kembalian (spt QRIS/Transfer/Kasbon).',
+                    value: _adaKembalian,
+                    onChanged: (v) => setStateIfMounted(() {
+                      _adaKembalian = v;
+                      _kembalianDisentuhManual = true;
+                    }),
                   ),
                 ],
               ),

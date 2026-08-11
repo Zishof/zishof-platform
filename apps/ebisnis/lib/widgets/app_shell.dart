@@ -15,9 +15,11 @@ import '../screens/pesanan_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/produk_screen.dart';
 import '../screens/stok_opname_screen.dart';
+import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/cara_bayar_screen.dart';
+import '../screens/jenis_produk_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -48,7 +50,9 @@ enum MenuEBisnis {
   pesanan,
   anggota,
   produk,
+  jenisProduk,
   stokOpname,
+  mutasiAntarOutlet,
   kulakan,
   diskon,
   caraBayar,
@@ -56,6 +60,7 @@ enum MenuEBisnis {
   riwayatPenjualan,
   laporanTransaksi,
   laporanLaporan,
+  laporanKeuangan,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -86,7 +91,9 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.pesanan: 'pesanan',
   MenuEBisnis.anggota: 'anggota',
   MenuEBisnis.produk: 'produk',
+  MenuEBisnis.jenisProduk: 'produk',
   MenuEBisnis.stokOpname: 'stokopname',
+  MenuEBisnis.mutasiAntarOutlet: 'mutasistokantaroutlet',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.diskon: 'diskon',
   MenuEBisnis.caraBayar: 'pembayaran',
@@ -94,6 +101,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.riwayatPenjualan: 'riwayatpenjualan',
   MenuEBisnis.laporanTransaksi: 'laporantransaksi',
   MenuEBisnis.laporanLaporan: 'laporan',
+  MenuEBisnis.laporanKeuangan: 'laporankeuangan',
   MenuEBisnis.riwayatSinkron: 'riwayatsinkronisasi',
   MenuEBisnis.logError: 'logerror',
   MenuEBisnis.konfigurasi: 'konfigurasi',
@@ -116,9 +124,15 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunAnggota),
   _ItemMenuShell(MenuEBisnis.produk, Icons.inventory_2_outlined, 'Produk',
       builder: _bangunProduk),
+  _ItemMenuShell(MenuEBisnis.jenisProduk, Icons.category_outlined,
+      'Jenis Produk',
+      builder: _bangunJenisProduk),
   _ItemMenuShell(
       MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname',
       builder: _bangunStok),
+  _ItemMenuShell(MenuEBisnis.mutasiAntarOutlet, Icons.compare_arrows,
+      'Mutasi Antar Outlet',
+      builder: _bangunMutasiAntarOutlet),
   _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan',
       builder: _bangunKulakan),
   _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon',
@@ -138,6 +152,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan',
       builder: _bangunLaporanLaporan),
+  _ItemMenuShell(MenuEBisnis.laporanKeuangan, Icons.account_balance_outlined,
+      'Laporan Keuangan',
+      builder: _bangunLaporanKeuangan),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -165,7 +182,9 @@ const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Master Data', [
     MenuEBisnis.anggota,
     MenuEBisnis.produk,
+    MenuEBisnis.jenisProduk,
     MenuEBisnis.stokOpname,
+    MenuEBisnis.mutasiAntarOutlet,
     MenuEBisnis.kulakan,
     MenuEBisnis.diskon,
     MenuEBisnis.caraBayar,
@@ -175,6 +194,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.riwayatPenjualan,
     MenuEBisnis.laporanTransaksi,
     MenuEBisnis.laporanLaporan,
+    MenuEBisnis.laporanKeuangan,
   ]),
   _GrupMenuShell('Sistem', [
     MenuEBisnis.riwayatSinkron,
@@ -189,7 +209,10 @@ Widget _bangunRingkasan(BuildContext c) => const RingkasanScreen();
 Widget _bangunPesanan(BuildContext c) => const PesananScreen();
 Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
 Widget _bangunProduk(BuildContext c) => const ProdukScreen();
+Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
+Widget _bangunMutasiAntarOutlet(BuildContext c) =>
+    const MutasiAntarOutletScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
 Widget _bangunCaraBayar(BuildContext c) => const CaraBayarScreen();
@@ -199,6 +222,12 @@ Widget _bangunRiwayatPenjualan(BuildContext c) =>
 Widget _bangunLaporanTransaksi(BuildContext c) =>
     const LaporanTransaksiScreen();
 Widget _bangunLaporanLaporan(BuildContext c) => const LaporanScreen();
+Widget _bangunLaporanKeuangan(BuildContext c) => const LaporanScreen(
+      aksiKatalog: 'laporan_keuangan_katalog',
+      menuAktif: MenuEBisnis.laporanKeuangan,
+      judul: 'Laporan Keuangan',
+      subjudul: 'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
+    );
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -249,8 +278,12 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Customer/Anggota';
     case MenuEBisnis.produk:
       return 'Produk';
+    case MenuEBisnis.jenisProduk:
+      return 'Jenis Produk';
     case MenuEBisnis.stokOpname:
       return 'Stok Opname';
+    case MenuEBisnis.mutasiAntarOutlet:
+      return 'Mutasi Antar Outlet';
     case MenuEBisnis.kulakan:
       return 'Kulakan';
     case MenuEBisnis.diskon:
@@ -265,6 +298,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Laporan Transaksi';
     case MenuEBisnis.laporanLaporan:
       return 'Laporan-Laporan';
+    case MenuEBisnis.laporanKeuangan:
+      return 'Laporan Keuangan';
     case MenuEBisnis.riwayatSinkron:
       return 'Riwayat Sinkronisasi';
     case MenuEBisnis.logError:
@@ -290,8 +325,12 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.anggota;
     case 'Produk':
       return MenuEBisnis.produk;
+    case 'Jenis Produk':
+      return MenuEBisnis.jenisProduk;
     case 'Stok Opname':
       return MenuEBisnis.stokOpname;
+    case 'Mutasi Antar Outlet':
+      return MenuEBisnis.mutasiAntarOutlet;
     case 'Kulakan':
       return MenuEBisnis.kulakan;
     case 'Aturan Diskon':
@@ -306,6 +345,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.laporanTransaksi;
     case 'Laporan-Laporan':
       return MenuEBisnis.laporanLaporan;
+    case 'Laporan Keuangan':
+      return MenuEBisnis.laporanKeuangan;
     case 'Riwayat Sinkronisasi':
       return MenuEBisnis.riwayatSinkron;
     case 'Log Error':

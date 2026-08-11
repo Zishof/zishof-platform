@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../parse_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -907,9 +908,9 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
     try {
       await ApiClient.instance.aksi('retur_penjualan_ubah', {
         'id': r['id'],
-        'qty': double.tryParse(qtyController.text) ?? r['qty'],
+        'qty': parseDesimal(qtyController.text) ?? r['qty'],
         'harga_satuan':
-            double.tryParse(hargaController.text) ?? r['hargaSatuan'],
+            parseDesimal(hargaController.text) ?? r['hargaSatuan'],
         'alasan': alasan,
         'kondisi_barang': kondisi,
         'kembalikan_ke_stok': !kondisi.toLowerCase().contains('rusak'),

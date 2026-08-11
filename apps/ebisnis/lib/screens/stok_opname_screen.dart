@@ -1,6 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:core_hw/core_hw.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -42,12 +49,163 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
     super.dispose();
   }
 
+  /// "Unduh Excel" (gap-closure, padanan tombol yg sudah ada di JSP
+  /// `kantin/stok/index.jsp` -- lihat JavaDoc server `KantinHelper.soEksporExcel`).
+  /// BEDA dari riwayat hari ini yg tampil di tab Input Opname -- ini SELURUH
+  /// riwayat toko, bukan cuma hari ini, supaya unduhan berguna sbg arsip.
+  Future<void> _eksporExcel() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('so_ekspor_excel', {});
+      final b64 = hasil['fileBase64'] as String?;
+      if (b64 == null || b64.isEmpty) {
+        throw Exception('Server tidak mengembalikan berkas.');
+      }
+      final bytes = base64Decode(b64);
+      final namaFile = (hasil['namaFile'] as String?) ?? 'StokOpname.xlsx';
+      final path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Simpan Stok Opname Excel',
+          fileName: namaFile,
+          bytes: bytes,
+          type: FileType.custom,
+          allowedExtensions: ['xlsx']);
+      if (path == null) return;
+      // Desktop: saveFile hanya mengembalikan path (belum menulis) -- mobile
+      // sudah menulis via `bytes`, tulis ulang di sini idempoten (byte sama)
+      // supaya satu jalur kode bekerja di kedua platform (pola sama produk_screen.dart).
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Stok Opname disimpan: $path')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengekspor: $e')));
+      }
+    }
+  }
+
+  /// "Unggah Excel" (gap-closure) -- SENGAJA insert-only (tiap baris file
+  /// selalu jadi catatan baru lewat `so_impor_excel`/`StokOpnameScanUtil.simpanOpname`
+  /// server, TIDAK PERNAH meng-update baris lama), TANPA layar tinjau terpisah
+  /// (beda dari Impor Excel Produk) krn tak ada risiko "menimpa data lama
+  /// diam-diam" yg perlu ditinjau dulu -- konsisten dgn Electron/JSP.
+  Future<void> _unggahExcel() async {
+    try {
+      final hasilPilih = await FilePicker.platform.pickFiles(
+          type: FileType.custom, allowedExtensions: ['xlsx'], withData: true);
+      if (hasilPilih == null ||
+          hasilPilih.files.isEmpty ||
+          hasilPilih.files.first.bytes == null) {
+        return;
+      }
+      final bytes = hasilPilih.files.first.bytes!;
+      final hasil = await ApiClient.instance
+          .aksi('so_impor_excel', {'file_base64': base64Encode(bytes)});
+      final disimpan = (hasil['disimpan'] as num?)?.toInt() ?? 0;
+      final dilewati = (hasil['dilewati'] as num?)?.toInt() ?? 0;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Tersimpan $disimpan baris${dilewati > 0 ? ', dilewati $dilewati baris (tidak lengkap/gagal)' : ''}.')));
+      setStateIfMounted(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengunggah: $e')));
+      }
+    }
+  }
+
+  /// "Cetak PDF" (gap-closure) -- riwayat HARI INI (sama cakupan dgn kartu
+  /// "Progres Opname Hari Ini"/tab Input Opname), dibangun client-side lewat
+  /// paket `pdf`/`printing` (pola sama `tab_mutasi_tabungan.dart`).
+  Future<void> _cetakPdf() async {
+    try {
+      final hasil =
+          await ApiClient.instance.aksi('so_riwayat', {'limit': 200});
+      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      if (data.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Tidak ada data untuk dicetak.')));
+        }
+        return;
+      }
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: const PdfPageFormat(842, 595.2, marginAll: 24),
+          header: (_) => pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Riwayat Stok Opname Hari Ini',
+                    style: pw.TextStyle(
+                        fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 8),
+              ]),
+          build: (_) => [
+            pw.Table.fromTextArray(
+              headers: const [
+                'Waktu Opname', 'Produk', 'Stok Sistem', 'Stok Fisik', 'Selisih', 'Keterangan'
+              ],
+              data: data.map((r) {
+                final selisih = (r['selisih'] as num?)?.toDouble() ?? 0;
+                final kode = (r['kode'] as String?)?.isNotEmpty == true ? ' [${r['kode']}]' : '';
+                return [
+                  '${r['waktu'] ?? ''}',
+                  '${r['nama'] ?? ''}$kode',
+                  '${r['stokSistem'] ?? 0}',
+                  '${r['stokFisik'] ?? 0}',
+                  '${selisih >= 0 ? '+' : ''}$selisih',
+                  '${r['keterangan'] ?? ''}',
+                ];
+              }).toList(),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              headerStyle:
+                  pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+      await Printing.layoutPdf(
+          onLayout: (_) async => doc.save(), name: 'Stok_Opname.pdf');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mencetak: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tombolAksi = <Widget>[
+      if (Sesi.instance.bolehKelola) ...[
+        HeaderActionButton(
+          icon: Icons.download_outlined,
+          label: 'Unduh Excel',
+          onPressed: _eksporExcel,
+        ),
+        HeaderActionButton(
+          icon: Icons.upload_file_outlined,
+          label: 'Unggah Excel',
+          onPressed: _unggahExcel,
+        ),
+        HeaderActionButton(
+          icon: Icons.picture_as_pdf_outlined,
+          label: 'Cetak PDF',
+          onPressed: _cetakPdf,
+        ),
+      ],
+    ];
     return AppShell(
       menuAktif: MenuEBisnis.stokOpname,
       judul: 'Stok Opname',
       subjudul: 'Kartu mutasi stok & input hasil hitung fisik',
+      aksiHeader: tombolAksi.isEmpty
+          ? null
+          : Wrap(alignment: WrapAlignment.end, runSpacing: 8, children: tombolAksi),
+      actionsAppBar: tombolAksi.isEmpty ? null : tombolAksi,
       scrollable: false,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -42,102 +42,256 @@ class _UkuranTag {
   final String id;
   final String label;
   final String detail;
+  final String kategori;
   final double lebarMm;
   final double tinggiMm;
+  final bool bulat;
+  final bool populer;
   final PdfPageFormat? pageFormat;
 
   const _UkuranTag({
     required this.id,
     required this.label,
     required this.detail,
+    required this.kategori,
     required this.lebarMm,
     required this.tinggiMm,
+    this.bulat = false,
+    this.populer = false,
     this.pageFormat,
   });
 }
+
+const _kategoriRakUtama = 'Rak / Gondola';
+const _kategoriThermalBarcode = 'Thermal / Printer Barcode';
+const _kategoriPriceGun = 'Price Gun Manual (Gulungan)';
+const _kategoriA4Label = 'Lembar A4 (Kertas Label)';
+const _kategoriKemasan = 'Kemasan / Logistik';
+const _kategoriBulatKotak = 'Cetak Bulat & Kotak';
+const _kategoriKertasBesar = 'Kertas Cetak Besar';
 
 const _ukuranRak = [
   _UkuranTag(
       id: 'rak_30x20',
       label: 'Rak Sempit',
       detail: '30 x 20 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 30,
       tinggiMm: 20),
   _UkuranTag(
       id: 'rak_50x30',
       label: 'Rak Gondola',
       detail: '50 x 30 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 50,
       tinggiMm: 30),
   _UkuranTag(
       id: 'rak_60x40',
       label: 'Rak Sedang',
       detail: '60 x 40 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 60,
       tinggiMm: 40),
   _UkuranTag(
       id: 'rak_80x50',
       label: 'Endcap Promo',
       detail: '80 x 50 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 80,
       tinggiMm: 50),
   _UkuranTag(
       id: 'rak_100x70',
       label: 'Hang Tag Besar',
       detail: '100 x 70 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 100,
       tinggiMm: 70),
   _UkuranTag(
       id: 'rak_40x60',
       label: 'Fashion Portrait',
       detail: '40 x 60 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 40,
       tinggiMm: 60),
   _UkuranTag(
       id: 'rak_a6',
       label: 'A6 Promo',
       detail: '105 x 148 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 105,
       tinggiMm: 148),
   _UkuranTag(
       id: 'rak_50x70',
       label: 'Menu Display',
       detail: '50 x 70 mm',
+      kategori: _kategoriRakUtama,
       lebarMm: 50,
       tinggiMm: 70),
+  _UkuranTag(
+      id: 'rak_33x15',
+      label: 'Barcode Rak Standar',
+      detail: '33 x 15 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 33,
+      tinggiMm: 15,
+      populer: true),
+  _UkuranTag(
+      id: 'rak_33x25',
+      label: 'Barcode Rak Lebar',
+      detail: '33 x 25 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 33,
+      tinggiMm: 25),
 ];
 
 const _ukuranProduk = [
   _UkuranTag(
-      id: 'produk_40x20',
-      label: 'Barcode Kecil',
-      detail: '40 x 20 mm',
-      lebarMm: 40,
-      tinggiMm: 20),
-  _UkuranTag(
       id: 'produk_50x25',
       label: 'Barcode Standar',
       detail: '50 x 25 mm',
+      kategori: _kategoriThermalBarcode,
       lebarMm: 50,
-      tinggiMm: 25),
+      tinggiMm: 25,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_40x20',
+      label: 'Barcode Kecil',
+      detail: '40 x 20 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 40,
+      tinggiMm: 20),
   _UkuranTag(
       id: 'produk_60x30',
       label: 'Barcode Besar',
       detail: '60 x 30 mm',
+      kategori: _kategoriThermalBarcode,
       lebarMm: 60,
       tinggiMm: 30),
+  _UkuranTag(
+      id: 'produk_33x15',
+      label: 'Barcode Mini 2 Baris',
+      detail: '33 x 15 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 33,
+      tinggiMm: 15),
+  _UkuranTag(
+      id: 'produk_33x25',
+      label: 'Barcode Mini Lebar',
+      detail: '33 x 25 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 33,
+      tinggiMm: 25),
+  _UkuranTag(
+      id: 'produk_50x30',
+      label: 'Barcode Sedang',
+      detail: '50 x 30 mm',
+      kategori: _kategoriThermalBarcode,
+      lebarMm: 50,
+      tinggiMm: 30),
+  _UkuranTag(
+      id: 'produk_21x12',
+      label: 'Price Gun 1 Baris',
+      detail: '21 x 12 mm - mis. MX-5500',
+      kategori: _kategoriPriceGun,
+      lebarMm: 21,
+      tinggiMm: 12,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_23x16',
+      label: 'Price Gun 2 Baris',
+      detail: '23 x 16 mm - mis. MX-6600',
+      kategori: _kategoriPriceGun,
+      lebarMm: 23,
+      tinggiMm: 16,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_22x12',
+      label: 'Price Gun Varian A',
+      detail: '22 x 12 mm',
+      kategori: _kategoriPriceGun,
+      lebarMm: 22,
+      tinggiMm: 12),
+  _UkuranTag(
+      id: 'produk_26x16',
+      label: 'Price Gun Varian B',
+      detail: '26 x 16 mm',
+      kategori: _kategoriPriceGun,
+      lebarMm: 26,
+      tinggiMm: 16),
   _UkuranTag(
       id: 'produk_52x29',
       label: 'A4 40 Label',
       detail: '52 x 29 mm',
+      kategori: _kategoriA4Label,
       lebarMm: 52,
       tinggiMm: 29),
   _UkuranTag(
       id: 'produk_70x35',
       label: 'A4 24 Label',
       detail: '70 x 35 mm',
+      kategori: _kategoriA4Label,
       lebarMm: 70,
       tinggiMm: 35),
+  _UkuranTag(
+      id: 'produk_100x50',
+      label: 'Label Kemasan',
+      detail: '100 x 50 mm',
+      kategori: _kategoriKemasan,
+      lebarMm: 100,
+      tinggiMm: 50),
+  _UkuranTag(
+      id: 'produk_100x150',
+      label: 'Label Pengiriman',
+      detail: '100 x 150 mm',
+      kategori: _kategoriKemasan,
+      lebarMm: 100,
+      tinggiMm: 150),
+  _UkuranTag(
+      id: 'produk_bulat20',
+      label: 'Bulat Kecil',
+      detail: 'diameter 20 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 20,
+      tinggiMm: 20,
+      bulat: true),
+  _UkuranTag(
+      id: 'produk_bulat25',
+      label: 'Bulat Sedang',
+      detail: 'diameter 25 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 25,
+      tinggiMm: 25,
+      bulat: true),
+  _UkuranTag(
+      id: 'produk_bulat30',
+      label: 'Bulat Besar',
+      detail: 'diameter 30 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 30,
+      tinggiMm: 30,
+      bulat: true),
+  _UkuranTag(
+      id: 'produk_bulat35',
+      label: 'Bulat Ekstra',
+      detail: 'diameter 35 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 35,
+      tinggiMm: 35,
+      bulat: true),
+  _UkuranTag(
+      id: 'produk_kotak30x20',
+      label: 'Kotak Kecil',
+      detail: '30 x 20 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 30,
+      tinggiMm: 20),
+  _UkuranTag(
+      id: 'produk_kotak40x30',
+      label: 'Kotak Sedang',
+      detail: '40 x 30 mm',
+      kategori: _kategoriBulatKotak,
+      lebarMm: 40,
+      tinggiMm: 30),
 ];
 
 final _ukuranPromo = [
@@ -145,6 +299,7 @@ final _ukuranPromo = [
       id: 'promo_a5',
       label: 'Setengah A4',
       detail: '148 x 210 mm',
+      kategori: _kategoriKertasBesar,
       lebarMm: 148,
       tinggiMm: 210,
       pageFormat: PdfPageFormat.a5),
@@ -152,6 +307,7 @@ final _ukuranPromo = [
       id: 'promo_a4',
       label: 'A4 - 3 Panel',
       detail: '210 x 297 mm',
+      kategori: _kategoriKertasBesar,
       lebarMm: 210,
       tinggiMm: 297,
       pageFormat: PdfPageFormat.a4),
@@ -159,6 +315,7 @@ final _ukuranPromo = [
       id: 'promo_f4',
       label: 'F4 - 3 Panel',
       detail: '210 x 330 mm',
+      kategori: _kategoriKertasBesar,
       lebarMm: 210,
       tinggiMm: 330,
       pageFormat:
@@ -175,6 +332,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final _controllerRakHeader = TextEditingController();
   final _controllerRakProduk = TextEditingController();
   final _controllerRakHarga = TextEditingController();
+  final _controllerRakHeaderSize = TextEditingController(text: '8');
+  final _controllerRakProdukSize = TextEditingController(text: '5.8');
+  final _controllerRakKodeSize = TextEditingController(text: '7');
+  final _controllerRakHargaSize = TextEditingController(text: '26');
   final _controllerRakHeaderBg = TextEditingController(text: '#505B54');
   final _controllerRakHeaderText = TextEditingController(text: '#FFFFFF');
   final _controllerRakStripBg = TextEditingController(text: '#E6B742');
@@ -189,6 +350,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final _controllerPromoHargaAsliText = TextEditingController(text: '#C62828');
   final _controllerPromoBodyBg = TextEditingController(text: '#FFFFFF');
   final _controllerPromoHargaText = TextEditingController(text: '#5F5555');
+  final _controllerPromoHeaderSize = TextEditingController(text: '20');
+  final _controllerPromoTokoSize = TextEditingController(text: '9');
+  final _controllerPromoProdukSize = TextEditingController(text: '7.5');
+  final _controllerPromoHargaAsliSize = TextEditingController(text: '7.5');
+  final _controllerPromoHargaSize = TextEditingController(text: '47');
+  final _controllerPromoKodeSize = TextEditingController(text: '7');
   final _controllerLogoWrapBg = TextEditingController(text: '#FFFFFF');
   final Map<int, String> _promoTeksPerProduk = {};
   final Map<int, String> _promoHargaAsliPerProduk = {};
@@ -206,6 +373,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   bool _bungkusLogo = false;
   bool _memproses = false;
   String? _logoPath;
+  double _marginKotakMm = 2;
 
   @override
   void initState() {
@@ -221,6 +389,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     _controllerRakHeader.dispose();
     _controllerRakProduk.dispose();
     _controllerRakHarga.dispose();
+    _controllerRakHeaderSize.dispose();
+    _controllerRakProdukSize.dispose();
+    _controllerRakKodeSize.dispose();
+    _controllerRakHargaSize.dispose();
     _controllerRakHeaderBg.dispose();
     _controllerRakHeaderText.dispose();
     _controllerRakStripBg.dispose();
@@ -235,6 +407,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     _controllerPromoHargaAsliText.dispose();
     _controllerPromoBodyBg.dispose();
     _controllerPromoHargaText.dispose();
+    _controllerPromoHeaderSize.dispose();
+    _controllerPromoTokoSize.dispose();
+    _controllerPromoProdukSize.dispose();
+    _controllerPromoHargaAsliSize.dispose();
+    _controllerPromoHargaSize.dispose();
+    _controllerPromoKodeSize.dispose();
     _controllerLogoWrapBg.dispose();
     for (final controller in _controllerPromoItem.values) {
       controller.dispose();
@@ -254,7 +432,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       setStateIfMounted(() {
         _semuaProduk =
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        _logoPath = PengaturanStruk.instance.logoPath;
+        _logoPath = PengaturanStruk.instance.priceTagLogoPath;
+        _marginKotakMm = PengaturanStruk.instance.priceTagMarginKotakMm;
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -289,6 +468,152 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final daftar = _ukuranTersedia;
     return daftar.firstWhere((u) => u.id == _ukuranId,
         orElse: () => daftar.first);
+  }
+
+  /// Tombol ringkas pengganti daftar ChoiceChip yang dulu selalu terbuka di
+  /// panel -- dengan ukuran per model sekarang bisa puluhan (price gun,
+  /// thermal, kemasan, bulat/kotak, dst.) menampilkan semuanya langsung di
+  /// panel akan membuat sisi kanan kepanjangan. Popup [_pilihUkuran]
+  /// mengelompokkannya per kategori supaya tetap mudah dicari.
+  Widget _tombolPilihUkuran() {
+    final u = _ukuranAktif;
+    return InkWell(
+      onTap: _pilihUkuran,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(u.bulat ? Icons.circle_outlined : Icons.crop_square_rounded,
+                size: 18, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(u.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text('${u.detail} - ${u.kategori}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            const Icon(Icons.unfold_more, size: 18, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pilihUkuran() async {
+    final daftar = _ukuranTersedia;
+    final kategoriUrut = <String>[];
+    for (final u in daftar) {
+      if (!kategoriUrut.contains(u.kategori)) kategoriUrut.add(u.kategori);
+    }
+    final dipilih = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Pilih Ukuran ${_model.label}'),
+        contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+        content: SizedBox(
+          width: 420,
+          height: 480,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final kategori in kategoriUrut) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 12, 2, 6),
+                  child: Text(kategori,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: AppColors.textSecondary)),
+                ),
+                ...daftar
+                    .where((u) => u.kategori == kategori)
+                    .map(_opsiUkuranTile),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+        ],
+      ),
+    );
+    if (dipilih != null) {
+      setStateIfMounted(() => _ukuranId = dipilih);
+    }
+  }
+
+  Widget _opsiUkuranTile(_UkuranTag u) {
+    final terpilih = _ukuranId == u.id;
+    return InkWell(
+      onTap: () => Navigator.pop(context, u.id),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: terpilih ? AppColors.primary.withValues(alpha: 0.08) : null,
+          border: Border.all(
+              color: terpilih ? AppColors.primary : AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              u.bulat ? Icons.circle_outlined : Icons.crop_square_rounded,
+              size: 18,
+              color: terpilih ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(u.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    terpilih ? AppColors.primary : null)),
+                      ),
+                      if (u.populer) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.star, size: 13, color: Colors.amber),
+                      ],
+                    ],
+                  ),
+                  Text(u.detail,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            if (terpilih)
+              const Icon(Icons.check_circle, size: 18, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
   }
 
   Map<String, dynamic>? get _produkPreview {
@@ -389,6 +714,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         promoHargaTextHex: _hexPdf(_controllerPromoHargaText, '#5F5555'),
         bungkusLogo: _bungkusLogo,
         logoWrapBgHex: _hexPdf(_controllerLogoWrapBg, '#FFFFFF'),
+        marginKotakMm: _marginKotakMm,
+        rakHeaderSize: _ukuranTeks(_controllerRakHeaderSize, 8),
+        rakProdukSize: _ukuranTeks(_controllerRakProdukSize, 5.8),
+        rakKodeSize: _ukuranTeks(_controllerRakKodeSize, 7),
+        rakHargaSize: _ukuranTeks(_controllerRakHargaSize, 26),
+        promoHeaderSize: _ukuranTeks(_controllerPromoHeaderSize, 20),
+        promoTokoSize: _ukuranTeks(_controllerPromoTokoSize, 9),
+        promoProdukSize: _ukuranTeks(_controllerPromoProdukSize, 7.5),
+        promoHargaAsliSize: _ukuranTeks(_controllerPromoHargaAsliSize, 7.5),
+        promoHargaSize: _ukuranTeks(_controllerPromoHargaSize, 47),
+        promoKodeSize: _ukuranTeks(_controllerPromoKodeSize, 7),
       );
       final bytes = await builder.bangun();
       if (!mounted) return;
@@ -426,6 +762,21 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
 
   String _hexPdf(TextEditingController controller, String fallback) {
     return _normalisasiHex(controller.text) ?? fallback;
+  }
+
+  /// Baca ukuran teks (pt, dipakai PDF) dari [controller] -- input kosong/
+  /// tidak valid fallback ke [fallback] (bukan error) supaya field boleh
+  /// dikosongkan pengguna tanpa merusak cetakan. Di-clamp [min]/[max] supaya
+  /// salah ketik (mis. "800") tidak menghasilkan tag tak terbaca/pecah layout.
+  double _ukuranTeks(
+    TextEditingController controller,
+    double fallback, {
+    double min = 2,
+    double max = 120,
+  }) {
+    final normalized = controller.text.trim().replaceAll(',', '.');
+    final parsed = double.tryParse(normalized) ?? fallback;
+    return parsed.clamp(min, max).toDouble();
   }
 
   String? _normalisasiHex(String input) {
@@ -651,18 +1002,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         Text('Ukuran ${_model.label}',
             style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _ukuranTersedia
-              .map((u) => ChoiceChip(
-                    label: Text('${u.label} (P x L: ${u.detail})'),
-                    selected: _ukuranId == u.id,
-                    onSelected: (_) =>
-                        setStateIfMounted(() => _ukuranId = u.id),
-                  ))
-              .toList(),
-        ),
+        _tombolPilihUkuran(),
         const SizedBox(height: 16),
         const Text('Salinan per Produk',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -717,7 +1057,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             value: _tampilLogo,
             onChanged: (v) => setStateIfMounted(() => _tampilLogo = v ?? false),
             title: const Text('Tampilkan Logo Toko'),
-            subtitle: const Text('Menggunakan logo dari Konfigurasi Struk'),
+            subtitle: const Text('Menggunakan logo dari Konfigurasi Price Tag'),
             contentPadding: EdgeInsets.zero,
             dense: true,
           ),
@@ -795,7 +1135,41 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             _fieldWarna('Teks Harga', _controllerRakHargaText),
           ],
         ),
+        const SizedBox(height: 12),
+        const Text('Ukuran Teks (pt, default = ukuran saat ini)',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _fieldUkuranTeks('Header', _controllerRakHeaderSize),
+            _fieldUkuranTeks('Nama Produk', _controllerRakProdukSize),
+            _fieldUkuranTeks('Kode', _controllerRakKodeSize),
+            _fieldUkuranTeks('Harga', _controllerRakHargaSize),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _fieldUkuranTeks(String label, TextEditingController controller) {
+    return SizedBox(
+      width: 128,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          suffixText: 'pt',
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (_) => setStateIfMounted(() {}),
+      ),
     );
   }
 
@@ -876,6 +1250,22 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             _fieldWarna('Harga Coret', _controllerPromoHargaAsliText),
             _fieldWarna('Latar Harga', _controllerPromoBodyBg),
             _fieldWarna('Harga Promo', _controllerPromoHargaText),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text('Ukuran Teks (pt, default = ukuran saat ini)',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _fieldUkuranTeks('Judul Promo', _controllerPromoHeaderSize),
+            _fieldUkuranTeks('Nama Toko', _controllerPromoTokoSize),
+            _fieldUkuranTeks('Nama Produk', _controllerPromoProdukSize),
+            _fieldUkuranTeks('Harga Coret', _controllerPromoHargaAsliSize),
+            _fieldUkuranTeks('Harga Promo', _controllerPromoHargaSize),
+            _fieldUkuranTeks('Kode', _controllerPromoKodeSize),
           ],
         ),
         const SizedBox(height: 12),
@@ -1128,21 +1518,25 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final ukuran = _ukuranAktif;
     const lebarA4 = 210.0;
     const tinggiA4 = 297.0;
-    final kolom = max(1, lebarA4 ~/ ukuran.lebarMm);
-    final baris = max(1, tinggiA4 ~/ ukuran.tinggiMm);
+    const gutterMm = 2.0;
+    final kolom = max(1, (lebarA4 + gutterMm) ~/ (ukuran.lebarMm + gutterMm));
+    final baris = max(1, (tinggiA4 + gutterMm) ~/ (ukuran.tinggiMm + gutterMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: kolom,
         childAspectRatio: ukuran.lebarMm / ukuran.tinggiMm,
-        crossAxisSpacing: 0,
-        mainAxisSpacing: 0,
+        crossAxisSpacing: gutterMm,
+        mainAxisSpacing: gutterMm,
       ),
       itemCount: min(kolom * baris, 36),
       itemBuilder: (_, i) => Opacity(
         opacity: i == 0 ? 1 : 0.28,
-        child: _previewTagMini(produk),
+        child: Padding(
+          padding: EdgeInsets.all((_marginKotakMm / 2).clamp(0, 4)),
+          child: _previewTagMini(produk),
+        ),
       ),
     );
   }
@@ -1152,15 +1546,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
     final harga = _formatRupiah(p['hargaJual'] as num?);
+    final bulat = _model == ModelPriceTag.produk && _ukuranAktif.bulat;
+    final isi = _model == ModelPriceTag.produk
+        ? _previewProdukMini(nama, kode, barcode)
+        : _previewRakMini(nama, kode, barcode, harga);
     return Container(
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: bulat ? null : BorderRadius.circular(2),
+        shape: bulat ? BoxShape.circle : BoxShape.rectangle,
       ),
-      child: _model == ModelPriceTag.produk
-          ? _previewProdukMini(nama, kode, barcode)
-          : _previewRakMini(nama, kode, barcode, harga),
+      child: bulat ? ClipOval(child: isi) : isi,
     );
   }
 
@@ -1174,6 +1571,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final bodyBg = _warnaRak(_controllerRakBodyBg, Colors.white);
     final hargaText =
         _warnaRak(_controllerRakHargaText, const Color(0xFF514B4B));
+    final produkSize = _ukuranTeks(_controllerRakProdukSize, 5.8) * (3.2 / 5.8);
+    final kodeSize = _ukuranTeks(_controllerRakKodeSize, 7) * (3.2 / 7);
+    final hargaSize = _ukuranTeks(_controllerRakHargaSize, 26) * (9 / 26);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1188,7 +1588,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 3.2,
+                        fontSize: produkSize,
                         color: stripText,
                         fontWeight: FontWeight.w800)),
               ),
@@ -1196,7 +1596,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 Text(kode,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 3.2, color: kodeText)),
+                    style: TextStyle(fontSize: kodeSize, color: kodeText)),
             ],
           ),
         ),
@@ -1208,7 +1608,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 fit: BoxFit.scaleDown,
                 child: Text(_teksRakHarga(harga),
                     style: TextStyle(
-                        fontSize: 9,
+                        fontSize: hargaSize,
                         color: hargaText,
                         fontWeight: FontWeight.w900)),
               ),
@@ -1268,6 +1668,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       ModelPriceTag.produk => 320.0,
       ModelPriceTag.promo => 520.0,
     };
+    final bulat = _model == ModelPriceTag.produk && ukuran.bulat;
+    final isi = _model == ModelPriceTag.produk
+        ? _previewProduk(nama, kode, barcode)
+        : _model == ModelPriceTag.promo
+            ? _previewPromo(p)
+            : _previewRak(nama, kode, barcode, harga);
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -1290,14 +1696,13 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 style: _model == ModelPriceTag.rak
                     ? BorderStyle.solid
                     : BorderStyle.solid),
-            borderRadius:
-                BorderRadius.circular(_model == ModelPriceTag.produk ? 4 : 8),
+            borderRadius: bulat
+                ? null
+                : BorderRadius.circular(
+                    _model == ModelPriceTag.produk ? 4 : 8),
+            shape: bulat ? BoxShape.circle : BoxShape.rectangle,
           ),
-          child: _model == ModelPriceTag.produk
-              ? _previewProduk(nama, kode, barcode)
-              : _model == ModelPriceTag.promo
-                  ? _previewPromo(p)
-                  : _previewRak(nama, kode, barcode, harga),
+          child: bulat ? ClipOval(child: isi) : isi,
         ),
       ),
     );
@@ -1313,6 +1718,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final bodyBg = _warnaRak(_controllerRakBodyBg, Colors.white);
     final hargaText =
         _warnaRak(_controllerRakHargaText, const Color(0xFF514B4B));
+    final produkSize = _ukuranTeks(_controllerRakProdukSize, 5.8) * (12 / 5.8);
+    final kodeSize = _ukuranTeks(_controllerRakKodeSize, 7) * 2;
+    final hargaSize = _ukuranTeks(_controllerRakHargaSize, 26) * (42 / 26);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1353,7 +1761,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: 12,
+                            fontSize: produkSize,
                             color: stripText,
                             fontWeight: FontWeight.w900)),
                   ),
@@ -1367,7 +1775,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 14,
+                              fontSize: kodeSize,
                               fontStyle: FontStyle.italic,
                               color: kodeText)),
                     ),
@@ -1390,7 +1798,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         fit: BoxFit.scaleDown,
                         child: Text(_teksRakHarga(harga),
                             style: TextStyle(
-                                fontSize: 42,
+                                fontSize: hargaSize,
                                 fontWeight: FontWeight.w900,
                                 color: hargaText)),
                       ),
@@ -1464,6 +1872,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final bodyBg = _warnaRak(_controllerPromoBodyBg, Colors.white);
     final hargaText =
         _warnaRak(_controllerPromoHargaText, const Color(0xFF5F5555));
+    final headerSize = _ukuranTeks(_controllerPromoHeaderSize, 20) * 1.2;
+    final tokoSize = _ukuranTeks(_controllerPromoTokoSize, 9) * (12 / 9);
+    final produkSize =
+        _ukuranTeks(_controllerPromoProdukSize, 7.5) * (10 / 7.5);
+    final hargaAsliSize =
+        _ukuranTeks(_controllerPromoHargaAsliSize, 7.5) * (10 / 7.5);
+    final hargaSize = _ukuranTeks(_controllerPromoHargaSize, 47) * (56 / 47);
+    final kodeSize = _ukuranTeks(_controllerPromoKodeSize, 7) * (10 / 7);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1479,7 +1895,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: headerText,
-                        fontSize: 24,
+                        fontSize: headerSize,
                         fontWeight: FontWeight.w900)),
               ),
               if (_tampilLogo) _previewLogo(maxHeight: 30, bottom: 0),
@@ -1490,7 +1906,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: headerText, fontWeight: FontWeight.w800)),
+                        color: headerText,
+                        fontSize: tokoSize,
+                        fontWeight: FontWeight.w800)),
             ],
           ),
         ),
@@ -1506,14 +1924,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: stripText,
-                        fontSize: 10,
+                        fontSize: produkSize,
                         fontWeight: FontWeight.w800)),
               ),
               if (hargaLama != null)
                 Text(hargaLama,
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: hargaAsliSize,
                       color: hargaAsliText,
                       decoration: TextDecoration.lineThrough,
                       fontWeight: FontWeight.w700,
@@ -1529,7 +1947,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 fit: BoxFit.scaleDown,
                 child: Text(harga,
                     style: TextStyle(
-                        fontSize: 56,
+                        fontSize: hargaSize,
                         fontWeight: FontWeight.w900,
                         color: hargaText)),
               ),
@@ -1548,7 +1966,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           ColoredBox(
             color: bodyBg,
             child:
-                Center(child: Text(kode, style: const TextStyle(fontSize: 10))),
+                Center(child: Text(kode, style: TextStyle(fontSize: kodeSize))),
           ),
       ],
     );
@@ -1643,6 +2061,17 @@ class _PriceTagPdfBuilder {
   final String promoHargaTextHex;
   final bool bungkusLogo;
   final String logoWrapBgHex;
+  final double marginKotakMm;
+  final double rakHeaderSize;
+  final double rakProdukSize;
+  final double rakKodeSize;
+  final double rakHargaSize;
+  final double promoHeaderSize;
+  final double promoTokoSize;
+  final double promoProdukSize;
+  final double promoHargaAsliSize;
+  final double promoHargaSize;
+  final double promoKodeSize;
 
   _PriceTagPdfBuilder({
     required this.model,
@@ -1676,6 +2105,17 @@ class _PriceTagPdfBuilder {
     required this.promoHargaTextHex,
     required this.bungkusLogo,
     required this.logoWrapBgHex,
+    required this.marginKotakMm,
+    required this.rakHeaderSize,
+    required this.rakProdukSize,
+    required this.rakKodeSize,
+    required this.rakHargaSize,
+    required this.promoHeaderSize,
+    required this.promoTokoSize,
+    required this.promoProdukSize,
+    required this.promoHargaAsliSize,
+    required this.promoHargaSize,
+    required this.promoKodeSize,
   });
 
   Future<Uint8List> bangun() async {
@@ -1721,10 +2161,14 @@ class _PriceTagPdfBuilder {
     );
     final lebar = ukuran.lebarMm * PdfPageFormat.mm;
     final tinggi = ukuran.tinggiMm * PdfPageFormat.mm;
+    final margin = marginKotakMm.clamp(0, 8).toDouble();
+    final gutter = margin * PdfPageFormat.mm;
+    final innerPadding =
+        (margin * 0.25).clamp(0, 1).toDouble() * PdfPageFormat.mm;
     final usableWidth = page.availableWidth;
     final usableHeight = page.availableHeight;
-    final kolom = max(1, usableWidth ~/ lebar);
-    final baris = max(1, usableHeight ~/ tinggi);
+    final kolom = max(1, (usableWidth + gutter) ~/ (lebar + gutter));
+    final baris = max(1, (usableHeight + gutter) ~/ (tinggi + gutter));
     final perHalaman = max(1, kolom * baris);
 
     for (var start = 0; start < tag.length; start += perHalaman) {
@@ -1733,13 +2177,16 @@ class _PriceTagPdfBuilder {
         pw.Page(
           pageFormat: page,
           build: (_) => pw.Wrap(
-            spacing: 0,
-            runSpacing: 0,
+            spacing: gutter,
+            runSpacing: gutter,
             children: slice
                 .map((p) => pw.SizedBox(
                       width: lebar,
                       height: tinggi,
-                      child: builder(p),
+                      child: pw.Padding(
+                        padding: pw.EdgeInsets.all(innerPadding),
+                        child: builder(p),
+                      ),
                     ))
                 .toList(),
           ),
@@ -1784,7 +2231,7 @@ class _PriceTagPdfBuilder {
                       ? pw.Text(rakHeaderText,
                           maxLines: 1,
                           style: pw.TextStyle(
-                              fontSize: 8 * skala,
+                              fontSize: rakHeaderSize * skala,
                               color: PdfColor.fromHex(rakHeaderTextHex),
                               fontWeight: pw.FontWeight.bold))
                       : pw.SizedBox()),
@@ -1800,7 +2247,7 @@ class _PriceTagPdfBuilder {
                   child: pw.Text(_teksProdukRakPdf(p),
                       maxLines: 1,
                       style: pw.TextStyle(
-                          fontSize: 5.8 * skala,
+                          fontSize: rakProdukSize * skala,
                           color: PdfColor.fromHex(rakStripTextHex),
                           fontWeight: pw.FontWeight.bold)),
                 ),
@@ -1808,7 +2255,7 @@ class _PriceTagPdfBuilder {
                   pw.Text(kode,
                       maxLines: 1,
                       style: pw.TextStyle(
-                          fontSize: 7 * skala,
+                          fontSize: rakKodeSize * skala,
                           color: PdfColor.fromHex(rakKodeTextHex),
                           fontStyle: pw.FontStyle.italic)),
               ],
@@ -1823,7 +2270,7 @@ class _PriceTagPdfBuilder {
                   child: pw.Text(
                     _teksHargaRakPdf(p),
                     style: pw.TextStyle(
-                      fontSize: 26 * skala,
+                      fontSize: rakHargaSize * skala,
                       fontWeight: pw.FontWeight.bold,
                       color: PdfColor.fromHex(rakHargaTextHex),
                     ),
@@ -1847,11 +2294,8 @@ class _PriceTagPdfBuilder {
     final bcw =
         _barcode(barcode, height: ukuran.tinggiMm * PdfPageFormat.mm * 0.48);
     final skala = (ukuran.tinggiMm / 25).clamp(0.75, 1.45);
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.grey500, width: 0.5),
-        borderRadius: pw.BorderRadius.circular(2),
-      ),
+    final bulat = ukuran.bulat;
+    final isi = pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -1886,6 +2330,14 @@ class _PriceTagPdfBuilder {
                 style: pw.TextStyle(fontSize: 5 * skala)),
         ],
       ),
+    );
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey500, width: 0.5),
+        borderRadius: bulat ? null : pw.BorderRadius.circular(2),
+        shape: bulat ? pw.BoxShape.circle : pw.BoxShape.rectangle,
+      ),
+      child: bulat ? pw.ClipOval(child: isi) : isi,
     );
   }
 
@@ -1979,7 +2431,7 @@ class _PriceTagPdfBuilder {
                   child: pw.Text(teksPromo.toUpperCase(),
                       maxLines: 1,
                       style: pw.TextStyle(
-                          fontSize: 20 * skala,
+                          fontSize: promoHeaderSize * skala,
                           color: PdfColor.fromHex(promoHeaderTextHex),
                           fontWeight: pw.FontWeight.bold)),
                 ),
@@ -1989,7 +2441,7 @@ class _PriceTagPdfBuilder {
                   pw.Text(tokoNama.toLowerCase(),
                       maxLines: 1,
                       style: pw.TextStyle(
-                          fontSize: 9 * skala,
+                          fontSize: promoTokoSize * skala,
                           color: PdfColor.fromHex(promoHeaderTextHex),
                           fontWeight: pw.FontWeight.bold)),
               ],
@@ -2005,14 +2457,14 @@ class _PriceTagPdfBuilder {
                   child: pw.Text('${p['nama'] ?? '-'}'.toUpperCase(),
                       maxLines: 1,
                       style: pw.TextStyle(
-                          fontSize: 7.5 * skala,
+                          fontSize: promoProdukSize * skala,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColor.fromHex(promoStripTextHex))),
                 ),
                 if (hargaLama != null)
                   pw.Text(hargaLama,
                       style: pw.TextStyle(
-                          fontSize: 7.5 * skala,
+                          fontSize: promoHargaAsliSize * skala,
                           color: PdfColor.fromHex(promoHargaAsliTextHex),
                           decoration: pw.TextDecoration.lineThrough)),
               ],
@@ -2027,7 +2479,7 @@ class _PriceTagPdfBuilder {
                   child: pw.Text(
                     _hargaPromoPdf(p),
                     style: pw.TextStyle(
-                      fontSize: 47 * skala,
+                      fontSize: promoHargaSize * skala,
                       fontWeight: pw.FontWeight.bold,
                       color: PdfColor.fromHex(promoHargaTextHex),
                     ),
@@ -2046,7 +2498,8 @@ class _PriceTagPdfBuilder {
             pw.Container(
               color: PdfColor.fromHex(promoBodyBgHex),
               child: pw.Center(
-                child: pw.Text(kode, style: pw.TextStyle(fontSize: 7 * skala)),
+                child: pw.Text(kode,
+                  style: pw.TextStyle(fontSize: promoKodeSize * skala)),
               ),
             ),
           pw.SizedBox(height: 3),

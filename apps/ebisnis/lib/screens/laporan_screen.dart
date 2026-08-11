@@ -15,7 +15,20 @@ import '../widgets/safe_state.dart';
 /// ZK/JRXML) -- ini dibuka EKSTERNAL via browser, bukan lewat alur jalankan/PDF
 /// generik, karena bukan bagian dari kontrak kolom/baris yang sama.
 class LaporanScreen extends StatefulWidget {
-  const LaporanScreen({super.key});
+  /// Aksi server sumber katalog: `laporan_katalog` (semua) atau
+  /// `laporan_keuangan_katalog` (subset keuangan). Membuat layar ini bisa dipakai
+  /// ulang untuk menu "Laporan Keuangan" tanpa menduplikasi logika render/run.
+  final String aksiKatalog;
+  final MenuEBisnis menuAktif;
+  final String judul;
+  final String subjudul;
+  const LaporanScreen({
+    super.key,
+    this.aksiKatalog = 'laporan_katalog',
+    this.menuAktif = MenuEBisnis.laporanLaporan,
+    this.judul = 'Laporan-Laporan',
+    this.subjudul = 'Katalog laporan siap pakai',
+  });
 
   @override
   State<LaporanScreen> createState() => _LaporanScreenState();
@@ -48,7 +61,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_katalog');
+      final hasil = await ApiClient.instance.aksi(widget.aksiKatalog);
       final arr = (hasil['kategori'] as List?) ?? [];
       setStateIfMounted(() {
         _kategori =
@@ -136,9 +149,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      menuAktif: MenuEBisnis.laporanLaporan,
-      judul: 'Laporan-Laporan',
-      subjudul: 'Katalog laporan siap pakai',
+      menuAktif: widget.menuAktif,
+      judul: widget.judul,
+      subjudul: widget.subjudul,
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat, tooltip: 'Muat ulang'),
       actionsAppBar: [IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _muat, tooltip: 'Muat ulang')],
       scrollable: true,
