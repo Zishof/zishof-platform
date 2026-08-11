@@ -26,6 +26,7 @@ import '../screens/inventory_sales/master_customer_screen.dart';
 import '../screens/inventory_sales/master_sales_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
+import '../screens/inventory_sales/hutang_supplier_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -160,6 +161,18 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Master & Analisis Harga',
                           builder: (_) => const HargaScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('hutang'))
+                      _ItemMenu(
+                        icon: Icons.account_balance_outlined,
+                        label: 'Hutang Supplier (AP)',
+                        aktif: menuAktif == 'Hutang Supplier (AP)',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Hutang Supplier (AP)',
+                          builder: (_) => const HutangSupplierScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))

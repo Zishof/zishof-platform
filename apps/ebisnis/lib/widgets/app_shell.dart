@@ -36,6 +36,7 @@ import '../screens/inventory_sales/master_customer_screen.dart';
 import '../screens/inventory_sales/master_sales_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
+import '../screens/inventory_sales/hutang_supplier_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -81,7 +82,8 @@ enum MenuEBisnis {
   masterCustomer,
   masterSales,
   persediaan,
-  harga
+  harga,
+  hutangSupplier
 }
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -92,6 +94,7 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.masterSales: 'master_sales',
   MenuEBisnis.persediaan: 'persediaan',
   MenuEBisnis.harga: 'harga',
+  MenuEBisnis.hutangSupplier: 'hutang',
 };
 
 class _ItemMenuShell {
@@ -167,6 +170,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.harga, Icons.price_change_outlined,
       'Master & Analisis Harga',
       builder: _bangunHarga),
+  _ItemMenuShell(MenuEBisnis.hutangSupplier, Icons.account_balance_outlined,
+      'Hutang Supplier (AP)',
+      builder: _bangunHutangSupplier),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -231,6 +237,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.masterSales,
     MenuEBisnis.persediaan,
     MenuEBisnis.harga,
+    MenuEBisnis.hutangSupplier,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -301,6 +308,7 @@ Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
 Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
 Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
 Widget _bangunHarga(BuildContext c) => const HargaScreen();
+Widget _bangunHutangSupplier(BuildContext c) => const HutangSupplierScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -389,6 +397,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Persediaan & Kartu Stok';
     case MenuEBisnis.harga:
       return 'Master & Analisis Harga';
+    case MenuEBisnis.hutangSupplier:
+      return 'Hutang Supplier (AP)';
   }
 }
 
@@ -448,6 +458,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.persediaan;
     case 'Master & Analisis Harga':
       return MenuEBisnis.harga;
+    case 'Hutang Supplier (AP)':
+      return MenuEBisnis.hutangSupplier;
   }
   return null;
 }
