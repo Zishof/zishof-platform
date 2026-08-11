@@ -15,6 +15,13 @@ class Produk {
   final bool izinkanJualMinusStok;
   final bool aktif;
 
+  /// Jenis Item (`"JUAL"`/`"BAHAN"`) -- gap-closure Bahan Baku BUKAN untuk
+  /// dijual langsung di Kasir, hanya jadi komponen resep produk lain (lihat
+  /// [bahanBaku]). Default `"JUAL"` -- semua produk lama tanpa field ini
+  /// (dari cache lokal atau respons server sebelum fitur ini) diperlakukan
+  /// sbg produk jual biasa.
+  final String jenisItem;
+
   /// Resep/Bahan Baku (BOM) -- daftar komponen `{produkId, nama, qty, harga}`
   /// dari field `bahanBaku` respons `katalog` (JSON string tersimpan apa
   /// adanya di server, dibaca ulang array persis spt yg terakhir disimpan
@@ -37,6 +44,7 @@ class Produk {
     this.keterangan = '',
     this.izinkanJualMinusStok = false,
     this.aktif = true,
+    this.jenisItem = 'JUAL',
     this.bahanBaku = const [],
   });
 
@@ -56,6 +64,9 @@ class Produk {
         // katalog tidak mengirim "aktif" eksplisit (hanya baris aktif yg dikembalikan kecuali admin
         // mode semuaToko) -- default true, dikoreksi lewat form Ubah bila memang dinonaktifkan.
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
+        jenisItem: (j['jenisItem'] as String?)?.isNotEmpty == true
+            ? j['jenisItem'] as String
+            : 'JUAL',
         bahanBaku:
             ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
       );
@@ -74,6 +85,9 @@ class Produk {
         'kategori_nama': j['kategoriNama'] ?? '',
         'gambar_url': j['gambarUrl'],
         'aktif': 1,
+        'jenis_item': (j['jenisItem'] as String?)?.isNotEmpty == true
+            ? j['jenisItem']
+            : 'JUAL',
       };
 }
 

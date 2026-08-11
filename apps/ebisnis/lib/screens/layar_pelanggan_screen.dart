@@ -53,6 +53,19 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   int _versiTerakhir = 0;
   DateTime? _liveUpdateTerakhir;
 
+  // "Survey Kepuasan Pelanggan" -- state KETIGA di luar idle/aktif, dipicu
+  // saat `tipe` broadcast berubah jadi "sukses" (lihat JavaDoc
+  // LayarPelangganBroadcaster.kirimSukses). [_tipeSebelumnya] dipakai deteksi
+  // "rising edge" (bukan `versi`, krn `layar_pelanggan_ambil` -- jalur polling
+  // murni tanpa live channel -- TIDAK mengembalikan `versi` sama sekali) supaya
+  // broadcast "sukses" yang SAMA tidak memicu ulang layar rating berkali-kali
+  // selama masih terpoll, tapi transaksi SUKSES berikutnya tetap memicu lagi.
+  String _tipeSebelumnya = 'keranjang';
+  bool _tampilkanSukses = false;
+  Timer? _timerSukses;
+  int? _ratingDipilih;
+  bool _mengirimRating = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +78,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _timerSukses?.cancel();
     unawaited(LayarPelangganBroadcaster.channel.setMethodCallHandler(null));
     super.dispose();
   }
@@ -98,9 +112,19 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     if (versi != null && versi < _versiTerakhir) return;
     if (versi != null) _versiTerakhir = versi;
     final aktif = hasil['aktif'] == true;
+    final tipe = aktif ? ((hasil['tipe'] as String?) ?? 'keranjang') : 'keranjang';
+    final suksesBaru = tipe == 'sukses' && _tipeSebelumnya != 'sukses';
+    _tipeSebelumnya = tipe;
     setStateIfMounted(() {
       _aktif = aktif;
-      if (aktif) {
+      if (suksesBaru) {
+        _mulaiTampilkanSukses();
+      } else if (tipe != 'sukses') {
+        // Broadcast pindah balik ke "keranjang" (kasir mulai transaksi baru)
+        // ATAU kembali idle -- jangan menahan layar rating lebih lama dari itu.
+        _tampilkanSukses = false;
+      }
+      if (aktif && tipe != 'sukses') {
         _items = ((hasil['items'] as List?) ?? [])
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
@@ -110,11 +134,47 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
         final nama =
             (hasil['memberNama'] ?? hasil['member_nama']) as String?;
         _memberNama = (nama == null || nama.isEmpty) ? null : nama;
-      } else {
+      } else if (!aktif) {
         _items = [];
         _memberNama = null;
       }
     });
+  }
+
+  /// Buka layar ucapan terima kasih + rating, otomatis kembali ke Idle
+  /// setelah ~15 detik kalau pelanggan tidak menyentuh bintang apa pun.
+  void _mulaiTampilkanSukses() {
+    _timerSukses?.cancel();
+    _tampilkanSukses = true;
+    _ratingDipilih = null;
+    _mengirimRating = false;
+    _timerSukses = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      setStateIfMounted(() => _tampilkanSukses = false);
+    });
+  }
+
+  Future<void> _kirimRating(int rating) async {
+    if (_mengirimRating || _ratingDipilih != null) return;
+    _timerSukses?.cancel();
+    setStateIfMounted(() {
+      _ratingDipilih = rating;
+      _mengirimRating = true;
+    });
+    try {
+      await ApiClient.instance.aksi('survey_kepuasan_simpan', {
+        'rating': rating,
+        'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
+      });
+    } catch (_) {
+      // Gagal kirim (mis. offline sesaat) -- bukan blocker, layar tetap
+      // menampilkan ucapan terima kasih lalu kembali ke Idle spt biasa.
+    }
+    if (!mounted) return;
+    setStateIfMounted(() => _mengirimRating = false);
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    setStateIfMounted(() => _tampilkanSukses = false);
   }
 
   Future<void> _ambil() async {
@@ -138,9 +198,11 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       backgroundColor: const Color(0xFF0F1C2E),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 350),
-        child: _aktif
-            ? _bodyAktif(key: const ValueKey('aktif'))
-            : _bodyIdle(key: const ValueKey('idle')),
+        child: _tampilkanSukses
+            ? _bodySukses(key: const ValueKey('sukses'))
+            : (_aktif
+                ? _bodyAktif(key: const ValueKey('aktif'))
+                : _bodyIdle(key: const ValueKey('idle'))),
       ),
     );
   }
@@ -171,6 +233,66 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
           const SizedBox(height: 10),
           const Text('Terima kasih telah berbelanja bersama kami',
               style: TextStyle(color: Colors.white54, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  /// Layar "Survey Kepuasan Pelanggan" -- muncul tepat setelah transaksi
+  /// sukses (`tipe == 'sukses'`, lihat [_terapkanData]/[_mulaiTampilkanSukses]).
+  /// Ketuk bintang mana pun mengirim `survey_kepuasan_simpan` sekali (bintang
+  /// tak bisa diganti setelah terkirim), lalu kembali ke Idle otomatis.
+  Widget _bodySukses({required Key key}) {
+    final sudahDinilai = _ratingDipilih != null;
+    return Center(
+      key: key,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.15),
+                shape: BoxShape.circle),
+            child: Icon(
+                sudahDinilai
+                    ? Icons.check_circle_outline
+                    : Icons.favorite_outline,
+                color: const Color(0xFF2E7D32),
+                size: 44),
+          ),
+          const SizedBox(height: 24),
+          const Text('Terima Kasih Atas Kunjungan Anda!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          Text(
+            sudahDinilai
+                ? 'Terima kasih atas penilaian Anda.'
+                : 'Bagaimana pengalaman belanja Anda hari ini?',
+            style: const TextStyle(color: Colors.white54, fontSize: 16),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final nilai = i + 1;
+              final terisi = _ratingDipilih != null && nilai <= _ratingDipilih!;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: IconButton(
+                  iconSize: 52,
+                  onPressed: sudahDinilai ? null : () => _kirimRating(nilai),
+                  icon: Icon(
+                    terisi ? Icons.star : Icons.star_border,
+                    color: const Color(0xFFFACC15),
+                  ),
+                ),
+              );
+            }),
+          ),
         ],
       ),
     );

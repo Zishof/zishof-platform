@@ -623,8 +623,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final uangDiterimaStruk = _uangDiterima;
       final kembalianStruk = _kembalian < 0 ? 0.0 : _kembalian;
       widget.keranjang.clear();
-      LayarPelangganBroadcaster.instance
-          .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+      // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
+      // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
+      // sinyal pindah ke layar ucapan terima kasih + rating (gap-closure
+      // "Survey Kepuasan Pelanggan", lihat JavaDoc kirimSukses).
+      LayarPelangganBroadcaster.instance.kirimSukses();
       setStateIfMounted(() {
         _langsungTerlayani = true;
         _splitBayar = [];

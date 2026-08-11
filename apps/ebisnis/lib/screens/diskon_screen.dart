@@ -10,6 +10,19 @@ import '../widgets/safe_state.dart';
 
 final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+/// Label chip "Hari Aktif" -- kunci ISO weekday (1=Senin..7=Minggu), SAMA
+/// persis dgn konvensi CSV `hari_aktif` yg dibaca/dikirim server (lihat
+/// JavaDoc AturanDiskon.getHariAktif()).
+const _labelHari = {
+  1: 'Senin',
+  2: 'Selasa',
+  3: 'Rabu',
+  4: 'Kamis',
+  5: 'Jumat',
+  6: 'Sabtu',
+  7: 'Minggu',
+};
+
 /// Layar Diskon / Aturan Diskon (padanan diskon.html/diskon-renderer.js
 /// Electron) -- CRUD aturan diskon. Siapa saja bisa MELIHAT (aksi
 /// `diskon_list` tanpa gate), tapi hanya admin/supervisor toko yang boleh
@@ -263,6 +276,12 @@ class _FormDiskonState extends State<_FormDiskon> {
   DateTime? _mulai;
   DateTime? _selesai;
 
+  // "Promo Pilih Hari" -- ISO weekday (1=Senin..7=Minggu), kosong = berlaku
+  // SEMUA hari (sama konvensi dgn tanggal_mulai/tanggal_selesai kosong =
+  // tanpa batas). Dikirim/dibaca CSV mis. "1,2,3,4,5" (lihat JavaDoc
+  // AturanDiskon.getHariAktif() & KantinHelper.diskonSimpan/diskonList).
+  final Set<int> _hariAktif = {};
+
   @override
   void initState() {
     super.initState();
@@ -279,6 +298,19 @@ class _FormDiskonState extends State<_FormDiskon> {
     _berlakuSemuaProduk = (a?['produkNama'] as String?)?.isEmpty ?? true;
     _mulai = _uraiTanggalServer(a?['tanggalMulai'] as String?);
     _selesai = _uraiTanggalServer(a?['tanggalSelesai'] as String?);
+    _hariAktif.addAll(_uraiHariAktif(a?['hariAktif'] as String?));
+  }
+
+  /// Urai CSV hari aktif (mis. "1,2,3,4,5") dari `diskon_list` -- entri yang
+  /// tak valid/di luar 1-7 diabaikan diam-diam (defensif thd data lama/kotor).
+  Set<int> _uraiHariAktif(String? s) {
+    if (s == null || s.trim().isEmpty) return {};
+    return s
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .where((h) => h >= 1 && h <= 7)
+        .toSet();
   }
 
   /// Urai format tampilan server ("dd-MM-yyyy HH:mm" dari `diskon_list`) --
@@ -347,6 +379,9 @@ class _FormDiskonState extends State<_FormDiskon> {
         'aktif': _aktif,
         'tanggal_mulai': _mulai == null ? '' : _formatUntukSimpan(_mulai!),
         'tanggal_selesai': _selesai == null ? '' : _formatUntukSimpan(_selesai!),
+        'hari_aktif': _hariAktif.isEmpty
+            ? ''
+            : (_hariAktif.toList()..sort()).join(','),
         if (Sesi.instance.isAdmin) 'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       });
       if (mounted) Navigator.of(context).pop(true);
@@ -545,6 +580,54 @@ class _FormDiskonState extends State<_FormDiskon> {
                             onPressed: () =>
                                 setStateIfMounted(() => _selesai = null)),
                     ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Hari Aktif',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondaryOf(context))),
+                      TextButton(
+                        onPressed: _hariAktif.isEmpty
+                            ? null
+                            : () => setStateIfMounted(() => _hariAktif.clear()),
+                        child: const Text('Pilih Semua Hari',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _labelHari.entries.map((e) {
+                      final terpilih = _hariAktif.contains(e.key);
+                      return FilterChip(
+                        label: Text(e.value),
+                        selected: terpilih,
+                        onSelected: (v) => setStateIfMounted(() {
+                          if (v) {
+                            _hariAktif.add(e.key);
+                          } else {
+                            _hariAktif.remove(e.key);
+                          }
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _hariAktif.isEmpty
+                          ? 'Kosong = berlaku SEMUA hari.'
+                          : 'Hanya berlaku pada hari yang dipilih.',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondaryOf(context)),
+                    ),
                   ),
                   if (Sesi.instance.isAdmin) ...[
                     const SizedBox(height: 12),

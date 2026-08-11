@@ -340,8 +340,13 @@ class _KasirScreenState extends State<KasirScreen> {
 
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson = (katalog['produk'] as List?) ?? [];
+      // Cache ditulis dari SELURUH baris (termasuk Bahan Baku, lihat
+      // CoreDb.produkCache) -- tapi grid Kasir (_semuaProduk) mengecualikan
+      // Bahan Baku, sama seperti klausa WHERE cache lokal, supaya perilaku
+      // online & offline konsisten (bahan baku tidak pernah terjual langsung).
       final produk = produkJson
           .map((e) => Produk.fromJson(e as Map<String, dynamic>))
+          .where((p) => p.jenisItem != 'BAHAN')
           .toList();
       final kategori = ((katalog['kategori'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))

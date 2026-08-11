@@ -10,13 +10,16 @@ import '../sesi.dart';
 /// (sama dgn spesifikasi Desktop) supaya tidak membanjiri server tiap ketukan
 /// stepper qty.
 ///
-/// CATATAN SCOPE: kontrak server (`layarPelangganKirim`/`layarPelangganAmbil`
-/// di KantinHelper.java) hanya punya state "keranjang aktif" (items/subtotal/
-/// diskon/total/memberNama) -- tidak ada sinyal "sukses"/"idle" eksplisit
-/// terpisah, jadi layar sukses ~4 detik ala Desktop TIDAK direplikasi di sini
-/// (butuh field baru di server, di luar scope gap-fill klien-saja). Layar
-/// kedua otomatis kembali ke Idle sendiri lewat TTL 90 detik server begitu
-/// kasir berhenti menyiarkan (mis. pindah layar/transaksi selesai).
+/// CATATAN "Survey Kepuasan Pelanggan": kontrak server
+/// (`layarPelangganKirim`/`layarPelangganAmbil` di KantinHelper.java) sekarang
+/// punya field opsional `tipe` ("keranjang" default, atau "sukses") --
+/// [kirimSukses] memakainya utk memberi tahu Layar Pelanggan (arsitektur
+/// polling 2-perangkat, BEDA dgn Layar Pelanggan Electron yang push langsung
+/// antar-window lewat IPC lokal tanpa lewat server) bahwa transaksi baru saja
+/// SUKSES, supaya layar kedua pindah dari tampilan keranjang ke layar ucapan
+/// terima kasih + rating (lihat LayarPelangganScreen). Broadcast biasa (lewat
+/// [jadwalkanKirim]) TIDAK mengirim `tipe` sama sekali -- server sendiri yang
+/// default ke "keranjang" saat field itu tak ada.
 class LayarPelangganBroadcaster {
   LayarPelangganBroadcaster._();
   static final LayarPelangganBroadcaster instance = LayarPelangganBroadcaster._();
@@ -61,5 +64,35 @@ class LayarPelangganBroadcaster {
 
   void berhenti() {
     _debounce?.cancel();
+  }
+
+  /// Siarkan SATU broadcast "transaksi baru saja SUKSES" (`tipe: 'sukses'`) --
+  /// dipanggil SEKALI dari KeranjangScreen._bayar() tepat setelah checkout
+  /// dianggap selesai (offline-first: sudah dianggap sukses begitu tersimpan
+  /// lokal, sama dgn alur menuju StrukScreen), MENGGANTIKAN broadcast
+  /// keranjang-kosong biasa di titik itu -- sekaligus mengosongkan tampilan
+  /// keranjang di Layar Pelanggan DAN memberi sinyal pindah ke layar rating.
+  /// Langsung dikirim (tanpa debounce) krn ini kejadian sekali-jalan, bukan
+  /// mutasi keranjang beruntun spt [jadwalkanKirim].
+  void kirimSukses() {
+    _debounce?.cancel();
+    final payload = {
+      'versi': ++_versi,
+      'aktif': true,
+      'toko_id': Sesi.instance.tokoId,
+      'items': const [],
+      'subtotal': 0,
+      'diskon': 0,
+      'total': 0,
+      'member_nama': '',
+      'memberNama': '',
+      'tipe': 'sukses',
+    };
+    channel.invokeMethod('update', payload).catchError((_) => null);
+    ApiClient.instance.aksi('layar_pelanggan_kirim', payload).catchError((_) {
+      // Gagal menyiarkan (mis. offline) -- bukan alasan mengganggu kasir,
+      // layar pelanggan sekadar tak ikut menampilkan layar rating kali ini.
+      return <String, dynamic>{};
+    });
   }
 }

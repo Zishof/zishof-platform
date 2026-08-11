@@ -62,9 +62,10 @@ class CoreDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
+        onUpgrade: _upgradeSkema,
       ),
     );
   }
@@ -72,6 +73,23 @@ class CoreDb {
   Future<void> _konfigurasiDb(Database db) async {
     await db.execute('PRAGMA busy_timeout = 5000');
     await db.execute('PRAGMA journal_mode = WAL');
+  }
+
+  /// Migrasi skema -- PERTAMA KALI sejak versi 1 dirilis (semua instalasi
+  /// yang sudah ada di lapangan hanya punya `onCreate`, tak pernah lewat
+  /// `onUpgrade` sebelumnya). Gap-closure "Jenis Item" (Produk vs Bahan Baku)
+  /// nambah kolom `jenis_item` ke `produk_cache`. `ALTER TABLE` dibungkus
+  /// try/catch murni defensif thd kemungkinan state upgrade parsial (mis.
+  /// proses sempat terhenti di tengah migrasi sebelumnya, kolom sudah
+  /// terlanjur ada) -- padanan cara migrasi `local-db.js` versi Electron.
+  Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
+    if (versiLama < 2) {
+      try {
+        await db.execute('ALTER TABLE produk_cache ADD COLUMN jenis_item TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
+      }
+    }
   }
 
   Future<void> _buatSkema(Database db, int versi) async {
@@ -86,7 +104,8 @@ class CoreDb {
         kategori_id INTEGER,
         kategori_nama TEXT,
         gambar_url TEXT,
-        aktif INTEGER DEFAULT 1
+        aktif INTEGER DEFAULT 1,
+        jenis_item TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
@@ -163,9 +182,19 @@ class CoreDb {
     });
   }
 
+  /// Dipakai semua konteks JUAL/penjualan (Kasir, Pesanan, picker pencarian
+  /// produk) -- gap-closure "Jenis Item" (Produk vs Bahan Baku) mengecualikan
+  /// baris `jenis_item = 'BAHAN'`. PENTING: `jenis_item != 'BAHAN'` SENDIRIAN
+  /// tidak cukup krn SQLite `!=` tidak match NULL -- semua produk yang dibuat
+  /// SEBELUM fitur ini (jenis_item masih NULL) akan ikut hilang diam-diam
+  /// kalau klausanya bukan `(jenis_item IS NULL OR jenis_item != 'BAHAN')`.
   Future<List<Map<String, Object?>>> produkCache() async {
     final database = await db;
-    return database.query('produk_cache', where: 'aktif = 1', orderBy: 'nama ASC');
+    return database.query(
+      'produk_cache',
+      where: "aktif = 1 AND (jenis_item IS NULL OR jenis_item != 'BAHAN')",
+      orderBy: 'nama ASC',
+    );
   }
 
   Future<int> jumlahProdukCache() async {

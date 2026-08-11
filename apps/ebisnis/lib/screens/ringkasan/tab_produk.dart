@@ -22,6 +22,11 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
   Map<String, dynamic>? _d;
   String _periode = 'bulanan';
 
+  /// Produk terpilih di dropdown "Jam Sibuk per Produk" -- null berarti
+  /// belum dipilih manual, jatuh ke entri PERTAMA (`jamSibukPerProduk` sudah
+  /// dibatasi top 5 terlaris server-side, lihat JavaDoc `prosesDashboardProduk`).
+  int? _produkJamSibukTerpilih;
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +85,25 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
         .cast<Map<String, dynamic>>();
     final kurangLaku = titikDariList(d['produkKurangLaku'] as List?,
         labelKey: 'nama', nilaiKey: 'terjual');
+    final jamSibukPerProduk = ((d['jamSibukPerProduk'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    final perputaranStok =
+        ((d['perputaranStok'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final kepuasanPelanggan =
+        (d['kepuasanPelanggan'] as Map<String, dynamic>?) ?? {};
+
+    final entriJamSibuk = jamSibukPerProduk.isEmpty
+        ? null
+        : jamSibukPerProduk.firstWhere(
+            (e) => (e['produkId'] as num?)?.toInt() == _produkJamSibukTerpilih,
+            orElse: () => jamSibukPerProduk.first);
+    final jamSibukProduk = entriJamSibuk == null
+        ? <TitikChart>[]
+        : List.generate(24, (jam) {
+            final arr = (entriJamSibuk['jam'] as List?) ?? const [];
+            final nilai = jam < arr.length ? (arr[jam] as num?) ?? 0 : 0;
+            return (label: '$jam', nilai: nilai.toDouble());
+          });
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -131,6 +155,15 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
               ),
             ),
           const SizedBox(height: 12),
+          BarisKpi(kartu: [
+            KartuKpi(
+              label: 'Kepuasan Pelanggan (30 hari)',
+              nilai:
+                  '★ ${((kepuasanPelanggan['rataRating'] as num?) ?? 0).toStringAsFixed(1)} · ${kepuasanPelanggan['jumlahResponden'] ?? 0} responden',
+              warna: const Color(0xFFB8860B),
+            ),
+          ]),
+          const SizedBox(height: 12),
           PanelChart(
               judul: 'Produk Terlaris (30 hari)',
               child: BarHorizontal(data: terlaris)),
@@ -138,6 +171,46 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
           PanelChart(
               judul: 'Komposisi Metode Bayar (30 hari)',
               child: StackProporsional(data: metodeBayar)),
+          const SizedBox(height: 12),
+          if (jamSibukPerProduk.isNotEmpty)
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Jam Sibuk per Produk (30 hari)',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        DropdownButton<int>(
+                          value: (entriJamSibuk?['produkId'] as num?)?.toInt(),
+                          items: jamSibukPerProduk
+                              .map((e) => DropdownMenuItem(
+                                    value: (e['produkId'] as num).toInt(),
+                                    child: Text('${e['nama']}',
+                                        style: const TextStyle(fontSize: 12)),
+                                  ))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setStateIfMounted(
+                                  () => _produkJamSibukTerpilih = v);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    BarVertikal(
+                        data: jamSibukProduk, warna: const Color(0xFF0284C7)),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           Text('Bahan Baku & Estimasi Habis',
               style: Theme.of(context).textTheme.titleMedium),
@@ -269,6 +342,61 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
                 ),
               ),
             ),
+          if (perputaranStok.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Perputaran Stok (Turnover)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: perputaranStok.take(20).map((t) {
+                    final perputaran = (t['perputaran'] as num?)?.toDouble() ?? 0;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text('${t['nama']}',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                                'Terjual ${formatAngkaDasbor.format(t['qtyTerjual'] ?? 0)}',
+                                style: const TextStyle(fontSize: 11),
+                                textAlign: TextAlign.right),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                                'Stok ${formatAngkaDasbor.format(t['stokKini'] ?? 0)}',
+                                style: const TextStyle(fontSize: 11),
+                                textAlign: TextAlign.right),
+                          ),
+                          SizedBox(
+                            width: 60,
+                            child: Text('${perputaran.toStringAsFixed(2)}x',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           PanelChart(
             judul: 'Produk Kurang Laku (≤5 terjual/30 hari)',

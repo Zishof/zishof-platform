@@ -72,6 +72,12 @@ class _ProdukScreenState extends State<ProdukScreen> {
   int _halaman = 0;
   Map<String, dynamic>? _statistik;
 
+  /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
+  /// sudah dimuat penuh (JUAL+BAHAN, tanpa filter server `jenisItem`, lihat
+  /// JavaDoc `prosesKatalog`) -- tidak perlu round-trip server baru.
+  /// `'SEMUA'` = tanpa filter (default).
+  String _filterJenisItem = 'SEMUA';
+
   @override
   void initState() {
     super.initState();
@@ -128,7 +134,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
           p.nama.toLowerCase().contains(kw) ||
           p.kode.toLowerCase().contains(kw) ||
           p.barcode.toLowerCase().contains(kw);
-      return cocokKategori && cocokKeyword;
+      final cocokJenisItem =
+          _filterJenisItem == 'SEMUA' || p.jenisItem == _filterJenisItem;
+      return cocokKategori && cocokKeyword && cocokJenisItem;
     }).toList();
   }
 
@@ -385,6 +393,25 @@ class _ProdukScreenState extends State<ProdukScreen> {
                           _kataKunci = v;
                           _halaman = 0;
                         }),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                                value: 'SEMUA', label: Text('Semua')),
+                            ButtonSegment(
+                                value: 'JUAL', label: Text('Produk')),
+                            ButtonSegment(
+                                value: 'BAHAN', label: Text('Bahan')),
+                          ],
+                          selected: {_filterJenisItem},
+                          onSelectionChanged: (s) => setStateIfMounted(() {
+                            _filterJenisItem = s.first;
+                            _halaman = 0;
+                          }),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       SizedBox(
@@ -784,6 +811,7 @@ class _FormProdukState extends State<_FormProduk> {
   int? _kategoriId;
   bool _izinkanJualMinusStok = false;
   bool _aktif = true;
+  String _jenisItem = 'JUAL';
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
@@ -804,6 +832,7 @@ class _FormProdukState extends State<_FormProduk> {
     _kategoriId = p?.kategoriId;
     _izinkanJualMinusStok = p?.izinkanJualMinusStok ?? false;
     _aktif = p?.aktif ?? true;
+    _jenisItem = p?.jenisItem ?? 'JUAL';
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
         produkId: (b['produkId'] as num?)?.toInt(),
@@ -838,9 +867,12 @@ class _FormProdukState extends State<_FormProduk> {
   Future<void> _tambahBahanBaku() async {
     final dipilih = await showDialog<Produk>(
       context: context,
+      // Komponen resep HARUS Bahan Baku (jenisItem == 'BAHAN') -- gap-closure
+      // "Jenis Item", produk JUAL biasa tidak boleh dipakai sbg bahan resep.
       builder: (_) => _DialogPilihProduk(
           daftar: widget.semuaProduk
-              .where((p) => p.id != widget.produk?.id)
+              .where((p) =>
+                  p.id != widget.produk?.id && p.jenisItem == 'BAHAN')
               .toList()),
     );
     if (dipilih == null) return;
@@ -875,6 +907,7 @@ class _FormProdukState extends State<_FormProduk> {
         'kategori_id': _kategoriId,
         'izinkan_jual_minus_stok': _izinkanJualMinusStok,
         'aktif': _aktif,
+        'jenis_item': _jenisItem,
         'bahan_baku': _bahanBaku
             .map((b) => {
                   'produk_id': b.produkId,
@@ -946,6 +979,27 @@ class _FormProdukState extends State<_FormProduk> {
                           value: k.id, child: Text(k.nama))),
                     ],
                     onChanged: (v) => setStateIfMounted(() => _kategoriId = v),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Jenis Item',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondaryOf(context))),
+                  ),
+                  const SizedBox(height: 6),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: 'JUAL', label: Text('Produk (Dijual)')),
+                      ButtonSegment(
+                          value: 'BAHAN', label: Text('Bahan Baku')),
+                    ],
+                    selected: {_jenisItem},
+                    onSelectionChanged: (s) =>
+                        setStateIfMounted(() => _jenisItem = s.first),
                   ),
                 ],
               ),
