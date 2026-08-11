@@ -40,13 +40,21 @@ class AppSetting {
   ///
   /// Kosongkan (null) utk varian yang dipakai multi-institusi dgn server
   /// berbeda-beda per pelanggan (spt eBisnis pada umumnya, satu APK/EXE
-  /// dipakai banyak toko independen) -- isi HANYA utk varian ber-institusi
-  /// tunggal yang semua tokonya memang satu server yang sama. Al-Bahjah:
-  /// https://siraj.albahjah.or.id/albahjah.
-  static const String? baseUrlHost =
-      AppVariant.isAlBahjah ? 'siraj.albahjah.or.id' : null;
-  static const String baseUrlContextPath =
-      AppVariant.isAlBahjah ? 'albahjah' : 'ebisnis';
+  /// dipakai banyak toko independen) -- isi HANYA utk varian ber-server
+  /// bawaan. Al-Bahjah: https://siraj.albahjah.or.id/albahjah.
+  /// Inventory & Sales: default https://dev.ecampus.id/ecampus (permintaan
+  /// pemilik utk fase dev/pilot) -- pengguna TETAP bisa menggantinya kapan
+  /// saja lewat "Ubah Alamat Server" di layar Masuk.
+  static const String? baseUrlHost = AppVariant.isAlBahjah
+      ? 'siraj.albahjah.or.id'
+      : (AppVariant.isInventorySales || AppVariant.isEmedik
+          ? 'dev.ecampus.id'
+          : null);
+  static const String baseUrlContextPath = AppVariant.isAlBahjah
+      ? 'albahjah'
+      : (AppVariant.isInventorySales || AppVariant.isEmedik
+          ? 'ecampus'
+          : 'ebisnis');
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya

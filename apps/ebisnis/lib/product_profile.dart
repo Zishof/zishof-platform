@@ -16,6 +16,7 @@ class FiturGrup {
   static const pos = 'pos';
   static const inventorySales = 'inventory_sales';
   static const apotik = 'apotik';
+  static const emedik = 'emedik';
 }
 
 /// <h3>Profil produk -- SATU deskriptor per varian build (PERINTAH_MASTER §4.1).</h3>
@@ -89,6 +90,22 @@ class AppProductProfile {
           fiturGrup: const {FiturGrup.pos, FiturGrup.apotik},
         );
 
+  /// Varian "POS eMedik" -- SATU build yang memuat fitur apotik SEKALIGUS
+  /// emedik: yang membedakan pengguna adalah Tbmrole di server (role apotik
+  /// melihat apotik_*, role ber-emedic melihat emedik_*; seed LANGKAH 1.5),
+  /// bukan binary terpisah. Server bawaan dev.ecampus.id/ecampus
+  /// (AppSetting.baseUrlHost) -- layar Pengaturan Server dilewati saat
+  /// instal pertama, tetap bisa diubah lewat "Ubah Alamat Server".
+  const AppProductProfile.emedik()
+      : this._(
+          kode: 'emedik',
+          namaAplikasi: 'eBisnis POS eMedik',
+          namaSidebar: 'POS eMedik',
+          updateAssetKeyword: 'emedik',
+          logoAsset: 'assets/images/emedik/icon.png',
+          fiturGrup: const {FiturGrup.pos, FiturGrup.apotik, FiturGrup.emedik},
+        );
+
   /// Profil yang cocok dgn `--dart-define=EBISNIS_VARIANT` build ini -- dipakai
   /// `main.dart` (entrypoint default melayani ebisnis & albahjah sekaligus).
   factory AppProductProfile.dariDartDefine() {
@@ -97,6 +114,7 @@ class AppProductProfile {
       return const AppProductProfile.inventorySales();
     }
     if (AppVariant.isApotik) return const AppProductProfile.apotik();
+    if (AppVariant.isEmedik) return const AppProductProfile.emedik();
     return const AppProductProfile.ebisnis();
   }
 
@@ -109,6 +127,8 @@ class AppProductProfile {
 
   bool get isApotik => fiturGrup.contains(FiturGrup.apotik);
 
+  bool get isEmedik => fiturGrup.contains(FiturGrup.emedik);
+
   bool cocokDenganDartDefine() => kode == AppProductProfile.dariDartDefine().kode;
 
   /// Layar pertama setelah login sukses. Varian Inventory & Sales SELALU lewat
@@ -118,7 +138,10 @@ class AppProductProfile {
     if (isInventorySales) {
       return const BerandaInventorySalesScreen();
     }
-    if (isApotik) {
+    if (isApotik || isEmedik) {
+      // Beranda yang SAMA melayani apotik & emedik: kedua grup chip menu
+      // dirender dari aksesMenu server, jadi role-lah yang membedakan
+      // tampilan -- bukan binary (judul ikut namaSidebar profil).
       return const BerandaApotikScreen();
     }
     return const KasirScreen();
@@ -127,11 +150,10 @@ class AppProductProfile {
   /// Gerbang menu level-varian (dipanggil `bolehTampilMenu` app_shell) --
   /// kunci menu khusus satu varian tidak pernah dirakit ke varian lain.
   bool bolehMenuVarian(String kunciMenuVarian) {
-    if (kunciMenuVarian == FiturGrup.inventorySales) {
-      return isInventorySales;
-    }
-    if (kunciMenuVarian == FiturGrup.apotik) {
-      return isApotik;
+    if (kunciMenuVarian == FiturGrup.inventorySales
+        || kunciMenuVarian == FiturGrup.apotik
+        || kunciMenuVarian == FiturGrup.emedik) {
+      return fiturGrup.contains(kunciMenuVarian);
     }
     return true;
   }

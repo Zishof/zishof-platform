@@ -42,4 +42,26 @@ void main() {
         isFalse,
         reason: 'Menu apotik tidak pernah dirakit ke varian POS lama.');
   });
+
+  test('profil emedik memuat apotik SEKALIGUS emedik (beda via Tbmrole)', () {
+    const emedik = AppProductProfile.emedik();
+    expect(emedik.kode, 'emedik');
+    expect(emedik.namaAplikasi, 'eBisnis POS eMedik');
+    expect(emedik.updateAssetKeyword, 'emedik');
+    expect(emedik.logoAsset, 'assets/images/emedik/icon.png');
+    expect(emedik.isEmedik, isTrue);
+    expect(emedik.isApotik, isTrue,
+        reason: 'Satu build eMedik WAJIB memuat fitur apotik -- yang '
+            'membedakan pengguna adalah Tbmrole di server.');
+    expect(emedik.bolehMenuVarian(FiturGrup.apotik), isTrue);
+    expect(emedik.bolehMenuVarian(FiturGrup.emedik), isTrue);
+    expect(const AppProductProfile.apotik().bolehMenuVarian(FiturGrup.emedik),
+        isFalse,
+        reason: 'Varian apotik murni tidak merakit grup emedik.');
+    // Adaptif thd dart-define build test ini: cocok HANYA bila define = emedik.
+    expect(emedik.cocokDenganDartDefine(),
+        AppProductProfile.dariDartDefine().kode == 'emedik',
+        reason: 'Guard harus true tepat ketika dart-define build = emedik, '
+            'false utk kombinasi lain.');
+  });
 }

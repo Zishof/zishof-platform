@@ -33,6 +33,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   const wchar_t* window_title = L"eBisnis Inventory & Sales";
 #elif defined(EBISNIS_VARIANT_APOTIK)
   const wchar_t* window_title = L"eBisnis POS Apotik";
+#elif defined(EBISNIS_VARIANT_EMEDIK)
+  const wchar_t* window_title = L"eBisnis POS eMedik";
 #else
   const wchar_t* window_title = L"ebisnis";
 #endif

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../product_profile.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -96,7 +97,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
-        title: const Text('POS Apotik'),
+        // Judul ikut profil varian: layar SAMA melayani "POS Apotik" dan
+        // "POS eMedik" (satu build eMedik memuat keduanya; beda via Tbmrole).
+        title: Text(AppProductProfile.aktif.namaSidebar),
         actions: [
           IconButton(
               icon: const Icon(Icons.refresh),
