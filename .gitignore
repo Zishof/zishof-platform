@@ -9,6 +9,13 @@
 
 **/installer/dist/
 
+# Release build artifacts (zip/exe/apk) -- uploaded to GitHub Releases as
+# assets, NOT tracked in git (bloats repo forever otherwise). Re-buildable
+# from source + a version bump any time.
+apps/*/dist/
+apps/*/tmp/release_stage/
+apps/*/*.apk
+
 # Platform build outputs
 **/android/.gradle/
 **/android/app/build/
