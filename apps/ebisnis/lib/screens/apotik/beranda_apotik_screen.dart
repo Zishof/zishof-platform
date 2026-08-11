@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../login_screen.dart';
+import 'kasir_apotik_screen.dart';
 
 /// <h3>Beranda varian "POS Apotik" -- landing setelah login (LANGKAH 2).</h3>
 ///
@@ -192,6 +193,16 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
         ]),
       );
 
+  /// Tujuan navigasi menu yang layarnya SUDAH dibangun -- bertambah per fase.
+  /// Menu tanpa tujuan tetap chip status (hak akses tetap terverifikasi UAT).
+  Widget? _layarTujuan(String kunci) {
+    switch (kunci) {
+      case 'apotik_kasir':
+        return const KasirApotikScreen();
+    }
+    return null;
+  }
+
   Widget _grupMenu(BuildContext context, String judul,
       List<(String, String, IconData)> daftar) {
     return AppSectionCard(
@@ -201,8 +212,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
         runSpacing: 8,
         children: daftar.map((m) {
           final boleh = Sesi.instance.bolehMenuVarianBaru(m.$1);
+          final tujuan = boleh ? _layarTujuan(m.$1) : null;
           final warna = boleh ? AppColors.success : AppColors.danger;
-          return Container(
+          final chip = Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: AppColors.latarLembut(warna),
@@ -218,9 +230,20 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
                       fontWeight: FontWeight.w600,
                       color: warna)),
               const SizedBox(width: 6),
-              Icon(boleh ? Icons.check_circle : Icons.block,
-                  size: 13, color: warna),
+              Icon(
+                  tujuan != null
+                      ? Icons.chevron_right
+                      : (boleh ? Icons.check_circle : Icons.block),
+                  size: 13,
+                  color: warna),
             ]),
+          );
+          if (tujuan == null) return chip;
+          return InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => tujuan)),
+            child: chip,
           );
         }).toList(),
       ),
