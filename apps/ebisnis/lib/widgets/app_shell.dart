@@ -18,6 +18,7 @@ import '../screens/stok_opname_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/cara_bayar_screen.dart';
+import '../screens/jenis_produk_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -48,6 +49,7 @@ enum MenuEBisnis {
   pesanan,
   anggota,
   produk,
+  jenisProduk,
   stokOpname,
   kulakan,
   diskon,
@@ -86,6 +88,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.pesanan: 'pesanan',
   MenuEBisnis.anggota: 'anggota',
   MenuEBisnis.produk: 'produk',
+  MenuEBisnis.jenisProduk: 'produk',
   MenuEBisnis.stokOpname: 'stokopname',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.diskon: 'diskon',
@@ -116,6 +119,9 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunAnggota),
   _ItemMenuShell(MenuEBisnis.produk, Icons.inventory_2_outlined, 'Produk',
       builder: _bangunProduk),
+  _ItemMenuShell(MenuEBisnis.jenisProduk, Icons.category_outlined,
+      'Jenis Produk',
+      builder: _bangunJenisProduk),
   _ItemMenuShell(
       MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname',
       builder: _bangunStok),
@@ -165,6 +171,7 @@ const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Master Data', [
     MenuEBisnis.anggota,
     MenuEBisnis.produk,
+    MenuEBisnis.jenisProduk,
     MenuEBisnis.stokOpname,
     MenuEBisnis.kulakan,
     MenuEBisnis.diskon,
@@ -189,6 +196,7 @@ Widget _bangunRingkasan(BuildContext c) => const RingkasanScreen();
 Widget _bangunPesanan(BuildContext c) => const PesananScreen();
 Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
 Widget _bangunProduk(BuildContext c) => const ProdukScreen();
+Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
@@ -249,6 +257,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Customer/Anggota';
     case MenuEBisnis.produk:
       return 'Produk';
+    case MenuEBisnis.jenisProduk:
+      return 'Jenis Produk';
     case MenuEBisnis.stokOpname:
       return 'Stok Opname';
     case MenuEBisnis.kulakan:
@@ -290,6 +300,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.anggota;
     case 'Produk':
       return MenuEBisnis.produk;
+    case 'Jenis Produk':
+      return MenuEBisnis.jenisProduk;
     case 'Stok Opname':
       return MenuEBisnis.stokOpname;
     case 'Kulakan':
