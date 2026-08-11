@@ -41,12 +41,13 @@ class AppSetting {
   /// Kosongkan (null) utk varian yang dipakai multi-institusi dgn server
   /// berbeda-beda per pelanggan (spt eBisnis pada umumnya, satu APK/EXE
   /// dipakai banyak toko independen) -- isi HANYA utk varian ber-server
-  /// bawaan. Al-Bahjah: https://siraj.albahjah.or.id/albahjah.
-  /// Inventory & Sales: default https://dev.ecampus.id/ecampus (permintaan
-  /// pemilik utk fase dev/pilot) -- pengguna TETAP bisa menggantinya kapan
-  /// saja lewat "Ubah Alamat Server" di layar Masuk.
+  /// bawaan. Al-Bahjah: https://ecampus.staialbahjah.ac.id/albahjah (2026-08-12,
+  /// menggantikan siraj.albahjah.or.id lama).
+  /// Inventory & Sales/eMedik: default https://dev.ecampus.id/ecampus
+  /// (permintaan pemilik utk fase dev/pilot) -- pengguna TETAP bisa
+  /// menggantinya kapan saja lewat "Ubah Alamat Server" di layar Masuk.
   static const String? baseUrlHost = AppVariant.isAlBahjah
-      ? 'siraj.albahjah.or.id'
+      ? 'ecampus.staialbahjah.ac.id'
       : (AppVariant.isInventorySales || AppVariant.isEmedik
           ? 'dev.ecampus.id'
           : null);
@@ -58,8 +59,10 @@ class AppSetting {
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya
-  /// sendiri lewat Konfigurasi. Sama untuk semua varian saat ini -- ganti
-  /// nilainya di sini kalau satu brand (mis. Al-Bahjah) punya warna
-  /// korporat sendiri; tak perlu ubah kode lain manapun.
-  static const AppThemeWarna temaBawaan = AppThemeWarna.biru;
+  /// sendiri lewat Konfigurasi. Al-Bahjah: hijau (mengikuti warna korporat
+  /// logo -- lihat juga aksen emas tambahan di `AppTheme._base` dan sidebar
+  /// hijau di `AppColors`, keduanya HANYA aktif utk varian ini). Varian lain
+  /// tetap biru spt sebelumnya.
+  static const AppThemeWarna temaBawaan =
+      AppVariant.isAlBahjah ? AppThemeWarna.hijau : AppThemeWarna.biru;
 }

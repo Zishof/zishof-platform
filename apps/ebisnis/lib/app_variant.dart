@@ -63,4 +63,16 @@ class AppVariant {
               : (isEmedik
                   ? 'assets/images/emedik/icon.png'
                   : 'assets/images/ebisnis/icon.png')));
+
+  /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
+  /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
+  /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
+  /// "Al-Bahjah POS", HANYA di kartu login.
+  static const judulLogin = isAlBahjah ? 'Unit Usaha Al Bahjah' : namaAplikasi;
+
+  /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
+  /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
+  static const subJudulLogin = isAlBahjah
+      ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
+      : (isInventorySales ? 'Masuk ke Inventory & Sales' : 'Masuk sebagai Kasir');
 }

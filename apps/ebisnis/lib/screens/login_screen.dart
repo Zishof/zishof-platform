@@ -48,6 +48,13 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Latar kartu Masuk & tombol "Masuk" -- BUKAN [AppColors.primary] (yang
+  /// bisa diubah pengguna kapan saja lewat Konfigurasi) krn layar ini muncul
+  /// SEBELUM identitas pengguna diketahui, jadi warnanya murni identitas
+  /// VARIAN build, sama spt [AppVariant.logoAsset]/[AppVariant.judulLogin].
+  static const _warnaLatar =
+      AppVariant.isAlBahjah ? Color(0xFF14532D) : Color(0xFF1E3A5F);
+
   @override
   Widget build(BuildContext context) {
     final isDark = AppColors.gelap(context);
@@ -55,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final warnaSubjudul = AppColors.textSecondaryOf(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E3A5F),
+      backgroundColor: _warnaLatar,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -73,16 +80,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Image.asset(AppVariant.logoAsset, height: 64),
                     const SizedBox(height: 12),
-                    Text(AppVariant.namaAplikasi,
+                    Text(AppVariant.judulLogin,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                             color: warnaJudul)),
-                    Text(
-                        AppVariant.isInventorySales
-                            ? 'Masuk ke Inventory & Sales'
-                            : 'Masuk sebagai Kasir',
+                    Text(AppVariant.subJudulLogin,
                         textAlign: TextAlign.center,
                         style: TextStyle(color: warnaSubjudul)),
                     const SizedBox(height: 24),
@@ -109,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ElevatedButton(
                       onPressed: _memproses ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3A5F),
+                        backgroundColor: _warnaLatar,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
