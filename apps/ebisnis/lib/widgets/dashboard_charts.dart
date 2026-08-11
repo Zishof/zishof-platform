@@ -186,6 +186,120 @@ class BarVertikal extends StatelessWidget {
   }
 }
 
+/// Chart batang vertikal 2-seri berdampingan (mis. Diskon vs Cashback per
+/// periode) -- padanan `groupedBar` versi ZK (`DashboardUiKit.groupedBar`,
+/// dipakai `MonitorDiskonKantinAction`). `labels`/`seri1`/`seri2` harus
+/// SEJAJAR urutan &amp; panjangnya (satu titik per indeks).
+class GroupedBarVertikal extends StatelessWidget {
+  final List<String> labels;
+  final List<double> seri1;
+  final List<double> seri2;
+  final String labelSeri1;
+  final String labelSeri2;
+  final Color warnaSeri1;
+  final Color warnaSeri2;
+  final String Function(double)? formatNilai;
+  const GroupedBarVertikal({
+    super.key,
+    required this.labels,
+    required this.seri1,
+    required this.seri2,
+    required this.labelSeri1,
+    required this.labelSeri2,
+    this.warnaSeri1 = const Color(0xFFC0563D),
+    this.warnaSeri2 = const Color(0xFF2E7D32),
+    this.formatNilai,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (labels.isEmpty) return _kosong(context);
+    final maks = [...seri1, ...seri2].fold<double>(0, (a, b) => a > b ? a : b);
+    final fmt = formatNilai ?? formatAngkaDasbor.format;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _legenda(warnaSeri1, labelSeri1),
+            const SizedBox(width: 14),
+            _legenda(warnaSeri2, labelSeri2),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 160,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(labels.length, (i) {
+              final t1 = maks > 0 ? (seri1[i] / maks) * 100 : 0.0;
+              final t2 = maks > 0 ? (seri2[i] / maks) * 100 : 0.0;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: t1.clamp(2, 100),
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            decoration: BoxDecoration(
+                                color: warnaSeri1,
+                                borderRadius: BorderRadius.circular(2)),
+                          ),
+                          Container(
+                            width: 8,
+                            height: t2.clamp(2, 100),
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            decoration: BoxDecoration(
+                                color: warnaSeri2,
+                                borderRadius: BorderRadius.circular(2)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        labels[i],
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: AppColors.textSecondaryOf(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Skala: ${fmt(maks)}',
+          style: TextStyle(fontSize: 10, color: AppColors.textSecondaryOf(context)),
+        ),
+      ],
+    );
+  }
+
+  Widget _legenda(Color warna, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 10, height: 10, color: warna),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
+      );
+}
+
 /// Chart batang horizontal berperingkat (padanan `buatBarHorizontal`) --
 /// dipakai utk daftar top-N (produk terlaris, kasir teratas, dsb).
 class BarHorizontal extends StatelessWidget {
