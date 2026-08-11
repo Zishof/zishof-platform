@@ -335,6 +335,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _evaluasiDiskon() async {
     if (widget.keranjang.isEmpty) return;
     try {
+      // SENGAJA tidak menyertakan `i.ekstra` di sini -- baris ekstra memang
+      // belum dibuat diskon-eligible sendiri di fase ini (bukan oversight),
+      // diskon tetap dievaluasi hanya thd produk dasar per baris.
       final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
         'id_member': _memberTerpilih?.id,
         'items': widget.keranjang
@@ -506,6 +509,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 'diskon': i.diskon,
                 'aturanDiskon': i.aturanDiskonId,
                 'cashback': i.cashback,
+                // Purely ADDITIVE (gap-closure "Produk Ekstra") -- selalu
+                // disertakan sbg array, kosong utk mayoritas baris tanpa
+                // add-on (lihat JavaDoc [ItemEkstra] di models.dart).
+                'ekstra': i.ekstra
+                    .map((e) => {
+                          'id': e.id,
+                          'kode': e.kode,
+                          'nama': e.nama,
+                          'harga': e.harga,
+                          'jumlah': e.jumlah,
+                        })
+                    .toList(),
               })
           .toList(),
     };
@@ -609,13 +624,26 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             .showSnackBar(SnackBar(content: Text(pesanTundaMenuju)));
       }
 
-      final itemStruk = widget.keranjang
-          .map((i) => {
-                'nama': i.produk.nama,
-                'qty': i.jumlah,
-                'harga': i.produk.hargaJual
-              })
-          .toList();
+      // Ekstra diratakan (flatten) jadi baris tersendiri TEPAT setelah induknya
+      // -- StrukScreen tak kenal struktur bersarang, cuma daftar {nama,qty,
+      // harga} datar (lihat JavaDoc StrukScreen._itemPdf). Prefiks "   + "
+      // sbg indentasi visual, qty ekstra ikut qty induk (kontrak server: 1
+      // ekstra berlaku per 1 unit induk, lihat JavaDoc [ItemEkstra]).
+      final itemStruk = <Map<String, dynamic>>[];
+      for (final i in widget.keranjang) {
+        itemStruk.add({
+          'nama': i.produk.nama,
+          'qty': i.jumlah,
+          'harga': i.produk.hargaJual,
+        });
+        for (final e in i.ekstra) {
+          itemStruk.add({
+            'nama': '   + ${e.nama}',
+            'qty': i.jumlah,
+            'harga': e.harga,
+          });
+        }
+      }
       final metodeNama = _caraBayarTerpilih!.nama;
       final pelangganStruk = _memberTerpilih?.nama;
       final totalStruk = _total;
@@ -974,6 +1002,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      // Sub-baris ekstra terpilih -- gaya sama dgn sub-baris
+                      // Diskon di bawah ini (indentasi via prefiks "+", warna
+                      // sekunder supaya tetap kalah tonjol drpd nama produk).
+                      for (final e in item.ekstra)
+                        Text('+ ${e.nama}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.textSecondaryOf(context),
+                                fontSize: 11.5)),
                       if (item.diskon > 0)
                         Text('Diskon ${_formatRupiah.format(item.diskon)}',
                             maxLines: 1,

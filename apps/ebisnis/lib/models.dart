@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Model data POS pilot -- bentuknya mengikuti persis kontrak JSON Api_eBisnis
 /// (identik PosApi.java, lihat prosesKatalog/prosesKonfigurasi di server).
 class Produk {
@@ -30,6 +32,17 @@ class Produk {
   /// tampilan di form -- lihat JavaDoc `_FormProduk._BahanBakuEditor`).
   final List<Map<String, dynamic>> bahanBaku;
 
+  /// Produk Ekstra (add-on/modifier) -- daftar id bare produk lain
+  /// (`jenisItem == 'EKSTRA'`) yang boleh dipilih pelanggan saat produk ini
+  /// ditambahkan ke keranjang (mis. "Kopi Susu Enak" -> ["Ekstra Topping
+  /// Mesis", "Ekstra Cruble Oreo"]). Dari field `ekstraPilihan` respons
+  /// `katalog` (server SUDAH mem-parse jadi array asli, bukan string JSON
+  /// mentah). Resolusi id->nama/harga dilakukan lokal lewat
+  /// `CoreDb.produkCacheResolveByIds` (lihat picker "Pilih Ekstra" Kasir),
+  /// BUKAN dikirim ulang APA ADANYA -- beda dari [bahanBaku] yang memang
+  /// sudah berisi nama/harga siap tampil dari server.
+  final List<int> ekstraPilihan;
+
   Produk({
     required this.id,
     required this.kode,
@@ -46,6 +59,7 @@ class Produk {
     this.aktif = true,
     this.jenisItem = 'JUAL',
     this.bahanBaku = const [],
+    this.ekstraPilihan = const [],
   });
 
   factory Produk.fromJson(Map<String, dynamic> j) => Produk(
@@ -69,6 +83,9 @@ class Produk {
             : 'JUAL',
         bahanBaku:
             ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
+        ekstraPilihan: ((j['ekstraPilihan'] as List?) ?? [])
+            .map((e) => (e as num).toInt())
+            .toList(),
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
@@ -88,6 +105,8 @@ class Produk {
         'jenis_item': (j['jenisItem'] as String?)?.isNotEmpty == true
             ? j['jenisItem']
             : 'JUAL',
+        'ekstra_pilihan': jsonEncode(
+            ((j['ekstraPilihan'] as List?) ?? []).map((e) => e as num).toList()),
       };
 }
 
@@ -111,22 +130,55 @@ class CaraBayar {
       );
 }
 
+/// Satu pilihan Produk Ekstra (add-on/modifier) yang dilekatkan ke satu baris
+/// [ItemKeranjang] -- bentuknya mengikuti persis kontrak `ekstra` dlm
+/// `transaksi` (aksi `bayar`/`draft_bayar`, lihat JavaDoc
+/// `PanelKeranjang._buatPayload`). [jumlah] SELALU `1` di payload (server
+/// mengalikan otomatis dgn qty produk induk, lihat JavaDoc
+/// [ItemKeranjang.subtotal]) -- field ini tetap disimpan (bukan konstanta
+/// dihardcode saat kirim) supaya bentuk model persis mengikuti kontrak JSON.
+class ItemEkstra {
+  final int id;
+  final String kode;
+  final String nama;
+  final double harga;
+  final int jumlah;
+  const ItemEkstra(
+      {required this.id,
+      required this.kode,
+      required this.nama,
+      required this.harga,
+      this.jumlah = 1});
+}
+
 /// Satu baris di keranjang -- disalin dari [Produk] + jumlah yang dipilih kasir.
 /// [diskon]/[cashback]/[aturanDiskonId] diisi hasil `diskon_evaluasi` (lihat
 /// KeranjangScreen._evaluasiDiskon) -- default 0/null sebelum evaluasi pertama.
+/// [ekstra] diisi lewat picker "Pilih Ekstra" (KasirScreen._tambahKeKeranjang)
+/// saat [produk] punya [Produk.ekstraPilihan] -- kosong (default) utk mayoritas
+/// baris biasa tanpa add-on.
 class ItemKeranjang {
   final Produk produk;
   int jumlah;
   double diskon;
   double cashback;
   int? aturanDiskonId;
+  final List<ItemEkstra> ekstra;
   ItemKeranjang(
       {required this.produk,
       this.jumlah = 1,
       this.diskon = 0,
       this.cashback = 0,
-      this.aturanDiskonId});
-  double get subtotal => produk.hargaJual * jumlah;
+      this.aturanDiskonId,
+      this.ekstra = const []});
+
+  /// Harga ekstra dijumlahkan PER UNIT produk induk (padanan cara server
+  /// mengalikan `ekstra` dgn qty induk saat checkout, lihat JavaDoc
+  /// [ItemEkstra]) -- jadi total di layar (subtotal/total/kembalian) SELALU
+  /// cocok dgn yang akan dihitung ulang server, bukan cuma harga produk dasar.
+  double get _hargaEkstraPerUnit =>
+      ekstra.fold(0.0, (s, e) => s + e.harga);
+  double get subtotal => (produk.hargaJual + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
 
@@ -222,6 +274,14 @@ class Anggota {
 
 /// Satu item di dalam [Pesanan] -- bentuk sama dgn `transaksi`/keranjang saat
 /// checkout, dikembalikan lagi APA ADANYA dari draft oleh aksi `pesanan_list`.
+///
+/// [draftItemId]/[indukId] (gap-closure "Produk Ekstra") -- [draftItemId]
+/// adalah id baris draft ITU SENDIRI, [indukId] null utk baris dasar, atau
+/// berisi [draftItemId] baris induknya utk baris ekstra. Dipakai
+/// PesananScreen._muatKeKeranjang mengelompokkan lagi baris ekstra yg
+/// datang FLAT dari server jadi [ItemEkstra] bersarang di [ItemKeranjang]
+/// induknya saat "Muat ke Keranjang" (resume Keranjang Tertahan) -- tanpa
+/// ini, tiap ekstra akan muncul sbg baris keranjang mandiri sendiri-sendiri.
 class ItemPesanan {
   final int? produkId;
   final String kode;
@@ -231,6 +291,8 @@ class ItemPesanan {
   final double diskon;
   final double cashback;
   final int? aturanDiskonId;
+  final int? draftItemId;
+  final int? indukId;
 
   ItemPesanan({
     required this.produkId,
@@ -241,6 +303,8 @@ class ItemPesanan {
     required this.diskon,
     required this.cashback,
     required this.aturanDiskonId,
+    this.draftItemId,
+    this.indukId,
   });
 
   factory ItemPesanan.fromJson(Map<String, dynamic> j) => ItemPesanan(
@@ -261,6 +325,9 @@ class ItemPesanan {
             j['aturanDiskonId'] ??
             j['aturan_diskon'] ??
             j['aturan_diskon_id']),
+        draftItemId:
+            _intNullable(j['draftItemId'] ?? j['draft_item_id']),
+        indukId: _intNullable(j['indukId'] ?? j['induk_id']),
       );
 }
 

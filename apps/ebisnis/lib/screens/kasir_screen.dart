@@ -179,7 +179,25 @@ class _KasirScreenState extends State<KasirScreen> {
         kategoriId: b['kategori_id'] as int?,
         kategoriNama: (b['kategori_nama'] ?? '') as String,
         gambarUrl: b['gambar_url'] as String?,
+        // Offline-first: gerbang "Pilih Ekstra" (_tambahKeKeranjang) harus
+        // tetap aktif walau Kasir baru saja start dari cache lokal (belum
+        // sempat sinkron katalog dari server) -- tanpa ini produk dgn ekstra
+        // yang dimuat dari cache akan diam-diam kehilangan picker-nya.
+        ekstraPilihan: _ekstraPilihanDariCache(b['ekstra_pilihan']),
       );
+
+  List<int> _ekstraPilihanDariCache(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((e) => (e as num).toInt()).toList();
+      }
+    } catch (_) {
+      // Data cache lama/korup -- anggap tanpa ekstra, bukan error fatal.
+    }
+    return const [];
+  }
 
   void _terapkanKonfig(Map<String, dynamic> konfig) {
     Sesi.instance
@@ -340,13 +358,14 @@ class _KasirScreenState extends State<KasirScreen> {
 
       final katalog = await ApiClient.instance.aksi('katalog');
       final produkJson = (katalog['produk'] as List?) ?? [];
-      // Cache ditulis dari SELURUH baris (termasuk Bahan Baku, lihat
+      // Cache ditulis dari SELURUH baris (termasuk Bahan Baku & Ekstra, lihat
       // CoreDb.produkCache) -- tapi grid Kasir (_semuaProduk) mengecualikan
-      // Bahan Baku, sama seperti klausa WHERE cache lokal, supaya perilaku
-      // online & offline konsisten (bahan baku tidak pernah terjual langsung).
+      // keduanya, sama seperti klausa WHERE cache lokal, supaya perilaku
+      // online & offline konsisten (bahan baku/ekstra tidak pernah terjual
+      // langsung sbg baris mandiri -- ekstra hanya via picker "Pilih Ekstra").
       final produk = produkJson
           .map((e) => Produk.fromJson(e as Map<String, dynamic>))
-          .where((p) => p.jenisItem != 'BAHAN')
+          .where((p) => p.jenisItem != 'BAHAN' && p.jenisItem != 'EKSTRA')
           .toList();
       final kategori = ((katalog['kategori'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
@@ -634,9 +653,19 @@ class _KasirScreenState extends State<KasirScreen> {
     }).toList();
   }
 
+  /// Produk dgn [Produk.ekstraPilihan] wajib lewat picker "Pilih Ekstra"
+  /// (checkbox, lihat [_bukaPickerEkstra]) SEBELUM masuk keranjang -- gerbang
+  /// dilewati (jalur lama persis, tanpa perubahan) utk mayoritas produk tanpa
+  /// ekstra sama sekali.
   void _tambahKeKeranjang(Produk p) {
+    if (p.ekstraPilihan.isNotEmpty) {
+      unawaited(_tambahKeKeranjangDenganEkstra(p));
+      return;
+    }
     setStateIfMounted(() {
-      final existing = _keranjang.where((i) => i.produk.id == p.id).toList();
+      final existing = _keranjang
+          .where((i) => i.produk.id == p.id && i.ekstra.isEmpty)
+          .toList();
       if (existing.isNotEmpty) {
         existing.first.jumlah++;
       } else {
@@ -649,6 +678,64 @@ class _KasirScreenState extends State<KasirScreen> {
     });
     _siarkanKeranjangKasir();
     _jadwalkanFokusCariItem();
+  }
+
+  /// Alur "Pilih Ekstra" -- buka bottom sheet checkbox (batal = tidak ada apa
+  /// pun ditambahkan), lalu masukkan ke keranjang PERSIS spt [_tambahKeKeranjang]
+  /// biasa, hanya kunci penggabungan baris (merge-key) ikut mensyaratkan
+  /// set ekstra yg SAMA PERSIS -- 2 baris produk sama tapi ekstra beda TIDAK
+  /// digabung jadi satu qty, tetap 2 baris keranjang terpisah.
+  Future<void> _tambahKeKeranjangDenganEkstra(Produk p) async {
+    final dipilih = await _bukaPickerEkstra(p);
+    if (dipilih == null || !mounted) return; // batal -- tidak menambah apa pun
+    setStateIfMounted(() {
+      final existing = _keranjang
+          .where((i) => i.produk.id == p.id && _ekstraSama(i.ekstra, dipilih))
+          .toList();
+      if (existing.isNotEmpty) {
+        existing.first.jumlah++;
+      } else {
+        _keranjang.add(ItemKeranjang(produk: p, ekstra: dipilih));
+      }
+      if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
+        _kataKunciController.clear();
+        _kataKunci = '';
+      }
+    });
+    _siarkanKeranjangKasir();
+    _jadwalkanFokusCariItem();
+  }
+
+  /// Resolusi [Produk.ekstraPilihan] jadi baris nama/harga siap tampil lewat
+  /// cache lokal (TANPA round-trip server, lihat JavaDoc
+  /// `CoreDb.produkCacheResolveByIds`) lalu tampilkan bottom sheet checkbox.
+  /// `null` = kasir membatalkan (tutup sheet tanpa menekan "Tambahkan").
+  Future<List<ItemEkstra>?> _bukaPickerEkstra(Produk p) async {
+    List<Map<String, Object?>> daftar;
+    try {
+      daftar = await CoreDb.instance.produkCacheResolveByIds(p.ekstraPilihan);
+    } catch (_) {
+      daftar = [];
+    }
+    if (!mounted) return null;
+    return showModalBottomSheet<List<ItemEkstra>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _SheetPilihEkstra(produkNama: p.nama, daftar: daftar),
+    );
+  }
+
+  /// Kunci penggabungan baris keranjang -- 2 himpunan ekstra dianggap SAMA
+  /// hanya kalau isinya identik (urutan tidak relevan, lihat JavaDoc
+  /// [_tambahKeKeranjangDenganEkstra]).
+  bool _ekstraSama(List<ItemEkstra> a, List<ItemEkstra> b) {
+    if (a.length != b.length) return false;
+    final idsA = a.map((e) => e.id).toList()..sort();
+    final idsB = b.map((e) => e.id).toList()..sort();
+    for (var i = 0; i < idsA.length; i++) {
+      if (idsA[i] != idsB[i]) return false;
+    }
+    return true;
   }
 
   /// Dropdown hasil pencarian -- padanan `renderSearchDropdown` pos-renderer.js,
@@ -682,11 +769,19 @@ class _KasirScreenState extends State<KasirScreen> {
         _semuaProduk.where((p) => p.kode == v || p.barcode == v).toList();
     if (cocok.isNotEmpty) {
       _tambahKeKeranjang(cocok.first);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('${cocok.first.nama} ditambahkan'),
-            duration: const Duration(milliseconds: 700)),
-      );
+      // Produk dgn ekstra BELUM tentu jadi masuk keranjang di sini -- masih
+      // menunggu picker "Pilih Ekstra" (bottom sheet async, lihat
+      // [_tambahKeKeranjangDenganEkstra]), kasir bisa saja membatalkannya.
+      // Snackbar "ditambahkan" langsung di sini akan menyesatkan utk kasus
+      // itu, jadi dilewati -- munculnya sheet itu sendiri sudah umpan balik
+      // yang cukup.
+      if (cocok.first.ekstraPilihan.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('${cocok.first.nama} ditambahkan'),
+              duration: const Duration(milliseconds: 700)),
+        );
+      }
       _kataKunciController.clear();
       setStateIfMounted(() => _kataKunci = '');
       _jadwalkanFokusCariItem();
@@ -1952,6 +2047,123 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
             child: const Text('Batal')),
         ElevatedButton(onPressed: _konfirmasi, child: const Text('Tutup Kas')),
       ],
+    );
+  }
+}
+
+/// Bottom sheet "Pilih Ekstra" -- checkbox per baris ekstra hasil resolusi
+/// [Produk.ekstraPilihan] (nama/harga dari cache lokal, lihat JavaDoc
+/// `KasirScreen._bukaPickerEkstra`). Ekstra bersifat OPSIONAL -- kasir boleh
+/// menekan "Tambahkan ke Keranjang" tanpa mencentang apa pun (produk dasar
+/// tetap masuk keranjang tanpa add-on), `null` (batal/tutup sheet) yang
+/// membedakannya dari "sengaja tidak pilih ekstra apa pun".
+class _SheetPilihEkstra extends StatefulWidget {
+  final String produkNama;
+  final List<Map<String, Object?>> daftar;
+  const _SheetPilihEkstra({required this.produkNama, required this.daftar});
+
+  @override
+  State<_SheetPilihEkstra> createState() => _SheetPilihEkstraState();
+}
+
+class _SheetPilihEkstraState extends State<_SheetPilihEkstra> {
+  final Set<int> _terpilih = {};
+
+  void _toggle(int id) {
+    setState(() {
+      if (!_terpilih.remove(id)) _terpilih.add(id);
+    });
+  }
+
+  void _konfirmasi() {
+    final hasil = widget.daftar.where((b) => _terpilih.contains(b['id'] as int)).map((b) {
+      return ItemEkstra(
+        id: b['id'] as int,
+        kode: (b['kode'] ?? '') as String,
+        nama: (b['nama'] ?? '') as String,
+        harga: (b['harga_jual'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+    Navigator.of(context).pop(hasil);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.75),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline,
+                        size: 18, color: AppColors.textPrimaryOf(context)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Pilih Ekstra -- ${widget.produkNama}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: AppColors.textPrimaryOf(context),
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: widget.daftar.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                            'Tidak ada pilihan ekstra tersedia (mungkin belum tersinkron -- coba Muat Ulang katalog).',
+                            style: TextStyle(
+                                color: AppColors.textSecondaryOf(context))),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: widget.daftar.length,
+                        itemBuilder: (context, i) {
+                          final b = widget.daftar[i];
+                          final id = b['id'] as int;
+                          final harga = (b['harga_jual'] as num?)?.toDouble() ?? 0;
+                          return CheckboxListTile(
+                            value: _terpilih.contains(id),
+                            onChanged: (_) => _toggle(id),
+                            title: Text('${b['nama'] ?? ''}'),
+                            secondary: Text('+${_formatRupiah.format(harga)}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary)),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                          );
+                        },
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _konfirmasi,
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14)),
+                    child: const Text('Tambahkan ke Keranjang'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

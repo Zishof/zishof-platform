@@ -73,8 +73,8 @@ class _ProdukScreenState extends State<ProdukScreen> {
   Map<String, dynamic>? _statistik;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
-  /// sudah dimuat penuh (JUAL+BAHAN, tanpa filter server `jenisItem`, lihat
-  /// JavaDoc `prosesKatalog`) -- tidak perlu round-trip server baru.
+  /// sudah dimuat penuh (JUAL+BAHAN+EKSTRA, tanpa filter server `jenisItem`,
+  /// lihat JavaDoc `prosesKatalog`) -- tidak perlu round-trip server baru.
   /// `'SEMUA'` = tanpa filter (default).
   String _filterJenisItem = 'SEMUA';
 
@@ -405,6 +405,8 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                 value: 'JUAL', label: Text('Produk')),
                             ButtonSegment(
                                 value: 'BAHAN', label: Text('Bahan')),
+                            ButtonSegment(
+                                value: 'EKSTRA', label: Text('Ekstra')),
                           ],
                           selected: {_filterJenisItem},
                           onSelectionChanged: (s) => setStateIfMounted(() {
@@ -816,6 +818,11 @@ class _FormProdukState extends State<_FormProduk> {
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
 
+  /// Pilihan Produk Ekstra (add-on/modifier) -- cuma daftar id (beda dari
+  /// [_bahanBaku] yang perlu qty/harga per baris), server cukup menyimpan
+  /// APA ADANYA lewat `ekstra_pilihan` (lihat JavaDoc [Produk.ekstraPilihan]).
+  final List<int> _ekstraPilihan = [];
+
   @override
   void initState() {
     super.initState();
@@ -841,6 +848,7 @@ class _FormProdukState extends State<_FormProduk> {
         hargaAwal: '${b['harga'] ?? 0}',
       ));
     }
+    _ekstraPilihan.addAll(p?.ekstraPilihan ?? const <int>[]);
   }
 
   @override
@@ -887,6 +895,40 @@ class _FormProdukState extends State<_FormProduk> {
     b.dispose();
   }
 
+  /// Reuse [_DialogPilihProduk] (padanan persis [_tambahBahanBaku], hanya
+  /// filternya `jenisItem == 'EKSTRA'` & yang sudah dipilih disembunyikan
+  /// dari daftar supaya kasir tak bisa pilih dobel produk ekstra yg sama).
+  Future<void> _tambahEkstra() async {
+    final dipilih = await showDialog<Produk>(
+      context: context,
+      builder: (_) => _DialogPilihProduk(
+          title: 'Pilih Ekstra',
+          tampilkanHargaJual: true,
+          daftar: widget.semuaProduk
+              .where((p) =>
+                  p.id != widget.produk?.id &&
+                  p.jenisItem == 'EKSTRA' &&
+                  !_ekstraPilihan.contains(p.id))
+              .toList()),
+    );
+    if (dipilih == null) return;
+    setStateIfMounted(() => _ekstraPilihan.add(dipilih.id));
+  }
+
+  void _hapusEkstra(int produkId) {
+    setStateIfMounted(() => _ekstraPilihan.remove(produkId));
+  }
+
+  /// Nama tampilan produk ekstra yg sudah dipilih -- dicari dari
+  /// [widget.semuaProduk] (katalog lengkap yang sudah dimuat layar Produk,
+  /// sama seperti sumber data [_DialogPilihProduk]).
+  String _namaProduk(int id) {
+    for (final p in widget.semuaProduk) {
+      if (p.id == id) return p.nama;
+    }
+    return '#$id';
+  }
+
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
@@ -916,6 +958,7 @@ class _FormProdukState extends State<_FormProduk> {
                   'harga': _angka(b.harga.text)
                 })
             .toList(),
+        'ekstra_pilihan': _ekstraPilihan,
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -996,6 +1039,8 @@ class _FormProdukState extends State<_FormProduk> {
                           value: 'JUAL', label: Text('Produk (Dijual)')),
                       ButtonSegment(
                           value: 'BAHAN', label: Text('Bahan Baku')),
+                      ButtonSegment(
+                          value: 'EKSTRA', label: Text('Ekstra')),
                     ],
                     selected: {_jenisItem},
                     onSelectionChanged: (s) =>
@@ -1120,6 +1165,30 @@ class _FormProdukState extends State<_FormProduk> {
                         ],
                       ),
               ),
+              const SizedBox(height: 12),
+              AppSectionCard(
+                judul: 'Pilih Ekstra (Add-on)',
+                aksiJudul: TextButton.icon(
+                    onPressed: _tambahEkstra,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Tambah')),
+                child: _ekstraPilihan.isEmpty
+                    ? Text(
+                        'Belum ada ekstra -- tambahkan produk bertipe "Ekstra" di sini kalau produk ini boleh dijual bersama add-on pilihan (mis. topping/rasa tambahan). Pelanggan memilihnya lewat kotak "Pilih Ekstra" saat produk ini ditambahkan ke keranjang di Kasir.',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context)))
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _ekstraPilihan
+                            .map((id) => Chip(
+                                  label: Text(_namaProduk(id)),
+                                  onDeleted: () => _hapusEkstra(id),
+                                ))
+                            .toList(),
+                      ),
+              ),
               const SizedBox(height: 8),
               AppFormSection(
                 judul: 'Pengaturan',
@@ -1172,11 +1241,23 @@ class _FormProdukState extends State<_FormProduk> {
 }
 
 /// Dialog pencarian produk sederhana -- dipakai [_FormProdukState._tambahBahanBaku]
-/// utk memilih komponen resep dari daftar produk yg SUDAH dimuat layar Produk
-/// (tak perlu round-trip server baru, katalog di memori sudah cukup).
+/// (Bahan Baku) & [_FormProdukState._tambahEkstra] (Ekstra) utk memilih dari
+/// daftar produk yg SUDAH dimuat layar Produk (tak perlu round-trip server
+/// baru, katalog di memori sudah cukup) -- [title] membedakan judul dialog
+/// antara kedua pemanggil, filter `daftar`-nya sendiri jadi tanggung jawab
+/// pemanggil (lihat `jenisItem == 'BAHAN'` vs `jenisItem == 'EKSTRA'`).
 class _DialogPilihProduk extends StatefulWidget {
   final List<Produk> daftar;
-  const _DialogPilihProduk({required this.daftar});
+  final String title;
+
+  /// `false` (default, Bahan Baku) = kolom harga menampilkan Harga Beli
+  /// (dipakai HPP). `true` (Ekstra) = menampilkan Harga Jual (itulah harga
+  /// yg dibebankan ke pelanggan saat add-on ini dipilih di Kasir).
+  final bool tampilkanHargaJual;
+  const _DialogPilihProduk(
+      {required this.daftar,
+      this.title = 'Pilih Bahan Baku',
+      this.tampilkanHargaJual = false});
 
   @override
   State<_DialogPilihProduk> createState() => _DialogPilihProdukState();
@@ -1195,7 +1276,7 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
         .take(50)
         .toList();
     return AppDetailDialogShell(
-      title: 'Pilih Bahan Baku',
+      title: widget.title,
       children: [
         TextField(
           autofocus: true,
@@ -1221,10 +1302,13 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
               : AppDataTable(
                   minWidth: 620,
                   emptyText: 'Tidak ditemukan.',
-                  columns: const [
-                    AppTableColumn('Produk', flex: 3),
-                    AppTableColumn('Kode', flex: 2),
-                    AppTableColumn('Harga Beli', flex: 2, align: TextAlign.right),
+                  columns: [
+                    const AppTableColumn('Produk', flex: 3),
+                    const AppTableColumn('Kode', flex: 2),
+                    AppTableColumn(
+                        widget.tampilkanHargaJual ? 'Harga Jual' : 'Harga Beli',
+                        flex: 2,
+                        align: TextAlign.right),
                   ],
                   rows: tersaring.map((p) {
                     return AppTableRowData(
@@ -1232,7 +1316,9 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
                         AppTableCell.text(p.nama, flex: 3),
                         AppTableCell.text(p.kode, flex: 2),
                         AppTableCell.text(
-                          _formatRupiah.format(p.hargaBeli),
+                          _formatRupiah.format(widget.tampilkanHargaJual
+                              ? p.hargaJual
+                              : p.hargaBeli),
                           flex: 2,
                           align: TextAlign.right,
                         ),

@@ -62,7 +62,7 @@ class CoreDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -78,14 +78,24 @@ class CoreDb {
   /// Migrasi skema -- PERTAMA KALI sejak versi 1 dirilis (semua instalasi
   /// yang sudah ada di lapangan hanya punya `onCreate`, tak pernah lewat
   /// `onUpgrade` sebelumnya). Gap-closure "Jenis Item" (Produk vs Bahan Baku)
-  /// nambah kolom `jenis_item` ke `produk_cache`. `ALTER TABLE` dibungkus
-  /// try/catch murni defensif thd kemungkinan state upgrade parsial (mis.
-  /// proses sempat terhenti di tengah migrasi sebelumnya, kolom sudah
-  /// terlanjur ada) -- padanan cara migrasi `local-db.js` versi Electron.
+  /// nambah kolom `jenis_item` ke `produk_cache`. Fase 2 "Produk Ekstra"
+  /// nambah kolom `ekstra_pilihan` (JSON array id produk EKSTRA, lihat
+  /// [produkCacheResolveByIds]). `ALTER TABLE` dibungkus try/catch murni
+  /// defensif thd kemungkinan state upgrade parsial (mis. proses sempat
+  /// terhenti di tengah migrasi sebelumnya, kolom sudah terlanjur ada) --
+  /// padanan cara migrasi `local-db.js` versi Electron.
   Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
     if (versiLama < 2) {
       try {
         await db.execute('ALTER TABLE produk_cache ADD COLUMN jenis_item TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
+      }
+    }
+    if (versiLama < 3) {
+      try {
+        await db
+            .execute('ALTER TABLE produk_cache ADD COLUMN ekstra_pilihan TEXT');
       } catch (_) {
         // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
       }
@@ -105,7 +115,8 @@ class CoreDb {
         kategori_nama TEXT,
         gambar_url TEXT,
         aktif INTEGER DEFAULT 1,
-        jenis_item TEXT
+        jenis_item TEXT,
+        ekstra_pilihan TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
@@ -183,16 +194,41 @@ class CoreDb {
   }
 
   /// Dipakai semua konteks JUAL/penjualan (Kasir, Pesanan, picker pencarian
-  /// produk) -- gap-closure "Jenis Item" (Produk vs Bahan Baku) mengecualikan
-  /// baris `jenis_item = 'BAHAN'`. PENTING: `jenis_item != 'BAHAN'` SENDIRIAN
-  /// tidak cukup krn SQLite `!=` tidak match NULL -- semua produk yang dibuat
-  /// SEBELUM fitur ini (jenis_item masih NULL) akan ikut hilang diam-diam
-  /// kalau klausanya bukan `(jenis_item IS NULL OR jenis_item != 'BAHAN')`.
+  /// produk) -- gap-closure "Jenis Item" mengecualikan baris `jenis_item IN
+  /// ('BAHAN','EKSTRA')` (bahan baku hanya via resep, ekstra hanya via picker
+  /// "Pilih Ekstra" produk dasar -- keduanya bukan baris yang bisa dijual
+  /// mandiri). PENTING: `jenis_item != 'BAHAN'` SENDIRIAN tidak cukup krn
+  /// SQLite `!=` tidak match NULL -- semua produk yang dibuat SEBELUM fitur
+  /// ini (jenis_item masih NULL) akan ikut hilang diam-diam kalau klausanya
+  /// bukan `(jenis_item IS NULL OR jenis_item NOT IN (...))`. Baris EKSTRA
+  /// tetap ADA di tabel ini (lihat [produkCacheResolveByIds]) -- yang
+  /// di-exclude cuma query ini, bukan sinkronisasinya.
   Future<List<Map<String, Object?>>> produkCache() async {
     final database = await db;
     return database.query(
       'produk_cache',
-      where: "aktif = 1 AND (jenis_item IS NULL OR jenis_item != 'BAHAN')",
+      where: "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))",
+      orderBy: 'nama ASC',
+    );
+  }
+
+  /// Resolusi id produk EKSTRA (dari [Produk.ekstraPilihan] produk dasar)
+  /// jadi baris nama/harga siap tampil -- dipakai picker "Pilih Ekstra" Kasir
+  /// SUPAYA TIDAK perlu round-trip server tiap kali produk dgn ekstra
+  /// disentuh. SENGAJA TANPA filter `jenis_item` (beda dgn [produkCache]) --
+  /// baris EKSTRA memang tetap disimpan lengkap di tabel ini oleh
+  /// `replaceProdukCache`, hanya disembunyikan dari grid/pencarian umum.
+  /// `ids` kosong -> query kosong (bukan error), aman dipanggil dgn
+  /// `p.ekstraPilihan` produk yang belum/tak punya ekstra apa pun.
+  Future<List<Map<String, Object?>>> produkCacheResolveByIds(
+      List<int> ids) async {
+    if (ids.isEmpty) return [];
+    final database = await db;
+    final placeholder = List.filled(ids.length, '?').join(',');
+    return database.query(
+      'produk_cache',
+      where: 'id IN ($placeholder)',
+      whereArgs: ids,
       orderBy: 'nama ASC',
     );
   }

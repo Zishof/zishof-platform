@@ -344,9 +344,13 @@ class _PesananScreenState extends State<PesananScreen> {
         builder: (_) => StrukScreen(
           kode: p.kode,
           waktu: p.tanggalPembayaran.isEmpty ? '-' : p.tanggalPembayaran,
+          // Baris ekstra (indukId != null) diberi indentasi visual "   + " --
+          // sama spt flatten struk sukses di KeranjangScreen._bayar, urutan
+          // asal dari server umumnya sudah induk-lalu-anak jadi cukup prefiks
+          // tanpa perlu pengelompokan ulang di sini.
           item: p.items
               .map((i) => {
-                    'nama': i.nama,
+                    'nama': i.indukId != null ? '   + ${i.nama}' : i.nama,
                     'qty': i.jumlah,
                     'harga': i.harga,
                   })
@@ -430,14 +434,18 @@ class _PesananScreenState extends State<PesananScreen> {
       ],
       rows: p.items.map((item) {
         final subtotal = item.harga * item.jumlah - item.diskon;
+        // Baris ekstra (indukId != null) diindentasi visual -- lihat JavaDoc
+        // _cetakStrukTertahan utk alasan yg sama.
         return AppTableRowData(cells: [
           AppTableCell.text(
-            item.nama,
+            item.indukId != null ? '   + ${item.nama}' : item.nama,
             flex: 4,
             style: TextStyle(
               fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimaryOf(context),
+              fontWeight: item.indukId != null ? FontWeight.w500 : FontWeight.w700,
+              color: item.indukId != null
+                  ? AppColors.textSecondaryOf(context)
+                  : AppColors.textPrimaryOf(context),
             ),
           ),
           AppTableCell.text(
@@ -568,14 +576,53 @@ class _PesananScreenState extends State<PesananScreen> {
       return null;
     }
 
+    // Gap-closure "Produk Ekstra": server mengembalikan baris ekstra FLAT
+    // (sejajar dgn baris dasar), dibedakan lewat [ItemPesanan.indukId] yg
+    // menunjuk ke [ItemPesanan.draftItemId] baris induknya (lihat JavaDoc
+    // model). Kelompokkan dulu di sini SEBELUM membangun [ItemKeranjang]
+    // supaya "Muat ke Keranjang" merestorasi struktur bersarang yg sama
+    // spt saat pertama ditahan -- tanpa ini tiap ekstra akan jadi baris
+    // keranjang top-level sendiri-sendiri (kehilangan keterkaitan ke induk).
+    // Draft LAMA (server belum kirim field ini / bukan produk ekstra sama
+    // sekali) -- semua `indukId` null, `ekstraByInduk` selalu kosong,
+    // perilaku identik sblm gap-closure ini.
+    final baseItems = <ItemPesanan>[];
+    final ekstraByInduk = <int, List<ItemPesanan>>{};
+    for (final i in p.items) {
+      final indukId = i.indukId;
+      if (indukId != null) {
+        ekstraByInduk.putIfAbsent(indukId, () => []).add(i);
+      } else {
+        baseItems.add(i);
+      }
+    }
+
     final itemTanpaId = <ItemPesanan>[];
     final keranjang = <ItemKeranjang>[];
-    for (final i in p.items) {
+    final indukTerpakai = <int>{};
+    for (final i in baseItems) {
       final produkId = idProduk(i);
       if (produkId == null || produkId <= 0) {
         itemTanpaId.add(i);
         continue;
       }
+      final anak = i.draftItemId == null
+          ? const <ItemPesanan>[]
+          : (ekstraByInduk[i.draftItemId] ?? const <ItemPesanan>[]);
+      if (i.draftItemId != null) indukTerpakai.add(i.draftItemId!);
+      final ekstra = <ItemEkstra>[];
+      var ekstraGagal = false;
+      for (final e in anak) {
+        final idEkstra = idProduk(e);
+        if (idEkstra == null || idEkstra <= 0) {
+          itemTanpaId.add(e);
+          ekstraGagal = true;
+          continue;
+        }
+        ekstra.add(ItemEkstra(
+            id: idEkstra, kode: e.kode, nama: e.nama, harga: e.harga));
+      }
+      if (ekstraGagal) continue; // batalkan seluruh muat (lihat gerbang di bawah)
       keranjang.add(
         ItemKeranjang(
           produk: Produk(
@@ -593,8 +640,16 @@ class _PesananScreenState extends State<PesananScreen> {
           diskon: i.diskon,
           cashback: i.cashback,
           aturanDiskonId: i.aturanDiskonId,
+          ekstra: ekstra,
         ),
       );
+    }
+    // Baris ekstra "yatim" (indukId menunjuk ke draftItemId yg tak pernah
+    // ditemukan di antara baris dasar, mis. anomali data) -- jangan dibuang
+    // diam-diam (bisa berarti kehilangan tagihan), perlakukan sbg kegagalan
+    // spt baris tanpa ID produk supaya muncul di pesan error di bawah.
+    for (final entry in ekstraByInduk.entries) {
+      if (!indukTerpakai.contains(entry.key)) itemTanpaId.addAll(entry.value);
     }
     if (itemTanpaId.isNotEmpty) {
       if (mounted) {
