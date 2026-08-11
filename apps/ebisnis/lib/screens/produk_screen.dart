@@ -1157,7 +1157,7 @@ class _FormProdukState extends State<_FormProduk> {
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               Text(_formatRupiah.format(_totalHpp),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.primary)),
                             ],

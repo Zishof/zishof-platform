@@ -219,6 +219,7 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
       menuAktif: MenuEBisnis.mutasiAntarOutlet,
       judul: 'Mutasi Stok Antar Outlet',
       subjudul: 'Kirim/transfer stok produk ke toko/outlet lain',
+      scrollable: false,
       body: RefreshIndicator(
         onRefresh: _muatRiwayat,
         child: ListView(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_setting.dart';
 import 'app_colors.dart';
 
 /// Pengelola tema ringan tanpa dependency state-management tambahan.
@@ -12,13 +13,29 @@ class AppThemeController {
   static final AppThemeController instance = AppThemeController._();
 
   static const _kunciModeTema = 'ebisnis_theme_mode';
+  static const _kunciWarnaTema = 'ebisnis_theme_warna';
 
   final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.light);
+
+  /// Warna aksen aplikasi -- default [AppSetting.temaBawaan] sebelum
+  /// pengguna pernah memilih sendiri lewat Konfigurasi. [muat] menyamakan
+  /// [AppColors.primary] dgn nilai ini sedini mungkin (sebelum `runApp`),
+  /// jadi frame pertama sudah memakai warna yang benar (tidak flash biru
+  /// lalu berubah).
+  final ValueNotifier<AppThemeWarna> warna =
+      ValueNotifier(AppSetting.temaBawaan);
 
   Future<void> muat() async {
     final sp = await SharedPreferences.getInstance();
     final tersimpan = sp.getString(_kunciModeTema);
     mode.value = tersimpan == 'dark' ? ThemeMode.dark : ThemeMode.light;
+
+    final warnaTersimpan = sp.getString(_kunciWarnaTema);
+    warna.value = AppThemeWarna.values.firstWhere(
+      (w) => w.name == warnaTersimpan,
+      orElse: () => AppSetting.temaBawaan,
+    );
+    AppColors.primary = warna.value.warna;
   }
 
   Future<void> ubah(bool gelap) async {
@@ -28,6 +45,13 @@ class AppThemeController {
   }
 
   Future<void> toggle() => ubah(mode.value != ThemeMode.dark);
+
+  Future<void> ubahWarna(AppThemeWarna w) async {
+    warna.value = w;
+    AppColors.primary = w.warna;
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_kunciWarnaTema, w.name);
+  }
 }
 
 class AppTheme {
@@ -101,7 +125,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: AppColors.primary),
         ),
         isDense: true,
       ),

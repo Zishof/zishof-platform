@@ -39,11 +39,11 @@ class PengaturanServerScreen extends StatelessWidget {
               if (pertamaKali)
                 Container(
                   padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF1E3A5F), AppColors.primary]),
+                        colors: [const Color(0xFF1E3A5F), AppColors.primary]),
                   ),
                   child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

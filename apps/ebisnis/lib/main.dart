@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'app_setting.dart';
 import 'app_variant.dart';
 import 'api_client.dart';
 import 'screens/login_screen.dart';
@@ -186,13 +187,20 @@ class _EBisnisAppState extends State<EBisnisApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppThemeController.instance.mode,
-      builder: (context, mode, _) => MaterialApp(
-        title: AppVariant.namaAplikasi,
-        debugShowCheckedModeBanner: false,
-        themeMode: mode,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        home: const _GerbangAwal(),
+      builder: (context, mode, _) => ValueListenableBuilder<AppThemeWarna>(
+        // Dengarkan warna tema JUGA (bukan cuma mode terang/gelap) --
+        // AppColors.primary sudah diubah oleh AppThemeController.ubahWarna
+        // sebelum notifier ini menyala, jadi AppTheme.light()/dark() yang
+        // dipanggil ulang di sini otomatis memakai ColorScheme seed baru.
+        valueListenable: AppThemeController.instance.warna,
+        builder: (context, warna, __) => MaterialApp(
+          title: AppVariant.namaAplikasi,
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          home: const _GerbangAwal(),
+        ),
       ),
     );
   }

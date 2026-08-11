@@ -313,7 +313,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Total Nilai Retur', style: TextStyle(fontWeight: FontWeight.w800)),
-                        Text(_formatRupiah.format(_totalNilai), style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary)),
+                        Text(_formatRupiah.format(_totalNilai), style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary)),
                       ],
                     ),
                   ),

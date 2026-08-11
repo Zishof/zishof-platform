@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
+import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
@@ -15,6 +16,7 @@ import '../services/pengaturan_struk.dart';
 import '../services/pengaturan_sesi_lokal.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'login_screen.dart';
@@ -327,6 +329,8 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
           ],
         ),
         const SizedBox(height: 16),
+        _pengaturanTema(context),
+        const SizedBox(height: 16),
         AppFormSection(
           judul: 'Preferensi POS',
           deskripsi:
@@ -480,6 +484,72 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
       ],
     );
   }
+}
+
+/// Pemilih warna aksen aplikasi -- berlaku langsung (tanpa restart) krn
+/// [AppThemeController.ubahWarna] mengubah [AppColors.primary] sekaligus
+/// memberitahu `ValueListenableBuilder` di main.dart utk membangun ulang
+/// `MaterialApp` dgn `ColorScheme.fromSeed` yang baru.
+Widget _pengaturanTema(BuildContext context) {
+  return ValueListenableBuilder<AppThemeWarna>(
+    valueListenable: AppThemeController.instance.warna,
+    builder: (context, warnaAktif, _) {
+      return AppFormSection(
+        judul: 'Tampilan',
+        deskripsi:
+            'Pilih warna aksen aplikasi untuk perangkat ini. Berlaku langsung di semua layar.',
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: AppThemeWarna.values.map((w) {
+              final terpilih = w == warnaAktif;
+              return InkWell(
+                onTap: () => AppThemeController.instance.ubahWarna(w),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 84,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: terpilih ? w.warna : AppColors.borderOf(context),
+                      width: terpilih ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: w.warna,
+                          shape: BoxShape.circle,
+                        ),
+                        child: terpilih
+                            ? const Icon(Icons.check,
+                                color: Colors.white, size: 18)
+                            : null,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(w.label,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight:
+                                  terpilih ? FontWeight.w700 : FontWeight.w500,
+                              color: AppColors.textPrimaryOf(context))),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _TabProfilToko extends StatefulWidget {
@@ -1189,7 +1259,7 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
                         MaterialPageRoute(
                             builder: (_) => const HakAksesScreen())),
                   ),
-                  children: const [
+                  children: [
                     AppInfoBanner(
                       icon: Icons.admin_panel_settings_outlined,
                       color: AppColors.primary,

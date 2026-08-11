@@ -33,7 +33,7 @@ class HeaderActionButton extends StatelessWidget {
         child: TextButton.icon(
           onPressed: onPressed,
           icon: IconTheme(
-            data: const IconThemeData(color: AppColors.primary, size: 18),
+            data: IconThemeData(color: AppColors.primary, size: 18),
             child: loading ?? Icon(icon),
           ),
           label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -449,7 +449,7 @@ class AppFormStyle {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        borderSide: BorderSide(color: AppColors.primary, width: 1.4),
       ),
     );
   }
@@ -737,12 +737,12 @@ class AppKpiCard extends StatelessWidget {
                           child: Text(tautan!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w600)),
                         ),
-                        const Icon(Icons.chevron_right,
+                        Icon(Icons.chevron_right,
                             size: 14, color: AppColors.primary),
                       ],
                     ),
@@ -870,19 +870,25 @@ class AppSectionCard extends StatelessWidget {
 class AppTombolAksi extends StatelessWidget {
   final String label;
   final IconData icon;
-  final Color warna;
+
+  /// `null` -- ikut [AppColors.primary] (tema aktif), diresolusi di
+  /// [build] (bukan default parameter) krn [AppColors.primary] sekarang
+  /// bisa berubah runtime (pilihan tema di Konfigurasi), jadi tidak lagi
+  /// nilai konstan yang sah utk default value.
+  final Color? warna;
   final bool terisi;
   final VoidCallback? onPressed;
   const AppTombolAksi(
       {super.key,
       required this.label,
       required this.icon,
-      this.warna = AppColors.primary,
+      this.warna,
       this.terisi = true,
       this.onPressed});
 
   @override
   Widget build(BuildContext context) {
+    final warnaEfektif = warna ?? AppColors.primary;
     if (terisi) {
       return ElevatedButton.icon(
         onPressed: onPressed,
@@ -892,7 +898,7 @@ class AppTombolAksi extends StatelessWidget {
           child: Text(label, maxLines: 1),
         ),
         style: ElevatedButton.styleFrom(
-            backgroundColor: warna,
+            backgroundColor: warnaEfektif,
             foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
@@ -900,13 +906,13 @@ class AppTombolAksi extends StatelessWidget {
     }
     return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 16, color: warna),
+      icon: Icon(icon, size: 16, color: warnaEfektif),
       label: FittedBox(
         fit: BoxFit.scaleDown,
-        child: Text(label, maxLines: 1, style: TextStyle(color: warna)),
+        child: Text(label, maxLines: 1, style: TextStyle(color: warnaEfektif)),
       ),
       style: OutlinedButton.styleFrom(
-          side: BorderSide(color: warna.withValues(alpha: 0.4)),
+          side: BorderSide(color: warnaEfektif.withValues(alpha: 0.4)),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
     );
   }

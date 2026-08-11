@@ -384,7 +384,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
                             width: 60,
                             child: Text('${perputaran.toStringAsFixed(2)}x',
                                 textAlign: TextAlign.right,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.primary)),

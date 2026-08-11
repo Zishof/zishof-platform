@@ -703,7 +703,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               ),
             ),
             if (terpilih)
-              const Icon(Icons.check_circle, size: 18, color: AppColors.primary),
+              Icon(Icons.check_circle, size: 18, color: AppColors.primary),
           ],
         ),
       ),
@@ -2138,7 +2138,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                   color: AppColors.primary)),

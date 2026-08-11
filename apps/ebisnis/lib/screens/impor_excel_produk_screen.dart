@@ -275,7 +275,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.upload_file_outlined,
+          Icon(Icons.upload_file_outlined,
               size: 56, color: AppColors.primary),
           const SizedBox(height: 16),
           const Text('Pilih berkas Excel (.xlsx) format Accurate',

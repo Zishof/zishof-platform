@@ -371,7 +371,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold)),
                           Text('${row['metode']}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 11, color: AppColors.primary)),
                         ],
                       ),

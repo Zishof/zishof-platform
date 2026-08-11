@@ -27,7 +27,11 @@ class AppColors {
   static const darkTextPrimary = Color(0xFFE5E7EB);
   static const darkTextSecondary = Color(0xFF94A3B8);
 
-  static const primary = Color(0xFF2563EB);
+  /// Warna aksen utama aplikasi -- MUTABLE (bukan const) supaya bisa
+  /// berubah saat pengguna ganti tema lewat Konfigurasi (lihat
+  /// `AppThemeController.ubahWarna` di theme/app_theme.dart). Nilai awal
+  /// sengaja disamakan dgn `AppThemeWarna.biru.warna` (lihat app_setting.dart).
+  static Color primary = const Color(0xFF2563EB);
   static const success = Color(0xFF16A34A);
   static const danger = Color(0xFFDC2626);
   static const warning = Color(0xFFEA580C);

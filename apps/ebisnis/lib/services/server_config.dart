@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_setting.dart';
+
 /// Konfigurasi alamat server (padanan `setup.html`/`main.js` desktop-pos-electron
 /// -- host/contextPath/https diisi sekali di awal lewat layar Pengaturan Alamat
 /// Server, bisa diubah lagi kapan saja lewat "Ubah Alamat Server" di layar
@@ -37,6 +39,17 @@ class ServerConfig {
     // mengisi sendiri -- tak ada cara tahu institusi mana yang dituju.
     if (host.trim().isEmpty && sp.getString('token') != null) {
       await simpan(host: 'ebisnis.id', contextPath: 'ebisnis', https: true);
+      return;
+    }
+    // Varian ber-institusi tunggal dgn base URL bawaan (lihat
+    // AppSetting.baseUrlHost) -- lewati layar Pengaturan Alamat Server
+    // sepenuhnya sejak instalasi pertama, server sudah dikenal dari build.
+    if (host.trim().isEmpty && AppSetting.baseUrlHost != null) {
+      await simpan(
+        host: AppSetting.baseUrlHost!,
+        contextPath: AppSetting.baseUrlContextPath,
+        https: AppSetting.baseUrlHttps,
+      );
     }
   }
 

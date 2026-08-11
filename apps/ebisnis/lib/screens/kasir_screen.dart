@@ -1107,7 +1107,7 @@ class _KasirScreenState extends State<KasirScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.storefront,
+                      Icon(Icons.storefront,
                           size: 14, color: AppColors.primary),
                       const SizedBox(width: 4),
                       ConstrainedBox(
@@ -1115,7 +1115,7 @@ class _KasirScreenState extends State<KasirScreen> {
                         child: Text(Sesi.instance.tokoNama,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary)),
@@ -1681,55 +1681,62 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
       child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.75),
         child: Center(
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.point_of_sale,
-                      size: 48, color: AppColors.primary),
-                  const SizedBox(height: 12),
-                  const Text('Buka Kas Terlebih Dahulu',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondaryOf(context)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _controller,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Modal Awal (Rp)',
-                        border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _catatanController,
-                    decoration: const InputDecoration(
-                        labelText: 'Catatan Pembukaan (opsional)',
-                        border: OutlineInputBorder()),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final modal = double.tryParse(_controller.text
-                                .replaceAll(RegExp('[^0-9.]'), '')) ??
-                            0;
-                        widget.onBuka(modal, _catatanController.text.trim());
-                      },
-                      child: const Text('Buka Kas'),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: Card(
+              margin: const EdgeInsets.all(16),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.point_of_sale,
+                        size: 32, color: AppColors.primary),
+                    const SizedBox(height: 8),
+                    const Text('Buka Kas Terlebih Dahulu',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textSecondaryOf(context)),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _controller,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          labelText: 'Modal Awal (Rp)',
+                          isDense: true,
+                          border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _catatanController,
+                      decoration: const InputDecoration(
+                          labelText: 'Catatan Pembukaan (opsional)',
+                          isDense: true,
+                          border: OutlineInputBorder()),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final modal = double.tryParse(_controller.text
+                                  .replaceAll(RegExp('[^0-9.]'), '')) ??
+                              0;
+                          widget.onBuka(modal, _catatanController.text.trim());
+                        },
+                        child: const Text('Buka Kas'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1820,7 +1827,7 @@ class _BarisHasilPencarian extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(_formatRupiah.format(produk.hargaJual),
-                style: const TextStyle(
+                style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                     color: AppColors.primary)),
@@ -1974,7 +1981,7 @@ class _KartuProduk extends StatelessWidget {
                                     ],
                                   )
                                 : Text(_formatRupiah.format(produk.hargaJual),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: AppColors.primary,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13))),
@@ -2253,7 +2260,7 @@ class _SheetPilihEkstraState extends State<_SheetPilihEkstra> {
                             onChanged: (_) => _toggle(id),
                             title: Text('${b['nama'] ?? ''}'),
                             secondary: Text('+${_formatRupiah.format(harga)}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.primary)),
                             controlAffinity: ListTileControlAffinity.leading,
