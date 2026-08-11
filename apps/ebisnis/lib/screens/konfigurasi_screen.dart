@@ -492,12 +492,15 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   bool _memuat = true;
   bool _menyimpan = false;
   bool _memilihLogo = false;
+  bool _memilihLogoPriceTag = false;
   String? _error;
   bool _bolehUbah = false;
   String? _logoStrukPath;
+  String? _logoPriceTagPath;
   String _logoStrukMode = 'persegi';
   double _logoStrukSkala = 1;
   double _lebarKertasStrukMm = 80;
+  double _marginKotakPriceTagMm = 2;
   final _kode = TextEditingController();
   final _nama = TextEditingController();
   final _alamat = TextEditingController();
@@ -576,9 +579,11 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       setStateIfMounted(() {
         _bolehUbah = hasil['bolehUbah'] == true;
         _logoStrukPath = PengaturanStruk.instance.logoPath;
+        _logoPriceTagPath = PengaturanStruk.instance.priceTagLogoPath;
         _logoStrukMode = PengaturanStruk.instance.logoMode;
         _logoStrukSkala = PengaturanStruk.instance.logoSkala;
         _lebarKertasStrukMm = PengaturanStruk.instance.lebarKertasMm;
+        _marginKotakPriceTagMm = PengaturanStruk.instance.priceTagMarginKotakMm;
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -612,6 +617,44 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       setStateIfMounted(() => _logoStrukPath = null);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Logo struk dikembalikan ke logo aplikasi.')));
+    }
+  }
+
+  Future<void> _pilihLogoPriceTag() async {
+    setStateIfMounted(() => _memilihLogoPriceTag = true);
+    try {
+      final path = await PengaturanStruk.instance.pilihDanSimpanLogoPriceTag();
+      if (path != null && mounted) {
+        setStateIfMounted(() => _logoPriceTagPath = path);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Logo price tag tersimpan lokal.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memilih logo: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memilihLogoPriceTag = false);
+    }
+  }
+
+  Future<void> _hapusLogoPriceTag() async {
+    await PengaturanStruk.instance.hapusLogoPriceTag();
+    if (mounted) {
+      setStateIfMounted(() => _logoPriceTagPath = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Logo price tag dikembalikan ke logo aplikasi.')));
+    }
+  }
+
+  Future<void> _simpanMarginPriceTag() async {
+    await PengaturanStruk.instance
+        .simpanMarginKotakPriceTag(_marginKotakPriceTagMm);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Margin kotak price tag tersimpan.')),
+      );
     }
   }
 
@@ -719,6 +762,127 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         border: Border.all(color: AppColors.borderOf(context)),
       ),
       child: logo,
+    );
+  }
+
+  Widget _previewLogoPriceTag() {
+    final path = _logoPriceTagPath;
+    final logo = path != null
+        ? Image.file(File(path), fit: BoxFit.contain)
+        : Image.asset(AppVariant.logoAsset, fit: BoxFit.contain);
+    return Container(
+      width: 140,
+      height: 72,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.cardBgOf(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: logo,
+    );
+  }
+
+  Widget _pengaturanPriceTag() {
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.pageBgOf(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _previewLogoPriceTag(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Price Tag',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimaryOf(context),
+                    )),
+                const SizedBox(height: 4),
+                Text(
+                  _logoPriceTagPath == null
+                      ? 'Logo price tag memakai logo aplikasi. Upload PNG/JPG jika price tag perlu logo khusus.'
+                      : 'Memakai logo khusus lokal untuk semua model price tag.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryOf(context),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    AppTombolAksi(
+                      icon: Icons.upload_file_outlined,
+                      label: _memilihLogoPriceTag
+                          ? 'Memilih...'
+                          : (_logoPriceTagPath == null
+                              ? 'Upload Logo Price Tag'
+                              : 'Ganti Logo Price Tag'),
+                      warna: AppColors.teal,
+                      onPressed:
+                          _memilihLogoPriceTag ? null : _pilihLogoPriceTag,
+                    ),
+                    if (_logoPriceTagPath != null)
+                      AppTombolAksi(
+                        icon: Icons.restore_outlined,
+                        label: 'Gunakan Logo Aplikasi',
+                        warna: AppColors.warning,
+                        onPressed: _hapusLogoPriceTag,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Margin Antar Kotak: ${_marginKotakPriceTagMm.toStringAsFixed(1)} mm',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimaryOf(context),
+                  ),
+                ),
+                Slider(
+                  value: _marginKotakPriceTagMm.clamp(0, 8),
+                  min: 0,
+                  max: 8,
+                  divisions: 16,
+                  label: '${_marginKotakPriceTagMm.toStringAsFixed(1)} mm',
+                  onChanged: (v) =>
+                      setStateIfMounted(() => _marginKotakPriceTagMm = v),
+                ),
+                Text(
+                  'Default 2 mm. Naikkan jika hasil print masih terlalu rapat atau printer bergeser.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryOf(context),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppTombolAksi(
+                    icon: Icons.grid_view_outlined,
+                    label: 'Simpan Margin Price Tag',
+                    warna: AppColors.primary,
+                    onPressed: _simpanMarginPriceTag,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -921,6 +1085,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
             _pengaturanLogoStruk(),
+            _pengaturanPriceTag(),
             if (_bolehUbah)
               Align(
                 alignment: Alignment.centerLeft,
@@ -1071,7 +1236,7 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.textPrimaryOf(context))),
                           subtitle: Text(
-                              '${a['userid']} · ${a['keterangan'] ?? ''}',
+                              '${a['userid']} Ã‚Â· ${a['keterangan'] ?? ''}',
                               style: TextStyle(
                                   color: AppColors.textSecondaryOf(context))),
                           trailing: Wrap(
