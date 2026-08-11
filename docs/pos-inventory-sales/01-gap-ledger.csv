@@ -9,25 +9,25 @@ FND-007,P1,,Seed role Pemilik Sales/Inventory dan Sales Keliling,AIS,BACKEND_DON
 FND-008,P1,,Menu/permission registry lintas server-Flutter,Keduanya,BACKEND_DONE,OK (16 kunci+konfigurasi aktor),OK (registry profil+beranda),OK,,OK,,analyze 0 error,,docs/pos-inventory-sales/evidence/p1/,AIS 1d7a82dc,Verifikasi landing 3 role menunggu server ter-deploy (restart Tomcat = wewenang operasional user)
 FND-009,P7,,Implementasi core_sync typed outbox,zishof-platform,NOT_STARTED,,,,,,,,,,,
 FND-010,P7,,Upgrade CoreDb schema Nota Sales,zishof-platform,NOT_STARTED,,,,,,,,,,,
-SCR-01,P2,1,Data Supplier -> Master Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-01/,,
-SCR-02,P2,2,Membuka Daftar Supplier -> Daftar Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-02/,,
-SCR-03,P2,3,Menutup Daftar Supplier -> Detail Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-03/,,
-SCR-04,P2,4,Data Customer -> Master Customer,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-04/,,
-SCR-05,P2,5,Membuka Daftar Customer -> Daftar Customer,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-05/,,
-SCR-06,P2,6,Menutup Daftar Customer -> Detail Customer,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-06/,,
-SCR-07,P2,7,Data Sales atau Penjual Keliling -> Master Sales,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-07/,,
-SCR-08,P2,8,Data Stok Barang -> Persediaan & Kartu Stok,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-08/,,
-SCR-09,P2,9,Laporan Opname -> Stok Opname,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-09/,,
-SCR-10,P2,10,Mencetak Laporan Opname -> Cetak Opname,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-10/,,
-SCR-11,P2,11,Harga Beli dan Harga Jual -> Analisis Harga,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-11/,,
-SCR-12,P2,12,Memilih dan Menjalankan Cetak Harga Beli/Jual -> Parameter Laporan Harga,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-12/,,
-SCR-13,P2,13,Mencetak Harga Jual -> Daftar Harga Jual,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-13/,,
-SCR-14,P2,14,Mengekspor Data Harga/Stok ke Excel -> Ekspor Harga & Stok,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-14/,,
-SCR-15,P2,15,Mencetak Daftar Stok -> Laporan Persediaan,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-15/,,
-SCR-16,P2,16,Hasil Cetak Stok -> Preview Laporan Persediaan,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-16/,,
-SCR-17,P2,17,Menu Master Harga -> Master Harga,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-17/,,
-SCR-18,P2,18,Master Harga Beli per Supplier -> Harga Beli Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-18/,,
-SCR-19,P2,19,Master Harga Jual per Customer -> Harga Jual Customer,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-19/,,
+SCR-01,P2,1,Data Supplier -> Master Supplier,Keduanya,BACKEND_DONE,si_supplier_* (AIS c1644750),master_supplier_screen (761c412..f29e93f),sama (satu codebase Flutter),cache offline menyusul P7,ctx.bolehAksi+bolehAksiIs,cetak disabled beralasan (P2-F),analyze 0 error; test smoke lulus,Menunggu deploy server,docs/pos-inventory-sales/evidence/p2/,AIS c1644750 + zishof f29e93f,Saldo hutang null s.d. ledger AP P3
+SCR-02,P2,2,Membuka Daftar Supplier -> Daftar Supplier,Keduanya,BACKEND_DONE,si_supplier_list,daftar search-first+sort+filter di layar yang sama,sama,idem SCR-01,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,
+SCR-03,P2,3,Menutup Daftar Supplier -> Detail Supplier,Keduanya,BACKEND_DONE,si_supplier_detail,detail sheet tanpa efek data + audit info,sama,idem,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,
+SCR-04,P2,4,Data Customer -> Master Customer,Keduanya,BACKEND_DONE,si_customer_* + saldo piutang ledger,master_customer_screen,sama,idem,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,
+SCR-05,P2,5,Membuka Daftar Customer -> Daftar Customer,Keduanya,BACKEND_DONE,si_customer_list,daftar search-first+filter profil,sama,idem,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,
+SCR-06,P2,6,Menutup Daftar Customer -> Detail Customer,Keduanya,BACKEND_DONE,si_customer_detail,detail sheet + saldo piutang,sama,idem,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,
+SCR-07,P2,7,Data Sales atau Penjual Keliling -> Master Sales,Keduanya,BACKEND_DONE,si_sales_* (entity P1),master_sales_screen (akun 1:1; jumlah customer),sama,idem,OK,idem,idem,idem,docs/pos-inventory-sales/evidence/p2/,idem SCR-01,No.Perkiraan tanpa validasi COA (uat-required #1)
+SCR-08,P2,8,Data Stok Barang -> Persediaan & Kartu Stok,Keduanya,BACKEND_DONE,si_inventory_balance/ledger (AIS b74c36f7),persediaan_screen + kartu stok (zishof cc8083c),sama,idem,OK,cetak disabled beralasan,idem,Rekonsiliasi angka vs ledger perlu data server,docs/pos-inventory-sales/evidence/p2/,AIS b74c36f7 + zishof cc8083c,
+SCR-09,P2,9,Laporan Opname -> Stok Opname,Keduanya,BACKEND_DONE,reuse so_* existing,reuse StokOpnameScreen existing (menu stokopname aktif utk Pemilik),sama,cache existing,role seed,Excel/PDF SUDAH ada dari fitur sebelumnya,existing,Perlu UAT varian,docs/pos-inventory-sales/evidence/p2/,reuse existing,Filter stok-mobil-sales menyusul P5
+SCR-10,P2,10,Mencetak Laporan Opname -> Cetak Opname,Keduanya,BACKEND_DONE,reuse so_ekspor/laporan existing,reuse tombol Download/Upload Excel + Cetak PDF existing,sama,idem,idem,OK (existing),existing,idem,docs/pos-inventory-sales/evidence/p2/,reuse existing,Snapshot/versi reprint menyusul
+SCR-11,P2,11,Harga Beli dan Harga Jual -> Analisis Harga,Keduanya,BACKEND_DONE,si_price_analysis (AIS 431c74c6),harga_screen tab Analisis (zishof 0b66b76),sama,menyusul P7,OK,cetak menyusul,analyze 0 error,Menunggu deploy,docs/pos-inventory-sales/evidence/p2/,AIS 431c74c6 + zishof 0b66b76,
+SCR-12,P2,12,Parameter Laporan Harga,Keduanya,AUDITED,filter di si_price_analysis tersedia,parameter filter di tab Analisis; preview cetak menyusul,sama,,OK,BELUM (preview cetak),,,docs/pos-inventory-sales/evidence/p2/,,Preview/cetak PDF harga menyusul fase laporan
+SCR-13,P2,13,Mencetak Harga Jual -> Daftar Harga Jual,Keduanya,BACKEND_DONE,harga umum berversi (HargaJualCustomer anggota NULL),tab Harga Jual Customer + filter "Hanya umum",sama,,OK,cetak PDF menyusul,idem,,docs/pos-inventory-sales/evidence/p2/,idem SCR-11,Snapshot cetak menyusul
+SCR-14,P2,14,Ekspor Harga/Stok Excel,Keduanya,AUDITED,reuse produk_ekspor_excel existing,reuse ProdukScreen ekspor (menu produk aktif),sama,,OK,parsial (format Accurate),existing,,docs/pos-inventory-sales/evidence/p2/,reuse existing,Kolom harga/stok spesifik legacy menyusul
+SCR-15,P2,15,Mencetak Daftar Stok -> Laporan Persediaan,Keduanya,AUDITED,data lengkap di si_inventory_balance,tabel legacy penuh di persediaan_screen; PDF menyusul,sama,,OK,BELUM (PDF),,,docs/pos-inventory-sales/evidence/p2/,,PDF/Excel persediaan menyusul fase laporan
+SCR-16,P2,16,Preview Laporan Persediaan,Keduanya,AUDITED,idem SCR-15,idem (preview=layar; snapshot menyusul),sama,,OK,BELUM,,,docs/pos-inventory-sales/evidence/p2/,,idem SCR-15
+SCR-17,P2,17,Menu Master Harga -> Master Harga,Keduanya,BACKEND_DONE,si_supplier_price_*+si_customer_price_*,harga_screen 3 tab (kedua jalur NYATA terbuka),sama,,OK,impor/ekspor template menyusul,idem,,docs/pos-inventory-sales/evidence/p2/,idem SCR-11,Approval berjenjang harga menyusul
+SCR-18,P2,18,Master Harga Beli per Supplier,Keduanya,BACKEND_DONE,versi effective-dated + tolak overlap + versi terkunci,tab Harga Beli Supplier + nonaktif versi,sama,,OK,idem,idem,,docs/pos-inventory-sales/evidence/p2/,idem SCR-11,
+SCR-19,P2,19,Master Harga Jual per Customer,Keduanya,BACKEND_DONE,idem + baris umum (anggota NULL),tab Harga Jual Customer + picker customer,sama,,OK,idem,idem,,docs/pos-inventory-sales/evidence/p2/,idem SCR-11,Simulasi margin ada di tab Analisis
 SCR-20,P3,20,Proses Pembelian Barang dari Supplier -> Kulakan / Pembelian Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-20/,,
 SCR-21,P3,21,Tombol Hutang pada Pembelian -> Deep-link Hutang,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-21/,,
 SCR-22,P3,22,Data Hutang Supplier -> Ledger Hutang,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-22/,,
