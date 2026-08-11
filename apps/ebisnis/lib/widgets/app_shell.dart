@@ -37,6 +37,8 @@ import '../screens/inventory_sales/master_sales_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
 import '../screens/inventory_sales/hutang_supplier_screen.dart';
+import '../screens/inventory_sales/penjualan_sales_screen.dart';
+import '../screens/inventory_sales/piutang_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -83,7 +85,9 @@ enum MenuEBisnis {
   masterSales,
   persediaan,
   harga,
-  hutangSupplier
+  hutangSupplier,
+  penjualanSales,
+  piutang
 }
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -95,6 +99,8 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.persediaan: 'persediaan',
   MenuEBisnis.harga: 'harga',
   MenuEBisnis.hutangSupplier: 'hutang',
+  MenuEBisnis.penjualanSales: 'penjualan_sales',
+  MenuEBisnis.piutang: 'piutang',
 };
 
 class _ItemMenuShell {
@@ -173,6 +179,12 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.hutangSupplier, Icons.account_balance_outlined,
       'Hutang Supplier (AP)',
       builder: _bangunHutangSupplier),
+  _ItemMenuShell(MenuEBisnis.penjualanSales, Icons.shopping_cart_checkout,
+      'Penjualan Sales',
+      builder: _bangunPenjualanSales),
+  _ItemMenuShell(MenuEBisnis.piutang, Icons.request_quote_outlined,
+      'Piutang Customer (AR)',
+      builder: _bangunPiutang),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -238,6 +250,8 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.persediaan,
     MenuEBisnis.harga,
     MenuEBisnis.hutangSupplier,
+    MenuEBisnis.penjualanSales,
+    MenuEBisnis.piutang,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -309,6 +323,8 @@ Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
 Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
 Widget _bangunHarga(BuildContext c) => const HargaScreen();
 Widget _bangunHutangSupplier(BuildContext c) => const HutangSupplierScreen();
+Widget _bangunPenjualanSales(BuildContext c) => const PenjualanSalesScreen();
+Widget _bangunPiutang(BuildContext c) => const PiutangScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -399,6 +415,10 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Master & Analisis Harga';
     case MenuEBisnis.hutangSupplier:
       return 'Hutang Supplier (AP)';
+    case MenuEBisnis.penjualanSales:
+      return 'Penjualan Sales';
+    case MenuEBisnis.piutang:
+      return 'Piutang Customer (AR)';
   }
 }
 
@@ -460,6 +480,10 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.harga;
     case 'Hutang Supplier (AP)':
       return MenuEBisnis.hutangSupplier;
+    case 'Penjualan Sales':
+      return MenuEBisnis.penjualanSales;
+    case 'Piutang Customer (AR)':
+      return MenuEBisnis.piutang;
   }
   return null;
 }
