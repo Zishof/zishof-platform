@@ -38,6 +38,77 @@ extension _LabelModelPriceTag on ModelPriceTag {
   }
 }
 
+/// Kertas tempat tag Rak/Produk dicetak -- terpisah dari ukuran tag itu
+/// sendiri karena satu ukuran tag (mis. 50x25mm) bisa dicetak dua cara yang
+/// berbeda total: [thermal] langsung ke printer label roll (tiap tag =
+/// satu "halaman" pas ukuran tag, dikirim berurutan spt continuous form),
+/// ATAU ditata sbg grid di atas kertas umum ([a4]/[f4]) yg dipotong manual.
+/// Promo TIDAK memakai ini -- ukurannya (A5/A4/F4) sudah sekaligus jadi
+/// ukuran kertas.
+enum KertasCetak { thermal, a4, f4 }
+
+extension _LabelKertasCetak on KertasCetak {
+  String get label {
+    switch (this) {
+      case KertasCetak.thermal:
+        return 'Thermal (Roll)';
+      case KertasCetak.a4:
+        return 'A4';
+      case KertasCetak.f4:
+        return 'F4';
+    }
+  }
+
+  /// `null` utk [thermal] -- ukuran halaman dinamis mengikuti ukuran tag
+  /// yang dipilih (lihat pemakaian di [_PriceTagPdfBuilder._isiGridLabel]),
+  /// bukan ukuran kertas tetap spt A4/F4.
+  PdfPageFormat? get pageFormat {
+    switch (this) {
+      case KertasCetak.thermal:
+        return null;
+      case KertasCetak.a4:
+        return PdfPageFormat.a4;
+      case KertasCetak.f4:
+        return PdfPageFormat(210 * PdfPageFormat.mm, 330 * PdfPageFormat.mm);
+    }
+  }
+}
+
+/// Lebar roll thermal kontinu (BUKAN ukuran tag/label itu sendiri) --
+/// dipakai saat [KertasCetak.thermal] dipilih supaya tag ditata berjajar
+/// (grid) melintasi lebar roll spt kertas umum, tapi TINGGI halaman
+/// menyesuaikan jumlah tag (bukan tetap spt A4) krn roll maju terus-
+/// menerus. 110mm dicantumkan krn kapasitas media TSC TTP-244 Pro
+/// (25.4-112mm, maks lebar cetak 108mm) -- lihat datasheet resmi TSC.
+/// Sisanya lebar umum yang beredar di pasaran Indonesia utk printer
+/// label thermal sejenis (Xprinter/Zebra/Argox/dll, bukan cuma TSC).
+class _LebarRoll {
+  final String id;
+  final String label;
+  final double lebarMm;
+  final bool populer;
+
+  const _LebarRoll({
+    required this.id,
+    required this.label,
+    required this.lebarMm,
+    this.populer = false,
+  });
+}
+
+const _daftarLebarRoll = [
+  _LebarRoll(id: 'roll_40', label: '40 mm', lebarMm: 40),
+  _LebarRoll(id: 'roll_50', label: '50 mm', lebarMm: 50),
+  _LebarRoll(id: 'roll_58', label: '58 mm', lebarMm: 58, populer: true),
+  _LebarRoll(id: 'roll_80', label: '80 mm', lebarMm: 80, populer: true),
+  _LebarRoll(id: 'roll_100', label: '100 mm', lebarMm: 100),
+  _LebarRoll(
+      id: 'roll_110',
+      label: '110 mm - TSC TTP-244 Pro',
+      lebarMm: 110,
+      populer: true),
+];
+
 class _UkuranTag {
   final String id;
   final String label;
@@ -63,6 +134,7 @@ class _UkuranTag {
 }
 
 const _kategoriRakUtama = 'Rak / Gondola';
+const _kategoriTscRoll = 'Roll TSC TTP-244 Pro (Rekomendasi)';
 const _kategoriThermalBarcode = 'Thermal / Printer Barcode';
 const _kategoriPriceGun = 'Price Gun Manual (Gulungan)';
 const _kategoriA4Label = 'Lembar A4 (Kertas Label)';
@@ -145,13 +217,49 @@ const _ukuranRak = [
 ];
 
 const _ukuranProduk = [
+  // Roll paling umum & pasti cocok di printer TSC TTP-244 Pro (203 dpi):
+  // lebar cetak maksimal printer ini 104 mm, jadi semua ukuran di bawah
+  // aman dipakai. Ditaruh di kategori sendiri paling atas supaya jadi
+  // pilihan utama saat mencetak stiker produk lewat roll thermal.
+  _UkuranTag(
+      id: 'produk_33x15',
+      label: 'Barcode Rak 2 Baris',
+      detail: '33 x 15 mm - 2 baris',
+      kategori: _kategoriTscRoll,
+      lebarMm: 33,
+      tinggiMm: 15,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_30x20',
+      label: 'Tempel Harga Produk',
+      detail: '30 x 20 mm - 1 baris',
+      kategori: _kategoriTscRoll,
+      lebarMm: 30,
+      tinggiMm: 20,
+      populer: true),
   _UkuranTag(
       id: 'produk_50x25',
-      label: 'Barcode Standar',
-      detail: '50 x 25 mm',
-      kategori: _kategoriThermalBarcode,
+      label: 'Nama + Barcode + Harga',
+      detail: '50 x 25 mm - 3 baris',
+      kategori: _kategoriTscRoll,
       lebarMm: 50,
       tinggiMm: 25,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_50x30',
+      label: 'Nama + Barcode + Harga (Lebar)',
+      detail: '50 x 30 mm - 3 baris',
+      kategori: _kategoriTscRoll,
+      lebarMm: 50,
+      tinggiMm: 30,
+      populer: true),
+  _UkuranTag(
+      id: 'produk_100x150',
+      label: 'Label Resi / Pengiriman',
+      detail: '100 x 150 mm',
+      kategori: _kategoriTscRoll,
+      lebarMm: 100,
+      tinggiMm: 150,
       populer: true),
   _UkuranTag(
       id: 'produk_40x20',
@@ -168,26 +276,12 @@ const _ukuranProduk = [
       lebarMm: 60,
       tinggiMm: 30),
   _UkuranTag(
-      id: 'produk_33x15',
-      label: 'Barcode Mini 2 Baris',
-      detail: '33 x 15 mm',
-      kategori: _kategoriThermalBarcode,
-      lebarMm: 33,
-      tinggiMm: 15),
-  _UkuranTag(
       id: 'produk_33x25',
       label: 'Barcode Mini Lebar',
       detail: '33 x 25 mm',
       kategori: _kategoriThermalBarcode,
       lebarMm: 33,
       tinggiMm: 25),
-  _UkuranTag(
-      id: 'produk_50x30',
-      label: 'Barcode Sedang',
-      detail: '50 x 30 mm',
-      kategori: _kategoriThermalBarcode,
-      lebarMm: 50,
-      tinggiMm: 30),
   _UkuranTag(
       id: 'produk_21x12',
       label: 'Price Gun 1 Baris',
@@ -239,13 +333,6 @@ const _ukuranProduk = [
       kategori: _kategoriKemasan,
       lebarMm: 100,
       tinggiMm: 50),
-  _UkuranTag(
-      id: 'produk_100x150',
-      label: 'Label Pengiriman',
-      detail: '100 x 150 mm',
-      kategori: _kategoriKemasan,
-      lebarMm: 100,
-      tinggiMm: 150),
   _UkuranTag(
       id: 'produk_bulat20',
       label: 'Bulat Kecil',
@@ -364,12 +451,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final Set<int> _idTerpilih = {};
 
   ModelPriceTag _model = ModelPriceTag.rak;
+  KertasCetak _kertasCetak = KertasCetak.a4;
+  String _lebarRollId = 'roll_58';
   String _ukuranId = 'rak_50x30';
   int _copies = 1;
   bool _tampilBarcode = true;
   bool _tampilKode = true;
   bool _tampilToko = true;
   bool _tampilLogo = false;
+  bool _tampilHargaProduk = true;
   bool _bungkusLogo = false;
   bool _memproses = false;
   String? _logoPath;
@@ -469,6 +559,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     return daftar.firstWhere((u) => u.id == _ukuranId,
         orElse: () => daftar.first);
   }
+
+  _LebarRoll get _lebarRollAktif => _daftarLebarRoll.firstWhere(
+      (r) => r.id == _lebarRollId,
+      orElse: () => _daftarLebarRoll.first);
 
   /// Tombol ringkas pengganti daftar ChoiceChip yang dulu selalu terbuka di
   /// panel -- dengan ukuran per model sekarang bisa puluhan (price gun,
@@ -616,6 +710,82 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
+  Future<void> _infoPrinterTsc() {
+    // Angka persis dari datasheet resmi TSC (TTP-244 Pro, model 2017,
+    // ks-barcode.com/files/datasheets/ttp-244_pro.pdf) -- BUKAN estimasi.
+    const spesifikasi = [
+      ('Lebar media', '25,4 - 112 mm (1,0" - 4,4")'),
+      ('Lebar cetak maksimal', '108 mm (4,25")'),
+      ('Panjang label', '10 - 2.286 mm (0,39" - 90")'),
+      ('Ketebalan media', '0,06 - 0,19 mm (2,36 - 7,48 mil)'),
+      ('Kapasitas roll (OD) standar', '110 mm (4,33") - dudukan internal'),
+      ('Kapasitas roll (OD) opsional', '214 mm (8,4") - dgn external roll mount, core 1" atau 3"'),
+      ('Diameter core roll', '25,4 - 76,2 mm (1" - 3")'),
+      ('Jenis media', 'Continuous, die-cut, black mark, fan-fold, notched'),
+      ('Ribbon (thermal transfer)', 'lebar 40 - 110 mm, maks. panjang 300 m, core 1"'),
+      ('Resolusi / kecepatan', '203 dpi (8 dot/mm), maks. 127 mm (5") per detik'),
+    ];
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spesifikasi Printer TSC TTP-244 Pro'),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Printer thermal transfer + direct thermal, 203 dpi.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 10),
+                for (final item in spesifikasi)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.$1,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        Text(item.$2,
+                            style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Catatan: pilihan "110 mm" di daftar Lebar Roll adalah '
+                    'LEBAR stok label yang dipasang (masih di bawah batas '
+                    'lebar media printer ini, 112 mm) -- beda dengan '
+                    '"Kapasitas roll (OD) standar 110 mm" di atas, yang '
+                    'itu DIAMETER gulungan, bukan lebarnya.',
+                    style: TextStyle(
+                        fontSize: 11.5, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Map<String, dynamic>? get _produkPreview {
     for (final p in _semuaProduk) {
       if (_idTerpilih.contains(p['id'] as int)) return p;
@@ -682,10 +852,13 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       final builder = _PriceTagPdfBuilder(
         model: _model,
         ukuran: _ukuranAktif,
+        kertasCetak: _kertasCetak,
+        lebarRollMm: _lebarRollAktif.lebarMm,
         tag: semuaTag,
         tampilBarcode: _tampilBarcode,
         tampilKode: _tampilKode,
         tampilToko: _tampilToko,
+        tampilHargaProduk: _tampilHargaProduk,
         promo: _controllerPromo.text.trim(),
         tokoNama: Sesi.instance.tokoNama,
         logoBytes: _tampilLogo ? logoBytes : null,
@@ -1003,6 +1176,69 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _tombolPilihUkuran(),
+        if (_model != ModelPriceTag.promo) ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('Kertas Cetak',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              if (_kertasCetak == KertasCetak.thermal) ...[
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: _infoPrinterTsc,
+                  borderRadius: BorderRadius.circular(12),
+                  child: const Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(Icons.info_outline,
+                        size: 16, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<KertasCetak>(
+            segments: KertasCetak.values
+                .map((k) => ButtonSegment(value: k, label: Text(k.label)))
+                .toList(),
+            selected: {_kertasCetak},
+            onSelectionChanged: (s) =>
+                setStateIfMounted(() => _kertasCetak = s.first),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _kertasCetak == KertasCetak.thermal
+                ? 'Tag ditata berjajar melintasi lebar roll, tinggi halaman menyesuaikan jumlah tag (roll maju terus).'
+                : 'Tag ditata berjajar (grid) di atas kertas ${_kertasCetak.label}.',
+            style: const TextStyle(
+                fontSize: 11.5, color: AppColors.textSecondary),
+          ),
+          if (_kertasCetak == KertasCetak.thermal) ...[
+            const SizedBox(height: 12),
+            const Text('Lebar Roll',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _daftarLebarRoll
+                  .map((r) => ChoiceChip(
+                        label: Text(r.populer ? '${r.label} ⭐' : r.label),
+                        selected: _lebarRollId == r.id,
+                        onSelected: (_) =>
+                            setStateIfMounted(() => _lebarRollId = r.id),
+                      ))
+                  .toList(),
+            ),
+            if (_lebarRollAktif.lebarMm < _ukuranAktif.lebarMm) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Lebar roll (${_lebarRollAktif.lebarMm.toStringAsFixed(0)} mm) lebih sempit dari ukuran tag (${_ukuranAktif.lebarMm.toStringAsFixed(0)} mm) -- tag akan terpotong. Pilih roll yang lebih lebar atau ukuran tag yang lebih sempit.',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.danger),
+              ),
+            ],
+          ],
+        ],
         const SizedBox(height: 16),
         const Text('Salinan per Produk',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1090,6 +1326,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
+        if (_model == ModelPriceTag.produk)
+          CheckboxListTile(
+            value: _tampilHargaProduk,
+            onChanged: (v) =>
+                setStateIfMounted(() => _tampilHargaProduk = v ?? false),
+            title: const Text('Tampilkan Harga'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
         if (_model == ModelPriceTag.promo) _opsiPromoKustom(),
         if (_model == ModelPriceTag.rak) _opsiRakKustom(),
         const SizedBox(height: 18),
@@ -1460,12 +1705,29 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
 
   Widget _previewKertas(Map<String, dynamic> produk) {
     final ukuran = _ukuranAktif;
-    final paperWidth = _model == ModelPriceTag.promo ? ukuran.lebarMm : 210.0;
-    final paperHeight = _model == ModelPriceTag.promo ? ukuran.tinggiMm : 297.0;
+    double paperWidth;
+    double paperHeight;
+    String pageLabel;
+    if (_model == ModelPriceTag.promo) {
+      paperWidth = ukuran.lebarMm;
+      paperHeight = ukuran.tinggiMm;
+      pageLabel = '${ukuran.label} (${ukuran.detail})';
+    } else if (_kertasCetak == KertasCetak.thermal) {
+      paperWidth = _lebarRollAktif.lebarMm;
+      // Tinggi cuma representatif (beberapa baris) -- roll sungguhan maju
+      // terus tanpa batas tinggi tetap spt A4/F4, lihat [_previewIsiKertas].
+      paperHeight = ukuran.tinggiMm * 4;
+      pageLabel = 'Roll ${_lebarRollAktif.label} - tag ${ukuran.detail}';
+    } else if (_kertasCetak == KertasCetak.f4) {
+      paperWidth = 210;
+      paperHeight = 330;
+      pageLabel = 'F4 (210 x 330 mm) - tag ${ukuran.detail}';
+    } else {
+      paperWidth = 210;
+      paperHeight = 297;
+      pageLabel = 'A4 (210 x 297 mm) - tag ${ukuran.detail}';
+    }
     final paperRatio = paperWidth / paperHeight;
-    final pageLabel = _model == ModelPriceTag.promo
-        ? '${ukuran.label} (${ukuran.detail})'
-        : 'A4 (210 x 297 mm) - tag ${ukuran.detail}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1516,11 +1778,21 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     }
 
     final ukuran = _ukuranAktif;
-    const lebarA4 = 210.0;
-    const tinggiA4 = 297.0;
+    // Roll thermal: lebar tetap (mengikuti lebar roll dipilih), tinggi
+    // representatif beberapa baris saja (roll sungguhan maju terus-menerus,
+    // tidak dibatasi tinggi tetap spt A4/F4 -- lihat [_isiGridLabel] utk
+    // logika PDF sesungguhnya).
+    final lebarKertas =
+        _kertasCetak == KertasCetak.thermal ? _lebarRollAktif.lebarMm : 210.0;
     const gutterMm = 2.0;
-    final kolom = max(1, (lebarA4 + gutterMm) ~/ (ukuran.lebarMm + gutterMm));
-    final baris = max(1, (tinggiA4 + gutterMm) ~/ (ukuran.tinggiMm + gutterMm));
+    final kolom =
+        max(1, (lebarKertas + gutterMm) ~/ (ukuran.lebarMm + gutterMm));
+    final baris = _kertasCetak == KertasCetak.thermal
+        ? 4
+        : max(
+            1,
+            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) + gutterMm) ~/
+                (ukuran.tinggiMm + gutterMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
@@ -1548,7 +1820,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final harga = _formatRupiah(p['hargaJual'] as num?);
     final bulat = _model == ModelPriceTag.produk && _ukuranAktif.bulat;
     final isi = _model == ModelPriceTag.produk
-        ? _previewProdukMini(nama, kode, barcode)
+        ? _previewProdukMini(nama, kode, barcode, harga)
         : _previewRakMini(nama, kode, barcode, harga);
     return Container(
       padding: EdgeInsets.zero,
@@ -1593,10 +1865,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         fontWeight: FontWeight.w800)),
               ),
               if (_tampilKode)
-                Text(kode,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: kodeSize, color: kodeText)),
+                Flexible(
+                  child: Text(kode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: kodeSize, color: kodeText)),
+                ),
             ],
           ),
         ),
@@ -1620,7 +1894,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
-  Widget _previewProdukMini(String nama, String kode, String barcode) {
+  Widget _previewProdukMini(
+      String nama, String kode, String barcode, String harga) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1642,6 +1917,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 3.8, letterSpacing: 0.6)),
+        if (_tampilHargaProduk)
+          Text(harga,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 4.2, fontWeight: FontWeight.w900)),
       ],
     );
   }
@@ -1670,7 +1951,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     };
     final bulat = _model == ModelPriceTag.produk && ukuran.bulat;
     final isi = _model == ModelPriceTag.produk
-        ? _previewProduk(nama, kode, barcode)
+        ? _previewProduk(nama, kode, barcode, harga)
         : _model == ModelPriceTag.promo
             ? _previewPromo(p)
             : _previewRak(nama, kode, barcode, harga);
@@ -1767,17 +2048,19 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                   ),
                 ),
                 if (_tampilKode)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(kode,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: kodeSize,
-                              fontStyle: FontStyle.italic,
-                              color: kodeText)),
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(kode,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: kodeSize,
+                                fontStyle: FontStyle.italic,
+                                color: kodeText)),
+                      ),
                     ),
                   ),
               ],
@@ -1819,7 +2102,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
-  Widget _previewProduk(String nama, String kode, String barcode) {
+  Widget _previewProduk(String nama, String kode, String barcode, String harga) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1850,6 +2133,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 10)),
+        if (_tampilHargaProduk)
+          Text(harga,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primary)),
       ],
     );
   }
@@ -1898,17 +2190,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         fontSize: headerSize,
                         fontWeight: FontWeight.w900)),
               ),
-              if (_tampilLogo) _previewLogo(maxHeight: 30, bottom: 0),
+              if (_tampilLogo)
+                Flexible(child: _previewLogo(maxHeight: 30, bottom: 0)),
               if (!_tampilLogo &&
                   _tampilToko &&
                   Sesi.instance.tokoNama.isNotEmpty)
-                Text(Sesi.instance.tokoNama.toLowerCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: headerText,
-                        fontSize: tokoSize,
-                        fontWeight: FontWeight.w800)),
+                Flexible(
+                  child: Text(Sesi.instance.tokoNama.toLowerCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: headerText,
+                          fontSize: tokoSize,
+                          fontWeight: FontWeight.w800)),
+                ),
             ],
           ),
         ),
@@ -1928,14 +2223,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         fontWeight: FontWeight.w800)),
               ),
               if (hargaLama != null)
-                Text(hargaLama,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: hargaAsliSize,
-                      color: hargaAsliText,
-                      decoration: TextDecoration.lineThrough,
-                      fontWeight: FontWeight.w700,
-                    )),
+                Flexible(
+                  child: Text(hargaLama,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: hargaAsliSize,
+                        color: hargaAsliText,
+                        decoration: TextDecoration.lineThrough,
+                        fontWeight: FontWeight.w700,
+                      )),
+                ),
             ],
           ),
         ),
@@ -2032,10 +2330,13 @@ class _PreviewBarcode extends StatelessWidget {
 class _PriceTagPdfBuilder {
   final ModelPriceTag model;
   final _UkuranTag ukuran;
+  final KertasCetak kertasCetak;
+  final double lebarRollMm;
   final List<Map<String, dynamic>> tag;
   final bool tampilBarcode;
   final bool tampilKode;
   final bool tampilToko;
+  final bool tampilHargaProduk;
   final String promo;
   final String tokoNama;
   final Uint8List? logoBytes;
@@ -2076,10 +2377,13 @@ class _PriceTagPdfBuilder {
   _PriceTagPdfBuilder({
     required this.model,
     required this.ukuran,
+    required this.kertasCetak,
+    required this.lebarRollMm,
     required this.tag,
     required this.tampilBarcode,
     required this.tampilKode,
     required this.tampilToko,
+    required this.tampilHargaProduk,
     required this.promo,
     required this.tokoNama,
     required this.logoBytes,
@@ -2153,18 +2457,64 @@ class _PriceTagPdfBuilder {
     pw.Document doc,
     pw.Widget Function(Map<String, dynamic>) builder,
   ) {
-    final page = PdfPageFormat.a4.copyWith(
-      marginLeft: 0,
-      marginTop: 0,
-      marginRight: 0,
-      marginBottom: 0,
-    );
     final lebar = ukuran.lebarMm * PdfPageFormat.mm;
     final tinggi = ukuran.tinggiMm * PdfPageFormat.mm;
     final margin = marginKotakMm.clamp(0, 8).toDouble();
     final gutter = margin * PdfPageFormat.mm;
     final innerPadding =
         (margin * 0.25).clamp(0, 1).toDouble() * PdfPageFormat.mm;
+
+    if (kertasCetak == KertasCetak.thermal) {
+      // Roll thermal: LEBAR halaman tetap (mengikuti lebar roll dipilih --
+      // mis. 110mm utk TSC TTP-244 Pro), tag ditata berjajar (grid) spt
+      // kertas umum SUPAYA lebar roll tidak terbuang percuma kalau tag-nya
+      // lebih sempit dari roll (mis. tag 50mm di roll 110mm -> 2 kolom).
+      // TINGGI halaman dinamis mengikuti isi (bukan tetap spt A4) krn roll
+      // maju terus-menerus -- dibatasi [maxTinggiRollMm] per halaman PDF
+      // murni supaya satu job cetak tidak melebihi panjang label maksimal
+      // printer thermal pada umumnya (mis. TTP-244 Pro: 2.286mm/90").
+      final lebarRoll = lebarRollMm * PdfPageFormat.mm;
+      final kolom = max(1, (lebarRoll + gutter) ~/ (lebar + gutter));
+      const maxTinggiRollMm = 2000.0;
+      final barisMaks = max(
+          1,
+          ((maxTinggiRollMm * PdfPageFormat.mm) + gutter) ~/ (tinggi + gutter));
+      final perHalamanMaks = kolom * barisMaks;
+
+      for (var start = 0; start < tag.length; start += perHalamanMaks) {
+        final slice = tag.skip(start).take(perHalamanMaks).toList();
+        final baris = (slice.length / kolom).ceil();
+        final tinggiHalaman = baris * tinggi + max(0, baris - 1) * gutter;
+        final pageRoll = PdfPageFormat(lebarRoll, tinggiHalaman, marginAll: 0);
+        doc.addPage(
+          pw.Page(
+            pageFormat: pageRoll,
+            build: (_) => pw.Wrap(
+              spacing: gutter,
+              runSpacing: gutter,
+              children: slice
+                  .map((p) => pw.SizedBox(
+                        width: lebar,
+                        height: tinggi,
+                        child: pw.Padding(
+                          padding: pw.EdgeInsets.all(innerPadding),
+                          child: builder(p),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final page = (kertasCetak.pageFormat ?? PdfPageFormat.a4).copyWith(
+      marginLeft: 0,
+      marginTop: 0,
+      marginRight: 0,
+      marginBottom: 0,
+    );
     final usableWidth = page.availableWidth;
     final usableHeight = page.availableHeight;
     final kolom = max(1, (usableWidth + gutter) ~/ (lebar + gutter));
@@ -2252,12 +2602,14 @@ class _PriceTagPdfBuilder {
                           fontWeight: pw.FontWeight.bold)),
                 ),
                 if (tampilKode)
-                  pw.Text(kode,
-                      maxLines: 1,
-                      style: pw.TextStyle(
-                          fontSize: rakKodeSize * skala,
-                          color: PdfColor.fromHex(rakKodeTextHex),
-                          fontStyle: pw.FontStyle.italic)),
+                  pw.Flexible(
+                    child: pw.Text(kode,
+                        maxLines: 1,
+                        style: pw.TextStyle(
+                            fontSize: rakKodeSize * skala,
+                            color: PdfColor.fromHex(rakKodeTextHex),
+                            fontStyle: pw.FontStyle.italic)),
+                  ),
               ],
             ),
           ),
@@ -2328,6 +2680,12 @@ class _PriceTagPdfBuilder {
                 maxLines: 1,
                 textAlign: pw.TextAlign.center,
                 style: pw.TextStyle(fontSize: 5 * skala)),
+          if (tampilHargaProduk)
+            pw.Text(_rupiah(p['hargaJual'] as num?),
+                maxLines: 1,
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                    fontSize: 7.5 * skala, fontWeight: pw.FontWeight.bold)),
         ],
       ),
     );
@@ -2436,14 +2794,16 @@ class _PriceTagPdfBuilder {
                           fontWeight: pw.FontWeight.bold)),
                 ),
                 if (logoBytes != null)
-                  _logoPdf(22 * skala)
+                  pw.Flexible(child: _logoPdf(22 * skala))
                 else if (tampilToko && tokoNama.isNotEmpty)
-                  pw.Text(tokoNama.toLowerCase(),
-                      maxLines: 1,
-                      style: pw.TextStyle(
-                          fontSize: promoTokoSize * skala,
-                          color: PdfColor.fromHex(promoHeaderTextHex),
-                          fontWeight: pw.FontWeight.bold)),
+                  pw.Flexible(
+                    child: pw.Text(tokoNama.toLowerCase(),
+                        maxLines: 1,
+                        style: pw.TextStyle(
+                            fontSize: promoTokoSize * skala,
+                            color: PdfColor.fromHex(promoHeaderTextHex),
+                            fontWeight: pw.FontWeight.bold)),
+                  ),
               ],
             ),
           ),
@@ -2462,11 +2822,13 @@ class _PriceTagPdfBuilder {
                           color: PdfColor.fromHex(promoStripTextHex))),
                 ),
                 if (hargaLama != null)
-                  pw.Text(hargaLama,
-                      style: pw.TextStyle(
-                          fontSize: promoHargaAsliSize * skala,
-                          color: PdfColor.fromHex(promoHargaAsliTextHex),
-                          decoration: pw.TextDecoration.lineThrough)),
+                  pw.Flexible(
+                    child: pw.Text(hargaLama,
+                        style: pw.TextStyle(
+                            fontSize: promoHargaAsliSize * skala,
+                            color: PdfColor.fromHex(promoHargaAsliTextHex),
+                            decoration: pw.TextDecoration.lineThrough)),
+                  ),
               ],
             ),
           ),
@@ -2542,5 +2904,5 @@ String _formatRupiah(num? v) {
     if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
     buf.write(s[i]);
   }
-  return 'Rp $buf';
+  return 'Rp $buf,-';
 }
