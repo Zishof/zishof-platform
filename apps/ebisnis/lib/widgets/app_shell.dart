@@ -34,6 +34,7 @@ import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
 import '../screens/inventory_sales/master_customer_screen.dart';
 import '../screens/inventory_sales/master_sales_screen.dart';
+import '../screens/inventory_sales/persediaan_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -77,7 +78,8 @@ enum MenuEBisnis {
   berandaInventorySales,
   masterSupplier,
   masterCustomer,
-  masterSales
+  masterSales,
+  persediaan
 }
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -86,6 +88,7 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.masterSupplier: 'master_supplier',
   MenuEBisnis.masterCustomer: 'master_customer',
   MenuEBisnis.masterSales: 'master_sales',
+  MenuEBisnis.persediaan: 'persediaan',
 };
 
 class _ItemMenuShell {
@@ -155,6 +158,9 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunMasterCustomer),
   _ItemMenuShell(MenuEBisnis.masterSales, Icons.badge_outlined, 'Master Sales',
       builder: _bangunMasterSales),
+  _ItemMenuShell(MenuEBisnis.persediaan, Icons.warehouse_outlined,
+      'Persediaan & Kartu Stok',
+      builder: _bangunPersediaan),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -217,6 +223,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.masterSupplier,
     MenuEBisnis.masterCustomer,
     MenuEBisnis.masterSales,
+    MenuEBisnis.persediaan,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -285,6 +292,7 @@ Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
 Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
 Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
 Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
+Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -369,6 +377,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Master Customer';
     case MenuEBisnis.masterSales:
       return 'Master Sales';
+    case MenuEBisnis.persediaan:
+      return 'Persediaan & Kartu Stok';
   }
 }
 
@@ -424,6 +434,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.masterCustomer;
     case 'Master Sales':
       return MenuEBisnis.masterSales;
+    case 'Persediaan & Kartu Stok':
+      return MenuEBisnis.persediaan;
   }
   return null;
 }

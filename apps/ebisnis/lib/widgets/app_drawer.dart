@@ -24,6 +24,7 @@ import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
 import '../screens/inventory_sales/master_customer_screen.dart';
 import '../screens/inventory_sales/master_sales_screen.dart';
+import '../screens/inventory_sales/persediaan_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -134,6 +135,18 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Master Sales',
                           builder: (_) => const MasterSalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('persediaan'))
+                      _ItemMenu(
+                        icon: Icons.warehouse_outlined,
+                        label: 'Persediaan & Kartu Stok',
+                        aktif: menuAktif == 'Persediaan & Kartu Stok',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Persediaan & Kartu Stok',
+                          builder: (_) => const PersediaanScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))
