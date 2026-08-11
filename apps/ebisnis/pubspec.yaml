@@ -46,6 +46,11 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.3
   barcode: ^2.2.9
+  # Baca arsip ZIP DBF legacy (tab "Impor DBF" Konfigurasi, varian Inventory &
+  # Sales). Sudah jadi dependency transitif pdf/printing -- dinaikkan eksplisit;
+  # ^4 mengikuti versi yang memang sudah ter-resolve (jangan turunkan ke 3.x,
+  # itu ikut men-downgrade package `image` yang dipakai rantai pdf/printing).
+  archive: ^4.0.9
 
   # Platform Core -- paket bersama dipakai ulang oleh apps/* lain ke depan
   # (lihat README.md root repo). Path deps, bukan pub.dev, karena semuanya

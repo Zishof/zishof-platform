@@ -23,6 +23,8 @@ import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
 import 'hak_akses_screen.dart';
 import 'konfigurasi/tab_screensaver.dart';
+import 'konfigurasi/tab_impor_dbf.dart';
+import '../product_profile.dart';
 import '../widgets/safe_state.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
@@ -35,7 +37,9 @@ import '../widgets/safe_state.dart';
 /// `FormAlamatServer` yg sama dgn `PengaturanServerScreen` -- bisa diubah
 /// dari DALAM aplikasi tanpa perlu logout dulu). Bagian "Tampilan Aplikasi"
 /// Electron (judul window/logo) sengaja TIDAK diporting -- itu chrome desktop,
-/// tak ada padanan di HP.
+/// tak ada padanan di HP. Tab ke-6 kondisional "Impor DBF" (migrasi legacy
+/// INVENTORY CONTROL, `screens/konfigurasi/tab_impor_dbf.dart`) hanya muncul
+/// di varian Inventory & Sales saat login sbg Pemilik Usaha Sales/Inventory.
 class KonfigurasiScreen extends StatefulWidget {
   const KonfigurasiScreen({super.key});
   @override
@@ -46,10 +50,19 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
+  // Tab ke-6 "Impor DBF" (migrasi legacy INVENTORY CONTROL) HANYA untuk
+  // varian Inventory & Sales DAN login sebagai Pemilik Usaha Sales/Inventory
+  // (permintaan eksplisit; server tetap menegakkan ulang di si_import_legacy).
+  // Dihitung sekali di initState -- actorType terikat sesi login, tidak
+  // berubah selama layar ini hidup.
+  late final bool _tampilkanImporDbf;
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tampilkanImporDbf = AppProductProfile.aktif.isInventorySales &&
+        Sesi.instance.isPemilikSalesInventory;
+    _tab = TabController(length: _tampilkanImporDbf ? 6 : 5, vsync: this);
   }
 
   @override
@@ -88,12 +101,13 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
             labelColor: AppColors.primary,
             unselectedLabelColor: warnaTeksSekunder,
             indicatorColor: AppColors.primary,
-            tabs: const [
-              Tab(text: 'Identitas Mesin'),
-              Tab(text: 'Profil Toko'),
-              Tab(text: 'Akun Pengguna'),
-              Tab(text: 'Screensaver'),
-              Tab(text: 'Alamat Server'),
+            tabs: [
+              const Tab(text: 'Identitas Mesin'),
+              const Tab(text: 'Profil Toko'),
+              const Tab(text: 'Akun Pengguna'),
+              const Tab(text: 'Screensaver'),
+              const Tab(text: 'Alamat Server'),
+              if (_tampilkanImporDbf) const Tab(text: 'Impor DBF'),
             ],
           ),
           Expanded(
@@ -103,6 +117,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const _TabAkunPengguna(),
               const TabScreensaver(),
               _TabAlamatServer(onUbah: _logout),
+              if (_tampilkanImporDbf) const TabImporDbf(),
             ]),
           ),
         ],

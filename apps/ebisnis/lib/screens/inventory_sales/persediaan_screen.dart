@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
+import 'cetak_util.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtQty = NumberFormat('#,##0.##', 'id_ID');
@@ -94,6 +95,103 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
     await _muat();
   }
 
+  /// Ambil SELURUH baris sesuai filter aktif (bukan halaman aktif saja) --
+  /// batas aman 1000 baris; bila lebih, cetak/ekspor memberi tahu terpotong
+  /// (tanpa silent truncation).
+  Future<(List<Map<String, dynamic>>, bool)> _ambilSemua() async {
+    final semua = <Map<String, dynamic>>[];
+    bool terpotong = false;
+    for (var p = 1; p <= 10; p++) {
+      final hasil = await ApiClient.instance.aksi('si_inventory_balance', {
+        if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
+        'dari': _fmtTgl.format(_dari),
+        'sampai': _fmtTgl.format(_sampai),
+        'hanya_minimum': _filter == 'minimum',
+        'hanya_negatif': _filter == 'negatif',
+        'hanya_tersedia': _filter == 'tersedia',
+        'page': p,
+        'page_size': 100,
+      });
+      final baris =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      semua.addAll(baris);
+      final total = (hasil['total'] as num?)?.toInt() ?? 0;
+      if (semua.length >= total || baris.isEmpty) break;
+      if (p == 10 && semua.length < total) terpotong = true;
+    }
+    return (semua, terpotong);
+  }
+
+  List<List<String>> _barisCetak(List<Map<String, dynamic>> data) => data
+      .map((p) => [
+            '${p['kode']}',
+            '${p['nama']}',
+            '${p['satuan'] ?? ''}',
+            _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
+            _fmtQty.format((p['awal'] as num?) ?? 0),
+            _fmtQty.format((p['masuk'] as num?) ?? 0),
+            _fmtQty.format((p['keluar'] as num?) ?? 0),
+            _fmtQty.format((p['akhir'] as num?) ?? 0),
+            _fmtRp.format((p['totalHarga'] as num?) ?? 0),
+            _fmtQty.format((p['stokMinimum'] as num?) ?? 0),
+          ])
+      .toList();
+
+  static const _headerCetak = [
+    'Kode', 'Nama Barang', 'Sat', 'Hrg Beli', 'Awal', 'Masuk', 'Keluar',
+    'Akhir', 'Total Harga', 'Min'
+  ];
+
+  String get _parameterCetak =>
+      '${_fmtTgl.format(_dari)} s.d. ${_fmtTgl.format(_sampai)}'
+      '${_kataKunci.isNotEmpty ? ' · cari "$_kataKunci"' : ''} · filter $_filter';
+
+  Future<void> _cetakPdf() async {
+    try {
+      final (data, terpotong) = await _ambilSemua();
+      double totalNilai = 0;
+      for (final p in data) {
+        totalNilai += (p['totalHarga'] as num?)?.toDouble() ?? 0;
+      }
+      await CetakUtilIs.cetakPdfTabel(
+        judul: 'LAPORAN PERSEDIAAN (DAFTAR STOK)',
+        parameter: _parameterCetak + (terpotong ? ' · TERPOTONG 1000 baris' : ''),
+        headers: _headerCetak,
+        rows: _barisCetak(data),
+        barisTotal:
+            'TOTAL NILAI PERSEDIAAN: ${_fmtRp.format(totalNilai)} · ${data.length} jenis barang',
+        namaFile: 'laporan-persediaan-${_fmtTgl.format(_sampai)}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal cetak: $e')));
+      }
+    }
+  }
+
+  Future<void> _eksporCsv() async {
+    try {
+      final (data, terpotong) = await _ambilSemua();
+      if (terpotong && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Data melebihi 1000 baris — ekspor terpotong.')));
+      }
+      if (!mounted) return;
+      await CetakUtilIs.eksporCsv(
+        context: context,
+        namaFile: 'persediaan-${_fmtTgl.format(_sampai)}.csv',
+        headers: _headerCetak,
+        rows: _barisCetak(data),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal ekspor: $e')));
+      }
+    }
+  }
+
   Future<void> _bukaKartuStok(Map<String, dynamic> p) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -119,12 +217,14 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
-        Tooltip(
-          message:
-              'Cetak/preview/Excel Laporan Persediaan tersedia di fase laporan (P2-F).',
-          child:
-              IconButton(icon: const Icon(Icons.print_outlined), onPressed: null),
-        ),
+        IconButton(
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Cetak/Preview PDF Laporan Persediaan (parameter = filter aktif)',
+            onPressed: _cetakPdf),
+        IconButton(
+            icon: const Icon(Icons.table_view_outlined),
+            tooltip: 'Ekspor CSV (kolom legacy lengkap)',
+            onPressed: _eksporCsv),
         IconButton(
             icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
       ]),
