@@ -20,12 +20,16 @@ import '../widgets/app_shell.dart';
 import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
 import 'hak_akses_screen.dart';
+import 'konfigurasi/tab_screensaver.dart';
 import '../widgets/safe_state.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
-/// Electron) -- 4 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
+/// Electron) -- 5 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
 /// (server, `toko_profil_ambil`/`_simpan`), Akun Pengguna (server,
-/// `pedagang_list`/`pedagang_ubah`/`akun_tambah`), Alamat Server (lokal,
+/// `pedagang_list`/`pedagang_ubah`/`akun_tambah`), Screensaver (server,
+/// `layar_pelanggan_slide_*`/`layar_pelanggan_screensaver_config_*` --
+/// slideshow gambar di Layar Pelanggan saat idle, lihat
+/// `screens/konfigurasi/tab_screensaver.dart`), Alamat Server (lokal,
 /// `FormAlamatServer` yg sama dgn `PengaturanServerScreen` -- bisa diubah
 /// dari DALAM aplikasi tanpa perlu logout dulu). Bagian "Tampilan Aplikasi"
 /// Electron (judul window/logo) sengaja TIDAK diporting -- itu chrome desktop,
@@ -43,7 +47,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -86,6 +90,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               Tab(text: 'Identitas Mesin'),
               Tab(text: 'Profil Toko'),
               Tab(text: 'Akun Pengguna'),
+              Tab(text: 'Screensaver'),
               Tab(text: 'Alamat Server'),
             ],
           ),
@@ -94,6 +99,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const _TabIdentitasMesin(),
               const _TabProfilToko(),
               const _TabAkunPengguna(),
+              const TabScreensaver(),
               _TabAlamatServer(onUbah: _logout),
             ]),
           ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -66,11 +67,27 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   int? _ratingDipilih;
   bool _mengirimRating = false;
 
+  // "Screensaver" -- state KEEMPAT, menyala setelah idle (tanpa transaksi)
+  // selama [_configScreensaver.idleDetik] detik berturut-turut. Konten (daftar
+  // gambar + pengaturan tampilan) dimuat SEKALI di initState (supaya durasi
+  // idle siklus PERTAMA sudah pakai nilai konfigurasi sungguhan, bukan
+  // default tebakan), lalu disegarkan ULANG setiap kali screensaver benar-benar
+  // menyala (lihat JavaDoc server `KantinHelper.layarPelangganSlideUntukTampil`)
+  // supaya gambar baru yg diunggah admin dari Konfigurasi ikut muncul tanpa
+  // perlu me-restart aplikasi Layar Pelanggan.
+  Timer? _timerIdleScreensaver;
+  Timer? _timerSlideAdvance;
+  Map<String, dynamic>? _configScreensaver;
+  List<Map<String, dynamic>> _slideScreensaver = [];
+  int _indexSlide = 0;
+  bool _tampilkanScreensaver = false;
+
   @override
   void initState() {
     super.initState();
     _daftarkanLiveChannel();
     _ambil();
+    _muatKontenScreensaver();
     _timer =
         Timer.periodic(const Duration(milliseconds: 500), (_) => _ambil());
   }
@@ -79,6 +96,8 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   void dispose() {
     _timer?.cancel();
     _timerSukses?.cancel();
+    _timerIdleScreensaver?.cancel();
+    _timerSlideAdvance?.cancel();
     unawaited(LayarPelangganBroadcaster.channel.setMethodCallHandler(null));
     super.dispose();
   }
@@ -93,6 +112,74 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       });
     } catch (_) {
       // Jika channel tidak tersedia (mis. fallback mobile), polling tetap jalan.
+    }
+  }
+
+  /// Muat konfigurasi + daftar gambar screensaver. Dipanggil di [initState]
+  /// (mengisi durasi idle utk siklus pertama) DAN setiap kali
+  /// [_mulaiTimerIdleScreensaver] benar-benar habis (menyegarkan konten
+  /// sebelum tampil) -- lihat catatan di deklarasi field di atas.
+  Future<void> _muatKontenScreensaver() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('layar_pelanggan_slide_untuk_tampil', {
+        'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
+        'id_mesin': IdentitasMesin.instance.idMesin,
+      });
+      if (!mounted) return;
+      final cfg = (hasil['config'] as Map?) != null
+          ? Map<String, dynamic>.from(hasil['config'] as Map)
+          : null;
+      final slide = ((hasil['slides'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      setStateIfMounted(() {
+        _configScreensaver = cfg;
+        _slideScreensaver = slide;
+      });
+    } catch (_) {
+      // Gagal muat -- screensaver tetap OFF (aman), idle biasa tampil terus.
+    }
+  }
+
+  int get _idleDetikTerkonfigurasi =>
+      (_configScreensaver?['idleDetik'] as num?)?.toInt() ?? 30;
+
+  void _mulaiTimerIdleScreensaver() {
+    _timerIdleScreensaver?.cancel();
+    _timerIdleScreensaver =
+        Timer(Duration(seconds: _idleDetikTerkonfigurasi), () async {
+      if (!mounted) return;
+      // Segarkan konten dulu (gambar baru/pengaturan berubah) sebelum tampil.
+      await _muatKontenScreensaver();
+      if (!mounted) return;
+      final cfg = _configScreensaver;
+      if (cfg == null || cfg['aktif'] != true || _slideScreensaver.isEmpty) {
+        return; // Screensaver dimatikan admin atau belum ada gambar -- tetap idle biasa.
+      }
+      setStateIfMounted(() {
+        _indexSlide = 0;
+        _tampilkanScreensaver = true;
+      });
+      _mulaiSlideAdvance();
+    });
+  }
+
+  void _mulaiSlideAdvance() {
+    _timerSlideAdvance?.cancel();
+    final durasi = (_configScreensaver?['durasiDetik'] as num?)?.toInt() ?? 6;
+    _timerSlideAdvance =
+        Timer.periodic(Duration(seconds: durasi), (_) {
+      if (!mounted || _slideScreensaver.isEmpty) return;
+      setStateIfMounted(
+          () => _indexSlide = (_indexSlide + 1) % _slideScreensaver.length);
+    });
+  }
+
+  void _batalkanScreensaver() {
+    _timerIdleScreensaver?.cancel();
+    _timerSlideAdvance?.cancel();
+    if (_tampilkanScreensaver) {
+      setStateIfMounted(() => _tampilkanScreensaver = false);
     }
   }
 
@@ -138,6 +225,14 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
         _items = [];
         _memberNama = null;
       }
+      // Screensaver HANYA relevan saat benar-benar idle (tanpa transaksi &
+      // bukan layar rating) -- transaksi baru atau layar sukses SELALU
+      // membatalkan screensaver seketika, kasir tak boleh tertutupi gambar.
+      if (aktif || suksesBaru || tipe == 'sukses') {
+        _batalkanScreensaver();
+      } else if (!aktif && !_tampilkanScreensaver && _timerIdleScreensaver == null) {
+        _mulaiTimerIdleScreensaver();
+      }
     });
   }
 
@@ -151,6 +246,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     _timerSukses = Timer(const Duration(seconds: 15), () {
       if (!mounted) return;
       setStateIfMounted(() => _tampilkanSukses = false);
+      _mulaiTimerIdleScreensaver();
     });
   }
 
@@ -175,6 +271,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     setStateIfMounted(() => _tampilkanSukses = false);
+    _mulaiTimerIdleScreensaver();
   }
 
   Future<void> _ambil() async {
@@ -202,14 +299,15 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
             ? _bodySukses(key: const ValueKey('sukses'))
             : (_aktif
                 ? _bodyAktif(key: const ValueKey('aktif'))
-                : _bodyIdle(key: const ValueKey('idle'))),
+                : (_tampilkanScreensaver
+                    ? _bodyScreensaver(key: const ValueKey('screensaver'))
+                    : _bodyIdle(key: const ValueKey('idle')))),
       ),
     );
   }
 
-  Widget _bodyIdle({required Key key}) {
+  Widget _bodyIdleKonten() {
     return Center(
-      key: key,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -236,6 +334,31 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
         ],
       ),
     );
+  }
+
+  Widget _bodyIdle({required Key key}) {
+    return SizedBox.expand(key: key, child: _bodyIdleKonten());
+  }
+
+  /// Screensaver slideshow -- menyala setelah idle berkepanjangan (lihat
+  /// [_mulaiTimerIdleScreensaver]). Mode `SETENGAH` membagi layar: separuh
+  /// atas tetap branding toko (spt Idle biasa), separuh bawah gambar berputar
+  /// -- mode `FULLSCREEN` (default) gambar mengisi seluruh layar.
+  Widget _bodyScreensaver({required Key key}) {
+    final mode = (_configScreensaver?['modeTampilan'] as String?) ?? 'FULLSCREEN';
+    final slideshow = _ScreensaverSlideshow(
+      slides: _slideScreensaver,
+      index: _indexSlide,
+      animasi: (_configScreensaver?['animasi'] as String?) ?? 'FADE',
+      durasiDetik: (_configScreensaver?['durasiDetik'] as num?)?.toInt() ?? 6,
+    );
+    if (mode == 'SETENGAH') {
+      return Column(key: key, children: [
+        Expanded(child: _bodyIdleKonten()),
+        Expanded(child: slideshow),
+      ]);
+    }
+    return SizedBox.expand(key: key, child: slideshow);
   }
 
   /// Layar "Survey Kepuasan Pelanggan" -- muncul tepat setelah transaksi
@@ -427,5 +550,88 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
         ],
       ),
     );
+  }
+}
+
+/// Widget slideshow murni (tanpa state polling apa pun) -- menampilkan satu
+/// gambar (`slides[index]`) dengan salah satu dari 4 efek transisi. Index
+/// dikendalikan dari LUAR ([_LayarPelangganScreenState._timerSlideAdvance])
+/// supaya widget ini tetap simpel/stateless dan mudah diuji terpisah.
+class _ScreensaverSlideshow extends StatelessWidget {
+  final List<Map<String, dynamic>> slides;
+  final int index;
+  final String animasi;
+  final int durasiDetik;
+
+  const _ScreensaverSlideshow({
+    required this.slides,
+    required this.index,
+    required this.animasi,
+    required this.durasiDetik,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (slides.isEmpty) return const SizedBox.shrink();
+    final slide = slides[index % slides.length];
+    final url = slide['urlGambar'] as String?;
+    final gambar = url == null
+        ? const SizedBox.shrink()
+        : Image.network(url, key: ValueKey(slide['id']), fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink());
+
+    switch (animasi) {
+      case 'SLIDE':
+        return ClipRect(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 700),
+            transitionBuilder: (child, anim) {
+              final masuk = Tween<Offset>(
+                      begin: const Offset(1, 0), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic));
+              return SlideTransition(position: masuk, child: child);
+            },
+            layoutBuilder: (currentChild, previousChildren) => Stack(
+              fit: StackFit.expand,
+              children: [...previousChildren, if (currentChild != null) currentChild],
+            ),
+            child: SizedBox.expand(key: ValueKey(slide['id']), child: gambar),
+          ),
+        );
+      case 'ZOOM':
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 700),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.88, end: 1).animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          ),
+          child: SizedBox.expand(key: ValueKey(slide['id']), child: gambar),
+        );
+      case 'KEN_BURNS':
+        return ClipRect(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 900),
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey(slide['id']),
+              tween: Tween(begin: 1.0, end: 1.12),
+              duration: Duration(seconds: durasiDetik),
+              curve: Curves.linear,
+              builder: (context, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
+              child: SizedBox.expand(child: gambar),
+            ),
+          ),
+        );
+      case 'FADE':
+      default:
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 900),
+          child: SizedBox.expand(key: ValueKey(slide['id']), child: gambar),
+        );
+    }
   }
 }

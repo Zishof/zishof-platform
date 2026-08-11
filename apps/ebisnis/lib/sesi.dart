@@ -67,6 +67,12 @@ class Sesi {
   bool bolehMenuIs(String kunci) =>
       isAdmin || (menuInventorySales[kunci] ?? false);
 
+  /// Aksi granular varian IS (create/update/delete/approve/reject) -- murni
+  /// gating tombol; server tetap menegakkan lewat ctx.bolehAksi. Fail-closed.
+  Map<String, Map<String, bool>> crudInventorySales = {};
+  bool bolehAksiIs(String kunci, String aksi) =>
+      isAdmin || (crudInventorySales[kunci]?[aksi] ?? false);
+
   /// Boleh mengelola (ubah/hapus/batal) -- padanan gerbang client-side yang
   /// sudah dipakai Electron/Android existing utk sembunyikan tombol destruktif
   /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
@@ -127,6 +133,14 @@ class Sesi {
     menuInventorySales = menuIs is Map<String, dynamic>
         ? menuIs.map((k, v) => MapEntry(k, v == true))
         : {};
+    final crudIs = izin is Map<String, dynamic> ? izin['crud'] : null;
+    crudInventorySales = crudIs is Map<String, dynamic>
+        ? crudIs.map((k, v) => MapEntry(
+            k,
+            v is Map<String, dynamic>
+                ? v.map((ak, av) => MapEntry(ak, av == true))
+                : <String, bool>{}))
+        : {};
   }
 
   void reset() {
@@ -154,5 +168,6 @@ class Sesi {
     currentTripId = null;
     featureProfile = [];
     menuInventorySales = {};
+    crudInventorySales = {};
   }
 }

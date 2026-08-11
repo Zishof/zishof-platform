@@ -21,6 +21,9 @@ import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
+import '../screens/inventory_sales/master_supplier_screen.dart';
+import '../screens/inventory_sales/master_customer_screen.dart';
+import '../screens/inventory_sales/master_sales_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -95,6 +98,42 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Beranda Inventory & Sales',
                           builder: (_) => const BerandaInventorySalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_supplier'))
+                      _ItemMenu(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Master Supplier',
+                        aktif: menuAktif == 'Master Supplier',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Supplier',
+                          builder: (_) => const MasterSupplierScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_customer'))
+                      _ItemMenu(
+                        icon: Icons.people_alt_outlined,
+                        label: 'Master Customer',
+                        aktif: menuAktif == 'Master Customer',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Customer',
+                          builder: (_) => const MasterCustomerScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_sales'))
+                      _ItemMenu(
+                        icon: Icons.badge_outlined,
+                        label: 'Master Sales',
+                        aktif: menuAktif == 'Master Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Sales',
+                          builder: (_) => const MasterSalesScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))

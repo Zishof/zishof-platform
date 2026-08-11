@@ -31,6 +31,9 @@ import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
+import '../screens/inventory_sales/master_supplier_screen.dart';
+import '../screens/inventory_sales/master_customer_screen.dart';
+import '../screens/inventory_sales/master_sales_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -71,8 +74,19 @@ enum MenuEBisnis {
   konfigurasi,
   layarPelanggan,
   hakAkses,
-  berandaInventorySales
+  berandaInventorySales,
+  masterSupplier,
+  masterCustomer,
+  masterSales
 }
+
+/// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
+/// dipakai [bolehTampilMenu] lewat `Sesi.bolehMenuIs`, kunci hilang = sembunyi).
+const _kunciMenuIs = <MenuEBisnis, String>{
+  MenuEBisnis.masterSupplier: 'master_supplier',
+  MenuEBisnis.masterCustomer: 'master_customer',
+  MenuEBisnis.masterSales: 'master_sales',
+};
 
 class _ItemMenuShell {
   final MenuEBisnis kunci;
@@ -120,6 +134,11 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.berandaInventorySales) {
     return AppProductProfile.aktif.isInventorySales;
   }
+  final kunciIs = _kunciMenuIs[kunci];
+  if (kunciIs != null) {
+    return AppProductProfile.aktif.isInventorySales &&
+        Sesi.instance.bolehMenuIs(kunciIs);
+  }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
 }
@@ -128,6 +147,14 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
       'Beranda Inventory & Sales',
       builder: _bangunBerandaIS),
+  _ItemMenuShell(MenuEBisnis.masterSupplier, Icons.local_shipping_outlined,
+      'Master Supplier',
+      builder: _bangunMasterSupplier),
+  _ItemMenuShell(MenuEBisnis.masterCustomer, Icons.people_alt_outlined,
+      'Master Customer',
+      builder: _bangunMasterCustomer),
+  _ItemMenuShell(MenuEBisnis.masterSales, Icons.badge_outlined, 'Master Sales',
+      builder: _bangunMasterSales),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -187,6 +214,9 @@ const _daftarMenu = <_ItemMenuShell>[
 const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Inventory & Sales', [
     MenuEBisnis.berandaInventorySales,
+    MenuEBisnis.masterSupplier,
+    MenuEBisnis.masterCustomer,
+    MenuEBisnis.masterSales,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -252,6 +282,9 @@ Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
 Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
+Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
+Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
+Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -330,6 +363,12 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Hak Akses';
     case MenuEBisnis.berandaInventorySales:
       return 'Beranda Inventory & Sales';
+    case MenuEBisnis.masterSupplier:
+      return 'Master Supplier';
+    case MenuEBisnis.masterCustomer:
+      return 'Master Customer';
+    case MenuEBisnis.masterSales:
+      return 'Master Sales';
   }
 }
 
@@ -379,6 +418,12 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.hakAkses;
     case 'Beranda Inventory & Sales':
       return MenuEBisnis.berandaInventorySales;
+    case 'Master Supplier':
+      return MenuEBisnis.masterSupplier;
+    case 'Master Customer':
+      return MenuEBisnis.masterCustomer;
+    case 'Master Sales':
+      return MenuEBisnis.masterSales;
   }
   return null;
 }
