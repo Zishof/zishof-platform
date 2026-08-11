@@ -34,9 +34,18 @@
   Excel + Cetak PDF dari fitur terdahulu); filter stok-mobil-sales menyusul P5.
 - SCR-11/13/17/18/19 (Harga): LENGKAP sisi master berversi + analisis margin; approval
   berjenjang & impor template menyusul.
-- SCR-12/14/15/16 (cetak/preview/ekspor): AUDITED/PARSIAL — data & filter sudah tersedia di
-  layar; PDF/Excel/snapshot spesifik legacy menyusul fase laporan (dicatat jujur di ledger,
-  TIDAK ditandai DONE).
+- SCR-12/14/15/16 (cetak/preview/ekspor): DITUTUP di commit `50651f2` (2026-08-12) —
+  `cetak_util.dart` baru (CetakUtilIs: PDF pw.MultiPage dgn konteks toko/pengguna/waktu/
+  parameter + CSV pola FilePicker); layar Persediaan & Harga dapat tombol Cetak PDF +
+  Ekspor CSV (harga dgn dialog "Jual Saja"/"Sertakan Harga Beli"); data diambil penuh via
+  loop paging `_ambilSemua`. Preview = dialog print OS (`Printing.layoutPdf`).
+- MIG-001 Impor DBF (commit AIS `aaf825b5` + zishof `50651f2`, 2026-08-12): aksi
+  `si_import_legacy` (upsert idempoten by kode legacy, existing tidak ditimpa, saldo STOK
+  jadi StokOpname migrasi, otorisasi PEMILIK/ADMIN ditegakkan server) + tab ke-6 "Impor
+  DBF" di Konfigurasi — kondisional HANYA varian IS + login Pemilik Usaha Sales/Inventory
+  (permintaan eksplisit user); parser DBF murni Dart (`dbf_parser.dart`) diverifikasi
+  terhadap 28 berkas arsip nyata `5-Inventory` (struktur field STOK/SUPPLIER/CUSTOMER/
+  SALES/masterbl/masterjl dibaca langsung dari byte header aslinya).
 
 ## Catatan insiden (2026-08-11)
 

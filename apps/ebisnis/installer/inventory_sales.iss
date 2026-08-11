@@ -35,9 +35,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Ikon tambahan:"
 
 [Files]
-; Exclude exe varian LAIN juga -- folder Release bisa berisi sisa build varian sebelumnya
-; (copy_if_different tidak pernah menghapus), tanpa ini installer ikut membungkusnya.
-Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis.exe,ebisnis_albahjah.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Folder Release bisa berisi sisa exe varian lain (copy_if_different tidak pernah
+; menghapus, dan varian baru terus bertambah: albahjah/apotik/emedik/...). Exclude
+; SEMUA ebisnis*.exe lalu masukkan kembali HANYA exe varian ini -- future-proof,
+; tidak perlu memperbarui daftar tiap kali ada varian baru.
+Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis*.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\ebisnis_inventory_sales.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
