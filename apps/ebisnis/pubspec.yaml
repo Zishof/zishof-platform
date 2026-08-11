@@ -17,7 +17,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
 
-version: 1.30.0+53
+version: 1.31.0+54
 
 environment:
   sdk: ^3.6.0
@@ -107,6 +107,8 @@ flutter:
   assets:
     - assets/images/ebisnis/icon.png
     - assets/images/albahjah/icon.png
+    - assets/images/inventory_sales/icon.png
+    - assets/images/apotik/icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -35,6 +35,18 @@ if(EBISNIS_RESOLVED_VARIANT STREQUAL "albahjah")
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "$<TARGET_FILE:${BINARY_NAME}>"
       "$<TARGET_FILE_DIR:${BINARY_NAME}>/ebisnis_albahjah.exe")
+elseif(EBISNIS_RESOLVED_VARIANT STREQUAL "inventory_sales")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "EBISNIS_VARIANT_INVENTORY_SALES")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:${BINARY_NAME}>"
+      "$<TARGET_FILE_DIR:${BINARY_NAME}>/ebisnis_inventory_sales.exe")
+elseif(EBISNIS_RESOLVED_VARIANT STREQUAL "apotik")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "EBISNIS_VARIANT_APOTIK")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:${BINARY_NAME}>"
+      "$<TARGET_FILE_DIR:${BINARY_NAME}>/ebisnis_apotik.exe")
 endif()
 
 # Disable Windows macros that collide with C++ standard library functions.

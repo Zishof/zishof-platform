@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fallback app_name utk build tanpa flavor; flavor ebisnis/inventorySales
+     meng-override lewat resValue di build.gradle. -->
+<resources>
+    <string name="app_name">ebisnis</string>
+</resources>

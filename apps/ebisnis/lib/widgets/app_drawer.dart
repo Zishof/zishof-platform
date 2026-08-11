@@ -20,6 +20,13 @@ import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
+import '../screens/inventory_sales/beranda_is_screen.dart';
+import '../screens/inventory_sales/master_supplier_screen.dart';
+import '../screens/inventory_sales/master_customer_screen.dart';
+import '../screens/inventory_sales/master_sales_screen.dart';
+import '../screens/inventory_sales/persediaan_screen.dart';
+import '../screens/inventory_sales/harga_screen.dart';
+import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -84,6 +91,77 @@ class AppDrawer extends StatelessWidget {
                 builder: (context, _, __) => ListView(
                   padding: EdgeInsets.zero,
                   children: [
+                    if (AppProductProfile.aktif.isInventorySales)
+                      _ItemMenu(
+                        icon: Icons.storefront_outlined,
+                        label: 'Beranda Inventory & Sales',
+                        aktif: menuAktif == 'Beranda Inventory & Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Beranda Inventory & Sales',
+                          builder: (_) => const BerandaInventorySalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_supplier'))
+                      _ItemMenu(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Master Supplier',
+                        aktif: menuAktif == 'Master Supplier',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Supplier',
+                          builder: (_) => const MasterSupplierScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_customer'))
+                      _ItemMenu(
+                        icon: Icons.people_alt_outlined,
+                        label: 'Master Customer',
+                        aktif: menuAktif == 'Master Customer',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Customer',
+                          builder: (_) => const MasterCustomerScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('master_sales'))
+                      _ItemMenu(
+                        icon: Icons.badge_outlined,
+                        label: 'Master Sales',
+                        aktif: menuAktif == 'Master Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master Sales',
+                          builder: (_) => const MasterSalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('persediaan'))
+                      _ItemMenu(
+                        icon: Icons.warehouse_outlined,
+                        label: 'Persediaan & Kartu Stok',
+                        aktif: menuAktif == 'Persediaan & Kartu Stok',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Persediaan & Kartu Stok',
+                          builder: (_) => const PersediaanScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('harga'))
+                      _ItemMenu(
+                        icon: Icons.price_change_outlined,
+                        label: 'Master & Analisis Harga',
+                        aktif: menuAktif == 'Master & Analisis Harga',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Master & Analisis Harga',
+                          builder: (_) => const HargaScreen(),
+                        ),
+                      ),
                     if (Sesi.instance.bolehMenu('kasir'))
                       _ItemMenu(
                         icon: Icons.point_of_sale,

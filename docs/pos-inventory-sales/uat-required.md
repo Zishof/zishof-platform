@@ -21,3 +21,10 @@ saat UAT (lihat juga assumption-register.md):
    tersedia lokal saat audit) — verifikasi alur layar 39-42 bersama operator lama.
 10. **UAT hardware**: printer thermal/A4 di Windows, share/print Android, scanner USB/kamera
     (P7) — perlu perangkat fisik pengguna.
+11. **Keystore signing Android produksi** (P1/FND-003): build.gradle sudah membaca
+    `android/key.properties` (tidak di-commit) bila tersedia; TANPA file itu release masih
+    debug-signing (perilaku lama). Pemilik harus menyediakan/menyetujui keystore — TIDAK
+    digenerate sepihak oleh build machine.
+12. **Aset branding varian** (P1/FND-004): ikon `assets/images/inventory_sales/icon.png` dan
+    `windows/runner/resources/icon_inventory_sales.ico` sementara SALINAN logo eBisnis —
+    logo final varian Inventory & Sales menunggu keputusan pemilik.

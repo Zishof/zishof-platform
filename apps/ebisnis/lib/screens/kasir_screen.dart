@@ -216,29 +216,11 @@ class _KasirScreenState extends State<KasirScreen> {
     return const [];
   }
 
+  // Pemetaan konfigurasi->Sesi dipindah ke Sesi.terapkanKonfig (dipakai juga
+  // landing varian Inventory & Sales) -- wrapper tipis ini dipertahankan
+  // supaya seluruh call-site lama di file ini tidak berubah.
   void _terapkanKonfig(Map<String, dynamic> konfig) {
-    Sesi.instance
-      ..tokoNama = (konfig['tokoNama'] ?? '') as String
-      ..tokoAlamat = '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim()
-      ..tokoTelp =
-          '${konfig['tokoTelp'] ?? konfig['telp'] ?? konfig['picHp'] ?? konfig['kontak'] ?? ''}'
-              .trim()
-      ..tokoId = konfig['tokoId'] as int?
-      ..userId = (konfig['userId'] ?? '') as String
-      ..pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0
-      ..pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String
-      ..wajibSesiKas = konfig['wajibSesiKas'] == true
-      ..isAdmin = konfig['isAdmin'] == true
-      ..supervisorPedagang = konfig['supervisorPedagang'] == true
-      ..bolehEntryTopup = konfig['bolehEntryTopup'] == true
-      ..caraBayar = ((konfig['caraBayar'] as List?) ?? [])
-          .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
-          .toList()
-      ..aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {})
-          .map((k, v) => MapEntry(k, v == true))
-      ..multiToko = konfig['multiToko'] == true
-      ..daftarToko =
-          ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    Sesi.instance.terapkanKonfig(konfig);
   }
 
   /// Bungkus [_terapkanKonfig] dengan penjagaan toko-per-perangkat -- lihat

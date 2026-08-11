@@ -30,6 +30,13 @@ import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/inventory_sales/beranda_is_screen.dart';
+import '../screens/inventory_sales/master_supplier_screen.dart';
+import '../screens/inventory_sales/master_customer_screen.dart';
+import '../screens/inventory_sales/master_sales_screen.dart';
+import '../screens/inventory_sales/persediaan_screen.dart';
+import '../screens/inventory_sales/harga_screen.dart';
+import '../product_profile.dart';
 import 'safe_state.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
@@ -39,7 +46,10 @@ import 'safe_state.dart';
 /// landscape kecil.
 const kAmbangLebarDesktop = 900.0;
 
-final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(MenuEBisnis.kasir);
+final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(
+    AppProductProfile.aktif.isInventorySales
+        ? MenuEBisnis.berandaInventorySales
+        : MenuEBisnis.kasir);
 
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
@@ -65,8 +75,24 @@ enum MenuEBisnis {
   logError,
   konfigurasi,
   layarPelanggan,
-  hakAkses
+  hakAkses,
+  berandaInventorySales,
+  masterSupplier,
+  masterCustomer,
+  masterSales,
+  persediaan,
+  harga
 }
+
+/// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
+/// dipakai [bolehTampilMenu] lewat `Sesi.bolehMenuIs`, kunci hilang = sembunyi).
+const _kunciMenuIs = <MenuEBisnis, String>{
+  MenuEBisnis.masterSupplier: 'master_supplier',
+  MenuEBisnis.masterCustomer: 'master_customer',
+  MenuEBisnis.masterSales: 'master_sales',
+  MenuEBisnis.persediaan: 'persediaan',
+  MenuEBisnis.harga: 'harga',
+};
 
 class _ItemMenuShell {
   final MenuEBisnis kunci;
@@ -109,11 +135,38 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
+  // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
+  // (bukan role): tidak pernah dirakit ke sidebar varian POS lama.
+  if (kunci == MenuEBisnis.berandaInventorySales) {
+    return AppProductProfile.aktif.isInventorySales;
+  }
+  final kunciIs = _kunciMenuIs[kunci];
+  if (kunciIs != null) {
+    return AppProductProfile.aktif.isInventorySales &&
+        Sesi.instance.bolehMenuIs(kunciIs);
+  }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
 }
 
 const _daftarMenu = <_ItemMenuShell>[
+  _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
+      'Beranda Inventory & Sales',
+      builder: _bangunBerandaIS),
+  _ItemMenuShell(MenuEBisnis.masterSupplier, Icons.local_shipping_outlined,
+      'Master Supplier',
+      builder: _bangunMasterSupplier),
+  _ItemMenuShell(MenuEBisnis.masterCustomer, Icons.people_alt_outlined,
+      'Master Customer',
+      builder: _bangunMasterCustomer),
+  _ItemMenuShell(MenuEBisnis.masterSales, Icons.badge_outlined, 'Master Sales',
+      builder: _bangunMasterSales),
+  _ItemMenuShell(MenuEBisnis.persediaan, Icons.warehouse_outlined,
+      'Persediaan & Kartu Stok',
+      builder: _bangunPersediaan),
+  _ItemMenuShell(MenuEBisnis.harga, Icons.price_change_outlined,
+      'Master & Analisis Harga',
+      builder: _bangunHarga),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -171,6 +224,14 @@ const _daftarMenu = <_ItemMenuShell>[
 ];
 
 const _grupMenu = <_GrupMenuShell>[
+  _GrupMenuShell('Inventory & Sales', [
+    MenuEBisnis.berandaInventorySales,
+    MenuEBisnis.masterSupplier,
+    MenuEBisnis.masterCustomer,
+    MenuEBisnis.masterSales,
+    MenuEBisnis.persediaan,
+    MenuEBisnis.harga,
+  ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
     MenuEBisnis.pesanan,
@@ -234,6 +295,12 @@ Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
+Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
+Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
+Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
+Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
+Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
+Widget _bangunHarga(BuildContext c) => const HargaScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -310,6 +377,18 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Layar Pelanggan';
     case MenuEBisnis.hakAkses:
       return 'Hak Akses';
+    case MenuEBisnis.berandaInventorySales:
+      return 'Beranda Inventory & Sales';
+    case MenuEBisnis.masterSupplier:
+      return 'Master Supplier';
+    case MenuEBisnis.masterCustomer:
+      return 'Master Customer';
+    case MenuEBisnis.masterSales:
+      return 'Master Sales';
+    case MenuEBisnis.persediaan:
+      return 'Persediaan & Kartu Stok';
+    case MenuEBisnis.harga:
+      return 'Master & Analisis Harga';
   }
 }
 
@@ -357,6 +436,18 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.layarPelanggan;
     case 'Hak Akses':
       return MenuEBisnis.hakAkses;
+    case 'Beranda Inventory & Sales':
+      return MenuEBisnis.berandaInventorySales;
+    case 'Master Supplier':
+      return MenuEBisnis.masterSupplier;
+    case 'Master Customer':
+      return MenuEBisnis.masterCustomer;
+    case 'Master Sales':
+      return MenuEBisnis.masterSales;
+    case 'Persediaan & Kartu Stok':
+      return MenuEBisnis.persediaan;
+    case 'Master & Analisis Harga':
+      return MenuEBisnis.harga;
   }
   return null;
 }

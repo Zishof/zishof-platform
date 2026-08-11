@@ -61,6 +61,27 @@ try/finally session). BigDecimal untuk uang di entity/perhitungan baru (bukan do
   1 test lulus (hanya smoke test `widget_test.dart`; cakupan test existing minim = fakta
   baseline, ekspansi test masuk DoD per layar).
 
+## D-08 — Realisasi P1 (varian, RBAC, menu) — pilihan yang diambil
+**Status:** selesai (DESIGN_DECISION, 2026-08-11)
+1. Branding compile-time tetap di `AppVariant` (dart-define; dibutuhkan variant.cmake Windows
+   & konteks const); `AppProductProfile` = lapisan runtime di atasnya yang dipilih eksplisit
+   oleh entrypoint. Ketidak-konsistenan -t vs --dart-define terdeteksi & tercatat ke error_log.
+2. Kunci menu varian di server: 16 kunci baru bermodul `MODUL_INVENTORY_SALES`; layar yang
+   reuse layar POS existing memakai kunci lamanya (Stok Opname→`stokopname`, Kulakan→`kulakan`,
+   Sales Order digabung `penjualan_sales` — layar legacy 30 memang satu layar). Rekomendasi
+   §5.2 `stok_opname`/`sales_order` TIDAK dibuat sebagai kunci duplikat.
+3. Default kunci baru = NONAKTIF (`KUNCI_DEFAULT_NONAKTIF`) — deviasi sadar dari konvensi
+   default-true katalog lama; fail-closed + role lama tidak berubah perilaku.
+4. Aksi granular tetap 5 (`create/update/delete/approve/reject`); 20 aksi §5.2
+   (dispatch/post/collect/close/print/…) dipetakan ke 5 flag itu + aturan aktor di dispatcher
+   per fase — memperluas `AKSI_CRUD` sekarang akan mengubah UI grid role existing tanpa perlu.
+5. Deklarasi flavor Android membuat SEMUA build wajib `--flavor` — perintah lama
+   `flutter build apk --release` polos tidak jalan lagi; disediakan wrapper
+   `apps/ebisnis/tool/build_apk_ebisnis.ps1` / `build_apk_inventory_sales.ps1` /
+   `build_windows_inventory_sales.ps1` (repo sebelumnya nol build script).
+6. Landing per aktor: Admin/Pemilik → Beranda IS (konteks + izin modul riil); Sales → "Sesi
+   Hari Ini" (empty-state jujur sampai SPJ ada di P5); varian POS lama tetap KasirScreen.
+
 ## D-07 — Sumber kebenaran spesifikasi per layar
 **Status:** diputuskan (FACT_MANUAL)
 Urutan otoritas saat konflik: (1) Matriks-Paritas-Komponen-48-Layar-v2.csv (komponen wajib
