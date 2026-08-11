@@ -40,6 +40,69 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
   final _tahunController =
       TextEditingController(text: '${DateTime.now().year}');
 
+  // "Singkronkan Semua" -- satu tombol menjalankan kelima sumber sekaligus
+  // (Siswa, Mahasiswa, Dosen, Guru, Pegawai), reuse Koperasi/Tahun yg sama
+  // dgn form lanjutan di bawah. Dosen/Guru/Pegawai TIDAK butuh tahun (bukan
+  // kohort per-angkatan) -- lihat JavaDoc `KantinHelper.sinkronDosen/Guru/
+  // Pegawai` server: kandidat Pegawai SUDAH mengecualikan baris yg tertaut
+  // ke Dosen ATAU Guru, jadi pegawai yg sebenarnya dosen/guru tidak pernah
+  // dobel-hitung lewat jalur Pegawai umum.
+  static const _sumberSemua = [
+    ('sinkron_siswa', 'Siswa', true),
+    ('sinkron_mahasiswa', 'Mahasiswa', true),
+    ('sinkron_dosen', 'Dosen', false),
+    ('sinkron_guru', 'Guru', false),
+    ('sinkron_pegawai', 'Pegawai', false),
+  ];
+  bool _menjalankanSemua = false;
+  String? _labelProgresSemua;
+  String? _pesanErrorSemua;
+  List<Map<String, dynamic>>? _hasilSemua;
+
+  Future<void> _jalankanSemua() async {
+    if (_koperasiId == null) {
+      setStateIfMounted(
+          () => _pesanErrorSemua = 'Koperasi wajib dipilih terlebih dahulu.');
+      return;
+    }
+    final tahun = int.tryParse(_tahunController.text.trim()) ?? DateTime.now().year;
+    setStateIfMounted(() {
+      _menjalankanSemua = true;
+      _pesanErrorSemua = null;
+      _hasilSemua = null;
+    });
+    final hasilPerSumber = <Map<String, dynamic>>[];
+    for (final s in _sumberSemua) {
+      if (!mounted) return;
+      setStateIfMounted(() => _labelProgresSemua = 'Menyingkronkan Data ${s.$2}...');
+      try {
+        final hasil = await ApiClient.instance.aksi(s.$1, {
+          'koperasi_id': _koperasiId,
+          if (s.$3) 'tahun': tahun,
+        });
+        hasilPerSumber.add({
+          'label': s.$2,
+          'total': hasil['total'] ?? 0,
+          'berhasil': hasil['berhasil'] ?? 0,
+          'gagal': hasil['gagal'] ?? 0,
+        });
+      } catch (e) {
+        hasilPerSumber.add({
+          'label': s.$2,
+          'total': 0,
+          'berhasil': 0,
+          'gagal': 0,
+          'error': e.toString(),
+        });
+      }
+    }
+    setStateIfMounted(() {
+      _menjalankanSemua = false;
+      _labelProgresSemua = null;
+      _hasilSemua = hasilPerSumber;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -163,6 +226,159 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        AppSectionCard(
+          judul: 'Singkronkan Semua Data Sivitas',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Satu tombol utk buat/perbarui Anggota Koperasi sekaligus dari 5 sumber: Data Siswa, Data Mahasiswa, Data Dosen, Data Guru, dan Data Pegawai. Pegawai yang sebenarnya dosen/guru TIDAK akan tercatat dobel -- otomatis disinkronkan lewat jalur Dosen/Guru saja.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int?>(
+                value: _koperasiId,
+                decoration:
+                    AppFormStyle.fieldDecoration(context, labelText: 'Koperasi *'),
+                items: _koperasi
+                    .map((k) => DropdownMenuItem<int?>(
+                        value: k['id'] as int, child: Text('${k['nama']}')))
+                    .toList(),
+                onChanged: (v) => setStateIfMounted(() => _koperasiId = v),
+              ),
+              const SizedBox(height: 12),
+              AppFormTextField(
+                label: 'Tahun Angkatan/Masuk (khusus Siswa & Mahasiswa)',
+                controller: _tahunController,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              if (_pesanErrorSemua != null) ...[
+                Text(_pesanErrorSemua!,
+                    style: const TextStyle(color: AppColors.danger)),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _menjalankanSemua ? null : _jalankanSemua,
+                  icon: _menjalankanSemua
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.sync_alt),
+                  label: Text(_menjalankanSemua
+                      ? (_labelProgresSemua ?? 'Menjalankan...')
+                      : 'Singkronkan Semua'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              if (_hasilSemua != null) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.groups_outlined,
+                        warna: AppColors.primary,
+                        nilai:
+                            '${_hasilSemua!.fold<int>(0, (a, b) => a + (b['total'] as int))}',
+                        label: 'Total Kandidat',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.check_circle_outline,
+                        warna: AppColors.success,
+                        nilai:
+                            '${_hasilSemua!.fold<int>(0, (a, b) => a + (b['berhasil'] as int))}',
+                        label: 'Berhasil',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppKpiCard(
+                        icon: Icons.error_outline,
+                        warna: AppColors.danger,
+                        nilai:
+                            '${_hasilSemua!.fold<int>(0, (a, b) => a + (b['gagal'] as int))}',
+                        label: 'Gagal',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ..._hasilSemua!.map((r) {
+                  final error = r['error'] as String?;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pageBgOf(context),
+                      border: Border.all(color: AppColors.borderOf(context)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text('${r['label']}',
+                              style: const TextStyle(
+                                  fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        ),
+                        if (error != null)
+                          Expanded(
+                            flex: 4,
+                            child: Text('Gagal: $error',
+                                style: const TextStyle(
+                                    fontSize: 11.5, color: AppColors.danger),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                          )
+                        else ...[
+                          Expanded(
+                            child: Text('Total ${r['total']}',
+                                style: const TextStyle(fontSize: 12)),
+                          ),
+                          Expanded(
+                            child: Text('Berhasil ${r['berhasil']}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppColors.success)),
+                          ),
+                          Expanded(
+                            child: Text('Gagal ${r['gagal']}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppColors.danger)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Sinkronisasi Lanjutan (per sumber, dengan filter)',
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondaryOf(context)),
+          ),
+        ),
+        const SizedBox(height: 8),
         AppSectionCard(
           judul: 'Sinkronisasi Siswa/Mahasiswa ke Anggota Koperasi',
           child: Column(
