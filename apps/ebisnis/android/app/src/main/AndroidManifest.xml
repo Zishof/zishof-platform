@@ -5,8 +5,12 @@
          saja krn overlay debug/profile-nya kebetulan sudah menyertakan izin ini. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Label dari resource per-flavor (resValue app_name di build.gradle):
+         flavor `ebisnis` = "ebisnis" (tidak berubah dari label hardcode lama),
+         `inventorySales` = "eBisnis Inventory & Sales". Fallback default utk
+         build tanpa flavor ada di res/values/strings.xml. -->
     <application
-        android:label="ebisnis"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

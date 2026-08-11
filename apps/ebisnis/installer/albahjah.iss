@@ -30,7 +30,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Ikon tambahan:"
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Exclude exe varian LAIN juga (ebisnis_inventory_sales.exe bisa tersisa dari build varian
+; Inventory & Sales di folder Release yang sama -- copy_if_different tidak menghapus).
+Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis.exe,ebisnis_inventory_sales.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]

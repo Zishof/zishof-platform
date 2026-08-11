@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
+import '../product_profile.dart';
 import '../theme/app_colors.dart';
-import 'kasir_screen.dart';
 import 'pengaturan_server_screen.dart';
 import '../widgets/safe_state.dart';
 
@@ -38,7 +38,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await ApiClient.instance.simpanToken(hasil['token'] as String);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const KasirScreen()),
+        MaterialPageRoute(
+            builder: (_) => AppProductProfile.aktif.buatLayarAwal()),
       );
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -78,7 +79,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                             color: warnaJudul)),
-                    Text('Masuk sebagai Kasir',
+                    Text(
+                        AppVariant.isInventorySales
+                            ? 'Masuk ke Inventory & Sales'
+                            : 'Masuk sebagai Kasir',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: warnaSubjudul)),
                     const SizedBox(height: 24),

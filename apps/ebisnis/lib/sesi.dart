@@ -40,11 +40,94 @@ class Sesi {
   Map<String, bool> aksesMenu = {};
   bool bolehMenu(String kunci) => aksesMenu[kunci] ?? true;
 
+  // ---------------------------------------------------------------------------
+  // Konteks aktor varian "eBisnis Inventory & Sales" -- dari blok ADITIF
+  // `konfigurasi.aktorInventorySales` (server: EbisnisActorContextResolver,
+  // fail-closed). Kosong/POS_LAINNYA utk akun POS biasa; klien varian lama
+  // tidak pernah membaca field-field ini.
+  // ---------------------------------------------------------------------------
+  String actorType = '';
+  String activeRoleId = '';
+  List<String> roleIds = [];
+  int? salesId;
+  String salesKode = '';
+  String salesNama = '';
+  int? currentTripId;
+  List<String> featureProfile = [];
+  Map<String, bool> menuInventorySales = {};
+
+  bool get isPemilikSalesInventory => actorType == 'PEMILIK_SALES_INVENTORY';
+  bool get isSalesKeliling => actorType == 'SALES_KELILING';
+  bool get isAktorInventorySales =>
+      featureProfile.contains('inventory_sales') || isAdmin;
+
+  /// Visibilitas menu varian Inventory & Sales -- BERBEDA dari [bolehMenu]:
+  /// kunci hilang = TIDAK boleh (fail-closed, paritas default server
+  /// `EbisnisMenuKatalog.KUNCI_DEFAULT_NONAKTIF`). Admin selalu boleh.
+  bool bolehMenuIs(String kunci) =>
+      isAdmin || (menuInventorySales[kunci] ?? false);
+
   /// Boleh mengelola (ubah/hapus/batal) -- padanan gerbang client-side yang
   /// sudah dipakai Electron/Android existing utk sembunyikan tombol destruktif
   /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
   /// ini hanya UI, lihat JavaDoc bolehSupervisorAtauAdmin di PosApi.java).
   bool get bolehKelola => isAdmin || supervisorPedagang;
+
+  /// Terapkan balasan aksi `konfigurasi` ke sesi ini -- SATU titik pemetaan
+  /// (dulu inline di `KasirScreen._terapkanKonfig`; dipindah ke sini saat
+  /// varian Inventory & Sales butuh memuat konfigurasi dari landing sendiri
+  /// tanpa lewat KasirScreen). Pemanggil multi-toko tetap wajib membungkusnya
+  /// dgn guard toko-per-perangkat (lihat KasirScreen
+  /// `_terapkanKonfigDenganGuardToko`).
+  void terapkanKonfig(Map<String, dynamic> konfig) {
+    tokoNama = (konfig['tokoNama'] ?? '') as String;
+    tokoAlamat = '${konfig['tokoAlamat'] ?? konfig['alamat'] ?? ''}'.trim();
+    tokoTelp =
+        '${konfig['tokoTelp'] ?? konfig['telp'] ?? konfig['picHp'] ?? konfig['kontak'] ?? ''}'
+            .trim();
+    tokoId = konfig['tokoId'] as int?;
+    userId = (konfig['userId'] ?? '') as String;
+    pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0;
+    pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String;
+    wajibSesiKas = konfig['wajibSesiKas'] == true;
+    isAdmin = konfig['isAdmin'] == true;
+    supervisorPedagang = konfig['supervisorPedagang'] == true;
+    bolehEntryTopup = konfig['bolehEntryTopup'] == true;
+    caraBayar = ((konfig['caraBayar'] as List?) ?? [])
+        .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
+        .toList();
+    aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {})
+        .map((k, v) => MapEntry(k, v == true));
+    multiToko = konfig['multiToko'] == true;
+    daftarToko =
+        ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    _terapkanAktor(konfig['aktorInventorySales']);
+  }
+
+  void _terapkanAktor(dynamic aktorRaw) {
+    final aktor = aktorRaw is Map<String, dynamic> ? aktorRaw : null;
+    if (aktor == null) {
+      // Server lama tanpa blok aktor (belum di-deploy) -- biarkan default POS.
+      actorType = '';
+      return;
+    }
+    actorType = (aktor['actorType'] ?? '') as String;
+    activeRoleId = '${aktor['activeRoleId'] ?? ''}';
+    roleIds = ((aktor['roleIds'] as List?) ?? []).map((e) => '$e').toList();
+    salesId = aktor['salesId'] is num ? (aktor['salesId'] as num).toInt() : null;
+    salesKode = (aktor['salesKode'] ?? '') as String;
+    salesNama = (aktor['salesNama'] ?? '') as String;
+    currentTripId = aktor['currentTripId'] is num
+        ? (aktor['currentTripId'] as num).toInt()
+        : null;
+    featureProfile =
+        ((aktor['featureProfile'] as List?) ?? []).map((e) => '$e').toList();
+    final izin = aktor['permissions'];
+    final menuIs = izin is Map<String, dynamic> ? izin['menu'] : null;
+    menuInventorySales = menuIs is Map<String, dynamic>
+        ? menuIs.map((k, v) => MapEntry(k, v == true))
+        : {};
+  }
 
   void reset() {
     tokoNama = '';
@@ -62,5 +145,14 @@ class Sesi {
     aksesMenu = {};
     multiToko = false;
     daftarToko = [];
+    actorType = '';
+    activeRoleId = '';
+    roleIds = [];
+    salesId = null;
+    salesKode = '';
+    salesNama = '';
+    currentTripId = null;
+    featureProfile = [];
+    menuInventorySales = {};
   }
 }

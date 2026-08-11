@@ -5,6 +5,19 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Signing release opsional via android/key.properties (TIDAK di-commit; berisi
+// storeFile/storePassword/keyAlias/keyPassword). Bila file tidak ada, release
+// tetap memakai debug key seperti sebelumnya (perilaku lama TIDAK berubah) --
+// penyediaan keystore produksi = keputusan pemilik (lihat docs/pos-inventory-sales/
+// uat-required.md). Jangan generate keystore sembarangan di build machine.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader('UTF-8') { reader ->
+        keystoreProperties.load(reader)
+    }
+}
+
 android {
     namespace = "id.zishof.ebisnis"
     // Eksplisit 36 (bukan flutter.compileSdkVersion bawaan) -- mobile_scanner (camera scan Stok
@@ -36,11 +49,47 @@ android {
         versionName = flutter.versionName
     }
 
+    // Varian produk (PERINTAH_MASTER §4.3): flavor `ebisnis` = perilaku lama
+    // persis (applicationId & label APK tak berubah); `inventorySales` = varian
+    // "eBisnis Inventory & Sales" dgn applicationId sendiri supaya bisa
+    // terpasang berdampingan dgn POS existing di perangkat yang sama.
+    // PERHATIAN: begitu flavor dideklarasikan, SEMUA build Android wajib
+    // menyertakan --flavor (perintah lama `flutter build apk --release` polos
+    // tidak jalan lagi) -- pakai wrapper tool/build_apk_ebisnis.ps1 /
+    // tool/build_apk_inventory_sales.ps1 supaya tidak lupa.
+    flavorDimensions = ["product"]
+    productFlavors {
+        ebisnis {
+            dimension "product"
+            applicationId "id.zishof.ebisnis"
+            resValue "string", "app_name", "ebisnis"
+        }
+        inventorySales {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.inventorysales"
+            resValue "string", "app_name", "eBisnis Inventory & Sales"
+        }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            release {
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
+                storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                storePassword = keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // key.properties tersedia -> tanda tangan produksi; kalau tidak,
+            // fallback debug key (perilaku lama, supaya `flutter run --release`
+            // tetap jalan di mesin dev tanpa keystore).
+            signingConfig = keystorePropertiesFile.exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
         }
     }
 }

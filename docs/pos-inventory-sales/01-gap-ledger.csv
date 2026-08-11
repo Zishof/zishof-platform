@@ -1,12 +1,12 @@
 ID,Fase,No_Layar,Requirement,Repo,Status,Backend_Java,Flutter_Windows,Flutter_Android,Offline,RBAC,Print_Export,Automated_Test,UAT,Evidence,Commit,Blocker
-FND-001,P0,,Audit dua repo dan manifest input,Keduanya,IN_PROGRESS,,,,,,,,,docs/pos-inventory-sales/00-baseline.md,,
-FND-002,P1,,AppProductProfile dan entrypoint inventory_sales,zishof-platform,NOT_STARTED,,,,,,,,,,,
-FND-003,P1,,Android flavor inventorySales + signing,zishof-platform,NOT_STARTED,,,,,,,,,,,
-FND-004,P1,,Windows variant + installer unik,zishof-platform,NOT_STARTED,,,,,,,,,,,
-FND-005,P1,,ApiEBisnis extension hook,AIS,NOT_STARTED,,,,,,,,,,,
-FND-006,P1,,EbisnisActorContextResolver fail-closed,AIS,NOT_STARTED,,,,,,,,,,,
-FND-007,P1,,Seed role Pemilik Sales/Inventory dan Sales Keliling,AIS,NOT_STARTED,,,,,,,,,,,
-FND-008,P1,,Menu/permission registry lintas server-Flutter,Keduanya,NOT_STARTED,,,,,,,,,,,
+FND-001,P0,,Audit dua repo dan manifest input,Keduanya,DONE,,,,,,,,,docs/pos-inventory-sales/00-baseline.md,zishof ffc0b74,
+FND-002,P1,,AppProductProfile dan entrypoint inventory_sales,zishof-platform,TESTED,,OK (build windows),OK (build apk flavor),,,,flutter test lulus,,docs/pos-inventory-sales/evidence/p1/,lihat commit P1 flutter,
+FND-003,P1,,Android flavor inventorySales + signing,zishof-platform,BACKEND_DONE,,,OK (applicationId id.zishof.ebisnis.inventorysales),,,,,,docs/pos-inventory-sales/evidence/p1/,lihat commit P1 flutter,Keystore produksi belum tersedia (uat-required #11) -- release masih debug-sign
+FND-004,P1,,Windows variant + installer unik,zishof-platform,BACKEND_DONE,,OK (exe+VERSIONINFO+iss AppId INVSL),,,,,,,docs/pos-inventory-sales/evidence/p1/,lihat commit P1 flutter,Ikon masih salinan logo eBisnis (uat-required #12)
+FND-005,P1,,ApiEBisnis extension hook,AIS,BACKEND_DONE,OK (prosesAksiTambahan+dispatcher),,,,OK (gate si_ fail-closed),,mvn -o compile EXIT=0,,,AIS 1d7a82dc,
+FND-006,P1,,EbisnisActorContextResolver fail-closed,AIS,BACKEND_DONE,OK,,,,OK,,mvn -o compile EXIT=0,,,AIS 1d7a82dc,Login E2E 3 role menunggu deploy server + akun uji (lihat Blocker FND-008)
+FND-007,P1,,Seed role Pemilik Sales/Inventory dan Sales Keliling,AIS,BACKEND_DONE,OK (seed idempoten di ApiEBisnis.init),,,,OK (ebisnisMenu eksplisit),,,,,AIS 1d7a82dc,Eksekusi seed nyata terjadi saat servlet dimuat pasca-deploy
+FND-008,P1,,Menu/permission registry lintas server-Flutter,Keduanya,BACKEND_DONE,OK (16 kunci+konfigurasi aktor),OK (registry profil+beranda),OK,,OK,,analyze 0 error,,docs/pos-inventory-sales/evidence/p1/,AIS 1d7a82dc,Verifikasi landing 3 role menunggu server ter-deploy (restart Tomcat = wewenang operasional user)
 FND-009,P7,,Implementasi core_sync typed outbox,zishof-platform,NOT_STARTED,,,,,,,,,,,
 FND-010,P7,,Upgrade CoreDb schema Nota Sales,zishof-platform,NOT_STARTED,,,,,,,,,,,
 SCR-01,P2,1,Data Supplier -> Master Supplier,Keduanya,NOT_STARTED,,,,,,,,,docs/pos-inventory-sales/evidence/screen-01/,,

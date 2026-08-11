@@ -30,6 +30,8 @@ import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/inventory_sales/beranda_is_screen.dart';
+import '../product_profile.dart';
 import 'safe_state.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
@@ -39,7 +41,10 @@ import 'safe_state.dart';
 /// landscape kecil.
 const kAmbangLebarDesktop = 900.0;
 
-final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(MenuEBisnis.kasir);
+final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(
+    AppProductProfile.aktif.isInventorySales
+        ? MenuEBisnis.berandaInventorySales
+        : MenuEBisnis.kasir);
 
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
@@ -65,7 +70,8 @@ enum MenuEBisnis {
   logError,
   konfigurasi,
   layarPelanggan,
-  hakAkses
+  hakAkses,
+  berandaInventorySales
 }
 
 class _ItemMenuShell {
@@ -109,11 +115,19 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
+  // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
+  // (bukan role): tidak pernah dirakit ke sidebar varian POS lama.
+  if (kunci == MenuEBisnis.berandaInventorySales) {
+    return AppProductProfile.aktif.isInventorySales;
+  }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
 }
 
 const _daftarMenu = <_ItemMenuShell>[
+  _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
+      'Beranda Inventory & Sales',
+      builder: _bangunBerandaIS),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -171,6 +185,9 @@ const _daftarMenu = <_ItemMenuShell>[
 ];
 
 const _grupMenu = <_GrupMenuShell>[
+  _GrupMenuShell('Inventory & Sales', [
+    MenuEBisnis.berandaInventorySales,
+  ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
     MenuEBisnis.pesanan,
@@ -234,6 +251,7 @@ Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
+Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -310,6 +328,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Layar Pelanggan';
     case MenuEBisnis.hakAkses:
       return 'Hak Akses';
+    case MenuEBisnis.berandaInventorySales:
+      return 'Beranda Inventory & Sales';
   }
 }
 
@@ -357,6 +377,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.layarPelanggan;
     case 'Hak Akses':
       return MenuEBisnis.hakAkses;
+    case 'Beranda Inventory & Sales':
+      return MenuEBisnis.berandaInventorySales;
   }
   return null;
 }
