@@ -7,6 +7,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../login_screen.dart';
 import 'kasir_apotik_screen.dart';
+import 'persediaan_apotik_screen.dart';
 
 /// <h3>Beranda varian "POS Apotik" -- landing setelah login (LANGKAH 2).</h3>
 ///
@@ -199,6 +200,16 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     switch (kunci) {
       case 'apotik_kasir':
         return const KasirApotikScreen();
+      case 'apotik_formularium':
+        return const PersediaanApotikScreen(tabAwal: 0);
+      case 'apotik_batch':
+        return const PersediaanApotikScreen(tabAwal: 1);
+      case 'apotik_pengadaan':
+        return const PersediaanApotikScreen(tabAwal: 2);
+      case 'apotik_stok_opname':
+        return const PersediaanApotikScreen(tabAwal: 3);
+      case 'apotik_retur':
+        return const PersediaanApotikScreen(tabAwal: 4);
     }
     return null;
   }
