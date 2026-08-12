@@ -10,7 +10,8 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
 /// <h3>Hutang Supplier (AP) -- layar legacy 20-29 (Pembelian/Hutang Dagang).</h3>
@@ -295,7 +296,8 @@ class _TabPembayaranState extends State<_TabPembayaran> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_payable_payment_history', {
+      final hasil =
+          await ApiClient.instance.aksi('si_payable_payment_history', {
         'dari': _fmtTgl.format(_dari),
         'sampai': _fmtTgl.format(_sampai),
         'metode': _metode,
@@ -330,13 +332,12 @@ class _TabPembayaranState extends State<_TabPembayaran> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text('VOUCHER PEMBAYARAN HUTANG SUPPLIER',
-                style: pw.TextStyle(
-                    fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
             pw.Text('No. Voucher: PHS-${d['id']}  ·  Ref: ${d['kodeUnik']}'),
             pw.Text('Tanggal: ${d['tanggal']}'),
-            pw.Text(
-                'Supplier: ${d['supplierKode']} — ${d['supplierNama']}'),
+            pw.Text('Supplier: ${d['supplierKode']} — ${d['supplierNama']}'),
             pw.Text('Metode: ${d['metode']}'
                 '${'${d['noBg']}'.isNotEmpty ? '  ·  BG: ${d['noBg']} ${d['namaBank']} jt ${d['tanggalBg']}' : ''}'),
             pw.SizedBox(height: 10),
@@ -352,7 +353,8 @@ class _TabPembayaranState extends State<_TabPembayaran> {
                   .toList(),
             ),
             pw.SizedBox(height: 8),
-            pw.Text('TOTAL DIBAYAR: ${_fmtRp.format((d['nominal'] as num?) ?? 0)}',
+            pw.Text(
+                'TOTAL DIBAYAR: ${_fmtRp.format((d['nominal'] as num?) ?? 0)}',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
             if ('${d['keterangan']}'.isNotEmpty)
               pw.Text('Keterangan: ${d['keterangan']}'),
@@ -385,6 +387,80 @@ class _TabPembayaranState extends State<_TabPembayaran> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal cetak voucher: $e')));
+      }
+    }
+  }
+
+  /// P10: pembayaran posted tetap disimpan; reversal menerbitkan dokumen
+  /// pembalik negatif yang idempoten di server.
+  Future<void> _reversal(Map<String, dynamic> pembayaran) async {
+    final alasan = TextEditingController();
+    final dikonfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Reversal pembayaran #${pembayaran['id']}?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'Pembayaran tidak dihapus. Sistem menerbitkan dokumen pembalik '
+              'dan memulihkan saldo hutang supplier.',
+              style: TextStyle(fontSize: 12.5)),
+          TextField(
+              controller: alasan,
+              decoration:
+                  const InputDecoration(labelText: 'Alasan reversal (wajib)')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Batal')),
+          ElevatedButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
+              child: const Text('Reversal')),
+        ],
+      ),
+    );
+    if (dikonfirmasi != true || alasan.text.trim().isEmpty) return;
+    try {
+      await ApiClient.instance.aksi('si_payable_payment_reverse', {
+        'pembayaran_id': pembayaran['id'],
+        'alasan': alasan.text.trim(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reversal pembayaran diterbitkan.')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  /// P10: BG hanya dapat berpindah dari DITERIMA ke CAIR/TOLAK. Penolakan
+  /// menerbitkan reversal pembayaran secara otomatis dan idempoten di server.
+  Future<void> _ubahStatusBg(
+      Map<String, dynamic> pembayaran, String status) async {
+    try {
+      await ApiClient.instance.aksi('si_payable_bg_status', {
+        'id': pembayaran['id'],
+        'status_bg': status,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(status == 'CAIR'
+                ? 'BG ditandai CAIR.'
+                : 'BG ditandai TOLAK — reversal otomatis diterbitkan.')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -461,9 +537,11 @@ class _TabPembayaranState extends State<_TabPembayaran> {
                   items: const [
                     DropdownMenuItem(value: 'SEMUA', child: Text('Semua')),
                     DropdownMenuItem(value: 'TUNAI', child: Text('Tunai')),
-                    DropdownMenuItem(value: 'TRANSFER', child: Text('Transfer')),
+                    DropdownMenuItem(
+                        value: 'TRANSFER', child: Text('Transfer')),
                     DropdownMenuItem(value: 'GIRO', child: Text('Giro/BG')),
-                    DropdownMenuItem(value: 'DISCOUNT', child: Text('Discount')),
+                    DropdownMenuItem(
+                        value: 'DISCOUNT', child: Text('Discount')),
                     DropdownMenuItem(value: 'RETUR', child: Text('Retur')),
                   ],
                   onChanged: (v) {
@@ -495,7 +573,13 @@ class _TabPembayaranState extends State<_TabPembayaran> {
                             '${b['supplierKode']} ${b['supplierNama']}'.trim(),
                             flex: 3,
                             maxLines: 2),
-                        AppTableCell.text('${b['metode']}', flex: 1),
+                        AppTableCell.text(
+                            '${b['metode']}'
+                            '${'${b['statusDok']}' == 'DIBATALKAN' ? ' · DIBATALKAN' : ''}'
+                            '${'${b['statusDok']}' == 'REVERSAL' ? ' · REVERSAL' : ''}'
+                            '${'${b['statusBg']}'.isNotEmpty ? ' · BG ${b['statusBg']}' : ''}',
+                            flex: 1,
+                            maxLines: 3),
                         AppTableCell.text(
                             '${b['noBg']} ${b['namaBank']}'.trim(),
                             flex: 2),
@@ -510,12 +594,44 @@ class _TabPembayaranState extends State<_TabPembayaran> {
                         AppTableCell(
                           flex: 1,
                           align: TextAlign.center,
-                          child: IconButton(
-                            icon: const Icon(Icons.receipt_long_outlined,
-                                size: 18),
-                            tooltip: 'Cetak Voucher (PDF)',
-                            onPressed: () => _cetakVoucher(b),
-                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            IconButton(
+                              icon: const Icon(Icons.receipt_long_outlined,
+                                  size: 18),
+                              tooltip: 'Cetak Voucher (PDF)',
+                              onPressed: () => _cetakVoucher(b),
+                            ),
+                            if (!Sesi.instance.isSalesKeliling &&
+                                '${b['statusDok']}' == 'AKTIF')
+                              PopupMenuButton<String>(
+                                tooltip: 'Aksi dokumen',
+                                onSelected: (aksi) {
+                                  if (aksi == 'reversal') _reversal(b);
+                                  if (aksi == 'cair') {
+                                    _ubahStatusBg(b, 'CAIR');
+                                  }
+                                  if (aksi == 'tolak') {
+                                    _ubahStatusBg(b, 'TOLAK');
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(
+                                      value: 'reversal',
+                                      child: Text('Reversal (batalkan)')),
+                                  if ('${b['metode']}' == 'GIRO' &&
+                                      ('${b['statusBg']}'.isEmpty ||
+                                          '${b['statusBg']}' ==
+                                              'DITERIMA')) ...[
+                                    const PopupMenuItem(
+                                        value: 'cair', child: Text('BG Cair')),
+                                    const PopupMenuItem(
+                                        value: 'tolak',
+                                        child:
+                                            Text('BG Tolak (auto-reversal)')),
+                                  ],
+                                ],
+                              ),
+                          ]),
                         ),
                       ]))
                   .toList(),
@@ -627,7 +743,8 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
     for (final f in _fakturs) {
       final id = (f['fakturId'] as num).toInt();
       final c = _alokasi[id];
-      final n = c == null ? 0.0 : (double.tryParse(c.text.replaceAll(',', '.')) ?? 0);
+      final n =
+          c == null ? 0.0 : (double.tryParse(c.text.replaceAll(',', '.')) ?? 0);
       if (n > 0) {
         alokasi.add({'faktur_id': id, 'nominal': n});
       }
@@ -668,7 +785,8 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.92,
         maxChildSize: 0.96,
@@ -758,7 +876,8 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
                   DropdownMenuItem(
                       value: 'RETUR', child: Text('Retur (pengurang)')),
                 ],
-                onChanged: (v) => setStateIfMounted(() => _metode = v ?? 'TUNAI'),
+                onChanged: (v) =>
+                    setStateIfMounted(() => _metode = v ?? 'TUNAI'),
               ),
               if (_metode == 'GIRO' || _metode == 'TRANSFER') ...[
                 const SizedBox(height: 12),
@@ -769,8 +888,8 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
                           controller: _noBg)),
                   const SizedBox(width: 8),
                   Expanded(
-                      child:
-                          AppFormTextField(label: 'Bank', controller: _namaBank)),
+                      child: AppFormTextField(
+                          label: 'Bank', controller: _namaBank)),
                 ]),
                 if (_metode == 'GIRO')
                   OutlinedButton.icon(
@@ -793,8 +912,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
                   label: 'Keterangan', controller: _keterangan, maxLines: 2),
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                    'TOTAL PEMBAYARAN: ${_fmtRp.format(_totalAlokasi)}',
+                child: Text('TOTAL PEMBAYARAN: ${_fmtRp.format(_totalAlokasi)}',
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w800)),
               ),
@@ -845,8 +963,8 @@ class _SheetPilihSupplierHutangState extends State<_SheetPilihSupplierHutang> {
     try {
       final hasil = await ApiClient.instance
           .aksi('si_supplier_list', {'keyword': v.trim(), 'page_size': 30});
-      setStateIfMounted(() =>
-          _hasil = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _hasil =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (_) {
       // biarkan hasil lama
     } finally {
@@ -933,8 +1051,8 @@ class _TabAgingState extends State<_TabAging> {
           .aksi('si_payable_aging', {'as_of': _fmtTgl.format(_asOf)});
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _ringkasan =
-            (hasil['ringkasan'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+        _ringkasan = (hasil['ringkasan'] as Map<String, dynamic>?) ??
+            <String, dynamic>{};
         _memuat = false;
       });
     } catch (e) {
@@ -1101,8 +1219,8 @@ class _TabFakturState extends State<_TabFaktur> {
     );
     if (tersimpan == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('Termin/jenis pembayaran faktur tersimpan (hutang terdaftar).')));
+          content: Text(
+              'Termin/jenis pembayaran faktur tersimpan (hutang terdaftar).')));
     }
   }
 
@@ -1119,8 +1237,8 @@ class _TabFakturState extends State<_TabFaktur> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text('FAKTUR PEMBELIAN (KULAKAN)',
-                style: pw.TextStyle(
-                    fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
             pw.Text('No. Faktur: ${h['nomorFaktur']}'),
             pw.Text('Tanggal: ${h['tanggalFaktur']}'),
@@ -1307,7 +1425,8 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.7,
         expand: false,
@@ -1332,7 +1451,8 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
                   DropdownMenuItem(
                       value: 'CREDIT', child: Text('CREDIT (hutang penuh)')),
                 ],
-                onChanged: (v) => setStateIfMounted(() => _jenis = v ?? 'CREDIT'),
+                onChanged: (v) =>
+                    setStateIfMounted(() => _jenis = v ?? 'CREDIT'),
               ),
               const SizedBox(height: 12),
               AppFormTextField(
@@ -1414,8 +1534,8 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
       });
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _ringkasan =
-            (hasil['ringkasan'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+        _ringkasan = (hasil['ringkasan'] as Map<String, dynamic>?) ??
+            <String, dynamic>{};
         _memuat = false;
       });
     } catch (e) {
@@ -1510,8 +1630,8 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
                   child: AppKpiCard(
                       icon: Icons.account_balance_wallet_outlined,
                       warna: AppColors.danger,
-                      nilai:
-                          _fmtRp.format((_ringkasan['sisaHutang'] as num?) ?? 0),
+                      nilai: _fmtRp
+                          .format((_ringkasan['sisaHutang'] as num?) ?? 0),
                       label: 'Sisa Hutang')),
             ]),
           ),
