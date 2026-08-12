@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
+import 'cetak_util.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
@@ -129,6 +130,105 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  /// Ambil seluruh baris sesuai filter (maks 1000, tanpa silent truncation).
+  Future<(List<Map<String, dynamic>>, bool)> _ambilSemua() async {
+    final semua = <Map<String, dynamic>>[];
+    bool terpotong = false;
+    for (var p = 1; p <= 10; p++) {
+      final hasil = await ApiClient.instance.aksi('si_price_analysis', {
+        if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
+        if (_filter.isNotEmpty) 'filter': _filter,
+        'page': p,
+        'page_size': 100,
+      });
+      final baris =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      semua.addAll(baris);
+      final total = (hasil['total'] as num?)?.toInt() ?? 0;
+      if (semua.length >= total || baris.isEmpty) break;
+      if (p == 10 && semua.length < total) terpotong = true;
+    }
+    return (semua, terpotong);
+  }
+
+  /// SCR-12/13/14: pilih jenis cetak (Harga Jual umum / + Harga Beli berizin),
+  /// parameter diteruskan APA ADANYA ke PDF/CSV; menyembunyikan kolom beli
+  /// tidak mengubah kolom lain.
+  Future<void> _cetakAtauEkspor({required bool pdf}) async {
+    final sertakanBeli = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(pdf ? 'Cetak Daftar Harga' : 'Ekspor Harga (CSV)'),
+        content: const Text(
+            'Sertakan kolom Harga Beli? (Harga beli adalah data terbatas -- '
+            'hanya untuk peran berwenang; pilih "Jual Saja" untuk daftar harga customer/umum.)'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Jual Saja')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sertakan Harga Beli')),
+        ],
+      ),
+    );
+    if (sertakanBeli == null) return;
+    try {
+      final (data, terpotong) = await _ambilSemua();
+      final headers = [
+        'Kode', 'Nama Barang', 'Sat', 'Stok',
+        if (sertakanBeli) 'Hrg Beli',
+        'Hrg Jual', 'Jual Umum Efektif',
+        if (sertakanBeli) 'Margin %',
+      ];
+      final rows = data
+          .map((p) => [
+                '${p['kode']}',
+                '${p['nama']}',
+                '${p['satuan'] ?? ''}',
+                '${p['stok'] ?? 0}',
+                if (sertakanBeli)
+                  _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
+                _fmtRp.format((p['hargaJual'] as num?) ?? 0),
+                p['hargaJualUmumEfektif'] == null
+                    ? '-'
+                    : _fmtRp.format(p['hargaJualUmumEfektif']),
+                if (sertakanBeli)
+                  p['marginPersen'] == null
+                      ? '-'
+                      : (p['marginPersen'] as num).toStringAsFixed(1),
+              ])
+          .toList();
+      final parameter =
+          '${_kataKunci.isNotEmpty ? 'cari "$_kataKunci" · ' : ''}filter ${_filter.isEmpty ? 'semua' : _filter}'
+          '${terpotong ? ' · TERPOTONG 1000 baris' : ''}';
+      if (!mounted) return;
+      if (pdf) {
+        await CetakUtilIs.cetakPdfTabel(
+          judul: sertakanBeli
+              ? 'ANALISIS HARGA BELI & JUAL'
+              : 'DAFTAR HARGA JUAL',
+          parameter: parameter,
+          headers: headers,
+          rows: rows,
+          namaFile: sertakanBeli ? 'analisis-harga.pdf' : 'daftar-harga-jual.pdf',
+        );
+      } else {
+        await CetakUtilIs.eksporCsv(
+          context: context,
+          namaFile: sertakanBeli ? 'analisis-harga.csv' : 'daftar-harga-jual.csv',
+          headers: headers,
+          rows: rows,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
@@ -166,6 +266,15 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
                 },
               ),
             ),
+            const SizedBox(width: 8),
+            IconButton(
+                icon: const Icon(Icons.print_outlined),
+                tooltip: 'Preview/Cetak PDF (Daftar Harga Jual / Analisis)',
+                onPressed: () => _cetakAtauEkspor(pdf: true)),
+            IconButton(
+                icon: const Icon(Icons.table_view_outlined),
+                tooltip: 'Ekspor CSV harga',
+                onPressed: () => _cetakAtauEkspor(pdf: false)),
             const SizedBox(width: 8),
             SizedBox(
               width: 170,

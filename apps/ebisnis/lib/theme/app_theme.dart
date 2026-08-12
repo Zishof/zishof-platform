@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_setting.dart';
+import '../app_variant.dart';
 import 'app_colors.dart';
 
 /// Pengelola tema ringan tanpa dependency state-management tambahan.
@@ -71,6 +72,13 @@ class AppTheme {
         onSurface: AppColors.darkTextPrimary,
       );
 
+  /// Aksen "kuning tua" korporat Al-Bahjah (lihat logo) -- dipakai sbg
+  /// `ColorScheme.secondary` HANYA utk varian ini, memberi widget Material
+  /// bawaan (mis. FloatingActionButton/Switch) sentuhan emas di samping
+  /// hijau [AppColors.primary]. Varian lain tetap sepenuhnya seed-generated
+  /// spt sebelumnya (tak ada perubahan visual).
+  static const _emasAlBahjah = Color(0xFFCA8A04);
+
   static ThemeData _base({
     required Brightness brightness,
     required Color scaffoldBackgroundColor,
@@ -82,6 +90,8 @@ class AppTheme {
       brightness: brightness,
       surface: surface,
       onSurface: onSurface,
+      secondary: AppVariant.isAlBahjah ? _emasAlBahjah : null,
+      onSecondary: AppVariant.isAlBahjah ? Colors.white : null,
     );
     final border =
         brightness == Brightness.dark ? AppColors.darkBorder : AppColors.border;

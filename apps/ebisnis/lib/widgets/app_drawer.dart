@@ -27,6 +27,12 @@ import '../screens/inventory_sales/master_sales_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
 import '../screens/inventory_sales/hutang_supplier_screen.dart';
+import '../screens/inventory_sales/penjualan_sales_screen.dart';
+import '../screens/inventory_sales/piutang_screen.dart';
+import '../screens/inventory_sales/spj_screen.dart';
+import '../screens/inventory_sales/nota_sales_screen.dart';
+import '../screens/inventory_sales/kas_jurnal_screen.dart';
+import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -173,6 +179,78 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Hutang Supplier (AP)',
                           builder: (_) => const HutangSupplierScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('penjualan_sales'))
+                      _ItemMenu(
+                        icon: Icons.shopping_cart_checkout,
+                        label: 'Penjualan Sales',
+                        aktif: menuAktif == 'Penjualan Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Penjualan Sales',
+                          builder: (_) => const PenjualanSalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('piutang'))
+                      _ItemMenu(
+                        icon: Icons.request_quote_outlined,
+                        label: 'Piutang Customer (AR)',
+                        aktif: menuAktif == 'Piutang Customer (AR)',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Piutang Customer (AR)',
+                          builder: (_) => const PiutangScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('surat_perintah_sales'))
+                      _ItemMenu(
+                        icon: Icons.assignment_outlined,
+                        label: 'Surat Perintah Sales',
+                        aktif: menuAktif == 'Surat Perintah Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Surat Perintah Sales',
+                          builder: (_) => const SpjScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('nota_sales'))
+                      _ItemMenu(
+                        icon: Icons.route_outlined,
+                        label: 'Sesi Nota Sales',
+                        aktif: menuAktif == 'Sesi Nota Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Sesi Nota Sales',
+                          builder: (_) => const NotaSalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('kas_jurnal'))
+                      _ItemMenu(
+                        icon: Icons.menu_book_outlined,
+                        label: 'Kas & Jurnal',
+                        aktif: menuAktif == 'Kas & Jurnal',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Kas & Jurnal',
+                          builder: (_) => const KasJurnalScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('laba_rugi'))
+                      _ItemMenu(
+                        icon: Icons.stacked_line_chart,
+                        label: 'Laba Rugi',
+                        aktif: menuAktif == 'Laba Rugi',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Laba Rugi',
+                          builder: (_) => const LabaRugiScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))

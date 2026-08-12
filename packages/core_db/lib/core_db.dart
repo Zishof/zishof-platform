@@ -62,7 +62,7 @@ class CoreDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 5,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -80,10 +80,12 @@ class CoreDb {
   /// `onUpgrade` sebelumnya). Gap-closure "Jenis Item" (Produk vs Bahan Baku)
   /// nambah kolom `jenis_item` ke `produk_cache`. Fase 2 "Produk Ekstra"
   /// nambah kolom `ekstra_pilihan` (JSON array id produk EKSTRA, lihat
-  /// [produkCacheResolveByIds]). `ALTER TABLE` dibungkus try/catch murni
-  /// defensif thd kemungkinan state upgrade parsial (mis. proses sempat
-  /// terhenti di tengah migrasi sebelumnya, kolom sudah terlanjur ada) --
-  /// padanan cara migrasi `local-db.js` versi Electron.
+  /// [produkCacheResolveByIds]). Gap-closure "Foto Produk" nambah kolom
+  /// `foto_urls` (JSON array URL foto, dipakai carousel kartu Kasir).
+  /// `ALTER TABLE` dibungkus try/catch murni defensif thd kemungkinan state
+  /// upgrade parsial (mis. proses sempat terhenti di tengah migrasi
+  /// sebelumnya, kolom sudah terlanjur ada) -- padanan cara migrasi
+  /// `local-db.js` versi Electron.
   Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
     if (versiLama < 2) {
       try {
@@ -100,7 +102,40 @@ class CoreDb {
         // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
       }
     }
+    if (versiLama < 4) {
+      // P7 varian Inventory & Sales: outbox TERPISAH dari transaksi_pending --
+      // flush POS existing mengirim SEMUA baris pending ke aksi 'bayar', jadi
+      // perintah si_* (kwitansi/biaya) tidak boleh menumpang tabel itu.
+      try {
+        await db.execute(_ddlOutboxIs);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
+      }
+    }
+    if (versiLama < 5) {
+      // Gap-closure "Foto Produk" -- kolom `foto_urls` (JSON array URL, urut
+      // lama->baru) dipakai kartu Kasir utk carousel otomatis tiap 3 detik
+      // bila >1 foto (lihat Produk.fotoUrls di apps/ebisnis/lib/models.dart).
+      try {
+        await db.execute('ALTER TABLE produk_cache ADD COLUMN foto_urls TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
+      }
+    }
   }
+
+  static const _ddlOutboxIs = '''
+      CREATE TABLE outbox_is (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        aksi TEXT NOT NULL,
+        kode_unik TEXT UNIQUE,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        pesan_error TEXT,
+        percobaan INTEGER DEFAULT 0,
+        dibuat_pada TEXT NOT NULL
+      )
+    ''';
 
   Future<void> _buatSkema(Database db, int versi) async {
     await db.execute('''
@@ -116,7 +151,8 @@ class CoreDb {
         gambar_url TEXT,
         aktif INTEGER DEFAULT 1,
         jenis_item TEXT,
-        ekstra_pilihan TEXT
+        ekstra_pilihan TEXT,
+        foto_urls TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
@@ -177,6 +213,62 @@ class CoreDb {
         disinkronkan INTEGER DEFAULT 0
       )
     ''');
+
+    await db.execute(_ddlOutboxIs);
+  }
+
+  // ============================== OUTBOX INVENTORY & SALES (P7) ==============================
+  // Outbox TYPED utk perintah idempoten varian IS (si_collection_create,
+  // si_expense_create, ...) -- tiap baris menyimpan NAMA AKSI + body JSON;
+  // flush mengirim ke aksi aslinya (bukan 'bayar'), server aman dari duplikat
+  // krn semua perintah ber-kode_unik idempoten.
+
+  Future<int> outboxIsTambah(
+      String aksi, String kodeUnik, String payloadJson) async {
+    final database = await db;
+    return database.insert('outbox_is', {
+      'aksi': aksi,
+      'kode_unik': kodeUnik,
+      'payload_json': payloadJson,
+      'status': 'PENDING',
+      'dibuat_pada': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, Object?>>> outboxIsPending() async {
+    final database = await db;
+    return database.query('outbox_is',
+        where: "status = 'PENDING'", orderBy: 'id ASC');
+  }
+
+  Future<void> outboxIsTandaiSukses(int id) async {
+    final database = await db;
+    await database.update(
+        'outbox_is', {'status': 'SYNCED', 'pesan_error': null},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Penolakan bisnis server (bukan offline): status GAGAL permanen + pesan --
+  /// tidak ikut retry berikutnya, tetap terlihat utk ditindak manual.
+  Future<void> outboxIsTandaiGagal(int id, String pesan) async {
+    final database = await db;
+    await database.update('outbox_is', {'status': 'GAGAL', 'pesan_error': pesan},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> outboxIsCatatPercobaan(int id, String pesan) async {
+    final database = await db;
+    await database.rawUpdate(
+        'UPDATE outbox_is SET percobaan = COALESCE(percobaan,0) + 1,'
+        ' pesan_error = ? WHERE id = ?',
+        [pesan, id]);
+  }
+
+  Future<int> jumlahOutboxIsPending() async {
+    final database = await db;
+    final hasil = await database
+        .rawQuery("SELECT COUNT(*) AS n FROM outbox_is WHERE status = 'PENDING'");
+    return (hasil.first['n'] as int?) ?? 0;
   }
 
   // ============================== PRODUK CACHE ==============================

@@ -58,6 +58,8 @@ IDI_APP_ICON            ICON                    "resources\\icon_albahjah.ico"
 IDI_APP_ICON            ICON                    "resources\\icon_inventory_sales.ico"
 #elif defined(EBISNIS_VARIANT_APOTIK)
 IDI_APP_ICON            ICON                    "resources\\icon_apotik.ico"
+#elif defined(EBISNIS_VARIANT_EMEDIK)
+IDI_APP_ICON            ICON                    "resources\\icon_emedik.ico"
 #else
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 #endif
@@ -113,6 +115,11 @@ BEGIN
             VALUE "InternalName", "ebisnis_apotik" "\0"
             VALUE "OriginalFilename", "ebisnis_apotik.exe" "\0"
             VALUE "ProductName", "eBisnis POS Apotik" "\0"
+#elif defined(EBISNIS_VARIANT_EMEDIK)
+            VALUE "FileDescription", "eBisnis POS eMedik" "\0"
+            VALUE "InternalName", "ebisnis_emedik" "\0"
+            VALUE "OriginalFilename", "ebisnis_emedik.exe" "\0"
+            VALUE "ProductName", "eBisnis POS eMedik" "\0"
 #else
             VALUE "FileDescription", "ebisnis" "\0"
             VALUE "InternalName", "ebisnis" "\0"

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app_variant.dart';
+
 /// Token warna desain baru (diambil dari 4 referensi screenshot dashboard/
 /// kasir/produk/stok yang diberikan user -- sidebar navy gelap, aksen biru,
 /// kartu KPI ikon berwarna, badge status pil lembut). Dipakai [AppShell] dan
@@ -9,8 +11,15 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  static const sidebarBg = Color(0xFF0F1C2E);
-  static const sidebarBgActive = Color(0xFF2563EB);
+  /// Sidebar HANYA Al-Bahjah pakai hijau+emas korporat (identitas logo, warna
+  /// sengaja disamakan dgn [primary]/badge profil -- bukan hijau nyaris hitam
+  /// spt draf awal, per feedback user "coba warnanya samakan... mirip warna
+  /// profile"); semua varian lain tetap navy/biru referensi di atas, tak
+  /// berubah.
+  static const sidebarBg =
+      AppVariant.isAlBahjah ? Color(0xFF15803D) : Color(0xFF0F1C2E);
+  static const sidebarBgActive =
+      AppVariant.isAlBahjah ? Color(0xFFCA8A04) : Color(0xFF2563EB);
   static const sidebarText = Color(0xFF8FA0BC);
   static const sidebarTextActive = Colors.white;
 

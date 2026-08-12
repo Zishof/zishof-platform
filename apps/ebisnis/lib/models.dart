@@ -43,6 +43,13 @@ class Produk {
   /// sudah berisi nama/harga siap tampil dari server.
   final List<int> ekstraPilihan;
 
+  /// URL foto produk (maks 10, urut lama->baru), dari field `fotoUrls`
+  /// respons `katalog` -- gap-closure "Foto Produk". Kosong = belum ada foto
+  /// diunggah (kartu Kasir tetap pakai avatar inisial placeholder). Lebih
+  /// dari 1 -> kartu Kasir berganti gambar otomatis tiap 3 detik (lihat
+  /// `_KartuProduk` di kasir_screen.dart), tepat 1 -> statis, TIDAK berganti.
+  final List<String> fotoUrls;
+
   Produk({
     required this.id,
     required this.kode,
@@ -60,6 +67,7 @@ class Produk {
     this.jenisItem = 'JUAL',
     this.bahanBaku = const [],
     this.ekstraPilihan = const [],
+    this.fotoUrls = const [],
   });
 
   factory Produk.fromJson(Map<String, dynamic> j) => Produk(
@@ -86,6 +94,9 @@ class Produk {
         ekstraPilihan: ((j['ekstraPilihan'] as List?) ?? [])
             .map((e) => (e as num).toInt())
             .toList(),
+        fotoUrls: ((j['fotoUrls'] as List?) ?? [])
+            .map((e) => e as String)
+            .toList(),
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
@@ -107,6 +118,8 @@ class Produk {
             : 'JUAL',
         'ekstra_pilihan': jsonEncode(
             ((j['ekstraPilihan'] as List?) ?? []).map((e) => e as num).toList()),
+        'foto_urls': jsonEncode(
+            ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),
       };
 }
 

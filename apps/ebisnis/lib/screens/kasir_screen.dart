@@ -201,6 +201,7 @@ class _KasirScreenState extends State<KasirScreen> {
         // sempat sinkron katalog dari server) -- tanpa ini produk dgn ekstra
         // yang dimuat dari cache akan diam-diam kehilangan picker-nya.
         ekstraPilihan: _ekstraPilihanDariCache(b['ekstra_pilihan']),
+        fotoUrls: _daftarStringDariCache(b['foto_urls']),
       );
 
   List<int> _ekstraPilihanDariCache(Object? raw) {
@@ -212,6 +213,21 @@ class _KasirScreenState extends State<KasirScreen> {
       }
     } catch (_) {
       // Data cache lama/korup -- anggap tanpa ekstra, bukan error fatal.
+    }
+    return const [];
+  }
+
+  /// Padanan [_ekstraPilihanDariCache] utk kolom `foto_urls` (JSON array
+  /// String, bukan int) -- gap-closure "Foto Produk".
+  List<String> _daftarStringDariCache(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((e) => e as String).toList();
+      }
+    } catch (_) {
+      // Data cache lama/korup -- anggap tanpa foto, bukan error fatal.
     }
     return const [];
   }
@@ -1820,7 +1836,7 @@ class _BarisHasilPencarian extends StatelessWidget {
   }
 }
 
-class _KartuProduk extends StatelessWidget {
+class _KartuProduk extends StatefulWidget {
   final Produk produk;
   final VoidCallback onTap;
 
@@ -1834,7 +1850,61 @@ class _KartuProduk extends StatelessWidget {
   const _KartuProduk({required this.produk, required this.onTap, this.diskon});
 
   @override
+  State<_KartuProduk> createState() => _KartuProdukState();
+}
+
+/// Gap-closure "Foto Produk": kartu ini SEKARANG stateful semata-mata utk
+/// carousel foto -- kalau [Produk.fotoUrls] > 1, `Timer.periodic` 3 detik
+/// menggeser indeks foto yang ditampilkan (permintaan user eksplisit: "tiap
+/// 3 detik, ganti-ganti otomatis"). Tepat 1 foto -> statis, timer TIDAK
+/// dipasang sama sekali (juga permintaan eksplisit: "kalau hanya 1, tidak
+/// perlu ganti-ganti"). 0 foto -> fallback avatar inisial (perilaku lama,
+/// tidak berubah).
+class _KartuProdukState extends State<_KartuProduk> {
+  int _indeksFoto = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _aturTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _KartuProduk old) {
+    super.didUpdateWidget(old);
+    // Grid Kasir bisa memuat ulang produk (sinkron katalog) sementara kartu
+    // yang sama tetap hidup di posisi GridView yg sama -- reset indeks+timer
+    // kalau daftar foto produk ini berubah, supaya tak nunjuk indeks basi.
+    if (!listEquals(old.produk.fotoUrls, widget.produk.fotoUrls)) {
+      _indeksFoto = 0;
+      _aturTimer();
+    }
+  }
+
+  void _aturTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (widget.produk.fotoUrls.length > 1) {
+      _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (!mounted) return;
+        setState(() =>
+            _indeksFoto = (_indeksFoto + 1) % widget.produk.fotoUrls.length);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final produk = widget.produk;
+    final onTap = widget.onTap;
+    final diskon = widget.diskon;
     final habis = produk.stok <= 0;
     final stokRendah = !habis && produk.stok <= 5;
     final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty
@@ -1842,6 +1912,7 @@ class _KartuProduk extends StatelessWidget {
         : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
     final adaPromo = (diskon ?? 0) > 0;
     final hargaPromo = adaPromo ? produk.hargaJual - diskon! : produk.hargaJual;
+    final adaFoto = produk.fotoUrls.isNotEmpty;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -1868,22 +1939,48 @@ class _KartuProduk extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                          color: AppColors.latarLembut(warnaAvatar),
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(12))),
-                      child: Center(
-                        child: Text(
-                          produk.nama.isNotEmpty
-                              ? produk.nama[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                              color: warnaAvatar,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800),
-                        ),
-                      ),
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12)),
+                      child: adaFoto
+                          ? AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              child: Image.network(
+                                produk.fotoUrls[
+                                    _indeksFoto % produk.fotoUrls.length],
+                                key: ValueKey(
+                                    _indeksFoto % produk.fotoUrls.length),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: AppColors.latarLembut(warnaAvatar),
+                                  child: Center(
+                                    child: Text(
+                                      produk.nama.isNotEmpty
+                                          ? produk.nama[0].toUpperCase()
+                                          : '?',
+                                      style: TextStyle(
+                                          color: warnaAvatar,
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.latarLembut(warnaAvatar),
+                              child: Center(
+                                child: Text(
+                                  produk.nama.isNotEmpty
+                                      ? produk.nama[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                      color: warnaAvatar,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ),
                     ),
                     Positioned(
                       top: 6,

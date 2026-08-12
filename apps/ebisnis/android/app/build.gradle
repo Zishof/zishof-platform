@@ -49,7 +49,7 @@ android {
         versionName = flutter.versionName
     }
 
-    // Varian produk (PERINTAH_MASTER §4.3): flavor `ebisnis` = perilaku lama
+    // Varian produk (PERINTAH_MASTER Â§4.3): flavor `ebisnis` = perilaku lama
     // persis (applicationId & label APK tak berubah); `inventorySales` = varian
     // "eBisnis Inventory & Sales" dgn applicationId sendiri supaya bisa
     // terpasang berdampingan dgn POS existing di perangkat yang sama.
@@ -68,6 +68,16 @@ android {
             dimension "product"
             applicationId "id.zishof.ebisnis.inventorysales"
             resValue "string", "app_name", "eBisnis Inventory & Sales"
+        }
+        emedik {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.emedik"
+            resValue "string", "app_name", "eBisnis POS eMedik"
+        }
+        albahjah {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.albahjah"
+            resValue "string", "app_name", "Al-Bahjah POS"
         }
     }
 

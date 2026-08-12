@@ -20,31 +20,59 @@ class AppVariant {
   /// Build: `-t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik`.
   static const isApotik = kode == 'apotik';
 
+  /// Varian "POS eMedik" -- kasir layanan medis; SUDAH TERMASUK seluruh fitur
+  /// POS Apotik dalam satu build (perbedaan hak diatur Tbmrole di server,
+  /// bukan binary terpisah). Server bawaan: dev.ecampus.id/ecampus.
+  /// Build: `-t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik`.
+  static const isEmedik = kode == 'emedik';
+
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales
           ? 'eBisnis Inventory & Sales'
-          : (isApotik ? 'eBisnis POS Apotik' : 'eBisnis'));
+          : (isApotik
+              ? 'eBisnis POS Apotik'
+              : (isEmedik ? 'eBisnis POS eMedik' : 'eBisnis')));
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales
           ? 'Inventory & Sales'
-          : (isApotik ? 'POS Apotik' : 'eBisnis POS'));
+          : (isApotik
+              ? 'POS Apotik'
+              : (isEmedik ? 'POS eMedik' : 'eBisnis POS')));
   static const updateAssetKeyword = isAlBahjah
       ? 'albahjah'
-      : (isInventorySales ? 'inventorysales' : (isApotik ? 'apotik' : 'ebisnis'));
+      : (isInventorySales
+          ? 'inventorysales'
+          : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isInventorySales
           ? 'eBisnis Inventory & Sales Flutter'
-          : (isApotik ? 'eBisnis POS Apotik Flutter' : 'eBisnis Flutter Pilot'));
+          : (isApotik
+              ? 'eBisnis POS Apotik Flutter'
+              : (isEmedik ? 'eBisnis POS eMedik Flutter' : 'eBisnis Flutter Pilot')));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isInventorySales
           ? 'assets/images/inventory_sales/icon.png'
           : (isApotik
               ? 'assets/images/apotik/icon.png'
-              : 'assets/images/ebisnis/icon.png'));
+              : (isEmedik
+                  ? 'assets/images/emedik/icon.png'
+                  : 'assets/images/ebisnis/icon.png')));
+
+  /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
+  /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
+  /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
+  /// "Al-Bahjah POS", HANYA di kartu login.
+  static const judulLogin = isAlBahjah ? 'Unit Usaha Al Bahjah' : namaAplikasi;
+
+  /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
+  /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
+  static const subJudulLogin = isAlBahjah
+      ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
+      : (isInventorySales ? 'Masuk ke Inventory & Sales' : 'Masuk sebagai Kasir');
 }

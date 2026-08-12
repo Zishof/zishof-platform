@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../services/kompresi_gambar.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -801,6 +805,22 @@ class _BahanBakuBaris {
   }
 }
 
+/// Satu foto produk -- dua kondisi:
+/// - Sudah tersimpan server: [id]+[url] terisi, [bytes] null (ditampilkan
+///   lewat `Image.network`).
+/// - Staged lokal (BELUM diunggah -- HANYA terjadi saat form ini "Tambah
+///   Produk" baru, produk belum punya id server): [bytes] terisi (sudah
+///   melalui kompresi), [id]/[url] null. Diunggah SETELAH `_simpan()` sukses
+///   dapat id baru -- lihat `_FormProdukState._simpan`.
+class _FotoBaris {
+  int? id;
+  String? url;
+  Uint8List? bytes;
+  String? namaFile;
+  bool mengunggah = false;
+  _FotoBaris({this.id, this.url, this.bytes, this.namaFile});
+}
+
 class _FormProdukState extends State<_FormProduk> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
@@ -823,9 +843,18 @@ class _FormProdukState extends State<_FormProduk> {
   /// APA ADANYA lewat `ekstra_pilihan` (lihat JavaDoc [Produk.ekstraPilihan]).
   final List<int> _ekstraPilihan = [];
 
+  /// Foto produk (maks 10, lihat [KantinHelper.MAKS_FOTO_PRODUK] server) --
+  /// utk produk YANG SUDAH ADA, dimuat dari server via [_muatFoto] &amp; tiap
+  /// baris diunggah SEGERA saat dipilih (produk_id sudah ada). Utk produk
+  /// BARU (`widget.produk == null`), baris ditahan di memori (`id == null`)
+  /// sampai `produk_simpan` sukses dapat id baru -- lihat [_simpan].
+  final List<_FotoBaris> _foto = [];
+  bool _memuatFoto = false;
+
   @override
   void initState() {
     super.initState();
+    if (widget.produk != null) _muatFoto();
     final p = widget.produk;
     _kode = TextEditingController(text: p?.kode ?? '');
     _nama = TextEditingController(text: p?.nama ?? '');
@@ -929,6 +958,157 @@ class _FormProdukState extends State<_FormProduk> {
     return '#$id';
   }
 
+  Future<void> _muatFoto() async {
+    if (widget.produk == null) return;
+    setStateIfMounted(() => _memuatFoto = true);
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('produk_foto_list', {'produk_id': widget.produk!.id});
+      final data = (hasil['data'] as List?) ?? const [];
+      setStateIfMounted(() {
+        _foto
+          ..clear()
+          ..addAll(data.map((d) => _FotoBaris(
+              id: (d['id'] as num).toInt(), url: d['urlGambar'] as String?)));
+      });
+    } catch (e) {
+      // Gagal muat foto bukan error fatal utk form ini -- form tetap bisa
+      // dipakai edit field lain, kasir/admin tinggal buka ulang utk retry.
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatFoto = false);
+    }
+  }
+
+  /// Ekstensi berkas yg diterima -- validasi klien "wajib gambar" (spesifikasi
+  /// user), pengecekan SUNGGUHAN (bisa dibaca sbg gambar) tetap terjadi lewat
+  /// [kompresGambar] yg melempar [FormatException] kalau `decodeImage` gagal.
+  static const _ekstensiGambarValid = {
+    'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'
+  };
+
+  Future<void> _pilihFoto(ImageSource sumber) async {
+    if (_foto.length >= 10) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Maksimal 10 foto per produk.')));
+      }
+      return;
+    }
+    final XFile? berkas =
+        await ImagePicker().pickImage(source: sumber, imageQuality: 100);
+    if (berkas == null) return;
+    final namaFile = berkas.name;
+    final ekstensi = namaFile.contains('.')
+        ? namaFile.split('.').last.toLowerCase()
+        : '';
+    if (!_ekstensiGambarValid.contains(ekstensi)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Format berkas wajib berupa gambar.')));
+      }
+      return;
+    }
+    final bytesAsli = await berkas.readAsBytes();
+    if (bytesAsli.length > 10 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Ukuran berkas maksimal 10 MB.')));
+      }
+      return;
+    }
+
+    final baris = _FotoBaris(bytes: bytesAsli, namaFile: namaFile)
+      ..mengunggah = true;
+    setStateIfMounted(() => _foto.add(baris));
+
+    Uint8List bytesKompres;
+    try {
+      // compute() -> isolate terpisah spy decode+encode JPEG foto kamera
+      // resolusi tinggi tak menjank UI (lihat JavaDoc kompresGambar).
+      bytesKompres = await compute(kompresGambarKeBawah500Kb, bytesAsli);
+    } catch (e) {
+      setStateIfMounted(() => _foto.remove(baris));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memproses gambar: $e')));
+      }
+      return;
+    }
+    baris.bytes = bytesKompres;
+
+    if (widget.produk == null) {
+      // Produk baru: belum punya id server -- tahan di memori, diunggah
+      // batch SETELAH _simpan() sukses (lihat _simpan).
+      setStateIfMounted(() => baris.mengunggah = false);
+      return;
+    }
+    await _unggahBaris(baris, widget.produk!.id);
+  }
+
+  Future<void> _unggahBaris(_FotoBaris baris, int produkId) async {
+    setStateIfMounted(() => baris.mengunggah = true);
+    try {
+      await ApiClient.instance.aksi('produk_foto_upload', {
+        'produk_id': produkId,
+        'file_base64': base64Encode(baris.bytes!),
+        'nama_file': baris.namaFile ?? 'foto.jpg',
+      });
+      // Muat ulang daftar dari server supaya baris ini dapat urlGambar yg
+      // benar (produk_foto_upload sendiri cuma balas {status,id}) -- ukuran
+      // daftar kecil (maks 10), round-trip tambahan ini murah.
+      await _muatFoto();
+    } catch (e) {
+      setStateIfMounted(() => _foto.remove(baris));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengunggah foto: $e')));
+      }
+    }
+  }
+
+  Future<void> _hapusFoto(_FotoBaris baris) async {
+    if (baris.id == null) {
+      // Staged, belum pernah sampai ke server -- cukup buang dari memori.
+      setStateIfMounted(() => _foto.remove(baris));
+      return;
+    }
+    setStateIfMounted(() => baris.mengunggah = true);
+    try {
+      await ApiClient.instance.aksi('produk_foto_hapus', {'id': baris.id});
+      setStateIfMounted(() => _foto.remove(baris));
+    } catch (e) {
+      setStateIfMounted(() => baris.mengunggah = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menghapus foto: $e')));
+      }
+    }
+  }
+
+  Future<void> _bukaPemilihSumberFoto() async {
+    final sumber = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Ambil Foto (Kamera)'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (sumber != null) await _pilihFoto(sumber);
+  }
+
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
@@ -936,7 +1116,7 @@ class _FormProdukState extends State<_FormProduk> {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('produk_simpan', {
+      final hasil = await ApiClient.instance.aksi('produk_simpan', {
         if (widget.produk != null) 'id': widget.produk!.id,
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -960,6 +1140,21 @@ class _FormProdukState extends State<_FormProduk> {
             .toList(),
         'ekstra_pilihan': _ekstraPilihan,
       });
+      // Produk baru: baris foto yg ditahan di memori (id==null, blm pernah
+      // diunggah krn belum ada produk_id) diunggah SEKARANG pakai id baru
+      // dari respons ini -- lihat JavaDoc _foto/_pilihFoto.
+      if (widget.produk == null) {
+        final produkIdBaru = (hasil['id'] as num?)?.toInt();
+        if (produkIdBaru != null) {
+          for (final baris in _foto.where((b) => b.id == null).toList()) {
+            await ApiClient.instance.aksi('produk_foto_upload', {
+              'produk_id': produkIdBaru,
+              'file_base64': base64Encode(baris.bytes!),
+              'nama_file': baris.namaFile ?? 'foto.jpg',
+            });
+          }
+        }
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -1188,6 +1383,109 @@ class _FormProdukState extends State<_FormProduk> {
                                 ))
                             .toList(),
                       ),
+              ),
+              const SizedBox(height: 12),
+              AppSectionCard(
+                judul: 'Foto Produk (maks 10)',
+                aksiJudul: TextButton.icon(
+                    onPressed: _foto.length >= 10 || _memuatFoto
+                        ? null
+                        : _bukaPemilihSumberFoto,
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+                    label: const Text('Tambah Foto')),
+                child: _memuatFoto
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                            child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))),
+                      )
+                    : _foto.isEmpty
+                        ? Text(
+                            'Belum ada foto -- tambahkan hingga 10 foto (galeri atau kamera). Berkas otomatis dikompres di bawah 500 KB sebelum diunggah. Kalau lebih dari 1 foto, tampilan di Kasir akan berganti otomatis tiap 3 detik.',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondaryOf(context)))
+                        : Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: _foto
+                                .map((baris) => Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: SizedBox(
+                                            width: 84,
+                                            height: 84,
+                                            child: baris.bytes != null
+                                                ? Image.memory(baris.bytes!,
+                                                    fit: BoxFit.cover)
+                                                : Image.network(
+                                                    baris.url ?? '',
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (_, __, ___) =>
+                                                            Container(
+                                                      color: AppColors
+                                                          .borderOf(context),
+                                                      child: const Icon(
+                                                          Icons
+                                                              .broken_image_outlined,
+                                                          size: 20),
+                                                    ),
+                                                  ),
+                                          ),
+                                        ),
+                                        if (baris.mengunggah)
+                                          Positioned.fill(
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.black38,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: const Center(
+                                                child: SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color:
+                                                              Colors.white),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          Positioned(
+                                            top: -6,
+                                            right: -6,
+                                            child: InkWell(
+                                              onTap: () => _hapusFoto(baris),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.all(2),
+                                                decoration:
+                                                    const BoxDecoration(
+                                                  color: Colors.black87,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.close,
+                                                    size: 14,
+                                                    color: Colors.white),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ))
+                                .toList(),
+                          ),
               ),
               const SizedBox(height: 8),
               AppFormSection(

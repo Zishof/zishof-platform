@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../product_profile.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../login_screen.dart';
+import 'kasir_apotik_screen.dart';
+import 'persediaan_apotik_screen.dart';
+import 'laporan_apotik_screen.dart';
 
 /// <h3>Beranda varian "POS Apotik" -- landing setelah login (LANGKAH 2).</h3>
 ///
@@ -94,7 +98,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
-        title: const Text('POS Apotik'),
+        // Judul ikut profil varian: layar SAMA melayani "POS Apotik" dan
+        // "POS eMedik" (satu build eMedik memuat keduanya; beda via Tbmrole).
+        title: Text(AppProductProfile.aktif.namaSidebar),
         actions: [
           IconButton(
               icon: const Icon(Icons.refresh),
@@ -192,6 +198,28 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
         ]),
       );
 
+  /// Tujuan navigasi menu yang layarnya SUDAH dibangun -- bertambah per fase.
+  /// Menu tanpa tujuan tetap chip status (hak akses tetap terverifikasi UAT).
+  Widget? _layarTujuan(String kunci) {
+    switch (kunci) {
+      case 'apotik_kasir':
+        return const KasirApotikScreen();
+      case 'apotik_formularium':
+        return const PersediaanApotikScreen(tabAwal: 0);
+      case 'apotik_batch':
+        return const PersediaanApotikScreen(tabAwal: 1);
+      case 'apotik_pengadaan':
+        return const PersediaanApotikScreen(tabAwal: 2);
+      case 'apotik_stok_opname':
+        return const PersediaanApotikScreen(tabAwal: 3);
+      case 'apotik_retur':
+        return const PersediaanApotikScreen(tabAwal: 4);
+      case 'apotik_laporan':
+        return const LaporanApotikScreen();
+    }
+    return null;
+  }
+
   Widget _grupMenu(BuildContext context, String judul,
       List<(String, String, IconData)> daftar) {
     return AppSectionCard(
@@ -201,8 +229,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
         runSpacing: 8,
         children: daftar.map((m) {
           final boleh = Sesi.instance.bolehMenuVarianBaru(m.$1);
+          final tujuan = boleh ? _layarTujuan(m.$1) : null;
           final warna = boleh ? AppColors.success : AppColors.danger;
-          return Container(
+          final chip = Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: AppColors.latarLembut(warna),
@@ -218,9 +247,20 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
                       fontWeight: FontWeight.w600,
                       color: warna)),
               const SizedBox(width: 6),
-              Icon(boleh ? Icons.check_circle : Icons.block,
-                  size: 13, color: warna),
+              Icon(
+                  tujuan != null
+                      ? Icons.chevron_right
+                      : (boleh ? Icons.check_circle : Icons.block),
+                  size: 13,
+                  color: warna),
             ]),
+          );
+          if (tujuan == null) return chip;
+          return InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => tujuan)),
+            child: chip,
           );
         }).toList(),
       ),

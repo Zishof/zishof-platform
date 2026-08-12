@@ -37,6 +37,12 @@ import '../screens/inventory_sales/master_sales_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
 import '../screens/inventory_sales/hutang_supplier_screen.dart';
+import '../screens/inventory_sales/penjualan_sales_screen.dart';
+import '../screens/inventory_sales/piutang_screen.dart';
+import '../screens/inventory_sales/spj_screen.dart';
+import '../screens/inventory_sales/nota_sales_screen.dart';
+import '../screens/inventory_sales/kas_jurnal_screen.dart';
+import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -83,7 +89,13 @@ enum MenuEBisnis {
   masterSales,
   persediaan,
   harga,
-  hutangSupplier
+  hutangSupplier,
+  penjualanSales,
+  piutang,
+  suratPerintahSales,
+  notaSales,
+  kasJurnal,
+  labaRugi
 }
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -95,6 +107,12 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.persediaan: 'persediaan',
   MenuEBisnis.harga: 'harga',
   MenuEBisnis.hutangSupplier: 'hutang',
+  MenuEBisnis.penjualanSales: 'penjualan_sales',
+  MenuEBisnis.piutang: 'piutang',
+  MenuEBisnis.suratPerintahSales: 'surat_perintah_sales',
+  MenuEBisnis.notaSales: 'nota_sales',
+  MenuEBisnis.kasJurnal: 'kas_jurnal',
+  MenuEBisnis.labaRugi: 'laba_rugi',
 };
 
 class _ItemMenuShell {
@@ -173,6 +191,24 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.hutangSupplier, Icons.account_balance_outlined,
       'Hutang Supplier (AP)',
       builder: _bangunHutangSupplier),
+  _ItemMenuShell(MenuEBisnis.penjualanSales, Icons.shopping_cart_checkout,
+      'Penjualan Sales',
+      builder: _bangunPenjualanSales),
+  _ItemMenuShell(MenuEBisnis.piutang, Icons.request_quote_outlined,
+      'Piutang Customer (AR)',
+      builder: _bangunPiutang),
+  _ItemMenuShell(MenuEBisnis.suratPerintahSales, Icons.assignment_outlined,
+      'Surat Perintah Sales',
+      builder: _bangunSpj),
+  _ItemMenuShell(MenuEBisnis.notaSales, Icons.route_outlined,
+      'Sesi Nota Sales',
+      builder: _bangunNotaSales),
+  _ItemMenuShell(MenuEBisnis.kasJurnal, Icons.menu_book_outlined,
+      'Kas & Jurnal',
+      builder: _bangunKasJurnal),
+  _ItemMenuShell(MenuEBisnis.labaRugi, Icons.stacked_line_chart,
+      'Laba Rugi',
+      builder: _bangunLabaRugi),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -238,6 +274,12 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.persediaan,
     MenuEBisnis.harga,
     MenuEBisnis.hutangSupplier,
+    MenuEBisnis.penjualanSales,
+    MenuEBisnis.piutang,
+    MenuEBisnis.suratPerintahSales,
+    MenuEBisnis.notaSales,
+    MenuEBisnis.kasJurnal,
+    MenuEBisnis.labaRugi,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -309,6 +351,12 @@ Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
 Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
 Widget _bangunHarga(BuildContext c) => const HargaScreen();
 Widget _bangunHutangSupplier(BuildContext c) => const HutangSupplierScreen();
+Widget _bangunPenjualanSales(BuildContext c) => const PenjualanSalesScreen();
+Widget _bangunPiutang(BuildContext c) => const PiutangScreen();
+Widget _bangunSpj(BuildContext c) => const SpjScreen();
+Widget _bangunNotaSales(BuildContext c) => const NotaSalesScreen();
+Widget _bangunKasJurnal(BuildContext c) => const KasJurnalScreen();
+Widget _bangunLabaRugi(BuildContext c) => const LabaRugiScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -399,6 +447,18 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Master & Analisis Harga';
     case MenuEBisnis.hutangSupplier:
       return 'Hutang Supplier (AP)';
+    case MenuEBisnis.penjualanSales:
+      return 'Penjualan Sales';
+    case MenuEBisnis.piutang:
+      return 'Piutang Customer (AR)';
+    case MenuEBisnis.suratPerintahSales:
+      return 'Surat Perintah Sales';
+    case MenuEBisnis.notaSales:
+      return 'Sesi Nota Sales';
+    case MenuEBisnis.kasJurnal:
+      return 'Kas & Jurnal';
+    case MenuEBisnis.labaRugi:
+      return 'Laba Rugi';
   }
 }
 
@@ -460,6 +520,18 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.harga;
     case 'Hutang Supplier (AP)':
       return MenuEBisnis.hutangSupplier;
+    case 'Penjualan Sales':
+      return MenuEBisnis.penjualanSales;
+    case 'Piutang Customer (AR)':
+      return MenuEBisnis.piutang;
+    case 'Surat Perintah Sales':
+      return MenuEBisnis.suratPerintahSales;
+    case 'Sesi Nota Sales':
+      return MenuEBisnis.notaSales;
+    case 'Kas & Jurnal':
+      return MenuEBisnis.kasJurnal;
+    case 'Laba Rugi':
+      return MenuEBisnis.labaRugi;
   }
   return null;
 }
