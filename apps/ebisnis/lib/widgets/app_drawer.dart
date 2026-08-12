@@ -13,6 +13,7 @@ import '../screens/laporan_transaksi_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/kulakan_screen.dart';
+import '../screens/supplier_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/log_error_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
@@ -337,6 +338,17 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Kulakan',
                           builder: (_) => const KulakanScreen(),
+                        ),
+                      ),
+                    if (Sesi.instance.bolehMenu('penyedia'))
+                      _ItemMenu(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Supplier (Penyedia)',
+                        aktif: menuAktif == 'Supplier (Penyedia)',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Supplier (Penyedia)',
+                          builder: (_) => const SupplierScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('diskon'))
