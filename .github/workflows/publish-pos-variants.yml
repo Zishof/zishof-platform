@@ -16,7 +16,9 @@ concurrency:
 
 jobs:
   build-and-release:
-    runs-on: windows-latest
+    # Flutter 3.27.x recognizes Visual Studio major 17. The moving
+    # windows-latest image now carries a newer major and falls back to VS 2019.
+    runs-on: windows-2022
     timeout-minutes: 90
     env:
       VERSION: 1.33.7
