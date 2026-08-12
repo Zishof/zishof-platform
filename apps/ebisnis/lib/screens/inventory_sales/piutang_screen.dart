@@ -683,10 +683,88 @@ class _TabRiwayatState extends State<_TabRiwayat> {
       ));
       await Printing.layoutPdf(
           onLayout: (_) => doc.save(), name: 'kwitansi-${d['nomor']}.pdf');
+      // P10: register riwayat cetak (append-only) -- gagal log tidak
+      // menggagalkan cetak (fire-and-forget).
+      ApiClient.instance.aksi('si_print_log_create', {
+        'jenis_dokumen': 'kwitansi_penerimaan',
+        'referensi': '${d['nomor']}',
+        'perangkat': 'flutter',
+      }).then((_) {}, onError: (_) {});
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal cetak kwitansi: $e')));
+      }
+    }
+  }
+
+  /// P10: reversal kwitansi posted (Pemilik/Admin; dokumen pembalik idempoten).
+  Future<void> _reversal(Map<String, dynamic> r) async {
+    final ctrl = TextEditingController();
+    final ya = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Reversal Kwitansi ${r['nomor']}?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'Kwitansi TIDAK dihapus — sistem menerbitkan dokumen pembalik '
+              'dan saldo faktur dipulihkan.',
+              style: TextStyle(fontSize: 12.5)),
+          TextField(
+              controller: ctrl,
+              decoration:
+                  const InputDecoration(labelText: 'Alasan reversal (wajib)')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Batal')),
+          ElevatedButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
+              child: const Text('Reversal')),
+        ],
+      ),
+    );
+    if (ya != true || ctrl.text.trim().isEmpty) return;
+    try {
+      await ApiClient.instance.aksi('si_collection_reverse', {
+        'penerimaan_id': r['id'],
+        'alasan': ctrl.text.trim(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reversal diterbitkan.')));
+      }
+      _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  /// P10: siklus BG (giro) -- CAIR | TOLAK (TOLAK => reversal otomatis server).
+  Future<void> _bgStatus(Map<String, dynamic> r, String status) async {
+    try {
+      await ApiClient.instance.aksi('si_collection_bg_status', {
+        'id': r['id'],
+        'status_bg': status,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(status == 'CAIR'
+                ? 'BG ditandai CAIR.'
+                : 'BG ditandai TOLAK — reversal otomatis diterbitkan.')));
+      }
+      _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -755,7 +833,13 @@ class _TabRiwayatState extends State<_TabRiwayat> {
             rows: [
               for (final r in _data)
                 AppTableRowData(cells: [
-                  AppTableCell.text('${r['nomor']}', flex: 2),
+                  AppTableCell.text(
+                      '${r['nomor']}'
+                      '${'${r['statusDok']}' == 'DIBATALKAN' ? ' (DIBATALKAN)' : ''}'
+                      '${'${r['statusDok']}' == 'REVERSAL' ? ' (REVERSAL)' : ''}'
+                      '${'${r['statusBg']}'.isNotEmpty ? ' · BG ${r['statusBg']}' : ''}',
+                      flex: 2,
+                      maxLines: 2),
                   AppTableCell.text('${r['tanggal']}'.split('.').first, flex: 2),
                   AppTableCell.text('${r['customerNama']}', flex: 3),
                   AppTableCell.text('${r['metode']}', flex: 1),
@@ -765,11 +849,37 @@ class _TabRiwayatState extends State<_TabRiwayat> {
                   AppTableCell(
                     flex: 1,
                     align: TextAlign.center,
-                    child: IconButton(
-                      icon: const Icon(Icons.print_outlined, size: 20),
-                      tooltip: 'Cetak kwitansi (PDF)',
-                      onPressed: () => _cetakKwitansi(r),
-                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        icon: const Icon(Icons.print_outlined, size: 20),
+                        tooltip: 'Cetak kwitansi (PDF)',
+                        onPressed: () => _cetakKwitansi(r),
+                      ),
+                      if (!Sesi.instance.isSalesKeliling &&
+                          '${r['statusDok']}' == 'AKTIF')
+                        PopupMenuButton<String>(
+                          tooltip: 'Aksi dokumen',
+                          onSelected: (v) {
+                            if (v == 'reversal') _reversal(r);
+                            if (v == 'cair') _bgStatus(r, 'CAIR');
+                            if (v == 'tolak') _bgStatus(r, 'TOLAK');
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                                value: 'reversal',
+                                child: Text('Reversal (batalkan)')),
+                            if ('${r['metode']}' == 'GIRO' &&
+                                ('${r['statusBg']}'.isEmpty ||
+                                    '${r['statusBg']}' == 'DITERIMA')) ...[
+                              const PopupMenuItem(
+                                  value: 'cair', child: Text('BG Cair')),
+                              const PopupMenuItem(
+                                  value: 'tolak',
+                                  child: Text('BG Tolak (auto-reversal)')),
+                            ],
+                          ],
+                        ),
+                    ]),
                   ),
                 ]),
             ],
