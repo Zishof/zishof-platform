@@ -154,6 +154,19 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.konfigurasi: 'konfigurasi',
 };
 
+/// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
+/// boleh tampil utk aktor berperan Pemilik Sales/Inventory atau Sales
+/// Keliling (permintaan user: role lain di Inventory & Sales -- mis. staf
+/// gudang/kasir -- tak perlu lihat menu ini). Menu Inventory & Sales LAIN
+/// (Master Supplier/Customer, Persediaan, Harga, Hutang/Piutang, Kas &
+/// Jurnal, Laba Rugi) TIDAK ikut dibatasi, hanya yg benar² "Sales".
+const _menuSalesSaja = <MenuEBisnis>{
+  MenuEBisnis.masterSales,
+  MenuEBisnis.penjualanSales,
+  MenuEBisnis.suratPerintahSales,
+  MenuEBisnis.notaSales,
+};
+
 bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
   // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
@@ -163,8 +176,15 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   }
   final kunciIs = _kunciMenuIs[kunci];
   if (kunciIs != null) {
-    return AppProductProfile.aktif.isInventorySales &&
-        Sesi.instance.bolehMenuIs(kunciIs);
+    if (!AppProductProfile.aktif.isInventorySales ||
+        !Sesi.instance.bolehMenuIs(kunciIs)) {
+      return false;
+    }
+    if (_menuSalesSaja.contains(kunci)) {
+      return Sesi.instance.isPemilikSalesInventory ||
+          Sesi.instance.isSalesKeliling;
+    }
+    return true;
   }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
