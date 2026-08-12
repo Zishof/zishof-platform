@@ -11,7 +11,8 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Sesi Nota Sales (layar legacy 40-42).</h3>
 ///
@@ -207,11 +208,14 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     if (ya == true) {
       final n = double.tryParse(nominal.text) ?? 0;
       if (n <= 0) return;
-      await _aksi(aksi, {
-        'session_id': widget.sessionId,
-        'nominal': n,
-        'keterangan': ket.text.trim(),
-      }, sukses: '$judul tercatat.');
+      await _aksi(
+          aksi,
+          {
+            'session_id': widget.sessionId,
+            'nominal': n,
+            'keterangan': ket.text.trim(),
+          },
+          sukses: '$judul tercatat.');
     }
   }
 
@@ -263,7 +267,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
                 value: metode,
                 decoration: const InputDecoration(labelText: 'Metode'),
                 items: const [
-                  DropdownMenuItem(value: 'TUNAI', child: Text('Tunai (kas sesi)')),
+                  DropdownMenuItem(
+                      value: 'TUNAI', child: Text('Tunai (kas sesi)')),
                   DropdownMenuItem(value: 'TRANSFER', child: Text('Transfer')),
                 ],
                 onChanged: (v) => setD(() => metode = v ?? 'TUNAI'),
@@ -405,7 +410,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
                 DropdownMenuItem(value: 'UNPAID', child: Text('Belum bayar')),
                 DropdownMenuItem(
                     value: 'PROMISE_TO_PAY', child: Text('Janji bayar')),
-                DropdownMenuItem(value: 'RETURNED', child: Text('Nota dikembalikan')),
+                DropdownMenuItem(
+                    value: 'RETURNED', child: Text('Nota dikembalikan')),
                 DropdownMenuItem(value: 'DISPUTED', child: Text('Sengketa')),
                 DropdownMenuItem(value: 'LOST', child: Text('Hilang')),
               ],
@@ -432,12 +438,15 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
       ),
     );
     if (ya == true) {
-      await _aksi('si_trip_nota_result', {
-        'nota_id': n['id'],
-        'status': status,
-        'hasil_kunjungan': hasilK.text.trim(),
-        'alasan_gagal': alasan.text.trim(),
-      }, sukses: 'Hasil kunjungan tersimpan.');
+      await _aksi(
+          'si_trip_nota_result',
+          {
+            'nota_id': n['id'],
+            'status': status,
+            'hasil_kunjungan': hasilK.text.trim(),
+            'alasan_gagal': alasan.text.trim(),
+          },
+          sukses: 'Hasil kunjungan tersimpan.');
     }
   }
 
@@ -447,7 +456,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     final d = _d;
     if (d == null) return;
     final nominal = TextEditingController(
-        text: '${(((n['saldoSaatAssign'] as num?) ?? 0).toDouble() - ((n['nilaiTertagih'] as num?) ?? 0).toDouble()).round()}');
+        text:
+            '${(((n['saldoSaatAssign'] as num?) ?? 0).toDouble() - ((n['nilaiTertagih'] as num?) ?? 0).toDouble()).round()}');
     String metode = 'TUNAI';
     final ya = await showDialog<bool>(
       context: context,
@@ -497,7 +507,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
         final baris = rows.firstWhere(
-            (r) => (r['id'] as num).toInt() == (n['piutangDocId'] as num).toInt(),
+            (r) =>
+                (r['id'] as num).toInt() == (n['piutangDocId'] as num).toInt(),
             orElse: () => rows.isEmpty ? {} : rows.first);
         if (baris.isEmpty) throw Exception('Faktur tidak ditemukan.');
         // P7: idempoten -> boleh diantre offline (kunjungan di area tanpa sinyal).
@@ -558,8 +569,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
                 decoration: const InputDecoration(labelText: 'Hilang')),
             TextField(
                 controller: alasan,
-                decoration:
-                    const InputDecoration(labelText: 'Alasan selisih')),
+                decoration: const InputDecoration(labelText: 'Alasan selisih')),
           ]),
         ),
         actions: [
@@ -573,18 +583,21 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
       ),
     );
     if (ya == true) {
-      await _aksi('si_trip_barang_update', {
-        'rows': [
+      await _aksi(
+          'si_trip_barang_update',
           {
-            'barang_id': b['id'],
-            'qty_terjual': double.tryParse(terjual.text) ?? 0,
-            'qty_kembali': double.tryParse(kembali.text) ?? 0,
-            'qty_rusak': double.tryParse(rusak.text) ?? 0,
-            'qty_hilang': double.tryParse(hilang.text) ?? 0,
-            'alasan_selisih': alasan.text.trim(),
-          }
-        ]
-      }, sukses: 'Kuantitas barang tersimpan.');
+            'rows': [
+              {
+                'barang_id': b['id'],
+                'qty_terjual': double.tryParse(terjual.text) ?? 0,
+                'qty_kembali': double.tryParse(kembali.text) ?? 0,
+                'qty_rusak': double.tryParse(rusak.text) ?? 0,
+                'qty_hilang': double.tryParse(hilang.text) ?? 0,
+                'alasan_selisih': alasan.text.trim(),
+              }
+            ]
+          },
+          sukses: 'Kuantitas barang tersimpan.');
     }
   }
 
@@ -617,12 +630,60 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
       ),
     );
     if (ya == true) {
-      await _aksi('si_trip_close', {
-        'session_id': widget.sessionId,
-        'kas_fisik_aktual': double.tryParse(kas.text) ?? 0,
-        'catatan': catatan.text.trim(),
-      }, sukses: 'Sesi ditutup.');
+      await _aksi(
+          'si_trip_close',
+          {
+            'session_id': widget.sessionId,
+            'kas_fisik_aktual': double.tryParse(kas.text) ?? 0,
+            'catatan': catatan.text.trim(),
+          },
+          sukses: 'Sesi ditutup.');
     }
+  }
+
+  /// P10: biaya posted tidak dihapus. Pemilik/Admin menerbitkan dokumen
+  /// pembalik; server tetap menjadi penjaga akhir dan menolak sesi CLOSED.
+  Future<void> _reversalBiaya(Map<String, dynamic> biaya) async {
+    final alasan = TextEditingController();
+    final dikonfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Reversal biaya #${biaya['id']}?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${biaya['kategori']} — ${biaya['uraian']}',
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          const Text(
+              'Biaya tidak dihapus. Sistem menerbitkan dokumen pembalik '
+              'negatif dan mengembalikan kas bila metode asal tunai.',
+              style: TextStyle(fontSize: 12.5)),
+          TextField(
+              controller: alasan,
+              decoration:
+                  const InputDecoration(labelText: 'Alasan reversal (wajib)')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Batal')),
+          ElevatedButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
+              child: const Text('Reversal')),
+        ],
+      ),
+    );
+    if (dikonfirmasi != true || alasan.text.trim().isEmpty) return;
+    await _aksi(
+        'si_expense_reverse',
+        {
+          'biaya_id': biaya['id'],
+          'alasan': alasan.text.trim(),
+        },
+        sukses: 'Reversal biaya diterbitkan.');
   }
 
   Future<void> _cetakLaporan() async {
@@ -636,7 +697,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         pw.Text('LAPORAN SESI NOTA SALES',
             style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 4),
-        pw.Text('Sesi: ${d['nomor']}  ·  SPJ: ${spj['nomor']}  ·  Sales: ${spj['salesNama']}'),
+        pw.Text(
+            'Sesi: ${d['nomor']}  ·  SPJ: ${spj['nomor']}  ·  Sales: ${spj['salesNama']}'),
         pw.Text('Mulai: ${d['waktuMulai']}  ·  Kembali: ${d['waktuKembali']}'),
         pw.Text('Status: ${d['statusSesi']}'),
         pw.SizedBox(height: 10),
@@ -644,13 +706,25 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
         pw.TableHelper.fromTextArray(
           data: [
-            ['Total piutang tertagih', _fmtRp.format(rumus['totalPiutangTertagih'] ?? 0)],
+            [
+              'Total piutang tertagih',
+              _fmtRp.format(rumus['totalPiutangTertagih'] ?? 0)
+            ],
             ['  - Tunai', _fmtRp.format(rumus['tertagihTunai'] ?? 0)],
             ['  - Non-tunai', _fmtRp.format(rumus['tertagihNonTunai'] ?? 0)],
             ['Total biaya sesi', _fmtRp.format(rumus['totalBiaya'] ?? 0)],
-            ['Total nilai pembelian', _fmtRp.format(rumus['totalNilaiPembelian'] ?? 0)],
-            ['  - Dibayar/DP saat sesi', _fmtRp.format(rumus['pembelianDibayarDp'] ?? 0)],
-            ['  - Sisa hutang baru', _fmtRp.format(rumus['pembelianSisaHutang'] ?? 0)],
+            [
+              'Total nilai pembelian',
+              _fmtRp.format(rumus['totalNilaiPembelian'] ?? 0)
+            ],
+            [
+              '  - Dibayar/DP saat sesi',
+              _fmtRp.format(rumus['pembelianDibayarDp'] ?? 0)
+            ],
+            [
+              '  - Sisa hutang baru',
+              _fmtRp.format(rumus['pembelianSisaHutang'] ?? 0)
+            ],
             ['HASIL BERSIH SESI', _fmtRp.format(rumus['hasilBersih'] ?? 0)],
           ],
         ),
@@ -660,13 +734,25 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         pw.TableHelper.fromTextArray(
           data: [
             ['Uang muka awal', _fmtRp.format(rumus['uangMukaAwal'] ?? 0)],
-            ['+ Penerimaan piutang tunai', _fmtRp.format(rumus['tertagihTunai'] ?? 0)],
+            [
+              '+ Penerimaan piutang tunai',
+              _fmtRp.format(rumus['tertagihTunai'] ?? 0)
+            ],
             ['+ Penjualan tunai', _fmtRp.format(rumus['penjualanTunai'] ?? 0)],
             ['+ Refund tunai', _fmtRp.format(rumus['refundTunai'] ?? 0)],
             ['- Biaya tunai', _fmtRp.format(rumus['biayaTunai'] ?? 0)],
-            ['- Pembayaran pembelian tunai', _fmtRp.format(rumus['pembayaranPembelianTunai'] ?? 0)],
-            ['- Setoran ke pemilik', _fmtRp.format(rumus['setoranKePemilik'] ?? 0)],
-            ['KAS FISIK SEHARUSNYA', _fmtRp.format(rumus['kasFisikSeharusnya'] ?? 0)],
+            [
+              '- Pembayaran pembelian tunai',
+              _fmtRp.format(rumus['pembayaranPembelianTunai'] ?? 0)
+            ],
+            [
+              '- Setoran ke pemilik',
+              _fmtRp.format(rumus['setoranKePemilik'] ?? 0)
+            ],
+            [
+              'KAS FISIK SEHARUSNYA',
+              _fmtRp.format(rumus['kasFisikSeharusnya'] ?? 0)
+            ],
             if (d['kasFisikAktual'] != null)
               ['Kas fisik aktual', _fmtRp.format(d['kasFisikAktual'] ?? 0)],
             if (d['selisihKas'] != null)
@@ -690,9 +776,17 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
           ],
         ),
         pw.SizedBox(height: 10),
-        pw.Text('BARANG DIBAWA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        pw.Text('BARANG DIBAWA',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
         pw.TableHelper.fromTextArray(
-          headers: ['Produk', 'Dimuat', 'Terjual', 'Kembali', 'Rusak', 'Hilang'],
+          headers: [
+            'Produk',
+            'Dimuat',
+            'Terjual',
+            'Kembali',
+            'Rusak',
+            'Hilang'
+          ],
           data: [
             for (final b in (spj['barang'] as List? ?? []))
               [
@@ -730,7 +824,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     final pemilik = !Sesi.instance.isSalesKeliling;
     return Scaffold(
       appBar: AppBar(
-        title: Text(d == null ? 'Detail Sesi' : '${d['nomor']} (${d['statusSesi']})'),
+        title: Text(
+            d == null ? 'Detail Sesi' : '${d['nomor']} (${d['statusSesi']})'),
         actions: [
           IconButton(
               onPressed: d == null ? null : _cetakLaporan,
@@ -765,8 +860,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
                                 size: 18),
                             label: const Text('Kulakan Sesi')),
                         OutlinedButton.icon(
-                            onPressed: () =>
-                                _dialogKas('Setoran ke Pemilik', 'si_trip_deposit'),
+                            onPressed: () => _dialogKas(
+                                'Setoran ke Pemilik', 'si_trip_deposit'),
                             icon: const Icon(Icons.savings_outlined, size: 18),
                             label: const Text('Setoran')),
                         ElevatedButton.icon(
@@ -856,7 +951,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(children: [
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('${n['fakturNomor']} — ${n['customerNama']}',
                           style: const TextStyle(
@@ -887,8 +983,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     final barang = ((spj['barang'] as List?) ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
-    final bolehEdit = '${d['statusSesi']}' == 'ACTIVE' ||
-        '${d['statusSesi']}' == 'RETURNED';
+    final bolehEdit =
+        '${d['statusSesi']}' == 'ACTIVE' || '${d['statusSesi']}' == 'RETURNED';
     return AppFormSection(
       judul: 'Barang Dibawa (${barang.length})',
       children: [
@@ -921,6 +1017,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     final kas = ((d['kas'] as List?) ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    final bolehReversal =
+        !Sesi.instance.isSalesKeliling && '${d['statusSesi']}' != 'CLOSED';
     return Column(children: [
       AppFormSection(judul: 'Biaya (${biaya.length})', children: [
         for (final b in biaya)
@@ -928,11 +1026,20 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(children: [
               Expanded(
-                  child: Text('${b['kategori']} — ${b['uraian']}',
+                  child: Text(
+                      '${b['kategori']} — ${b['uraian']}'
+                      '${'${b['statusDok']}' == 'DIBATALKAN' ? ' (DIBATALKAN)' : ''}'
+                      '${'${b['statusDok']}' == 'REVERSAL' ? ' (REVERSAL)' : ''}',
                       style: const TextStyle(fontSize: 12))),
               Text(_fmtRp.format(b['nilai'] ?? 0),
                   style: const TextStyle(
                       fontSize: 12, fontWeight: FontWeight.w700)),
+              if (bolehReversal && '${b['statusDok']}' == 'AKTIF')
+                IconButton(
+                    icon: const Icon(Icons.undo_outlined, size: 18),
+                    color: AppColors.danger,
+                    tooltip: 'Reversal biaya',
+                    onPressed: () => _reversalBiaya(b)),
             ]),
           ),
       ]),
