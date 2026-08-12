@@ -129,6 +129,17 @@ class AppProductProfile {
 
   bool get isEmedik => fiturGrup.contains(FiturGrup.emedik);
 
+  /// Prefix tag rilis GitHub utk update-checker VARIAN yg punya rilis bertag
+  /// khusus (emedik/apotik -> `emedik-v*`/`apotik-v*`). null utk varian yg
+  /// asetnya menumpang rilis `v*` utama & dibedakan lewat updateAssetKeyword
+  /// (ebisnis/albahjah/inventory_sales). Dikunci by [kode], BUKAN isApotik --
+  /// profil emedik memuat fitur apotik (isApotik==true) tapi rilisnya `emedik-`.
+  String? get tagRilisPrefix {
+    if (kode == 'emedik') return 'emedik-';
+    if (kode == 'apotik') return 'apotik-';
+    return null;
+  }
+
   bool cocokDenganDartDefine() => kode == AppProductProfile.dariDartDefine().kode;
 
   /// Layar pertama setelah login sukses. Varian Inventory & Sales SELALU lewat

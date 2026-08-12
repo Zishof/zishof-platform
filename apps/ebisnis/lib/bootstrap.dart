@@ -262,6 +262,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         repoName: 'zishof-platform',
         versiSaatIni: info.version,
         assetKeyword: AppProductProfile.aktif.updateAssetKeyword,
+        tagPrefix: AppProductProfile.aktif.tagRilisPrefix,
       );
       if (mounted && hasil != null) {
         setStateIfMounted(() => _infoUpdate = hasil);
