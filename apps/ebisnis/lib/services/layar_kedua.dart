@@ -31,6 +31,19 @@ Future<void> bukaLayarPelangganJendelaKedua() async {
     return;
   }
 
+  // Gap-closure "KeyDownEvent... state shows physical key is already
+  // pressed" (assertion `hardware_keyboard.dart`, dipicu jendela ini dibuka
+  // via tombol F9): `ShowWindow(SW_SHOWMAXIMIZED)` di bawah MENGAKTIFKAN
+  // jendela baru (merebut fokus OS dari jendela kasir). Kalau ada physical
+  // key yg masih tertekan saat itu (mis. scanner barcode msh mengirim
+  // keystroke), KeyUp-nya terkirim ke jendela BARU (yg engine Flutter-nya
+  // beda), bukan ke jendela kasir yg menerima KeyDown-nya -- `_pressedKeys`
+  // di jendela kasir jadi permanen "nyangkut" sampai app direstart. Simpan
+  // HWND kasir SEBELUM jendela kedua dibuat, lalu rebut fokus balik
+  // stlh selesai -- sekalian UX yg lebih benar (kasir tak perlu klik ulang
+  // ke layarnya sendiri stlh membuka Layar Pelanggan).
+  final hwndKasir = GetForegroundWindow();
+
   final argumen = jsonEncode({
     'tokoId': Sesi.instance.tokoId,
     'tokoNama': Sesi.instance.tokoNama,
@@ -56,6 +69,8 @@ Future<void> bukaLayarPelangganJendelaKedua() async {
     }
   }
   await controller.show();
+
+  if (hwndKasir != 0) SetForegroundWindow(hwndKasir);
 }
 
 bool tutupLayarPelangganJendelaKedua() {
