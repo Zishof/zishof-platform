@@ -120,6 +120,8 @@ flutter:
     - assets/images/inventory_sales/icon.png
     - assets/images/apotik/icon.png
     - assets/images/emedik/icon.png
+    - assets/images/help/apotik-workflow.png
+    - assets/images/help/emedik-workflow.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

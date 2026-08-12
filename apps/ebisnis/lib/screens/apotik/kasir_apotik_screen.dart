@@ -7,8 +7,10 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import 'pos_help.dart';
 
-final _rp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _rp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Kasir Apotik -- FASE A varian "POS Apotik".</h3>
 ///
@@ -71,7 +73,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
 
   void _cariBerubah(String v) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () => _jalankanCari(v));
+    _debounce =
+        Timer(const Duration(milliseconds: 350), () => _jalankanCari(v));
   }
 
   Future<void> _jalankanCari(String v) async {
@@ -83,8 +86,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     try {
       final hasil = await ApiClient.instance
           .aksi('apotik_item_cari', {'keyword': v.trim(), 'page_size': 20});
-      setStateIfMounted(() =>
-          _hasilCari = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _hasilCari =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -123,8 +126,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       return;
     }
     setStateIfMounted(() {
-      _keranjang.add(_BarisKeranjang(
-          item, qty, ((item['hargaJual'] as num?) ?? 0).toDouble(), batchTerpilih));
+      _keranjang.add(_BarisKeranjang(item, qty,
+          ((item['hargaJual'] as num?) ?? 0).toDouble(), batchTerpilih));
     });
   }
 
@@ -222,7 +225,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
               'Kode: ${hasil['kode']}\nTotal: ${_rp.format(total)}\n\nStruk/cetak menyusul pada iterasi FASE A berikutnya.'),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('Tutup')),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Tutup')),
           ],
         ),
       );
@@ -244,7 +248,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
             content: Text('$e'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(ctx), child: const Text('Tutup')),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Tutup')),
             ],
           ),
         );
@@ -262,7 +267,10 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     final panelKeranjang = _panelKeranjang(context);
     return Scaffold(
       backgroundColor: AppColors.pageBgOf(context),
-      appBar: AppBar(title: const Text('Kasir Apotik')),
+      appBar: AppBar(
+        title: const Text('Kasir Apotik'),
+        actions: [PosHelp.button(context, 'apotik_kasir', compact: true)],
+      ),
       body: desktop
           ? Row(children: [
               Expanded(flex: 3, child: panelCari),
@@ -308,7 +316,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
             child: AppInfoBanner(
                 icon: Icons.description_outlined,
                 color: AppColors.info,
-                text: 'Menebus resep $_resepKode -- baris resep sudah dimuat ke keranjang.'),
+                text:
+                    'Menebus resep $_resepKode -- baris resep sudah dimuat ke keranjang.'),
           ),
         const SizedBox(height: 8),
         Expanded(
@@ -441,8 +450,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
         const Divider(),
         Row(children: [
           const Expanded(
-              child: Text('Total',
-                  style: TextStyle(fontWeight: FontWeight.w700))),
+              child:
+                  Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
           Text(_rp.format(total),
               style:
                   const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
@@ -475,7 +484,9 @@ class _SheetPilihBatch extends StatefulWidget {
   final List<Map<String, dynamic>> batches;
   final double qtyDiminta;
   const _SheetPilihBatch(
-      {required this.namaItem, required this.batches, required this.qtyDiminta});
+      {required this.namaItem,
+      required this.batches,
+      required this.qtyDiminta});
 
   @override
   State<_SheetPilihBatch> createState() => _SheetPilihBatchState();
@@ -522,7 +533,8 @@ class _SheetPilihBatchState extends State<_SheetPilihBatch> {
         padding: const EdgeInsets.all(16),
         children: [
           Text('Pilih Batch — ${widget.namaItem}',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              style:
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 4),
           Text(
               'Urutan FEFO (terdekat kedaluwarsa didahulukan). Batch kedaluwarsa terkunci.',
