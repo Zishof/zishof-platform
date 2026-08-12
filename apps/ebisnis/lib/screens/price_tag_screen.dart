@@ -145,6 +145,18 @@ class _UkuranTag {
   });
 }
 
+/// Margin cetak aman utk grid Rak/Produk di kertas umum (A4/F4) -- printer
+/// konsumen/kantor umumnya TIDAK bisa mencetak sampai tepi mutlak kertas
+/// (non-printable area khas ±3-6mm tergantung merek/model). Tanpa margin
+/// ini, tag di baris/kolom paling tepi bisa terpotong saat dicetak LANGSUNG
+/// ke printer fisik (beda dgn cuma dilihat di PDF viewer, yang menampilkan
+/// apa adanya tanpa peduli batas fisik printer). SENGAJA TIDAK dipakai utk
+/// roll thermal (`_isiGridLabel` kertasCetak==thermal) -- printer label
+/// thermal dikalibrasi cetak pas ke tepi label die-cut, beda karakteristik
+/// dgan printer kertas umum. 5mm dipilih spy konsisten dgn margin Promo
+/// (`_isiPromo`, yg sudah lebih dulu pakai nilai yang sama).
+const _marginCetakAmanMm = 5.0;
+
 const _kategoriRakUtama = 'Rak / Gondola';
 const _kategoriTscRoll = 'Roll TSC TTP-244 Pro (Rekomendasi)';
 const _kategoriThermalBarcode = 'Thermal / Printer Barcode';
@@ -686,14 +698,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       (r) => r.id == _lebarRollId,
       orElse: () => _daftarLebarRoll.first);
 
-  /// Margin horizontal/vertikal yang benar-benar dipakai saat ini -- Produk
-  /// pakai [_marginHorizontalMm]/[_marginVerticalMm] independen (lihat
-  /// deklarasinya), model lain tetap pakai [_marginKotakMm] tunggal utk
-  /// kedua arah spt semula (dari Konfigurasi > Profil Toko).
+  /// Margin horizontal/vertikal yang benar-benar dipakai saat ini -- Rak &
+  /// Produk (keduanya pakai grid [_isiGridLabel]) boleh atur
+  /// [_marginHorizontalMm]/[_marginVerticalMm] independen (lihat
+  /// deklarasinya), Promo tetap pakai [_marginKotakMm] tunggal utk kedua
+  /// arah spt semula (dari Konfigurasi > Profil Toko).
+  bool get _modelBolehMarginIndependen =>
+      _model == ModelPriceTag.produk || _model == ModelPriceTag.rak;
   double get _marginHorizontalAktifMm =>
-      _model == ModelPriceTag.produk ? _marginHorizontalMm : _marginKotakMm;
+      _modelBolehMarginIndependen ? _marginHorizontalMm : _marginKotakMm;
   double get _marginVerticalAktifMm =>
-      _model == ModelPriceTag.produk ? _marginVerticalMm : _marginKotakMm;
+      _modelBolehMarginIndependen ? _marginVerticalMm : _marginKotakMm;
 
   /// Tombol ringkas pengganti daftar ChoiceChip yang dulu selalu terbuka di
   /// panel -- dengan ukuran per model sekarang bisa puluhan (price gun,
@@ -962,6 +977,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
           'logoWrapBg': _controllerLogoWrapBg.text,
+          'marginHorizontalMm': _marginHorizontalMm,
+          'marginVerticalMm': _marginVerticalMm,
           'rakHeader': _controllerRakHeader.text,
           'rakProduk': _controllerRakProduk.text,
           'rakHarga': _controllerRakHarga.text,
@@ -1076,6 +1093,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerRakKodeText.text = teks('rakKodeText', '#4D403C');
         _controllerRakBodyBg.text = teks('rakBodyBg', '#FFFFFF');
         _controllerRakHargaText.text = teks('rakHargaTextColor', '#514B4B');
+        _muatMarginIndependen(data);
       case ModelPriceTag.produk:
         _kertasCetak = _kertasCetakDari(data?['kertasCetak']) ?? KertasCetak.a4;
         _lebarRollId = teks('lebarRollId', 'roll_58');
@@ -1083,19 +1101,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _tampilToko = false;
         _tampilLogo = false;
         _tampilBarcodeTeks = false;
-        // Belum pernah diutak-atik -> ikut Margin Antar Kotak global
-        // (Konfigurasi > Profil Toko, sudah kebaca ke [_marginKotakMm] di
-        // [_muat] sebelum method ini jalan) spy tampilan awal tak berubah;
-        // begitu disentuh sekali, tersimpan independen spt field lainnya.
-        _marginHorizontalMm = ((data?['marginHorizontalMm'] as num?)
-                    ?.toDouble() ??
-                _marginKotakMm)
-            .clamp(0, 8)
-            .toDouble();
-        _marginVerticalMm = ((data?['marginVerticalMm'] as num?)?.toDouble() ??
-                _marginKotakMm)
-            .clamp(0, 8)
-            .toDouble();
+        _muatMarginIndependen(data);
       case ModelPriceTag.promo:
         _tampilToko = boolean('tampilToko', true);
         _tampilLogo = boolean('tampilLogo', false);
@@ -1126,6 +1132,22 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     // atas (listener ikut jalan tiap controller diisi ulang) -- ini cuma
     // menerapkan data yg SUDAH tersimpan, bukan perubahan baru dari user.
     _debounceSimpanPengaturan?.cancel();
+  }
+
+  /// Dipanggil dari cabang Rak & Produk di [_terapkanPengaturanModel] --
+  /// belum pernah diutak-atik -> ikut Margin Antar Kotak global (Konfigurasi
+  /// > Profil Toko, sudah kebaca ke [_marginKotakMm] di [_muat] sebelum
+  /// method ini jalan) spy tampilan awal tak berubah; begitu disentuh
+  /// sekali, tersimpan independen spt field lainnya.
+  void _muatMarginIndependen(Map<String, dynamic>? data) {
+    _marginHorizontalMm =
+        ((data?['marginHorizontalMm'] as num?)?.toDouble() ?? _marginKotakMm)
+            .clamp(0, 8)
+            .toDouble();
+    _marginVerticalMm =
+        ((data?['marginVerticalMm'] as num?)?.toDouble() ?? _marginKotakMm)
+            .clamp(0, 8)
+            .toDouble();
   }
 
   Future<void> _simpanPengaturanModel(ModelPriceTag model) async {
@@ -1625,7 +1647,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             ],
           ],
         ],
-        if (_model == ModelPriceTag.produk) ...[
+        if (_modelBolehMarginIndependen) ...[
           const SizedBox(height: 16),
           const Text('Margin Antar Kotak',
               style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1634,7 +1656,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             'Atur horizontal & vertikal terpisah supaya grid label bisa '
             'disesuaikan langsung dgn ketersediaan kertas/roll di lapangan. '
             'Nilai awal ikut Margin Antar Kotak di Konfigurasi, tapi '
-            'perubahan di sini hanya berlaku utk Stiker Produk.',
+            'perubahan di sini hanya berlaku utk ${_model.label}.',
             style: const TextStyle(
                 fontSize: 11.5, color: AppColors.textSecondary),
           ),
@@ -2315,9 +2337,12 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     // Roll thermal: lebar tetap (mengikuti lebar roll dipilih), tinggi
     // representatif beberapa baris saja (roll sungguhan maju terus-menerus,
     // tidak dibatasi tinggi tetap spt A4/F4 -- lihat [_isiGridLabel] utk
-    // logika PDF sesungguhnya).
-    final lebarKertas =
-        _kertasCetak == KertasCetak.thermal ? _lebarRollAktif.lebarMm : 210.0;
+    // logika PDF sesungguhnya). A4/F4 dikurangi [_marginCetakAmanMm] di
+    // kedua sisi supaya jumlah kolom/baris preview ini SAMA dgn PDF
+    // sesungguhnya (yang jg sudah pakai margin aman itu, bukan 0).
+    final lebarKertas = _kertasCetak == KertasCetak.thermal
+        ? _lebarRollAktif.lebarMm
+        : 210.0 - 2 * _marginCetakAmanMm;
     // Pakai margin H/V sungguhan (bukan hardcode) supaya preview ini benar-
     // benar mencerminkan slider Margin Antar Kotak -- kalau tidak, user
     // menggeser slider tapi preview-nya diam saja, jadi tidak berguna utk
@@ -2330,7 +2355,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         ? 4
         : max(
             1,
-            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) + gutterVMm) ~/
+            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) -
+                        2 * _marginCetakAmanMm +
+                        gutterVMm) ~/
                 (ukuran.tinggiMm + gutterVMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
@@ -3139,11 +3166,15 @@ class _PriceTagPdfBuilder {
       return;
     }
 
+    // Margin halaman aman (lihat JavaDoc [_marginCetakAmanMm]) -- BUKAN
+    // margin 0 spt sebelumnya, supaya grid tag tak nempel ke tepi mutlak
+    // kertas & tak terpotong saat dicetak langsung ke printer fisik umum.
+    final marginAman = _marginCetakAmanMm * PdfPageFormat.mm;
     final page = (kertasCetak.pageFormat ?? PdfPageFormat.a4).copyWith(
-      marginLeft: 0,
-      marginTop: 0,
-      marginRight: 0,
-      marginBottom: 0,
+      marginLeft: marginAman,
+      marginTop: marginAman,
+      marginRight: marginAman,
+      marginBottom: marginAman,
     );
     final usableWidth = page.availableWidth;
     final usableHeight = page.availableHeight;
