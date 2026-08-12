@@ -534,6 +534,55 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
     }
   }
 
+  /// Tabel "Riwayat Hari Ini" -- dipakai baik di jalur admin/manager maupun
+  /// jalur read-only, mengikuti pola [AppDataTable] yg sama spt halaman
+  /// Pelanggan/Produk supaya tampilan list konsisten di seluruh aplikasi.
+  Widget _riwayatTable() {
+    return AppDataTable(
+      minWidth: 820,
+      emptyText: 'Belum ada catatan hari ini.',
+      columns: const [
+        AppTableColumn('Waktu', flex: 2),
+        AppTableColumn('Kode', flex: 1),
+        AppTableColumn('Produk', flex: 3),
+        AppTableColumn('Sistem', flex: 1, align: TextAlign.right),
+        AppTableColumn('Fisik', flex: 1, align: TextAlign.right),
+        AppTableColumn('Selisih', flex: 1, align: TextAlign.right),
+        AppTableColumn('Keterangan', flex: 2),
+      ],
+      rows: _riwayatHariIni.map((k) {
+        final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
+        final warnaSelisih = selisih == 0
+            ? AppColors.textSecondaryOf(context)
+            : (selisih > 0 ? AppColors.success : AppColors.danger);
+        return AppTableRowData(
+          cells: [
+            AppTableCell.text('${k['waktu'] ?? ''}', flex: 2),
+            AppTableCell.text('${k['kode'] ?? ''}',
+                flex: 1,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'monospace',
+                    fontSize: 12.5)),
+            AppTableCell.text('${k['nama'] ?? ''}', flex: 3, maxLines: 2),
+            AppTableCell.text(_formatAngka.format(k['stokSistem'] ?? 0),
+                flex: 1, align: TextAlign.right),
+            AppTableCell.text(_formatAngka.format(k['stokFisik'] ?? 0),
+                flex: 1, align: TextAlign.right),
+            AppTableCell.text(
+              '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
+              flex: 1,
+              align: TextAlign.right,
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: warnaSelisih),
+            ),
+            AppTableCell.text('${k['keterangan'] ?? ''}', flex: 2, maxLines: 2),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!Sesi.instance.bolehKelola) {
@@ -566,31 +615,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
           const Text('Riwayat Hari Ini',
               style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          if (_riwayatHariIni.isEmpty)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text('Belum ada catatan hari ini.')))
-          else
-            ..._riwayatHariIni.map((k) {
-              final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  dense: true,
-                  title: Text('${k['nama']}'),
-                  subtitle: Text(
-                      '${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
-                  trailing: Text(
-                    '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: selisih == 0
-                            ? AppColors.textSecondaryOf(context)
-                            : (selisih > 0 ? Colors.green : Colors.red)),
-                  ),
-                ),
-              );
-            }),
+          _riwayatTable(),
         ],
       );
     }
@@ -678,32 +703,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         const Text('Riwayat Hari Ini',
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        if (_riwayatHariIni.isEmpty)
-          const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('Belum ada catatan hari ini.')))
-        else
-          ..._riwayatHariIni.map((k) {
-            final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 6),
-              child: ListTile(
-                dense: true,
-                title: Text('${k['nama']}'),
-                subtitle: Text(
-                    '${k['waktu']} · Sistem ${k['stokSistem']} → Fisik ${k['stokFisik']}'),
-                trailing: Text(
-                  '${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: selisih == 0
-                        ? AppColors.textSecondaryOf(context)
-                        : (selisih > 0 ? Colors.green : Colors.red),
-                  ),
-                ),
-              ),
-            );
-          }),
+        _riwayatTable(),
       ],
     );
   }

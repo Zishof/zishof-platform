@@ -157,11 +157,22 @@ class _KasirScreenState extends State<KasirScreen> {
       // cache lokal gagal dibaca (mis. pertama kali install) -- lanjut ke jalur server saja.
     }
 
-    await _perbaruiJumlahPending();
-    await _sinkronKatalogDanKonfigurasi(
-        tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
-    await _periksaSesiKas();
-    PesananPoller.instance.mulai();
+    try {
+      await _perbaruiJumlahPending();
+      await _sinkronKatalogDanKonfigurasi(
+          tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
+      await _periksaSesiKas();
+      PesananPoller.instance.mulai();
+    } catch (e) {
+      // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": kegagalan
+      // tak terduga di sini (sebelumnya) bikin _memuat tak pernah balik ke
+      // false -- spinner macet SELAMANYA tanpa pesan apa pun. Sekarang
+      // ditangkap di sini spy user minimal lihat pesan error + tombol coba
+      // lagi (sama spt jalur _sinkronKatalogDanKonfigurasi di atas).
+      if (_semuaProduk.isEmpty) {
+        setStateIfMounted(() => _pesanError = 'Gagal memuat data lokal: $e');
+      }
+    }
 
     if (mounted) {
       setStateIfMounted(() => _memuat = false);

@@ -59,7 +59,25 @@ class CoreDb {
       factory = databaseFactory;
       path = p.join(await getDatabasesPath(), 'ebisnis.db');
     }
-    return factory.openDatabase(
+    try {
+      return await _bukaDanVerifikasi(factory, path);
+    } catch (e) {
+      // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": file DB
+      // (atau sidecar -wal/-shm-nya) korup krn proses tulis terputus paksa
+      // tidak akan pernah bisa dibuka lagi TANPA campur tangan -- sebelum
+      // ini, satu-satunya jalan keluar user adalah hapus manual seluruh
+      // folder AppData. Cadangkan file lama (BUKAN dihapus, spy masih bisa
+      // diperiksa manual kalau perlu) lalu buat ulang dari nol supaya app
+      // tetap bisa dibuka -- konsekuensinya transaksi PENDING yg belum
+      // sempat tersinkron ke server ikut hilang, tapi itu jauh lebih baik
+      // drpd app tak bisa dibuka sama sekali.
+      await _cadangkanFileKorup(path, alasan: e.toString());
+      return _bukaDanVerifikasi(factory, path);
+    }
+  }
+
+  Future<Database> _bukaDanVerifikasi(DatabaseFactory factory, String path) async {
+    final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
         version: 5,
@@ -68,6 +86,40 @@ class CoreDb {
         onUpgrade: _upgradeSkema,
       ),
     );
+    // `openDatabase` bisa saja LOLOS walau sebagian halaman file korup
+    // (header masih valid, badan file rusak) -- korupsi separuh-jalan spt
+    // ini baru ketahuan belakangan saat query menyentuh halaman yg rusak
+    // (mis. di tengah transaksi kasir). `quick_check` jauh lebih murah drpd
+    // `integrity_check` penuh (tak verifikasi index silang) jadi aman
+    // dijalankan tiap start tanpa menambah lambat buka app scr terasa.
+    final hasil = await database.rawQuery('PRAGMA quick_check');
+    final status = hasil.isNotEmpty ? hasil.first.values.first?.toString() : null;
+    if (status != 'ok') {
+      await database.close();
+      throw StateError('PRAGMA quick_check gagal: $status');
+    }
+    return database;
+  }
+
+  Future<void> _cadangkanFileKorup(String path, {required String alasan}) async {
+    for (final akhiran in ['', '-wal', '-shm', '-journal']) {
+      final file = File('$path$akhiran');
+      if (!file.existsSync()) continue;
+      try {
+        file.renameSync(
+            '$path$akhiran.corrupt-${DateTime.now().millisecondsSinceEpoch}');
+      } catch (_) {
+        // Rename gagal (mis. file terkunci proses lain) -- coba hapus
+        // langsung spy percobaan buka berikutnya minimal tak nyangkut di
+        // file yg sama; kalau ini pun gagal, itu di luar kendali kita.
+        try {
+          file.deleteSync();
+        } catch (_) {}
+      }
+    }
+    if (kDebugMode) {
+      debugPrint('CoreDb: $path korup ($alasan) -- dicadangkan & dibuat ulang.');
+    }
   }
 
   Future<void> _konfigurasiDb(Database db) async {

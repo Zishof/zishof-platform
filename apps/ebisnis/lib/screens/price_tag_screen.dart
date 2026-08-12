@@ -425,6 +425,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final _controllerRakProdukSize = TextEditingController(text: '5.8');
   final _controllerRakKodeSize = TextEditingController(text: '7');
   final _controllerRakHargaSize = TextEditingController(text: '26');
+  final _controllerRakHeaderTinggi = TextEditingController();
+  final _controllerRakStripTinggi = TextEditingController();
   final _controllerRakHeaderBg = TextEditingController(text: '#505B54');
   final _controllerRakHeaderText = TextEditingController(text: '#FFFFFF');
   final _controllerRakStripBg = TextEditingController(text: '#E6B742');
@@ -445,6 +447,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final _controllerPromoHargaAsliSize = TextEditingController(text: '7.5');
   final _controllerPromoHargaSize = TextEditingController(text: '47');
   final _controllerPromoKodeSize = TextEditingController(text: '7');
+  final _controllerPromoHeaderTinggi = TextEditingController();
+  final _controllerPromoStripTinggi = TextEditingController();
   final _controllerLogoWrapBg = TextEditingController(text: '#FFFFFF');
   final Map<int, String> _promoTeksPerProduk = {};
   final Map<int, String> _promoHargaAsliPerProduk = {};
@@ -483,6 +487,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerRakProdukSize,
         _controllerRakKodeSize,
         _controllerRakHargaSize,
+        _controllerRakHeaderTinggi,
+        _controllerRakStripTinggi,
         _controllerRakHeaderBg,
         _controllerRakHeaderText,
         _controllerRakStripBg,
@@ -503,6 +509,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerPromoHargaAsliSize,
         _controllerPromoHargaSize,
         _controllerPromoKodeSize,
+        _controllerPromoHeaderTinggi,
+        _controllerPromoStripTinggi,
         _controllerLogoWrapBg,
       ];
 
@@ -534,6 +542,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     _controllerRakProdukSize.dispose();
     _controllerRakKodeSize.dispose();
     _controllerRakHargaSize.dispose();
+    _controllerRakHeaderTinggi.dispose();
+    _controllerRakStripTinggi.dispose();
     _controllerRakHeaderBg.dispose();
     _controllerRakHeaderText.dispose();
     _controllerRakStripBg.dispose();
@@ -554,6 +564,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     _controllerPromoHargaAsliSize.dispose();
     _controllerPromoHargaSize.dispose();
     _controllerPromoKodeSize.dispose();
+    _controllerPromoHeaderTinggi.dispose();
+    _controllerPromoStripTinggi.dispose();
     _controllerLogoWrapBg.dispose();
     for (final controller in _controllerPromoItem.values) {
       controller.dispose();
@@ -891,6 +903,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'rakProdukSize': _controllerRakProdukSize.text,
           'rakKodeSize': _controllerRakKodeSize.text,
           'rakHargaSize': _controllerRakHargaSize.text,
+          'rakHeaderTinggi': _controllerRakHeaderTinggi.text,
+          'rakStripTinggi': _controllerRakStripTinggi.text,
           'rakHeaderBg': _controllerRakHeaderBg.text,
           'rakHeaderTextColor': _controllerRakHeaderText.text,
           'rakStripBg': _controllerRakStripBg.text,
@@ -931,6 +945,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'promoHargaAsliSize': _controllerPromoHargaAsliSize.text,
           'promoHargaSize': _controllerPromoHargaSize.text,
           'promoKodeSize': _controllerPromoKodeSize.text,
+          'promoHeaderTinggi': _controllerPromoHeaderTinggi.text,
+          'promoStripTinggi': _controllerPromoStripTinggi.text,
         };
     }
   }
@@ -981,6 +997,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerRakProdukSize.text = teks('rakProdukSize', '5.8');
         _controllerRakKodeSize.text = teks('rakKodeSize', '7');
         _controllerRakHargaSize.text = teks('rakHargaSize', '26');
+        _controllerRakHeaderTinggi.text = teks('rakHeaderTinggi', '');
+        _controllerRakStripTinggi.text = teks('rakStripTinggi', '');
         _controllerRakHeaderBg.text = teks('rakHeaderBg', '#505B54');
         _controllerRakHeaderText.text = teks('rakHeaderTextColor', '#FFFFFF');
         _controllerRakStripBg.text = teks('rakStripBg', '#E6B742');
@@ -1017,6 +1035,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             teks('promoHargaAsliSize', '7.5');
         _controllerPromoHargaSize.text = teks('promoHargaSize', '47');
         _controllerPromoKodeSize.text = teks('promoKodeSize', '7');
+        _controllerPromoHeaderTinggi.text = teks('promoHeaderTinggi', '');
+        _controllerPromoStripTinggi.text = teks('promoStripTinggi', '');
     }
     // Batalkan penjadwalan simpan yg keterpicu krn assignment `.text` di
     // atas (listener ikut jalan tiap controller diisi ulang) -- ini cuma
@@ -1138,6 +1158,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         promoHargaAsliSize: _ukuranTeks(_controllerPromoHargaAsliSize, 7.5),
         promoHargaSize: _ukuranTeks(_controllerPromoHargaSize, 47),
         promoKodeSize: _ukuranTeks(_controllerPromoKodeSize, 7),
+        rakHeaderTinggiMm: _tinggiOpsional(
+            _controllerRakHeaderTinggi, _rakHeaderTinggiAutoMm),
+        rakStripTinggiMm:
+            _tinggiOpsional(_controllerRakStripTinggi, _rakStripTinggiAutoMm),
+        promoHeaderTinggiPt: _tinggiOpsional(
+            _controllerPromoHeaderTinggi, _promoHeaderTinggiAutoPt),
+        promoStripTinggiPt: _tinggiOpsional(
+            _controllerPromoStripTinggi, _promoStripTinggiAutoPt),
       );
       final bytes = await builder.bangun();
       if (!mounted) return;
@@ -1191,6 +1219,34 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final parsed = double.tryParse(normalized) ?? fallback;
     return parsed.clamp(min, max).toDouble();
   }
+
+  /// Sama spt [_ukuranTeks] TAPI [controller] boleh KOSONG (bukan cuma
+  /// invalid) -- dipakai utk tinggi Header/Strip Produk yang otomatisnya
+  /// bergantung ukuran tag terpilih (beda formula per model), jadi tidak
+  /// bisa diberi satu default angka tetap spt ukuran teks. Kosong = ikut
+  /// [auto]; isi angka = override manual pengguna.
+  double _tinggiOpsional(
+    TextEditingController controller,
+    double auto, {
+    double min = 2,
+    double max = 100,
+  }) {
+    final text = controller.text.trim().replaceAll(',', '.');
+    if (text.isEmpty) return auto;
+    final parsed = double.tryParse(text);
+    if (parsed == null) return auto;
+    return parsed.clamp(min, max).toDouble();
+  }
+
+  /// Formula bawaan (sebelum fitur custom tinggi ini ada) -- dipertahankan
+  /// sbg fallback SUPAYA tag yang belum pernah diutak-atik pengguna tetap
+  /// tampil identik spt sebelumnya, hanya sekarang bisa dioverride.
+  double get _rakHeaderTinggiAutoMm => min(18.0, _ukuranAktif.tinggiMm * 0.28);
+  double get _rakStripTinggiAutoMm => min(11.0, _ukuranAktif.tinggiMm * 0.2);
+  double get _promoHeaderTinggiAutoPt =>
+      28 * (_ukuranAktif.id == 'promo_a5' ? 1.25 : 1.0);
+  double get _promoStripTinggiAutoPt =>
+      17 * (_ukuranAktif.id == 'promo_a5' ? 1.25 : 1.0);
 
   String? _normalisasiHex(String input) {
     var value = input.trim().toUpperCase();
@@ -1653,7 +1709,47 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             _fieldUkuranTeks('Harga', _controllerRakHargaSize),
           ],
         ),
+        const SizedBox(height: 12),
+        const Text('Tinggi Kotak (mm, kosong = otomatis ikut ukuran tag)',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _fieldTinggiKotak('Header', _controllerRakHeaderTinggi,
+                satuan: 'mm', otomatis: _rakHeaderTinggiAutoMm),
+            _fieldTinggiKotak('Strip Produk', _controllerRakStripTinggi,
+                satuan: 'mm', otomatis: _rakStripTinggiAutoMm),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _fieldTinggiKotak(
+    String label,
+    TextEditingController controller, {
+    required String satuan,
+    required double otomatis,
+  }) {
+    return SizedBox(
+      width: 168,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: 'Otomatis (${otomatis.toStringAsFixed(1)})',
+          suffixText: satuan,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (_) => setStateIfMounted(() {}),
+      ),
     );
   }
 
@@ -1770,6 +1866,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             _fieldUkuranTeks('Harga Coret', _controllerPromoHargaAsliSize),
             _fieldUkuranTeks('Harga Promo', _controllerPromoHargaSize),
             _fieldUkuranTeks('Kode', _controllerPromoKodeSize),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text('Tinggi Kotak (pt, kosong = otomatis ikut ukuran kertas)',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _fieldTinggiKotak('Header', _controllerPromoHeaderTinggi,
+                satuan: 'pt', otomatis: _promoHeaderTinggiAutoPt),
+            _fieldTinggiKotak('Strip Produk', _controllerPromoStripTinggi,
+                satuan: 'pt', otomatis: _promoStripTinggiAutoPt),
           ],
         ),
         const SizedBox(height: 12),
@@ -2261,11 +2371,23 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final produkSize = _ukuranTeks(_controllerRakProdukSize, 5.8) * (12 / 5.8);
     final kodeSize = _ukuranTeks(_controllerRakKodeSize, 7) * 2;
     final hargaSize = _ukuranTeks(_controllerRakHargaSize, 26) * (42 / 26);
+    // Proporsi header:strip:body preview mengikuti tinggi (mm) yang SAMA
+    // dgn hasil cetak PDF (bukan flex tetap spt sebelumnya) -- supaya
+    // custom tinggi Header/Strip Produk kelihatan efeknya di preview juga.
+    final headerMm =
+        _tinggiOpsional(_controllerRakHeaderTinggi, _rakHeaderTinggiAutoMm);
+    final stripMm =
+        _tinggiOpsional(_controllerRakStripTinggi, _rakStripTinggiAutoMm);
+    final bodyMm =
+        (_ukuranAktif.tinggiMm - headerMm - stripMm).clamp(2.0, 999.0);
+    final flexHeader = (headerMm * 10).round().clamp(1, 999999);
+    final flexStrip = (stripMm * 10).round().clamp(1, 999999);
+    final flexBody = (bodyMm * 10).round().clamp(1, 999999);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Flexible(
-          flex: 18,
+          flex: flexHeader,
           child: Container(
             color: headerBg,
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -2287,7 +2409,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           ),
         ),
         Flexible(
-          flex: 11,
+          flex: flexStrip,
           child: Container(
             color: stripBg,
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2327,7 +2449,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           ),
         ),
         Expanded(
-          flex: 71,
+          flex: flexBody,
           child: ColoredBox(
             color: bodyBg,
             child: Column(
@@ -2431,11 +2553,19 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _ukuranTeks(_controllerPromoHargaAsliSize, 7.5) * (10 / 7.5);
     final hargaSize = _ukuranTeks(_controllerPromoHargaSize, 47) * (56 / 47);
     final kodeSize = _ukuranTeks(_controllerPromoKodeSize, 7) * (10 / 7);
+    // Skala 1.5x cocok dgn tinggi bawaan lama (28pt*1.5=42px) -- custom
+    // tinggi Header/Strip Produk ikut skala yang sama di preview.
+    final headerTinggiPx =
+        _tinggiOpsional(_controllerPromoHeaderTinggi, _promoHeaderTinggiAutoPt) *
+            1.5;
+    final stripTinggiPx =
+        _tinggiOpsional(_controllerPromoStripTinggi, _promoStripTinggiAutoPt) *
+            1.5;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          height: 42,
+          height: headerTinggiPx,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           color: headerBg,
           child: Row(
@@ -2467,7 +2597,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           ),
         ),
         Container(
-          height: 22,
+          height: stripTinggiPx,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           color: stripBg,
           child: Row(
@@ -2632,6 +2762,10 @@ class _PriceTagPdfBuilder {
   final double promoHargaAsliSize;
   final double promoHargaSize;
   final double promoKodeSize;
+  final double rakHeaderTinggiMm;
+  final double rakStripTinggiMm;
+  final double promoHeaderTinggiPt;
+  final double promoStripTinggiPt;
 
   _PriceTagPdfBuilder({
     required this.model,
@@ -2679,6 +2813,10 @@ class _PriceTagPdfBuilder {
     required this.promoHargaAsliSize,
     required this.promoHargaSize,
     required this.promoKodeSize,
+    required this.rakHeaderTinggiMm,
+    required this.rakStripTinggiMm,
+    required this.promoHeaderTinggiPt,
+    required this.promoStripTinggiPt,
   });
 
   Future<Uint8List> bangun() async {
@@ -2819,8 +2957,8 @@ class _PriceTagPdfBuilder {
     final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
     final bcw = _barcode(barcode, height: min(9, ukuran.tinggiMm * 0.2));
-    final headerH = min(18.0, ukuran.tinggiMm * 0.28) * PdfPageFormat.mm;
-    final stripH = min(11.0, ukuran.tinggiMm * 0.2) * PdfPageFormat.mm;
+    final headerH = rakHeaderTinggiMm * PdfPageFormat.mm;
+    final stripH = rakStripTinggiMm * PdfPageFormat.mm;
     final skala = (ukuran.tinggiMm / 30).clamp(0.7, 1.8);
     return pw.Container(
       decoration: pw.BoxDecoration(
@@ -3039,7 +3177,7 @@ class _PriceTagPdfBuilder {
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
           pw.Container(
-            height: 28 * skala,
+            height: promoHeaderTinggiPt * skala,
             color: PdfColor.fromHex(promoHeaderBgHex),
             padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             child: pw.Row(
@@ -3067,7 +3205,7 @@ class _PriceTagPdfBuilder {
             ),
           ),
           pw.Container(
-            height: 17 * skala,
+            height: promoStripTinggiPt * skala,
             color: PdfColor.fromHex(promoStripBgHex),
             padding: const pw.EdgeInsets.symmetric(horizontal: 6),
             child: pw.Row(

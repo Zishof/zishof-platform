@@ -17,6 +17,7 @@ import 'screens/kasir_screen.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/pengaturan_sesi_lokal.dart';
+import 'services/prefs_guard.dart';
 import 'services/server_config.dart';
 import 'theme/app_theme.dart';
 import 'widgets/safe_state.dart';
@@ -38,6 +39,9 @@ import 'widgets/safe_state.dart';
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    // HARUS paling awal, sebelum kode lain manapun menyentuh
+    // SharedPreferences (langsung/tak langsung) -- lihat JavaDoc [PrefsGuard].
+    await PrefsGuard.perbaikiJikaKorup();
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       CoreDb.instance.catatErrorLog(
@@ -125,9 +129,21 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
   }
 
   Future<void> _muat() async {
-    await ServerConfig.instance.muat();
-    await ApiClient.instance.muatTokenTersimpan();
-    if (mounted) setStateIfMounted(() => _siap = true);
+    try {
+      await ServerConfig.instance.muat();
+      await ApiClient.instance.muatTokenTersimpan();
+    } catch (e, stack) {
+      // Jangan biarkan jendela ini macet selamanya di spinner kalau ada apa
+      // pun yg gagal (mis. token lokal korup) -- lanjut tanpa data, layar
+      // Layar Pelanggan cukup tampil kosong drpd macet total.
+      unawaited(CoreDb.instance.catatErrorLog(
+          sumber: 'startup',
+          tingkat: 'ERROR',
+          pesan: 'Gagal muat konfigurasi jendela kedua: $e',
+          detail: stack.toString()));
+    } finally {
+      if (mounted) setStateIfMounted(() => _siap = true);
+    }
   }
 
   @override
@@ -228,26 +244,40 @@ class _GerbangAwalState extends State<_GerbangAwal> {
   }
 
   Future<void> _periksaToken() async {
-    // Alamat server WAJIB diatur dulu (sekali di awal) sebelum apa pun lain
-    // -- padanan gerbang setup.html/main.js desktop-pos-electron: satu
-    // APK/EXE eBisnis harus bisa dipakai institusi mana pun, jadi baseUrl
-    // TIDAK BOLEH hardcode (lihat ServerConfig/ApiClient.baseUrl).
-    await ServerConfig.instance.muat();
-    if (!ServerConfig.instance.sudahDiatur) {
-      if (mounted) setStateIfMounted(() => _perluSetupServer = true);
-      return;
-    }
-    await ApiClient.instance.muatTokenTersimpan();
-    if (ApiClient.instance.sudahLogin) {
-      final kedaluwarsa = await PengaturanSesiLokal.instance.sudahKedaluwarsa();
-      if (kedaluwarsa) {
-        await ApiClient.instance.hapusToken();
-      } else {
-        await PengaturanSesiLokal.instance.catatAktifSekarang();
+    try {
+      // Alamat server WAJIB diatur dulu (sekali di awal) sebelum apa pun lain
+      // -- padanan gerbang setup.html/main.js desktop-pos-electron: satu
+      // APK/EXE eBisnis harus bisa dipakai institusi mana pun, jadi baseUrl
+      // TIDAK BOLEH hardcode (lihat ServerConfig/ApiClient.baseUrl).
+      await ServerConfig.instance.muat();
+      if (!ServerConfig.instance.sudahDiatur) {
+        if (mounted) setStateIfMounted(() => _perluSetupServer = true);
+        return;
       }
+      await ApiClient.instance.muatTokenTersimpan();
+      if (ApiClient.instance.sudahLogin) {
+        final kedaluwarsa =
+            await PengaturanSesiLokal.instance.sudahKedaluwarsa();
+        if (kedaluwarsa) {
+          await ApiClient.instance.hapusToken();
+        } else {
+          await PengaturanSesiLokal.instance.catatAktifSekarang();
+        }
+      }
+      await IdentitasMesin.instance.muat();
+    } catch (e, stack) {
+      // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": kalau
+      // ada apa pun yg gagal di sini (mis. data lokal korup), JANGAN biarkan
+      // spinner macet selamanya -- jatuh ke LoginScreen (aman, user tinggal
+      // login ulang) drpd macet total spt sebelumnya.
+      unawaited(CoreDb.instance.catatErrorLog(
+          sumber: 'startup',
+          tingkat: 'ERROR',
+          pesan: 'Gagal periksa token awal: $e',
+          detail: stack.toString()));
+    } finally {
+      if (mounted) setStateIfMounted(() => _memeriksa = false);
     }
-    await IdentitasMesin.instance.muat();
-    if (mounted) setStateIfMounted(() => _memeriksa = false);
   }
 
   /// Cek rilis GitHub terbaru sekali per buka-app (non-blocking, tak
