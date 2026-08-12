@@ -1,0 +1,106 @@
+name: Publish POS Apotik and eMedik
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-pos-variants.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-pos-1.33.7
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    # Flutter 3.27.x recognizes Visual Studio major 17. The moving
+    # windows-latest image now carries a newer major and falls back to VS 2019.
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      VERSION: 1.33.7
+      BUILD_NUMBER: 65
+      APP_DIR: apps/ebisnis
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Override repository-local Gradle JDK path
+        shell: pwsh
+        run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "GRADLE_OPTS=-Dorg.gradle.java.home=$env:JAVA_HOME"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.4
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: flutter pub get
+
+      - name: Build Android variants
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: |
+          flutter build apk --release --flavor apotik -t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/app/outputs/flutter-apk/app-apotik-release.apk "eBisnis-POS-Apotik-$env:VERSION.apk"
+          flutter build apk --release --flavor emedik -t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/app/outputs/flutter-apk/app-emedik-release.apk "eBisnis-POS-eMedik-$env:VERSION.apk"
+
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup --yes --no-progress }
+
+      - name: Build Windows Apotik
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: |
+          flutter build windows --release -t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          & $iscc "/DAppVersion=$env:VERSION" installer/apotik.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Windows eMedik
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: |
+          flutter build windows --release -t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          & $iscc "/DAppVersion=$env:VERSION" installer/emedik.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify and publish variant releases
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: |
+          $apotikApk = "eBisnis-POS-Apotik-$env:VERSION.apk"
+          $emedikApk = "eBisnis-POS-eMedik-$env:VERSION.apk"
+          $apotikExe = "installer/dist/eBisnis-POS-Apotik-Setup-$env:VERSION.exe"
+          $emedikExe = "installer/dist/eBisnis-POS-eMedik-Setup-$env:VERSION.exe"
+          @($apotikApk, $emedikApk, $apotikExe, $emedikExe) | ForEach-Object {
+            if (-not (Test-Path -LiteralPath $_)) { throw "Artefak tidak ditemukan: $_" }
+            Get-FileHash -Algorithm SHA256 -LiteralPath $_
+          }
+          gh release create "apotik-v$env:VERSION" $apotikApk $apotikExe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "POS Apotik v$env:VERSION" --notes "Rilis POS Apotik v$env:VERSION untuk Android dan Windows. Build dari commit ${{ github.sha }}. Production signing tetap menunggu kredensial pemilik."
+          gh release create "emedik-v$env:VERSION" $emedikApk $emedikExe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "POS eMedik v$env:VERSION" --notes "Rilis POS eMedik v$env:VERSION untuk Android dan Windows. Build dari commit ${{ github.sha }}. Production signing tetap menunggu kredensial pemilik."
