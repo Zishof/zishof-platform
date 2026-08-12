@@ -134,7 +134,9 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('master_sales'))
+                        Sesi.instance.bolehMenuIs('master_sales') &&
+                        (Sesi.instance.isPemilikSalesInventory ||
+                            Sesi.instance.isSalesKeliling))
                       _ItemMenu(
                         icon: Icons.badge_outlined,
                         label: 'Master Sales',
@@ -182,7 +184,9 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('penjualan_sales'))
+                        Sesi.instance.bolehMenuIs('penjualan_sales') &&
+                        (Sesi.instance.isPemilikSalesInventory ||
+                            Sesi.instance.isSalesKeliling))
                       _ItemMenu(
                         icon: Icons.shopping_cart_checkout,
                         label: 'Penjualan Sales',
@@ -206,7 +210,9 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('surat_perintah_sales'))
+                        Sesi.instance.bolehMenuIs('surat_perintah_sales') &&
+                        (Sesi.instance.isPemilikSalesInventory ||
+                            Sesi.instance.isSalesKeliling))
                       _ItemMenu(
                         icon: Icons.assignment_outlined,
                         label: 'Surat Perintah Sales',
@@ -218,7 +224,9 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('nota_sales'))
+                        Sesi.instance.bolehMenuIs('nota_sales') &&
+                        (Sesi.instance.isPemilikSalesInventory ||
+                            Sesi.instance.isSalesKeliling))
                       _ItemMenu(
                         icon: Icons.route_outlined,
                         label: 'Sesi Nota Sales',
