@@ -383,6 +383,12 @@ class _TabPembayaranState extends State<_TabPembayaran> {
       ));
       await Printing.layoutPdf(
           onLayout: (_) => doc.save(), name: 'voucher-hutang-${d['id']}.pdf');
+      ApiClient.instance.aksi('si_print_log_create', {
+        'jenis_dokumen': 'voucher_pembayaran_hutang',
+        'referensi': 'PHS-${d['id']}',
+        'parameter': 'kode_unik=${d['kodeUnik']}',
+        'perangkat': 'flutter',
+      }).then((_) {}, onError: (_) {});
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

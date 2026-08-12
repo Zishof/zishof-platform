@@ -816,6 +816,12 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     ));
     await Printing.layoutPdf(
         onLayout: (_) => doc.save(), name: 'laporan-sesi-${d['nomor']}.pdf');
+    ApiClient.instance.aksi('si_print_log_create', {
+      'jenis_dokumen': 'laporan_sesi_nota_sales',
+      'referensi': '${d['nomor']}',
+      'parameter': 'session_id=${widget.sessionId}',
+      'perangkat': 'flutter',
+    }).then((_) {}, onError: (_) {});
   }
 
   @override

@@ -1233,6 +1233,14 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> {
     await Printing.layoutPdf(
         onLayout: (_) => doc.save(),
         name: 'rekap-penjualan-${_fmtTgl.format(_dari)}.pdf');
+    ApiClient.instance.aksi('si_print_log_create', {
+      'jenis_dokumen': 'rekap_penjualan_barang',
+      'referensi':
+          '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
+      'parameter':
+          'dari=${_fmtTgl.format(_dari)};sampai=${_fmtTgl.format(_sampai)};urut=$_urut;q=$_q',
+      'perangkat': 'flutter',
+    }).then((_) {}, onError: (_) {});
   }
 
   @override

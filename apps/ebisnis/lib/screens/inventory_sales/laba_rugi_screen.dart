@@ -154,6 +154,14 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
     await Printing.layoutPdf(
         onLayout: (_) => doc.save(),
         name: 'laba-rugi-${_fmtTgl.format(_dari)}-${_fmtTgl.format(_sampai)}.pdf');
+    ApiClient.instance.aksi('si_print_log_create', {
+      'jenis_dokumen': 'laporan_laba_rugi',
+      'referensi':
+          '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
+      'parameter':
+          'dari=${_fmtTgl.format(_dari)};sampai=${_fmtTgl.format(_sampai)};sales_id=${_salesId ?? ''};group_by=$_groupBy',
+      'perangkat': 'flutter',
+    }).then((_) {}, onError: (_) {});
   }
 
   @override
