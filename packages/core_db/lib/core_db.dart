@@ -601,7 +601,15 @@ class CoreDb {
     return hasil.isEmpty ? null : hasil.first;
   }
 
-  Future<void> bukaSesiKasLokal(String kode, double modalAwal) async {
+  /// [disinkronkan] = false (default) dipakai alur optimistic-open (tulis lokal DULU sebelum
+  /// tahu hasil panggilan server, lihat `_bukaKas` di kasir_screen.dart) -- baris ditandai
+  /// PENDING sampai server benar-benar mengonfirmasi. [disinkronkan] = true dipakai
+  /// `_periksaSesiKas` saat menyalin status yg SUDAH terkonfirmasi server (`sesi_kas_status`),
+  /// jadi tak perlu di-retry lagi. Lihat [sesiKasLokalBelumSinkron]/[tandaiSesiKasTersinkron]
+  /// utk mekanisme retry-nya -- gap-closure bug "topbar Kas Terbuka vs checkout ditolak server"
+  /// (kolom `disinkronkan` sudah ada di skema sejak awal tapi sebelumnya tidak pernah dipakai).
+  Future<void> bukaSesiKasLokal(String kode, double modalAwal,
+      {bool disinkronkan = false}) async {
     final database = await db;
     await database.insert(
       'sesi_kas_lokal',
@@ -610,11 +618,25 @@ class CoreDb {
         'status': 'BUKA',
         'modal_awal': modalAwal,
         'dibuka_pada': DateTime.now().toIso8601String(),
-        'disinkronkan': 0,
+        'disinkronkan': disinkronkan ? 1 : 0,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     sesiKasVersi.value++;
+  }
+
+  /// Baris sesi kas BUKA yang optimistic-write lokalnya belum terkonfirmasi server -- kandidat
+  /// retry (lihat [bukaSesiKasLokal]).
+  Future<List<Map<String, Object?>>> sesiKasLokalBelumSinkron() async {
+    final database = await db;
+    return database.query('sesi_kas_lokal',
+        where: "status = 'BUKA' AND disinkronkan = 0");
+  }
+
+  Future<void> tandaiSesiKasTersinkron(String kode) async {
+    final database = await db;
+    await database
+        .update('sesi_kas_lokal', {'disinkronkan': 1}, where: 'kode = ?', whereArgs: [kode]);
   }
 
   Future<void> tutupSesiKasLokal(String kode) async {

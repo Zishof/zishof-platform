@@ -105,6 +105,14 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   List<_BarisImpor> _baris = [];
   bool _nonaktifkanTakDiimpor = false;
 
+  // Progres komit per-batch (spec: tampilkan persentase, bukan spinner polos
+  // saat 5000+ baris -- satu batch = 200 baris, jadi update tiap batch
+  // selesai cukup responsif tanpa perlu progres per-baris dari server).
+  int _barisUntukKomit = 0;
+  int _barisSelesaiKomit = 0;
+  double get _progresKomit =>
+      _barisUntukKomit == 0 ? 0 : _barisSelesaiKomit / _barisUntukKomit;
+
   // Ringkasan hasil komit (tahap laporan)
   int _total = 0,
       _dibuat = 0,
@@ -179,6 +187,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     setStateIfMounted(() {
       _memproses = true;
       _error = null;
+      _barisUntukKomit = terpilih.length;
+      _barisSelesaiKomit = 0;
     });
     final idBerhasilSemuaBatch = <int>[];
     _total = _dibuat = _diperbarui = _dilewati = _kategoriBaru =
@@ -190,6 +200,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             awal, (awal + ukuranBatch).clamp(0, terpilih.length));
         final hasil = await ApiClient.instance.aksi('produk_impor_excel_komit',
             {'baris': batch.map((b) => b.keKomit()).toList()});
+        setStateIfMounted(() => _barisSelesaiKomit += batch.length);
         _total += (hasil['total'] as num?)?.toInt() ?? 0;
         _dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
         _diperbarui += (hasil['diperbarui'] as num?)?.toInt() ?? 0;
@@ -238,6 +249,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       _error = null;
       _nonaktifkanTakDiimpor = false;
       _dinonaktifkan = null;
+      _barisUntukKomit = 0;
+      _barisSelesaiKomit = 0;
     });
   }
 
@@ -378,6 +391,26 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                   onChanged: (v) => setStateIfMounted(
                       () => _nonaktifkanTakDiimpor = v ?? false),
                 ),
+                if (_memproses && _barisUntukKomit > 0) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _progresKomit,
+                      minHeight: 8,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Mengimpor $_barisSelesaiKomit dari $_barisUntukKomit baris '
+                    '(${(_progresKomit * 100).toStringAsFixed(0)}%)',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(

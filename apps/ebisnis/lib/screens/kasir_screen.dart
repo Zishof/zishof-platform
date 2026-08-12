@@ -76,6 +76,16 @@ class _KasirScreenState extends State<KasirScreen> {
   bool? _kasTerbuka;
   double _modalAwalKas = 0;
 
+  /// Sinkron latar BERKALA (30 detik, pola PERSIS `mulaiSinkronSesiKasBerkala`
+  /// versi Electron main.js) selama layar Kasir terbuka -- gap-closure: SEBELUMNYA
+  /// `_cobaSinkronBukaKasPending` cuma jalan sbg efek-samping transaksi selesai
+  /// ([_muatKasSaatIni], via [_perbaruiJumlahPending]), jadi TRANSAKSI PERTAMA
+  /// setelah gagal sinkron (belum pernah ada transaksi sukses sama sekali) tak
+  /// pernah dapat kesempatan retry lebih dulu -- checkout tetap ditolak server
+  /// walau topbar sudah "Kas Terbuka". Timer ini jalan independen dari
+  /// transaksi/navigasi, persis spt versi Electron.
+  Timer? _timerSinkronSesiKas;
+
   /// Kas Sekarang -- pil saldo kas berjalan di toolbar (padanan indikator
   /// "Rp 1.900.000" pada referensi Electron). `null` = belum diketahui/tak
   /// relevan (mis. toko belum wajib-sesi-kas) -- pil disembunyikan saat itu,
@@ -112,6 +122,8 @@ class _KasirScreenState extends State<KasirScreen> {
     _muatPreferensiTampilan();
     _muatAwal();
     _jadwalkanFokusCariItem();
+    _timerSinkronSesiKas = Timer.periodic(
+        const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
   }
 
   @override
@@ -132,6 +144,7 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void dispose() {
     _debounceHargaCoret?.cancel();
+    _timerSinkronSesiKas?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
@@ -421,14 +434,27 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _periksaSesiKas() async {
+    // Beri kesempatan sesi lokal yang masih pending (mis. baru dibuka di layar
+    // Kasir SEBELUMNYA, gagal sinkron, lalu kasir pindah menu & kembali lagi)
+    // utk sinkron DULU sebelum status "tertutup" dari server dipercaya --
+    // gap-closure: SEBELUMNYA method ini langsung percaya jawaban server &
+    // memanggil tutupSemuaSesiKasLokal() kalau server blm tahu, MENGHAPUS baris
+    // pending itu SEBELUM ia pernah dapat kesempatan coba sinkron sama sekali
+    // (retry lama cuma jalan lewat _muatKasSaatIni, yg no-op selama _kasTerbuka
+    // masih null di pemuatan layar pertama) -- itulah sumber "Buka Kas muncul
+    // lagi setiap ganti menu" walau baru saja dibuka.
+    await _cobaSinkronBukaKasPending();
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
       final terbuka = hasil['terbuka'] == true;
       if (terbuka) {
+        // disinkronkan:true -- ini status ASLI dari server (sudah terkonfirmasi),
+        // bukan optimistic-write, jadi tak perlu masuk antrian retry.
         await CoreDb.instance.bukaSesiKasLokal(
           'sesi-${Sesi.instance.tokoId}',
           (hasil['modalAwal'] as num?)?.toDouble() ?? 0,
+          disinkronkan: true,
         );
       } else {
         await CoreDb.instance.tutupSemuaSesiKasLokal();
@@ -452,20 +478,33 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
-  /// Muat ulang saldo Kas Sekarang saja (tanpa menyentuh gerbang buka/tutup
-  /// kas) -- dipanggil dari [_perbaruiJumlahPending] tiap kali transaksi
-  /// baru selesai (Bayar/Tahan/Sinkronkan) supaya pil toolbar selalu segar.
+  /// Muat ulang saldo Kas Sekarang -- dipanggil dari [_perbaruiJumlahPending]
+  /// tiap kali transaksi baru selesai (Bayar/Tahan/Sinkronkan) supaya pil
+  /// toolbar selalu segar. Sekalian titik retry alami utk buka-kas lokal yang
+  /// belum terkonfirmasi server ([_cobaSinkronBukaKasPending]) DAN sekalian
+  /// koreksi [_kasTerbuka] dari status server sungguhan -- SEBELUMNYA method
+  /// ini cuma update [_kasSaatIni], [_kasTerbuka] dibiarkan apa adanya sampai
+  /// layar dimuat ulang penuh, itulah sumber bug topbar "Kas Terbuka" yang
+  /// diam2 sudah tak sinkron dgn gerbang checkout server (mandatory sejak
+  /// 2026-08-11).
   Future<void> _muatKasSaatIni() async {
     if (_kasTerbuka != true) return;
+    await _cobaSinkronBukaKasPending();
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+      final terbuka = hasil['terbuka'] == true;
       if (mounted) {
-        setStateIfMounted(
-            () => _kasSaatIni = (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0);
+        setStateIfMounted(() {
+          _kasTerbuka = terbuka;
+          _kasSaatIni = terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null;
+        });
+      }
+      if (!terbuka) {
+        await CoreDb.instance.tutupSemuaSesiKasLokal();
       }
     } catch (_) {
-      // Offline -- biarkan angka lama, jangan ganti dgn 0 yg menyesatkan.
+      // Offline -- biarkan angka/status lama, jangan ganti dgn nilai yg menyesatkan.
     }
   }
 
@@ -571,7 +610,14 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _bukaKas(double modalAwal, String catatan) async {
     final kode =
         'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
-    await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal);
+    // disinkronkan:false -- baris ini OPTIMISTIC (ditulis lokal sebelum tahu hasil
+    // panggilan server di bawah), jadi PENDING sampai terkonfirmasi. Kalau panggilan
+    // server gagal, `_cobaSinkronBukaKasPending` (dipanggil dari `_muatKasSaatIni`
+    // tiap selesai transaksi) akan retry pakai `kode` yang sama (idempoten di server,
+    // lihat SesiKasUtil.cariByKode) -- SEBELUMNYA baris pending ini tak pernah
+    // di-retry sama sekali walau komentarnya mengklaim begitu, sumber bug topbar
+    // "Kas Terbuka" tapi checkout ditolak server (gerbang wajib permanen 2026-08-11).
+    await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal, disinkronkan: false);
     if (mounted) {
       setStateIfMounted(() => _kasTerbuka = true);
       _jadwalkanFokusCariItem();
@@ -586,9 +632,32 @@ class _KasirScreenState extends State<KasirScreen> {
         // hanya form Buka Kas yg belum pernah mengirimkannya.
         'keterangan': catatan,
       });
+      await CoreDb.instance.tandaiSesiKasTersinkron(kode);
     } catch (_) {
       // Gagal tersinkron ke server -- tetap dianggap terbuka secara lokal
-      // (local-first), akan disinkron ulang saat "Sinkronkan Sekarang".
+      // (local-first), akan di-retry `_cobaSinkronBukaKasPending`.
+    }
+  }
+
+  /// Retry buka-kas lokal yang optimistic-write-nya belum terkonfirmasi server (lihat
+  /// komentar [_bukaKas]) -- dipanggil dari [_muatKasSaatIni] supaya dapat kesempatan
+  /// coba lagi tiap kali ada transaksi/aktivitas, tanpa perlu kasir restart aplikasi.
+  /// `kode` dipakai ulang APA ADANYA (idempoten di server) supaya retry tak pernah
+  /// membuat sesi kas dobel.
+  Future<void> _cobaSinkronBukaKasPending() async {
+    final pending = await CoreDb.instance.sesiKasLokalBelumSinkron();
+    for (final row in pending) {
+      final kode = row['kode'] as String;
+      try {
+        await ApiClient.instance.aksi('sesi_kas_buka', {
+          'id_toko': Sesi.instance.tokoId,
+          'kode': kode,
+          'modal_awal': row['modal_awal'],
+        });
+        await CoreDb.instance.tandaiSesiKasTersinkron(kode);
+      } catch (_) {
+        // Masih gagal -- coba lagi di kesempatan berikutnya.
+      }
     }
   }
 
