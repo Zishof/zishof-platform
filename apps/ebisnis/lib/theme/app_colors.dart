@@ -11,10 +11,13 @@ import '../app_variant.dart';
 class AppColors {
   AppColors._();
 
-  /// Sidebar HANYA Al-Bahjah pakai hijau tua+emas korporat (identitas logo);
-  /// semua varian lain tetap navy/biru referensi di atas, tak berubah.
+  /// Sidebar HANYA Al-Bahjah pakai hijau+emas korporat (identitas logo, warna
+  /// sengaja disamakan dgn [primary]/badge profil -- bukan hijau nyaris hitam
+  /// spt draf awal, per feedback user "coba warnanya samakan... mirip warna
+  /// profile"); semua varian lain tetap navy/biru referensi di atas, tak
+  /// berubah.
   static const sidebarBg =
-      AppVariant.isAlBahjah ? Color(0xFF0F2E1A) : Color(0xFF0F1C2E);
+      AppVariant.isAlBahjah ? Color(0xFF15803D) : Color(0xFF0F1C2E);
   static const sidebarBgActive =
       AppVariant.isAlBahjah ? Color(0xFFCA8A04) : Color(0xFF2563EB);
   static const sidebarText = Color(0xFF8FA0BC);
