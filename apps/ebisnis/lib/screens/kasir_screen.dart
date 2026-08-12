@@ -299,7 +299,8 @@ class _KasirScreenState extends State<KasirScreen> {
       return;
     }
 
-    final tokoKlaim = Sesi.instance.daftarToko.where((t) => t['id'] == idKlaimLokal);
+    final tokoKlaim =
+        Sesi.instance.daftarToko.where((t) => t['id'] == idKlaimLokal);
     if (tokoKlaim.isEmpty) {
       // Klaim lama sudah tak berlaku (mis. akses toko itu dicabut) -- lepas
       // klaim lama, terima saran server sbg klaim baru.
@@ -497,7 +498,8 @@ class _KasirScreenState extends State<KasirScreen> {
       if (mounted) {
         setStateIfMounted(() {
           _kasTerbuka = terbuka;
-          _kasSaatIni = terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null;
+          _kasSaatIni =
+              terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null;
         });
       }
       if (!terbuka) {
@@ -617,7 +619,8 @@ class _KasirScreenState extends State<KasirScreen> {
     // lihat SesiKasUtil.cariByKode) -- SEBELUMNYA baris pending ini tak pernah
     // di-retry sama sekali walau komentarnya mengklaim begitu, sumber bug topbar
     // "Kas Terbuka" tapi checkout ditolak server (gerbang wajib permanen 2026-08-11).
-    await CoreDb.instance.bukaSesiKasLokal(kode, modalAwal, disinkronkan: false);
+    await CoreDb.instance
+        .bukaSesiKasLokal(kode, modalAwal, disinkronkan: false);
     if (mounted) {
       setStateIfMounted(() => _kasTerbuka = true);
       _jadwalkanFokusCariItem();
@@ -1071,8 +1074,9 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   void _bukaBantuan() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const BantuanScreen()));
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            const BantuanScreen(menuId: 'kasir', menuJudul: 'Kasir/POS')));
   }
 
   void _bukaAkunSaya() {
@@ -1265,12 +1269,6 @@ class _KasirScreenState extends State<KasirScreen> {
             label: 'Muat Ulang',
             onPressed: _muatAwal,
             tooltip: 'Muat ulang katalog'),
-        if (defaultTargetPlatform == TargetPlatform.windows)
-          _tombolToolbar(
-              icon: const Icon(Icons.help_outline, size: 18),
-              label: 'Bantuan',
-              onPressed: _bukaBantuan,
-              tooltip: 'Bantuan (F1)'),
         _tombolToolbar(
             icon: const Icon(Icons.account_circle_outlined, size: 18),
             label: 'Akun Saya',
@@ -2039,8 +2037,8 @@ class _KartuProdukState extends State<_KartuProduk> {
                   fit: StackFit.expand,
                   children: [
                     ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(12)),
                       child: adaFoto
                           ? AnimatedSwitcher(
                               duration: const Duration(milliseconds: 400),
@@ -2139,13 +2137,13 @@ class _KartuProdukState extends State<_KartuProduk> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                          _formatRupiah
-                                              .format(produk.hargaJual),
+                                          _formatRupiah.format(
+                                              produk.hargaJual),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                              color: AppColors
-                                                  .textSecondaryOf(context),
+                                              color: AppColors.textSecondaryOf(
+                                                  context),
                                               decoration:
                                                   TextDecoration.lineThrough,
                                               fontSize: 11)),
@@ -2375,7 +2373,8 @@ class _SheetPilihEkstraState extends State<_SheetPilihEkstra> {
   }
 
   void _konfirmasi() {
-    final hasil = widget.daftar.where((b) => _terpilih.contains(b['id'] as int)).map((b) {
+    final hasil =
+        widget.daftar.where((b) => _terpilih.contains(b['id'] as int)).map((b) {
       return ItemEkstra(
         id: b['id'] as int,
         kode: (b['kode'] ?? '') as String,
@@ -2390,7 +2389,8 @@ class _SheetPilihEkstraState extends State<_SheetPilihEkstra> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: ConstrainedBox(
           constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(context).height * 0.75),
@@ -2432,7 +2432,8 @@ class _SheetPilihEkstraState extends State<_SheetPilihEkstra> {
                         itemBuilder: (context, i) {
                           final b = widget.daftar[i];
                           final id = b['id'] as int;
-                          final harga = (b['harga_jual'] as num?)?.toDouble() ?? 0;
+                          final harga =
+                              (b['harga_jual'] as num?)?.toDouble() ?? 0;
                           return CheckboxListTile(
                             value: _terpilih.contains(id),
                             onChanged: (_) => _toggle(id),

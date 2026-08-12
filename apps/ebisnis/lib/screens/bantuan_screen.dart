@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import 'bantuan_content.dart';
+import 'bantuan_kontekstual.dart';
 
 /// Pusat bantuan POS yang tetap tersedia offline. Setiap artikel platform
 /// memuat >= 1.000 kata, workflow, ilustrasi layar, checklist, dan diagnosis.
 class BantuanScreen extends StatefulWidget {
-  const BantuanScreen({super.key});
+  final String? menuId;
+  final String? menuJudul;
+  const BantuanScreen({super.key, this.menuId, this.menuJudul});
 
   @override
   State<BantuanScreen> createState() => _BantuanScreenState();
@@ -19,7 +22,12 @@ class _BantuanScreenState extends State<BantuanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final artikel = artikelBantuan[_terpilih];
+    final platformId =
+        defaultTargetPlatform == TargetPlatform.android ? 'android' : 'desktop';
+    final artikel = widget.menuId == null
+        ? artikelBantuan[_terpilih]
+        : artikelBantuanUntukMenu(
+            widget.menuId!, widget.menuJudul ?? 'Halaman', platformId);
     final query = _cari.toLowerCase().trim();
     final bagian = artikel.bagian
         .where((b) =>
@@ -58,6 +66,7 @@ class _BantuanScreenState extends State<BantuanScreen> {
             query: _cari,
             onCari: (nilai) => setState(() => _cari = nilai),
           );
+          if (widget.menuId != null) return konten;
           return lebar
               ? Row(children: [
                   SizedBox(width: 290, child: navigasi),
@@ -171,9 +180,9 @@ class _IsiArtikel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const _WorkflowDiagram(),
+          _WorkflowDiagram(langkahKonteks: artikel.workflow),
           const SizedBox(height: 20),
-          _IlustrasiLayar(platform: artikel.id),
+          _IlustrasiLayar(platform: artikel.id, areaKonteks: artikel.ilustrasi),
           const SizedBox(height: 20),
           if (bagian.isEmpty)
             const _InfoKosong()
@@ -192,7 +201,8 @@ class _IsiArtikel extends StatelessWidget {
 }
 
 class _WorkflowDiagram extends StatelessWidget {
-  const _WorkflowDiagram();
+  final List<String> langkahKonteks;
+  const _WorkflowDiagram({this.langkahKonteks = const []});
   static const langkah = [
     ('1', 'Buka sesi', Icons.lock_open_outlined),
     ('2', 'Scan produk', Icons.qr_code_scanner),
@@ -204,6 +214,15 @@ class _WorkflowDiagram extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final data = langkahKonteks.isEmpty
+        ? langkah
+        : List.generate(
+            langkahKonteks.length,
+            (i) => (
+                  '${i + 1}',
+                  langkahKonteks[i],
+                  langkah[i % langkah.length].$3
+                ));
     return Card(
       elevation: 0,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -223,7 +242,7 @@ class _WorkflowDiagram extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: List.generate(
-                  langkah.length,
+                  data.length,
                   (i) => Row(children: [
                         Container(
                           width: 126,
@@ -239,19 +258,19 @@ class _WorkflowDiagram extends StatelessWidget {
                           child: Column(children: [
                             CircleAvatar(
                               radius: 18,
-                              child: Icon(langkah[i].$3, size: 18),
+                              child: Icon(data[i].$3, size: 18),
                             ),
                             const SizedBox(height: 8),
-                            Text(langkah[i].$1,
+                            Text(data[i].$1,
                                 style: const TextStyle(
                                     fontSize: 11, fontWeight: FontWeight.w800)),
-                            Text(langkah[i].$2,
+                            Text(data[i].$2,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w700)),
                           ]),
                         ),
-                        if (i < langkah.length - 1)
+                        if (i < data.length - 1)
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 5),
                             child: Icon(Icons.arrow_forward, size: 18),
@@ -267,7 +286,8 @@ class _WorkflowDiagram extends StatelessWidget {
 
 class _IlustrasiLayar extends StatelessWidget {
   final String platform;
-  const _IlustrasiLayar({required this.platform});
+  final List<String> areaKonteks;
+  const _IlustrasiLayar({required this.platform, this.areaKonteks = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -295,37 +315,75 @@ class _IlustrasiLayar extends StatelessWidget {
                 color: const Color(0xFF172B4D),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: mobile
-                  ? const Column(children: [
-                      _MockArea('① Menu & status sesi', Color(0xFFEAF2FF), 50),
-                      _MockArea('② Scan / cari produk', Color(0xFFFFFFFF), 62),
-                      _MockArea('③ Katalog produk', Color(0xFFF4F7FB), 120),
-                      _MockArea('④ Keranjang & total', Color(0xFFFFF4E8), 105),
-                      _MockArea('⑤ Tombol Bayar', Color(0xFFE8FFF3), 56),
-                    ])
-                  : const Column(children: [
-                      _MockArea('① Header, pengguna, toko, status sesi',
-                          Color(0xFFEAF2FF), 54),
-                      Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                                flex: 3,
-                                child: _MockArea('② Scan + katalog produk',
-                                    Color(0xFFF4F7FB), 220)),
-                            Expanded(
-                                flex: 2,
-                                child: _MockArea(
-                                    '③ Keranjang\n④ Total\n⑤ Bayar',
-                                    Color(0xFFFFF4E8),
-                                    220)),
-                          ]),
-                    ]),
+              child: _IlustrasiArea(mobile: mobile, areaKonteks: areaKonteks),
             ),
           ),
         ]),
       ),
     );
+  }
+}
+
+class _IlustrasiArea extends StatelessWidget {
+  final bool mobile;
+  final List<String> areaKonteks;
+  const _IlustrasiArea({required this.mobile, required this.areaKonteks});
+
+  @override
+  Widget build(BuildContext context) {
+    final area = areaKonteks.isEmpty
+        ? const [
+            'Menu & status',
+            'Pencarian',
+            'Area data',
+            'Ringkasan',
+            'Tindakan utama'
+          ]
+        : areaKonteks;
+    final warna = const [
+      Color(0xFFEAF2FF),
+      Color(0xFFFFFFFF),
+      Color(0xFFF4F7FB),
+      Color(0xFFFFF4E8),
+      Color(0xFFE8FFF3)
+    ];
+    if (mobile) {
+      return Column(
+          children: List.generate(
+              area.length,
+              (i) => _MockArea('${i + 1}. ${area[i]}', warna[i % warna.length],
+                  i == 2 ? 120 : 58)));
+    }
+    return Column(children: [
+      _MockArea('1. ${area.first}', warna.first, 54),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+            flex: 3,
+            child: _MockArea(
+                area
+                    .skip(1)
+                    .take(2)
+                    .toList()
+                    .asMap()
+                    .entries
+                    .map((e) => '${e.key + 2}. ${e.value}')
+                    .join('\n'),
+                warna[2],
+                220)),
+        Expanded(
+            flex: 2,
+            child: _MockArea(
+                area
+                    .skip(3)
+                    .toList()
+                    .asMap()
+                    .entries
+                    .map((e) => '${e.key + 4}. ${e.value}')
+                    .join('\n'),
+                warna[3],
+                220)),
+      ]),
+    ]);
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:ebisnis/screens/bantuan_content.dart';
+import 'package:ebisnis/screens/bantuan_kontekstual.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -17,6 +18,23 @@ void main() {
     for (final artikel in artikelBantuan) {
       expect(artikel.bagian.length, greaterThanOrEqualTo(10));
       expect(artikel.ringkasan, isNotEmpty);
+    }
+  });
+
+  test('setiap menu memiliki bantuan kontekstual minimal 1000 kata dan diagram',
+      () {
+    // Harus sama dengan jumlah MenuEBisnis pada app_shell.dart. Penambahan menu
+    // baru wajib diikuti artikel bantuan sebelum test ini dapat lulus.
+    expect(spesifikasiBantuanMenu.length, 36);
+    for (final entri in spesifikasiBantuanMenu.entries) {
+      final artikel =
+          artikelBantuanUntukMenu(entri.key, entri.value.judul, 'android');
+      expect(artikel.jumlahKata, greaterThanOrEqualTo(1000),
+          reason:
+              'Bantuan ${entri.value.judul} hanya ${artikel.jumlahKata} kata');
+      expect(artikel.workflow.length, greaterThanOrEqualTo(5));
+      expect(artikel.ilustrasi.length, greaterThanOrEqualTo(5));
+      expect(artikel.bagian.length, greaterThanOrEqualTo(12));
     }
   });
 }

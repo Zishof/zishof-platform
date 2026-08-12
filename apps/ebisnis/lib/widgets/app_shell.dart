@@ -9,12 +9,14 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
 import '../screens/akun_saya_screen.dart';
+import '../screens/bantuan_screen.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/pesanan_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/produk_screen.dart';
 import '../screens/stok_opname_screen.dart';
+import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/diskon_screen.dart';
@@ -70,6 +72,7 @@ enum MenuEBisnis {
   produk,
   jenisProduk,
   stokOpname,
+  kedaluwarsa,
   mutasiAntarOutlet,
   kulakan,
   penyedia,
@@ -142,6 +145,9 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.produk: 'produk',
   MenuEBisnis.jenisProduk: 'produk',
   MenuEBisnis.stokOpname: 'stokopname',
+  // Hak kelola mengikuti Stok Opname agar role lama langsung mendapat akses
+  // tanpa menunggu migrasi matriks RBAC di server.
+  MenuEBisnis.kedaluwarsa: 'stokopname',
   MenuEBisnis.mutasiAntarOutlet: 'mutasistokantaroutlet',
   MenuEBisnis.kulakan: 'kulakan',
   // Kunci server "penyedia" (aksesMenu, lihat PosApi.java:1012-1013) sudah
@@ -203,16 +209,16 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.masterSupplier, Icons.local_shipping_outlined,
       'Master Supplier',
       builder: _bangunMasterSupplier),
-  _ItemMenuShell(MenuEBisnis.masterCustomer, Icons.people_alt_outlined,
-      'Master Customer',
+  _ItemMenuShell(
+      MenuEBisnis.masterCustomer, Icons.people_alt_outlined, 'Master Customer',
       builder: _bangunMasterCustomer),
   _ItemMenuShell(MenuEBisnis.masterSales, Icons.badge_outlined, 'Master Sales',
       builder: _bangunMasterSales),
   _ItemMenuShell(MenuEBisnis.persediaan, Icons.warehouse_outlined,
       'Persediaan & Kartu Stok',
       builder: _bangunPersediaan),
-  _ItemMenuShell(MenuEBisnis.harga, Icons.price_change_outlined,
-      'Master & Analisis Harga',
+  _ItemMenuShell(
+      MenuEBisnis.harga, Icons.price_change_outlined, 'Master & Analisis Harga',
       builder: _bangunHarga),
   _ItemMenuShell(MenuEBisnis.hutangSupplier, Icons.account_balance_outlined,
       'Hutang Supplier (AP)',
@@ -226,14 +232,12 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.suratPerintahSales, Icons.assignment_outlined,
       'Surat Perintah Sales',
       builder: _bangunSpj),
-  _ItemMenuShell(MenuEBisnis.notaSales, Icons.route_outlined,
-      'Sesi Nota Sales',
+  _ItemMenuShell(MenuEBisnis.notaSales, Icons.route_outlined, 'Sesi Nota Sales',
       builder: _bangunNotaSales),
-  _ItemMenuShell(MenuEBisnis.kasJurnal, Icons.menu_book_outlined,
-      'Kas & Jurnal',
+  _ItemMenuShell(
+      MenuEBisnis.kasJurnal, Icons.menu_book_outlined, 'Kas & Jurnal',
       builder: _bangunKasJurnal),
-  _ItemMenuShell(MenuEBisnis.labaRugi, Icons.stacked_line_chart,
-      'Laba Rugi',
+  _ItemMenuShell(MenuEBisnis.labaRugi, Icons.stacked_line_chart, 'Laba Rugi',
       builder: _bangunLabaRugi),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
@@ -245,24 +249,27 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunAnggota),
   _ItemMenuShell(MenuEBisnis.produk, Icons.inventory_2_outlined, 'Produk',
       builder: _bangunProduk),
-  _ItemMenuShell(MenuEBisnis.jenisProduk, Icons.category_outlined,
-      'Jenis Produk',
+  _ItemMenuShell(
+      MenuEBisnis.jenisProduk, Icons.category_outlined, 'Jenis Produk',
       builder: _bangunJenisProduk),
   _ItemMenuShell(
       MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname',
       builder: _bangunStok),
+  _ItemMenuShell(
+      MenuEBisnis.kedaluwarsa, Icons.event_busy_outlined, 'Kedaluwarsa',
+      builder: _bangunKedaluwarsa),
   _ItemMenuShell(MenuEBisnis.mutasiAntarOutlet, Icons.compare_arrows,
       'Mutasi Antar Outlet',
       builder: _bangunMutasiAntarOutlet),
   _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan',
       builder: _bangunKulakan),
-  _ItemMenuShell(
-      MenuEBisnis.penyedia, Icons.local_shipping_outlined, 'Supplier (Penyedia)',
+  _ItemMenuShell(MenuEBisnis.penyedia, Icons.local_shipping_outlined,
+      'Supplier (Penyedia)',
       builder: _bangunPenyedia),
   _ItemMenuShell(MenuEBisnis.diskon, Icons.sell_outlined, 'Aturan Diskon',
       builder: _bangunDiskon),
-  _ItemMenuShell(MenuEBisnis.caraBayar, Icons.payments_outlined,
-      'Cara Pembayaran',
+  _ItemMenuShell(
+      MenuEBisnis.caraBayar, Icons.payments_outlined, 'Cara Pembayaran',
       builder: _bangunCaraBayar),
   _ItemMenuShell(MenuEBisnis.returPenjualan, Icons.assignment_return_outlined,
       'Retur Penjualan',
@@ -323,6 +330,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.produk,
     MenuEBisnis.jenisProduk,
     MenuEBisnis.stokOpname,
+    MenuEBisnis.kedaluwarsa,
     MenuEBisnis.mutasiAntarOutlet,
     MenuEBisnis.kulakan,
     MenuEBisnis.penyedia,
@@ -351,6 +359,7 @@ Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
 Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
+Widget _bangunKedaluwarsa(BuildContext c) => const KedaluwarsaScreen();
 Widget _bangunMutasiAntarOutlet(BuildContext c) =>
     const MutasiAntarOutletScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
@@ -436,6 +445,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Jenis Produk';
     case MenuEBisnis.stokOpname:
       return 'Stok Opname';
+    case MenuEBisnis.kedaluwarsa:
+      return 'Kedaluwarsa';
     case MenuEBisnis.mutasiAntarOutlet:
       return 'Mutasi Antar Outlet';
     case MenuEBisnis.kulakan:
@@ -511,6 +522,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.jenisProduk;
     case 'Stok Opname':
       return MenuEBisnis.stokOpname;
+    case 'Kedaluwarsa':
+      return MenuEBisnis.kedaluwarsa;
     case 'Mutasi Antar Outlet':
       return MenuEBisnis.mutasiAntarOutlet;
     case 'Kulakan':
@@ -664,7 +677,15 @@ class _AppShellState extends State<AppShell> {
               title: Text(widget.judul),
               backgroundColor: AppColors.sidebarBg,
               foregroundColor: Colors.white,
-              actions: widget.actionsAppBar),
+              actions: [
+                ...?widget.actionsAppBar,
+                IconButton(
+                  onPressed: () => _bukaBantuan(context),
+                  icon: const Icon(Icons.help_outline),
+                  tooltip: 'Bantuan halaman ini',
+                ),
+                const SizedBox(width: 4),
+              ]),
           drawer: AppDrawer(
             menuAktif: _labelDrawer(widget.menuAktif),
             onPilihMenu: (label) {
@@ -716,11 +737,20 @@ class _AppShellState extends State<AppShell> {
                               ],
                             ),
                           ),
-                          if (widget.aksiHeader != null) widget.aksiHeader!,
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            if (widget.aksiHeader != null) widget.aksiHeader!,
+                            if (widget.aksiHeader != null)
+                              const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _bukaBantuan(context),
+                              icon: const Icon(Icons.help_outline, size: 18),
+                              label: const Text('Bantuan'),
+                            ),
+                          ]),
                         ],
                       ),
                     )
-                  else if (widget.aksiHeader != null)
+                  else
                     // Layar spt Kasir sembunyikan judul besar (langsung ke pencarian), TAPI
                     // aksiHeader (mis. toolbar Akun Saya/Layar Pelanggan/Buka Laci/Ganti Toko)
                     // tetap wajib tampil -- gap-closure: sebelumnya baris ini terlewat total
@@ -729,8 +759,18 @@ class _AppShellState extends State<AppShell> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                       child: Align(
-                          alignment: Alignment.centerRight,
-                          child: widget.aksiHeader!),
+                        alignment: Alignment.centerRight,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (widget.aksiHeader != null) widget.aksiHeader!,
+                          if (widget.aksiHeader != null)
+                            const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _bukaBantuan(context),
+                            icon: const Icon(Icons.help_outline, size: 18),
+                            label: const Text('Bantuan'),
+                          ),
+                        ]),
+                      ),
                     ),
                   Expanded(
                     child: widget.scrollable
@@ -750,6 +790,15 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     });
+  }
+
+  void _bukaBantuan(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => BantuanScreen(
+        menuId: widget.menuAktif.name,
+        menuJudul: widget.judul,
+      ),
+    ));
   }
 }
 
@@ -772,11 +821,15 @@ class _AppSidebar extends StatelessWidget {
                 children: [
                   const Icon(Icons.link, color: Colors.white, size: 22),
                   const SizedBox(width: 8),
-                  const Text(AppVariant.namaSidebar,
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16)),
+                  const Expanded(
+                    child: Text(AppVariant.namaSidebar,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
+                  ),
                 ],
               ),
             ),

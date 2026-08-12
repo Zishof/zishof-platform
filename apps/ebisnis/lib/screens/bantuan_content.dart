@@ -9,11 +9,15 @@ class ArtikelBantuan {
   final String judul;
   final String ringkasan;
   final List<BagianBantuan> bagian;
+  final List<String> workflow;
+  final List<String> ilustrasi;
   const ArtikelBantuan({
     required this.id,
     required this.judul,
     required this.ringkasan,
     required this.bagian,
+    this.workflow = const [],
+    this.ilustrasi = const [],
   });
 
   int get jumlahKata => bagian

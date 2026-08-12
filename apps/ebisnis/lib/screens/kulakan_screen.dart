@@ -11,7 +11,8 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import 'retur_pembelian_screen.dart';
 
-final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 final _formatTanggal = DateFormat('dd/MM/yyyy');
 
@@ -23,7 +24,18 @@ class _ItemFaktur {
   final String kode;
   final double qty;
   final double harga;
-  _ItemFaktur({required this.produkId, required this.nama, required this.kode, required this.qty, required this.harga});
+  final String? nomorBatch;
+  final DateTime? tanggalProduksi;
+  final DateTime? tanggalExpired;
+  _ItemFaktur(
+      {required this.produkId,
+      required this.nama,
+      required this.kode,
+      required this.qty,
+      required this.harga,
+      this.nomorBatch,
+      this.tanggalProduksi,
+      this.tanggalExpired});
   double get total => qty * harga;
 }
 
@@ -37,7 +49,8 @@ class KulakanScreen extends StatefulWidget {
   State<KulakanScreen> createState() => _KulakanScreenState();
 }
 
-class _KulakanScreenState extends State<KulakanScreen> with SingleTickerProviderStateMixin {
+class _KulakanScreenState extends State<KulakanScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -104,6 +117,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   final _barcodeController = TextEditingController();
   final _qtyController = TextEditingController();
   final _hargaController = TextEditingController();
+  final _batchController = TextEditingController();
+  bool _kelolaBatch = true;
+  DateTime? _tanggalProduksi;
+  DateTime? _tanggalExpired;
   bool _mencari = false;
   String? _errorForm;
   Map<String, dynamic>? _produkDitemukan;
@@ -132,6 +149,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     _barcodeController.dispose();
     _qtyController.dispose();
     _hargaController.dispose();
+    _batchController.dispose();
     super.dispose();
   }
 
@@ -149,7 +167,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       });
       if (!mounted) return;
       setStateIfMounted(() {
-        _riwayat = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _riwayat =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
@@ -175,7 +194,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       _produkDitemukan = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
+      final hasil =
+          await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       if (!mounted) return;
       setStateIfMounted(() {
         _produkDitemukan = hasil;
@@ -191,7 +211,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   }
 
   Future<void> _scanKamera() async {
-    final kode = await BarcodeScannerScreen.pindai(context, judul: 'Scan Barcode Produk');
+    final kode = await BarcodeScannerScreen.pindai(context,
+        judul: 'Scan Barcode Produk');
     if (!mounted) return;
     if (kode != null) {
       _barcodeController.text = kode;
@@ -209,7 +230,14 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       return;
     }
     if (harga == null || harga <= 0) {
-      setStateIfMounted(() => _errorForm = 'Harga beli satuan harus lebih dari 0.');
+      setStateIfMounted(
+          () => _errorForm = 'Harga beli satuan harus lebih dari 0.');
+      return;
+    }
+    if (_kelolaBatch &&
+        (_batchController.text.trim().isEmpty || _tanggalExpired == null)) {
+      setStateIfMounted(() => _errorForm =
+          'Nomor batch dan tanggal kedaluwarsa wajib diisi untuk stok terpantau.');
       return;
     }
     setStateIfMounted(() {
@@ -219,20 +247,42 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
         kode: '${p['kode'] ?? ''}',
         qty: qty,
         harga: harga,
+        nomorBatch: _kelolaBatch ? _batchController.text.trim() : null,
+        tanggalProduksi: _kelolaBatch ? _tanggalProduksi : null,
+        tanggalExpired: _kelolaBatch ? _tanggalExpired : null,
       ));
       _produkDitemukan = null;
       _barcodeController.clear();
       _qtyController.clear();
       _hargaController.clear();
+      _batchController.clear();
+      _tanggalProduksi = null;
+      _tanggalExpired = null;
       _errorForm = null;
     });
+  }
+
+  Future<void> _pilihTanggalBatch({required bool expired}) async {
+    final sekarang = DateTime.now();
+    final hasil = await showDatePicker(
+      context: context,
+      initialDate: expired
+          ? (_tanggalExpired ?? sekarang.add(const Duration(days: 365)))
+          : (_tanggalProduksi ?? sekarang),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (hasil != null)
+      setStateIfMounted(
+          () => expired ? _tanggalExpired = hasil : _tanggalProduksi = hasil);
   }
 
   void _hapusDariDaftar(int index) {
     setStateIfMounted(() => _itemsFaktur.removeAt(index));
   }
 
-  double get _totalHitung => _itemsFaktur.fold<double>(0, (a, it) => a + it.total);
+  double get _totalHitung =>
+      _itemsFaktur.fold<double>(0, (a, it) => a + it.total);
 
   double? get _totalManual => parseDesimal(_totalManualController.text);
 
@@ -269,7 +319,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       return;
     }
     if (_itemsFaktur.isEmpty) {
-      setStateIfMounted(() => _errorForm = 'Belum ada barang yang dimasukkan untuk faktur ini.');
+      setStateIfMounted(() =>
+          _errorForm = 'Belum ada barang yang dimasukkan untuk faktur ini.');
       return;
     }
     setStateIfMounted(() {
@@ -284,7 +335,18 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
         if (_totalManual != null) 'total_faktur_manual': _totalManual,
         'keterangan': _keteranganController.text.trim(),
         'items': _itemsFaktur
-            .map((it) => {'produk_id': it.produkId, 'qty': it.qty, 'harga_beli_satuan': it.harga})
+            .map((it) => {
+                  'produk_id': it.produkId,
+                  'qty': it.qty,
+                  'harga_beli_satuan': it.harga,
+                  if (it.nomorBatch != null) 'nomor_batch': it.nomorBatch,
+                  if (it.tanggalProduksi != null)
+                    'tanggal_produksi':
+                        DateFormat('yyyy-MM-dd').format(it.tanggalProduksi!),
+                  if (it.tanggalExpired != null)
+                    'tanggal_expired':
+                        DateFormat('yyyy-MM-dd').format(it.tanggalExpired!),
+                })
             .toList(),
       });
       final diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
@@ -316,16 +378,19 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
     Map<String, dynamic>? detail;
     try {
-      detail = await ApiClient.instance.aksi('kulakan_faktur_detail', {'faktur_id': f['fakturId']});
+      detail = await ApiClient.instance
+          .aksi('kulakan_faktur_detail', {'faktur_id': f['fakturId']});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat detail: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memuat detail: $e')));
       }
       return;
     }
     if (!mounted) return;
     final header = (detail['header'] as Map?)?.cast<String, dynamic>() ?? {};
-    final items = ((detail['items'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final items =
+        ((detail['items'] as List?) ?? []).cast<Map<String, dynamic>>();
     await showDialog<void>(
       context: context,
       builder: (_) => AppDetailDialogShell(
@@ -335,10 +400,13 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              AppDetailChip(icon: Icons.schedule_outlined, label: 'Tanggal: ${header['tanggalFaktur'] ?? '-'}'),
+              AppDetailChip(
+                  icon: Icons.schedule_outlined,
+                  label: 'Tanggal: ${header['tanggalFaktur'] ?? '-'}'),
               AppDetailChip(
                   icon: Icons.local_shipping_outlined,
-                  label: 'Supplier: ${(header['namaSupplier'] as String?)?.isNotEmpty == true ? header['namaSupplier'] : '-'}'),
+                  label:
+                      'Supplier: ${(header['namaSupplier'] as String?)?.isNotEmpty == true ? header['namaSupplier'] : '-'}'),
             ],
           ),
           const SizedBox(height: 12),
@@ -350,13 +418,20 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            Expanded(child: Text('${it['namaProduk']}', style: const TextStyle(fontSize: 13))),
-                            Text('${_formatAngka.format(it['qty'] ?? 0)}x', style: const TextStyle(fontSize: 12)),
+                            Expanded(
+                                child: Text('${it['namaProduk']}',
+                                    style: const TextStyle(fontSize: 13))),
+                            Text('${_formatAngka.format(it['qty'] ?? 0)}x',
+                                style: const TextStyle(fontSize: 12)),
                             const SizedBox(width: 10),
                             SizedBox(
                                 width: 90,
-                                child: Text(_formatRupiah.format(it['totalHarga'] ?? 0),
-                                    textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                                child: Text(
+                                    _formatRupiah.format(it['totalHarga'] ?? 0),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12))),
                           ],
                         ),
                       ))
@@ -368,16 +443,24 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
             judul: 'Ringkasan',
             child: Column(
               children: [
-                _barisRingkas('Total Hitungan Baris', _formatRupiah.format(header['totalHitung'] ?? 0)),
+                _barisRingkas('Total Hitungan Baris',
+                    _formatRupiah.format(header['totalHitung'] ?? 0)),
                 if ((header['diskon'] as num? ?? 0) > 0)
-                  _barisRingkas('Diskon/Potongan Faktur', '- ${_formatRupiah.format(header['diskon'])}'),
+                  _barisRingkas('Diskon/Potongan Faktur',
+                      '- ${_formatRupiah.format(header['diskon'])}'),
                 const Divider(height: 20),
-                _barisRingkas('Total Faktur', _formatRupiah.format(header['totalFakturFinal'] ?? 0), tebal: true),
+                _barisRingkas('Total Faktur',
+                    _formatRupiah.format(header['totalFakturFinal'] ?? 0),
+                    tebal: true),
               ],
             ),
           ),
         ],
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup'))
+        ],
       ),
     );
   }
@@ -388,11 +471,14 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: AppColors.textSecondaryOf(context))),
+          Text(label,
+              style: TextStyle(color: AppColors.textSecondaryOf(context))),
           Text(nilai,
               style: TextStyle(
                   fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
-                  color: tebal ? AppColors.primary : AppColors.textPrimaryOf(context))),
+                  color: tebal
+                      ? AppColors.primary
+                      : AppColors.textPrimaryOf(context))),
         ],
       ),
     );
@@ -410,14 +496,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           if (Sesi.instance.bolehKelola) ...[
             AppFormSection(
               judul: 'Faktur Baru',
-              deskripsi: 'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
+              deskripsi:
+                  'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
               children: [
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _fakturController,
-                        decoration: AppFormStyle.fieldDecoration(context, labelText: 'Nomor Faktur *'),
+                        decoration: AppFormStyle.fieldDecoration(context,
+                            labelText: 'Nomor Faktur *'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -425,7 +513,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                       child: InkWell(
                         onTap: _pilihTanggal,
                         child: InputDecorator(
-                          decoration: AppFormStyle.fieldDecoration(context, labelText: 'Tanggal Faktur *'),
+                          decoration: AppFormStyle.fieldDecoration(context,
+                              labelText: 'Tanggal Faktur *'),
                           child: Text(_formatTanggal.format(_tanggalFaktur)),
                         ),
                       ),
@@ -437,11 +526,14 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                   onTap: _pilihSupplier,
                   child: InputDecorator(
                     decoration: AppFormStyle.fieldDecoration(context,
-                        labelText: 'Supplier (opsional)', prefixIcon: const Icon(Icons.local_shipping_outlined)),
+                        labelText: 'Supplier (opsional)',
+                        prefixIcon: const Icon(Icons.local_shipping_outlined)),
                     child: Row(
                       children: [
                         Expanded(
-                            child: Text(_supplierTerpilih == null ? '-- Pilih Supplier --' : '${_supplierTerpilih!['nama']}')),
+                            child: Text(_supplierTerpilih == null
+                                ? '-- Pilih Supplier --'
+                                : '${_supplierTerpilih!['nama']}')),
                         const Icon(Icons.arrow_drop_down),
                       ],
                     ),
@@ -450,16 +542,19 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _totalManualController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: AppFormStyle.fieldDecoration(context,
                       labelText: 'Total Faktur (opsional)',
-                      hintText: 'Kosongkan bila sama dgn hitungan baris di bawah'),
+                      hintText:
+                          'Kosongkan bila sama dgn hitungan baris di bawah'),
                   onChanged: (_) => setStateIfMounted(() {}),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _keteranganController,
-                  decoration: AppFormStyle.fieldDecoration(context, labelText: 'Keterangan (opsional)'),
+                  decoration: AppFormStyle.fieldDecoration(context,
+                      labelText: 'Keterangan (opsional)'),
                 ),
               ],
             ),
@@ -475,33 +570,48 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                         label: 'Kode / Barcode / Nama Produk',
                         icon: Icons.search,
                         onPilih: _cariProduk,
-                        decorationBuilder: (context) => AppFormStyle.fieldDecoration(context,
-                            labelText: 'Kode / Barcode / Nama Produk', prefixIcon: const Icon(Icons.search)),
+                        decorationBuilder: (context) =>
+                            AppFormStyle.fieldDecoration(context,
+                                labelText: 'Kode / Barcode / Nama Produk',
+                                prefixIcon: const Icon(Icons.search)),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton.filled(onPressed: _scanKamera, icon: const Icon(Icons.qr_code_scanner), tooltip: 'Scan pakai kamera'),
+                    IconButton.filled(
+                        onPressed: _scanKamera,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        tooltip: 'Scan pakai kamera'),
                   ],
                 ),
-                if (_mencari) const Padding(padding: EdgeInsets.only(top: 12), child: Center(child: CircularProgressIndicator())),
+                if (_mencari)
+                  const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Center(child: CircularProgressIndicator())),
                 if (_errorForm != null)
                   Container(
                     padding: const EdgeInsets.all(10),
                     margin: const EdgeInsets.only(top: 12),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Text(_errorForm!, style: TextStyle(color: Colors.red.shade700)),
+                    decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(_errorForm!,
+                        style: TextStyle(color: Colors.red.shade700)),
                   ),
                 if (_produkDitemukan != null) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                        color: AppColors.latarLembut(AppColors.warning), borderRadius: BorderRadius.circular(10)),
+                        color: AppColors.latarLembut(AppColors.warning),
+                        borderRadius: BorderRadius.circular(10)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${_produkDitemukan!['nama'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
+                        Text('${_produkDitemukan!['nama'] ?? ''}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                            'Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
                             style: const TextStyle(fontSize: 11.5)),
                         const SizedBox(height: 10),
                         Row(
@@ -509,29 +619,97 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                             Expanded(
                               child: TextField(
                                 controller: _qtyController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: AppFormStyle.fieldDecoration(context, labelText: 'Jumlah Masuk *', isDense: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: 'Jumlah Masuk *',
+                                    isDense: true),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
                                 controller: _hargaController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: AppFormStyle.fieldDecoration(context, labelText: 'Harga Beli Satuan *', isDense: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: 'Harga Beli Satuan *',
+                                    isDense: true),
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton.filled(onPressed: _tambahKeDaftar, icon: const Icon(Icons.add), tooltip: 'Tambah ke daftar'),
+                            IconButton.filled(
+                                onPressed: _tambahKeDaftar,
+                                icon: const Icon(Icons.add),
+                                tooltip: 'Tambah ke daftar'),
                           ],
                         ),
+                        CheckboxListTile(
+                          value: _kelolaBatch,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text(
+                              'Pantau batch & kedaluwarsa (disarankan)',
+                              style: TextStyle(
+                                  fontSize: 12.5, fontWeight: FontWeight.w600)),
+                          subtitle: const Text(
+                              'Stok dari penerimaan ini akan dikeluarkan otomatis dengan FEFO.',
+                              style: TextStyle(fontSize: 11)),
+                          onChanged: (v) =>
+                              setStateIfMounted(() => _kelolaBatch = v ?? true),
+                        ),
+                        if (_kelolaBatch) ...[
+                          Row(children: [
+                            Expanded(
+                                child: TextField(
+                              controller: _batchController,
+                              decoration: AppFormStyle.fieldDecoration(context,
+                                  labelText: 'Nomor Batch / Lot *',
+                                  isDense: true),
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: InkWell(
+                              onTap: () => _pilihTanggalBatch(expired: false),
+                              child: InputDecorator(
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: 'Tanggal Produksi',
+                                    isDense: true),
+                                child: Text(_tanggalProduksi == null
+                                    ? 'Opsional'
+                                    : _formatTanggal.format(_tanggalProduksi!)),
+                              ),
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: InkWell(
+                              onTap: () => _pilihTanggalBatch(expired: true),
+                              child: InputDecorator(
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: 'Tanggal Kedaluwarsa *',
+                                    isDense: true),
+                                child: Text(_tanggalExpired == null
+                                    ? 'Pilih tanggal'
+                                    : _formatTanggal.format(_tanggalExpired!)),
+                              ),
+                            )),
+                          ]),
+                        ],
                       ],
                     ),
                   ),
                 ],
                 if (_itemsFaktur.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  const Text('Barang di Faktur Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const Text('Barang di Faktur Ini',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 6),
                   ..._itemsFaktur.asMap().entries.map((e) {
                     final it = e.value;
@@ -539,12 +717,19 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                       margin: const EdgeInsets.only(bottom: 6),
                       child: ListTile(
                         dense: true,
-                        title: Text(it.nama, style: const TextStyle(fontSize: 13)),
-                        subtitle: Text('${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}', style: const TextStyle(fontSize: 11.5)),
+                        title:
+                            Text(it.nama, style: const TextStyle(fontSize: 13)),
+                        subtitle: Text(
+                            '${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}'
+                            '${it.nomorBatch == null ? '' : ' · Batch ${it.nomorBatch} · Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
+                            style: const TextStyle(fontSize: 11.5)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(_formatRupiah.format(it.total), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                            Text(_formatRupiah.format(it.total),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5)),
                             IconButton(
                                 icon: const Icon(Icons.close, size: 18),
                                 onPressed: () => _hapusDariDaftar(e.key)),
@@ -554,23 +739,32 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                     );
                   }),
                   const Divider(height: 20),
-                  _barisRingkas('Total Hitungan Baris', _formatRupiah.format(_totalHitung)),
-                  if (_diskonPreview > 0) _barisRingkas('Diskon/Potongan (kelebihan hitungan)', '- ${_formatRupiah.format(_diskonPreview)}'),
-                  _barisRingkas('Total Faktur', _formatRupiah.format(_totalManual ?? _totalHitung), tebal: true),
+                  _barisRingkas('Total Hitungan Baris',
+                      _formatRupiah.format(_totalHitung)),
+                  if (_diskonPreview > 0)
+                    _barisRingkas('Diskon/Potongan (kelebihan hitungan)',
+                        '- ${_formatRupiah.format(_diskonPreview)}'),
+                  _barisRingkas('Total Faktur',
+                      _formatRupiah.format(_totalManual ?? _totalHitung),
+                      tebal: true),
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton.icon(
                       onPressed: _menyimpanFaktur ? null : _simpanFaktur,
                       icon: _menyimpanFaktur
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.save_outlined, size: 18),
                       label: const Text('Simpan Faktur'),
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.success,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 12)),
                     ),
                   ),
                 ],
@@ -580,24 +774,36 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           ] else
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
-              child: Text('Hanya admin/supervisor toko yang dapat mencatat kulakan baru. Riwayat di bawah tetap bisa dilihat.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+              child: Text(
+                  'Hanya admin/supervisor toko yang dapat mencatat kulakan baru. Riwayat di bawah tetap bisa dilihat.',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black54,
+                      fontStyle: FontStyle.italic)),
             ),
-          const Text('Riwayat Faktur', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const Text('Riwayat Faktur',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 8),
           SizedBox(
             height: 96,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                SizedBox(width: 190, child: AppKpiCard(icon: Icons.receipt_long_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Faktur')),
+                SizedBox(
+                    width: 190,
+                    child: AppKpiCard(
+                        icon: Icons.receipt_long_outlined,
+                        warna: AppColors.primary,
+                        nilai: '$_total',
+                        label: 'Total Faktur')),
                 const SizedBox(width: 8),
                 SizedBox(
                   width: 190,
                   child: AppKpiCard(
                     icon: Icons.payments_outlined,
                     warna: AppColors.teal,
-                    nilai: _formatRupiah.format(_riwayat.fold<num>(0, (a, f) => a + ((f['totalHitung'] as num?) ?? 0))),
+                    nilai: _formatRupiah.format(_riwayat.fold<num>(
+                        0, (a, f) => a + ((f['totalHitung'] as num?) ?? 0))),
                     label: 'Nilai (hal. ini)',
                   ),
                 ),
@@ -607,7 +813,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           const SizedBox(height: 12),
           TextField(
             decoration: AppFormStyle.fieldDecoration(context,
-                labelText: 'Cari Riwayat', hintText: 'Cari nomor faktur/nama supplier...', prefixIcon: const Icon(Icons.search), isDense: true),
+                labelText: 'Cari Riwayat',
+                hintText: 'Cari nomor faktur/nama supplier...',
+                prefixIcon: const Icon(Icons.search),
+                isDense: true),
             onSubmitted: (v) {
               _kataKunciRiwayat = v;
               _halaman = 1;
@@ -616,9 +825,13 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           ),
           const SizedBox(height: 8),
           if (_memuatRiwayat)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()))
           else if (_errorRiwayat != null)
-            Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Text(_errorRiwayat!)))
+            Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: Text(_errorRiwayat!)))
           else
             AppDataTable(
               minWidth: 900,
@@ -631,15 +844,28 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                 AppTableColumn('Total', flex: 2, align: TextAlign.right),
               ],
               rows: _riwayat.map((f) {
-                final supplier = (f['namaSupplier'] as String?)?.isNotEmpty == true ? '${f['namaSupplier']}' : '-';
+                final supplier =
+                    (f['namaSupplier'] as String?)?.isNotEmpty == true
+                        ? '${f['namaSupplier']}'
+                        : '-';
                 final diskon = (f['diskon'] as num?) ?? 0;
-                final totalFinal = diskon > 0 ? ((f['totalHitung'] as num? ?? 0) - diskon) : (f['totalHitung'] ?? 0);
+                final totalFinal = diskon > 0
+                    ? ((f['totalHitung'] as num? ?? 0) - diskon)
+                    : (f['totalHitung'] ?? 0);
                 return AppTableRowData(cells: [
-                  AppTableCell.text('${f['nomorFaktur']}', flex: 2, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  AppTableCell.text('${f['nomorFaktur']}',
+                      flex: 2,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
                   AppTableCell.text('${f['tanggalFaktur']}', flex: 2),
                   AppTableCell.text(supplier, flex: 2),
-                  AppTableCell.text('${f['jumlahItem'] ?? 0}', flex: 1, align: TextAlign.right),
-                  AppTableCell.text(_formatRupiah.format(totalFinal), flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  AppTableCell.text('${f['jumlahItem'] ?? 0}',
+                      flex: 1, align: TextAlign.right),
+                  AppTableCell.text(_formatRupiah.format(totalFinal),
+                      flex: 2,
+                      align: TextAlign.right,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12.5)),
                 ], onTap: () => _lihatDetailFaktur(f));
               }).toList(),
               pagination: AppTablePagination(
@@ -648,7 +874,9 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                 totalData: _total,
                 labelData: 'faktur',
                 onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+                onBerikutnya: _halaman < _totalHalaman
+                    ? () => _pindah(_halaman + 1)
+                    : null,
               ),
             ),
         ],
@@ -690,8 +918,10 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
   Future<void> _cari(String keyword) async {
     setStateIfMounted(() => _memuat = true);
     try {
-      final hasil = await ApiClient.instance.aksi('penyedia_list', {'keyword': keyword});
-      setStateIfMounted(() => _daftar = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      final hasil =
+          await ApiClient.instance.aksi('penyedia_list', {'keyword': keyword});
+      setStateIfMounted(() => _daftar =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (_) {
       // gagal muat -- biarkan daftar kosong, bukan blocker fatal utk sheet ini.
     } finally {
@@ -704,11 +934,14 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
     if (nama.isEmpty) return;
     setStateIfMounted(() => _menyimpanBaru = true);
     try {
-      final hasil = await ApiClient.instance.aksi('penyedia_simpan', {'nama': nama});
-      if (mounted) Navigator.of(context).pop({'id': hasil['id'], 'nama': hasil['nama']});
+      final hasil =
+          await ApiClient.instance.aksi('penyedia_simpan', {'nama': nama});
+      if (mounted)
+        Navigator.of(context).pop({'id': hasil['id'], 'nama': hasil['nama']});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menambah supplier: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menambah supplier: $e')));
       }
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpanBaru = false);
@@ -727,11 +960,14 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Pilih Supplier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('Pilih Supplier',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
             TextField(
               controller: _cariController,
-              decoration: AppFormStyle.fieldDecoration(context, labelText: 'Cari nama supplier...', prefixIcon: const Icon(Icons.search)),
+              decoration: AppFormStyle.fieldDecoration(context,
+                  labelText: 'Cari nama supplier...',
+                  prefixIcon: const Icon(Icons.search)),
               onSubmitted: _cari,
             ),
             const SizedBox(height: 8),
@@ -742,19 +978,27 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
                       controller: scrollController,
                       children: [
                         ..._daftar.map((s) => ListTile(
-                              leading: const Icon(Icons.local_shipping_outlined),
+                              leading:
+                                  const Icon(Icons.local_shipping_outlined),
                               title: Text('${s['nama']}'),
-                              subtitle: (s['telp'] as String?)?.isNotEmpty == true ? Text('${s['telp']}') : null,
+                              subtitle:
+                                  (s['telp'] as String?)?.isNotEmpty == true
+                                      ? Text('${s['telp']}')
+                                      : null,
                               onTap: () => Navigator.of(context).pop(s),
                             )),
-                        if (_daftar.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('Tidak ada supplier ditemukan.')),
+                        if (_daftar.isEmpty)
+                          const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text('Tidak ada supplier ditemukan.')),
                       ],
                     ),
             ),
             const Divider(),
             if (!_tampilFormBaru)
               TextButton.icon(
-                onPressed: () => setStateIfMounted(() => _tampilFormBaru = true),
+                onPressed: () =>
+                    setStateIfMounted(() => _tampilFormBaru = true),
                 icon: const Icon(Icons.add),
                 label: const Text('Tambah Supplier Baru'),
               )
@@ -764,14 +1008,18 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
                   Expanded(
                     child: TextField(
                       controller: _namaBaruController,
-                      decoration: AppFormStyle.fieldDecoration(context, labelText: 'Nama Supplier Baru', isDense: true),
+                      decoration: AppFormStyle.fieldDecoration(context,
+                          labelText: 'Nama Supplier Baru', isDense: true),
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
                     onPressed: _menyimpanBaru ? null : _simpanSupplierBaru,
                     icon: _menyimpanBaru
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.check),
                   ),
                 ],
