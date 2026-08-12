@@ -31,6 +31,8 @@ import '../screens/inventory_sales/penjualan_sales_screen.dart';
 import '../screens/inventory_sales/piutang_screen.dart';
 import '../screens/inventory_sales/spj_screen.dart';
 import '../screens/inventory_sales/nota_sales_screen.dart';
+import '../screens/inventory_sales/kas_jurnal_screen.dart';
+import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -225,6 +227,30 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Sesi Nota Sales',
                           builder: (_) => const NotaSalesScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('kas_jurnal'))
+                      _ItemMenu(
+                        icon: Icons.menu_book_outlined,
+                        label: 'Kas & Jurnal',
+                        aktif: menuAktif == 'Kas & Jurnal',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Kas & Jurnal',
+                          builder: (_) => const KasJurnalScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('laba_rugi'))
+                      _ItemMenu(
+                        icon: Icons.stacked_line_chart,
+                        label: 'Laba Rugi',
+                        aktif: menuAktif == 'Laba Rugi',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Laba Rugi',
+                          builder: (_) => const LabaRugiScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))

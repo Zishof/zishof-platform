@@ -41,6 +41,8 @@ import '../screens/inventory_sales/penjualan_sales_screen.dart';
 import '../screens/inventory_sales/piutang_screen.dart';
 import '../screens/inventory_sales/spj_screen.dart';
 import '../screens/inventory_sales/nota_sales_screen.dart';
+import '../screens/inventory_sales/kas_jurnal_screen.dart';
+import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -91,7 +93,9 @@ enum MenuEBisnis {
   penjualanSales,
   piutang,
   suratPerintahSales,
-  notaSales
+  notaSales,
+  kasJurnal,
+  labaRugi
 }
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -107,6 +111,8 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.piutang: 'piutang',
   MenuEBisnis.suratPerintahSales: 'surat_perintah_sales',
   MenuEBisnis.notaSales: 'nota_sales',
+  MenuEBisnis.kasJurnal: 'kas_jurnal',
+  MenuEBisnis.labaRugi: 'laba_rugi',
 };
 
 class _ItemMenuShell {
@@ -197,6 +203,12 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.notaSales, Icons.route_outlined,
       'Sesi Nota Sales',
       builder: _bangunNotaSales),
+  _ItemMenuShell(MenuEBisnis.kasJurnal, Icons.menu_book_outlined,
+      'Kas & Jurnal',
+      builder: _bangunKasJurnal),
+  _ItemMenuShell(MenuEBisnis.labaRugi, Icons.stacked_line_chart,
+      'Laba Rugi',
+      builder: _bangunLabaRugi),
   _ItemMenuShell(MenuEBisnis.kasir, Icons.point_of_sale, 'Kasir/POS',
       builder: _bangunKasir),
   _ItemMenuShell(MenuEBisnis.ringkasan, Icons.dashboard_outlined, 'Dashboard',
@@ -266,6 +278,8 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.piutang,
     MenuEBisnis.suratPerintahSales,
     MenuEBisnis.notaSales,
+    MenuEBisnis.kasJurnal,
+    MenuEBisnis.labaRugi,
   ]),
   _GrupMenuShell('Operasional', [
     MenuEBisnis.kasir,
@@ -341,6 +355,8 @@ Widget _bangunPenjualanSales(BuildContext c) => const PenjualanSalesScreen();
 Widget _bangunPiutang(BuildContext c) => const PiutangScreen();
 Widget _bangunSpj(BuildContext c) => const SpjScreen();
 Widget _bangunNotaSales(BuildContext c) => const NotaSalesScreen();
+Widget _bangunKasJurnal(BuildContext c) => const KasJurnalScreen();
+Widget _bangunLabaRugi(BuildContext c) => const LabaRugiScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -439,6 +455,10 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Surat Perintah Sales';
     case MenuEBisnis.notaSales:
       return 'Sesi Nota Sales';
+    case MenuEBisnis.kasJurnal:
+      return 'Kas & Jurnal';
+    case MenuEBisnis.labaRugi:
+      return 'Laba Rugi';
   }
 }
 
@@ -508,6 +528,10 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.suratPerintahSales;
     case 'Sesi Nota Sales':
       return MenuEBisnis.notaSales;
+    case 'Kas & Jurnal':
+      return MenuEBisnis.kasJurnal;
+    case 'Laba Rugi':
+      return MenuEBisnis.labaRugi;
   }
   return null;
 }
