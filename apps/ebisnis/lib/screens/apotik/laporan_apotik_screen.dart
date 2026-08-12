@@ -5,8 +5,10 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import 'pos_help.dart';
 
-final _rp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _rp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
 /// <h3>Laporan Apotik -- FASE C (penjualan, obat terkendali, kedaluwarsa).</h3>
@@ -32,10 +34,16 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
     super.initState();
     _tab = TabController(
         length: 3, vsync: this, initialIndex: widget.tabAwal.clamp(0, 2));
+    _tab.addListener(_ubahTab);
+  }
+
+  void _ubahTab() {
+    if (!_tab.indexIsChanging && mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _tab.removeListener(_ubahTab);
     _tab.dispose();
     super.dispose();
   }
@@ -46,6 +54,16 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
         title: const Text('Laporan Apotik'),
+        actions: [
+          PosHelp.button(
+              context,
+              const [
+                'apotik_laporan',
+                'apotik_narkotika',
+                'apotik_laporan'
+              ][_tab.index],
+              compact: true)
+        ],
         bottom: TabBar(
           controller: _tab,
           isScrollable: true,
@@ -82,8 +100,8 @@ class _FilterPeriode extends StatelessWidget {
       required this.onSampai,
       required this.onMuat});
 
-  Future<void> _pilih(BuildContext context, DateTime awal,
-      ValueChanged<DateTime> cb) async {
+  Future<void> _pilih(
+      BuildContext context, DateTime awal, ValueChanged<DateTime> cb) async {
     final t = await showDatePicker(
         context: context,
         initialDate: awal,
@@ -208,7 +226,8 @@ class _TabPenjualanState extends State<_TabPenjualan> {
                                       Expanded(
                                           child: Text('${g['golongan']}',
                                               style: const TextStyle(
-                                                  fontWeight: FontWeight.w600))),
+                                                  fontWeight:
+                                                      FontWeight.w600))),
                                       Text('${g['qty']} • ',
                                           style: const TextStyle(fontSize: 12)),
                                       Text(_rp.format(g['nilai'] ?? 0),
@@ -226,7 +245,8 @@ class _TabPenjualanState extends State<_TabPenjualan> {
                       columns: const [
                         AppTableColumn('Obat', flex: 4),
                         AppTableColumn('Qty', flex: 1, align: TextAlign.right),
-                        AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                        AppTableColumn('Nilai',
+                            flex: 2, align: TextAlign.right),
                       ],
                       rows: perItem
                           .map((it) => AppTableRowData(cells: [
@@ -444,8 +464,7 @@ class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
                         dense: true,
                         leading: Icon(
                             exp ? Icons.dangerous_outlined : Icons.schedule,
-                            color:
-                                exp ? AppColors.danger : AppColors.warning),
+                            color: exp ? AppColors.danger : AppColors.warning),
                         title: Text('${b['nama']} (${b['kode']})',
                             style:
                                 const TextStyle(fontWeight: FontWeight.w600)),
@@ -454,8 +473,7 @@ class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
                             style: const TextStyle(fontSize: 11.5)),
                         trailing: StatusPill(
                             label: exp ? 'KEDALUWARSA' : 'SEGERA',
-                            warna:
-                                exp ? AppColors.danger : AppColors.warning),
+                            warna: exp ? AppColors.danger : AppColors.warning),
                       );
                     },
                   ),

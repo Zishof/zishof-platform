@@ -10,6 +10,7 @@ import '../login_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
+import 'pos_help.dart';
 
 /// <h3>Beranda varian "POS Apotik" -- landing setelah login (LANGKAH 2).</h3>
 ///
@@ -92,9 +93,8 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
   @override
   Widget build(BuildContext context) {
     final s = Sesi.instance;
-    final adaMenuApotik =
-        _menuApotik.any((m) => s.bolehMenuVarianBaru(m.$1)) ||
-            _menuEmedik.any((m) => s.bolehMenuVarianBaru(m.$1));
+    final adaMenuApotik = _menuApotik.any((m) => s.bolehMenuVarianBaru(m.$1)) ||
+        _menuEmedik.any((m) => s.bolehMenuVarianBaru(m.$1));
     return Scaffold(
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
@@ -243,9 +243,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
               const SizedBox(width: 6),
               Text(m.$2,
                   style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: warna)),
+                      fontSize: 12, fontWeight: FontWeight.w600, color: warna)),
               const SizedBox(width: 6),
               Icon(
                   tujuan != null
@@ -255,13 +253,22 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
                   color: warna),
             ]),
           );
-          if (tujuan == null) return chip;
-          return InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => tujuan)),
-            child: chip,
-          );
+          return Row(mainAxisSize: MainAxisSize.min, children: [
+            tujuan == null
+                ? chip
+                : InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => tujuan)),
+                    child: chip,
+                  ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Bantuan ${m.$2}',
+              icon: const Icon(Icons.help_outline, size: 19),
+              onPressed: () => PosHelp.open(context, m.$1),
+            ),
+          ]);
         }).toList(),
       ),
     );

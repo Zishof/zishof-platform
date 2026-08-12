@@ -7,8 +7,10 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import 'pos_help.dart';
 
-final _rp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _rp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Persediaan Apotik -- FASE B (formularium, batch/ED, PBF, opname, retur).</h3>
 ///
@@ -34,10 +36,16 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     super.initState();
     _tab = TabController(
         length: 5, vsync: this, initialIndex: widget.tabAwal.clamp(0, 4));
+    _tab.addListener(_ubahTab);
+  }
+
+  void _ubahTab() {
+    if (!_tab.indexIsChanging && mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _tab.removeListener(_ubahTab);
     _tab.dispose();
     super.dispose();
   }
@@ -48,6 +56,18 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
         title: const Text('Persediaan Apotik'),
+        actions: [
+          PosHelp.button(
+              context,
+              const [
+                'apotik_formularium',
+                'apotik_batch',
+                'apotik_pengadaan',
+                'apotik_stok_opname',
+                'apotik_retur'
+              ][_tab.index],
+              compact: true)
+        ],
         bottom: TabBar(
           controller: _tab,
           isScrollable: true,
@@ -111,8 +131,8 @@ class _SheetCariItemState extends State<_SheetCariItem> {
       try {
         final hasil = await ApiClient.instance
             .aksi('apotik_item_cari', {'keyword': v.trim(), 'page_size': 20});
-        setStateIfMounted(() =>
-            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        setStateIfMounted(() => _data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
       } catch (_) {
         // Biarkan daftar lama; kegagalan cari bukan blocker sheet.
       } finally {
@@ -189,8 +209,8 @@ class _TabFormulariumState extends State<_TabFormularium> {
         if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
         'page_size': 30,
       });
-      setStateIfMounted(() =>
-          _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -310,9 +330,8 @@ class _TabFormulariumState extends State<_TabFormularium> {
                               label: 'LASA', warna: Color(0xFFB8860B)),
                         StatusPill(
                             label: '${it['golonganObat']}',
-                            warna: terkendali
-                                ? AppColors.danger
-                                : AppColors.teal),
+                            warna:
+                                terkendali ? AppColors.danger : AppColors.teal),
                       ]),
                       onTap: () => _ubahProfil(it),
                     );
@@ -345,8 +364,8 @@ class _TabBatchMonitorState extends State<_TabBatchMonitor> {
     try {
       final hasil = await ApiClient.instance.aksi(
           'apotik_batch_monitor', {'hari_ke_depan': _hari, 'page_size': 100});
-      setStateIfMounted(() =>
-          _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -730,8 +749,8 @@ class _TabOpnameState extends State<_TabOpname> {
         ..._hasilTerakhir.map((r) => ListTile(
               dense: true,
               title: Text('${r['nama']}'),
-              subtitle: Text(
-                  'sistem ${r['stokSistem']} -> fisik ${r['qtyFisik']}'),
+              subtitle:
+                  Text('sistem ${r['stokSistem']} -> fisik ${r['qtyFisik']}'),
               trailing: Text('${(r['selisih'] as num?) ?? 0}',
                   style: TextStyle(
                       fontWeight: FontWeight.w800,
@@ -790,8 +809,8 @@ class _TabReturState extends State<_TabRetur> {
             .toList(),
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Retur tercatat.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Retur tercatat.')));
         setStateIfMounted(() {
           for (final b in _baris) {
             b.dispose();
