@@ -27,10 +27,14 @@ jobs:
         run: flutter pub get
       - name: Build Inventory Sales APK
         working-directory: apps/ebisnis
+        shell: bash
         run: >-
+          set -o pipefail;
           flutter build apk --release --flavor inventorySales
           -t lib/main_inventory_sales.dart
-          --dart-define=EBISNIS_VARIANT=inventory_sales
+          --dart-define=EBISNIS_VARIANT=inventory_sales 2>&1 | tee build-android.log
+          || { tail -n 80 build-android.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g'
+          | sed 's/^/::error title=Android build failed::/'; exit 1; }
       - name: Name APK
         shell: bash
         run: |
@@ -62,7 +66,15 @@ jobs:
       - name: Build Inventory Sales installer
         working-directory: apps/ebisnis
         shell: powershell
-        run: .\tool\build_windows_inventory_sales.ps1 -Installer
+        run: |
+          & .\tool\build_windows_inventory_sales.ps1 -Installer *>&1 |
+            Tee-Object -FilePath build-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = ((Get-Content build-windows.log -Tail 80) -join "`n")
+            $tail = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Windows build failed::$tail"
+            exit 1
+          }
       - name: Name installer
         shell: powershell
         run: |
