@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -99,44 +100,35 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     }
   }
 
-  /// Ekspor CSV -- spec meminta CSV di samping PDF utk katalog Laporan-
-  /// Laporan (~150 laporan), yg sebelumnya HANYA punya PDF. Dibangun MURNI
-  /// client-side dari `_hasil` yg sudah dimuat lewat "Tampilkan" (kolom/baris
-  /// SAMA persis dgn yg dirender `_TabelLaporan`) -- tak perlu aksi server
-  /// baru, cukup satu kali `laporan_jalankan` melayani PDF (server) & CSV
-  /// (klien) sekaligus.
-  Future<void> _eksporCsv() async {
+  /// Ekspor Excel (.xlsx) SUNGGUHAN -- sebelumnya tombol ini menyimpan CSV
+  /// (data koma) berekstensi .csv; sekarang benar-benar berkas OOXML yang
+  /// bisa dibuka Excel/LibreOffice langsung. Dibangun MANUAL dari XML minimal
+  /// (BUKAN lewat package `excel`, yang SETIAP versinya mewajibkan
+  /// `archive ^3.x`, padahal proyek ini sudah terkunci ke `archive ^4.0.9`
+  /// demi rantai `image`/pdf/printing -- lihat komentar dependency di
+  /// pubspec.yaml, jangan downgrade). Format .xlsx sendiri cuma ZIP berisi
+  /// beberapa file XML (OOXML) -- `archive` package yang SUDAH ada cukup utk
+  /// nge-zip-nya, tak perlu dependency baru. Data dari `_hasil` yg sudah
+  /// dimuat lewat "Tampilkan" (kolom/baris SAMA persis dgn `_TabelLaporan`).
+  Future<void> _eksporExcel() async {
     final hasil = _hasil;
     if (hasil == null) return;
     final kolom = ((hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     final baris = ((hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
     if (kolom.isEmpty) return;
 
-    String escapeCsv(String s) {
-      if (s.contains(',') || s.contains('"') || s.contains('\n')) {
-        return '"${s.replaceAll('"', '""')}"';
-      }
-      return s;
-    }
-
-    final buffer = StringBuffer();
-    buffer.writeln(kolom.map((k) => escapeCsv((k['l'] as String?) ?? '')).join(','));
-    for (final r in baris) {
-      buffer.writeln(r.map((v) => escapeCsv(v?.toString() ?? '')).join(','));
-    }
-
     try {
-      final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
-      final namaFile = '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.csv';
-      final path = await FilePicker.platform.saveFile(dialogTitle: 'Simpan Laporan (CSV)', fileName: namaFile, bytes: bytes, type: FileType.custom, allowedExtensions: ['csv']);
+      final bytes = _bangunXlsx(kolom, baris);
+      final namaFile = '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
+      final path = await FilePicker.platform.saveFile(dialogTitle: 'Simpan Laporan (Excel)', fileName: namaFile, bytes: bytes, type: FileType.custom, allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Sama seperti ekspor Excel Produk -- Desktop hanya mengembalikan path,
       // mobile sudah menulis via `bytes`; tulis ulang idempoten (isi sama).
       await File(path).writeAsBytes(bytes);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('CSV disimpan: $path')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel disimpan: $path')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengekspor CSV: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengekspor Excel: $e')));
     }
   }
 
@@ -214,9 +206,9 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton.icon(
-                        onPressed: _hasil == null ? null : _eksporCsv,
-                        icon: const Icon(Icons.table_chart_outlined),
-                        label: const Text('CSV'),
+                        onPressed: _hasil == null ? null : _eksporExcel,
+                        icon: const Icon(Icons.grid_on_outlined),
+                        label: const Text('Excel'),
                       ),
                     ],
                   ),
@@ -534,4 +526,123 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       ],
     );
   }
+}
+
+/// Ubah index kolom 0-based jadi huruf kolom Excel (0->A, 25->Z, 26->AA, dst).
+String _kolomExcel(int index) {
+  var i = index;
+  var s = '';
+  while (true) {
+    s = String.fromCharCode(65 + (i % 26)) + s;
+    i = i ~/ 26 - 1;
+    if (i < 0) break;
+  }
+  return s;
+}
+
+String _escapeXml(String s) => s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+
+/// Bangun .xlsx SATU sheet dari kontrak `kolom`/`baris` yang sama dgn
+/// [_TabelLaporan] -- kolom `t=="num"` ditulis sbg sel numerik ASLI (bukan
+/// teks berformat) supaya bisa dihitung/diurutkan langsung di Excel, sisanya
+/// (termasuk `t=="tgl"`, sudah diformat server) sbg teks apa adanya. String
+/// inline (`t="inlineStr"`) dipakai drpd `sharedStrings.xml` -- lebih
+/// sederhana utk laporan sekali-pakai spt ini (tak perlu tabel string
+/// terpisah), tetap valid OOXML.
+Uint8List _bangunXlsx(
+  List<Map<String, dynamic>> kolom,
+  List<List<dynamic>> baris,
+) {
+  final sheetXml = StringBuffer()
+    ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
+    ..write(
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
+    ..write('<sheetData>')
+    ..write('<row r="1">');
+  for (var i = 0; i < kolom.length; i++) {
+    final label = _escapeXml((kolom[i]['l'] as String?) ?? '');
+    sheetXml.write(
+        '<c r="${_kolomExcel(i)}1" t="inlineStr" s="1"><is><t xml:space="preserve">$label</t></is></c>');
+  }
+  sheetXml.write('</row>');
+
+  for (var r = 0; r < baris.length; r++) {
+    final row = baris[r];
+    final excelRow = r + 2;
+    sheetXml.write('<row r="$excelRow">');
+    for (var i = 0; i < kolom.length; i++) {
+      final v = i < row.length ? row[i] : null;
+      if (v == null) continue;
+      final ref = '${_kolomExcel(i)}$excelRow';
+      final tipe = kolom[i]['t'] as String? ?? 'text';
+      if (tipe == 'num' && v is num) {
+        sheetXml.write('<c r="$ref"><v>$v</v></c>');
+      } else {
+        final teks = _escapeXml(v.toString());
+        sheetXml.write(
+            '<c r="$ref" t="inlineStr"><is><t xml:space="preserve">$teks</t></is></c>');
+      }
+    }
+    sheetXml.write('</row>');
+  }
+  sheetXml
+    ..write('</sheetData>')
+    ..write('</worksheet>');
+
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      '<Default Extension="xml" ContentType="application/xml"/>'
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      '</Types>';
+
+  const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      '</Relationships>';
+
+  const workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      '<sheets><sheet name="Laporan" sheetId="1" r:id="rId1"/></sheets>'
+      '</workbook>';
+
+  const workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      '</Relationships>';
+
+  const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+      '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+      '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      '<cellXfs count="2">'
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+      '</cellXfs>'
+      '</styleSheet>';
+
+  final archive = Archive()
+    ..addFile(
+        ArchiveFile.bytes('[Content_Types].xml', utf8.encode(contentTypes)))
+    ..addFile(ArchiveFile.bytes('_rels/.rels', utf8.encode(rootRels)))
+    ..addFile(ArchiveFile.bytes('xl/workbook.xml', utf8.encode(workbookXml)))
+    ..addFile(ArchiveFile.bytes(
+        'xl/_rels/workbook.xml.rels', utf8.encode(workbookRels)))
+    ..addFile(ArchiveFile.bytes('xl/styles.xml', utf8.encode(stylesXml)))
+    ..addFile(ArchiveFile.bytes(
+        'xl/worksheets/sheet1.xml', utf8.encode(sheetXml.toString())));
+
+  return ZipEncoder().encodeBytes(archive);
 }

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:io';
 
 import 'package:barcode/barcode.dart' as bc;
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -104,9 +105,18 @@ const _daftarLebarRoll = [
   _LebarRoll(id: 'roll_58', label: '58 mm', lebarMm: 58, populer: true),
   _LebarRoll(id: 'roll_80', label: '80 mm', lebarMm: 80, populer: true),
   _LebarRoll(id: 'roll_100', label: '100 mm', lebarMm: 100),
+  // Terukur langsung dari roll TSC terpasang: lebar 108mm, margin tepi
+  // ~1-2mm, jarak antar kotak ~3mm (atur di Konfigurasi > Profil Toko >
+  // Margin Antar Kotak Price Tag) -- dgn tag lebar ~33mm (mis. "Barcode
+  // Mini 2 Baris"/"Barcode Mini Lebar") hasilnya pas 3 kotak per baris.
+  _LebarRoll(
+      id: 'roll_108',
+      label: '108 mm - Roll TSC terpasang (3 kotak/baris)',
+      lebarMm: 108,
+      populer: true),
   _LebarRoll(
       id: 'roll_110',
-      label: '110 mm - TSC TTP-244 Pro',
+      label: '110 mm - TSC TTP-244 Pro (spesifikasi resmi)',
       lebarMm: 110,
       populer: true),
 ];
@@ -463,6 +473,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   int _copies = 1;
   bool _tampilBarcode = true;
   bool _tampilKode = true;
+  // Khusus Rak & Promo -- teks angka barcode (BUKAN kolom Kode Produk),
+  // independen dari [_tampilBarcode] (gambar batang) supaya bisa
+  // ditampilkan salah satu, keduanya, atau tak satu pun.
+  bool _tampilBarcodeTeks = false;
   bool _tampilToko = true;
   bool _tampilLogo = false;
   bool _tampilHargaProduk = true;
@@ -470,6 +484,13 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   bool _memproses = false;
   String? _logoPath;
   double _marginKotakMm = 2;
+  // Khusus model Produk -- horizontal/vertikal bisa diatur terpisah supaya
+  // grid label bisa disesuaikan lebih dinamis dgn ketersediaan kertas/roll
+  // di lapangan (mis. roll agak sempit butuh margin horizontal lebih kecil
+  // spy tetap muat 3 kolom, tanpa perlu mengubah margin vertikal). Rak &
+  // Promo TETAP pakai [_marginKotakMm] tunggal (dari Konfigurasi) spt semula.
+  double _marginHorizontalMm = 2;
+  double _marginVerticalMm = 2;
   Timer? _debounceSimpanPengaturan;
 
   /// Controller yang isinya ikut disimpan sbg "pengaturan print" per model
@@ -583,9 +604,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       await PengaturanPriceTag.instance.muat();
       final hasil = await ApiClient.instance.aksi('price_tag_list_produk', {});
       final arr = (hasil['data'] as List?) ?? [];
+      final produk =
+          arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      await _lengkapiBarcodeDariCacheLokal(produk);
       setStateIfMounted(() {
-        _semuaProduk =
-            arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _semuaProduk = produk;
         _logoPath = PengaturanStruk.instance.priceTagLogoPath;
         _marginKotakMm = PengaturanStruk.instance.priceTagMarginKotakMm;
         _model = _modelDari(PengaturanPriceTag.instance.modelTerakhir) ?? _model;
@@ -595,6 +618,39 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  /// Gap-closure "barcode dalam teks masih Kode Produk walau data Barcode
+  /// terisi": aksi server `price_tag_list_produk` ternyata TIDAK selalu
+  /// mengirim kolom `barcode` tiap produk -- padahal katalog offline-first
+  /// Kasir (`produk_cache`, disinkron via aksi katalog terpisah utk scan
+  /// barcode sehari-hari) SUDAH andal menyimpannya. Lengkapi [produk] dari
+  /// cache lokal itu (join by id) SEBELUM kode manapun (mis. [_kodeBarcode])
+  /// sempat membaca `p['barcode']`, spy fallback ke Kode Produk cuma
+  /// terjadi kalau memang benar-benar tak ada barcode di mana pun -- bukan
+  /// krn endpoint ini saja yang kebetulan tak mengirimnya.
+  Future<void> _lengkapiBarcodeDariCacheLokal(
+      List<Map<String, dynamic>> produk) async {
+    try {
+      final cache = await CoreDb.instance.produkCache();
+      final barcodePerId = <int, String>{};
+      for (final row in cache) {
+        final id = (row['id'] as num?)?.toInt();
+        final barcode = '${row['barcode'] ?? ''}'.trim();
+        if (id != null && barcode.isNotEmpty) barcodePerId[id] = barcode;
+      }
+      if (barcodePerId.isEmpty) return;
+      for (final p in produk) {
+        if ('${p['barcode'] ?? ''}'.trim().isNotEmpty) continue;
+        final id = (p['id'] as num?)?.toInt();
+        final barcode = id == null ? null : barcodePerId[id];
+        if (barcode != null) p['barcode'] = barcode;
+      }
+    } catch (_) {
+      // Cache lokal gagal dibaca (mis. belum pernah sinkron) -- bukan
+      // blocker, price tag tetap bisa dicetak, cuma fallback ke Kode
+      // Produk spt sebelum gap-closure ini ada.
     }
   }
 
@@ -629,6 +685,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   _LebarRoll get _lebarRollAktif => _daftarLebarRoll.firstWhere(
       (r) => r.id == _lebarRollId,
       orElse: () => _daftarLebarRoll.first);
+
+  /// Margin horizontal/vertikal yang benar-benar dipakai saat ini -- Produk
+  /// pakai [_marginHorizontalMm]/[_marginVerticalMm] independen (lihat
+  /// deklarasinya), model lain tetap pakai [_marginKotakMm] tunggal utk
+  /// kedua arah spt semula (dari Konfigurasi > Profil Toko).
+  double get _marginHorizontalAktifMm =>
+      _model == ModelPriceTag.produk ? _marginHorizontalMm : _marginKotakMm;
+  double get _marginVerticalAktifMm =>
+      _model == ModelPriceTag.produk ? _marginVerticalMm : _marginKotakMm;
 
   /// Tombol ringkas pengganti daftar ChoiceChip yang dulu selalu terbuka di
   /// panel -- dengan ukuran per model sekarang bisa puluhan (price gun,
@@ -892,6 +957,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'lebarRollId': _lebarRollId,
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
+          'tampilBarcodeTeks': _tampilBarcodeTeks,
           'tampilToko': _tampilToko,
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
@@ -921,12 +987,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
           'tampilHargaProduk': _tampilHargaProduk,
+          'marginHorizontalMm': _marginHorizontalMm,
+          'marginVerticalMm': _marginVerticalMm,
         };
       case ModelPriceTag.promo:
         return {
           ...umum,
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
+          'tampilBarcodeTeks': _tampilBarcodeTeks,
           'tampilToko': _tampilToko,
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
@@ -981,6 +1050,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
 
     _tampilBarcode = boolean('tampilBarcode', true);
     _tampilKode = boolean('tampilKode', true);
+    _tampilBarcodeTeks = boolean('tampilBarcodeTeks', false);
 
     switch (model) {
       case ModelPriceTag.rak:
@@ -1012,6 +1082,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _tampilHargaProduk = boolean('tampilHargaProduk', true);
         _tampilToko = false;
         _tampilLogo = false;
+        _tampilBarcodeTeks = false;
+        // Belum pernah diutak-atik -> ikut Margin Antar Kotak global
+        // (Konfigurasi > Profil Toko, sudah kebaca ke [_marginKotakMm] di
+        // [_muat] sebelum method ini jalan) spy tampilan awal tak berubah;
+        // begitu disentuh sekali, tersimpan independen spt field lainnya.
+        _marginHorizontalMm = ((data?['marginHorizontalMm'] as num?)
+                    ?.toDouble() ??
+                _marginKotakMm)
+            .clamp(0, 8)
+            .toDouble();
+        _marginVerticalMm = ((data?['marginVerticalMm'] as num?)?.toDouble() ??
+                _marginKotakMm)
+            .clamp(0, 8)
+            .toDouble();
       case ModelPriceTag.promo:
         _tampilToko = boolean('tampilToko', true);
         _tampilLogo = boolean('tampilLogo', false);
@@ -1117,6 +1201,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         tag: semuaTag,
         tampilBarcode: _tampilBarcode,
         tampilKode: _tampilKode,
+        tampilBarcodeTeks: _tampilBarcodeTeks,
         tampilToko: _tampilToko,
         tampilHargaProduk: _tampilHargaProduk,
         promo: _controllerPromo.text.trim(),
@@ -1147,7 +1232,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         promoHargaTextHex: _hexPdf(_controllerPromoHargaText, '#5F5555'),
         bungkusLogo: _bungkusLogo,
         logoWrapBgHex: _hexPdf(_controllerLogoWrapBg, '#FFFFFF'),
-        marginKotakMm: _marginKotakMm,
+        marginHorizontalMm: _marginHorizontalAktifMm,
+        marginVerticalMm: _marginVerticalAktifMm,
         rakHeaderSize: _ukuranTeks(_controllerRakHeaderSize, 8),
         rakProdukSize: _ukuranTeks(_controllerRakProdukSize, 5.8),
         rakKodeSize: _ukuranTeks(_controllerRakKodeSize, 7),
@@ -1539,6 +1625,37 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             ],
           ],
         ],
+        if (_model == ModelPriceTag.produk) ...[
+          const SizedBox(height: 16),
+          const Text('Margin Antar Kotak',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(
+            'Atur horizontal & vertikal terpisah supaya grid label bisa '
+            'disesuaikan langsung dgn ketersediaan kertas/roll di lapangan. '
+            'Nilai awal ikut Margin Antar Kotak di Konfigurasi, tapi '
+            'perubahan di sini hanya berlaku utk Stiker Produk.',
+            style: const TextStyle(
+                fontSize: 11.5, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          _sliderMarginKotak(
+            label: 'Horizontal',
+            value: _marginHorizontalMm,
+            onChanged: (v) {
+              setStateIfMounted(() => _marginHorizontalMm = v);
+              unawaited(_simpanPengaturanModel(_model));
+            },
+          ),
+          _sliderMarginKotak(
+            label: 'Vertikal',
+            value: _marginVerticalMm,
+            onChanged: (v) {
+              setStateIfMounted(() => _marginVerticalMm = v);
+              unawaited(_simpanPengaturanModel(_model));
+            },
+          ),
+        ],
         const SizedBox(height: 16),
         const Text('Salinan per Produk',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1639,6 +1756,19 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
+        if (_model != ModelPriceTag.produk)
+          CheckboxListTile(
+            value: _tampilBarcodeTeks,
+            onChanged: (v) {
+              setStateIfMounted(() => _tampilBarcodeTeks = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
+            title: const Text('Tampilkan Barcode dalam Teks'),
+            subtitle: const Text(
+                'Barcode produk sbg teks; kosong = pakai Kode Produk'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
         if (_model == ModelPriceTag.produk)
           CheckboxListTile(
             value: _tampilHargaProduk,
@@ -1750,6 +1880,41 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         ),
         onChanged: (_) => setStateIfMounted(() {}),
       ),
+    );
+  }
+
+  Widget _sliderMarginKotak({
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
+    final nilai = value.clamp(0, 8).toDouble();
+    return Row(
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(label,
+              style: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: Slider(
+            value: nilai,
+            min: 0,
+            max: 8,
+            divisions: 16,
+            label: '${nilai.toStringAsFixed(1)} mm',
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          child: Text('${nilai.toStringAsFixed(1)} mm',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
+        ),
+      ],
     );
   }
 
@@ -2153,29 +2318,35 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     // logika PDF sesungguhnya).
     final lebarKertas =
         _kertasCetak == KertasCetak.thermal ? _lebarRollAktif.lebarMm : 210.0;
-    const gutterMm = 2.0;
+    // Pakai margin H/V sungguhan (bukan hardcode) supaya preview ini benar-
+    // benar mencerminkan slider Margin Antar Kotak -- kalau tidak, user
+    // menggeser slider tapi preview-nya diam saja, jadi tidak berguna utk
+    // menyesuaikan ke ketersediaan kertas di lapangan.
+    final gutterHMm = _marginHorizontalAktifMm;
+    final gutterVMm = _marginVerticalAktifMm;
     final kolom =
-        max(1, (lebarKertas + gutterMm) ~/ (ukuran.lebarMm + gutterMm));
+        max(1, (lebarKertas + gutterHMm) ~/ (ukuran.lebarMm + gutterHMm));
     final baris = _kertasCetak == KertasCetak.thermal
         ? 4
         : max(
             1,
-            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) + gutterMm) ~/
-                (ukuran.tinggiMm + gutterMm));
+            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) + gutterVMm) ~/
+                (ukuran.tinggiMm + gutterVMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: kolom,
         childAspectRatio: ukuran.lebarMm / ukuran.tinggiMm,
-        crossAxisSpacing: gutterMm,
-        mainAxisSpacing: gutterMm,
+        crossAxisSpacing: gutterHMm,
+        mainAxisSpacing: gutterVMm,
       ),
       itemCount: min(kolom * baris, 36),
       itemBuilder: (_, i) => Opacity(
         opacity: i == 0 ? 1 : 0.28,
         child: Padding(
-          padding: EdgeInsets.all((_marginKotakMm / 2).clamp(0, 4)),
+          padding:
+              EdgeInsets.all((min(gutterHMm, gutterVMm) / 2).clamp(0, 4)),
           child: _previewTagMini(produk),
         ),
       ),
@@ -2383,6 +2554,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final flexHeader = (headerMm * 10).round().clamp(1, 999999);
     final flexStrip = (stripMm * 10).round().clamp(1, 999999);
     final flexBody = (bodyMm * 10).round().clamp(1, 999999);
+    final tampilAreaBarcode =
+        _tampilBarcode || (_tampilBarcodeTeks && barcode.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2455,6 +2628,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             child: Column(
               children: [
                 Expanded(
+                  // Harga dominan (flex 3), barcode kebagian flex 1 -- BUKAN
+                  // tinggi tetap spt sebelumnya, jadi selalu pas dgn sisa
+                  // ruang body (yang kini bisa berubah krn tinggi Header/
+                  // Strip Produk bisa dikustom), tak lagi terpotong.
+                  flex: tampilAreaBarcode ? 3 : 1,
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2469,11 +2647,31 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     ),
                   ),
                 ),
-                if (_tampilBarcode)
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
-                    child: _PreviewBarcode(data: barcode, height: 12),
+                if (tampilAreaBarcode)
+                  Expanded(
+                    flex: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 2),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_tampilBarcode)
+                            Expanded(
+                              child: _PreviewBarcode(
+                                  data: barcode, height: double.infinity),
+                            ),
+                          if (_tampilBarcodeTeks && barcode.isNotEmpty)
+                            Text(barcode,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: kodeSize * 0.7,
+                                    letterSpacing: 1,
+                                    color: kodeText)),
+                        ],
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -2649,6 +2847,13 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               child: _PreviewBarcode(data: barcode, height: 18),
             ),
           ),
+        if (_tampilBarcodeTeks && barcode.isNotEmpty)
+          ColoredBox(
+            color: bodyBg,
+            child: Center(
+                child: Text(barcode,
+                    style: TextStyle(fontSize: kodeSize, letterSpacing: 1))),
+          ),
         if (_tampilKode)
           ColoredBox(
             color: bodyBg,
@@ -2706,12 +2911,20 @@ class _PreviewBarcode extends StatelessWidget {
         );
       }),
     );
-    if (height.isInfinite) {
-      return SizedBox.expand(child: barcode);
-    }
+    // Row(stretch) diberi tinggi TEGAS dulu (bukan langsung infinite) supaya
+    // selalu punya batas jelas utk mengukur diri, baru FittedBox di luar
+    // menyusutkannya ke ruang yang BENAR-BENAR tersedia (lebar box tag +
+    // tinggi sisa setelah header/strip/harga) -- mencegah barcode melebar
+    // keluar garis tepi tag (lebar sebelumnya sama sekali tak dibatasi)
+    // ATAUPUN terpotong di bawah (tinggi sebelumnya hardcode/tetap).
+    final tinggiUkur = height.isFinite ? height : 20.0;
     return SizedBox(
-      height: height,
-      child: barcode,
+      width: double.infinity,
+      height: height.isFinite ? height : null,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: SizedBox(height: tinggiUkur, child: barcode),
+      ),
     );
   }
 }
@@ -2724,6 +2937,7 @@ class _PriceTagPdfBuilder {
   final List<Map<String, dynamic>> tag;
   final bool tampilBarcode;
   final bool tampilKode;
+  final bool tampilBarcodeTeks;
   final bool tampilToko;
   final bool tampilHargaProduk;
   final String promo;
@@ -2751,7 +2965,8 @@ class _PriceTagPdfBuilder {
   final String promoHargaTextHex;
   final bool bungkusLogo;
   final String logoWrapBgHex;
-  final double marginKotakMm;
+  final double marginHorizontalMm;
+  final double marginVerticalMm;
   final double rakHeaderSize;
   final double rakProdukSize;
   final double rakKodeSize;
@@ -2775,6 +2990,7 @@ class _PriceTagPdfBuilder {
     required this.tag,
     required this.tampilBarcode,
     required this.tampilKode,
+    required this.tampilBarcodeTeks,
     required this.tampilToko,
     required this.tampilHargaProduk,
     required this.promo,
@@ -2802,7 +3018,8 @@ class _PriceTagPdfBuilder {
     required this.promoHargaTextHex,
     required this.bungkusLogo,
     required this.logoWrapBgHex,
-    required this.marginKotakMm,
+    required this.marginHorizontalMm,
+    required this.marginVerticalMm,
     required this.rakHeaderSize,
     required this.rakProdukSize,
     required this.rakKodeSize,
@@ -2837,14 +3054,25 @@ class _PriceTagPdfBuilder {
 
   String _rupiah(num? v) => _formatRupiah(v);
 
-  pw.Widget? _barcode(String kode, {double height = 40}) {
+  /// [width] WAJIB diisi kalau widget ini akan dibungkus [pw.FittedBox]
+  /// (spt di [_kotakRak]) -- `pw.BarcodeWidget` tanpa `width` eksplisit
+  /// membiarkan lebarnya mengikuti constraint dari parent, dan `FittedBox`
+  /// SELALU mengukur anaknya dgn constraint TAK TERBATAS (`BoxConstraints()`)
+  /// utk cari ukuran alaminya -- tanpa width tetap, lebar "alami" barcode
+  /// jadi `double.infinity`, yang bikin `FittedBox` menghitung rasio skala
+  /// `sesuatu / Infinity` (jadi NaN) lalu `doc.save()` gagal dgn
+  /// `Failed assertion: '!value.isNaN'`. Ini bukan bug spesifik ukuran tag
+  /// tertentu -- SELALU terjadi begitu ada barcode di dalam FittedBox tanpa
+  /// width, makanya sebelumnya tombol Cetak di Rak SELALU gagal.
+  pw.Widget? _barcode(String kode, {double height = 40, double? width}) {
     if (!tampilBarcode || kode.isEmpty) return null;
     try {
       return pw.BarcodeWidget(
           barcode: bc.Barcode.code128(),
           data: kode,
           drawText: false,
-          height: height);
+          height: height,
+          width: width);
     } catch (_) {
       return null;
     }
@@ -2856,10 +3084,18 @@ class _PriceTagPdfBuilder {
   ) {
     final lebar = ukuran.lebarMm * PdfPageFormat.mm;
     final tinggi = ukuran.tinggiMm * PdfPageFormat.mm;
-    final margin = marginKotakMm.clamp(0, 8).toDouble();
-    final gutter = margin * PdfPageFormat.mm;
+    // Horizontal & vertikal SENGAJA independen (lihat
+    // [_PriceTagScreenState._marginHorizontalAktifMm]/[_marginVerticalAktifMm])
+    // supaya grid bisa disesuaikan langsung dgn ketersediaan kertas/roll di
+    // lapangan (mis. roll agak sempit cukup kecilkan margin horizontal tanpa
+    // ikut mengubah jarak antar baris).
+    final marginH = marginHorizontalMm.clamp(0, 8).toDouble();
+    final marginV = marginVerticalMm.clamp(0, 8).toDouble();
+    final gutterH = marginH * PdfPageFormat.mm;
+    final gutterV = marginV * PdfPageFormat.mm;
     final innerPadding =
-        (margin * 0.25).clamp(0, 1).toDouble() * PdfPageFormat.mm;
+        (min(marginH, marginV) * 0.25).clamp(0, 1).toDouble() *
+            PdfPageFormat.mm;
 
     if (kertasCetak == KertasCetak.thermal) {
       // Roll thermal: LEBAR halaman tetap (mengikuti lebar roll dipilih --
@@ -2871,24 +3107,25 @@ class _PriceTagPdfBuilder {
       // murni supaya satu job cetak tidak melebihi panjang label maksimal
       // printer thermal pada umumnya (mis. TTP-244 Pro: 2.286mm/90").
       final lebarRoll = lebarRollMm * PdfPageFormat.mm;
-      final kolom = max(1, (lebarRoll + gutter) ~/ (lebar + gutter));
+      final kolom = max(1, (lebarRoll + gutterH) ~/ (lebar + gutterH));
       const maxTinggiRollMm = 2000.0;
       final barisMaks = max(
           1,
-          ((maxTinggiRollMm * PdfPageFormat.mm) + gutter) ~/ (tinggi + gutter));
+          ((maxTinggiRollMm * PdfPageFormat.mm) + gutterV) ~/
+              (tinggi + gutterV));
       final perHalamanMaks = kolom * barisMaks;
 
       for (var start = 0; start < tag.length; start += perHalamanMaks) {
         final slice = tag.skip(start).take(perHalamanMaks).toList();
         final baris = (slice.length / kolom).ceil();
-        final tinggiHalaman = baris * tinggi + max(0, baris - 1) * gutter;
+        final tinggiHalaman = baris * tinggi + max(0, baris - 1) * gutterV;
         final pageRoll = PdfPageFormat(lebarRoll, tinggiHalaman, marginAll: 0);
         doc.addPage(
           pw.Page(
             pageFormat: pageRoll,
             build: (_) => pw.Wrap(
-              spacing: gutter,
-              runSpacing: gutter,
+              spacing: gutterH,
+              runSpacing: gutterV,
               children: slice
                   .map((p) => pw.SizedBox(
                         width: lebar,
@@ -2914,8 +3151,8 @@ class _PriceTagPdfBuilder {
     );
     final usableWidth = page.availableWidth;
     final usableHeight = page.availableHeight;
-    final kolom = max(1, (usableWidth + gutter) ~/ (lebar + gutter));
-    final baris = max(1, (usableHeight + gutter) ~/ (tinggi + gutter));
+    final kolom = max(1, (usableWidth + gutterH) ~/ (lebar + gutterH));
+    final baris = max(1, (usableHeight + gutterV) ~/ (tinggi + gutterV));
     final perHalaman = max(1, kolom * baris);
 
     for (var start = 0; start < tag.length; start += perHalaman) {
@@ -2924,8 +3161,8 @@ class _PriceTagPdfBuilder {
         pw.Page(
           pageFormat: page,
           build: (_) => pw.Wrap(
-            spacing: gutter,
-            runSpacing: gutter,
+            spacing: gutterH,
+            runSpacing: gutterV,
             children: slice
                 .map((p) => pw.SizedBox(
                       width: lebar,
@@ -2956,7 +3193,20 @@ class _PriceTagPdfBuilder {
   pw.Widget _kotakRak(Map<String, dynamic> p) {
     final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
-    final bcw = _barcode(barcode, height: min(9, ukuran.tinggiMm * 0.2));
+    // width WAJIB diisi krn bcw dibungkus FittedBox di bawah -- lihat
+    // JavaDoc [_barcode]. Nilai persisnya tidak krusial (FittedBox tetap
+    // menyusutkannya proporsional ke ruang yang benar-benar tersedia),
+    // cukup ikut lebar tag sbg ukuran "alami" sebelum diskalakan.
+    final bcw = _barcode(barcode,
+        height: min(9, ukuran.tinggiMm * 0.2),
+        width: ukuran.lebarMm * PdfPageFormat.mm);
+    // Area gambar+teks barcode tampil kalau salah satu toggle-nya aktif --
+    // supaya user bisa pilih gambar saja, teks saja, keduanya, atau tak
+    // satu pun (lihat gap-closure "Tampilkan Barcode dalam Teks"). Teks
+    // pakai [barcode] yg SAMA dgn gambar (barcode asli produk, fallback ke
+    // Kode Produk kalau kosong) -- BUKAN barcode mentah tanpa fallback.
+    final tampilAreaBarcode =
+        bcw != null || (tampilBarcodeTeks && barcode.isNotEmpty);
     final headerH = rakHeaderTinggiMm * PdfPageFormat.mm;
     final stripH = rakStripTinggiMm * PdfPageFormat.mm;
     final skala = (ukuran.tinggiMm / 30).clamp(0.7, 1.8);
@@ -3013,25 +3263,68 @@ class _PriceTagPdfBuilder {
           pw.Expanded(
             child: pw.Container(
               color: PdfColor.fromHex(rakBodyBgHex),
-              child: pw.Center(
-                child: pw.FittedBox(
-                  fit: pw.BoxFit.scaleDown,
-                  child: pw.Text(
-                    _teksHargaRakPdf(p),
-                    style: pw.TextStyle(
-                      fontSize: rakHargaSize * skala,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex(rakHargaTextHex),
+              // Harga (flex 3) + barcode (flex 1) berbagi Expanded yang
+              // SAMA -- bukan barcode ditaruh sbg sibling tetap di luar
+              // Expanded spt sebelumnya (bisa memaksa total tinggi melebihi
+              // kotak & terpotong di margin bawah kalau tinggi Header/Strip
+              // Produk dikustom lebih besar). FittedBox pada barcode jadi
+              // jaring pengaman kedua thd lebar yang melebihi kotak.
+              child: pw.Column(
+                children: [
+                  pw.Expanded(
+                    flex: tampilAreaBarcode ? 3 : 1,
+                    child: pw.Center(
+                      child: pw.FittedBox(
+                        fit: pw.BoxFit.scaleDown,
+                        child: pw.Text(
+                          _teksHargaRakPdf(p),
+                          style: pw.TextStyle(
+                            fontSize: rakHargaSize * skala,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColor.fromHex(rakHargaTextHex),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  if (tampilAreaBarcode)
+                    pw.Expanded(
+                      flex: 1,
+                      child: pw.Padding(
+                        padding:
+                            const pw.EdgeInsets.symmetric(horizontal: 8),
+                        child: bcw == null
+                            ? pw.Center(
+                                child: pw.Text(barcode,
+                                    maxLines: 1,
+                                    style: pw.TextStyle(
+                                        fontSize: rakKodeSize * skala,
+                                        letterSpacing: 1,
+                                        color:
+                                            PdfColor.fromHex(rakKodeTextHex))),
+                              )
+                            : pw.Column(
+                                children: [
+                                  pw.Expanded(
+                                    child: pw.FittedBox(
+                                        fit: pw.BoxFit.scaleDown, child: bcw),
+                                  ),
+                                  if (tampilBarcodeTeks && barcode.isNotEmpty)
+                                    pw.Text(barcode,
+                                        maxLines: 1,
+                                        style: pw.TextStyle(
+                                            fontSize: rakKodeSize * skala,
+                                            letterSpacing: 1,
+                                            color: PdfColor.fromHex(
+                                                rakKodeTextHex))),
+                                ],
+                              ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
-          if (bcw != null)
-            pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8),
-                child: bcw),
         ],
       ),
     );
@@ -3252,6 +3545,15 @@ class _PriceTagPdfBuilder {
               color: PdfColor.fromHex(promoBodyBgHex),
               padding: const pw.EdgeInsets.symmetric(horizontal: 24),
               child: bcw,
+            ),
+          if (tampilBarcodeTeks && barcode.isNotEmpty)
+            pw.Container(
+              color: PdfColor.fromHex(promoBodyBgHex),
+              child: pw.Center(
+                child: pw.Text(barcode,
+                    style: pw.TextStyle(
+                        fontSize: promoKodeSize * skala, letterSpacing: 1)),
+              ),
             ),
           if (tampilKode)
             pw.Container(
