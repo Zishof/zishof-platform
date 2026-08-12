@@ -40,7 +40,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -215,8 +215,11 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondaryOf(context),
             indicatorColor: AppColors.primary,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: const [
               Tab(text: 'Kartu Mutasi Stok'),
+              Tab(text: 'Monitor Keluar/Masuk'),
               Tab(text: 'Input Opname'),
               Tab(text: 'SO by Scan'),
             ],
@@ -224,6 +227,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
           Expanded(
             child: TabBarView(controller: _tab, children: const [
               _TabMutasiStok(),
+              _TabMonitorBarang(),
               _TabInputOpname(),
               _TabSoByScan(),
             ]),
@@ -418,6 +422,207 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
     );
   }
 
+}
+
+/// "Monitor Keluar/Masuk Barang" (gap-closure, permintaan user 2026-08-12) -- buku besar mutasi
+/// stok yang menyatukan SEMUA sumber (Pengadaan, Stok Opname, Penjualan, Pemakaian Bahan Baku,
+/// Retur Penjualan/Pembelian, Mutasi Antar Outlet) jadi satu daftar kronologis, lewat aksi server
+/// baru `stok_mutasi_ledger` (lihat JavaDoc `KantinHelper.stokMutasiLedger`). BEDA dari tab "Kartu
+/// Mutasi Stok" (agregat KPI saja) -- ini baris-per-baris, kasir/admin bisa lihat KENAPA stok satu
+/// produk berubah tanpa buka 5+ layar berbeda.
+class _TabMonitorBarang extends StatefulWidget {
+  const _TabMonitorBarang();
+
+  @override
+  State<_TabMonitorBarang> createState() => _TabMonitorBarangState();
+}
+
+class _TabMonitorBarangState extends State<_TabMonitorBarang> {
+  bool _memuat = true;
+  bool _memuatLagi = false;
+  String? _pesanError;
+  List<Map<String, dynamic>> _data = [];
+  bool _adaLagi = false;
+  int _hari = 30;
+  final _cariController = TextEditingController();
+  String _kataKunci = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    _cariController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _pesanError = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': 0});
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _adaLagi = hasil['adaLagi'] == true;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = e.toString());
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _muatLebihBanyak() async {
+    setStateIfMounted(() => _memuatLagi = true);
+    try {
+      final hasil = await ApiClient.instance.aksi(
+          'stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': _data.length});
+      setStateIfMounted(() {
+        _data.addAll(((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        _adaLagi = hasil['adaLagi'] == true;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memuat lebih banyak: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatLagi = false);
+    }
+  }
+
+  List<Map<String, dynamic>> get _tersaring {
+    final k = _kataKunci.trim().toLowerCase();
+    if (k.isEmpty) return _data;
+    return _data.where((r) {
+      return '${r['produkNama'] ?? ''}'.toLowerCase().contains(k) ||
+          '${r['produkKode'] ?? ''}'.toLowerCase().contains(k) ||
+          '${r['jenis'] ?? ''}'.toLowerCase().contains(k) ||
+          '${r['keterangan'] ?? ''}'.toLowerCase().contains(k);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: AppSearchField(
+                  controller: _cariController,
+                  hintText: 'Cari produk/jenis/keterangan...',
+                  onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
+                ),
+              ),
+              const SizedBox(width: 10),
+              DropdownButton<int>(
+                value: _hari,
+                items: const [
+                  DropdownMenuItem(value: 7, child: Text('7 hari')),
+                  DropdownMenuItem(value: 30, child: Text('30 hari')),
+                  DropdownMenuItem(value: 90, child: Text('90 hari')),
+                  DropdownMenuItem(value: 365, child: Text('1 tahun')),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setStateIfMounted(() => _hari = v);
+                  _muat();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_memuat)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_pesanError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                children: [
+                  Text(_pesanError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                ],
+              ),
+            )
+          else ...[
+            AppDataTable(
+              minWidth: 800,
+              emptyText: 'Tidak ada mutasi stok dalam periode ini.',
+              columns: const [
+                AppTableColumn('Waktu', flex: 2),
+                AppTableColumn('Jenis', flex: 2),
+                AppTableColumn('Produk', flex: 3),
+                AppTableColumn('Qty', flex: 1, align: TextAlign.right),
+                AppTableColumn('Keterangan', flex: 3),
+              ],
+              rows: _tersaring.map((r) {
+                final qty = (r['qty'] as num?)?.toDouble() ?? 0;
+                final masuk = qty >= 0;
+                return AppTableRowData(cells: [
+                  AppTableCell.text('${r['waktu'] ?? ''}', flex: 2),
+                  AppTableCell(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: AppColors.latarLembut(masuk ? AppColors.success : AppColors.danger),
+                          borderRadius: BorderRadius.circular(999)),
+                      child: Text('${r['jenis'] ?? ''}',
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: masuk ? AppColors.success : AppColors.danger)),
+                    ),
+                  ),
+                  AppTableCell.text(
+                      '${r['produkNama'] ?? ''}${(r['produkKode'] ?? '').toString().isEmpty ? '' : ' (${r['produkKode']})'}',
+                      flex: 3),
+                  AppTableCell(
+                    flex: 1,
+                    align: TextAlign.right,
+                    child: Text(
+                        '${masuk ? '+' : ''}${_formatAngka.format(qty)}',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: masuk ? AppColors.success : AppColors.danger)),
+                  ),
+                  AppTableCell.text('${r['keterangan'] ?? ''}'.isEmpty ? '-' : '${r['keterangan']}',
+                      flex: 3),
+                ]);
+              }).toList(),
+            ),
+            if (_adaLagi) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: OutlinedButton(
+                  onPressed: _memuatLagi ? null : _muatLebihBanyak,
+                  child: _memuatLagi
+                      ? const SizedBox(
+                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Muat Lebih Banyak'),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _TabInputOpname extends StatefulWidget {

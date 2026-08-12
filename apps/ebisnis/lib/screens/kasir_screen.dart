@@ -76,6 +76,16 @@ class _KasirScreenState extends State<KasirScreen> {
   bool? _kasTerbuka;
   double _modalAwalKas = 0;
 
+  /// Sinkron latar BERKALA (30 detik, pola PERSIS `mulaiSinkronSesiKasBerkala`
+  /// versi Electron main.js) selama layar Kasir terbuka -- gap-closure: SEBELUMNYA
+  /// `_cobaSinkronBukaKasPending` cuma jalan sbg efek-samping transaksi selesai
+  /// ([_muatKasSaatIni], via [_perbaruiJumlahPending]), jadi TRANSAKSI PERTAMA
+  /// setelah gagal sinkron (belum pernah ada transaksi sukses sama sekali) tak
+  /// pernah dapat kesempatan retry lebih dulu -- checkout tetap ditolak server
+  /// walau topbar sudah "Kas Terbuka". Timer ini jalan independen dari
+  /// transaksi/navigasi, persis spt versi Electron.
+  Timer? _timerSinkronSesiKas;
+
   /// Kas Sekarang -- pil saldo kas berjalan di toolbar (padanan indikator
   /// "Rp 1.900.000" pada referensi Electron). `null` = belum diketahui/tak
   /// relevan (mis. toko belum wajib-sesi-kas) -- pil disembunyikan saat itu,
@@ -112,6 +122,8 @@ class _KasirScreenState extends State<KasirScreen> {
     _muatPreferensiTampilan();
     _muatAwal();
     _jadwalkanFokusCariItem();
+    _timerSinkronSesiKas = Timer.periodic(
+        const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
   }
 
   @override
@@ -132,6 +144,7 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void dispose() {
     _debounceHargaCoret?.cancel();
+    _timerSinkronSesiKas?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
@@ -421,6 +434,16 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _periksaSesiKas() async {
+    // Beri kesempatan sesi lokal yang masih pending (mis. baru dibuka di layar
+    // Kasir SEBELUMNYA, gagal sinkron, lalu kasir pindah menu & kembali lagi)
+    // utk sinkron DULU sebelum status "tertutup" dari server dipercaya --
+    // gap-closure: SEBELUMNYA method ini langsung percaya jawaban server &
+    // memanggil tutupSemuaSesiKasLokal() kalau server blm tahu, MENGHAPUS baris
+    // pending itu SEBELUM ia pernah dapat kesempatan coba sinkron sama sekali
+    // (retry lama cuma jalan lewat _muatKasSaatIni, yg no-op selama _kasTerbuka
+    // masih null di pemuatan layar pertama) -- itulah sumber "Buka Kas muncul
+    // lagi setiap ganti menu" walau baru saja dibuka.
+    await _cobaSinkronBukaKasPending();
     try {
       final hasil = await ApiClient.instance
           .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
