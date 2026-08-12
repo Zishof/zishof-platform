@@ -62,7 +62,7 @@ class CoreDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -100,7 +100,30 @@ class CoreDb {
         // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
       }
     }
+    if (versiLama < 4) {
+      // P7 varian Inventory & Sales: outbox TERPISAH dari transaksi_pending --
+      // flush POS existing mengirim SEMUA baris pending ke aksi 'bayar', jadi
+      // perintah si_* (kwitansi/biaya) tidak boleh menumpang tabel itu.
+      try {
+        await db.execute(_ddlOutboxIs);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
+      }
+    }
   }
+
+  static const _ddlOutboxIs = '''
+      CREATE TABLE outbox_is (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        aksi TEXT NOT NULL,
+        kode_unik TEXT UNIQUE,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        pesan_error TEXT,
+        percobaan INTEGER DEFAULT 0,
+        dibuat_pada TEXT NOT NULL
+      )
+    ''';
 
   Future<void> _buatSkema(Database db, int versi) async {
     await db.execute('''
@@ -177,6 +200,62 @@ class CoreDb {
         disinkronkan INTEGER DEFAULT 0
       )
     ''');
+
+    await db.execute(_ddlOutboxIs);
+  }
+
+  // ============================== OUTBOX INVENTORY & SALES (P7) ==============================
+  // Outbox TYPED utk perintah idempoten varian IS (si_collection_create,
+  // si_expense_create, ...) -- tiap baris menyimpan NAMA AKSI + body JSON;
+  // flush mengirim ke aksi aslinya (bukan 'bayar'), server aman dari duplikat
+  // krn semua perintah ber-kode_unik idempoten.
+
+  Future<int> outboxIsTambah(
+      String aksi, String kodeUnik, String payloadJson) async {
+    final database = await db;
+    return database.insert('outbox_is', {
+      'aksi': aksi,
+      'kode_unik': kodeUnik,
+      'payload_json': payloadJson,
+      'status': 'PENDING',
+      'dibuat_pada': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, Object?>>> outboxIsPending() async {
+    final database = await db;
+    return database.query('outbox_is',
+        where: "status = 'PENDING'", orderBy: 'id ASC');
+  }
+
+  Future<void> outboxIsTandaiSukses(int id) async {
+    final database = await db;
+    await database.update(
+        'outbox_is', {'status': 'SYNCED', 'pesan_error': null},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Penolakan bisnis server (bukan offline): status GAGAL permanen + pesan --
+  /// tidak ikut retry berikutnya, tetap terlihat utk ditindak manual.
+  Future<void> outboxIsTandaiGagal(int id, String pesan) async {
+    final database = await db;
+    await database.update('outbox_is', {'status': 'GAGAL', 'pesan_error': pesan},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> outboxIsCatatPercobaan(int id, String pesan) async {
+    final database = await db;
+    await database.rawUpdate(
+        'UPDATE outbox_is SET percobaan = COALESCE(percobaan,0) + 1,'
+        ' pesan_error = ? WHERE id = ?',
+        [pesan, id]);
+  }
+
+  Future<int> jumlahOutboxIsPending() async {
+    final database = await db;
+    final hasil = await database
+        .rawQuery("SELECT COUNT(*) AS n FROM outbox_is WHERE status = 'PENDING'");
+    return (hasil.first['n'] as int?) ?? 0;
   }
 
   // ============================== PRODUK CACHE ==============================

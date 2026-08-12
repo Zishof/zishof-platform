@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/outbox_is.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -37,6 +38,9 @@ class _PiutangScreenState extends State<PiutangScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 5, vsync: this);
+    // P7: kirim ulang antrean offline (kwitansi/biaya) begitu layar dibuka --
+    // no-op saat kosong, aman dipanggil berulang (idempoten kode_unik).
+    OutboxIs.flush();
   }
 
   @override
@@ -346,7 +350,8 @@ class _TabPenerimaanState extends State<_TabPenerimaan> {
       _sukses = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_collection_create', {
+      // P7: idempoten kode_unik -> boleh diantre offline (OutboxIs).
+      final hasil = await OutboxIs.kirimAtauAntre('si_collection_create', {
         'customer_id': _customerId,
         'nominal': _totalAlokasi,
         'metode': _metode,
@@ -367,9 +372,10 @@ class _TabPenerimaanState extends State<_TabPenerimaan> {
       _urutKode++;
       _kodeUnik =
           'KWT-${DateTime.now().millisecondsSinceEpoch}-$_urutKode';
-      setStateIfMounted(() => _sukses =
-          'Penerimaan tersimpan: ${hasil['nomor'] ?? hasil['id']} — kwitansi bisa dicetak di tab Riwayat.');
-      await _muatFaktur();
+      setStateIfMounted(() => _sukses = hasil['offline'] == true
+          ? 'Jaringan terputus — penerimaan DISIMPAN OFFLINE dan akan dikirim otomatis saat online (idempoten, tidak dobel).'
+          : 'Penerimaan tersimpan: ${hasil['nomor'] ?? hasil['id']} — kwitansi bisa dicetak di tab Riwayat.');
+      if (hasil['offline'] != true) await _muatFaktur();
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {

@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/outbox_is.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -140,7 +141,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
   @override
   void initState() {
     super.initState();
-    _muat();
+    // P7: kirim ulang antrean offline (tagihan/biaya/kulakan sesi) dulu.
+    OutboxIs.flush().whenComplete(_muat);
   }
 
   Future<void> _muat() async {
@@ -282,16 +284,31 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     if (ya == true) {
       final n = double.tryParse(nilai.text) ?? 0;
       if (n <= 0) return;
-      await _aksi('si_expense_create', {
-        'session_id': widget.sessionId,
-        'kategori_id': kategoriId,
-        'nilai': n,
-        'uraian': uraian.text.trim(),
-        'penerima': penerima.text.trim(),
-        'metode': metode,
-        'kode_unik':
-            'BIAYA-${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(nilai)}',
-      }, sukses: 'Biaya tercatat.');
+      // P7: idempoten kode_unik -> boleh diantre offline.
+      try {
+        final hasil = await OutboxIs.kirimAtauAntre('si_expense_create', {
+          'session_id': widget.sessionId,
+          'kategori_id': kategoriId,
+          'nilai': n,
+          'uraian': uraian.text.trim(),
+          'penerima': penerima.text.trim(),
+          'metode': metode,
+          'kode_unik':
+              'BIAYA-${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(nilai)}',
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(hasil['offline'] == true
+                  ? 'Offline — biaya diantre, terkirim otomatis saat online.'
+                  : 'Biaya tercatat.')));
+        }
+        await _muat();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$e')));
+        }
+      }
     }
   }
 
@@ -345,15 +362,29 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
     if (ya == true) {
       final t = double.tryParse(total.text) ?? 0;
       if (t <= 0) return;
-      await _aksi('si_trip_purchase_link', {
-        'session_id': widget.sessionId,
-        'total_faktur': t,
-        'dibayar_sesi': double.tryParse(dibayar.text) ?? 0,
-        'tujuan_stok': tujuan,
-        'keterangan': ket.text.trim(),
-        'kode_unik':
-            'BELI-${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(total)}',
-      }, sukses: 'Pembelian tercatat.');
+      try {
+        final hasil = await OutboxIs.kirimAtauAntre('si_trip_purchase_link', {
+          'session_id': widget.sessionId,
+          'total_faktur': t,
+          'dibayar_sesi': double.tryParse(dibayar.text) ?? 0,
+          'tujuan_stok': tujuan,
+          'keterangan': ket.text.trim(),
+          'kode_unik':
+              'BELI-${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(total)}',
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(hasil['offline'] == true
+                  ? 'Offline — pembelian diantre, terkirim otomatis saat online.'
+                  : 'Pembelian tercatat.')));
+        }
+        await _muat();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$e')));
+        }
+      }
     }
   }
 
@@ -469,7 +500,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
             (r) => (r['id'] as num).toInt() == (n['piutangDocId'] as num).toInt(),
             orElse: () => rows.isEmpty ? {} : rows.first);
         if (baris.isEmpty) throw Exception('Faktur tidak ditemukan.');
-        await ApiClient.instance.aksi('si_collection_create', {
+        // P7: idempoten -> boleh diantre offline (kunjungan di area tanpa sinyal).
+        final hasil = await OutboxIs.kirimAtauAntre('si_collection_create', {
           'customer_id': baris['customerId'],
           'nominal': v,
           'metode': metode,
@@ -481,8 +513,10 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
           ],
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Penerimaan tercatat.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(hasil['offline'] == true
+                  ? 'Offline — tagihan diantre, terkirim otomatis saat online.'
+                  : 'Penerimaan tercatat.')));
         }
         await _muat();
       } catch (e) {
