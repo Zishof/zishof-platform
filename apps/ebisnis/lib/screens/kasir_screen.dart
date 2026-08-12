@@ -1700,7 +1700,17 @@ class _DialogBukaKasState extends State<_DialogBukaKas> {
         width: 380,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Pola sama dgn status hijau "Kas terbuka sejak..." di _DialogTutupKas
+            // (padanan `.sesikas-status.buka`/`.tutup` versi Electron) -- sebelumnya
+            // dialog ini TIDAK punya status berwarna, cuma hint abu-abu netral.
+            const Text('Kas sedang tertutup',
+                style: TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13)),
+            const SizedBox(height: 4),
             Text(
               'Isi modal awal untuk memulai sesi kasir.',
               style: TextStyle(color: AppColors.textSecondaryOf(context)),
@@ -1774,6 +1784,15 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                     const Text('Buka Kas Terlebih Dahulu',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    // Padanan `.sesikas-status.tutup` versi Electron -- status
+                    // berwarna merah SEBELUM deskripsi netral, konsisten dgn
+                    // _DialogBukaKas/_DialogTutupKas.
+                    const Text('Kas sedang tertutup',
+                        style: TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5)),
                     const SizedBox(height: 4),
                     Text(
                       'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
