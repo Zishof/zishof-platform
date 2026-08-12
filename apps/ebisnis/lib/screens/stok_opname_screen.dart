@@ -41,10 +41,16 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
+    _tab.addListener(_saatTabBerubah);
+  }
+
+  void _saatTabBerubah() {
+    if (!_tab.indexIsChanging && mounted) setStateIfMounted(() {});
   }
 
   @override
   void dispose() {
+    _tab.removeListener(_saatTabBerubah);
     _tab.dispose();
     super.dispose();
   }
@@ -225,11 +231,11 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             ],
           ),
           Expanded(
-            child: TabBarView(controller: _tab, children: const [
-              _TabMutasiStok(),
-              _TabMonitorBarang(),
-              _TabInputOpname(),
-              _TabSoByScan(),
+            child: TabBarView(controller: _tab, children: [
+              const _TabMutasiStok(),
+              const _TabMonitorBarang(),
+              const _TabInputOpname(),
+              _TabSoByScan(aktif: _tab.index == 3),
             ]),
           ),
         ],
@@ -922,7 +928,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
 /// selesai sebelum scan berikutnya (beda dari _TabInputOpname yg simpan
 /// LANGSUNG per satu produk).
 class _TabSoByScan extends StatefulWidget {
-  const _TabSoByScan();
+  final bool aktif;
+
+  const _TabSoByScan({required this.aktif});
 
   @override
   State<_TabSoByScan> createState() => _TabSoByScanState();
@@ -938,15 +946,48 @@ class _AntreanSo {
         keterangan = TextEditingController();
 }
 
-class _TabSoByScanState extends State<_TabSoByScan> {
+class _TabSoByScanState extends State<_TabSoByScan>
+    with WidgetsBindingObserver {
   final _barcodeController = TextEditingController();
+  final _barcodeFocus = FocusNode(debugLabel: 'so-by-scan-barcode');
   bool _mencari = false;
   bool _mengirim = false;
   String? _pesanError;
   final List<_AntreanSo> _antrean = [];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _fokusBarcode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabSoByScan oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.aktif && widget.aktif) _fokusBarcode();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _fokusBarcode();
+  }
+
+  void _fokusBarcode() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.aktif || _mencari || _mengirim) return;
+      _barcodeFocus.requestFocus();
+      _barcodeController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _barcodeController.text.length,
+      );
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _barcodeFocus.dispose();
     _barcodeController.dispose();
     for (final a in _antrean) {
       a.stokFisik.dispose();
@@ -975,20 +1016,28 @@ class _TabSoByScanState extends State<_TabSoByScan> {
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
-      if (mounted) setStateIfMounted(() => _mencari = false);
+      if (mounted) {
+        setStateIfMounted(() => _mencari = false);
+        _fokusBarcode();
+      }
     }
   }
 
   Future<void> _scanKamera() async {
-    final kode = await BarcodeScannerScreen.pindai(context,
-        judul: 'Scan Barcode Produk');
-    if (kode != null) await _tambahKeAntrean(kode);
+    try {
+      final kode = await BarcodeScannerScreen.pindai(context,
+          judul: 'Scan Barcode Produk');
+      if (kode != null) await _tambahKeAntrean(kode);
+    } finally {
+      _fokusBarcode();
+    }
   }
 
   void _hapusDariAntrean(_AntreanSo a) {
     setStateIfMounted(() => _antrean.remove(a));
     a.stokFisik.dispose();
     a.keterangan.dispose();
+    _fokusBarcode();
   }
 
   Future<void> _simpanSemua() async {
@@ -1022,6 +1071,7 @@ class _TabSoByScanState extends State<_TabSoByScan> {
               Text('$berhasil dari ${belumDikirim.length} baris tersimpan.')));
       setStateIfMounted(
           () => _antrean.removeWhere((a) => a.statusKirim == 'ok'));
+      _fokusBarcode();
     }
   }
 
@@ -1046,6 +1096,8 @@ class _TabSoByScanState extends State<_TabSoByScan> {
               Expanded(
                 child: PencarianProdukBanbox(
                   controller: _barcodeController,
+                  focusNode: _barcodeFocus,
+                  autofocus: true,
                   label: 'Scan / Ketik Kode / Nama Produk',
                   icon: Icons.qr_code,
                   aktif: !_mencari,

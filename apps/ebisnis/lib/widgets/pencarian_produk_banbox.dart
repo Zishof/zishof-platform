@@ -24,6 +24,8 @@ class PencarianProdukBanbox extends StatefulWidget {
   final IconData icon;
   final bool aktif;
   final ValueChanged<String> onPilih;
+  final FocusNode? focusNode;
+  final bool autofocus;
 
   /// Override opsional utk decoration kotak teks -- dipakai layar yang
   /// sudah punya gaya form sendiri (mis. `AppFormStyle.fieldDecoration`)
@@ -38,6 +40,8 @@ class PencarianProdukBanbox extends StatefulWidget {
     required this.icon,
     required this.onPilih,
     this.aktif = true,
+    this.focusNode,
+    this.autofocus = false,
     this.decorationBuilder,
   });
 
@@ -47,11 +51,30 @@ class PencarianProdukBanbox extends StatefulWidget {
 
 class _PencarianProdukBanboxState extends State<PencarianProdukBanbox> {
   List<Map<String, Object?>> _semuaProduk = [];
+  FocusNode? _focusNodeInternal;
+
+  FocusNode get _focusNode =>
+      widget.focusNode ?? (_focusNodeInternal ??= FocusNode());
 
   @override
   void initState() {
     super.initState();
+    if (widget.focusNode == null) _focusNodeInternal = FocusNode();
     _muatCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant PencarianProdukBanbox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode == widget.focusNode) return;
+    _focusNodeInternal?.dispose();
+    _focusNodeInternal = widget.focusNode == null ? FocusNode() : null;
+  }
+
+  @override
+  void dispose() {
+    _focusNodeInternal?.dispose();
+    super.dispose();
   }
 
   Future<void> _muatCache() async {
@@ -79,7 +102,7 @@ class _PencarianProdukBanboxState extends State<PencarianProdukBanbox> {
   Widget build(BuildContext context) {
     return RawAutocomplete<Map<String, Object?>>(
       textEditingController: widget.controller,
-      focusNode: FocusNode(),
+      focusNode: _focusNode,
       optionsBuilder: (value) => _cariSaran(value.text),
       displayStringForOption: (p) => '${p['kode'] ?? p['barcode'] ?? ''}',
       onSelected: (p) {
@@ -90,6 +113,7 @@ class _PencarianProdukBanboxState extends State<PencarianProdukBanbox> {
         return TextField(
           controller: controller,
           focusNode: focusNode,
+          autofocus: widget.autofocus,
           enabled: widget.aktif,
           decoration: widget.decorationBuilder?.call(context) ??
               InputDecoration(
