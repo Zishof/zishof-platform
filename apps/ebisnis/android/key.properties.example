@@ -1,0 +1,14 @@
+# Template konfigurasi signing rilis Android. SALIN ke `android/key.properties`
+# (file itu SUDAH di-gitignore -- JANGAN commit yang berisi nilai asli).
+#
+# Bila `android/key.properties` TIDAK ada, build release otomatis fallback ke
+# debug key (perilaku lama, aman untuk mesin dev). Isi file ini HANYA di mesin
+# rilis milik pemilik.
+#
+# storeFile: path ke keystore .jks (absolut, atau relatif thd android/app/).
+# Semua nilai di bawah adalah CONTOH -- ganti dengan milik Anda.
+
+storeFile=C:/keystore/ebisnis-release.jks
+storePassword=GANTI_DENGAN_PASSWORD_STORE
+keyAlias=ebisnis
+keyPassword=GANTI_DENGAN_PASSWORD_KEY
