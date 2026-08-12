@@ -70,11 +70,10 @@ jobs:
         working-directory: apps/ebisnis
         shell: powershell
         run: |
-          $output = & flutter build windows --release `
-            -t lib/main_inventory_sales.dart `
-            --dart-define=EBISNIS_VARIANT=inventory_sales 2>&1
+          cmd /d /c "flutter build windows --release -t lib/main_inventory_sales.dart --dart-define=EBISNIS_VARIANT=inventory_sales > build-windows.log 2>&1"
           $buildExit = $LASTEXITCODE
-          $output | Tee-Object -FilePath build-windows.log
+          $output = Get-Content build-windows.log
+          $output | Write-Output
           if ($buildExit -ne 0) {
             $tail = (($output | Select-Object -Last 80) -join "`n")
             $tail = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
