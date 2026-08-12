@@ -6,6 +6,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -538,6 +539,18 @@ class _FormSalesState extends State<_FormSales> {
                 ]),
               ],
               actions: [
+                // Paritas aksi "Riwayat Audit" legacy: SalesInventory sendiri
+                // entity ber-@Audited, jadi id-nya langsung dipakai.
+                if (_ubah)
+                  OutlinedButton.icon(
+                    onPressed: () => tampilkanRiwayatAudit(
+                        context,
+                        'sales',
+                        widget.data!['id'] as Object,
+                        '${widget.data!['nama']}'),
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('Riwayat Audit'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: _menyimpan
                       ? null

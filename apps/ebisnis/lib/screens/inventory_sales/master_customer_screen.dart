@@ -6,6 +6,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -418,6 +419,20 @@ class _DetailCustomerSheet extends StatelessWidget {
           ]),
           const SizedBox(height: 16),
           Wrap(alignment: WrapAlignment.end, spacing: 10, runSpacing: 10, children: [
+            // Paritas aksi "Riwayat Audit" legacy (revisi Envers profil customer);
+            // disabled beralasan bila belum ada profil varian.
+            Tooltip(
+              message: data['profilId'] == null
+                  ? 'Belum ada profil varian tersimpan — belum ada revisi audit.'
+                  : 'Riwayat perubahan (Envers)',
+              child: OutlinedButton.icon(
+                  onPressed: data['profilId'] == null
+                      ? null
+                      : () => tampilkanRiwayatAudit(context, 'customer',
+                          data['profilId'] as Object, '${data['nama']}'),
+                  icon: const Icon(Icons.history, size: 18),
+                  label: const Text('Riwayat Audit')),
+            ),
             OutlinedButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close, size: 18),

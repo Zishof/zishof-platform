@@ -37,7 +37,7 @@ class _PiutangScreenState extends State<PiutangScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
     // P7: kirim ulang antrean offline (kwitansi/biaya) begitu layar dibuka --
     // no-op saat kosong, aman dipanggil berulang (idempoten kode_unik).
     OutboxIs.flush();
@@ -71,6 +71,7 @@ class _PiutangScreenState extends State<PiutangScreen>
               Tab(text: 'Riwayat & Kwitansi'),
               Tab(text: 'Aging Customer'),
               Tab(text: 'Aging per Sales'),
+              Tab(text: 'Laporan (Rekap Barang)'),
             ],
           ),
         ),
@@ -81,6 +82,7 @@ class _PiutangScreenState extends State<PiutangScreen>
             _TabRiwayat(),
             _TabAgingCustomer(),
             _TabAgingSales(),
+            _TabLaporanPiutang(),
           ]),
         ),
       ]),
@@ -1028,6 +1030,202 @@ class _TabAgingSalesState extends State<_TabAgingSales> {
                 ]),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// TAB 6: LAPORAN PIUTANG (SCR-41/42) -- jenis eksplisit spt matriks paritas:
+// Rekap Penjualan Barang (fungsi legacy layar 41) | Outstanding | Register Event
+// (dua jenis terakhir tinggal pindah tab Piutang/Riwayat -- di sini rekap barang)
+// =============================================================================
+
+class _TabLaporanPiutang extends StatefulWidget {
+  const _TabLaporanPiutang();
+
+  @override
+  State<_TabLaporanPiutang> createState() => _TabLaporanPiutangState();
+}
+
+class _TabLaporanPiutangState extends State<_TabLaporanPiutang> {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  double _totalQty = 0, _totalRp = 0;
+  DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
+  DateTime _sampai = DateTime.now();
+  String _urut = 'nama';
+  String _q = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('si_receivable_report', {
+        'jenis': 'rekap_penjualan',
+        'dari': _fmtTgl.format(_dari),
+        'sampai': _fmtTgl.format(_sampai),
+        'urut': _urut,
+        if (_q.isNotEmpty) 'q': _q,
+      });
+      setStateIfMounted(() {
+        _data = ((hasil['rows'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _totalQty = (hasil['totalQty'] as num?)?.toDouble() ?? 0;
+        _totalRp = (hasil['totalRp'] as num?)?.toDouble() ?? 0;
+        _memuat = false;
+      });
+    } catch (e) {
+      setStateIfMounted(() {
+        _memuat = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _cetak() async {
+    final doc = pw.Document();
+    doc.addPage(pw.MultiPage(
+      build: (ctx) => [
+        pw.Text('REKAP PENJUALAN BARANG (Laporan Piutang — fungsi legacy layar 41)',
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text(
+            'Periode ${_fmtTgl.format(_dari)} s/d ${_fmtTgl.format(_sampai)} · urut ${_urut == 'qty' ? 'Fast Moving (QTY)' : 'Nama Barang'}'),
+        pw.SizedBox(height: 8),
+        pw.TableHelper.fromTextArray(
+          headers: ['#Brg', 'Nama Barang', 'QTY', 'Jumlah (Rp)'],
+          data: [
+            for (final r in _data)
+              [
+                '${r['produkId']}',
+                '${r['namaProduk']}',
+                '${r['qty']}',
+                _fmtRp.format(r['jumlahRp'] ?? 0),
+              ]
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Text('TOTAL: $_totalQty unit · ${_fmtRp.format(_totalRp)}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+      ],
+    ));
+    await Printing.layoutPdf(
+        onLayout: (_) => doc.save(),
+        name: 'rekap-penjualan-${_fmtTgl.format(_dari)}.pdf');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        children: [
+          Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            OutlinedButton.icon(
+              onPressed: () async {
+                final t = await showDatePicker(
+                    context: context,
+                    initialDate: _dari,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2035));
+                if (t != null) {
+                  setStateIfMounted(() => _dari = t);
+                  _muat();
+                }
+              },
+              icon: const Icon(Icons.event, size: 16),
+              label: Text('Dari ${_fmtTgl.format(_dari)}',
+                  style: const TextStyle(fontSize: 12)),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final t = await showDatePicker(
+                    context: context,
+                    initialDate: _sampai,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2035));
+                if (t != null) {
+                  setStateIfMounted(() => _sampai = t);
+                  _muat();
+                }
+              },
+              icon: const Icon(Icons.event, size: 16),
+              label: Text('s/d ${_fmtTgl.format(_sampai)}',
+                  style: const TextStyle(fontSize: 12)),
+            ),
+            DropdownButton<String>(
+              value: _urut,
+              items: const [
+                DropdownMenuItem(
+                    value: 'nama', child: Text('Urut Nama Barang')),
+                DropdownMenuItem(
+                    value: 'qty', child: Text('Fast Moving (QTY)')),
+              ],
+              onChanged: (v) {
+                setStateIfMounted(() => _urut = v ?? 'nama');
+                _muat();
+              },
+            ),
+            SizedBox(
+              width: 220,
+              child: AppSearchField(
+                hintText: 'Cari nama barang...',
+                onChanged: (v) {
+                  _q = v.trim();
+                  _muat();
+                },
+              ),
+            ),
+            IconButton(
+                onPressed: _cetak,
+                tooltip: 'Cetak PDF',
+                icon: const Icon(Icons.print_outlined)),
+          ]),
+          const SizedBox(height: 10),
+          AppDataTable(
+            minWidth: 700,
+            emptyText: 'Tidak ada penjualan terfakturkan pada periode ini.',
+            columns: const [
+              AppTableColumn('#Brg', flex: 1),
+              AppTableColumn('Nama Barang', flex: 4),
+              AppTableColumn('QTY', flex: 1, align: TextAlign.right),
+              AppTableColumn('Jumlah (Rp)', flex: 2, align: TextAlign.right),
+            ],
+            rows: [
+              for (final r in _data)
+                AppTableRowData(cells: [
+                  AppTableCell.text('${r['produkId']}', flex: 1),
+                  AppTableCell.text('${r['namaProduk']}', flex: 4),
+                  AppTableCell.text('${r['qty']}',
+                      flex: 1, align: TextAlign.right),
+                  AppTableCell.text(_fmtRp.format(r['jumlahRp'] ?? 0),
+                      flex: 2, align: TextAlign.right),
+                ]),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('TOTAL: $_totalQty unit · ${_fmtRp.format(_totalRp)}',
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+              'Outstanding Piutang = tab "Piutang"; Register Event = tab "Riwayat & Kwitansi" (jenis laporan dipilih eksplisit, tidak dicampur).',
+              style: TextStyle(
+                  fontSize: 11, color: AppColors.textSecondaryOf(context))),
         ],
       ),
     );

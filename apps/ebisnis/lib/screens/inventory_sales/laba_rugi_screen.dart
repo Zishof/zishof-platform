@@ -37,6 +37,10 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
   Map<String, dynamic> _labaRugi = {};
   List<Map<String, dynamic>> _labaKotor = [];
   Map<String, dynamic> _ringkasKotor = {};
+  List<Map<String, dynamic>> _detail = [];
+  final _hppTambah = TextEditingController(text: '0');
+  String _filterDetail = 'semua'; // semua | jual_rugi
+  String _statusLunas = ''; // '' | lunas | belum
 
   @override
   void initState() {
@@ -67,8 +71,17 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
         if (_salesId != null) 'sales_id': _salesId,
       };
       final pl = await ApiClient.instance.aksi('si_profit_loss_report', body);
-      final gp = await ApiClient.instance.aksi(
-          'si_gross_profit_report', {...body, 'group_by': _groupBy});
+      final gp = await ApiClient.instance.aksi('si_gross_profit_report', {
+        ...body,
+        'group_by': _groupBy,
+        // "HPP Tambah (%)" legacy layar 45/46 -- markup eksplisit atas HPP snapshot.
+        'hpp_tambah_persen': double.tryParse(_hppTambah.text) ?? 0,
+      });
+      final dt = await ApiClient.instance.aksi('si_profit_loss_detail', {
+        ...body,
+        if (_filterDetail == 'jual_rugi') 'filter': 'jual_rugi',
+        if (_statusLunas.isNotEmpty) 'status_lunas': _statusLunas,
+      });
       setStateIfMounted(() {
         _labaRugi = Map<String, dynamic>.from((pl['data'] as Map?) ?? {});
         _labaKotor = ((gp['rows'] as List?) ?? [])
@@ -76,6 +89,9 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
             .toList();
         _ringkasKotor =
             Map<String, dynamic>.from((gp['ringkasan'] as Map?) ?? {});
+        _detail = ((dt['rows'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
         _memuat = false;
       });
     } catch (e) {
@@ -214,6 +230,17 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
                             _muat();
                           },
                         ),
+                        SizedBox(
+                          width: 130,
+                          child: TextField(
+                            controller: _hppTambah,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(fontSize: 12),
+                            decoration: const InputDecoration(
+                                labelText: 'HPP Tambah (%)', isDense: true),
+                            onSubmitted: (_) => _muat(),
+                          ),
+                        ),
                       ]),
                       const SizedBox(height: 10),
                       Wrap(spacing: 10, runSpacing: 10, children: [
@@ -340,9 +367,113 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                              'Total: penjualan ${_fmtRp.format(_ringkasKotor['penjualan'] ?? 0)} · HPP ${_fmtRp.format(_ringkasKotor['hpp'] ?? 0)} · laba kotor ${_fmtRp.format(_ringkasKotor['labaKotor'] ?? 0)} (${((_ringkasKotor['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%)',
+                              'Total: penjualan ${_fmtRp.format(_ringkasKotor['penjualan'] ?? 0)} · HPP ${_fmtRp.format(_ringkasKotor['hpp'] ?? 0)} (+${((_ringkasKotor['hppTambahPersen'] as num?) ?? 0)}% tambah) · laba kotor ${_fmtRp.format(_ringkasKotor['labaKotor'] ?? 0)} (${((_ringkasKotor['marginPersen'] as num?) ?? 0).toStringAsFixed(1)}%)',
                               style: const TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      AppFormSection(
+                        judul: 'Rincian per Baris Faktur (grid legacy layar 47)',
+                        aksiJudul:
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                          DropdownButton<String>(
+                            value: _filterDetail,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'semua', child: Text('Semua')),
+                              DropdownMenuItem(
+                                  value: 'jual_rugi',
+                                  child: Text('Jual Rugi saja')),
+                            ],
+                            onChanged: (v) {
+                              setStateIfMounted(
+                                  () => _filterDetail = v ?? 'semua');
+                              _muat();
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value: _statusLunas,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: '', child: Text('Lunas & Belum')),
+                              DropdownMenuItem(
+                                  value: 'lunas', child: Text('Lunas')),
+                              DropdownMenuItem(
+                                  value: 'belum', child: Text('Belum Lunas')),
+                            ],
+                            onChanged: (v) {
+                              setStateIfMounted(() => _statusLunas = v ?? '');
+                              _muat();
+                            },
+                          ),
+                        ]),
+                        children: [
+                          AppDataTable(
+                            minWidth: 1100,
+                            emptyText: _filterDetail == 'jual_rugi'
+                                ? 'Tidak ada baris jual rugi pada periode ini.'
+                                : 'Tidak ada baris faktur pada periode ini.',
+                            columns: const [
+                              AppTableColumn('Sales', flex: 2),
+                              AppTableColumn('Tanggal', flex: 2),
+                              AppTableColumn('No. Faktur', flex: 2),
+                              AppTableColumn('Nama Barang', flex: 3),
+                              AppTableColumn('HPP', flex: 2,
+                                  align: TextAlign.right),
+                              AppTableColumn('Hrg. Jual', flex: 2,
+                                  align: TextAlign.right),
+                              AppTableColumn('Jumlah', flex: 2,
+                                  align: TextAlign.right),
+                              AppTableColumn('Rugi/Laba', flex: 2,
+                                  align: TextAlign.right),
+                              AppTableColumn('Customer', flex: 2),
+                            ],
+                            rows: [
+                              for (final r in _detail)
+                                AppTableRowData(cells: [
+                                  AppTableCell.text('${r['salesNama']}', flex: 2),
+                                  AppTableCell.text(
+                                      '${r['tanggal']}'.split(' ').first,
+                                      flex: 2),
+                                  AppTableCell.text('${r['fakturNomor']}',
+                                      flex: 2),
+                                  AppTableCell.text('${r['namaProduk']}',
+                                      flex: 3),
+                                  AppTableCell.text(
+                                      _fmtRp.format(r['hppSatuan'] ?? 0),
+                                      flex: 2,
+                                      align: TextAlign.right),
+                                  AppTableCell.text(
+                                      _fmtRp.format(r['hargaJual'] ?? 0),
+                                      flex: 2,
+                                      align: TextAlign.right),
+                                  AppTableCell.text(
+                                      _fmtRp.format(r['jumlah'] ?? 0),
+                                      flex: 2,
+                                      align: TextAlign.right),
+                                  AppTableCell(
+                                    flex: 2,
+                                    align: TextAlign.right,
+                                    child: Text(
+                                      _fmtRp.format(r['labaRugi'] ?? 0),
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: ((r['labaRugi'] as num?) ??
+                                                      0) <
+                                                  0
+                                              ? AppColors.danger
+                                              : AppColors.success),
+                                    ),
+                                  ),
+                                  AppTableCell.text('${r['customerNama']}',
+                                      flex: 2),
+                                ]),
+                            ],
+                          ),
                         ],
                       ),
                     ],
