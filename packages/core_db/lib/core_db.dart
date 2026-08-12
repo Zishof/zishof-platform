@@ -62,7 +62,7 @@ class CoreDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -80,10 +80,12 @@ class CoreDb {
   /// `onUpgrade` sebelumnya). Gap-closure "Jenis Item" (Produk vs Bahan Baku)
   /// nambah kolom `jenis_item` ke `produk_cache`. Fase 2 "Produk Ekstra"
   /// nambah kolom `ekstra_pilihan` (JSON array id produk EKSTRA, lihat
-  /// [produkCacheResolveByIds]). `ALTER TABLE` dibungkus try/catch murni
-  /// defensif thd kemungkinan state upgrade parsial (mis. proses sempat
-  /// terhenti di tengah migrasi sebelumnya, kolom sudah terlanjur ada) --
-  /// padanan cara migrasi `local-db.js` versi Electron.
+  /// [produkCacheResolveByIds]). Gap-closure "Foto Produk" nambah kolom
+  /// `foto_urls` (JSON array URL foto, dipakai carousel kartu Kasir).
+  /// `ALTER TABLE` dibungkus try/catch murni defensif thd kemungkinan state
+  /// upgrade parsial (mis. proses sempat terhenti di tengah migrasi
+  /// sebelumnya, kolom sudah terlanjur ada) -- padanan cara migrasi
+  /// `local-db.js` versi Electron.
   Future<void> _upgradeSkema(Database db, int versiLama, int versiBaru) async {
     if (versiLama < 2) {
       try {
@@ -108,6 +110,16 @@ class CoreDb {
         await db.execute(_ddlOutboxIs);
       } catch (_) {
         // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
+      }
+    }
+    if (versiLama < 5) {
+      // Gap-closure "Foto Produk" -- kolom `foto_urls` (JSON array URL, urut
+      // lama->baru) dipakai kartu Kasir utk carousel otomatis tiap 3 detik
+      // bila >1 foto (lihat Produk.fotoUrls di apps/ebisnis/lib/models.dart).
+      try {
+        await db.execute('ALTER TABLE produk_cache ADD COLUMN foto_urls TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
       }
     }
   }
@@ -139,7 +151,8 @@ class CoreDb {
         gambar_url TEXT,
         aktif INTEGER DEFAULT 1,
         jenis_item TEXT,
-        ekstra_pilihan TEXT
+        ekstra_pilihan TEXT,
+        foto_urls TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
