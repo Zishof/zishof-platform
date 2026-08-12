@@ -2699,6 +2699,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           )
         else
           const Spacer(),
+        // Cuma SATU kode -- barcode kalau kolom Barcode produk terisi,
+        // fallback ke Kode Produk kalau kosong (lihat [_kodeBarcode]).
         if (_tampilKode)
           Text(barcode,
               maxLines: 1,
@@ -2706,12 +2708,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                   fontSize: 13, letterSpacing: 2, fontWeight: FontWeight.w600)),
-        if (_tampilKode && kode != barcode)
-          Text(kode,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10)),
         if (_tampilHargaProduk)
           Text(harga,
               maxLines: 1,
@@ -3331,7 +3327,6 @@ class _PriceTagPdfBuilder {
   }
 
   pw.Widget _kotakProduk(Map<String, dynamic> p) {
-    final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
     final bcw =
         _barcode(barcode, height: ukuran.tinggiMm * PdfPageFormat.mm * 0.48);
@@ -3357,6 +3352,8 @@ class _PriceTagPdfBuilder {
             )
           else
             pw.Spacer(),
+          // Cuma SATU kode -- barcode kalau kolom Barcode produk terisi,
+          // fallback ke Kode Produk kalau kosong (lihat [_kodeBarcode]).
           if (tampilKode)
             pw.Text(barcode,
                 maxLines: 1,
@@ -3365,11 +3362,6 @@ class _PriceTagPdfBuilder {
                     fontSize: 6 * skala,
                     letterSpacing: 1.5,
                     fontWeight: pw.FontWeight.bold)),
-          if (tampilKode && kode != barcode)
-            pw.Text(kode,
-                maxLines: 1,
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 5 * skala)),
           if (tampilHargaProduk)
             pw.Text(_rupiah(p['hargaJual'] as num?),
                 maxLines: 1,
