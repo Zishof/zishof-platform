@@ -32,6 +32,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Override repository-local Gradle JDK path
+        shell: pwsh
+        run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "GRADLE_OPTS=-Dorg.gradle.java.home=$env:JAVA_HOME"
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.27.4
@@ -48,8 +52,10 @@ jobs:
         shell: pwsh
         run: |
           flutter build apk --release --flavor apotik -t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item build/app/outputs/flutter-apk/app-apotik-release.apk "eBisnis-POS-Apotik-$env:VERSION.apk"
           flutter build apk --release --flavor emedik -t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item build/app/outputs/flutter-apk/app-emedik-release.apk "eBisnis-POS-eMedik-$env:VERSION.apk"
 
       - name: Ensure Inno Setup
@@ -67,6 +73,7 @@ jobs:
         shell: pwsh
         run: |
           flutter build windows --release -t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           & $iscc "/DAppVersion=$env:VERSION" installer/apotik.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -76,6 +83,7 @@ jobs:
         shell: pwsh
         run: |
           flutter build windows --release -t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik --build-name=$env:VERSION --build-number=$env:BUILD_NUMBER
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           & $iscc "/DAppVersion=$env:VERSION" installer/emedik.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
