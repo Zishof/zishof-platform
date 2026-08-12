@@ -29,6 +29,8 @@ import '../screens/inventory_sales/harga_screen.dart';
 import '../screens/inventory_sales/hutang_supplier_screen.dart';
 import '../screens/inventory_sales/penjualan_sales_screen.dart';
 import '../screens/inventory_sales/piutang_screen.dart';
+import '../screens/inventory_sales/spj_screen.dart';
+import '../screens/inventory_sales/nota_sales_screen.dart';
 import '../product_profile.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
@@ -199,6 +201,30 @@ class AppDrawer extends StatelessWidget {
                           context,
                           label: 'Piutang Customer (AR)',
                           builder: (_) => const PiutangScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('surat_perintah_sales'))
+                      _ItemMenu(
+                        icon: Icons.assignment_outlined,
+                        label: 'Surat Perintah Sales',
+                        aktif: menuAktif == 'Surat Perintah Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Surat Perintah Sales',
+                          builder: (_) => const SpjScreen(),
+                        ),
+                      ),
+                    if (AppProductProfile.aktif.isInventorySales &&
+                        Sesi.instance.bolehMenuIs('nota_sales'))
+                      _ItemMenu(
+                        icon: Icons.route_outlined,
+                        label: 'Sesi Nota Sales',
+                        aktif: menuAktif == 'Sesi Nota Sales',
+                        onTap: () => _pindahMenu(
+                          context,
+                          label: 'Sesi Nota Sales',
+                          builder: (_) => const NotaSalesScreen(),
                         ),
                       ),
                     if (Sesi.instance.bolehMenu('kasir'))
