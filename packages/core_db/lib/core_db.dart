@@ -50,7 +50,8 @@ class CoreDb {
   Future<Database> _buka() async {
     String path;
     DatabaseFactory factory;
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       sqfliteFfiInit();
       factory = databaseFactoryFfi;
       final dir = await getApplicationSupportDirectory();
@@ -76,7 +77,8 @@ class CoreDb {
     }
   }
 
-  Future<Database> _bukaDanVerifikasi(DatabaseFactory factory, String path) async {
+  Future<Database> _bukaDanVerifikasi(
+      DatabaseFactory factory, String path) async {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
@@ -93,7 +95,8 @@ class CoreDb {
     // `integrity_check` penuh (tak verifikasi index silang) jadi aman
     // dijalankan tiap start tanpa menambah lambat buka app scr terasa.
     final hasil = await database.rawQuery('PRAGMA quick_check');
-    final status = hasil.isNotEmpty ? hasil.first.values.first?.toString() : null;
+    final status =
+        hasil.isNotEmpty ? hasil.first.values.first?.toString() : null;
     if (status != 'ok') {
       await database.close();
       throw StateError('PRAGMA quick_check gagal: $status');
@@ -101,7 +104,8 @@ class CoreDb {
     return database;
   }
 
-  Future<void> _cadangkanFileKorup(String path, {required String alasan}) async {
+  Future<void> _cadangkanFileKorup(String path,
+      {required String alasan}) async {
     for (final akhiran in ['', '-wal', '-shm', '-journal']) {
       final file = File('$path$akhiran');
       if (!file.existsSync()) continue;
@@ -118,13 +122,19 @@ class CoreDb {
       }
     }
     if (kDebugMode) {
-      debugPrint('CoreDb: $path korup ($alasan) -- dicadangkan & dibuat ulang.');
+      debugPrint(
+          'CoreDb: $path korup ($alasan) -- dicadangkan & dibuat ulang.');
     }
   }
 
   Future<void> _konfigurasiDb(Database db) async {
-    await db.execute('PRAGMA busy_timeout = 5000');
-    await db.execute('PRAGMA journal_mode = WAL');
+    // Kedua PRAGMA ini mengembalikan result-set. Driver SQLite Android
+    // menolak pemanggilan lewat `execute()` (walau driver FFI Windows
+    // menerimanya) dengan pesan "Queries can be performed using ...
+    // query or rawQuery methods only". Gunakan rawQuery agar konfigurasi
+    // bekerja konsisten di Android maupun desktop.
+    await db.rawQuery('PRAGMA busy_timeout = 5000');
+    await db.rawQuery('PRAGMA journal_mode = WAL');
   }
 
   /// Migrasi skema -- PERTAMA KALI sejak versi 1 dirilis (semua instalasi
@@ -207,8 +217,10 @@ class CoreDb {
         foto_urls TEXT
       )
     ''');
-    await db.execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
-    await db.execute('CREATE INDEX idx_produk_cache_barcode ON produk_cache(barcode)');
+    await db
+        .execute('CREATE INDEX idx_produk_cache_kode ON produk_cache(kode)');
+    await db.execute(
+        'CREATE INDEX idx_produk_cache_barcode ON produk_cache(barcode)');
 
     await db.execute('''
       CREATE TABLE anggota_cache (
@@ -222,7 +234,8 @@ class CoreDb {
         foto_url TEXT
       )
     ''');
-    await db.execute('CREATE INDEX idx_anggota_cache_nama ON anggota_cache(nama)');
+    await db
+        .execute('CREATE INDEX idx_anggota_cache_nama ON anggota_cache(nama)');
 
     await db.execute('''
       CREATE TABLE transaksi_pending (
@@ -304,7 +317,8 @@ class CoreDb {
   /// tidak ikut retry berikutnya, tetap terlihat utk ditindak manual.
   Future<void> outboxIsTandaiGagal(int id, String pesan) async {
     final database = await db;
-    await database.update('outbox_is', {'status': 'GAGAL', 'pesan_error': pesan},
+    await database.update(
+        'outbox_is', {'status': 'GAGAL', 'pesan_error': pesan},
         where: 'id = ?', whereArgs: [id]);
   }
 
@@ -318,8 +332,8 @@ class CoreDb {
 
   Future<int> jumlahOutboxIsPending() async {
     final database = await db;
-    final hasil = await database
-        .rawQuery("SELECT COUNT(*) AS n FROM outbox_is WHERE status = 'PENDING'");
+    final hasil = await database.rawQuery(
+        "SELECT COUNT(*) AS n FROM outbox_is WHERE status = 'PENDING'");
     return (hasil.first['n'] as int?) ?? 0;
   }
 
@@ -331,7 +345,8 @@ class CoreDb {
       await txn.delete('produk_cache');
       final batch = txn.batch();
       for (final b in baris) {
-        batch.insert('produk_cache', b, conflictAlgorithm: ConflictAlgorithm.replace);
+        batch.insert('produk_cache', b,
+            conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
     });
@@ -351,7 +366,8 @@ class CoreDb {
     final database = await db;
     return database.query(
       'produk_cache',
-      where: "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))",
+      where:
+          "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))",
       orderBy: 'nama ASC',
     );
   }
@@ -379,7 +395,8 @@ class CoreDb {
 
   Future<int> jumlahProdukCache() async {
     final database = await db;
-    final hasil = await database.rawQuery('SELECT COUNT(*) AS n FROM produk_cache');
+    final hasil =
+        await database.rawQuery('SELECT COUNT(*) AS n FROM produk_cache');
     return (hasil.first['n'] as int?) ?? 0;
   }
 
@@ -389,12 +406,14 @@ class CoreDb {
     final database = await db;
     final batch = database.batch();
     for (final b in baris) {
-      batch.insert('anggota_cache', b, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert('anggota_cache', b,
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
 
-  Future<List<Map<String, Object?>>> cariAnggotaCache(String kataKunci, {int limit = 30}) async {
+  Future<List<Map<String, Object?>>> cariAnggotaCache(String kataKunci,
+      {int limit = 30}) async {
     final database = await db;
     if (kataKunci.trim().isEmpty) {
       return database.query('anggota_cache', orderBy: 'nama ASC', limit: limit);
@@ -411,7 +430,8 @@ class CoreDb {
 
   // ============================== TRANSAKSI PENDING ==============================
 
-  Future<int> simpanTransaksiPending(String kodeUnik, String payloadJson) async {
+  Future<int> simpanTransaksiPending(
+      String kodeUnik, String payloadJson) async {
     final database = await db;
     return database.insert('transaksi_pending', {
       'kode_unik': kodeUnik,
@@ -423,7 +443,8 @@ class CoreDb {
 
   Future<void> tandaiTransaksiSinkron(String kodeUnik) async {
     final database = await db;
-    await database.update('transaksi_pending', {'status': 'SYNCED', 'pesan_error': null},
+    await database.update(
+        'transaksi_pending', {'status': 'SYNCED', 'pesan_error': null},
         where: 'kode_unik = ?', whereArgs: [kodeUnik]);
   }
 
@@ -439,18 +460,20 @@ class CoreDb {
   /// tidak pernah akan diterima server.
   Future<void> hapusTransaksiPending(String kodeUnik) async {
     final database = await db;
-    await database.delete('transaksi_pending', where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    await database.delete('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
   }
 
   Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron() async {
     final database = await db;
-    return database.query('transaksi_pending', where: "status = 'PENDING'", orderBy: 'id ASC');
+    return database.query('transaksi_pending',
+        where: "status = 'PENDING'", orderBy: 'id ASC');
   }
 
   Future<int> jumlahTransaksiPending() async {
     final database = await db;
-    final hasil = await database
-        .rawQuery("SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = 'PENDING'");
+    final hasil = await database.rawQuery(
+        "SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = 'PENDING'");
     return (hasil.first['n'] as int?) ?? 0;
   }
 
@@ -460,14 +483,19 @@ class CoreDb {
     final database = await db;
     await database.insert(
       'cache_referensi',
-      {'kunci': kunci, 'nilai_json': nilaiJson, 'diperbarui_pada': DateTime.now().toIso8601String()},
+      {
+        'kunci': kunci,
+        'nilai_json': nilaiJson,
+        'diperbarui_pada': DateTime.now().toIso8601String()
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
   Future<String?> ambilCacheReferensi(String kunci) async {
     final database = await db;
-    final hasil = await database.query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
+    final hasil = await database
+        .query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
     if (hasil.isEmpty) return null;
     return hasil.first['nilai_json'] as String?;
   }
@@ -491,9 +519,8 @@ class CoreDb {
     _lastErrorLogKey = key;
     _lastErrorLogAt = now;
 
-    _errorLogTail = _errorLogTail
-        .catchError((_) {})
-        .then((_) => _catatErrorLogLangsung(
+    _errorLogTail =
+        _errorLogTail.catchError((_) {}).then((_) => _catatErrorLogLangsung(
               waktu: now,
               sumber: sumber,
               tingkat: tingkat,
@@ -527,7 +554,12 @@ class CoreDb {
     }
   }
 
-  Future<List<Map<String, Object?>>> listErrorLog({String? tingkat, String? sumber, String? kataKunci, int limit = 100, int offset = 0}) async {
+  Future<List<Map<String, Object?>>> listErrorLog(
+      {String? tingkat,
+      String? sumber,
+      String? kataKunci,
+      int limit = 100,
+      int offset = 0}) async {
     final database = await db;
     final klausa = <String>[];
     final args = <Object?>[];
@@ -557,7 +589,8 @@ class CoreDb {
     final database = await db;
     final hasil = tingkat == null
         ? await database.rawQuery('SELECT COUNT(*) AS n FROM error_log')
-        : await database.rawQuery('SELECT COUNT(*) AS n FROM error_log WHERE tingkat = ?', [tingkat]);
+        : await database.rawQuery(
+            'SELECT COUNT(*) AS n FROM error_log WHERE tingkat = ?', [tingkat]);
     return (hasil.first['n'] as int?) ?? 0;
   }
 
@@ -580,14 +613,22 @@ class CoreDb {
 
   // ============================== TRANSAKSI PENDING (lanjutan) ==============================
 
-  Future<({List<Map<String, Object?>> data, int total})> listTransaksiPending({int limit = 20, int offset = 0, String? status}) async {
+  Future<({List<Map<String, Object?>> data, int total})> listTransaksiPending(
+      {int limit = 20, int offset = 0, String? status}) async {
     final database = await db;
     final where = status == null ? null : 'status = ?';
     final whereArgs = status == null ? null : [status];
-    final data = await database.query('transaksi_pending', where: where, whereArgs: whereArgs, orderBy: 'id DESC', limit: limit, offset: offset);
+    final data = await database.query('transaksi_pending',
+        where: where,
+        whereArgs: whereArgs,
+        orderBy: 'id DESC',
+        limit: limit,
+        offset: offset);
     final hasilTotal = status == null
         ? await database.rawQuery('SELECT COUNT(*) AS n FROM transaksi_pending')
-        : await database.rawQuery('SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = ?', [status]);
+        : await database.rawQuery(
+            'SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = ?',
+            [status]);
     final total = (hasilTotal.first['n'] as int?) ?? 0;
     return (data: data, total: total);
   }
@@ -635,8 +676,8 @@ class CoreDb {
 
   Future<void> tandaiSesiKasTersinkron(String kode) async {
     final database = await db;
-    await database
-        .update('sesi_kas_lokal', {'disinkronkan': 1}, where: 'kode = ?', whereArgs: [kode]);
+    await database.update('sesi_kas_lokal', {'disinkronkan': 1},
+        where: 'kode = ?', whereArgs: [kode]);
   }
 
   Future<void> tutupSesiKasLokal(String kode) async {
