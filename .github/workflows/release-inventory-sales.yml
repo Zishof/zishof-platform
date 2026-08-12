@@ -25,6 +25,9 @@ jobs:
       - name: Resolve dependencies
         working-directory: apps/ebisnis
         run: flutter pub get
+      - name: Use runner JDK
+        shell: bash
+        run: sed -i '/^org\.gradle\.java\.home=/d' apps/ebisnis/android/gradle.properties
       - name: Build Inventory Sales APK
         working-directory: apps/ebisnis
         shell: bash
@@ -67,14 +70,22 @@ jobs:
         working-directory: apps/ebisnis
         shell: powershell
         run: |
-          & .\tool\build_windows_inventory_sales.ps1 -Installer *>&1 |
-            Tee-Object -FilePath build-windows.log
-          if ($LASTEXITCODE -ne 0) {
-            $tail = ((Get-Content build-windows.log -Tail 80) -join "`n")
+          $output = & flutter build windows --release `
+            -t lib/main_inventory_sales.dart `
+            --dart-define=EBISNIS_VARIANT=inventory_sales 2>&1
+          $buildExit = $LASTEXITCODE
+          $output | Tee-Object -FilePath build-windows.log
+          if ($buildExit -ne 0) {
+            $tail = (($output | Select-Object -Last 80) -join "`n")
             $tail = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
             Write-Output "::error title=Windows build failed::$tail"
             exit 1
           }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' }
+          & $iscc "/DAppVersion=$version" installer\inventory_sales.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Name installer
         shell: powershell
         run: |
