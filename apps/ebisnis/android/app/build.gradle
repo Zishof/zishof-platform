@@ -74,6 +74,11 @@ android {
             applicationId "id.zishof.ebisnis.emedik"
             resValue "string", "app_name", "eBisnis POS eMedik"
         }
+        apotik {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.apotik"
+            resValue "string", "app_name", "eBisnis POS Apotik"
+        }
         albahjah {
             dimension "product"
             applicationId "id.zishof.ebisnis.albahjah"
