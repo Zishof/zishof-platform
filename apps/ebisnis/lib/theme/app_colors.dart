@@ -16,11 +16,12 @@ class AppColors {
   /// spt draf awal, per feedback user "coba warnanya samakan... mirip warna
   /// profile"); semua varian lain tetap navy/biru referensi di atas, tak
   /// berubah.
-  static const sidebarBg =
-      AppVariant.isAlBahjah ? Color(0xFF15803D) : Color(0xFF0F1C2E);
+  static const sidebarBg = AppVariant.isAlBahjah
+      ? Color.fromARGB(255, 18, 70, 37)
+      : Color(0xFF0F1C2E);
   static const sidebarBgActive =
       AppVariant.isAlBahjah ? Color(0xFFCA8A04) : Color(0xFF2563EB);
-  static const sidebarText = Color(0xFF8FA0BC);
+  static const sidebarText = Color.fromARGB(255, 218, 219, 221);
   static const sidebarTextActive = Colors.white;
 
   static const pageBg = Color(0xFFF4F6FA);

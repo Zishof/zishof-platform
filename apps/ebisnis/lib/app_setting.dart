@@ -18,9 +18,9 @@ extension AppThemeWarnaX on AppThemeWarna {
       };
 
   Color get warna => switch (this) {
-        AppThemeWarna.biru => const Color(0xFF2563EB),
-        AppThemeWarna.merah => const Color(0xFFDC2626),
-        AppThemeWarna.hijau => const Color(0xFF16A34A),
+        AppThemeWarna.biru => const Color.fromARGB(255, 29, 78, 108),
+        AppThemeWarna.merah => const Color.fromARGB(255, 102, 41, 41),
+        AppThemeWarna.hijau => const Color.fromARGB(255, 16, 78, 39),
         AppThemeWarna.abuAbu => const Color(0xFF475569),
       };
 }

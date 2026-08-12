@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:io';
 
@@ -9,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
+import '../services/pengaturan_price_tag.dart';
 import '../services/pengaturan_struk.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -464,15 +466,64 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   bool _memproses = false;
   String? _logoPath;
   double _marginKotakMm = 2;
+  Timer? _debounceSimpanPengaturan;
+
+  /// Controller yang isinya ikut disimpan sbg "pengaturan print" per model
+  /// (lihat [PengaturanPriceTag]) -- SENGAJA tidak termasuk [_controllerCari]
+  /// (filter pencarian produk, bukan pengaturan cetak) maupun
+  /// [_controllerPromoItem] (override teks manual per produk terpilih,
+  /// spesifik utk batch cetak saat itu, bukan preferensi yang reusable).
+  List<TextEditingController> get _controllerPengaturanTersimpan => [
+        _controllerCopies,
+        _controllerPromo,
+        _controllerRakHeader,
+        _controllerRakProduk,
+        _controllerRakHarga,
+        _controllerRakHeaderSize,
+        _controllerRakProdukSize,
+        _controllerRakKodeSize,
+        _controllerRakHargaSize,
+        _controllerRakHeaderBg,
+        _controllerRakHeaderText,
+        _controllerRakStripBg,
+        _controllerRakStripText,
+        _controllerRakKodeText,
+        _controllerRakBodyBg,
+        _controllerRakHargaText,
+        _controllerPromoHeaderBg,
+        _controllerPromoHeaderText,
+        _controllerPromoStripBg,
+        _controllerPromoStripText,
+        _controllerPromoHargaAsliText,
+        _controllerPromoBodyBg,
+        _controllerPromoHargaText,
+        _controllerPromoHeaderSize,
+        _controllerPromoTokoSize,
+        _controllerPromoProdukSize,
+        _controllerPromoHargaAsliSize,
+        _controllerPromoHargaSize,
+        _controllerPromoKodeSize,
+        _controllerLogoWrapBg,
+      ];
 
   @override
   void initState() {
     super.initState();
+    for (final c in _controllerPengaturanTersimpan) {
+      c.addListener(_jadwalkanSimpanPengaturan);
+    }
     _muat();
   }
 
   @override
   void dispose() {
+    _debounceSimpanPengaturan?.cancel();
+    // Flush pengaturan terakhir (mis. keyboard belum sempat "settle" 500ms
+    // sebelum user tutup layar) -- baca .text SEBELUM controller di-dispose.
+    unawaited(_simpanPengaturanModel(_model));
+    for (final c in _controllerPengaturanTersimpan) {
+      c.removeListener(_jadwalkanSimpanPengaturan);
+    }
     _controllerCari.dispose();
     _controllerPromo.dispose();
     _controllerCopies.dispose();
@@ -517,6 +568,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     });
     try {
       await PengaturanStruk.instance.muat();
+      await PengaturanPriceTag.instance.muat();
       final hasil = await ApiClient.instance.aksi('price_tag_list_produk', {});
       final arr = (hasil['data'] as List?) ?? [];
       setStateIfMounted(() {
@@ -524,6 +576,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _logoPath = PengaturanStruk.instance.priceTagLogoPath;
         _marginKotakMm = PengaturanStruk.instance.priceTagMarginKotakMm;
+        _model = _modelDari(PengaturanPriceTag.instance.modelTerakhir) ?? _model;
+        _terapkanPengaturanModel(_model);
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -650,6 +704,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
     if (dipilih != null) {
       setStateIfMounted(() => _ukuranId = dipilih);
+      unawaited(_simpanPengaturanModel(_model));
     }
   }
 
@@ -793,19 +848,204 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     return _terfilter.isNotEmpty ? _terfilter.first : null;
   }
 
+  ModelPriceTag? _modelDari(String? nama) {
+    for (final m in ModelPriceTag.values) {
+      if (m.name == nama) return m;
+    }
+    return null;
+  }
+
+  KertasCetak? _kertasCetakDari(dynamic nama) {
+    if (nama is! String) return null;
+    for (final k in KertasCetak.values) {
+      if (k.name == nama) return k;
+    }
+    return null;
+  }
+
+  /// Snapshot pengaturan print model [model] saat ini -- bentuknya
+  /// disesuaikan per model (field yang tidak relevan/tidak tampil di UI
+  /// model tsb tidak ikut disimpan, mis. rak tidak punya `tampilHargaProduk`
+  /// dan produk tidak punya field kustom warna/teks rak).
+  Map<String, dynamic> _snapshotPengaturan(ModelPriceTag model) {
+    final umum = <String, dynamic>{
+      'ukuranId': _ukuranId,
+      'copies': _copies,
+    };
+    switch (model) {
+      case ModelPriceTag.rak:
+        return {
+          ...umum,
+          'kertasCetak': _kertasCetak.name,
+          'lebarRollId': _lebarRollId,
+          'tampilBarcode': _tampilBarcode,
+          'tampilKode': _tampilKode,
+          'tampilToko': _tampilToko,
+          'tampilLogo': _tampilLogo,
+          'bungkusLogo': _bungkusLogo,
+          'logoWrapBg': _controllerLogoWrapBg.text,
+          'rakHeader': _controllerRakHeader.text,
+          'rakProduk': _controllerRakProduk.text,
+          'rakHarga': _controllerRakHarga.text,
+          'rakHeaderSize': _controllerRakHeaderSize.text,
+          'rakProdukSize': _controllerRakProdukSize.text,
+          'rakKodeSize': _controllerRakKodeSize.text,
+          'rakHargaSize': _controllerRakHargaSize.text,
+          'rakHeaderBg': _controllerRakHeaderBg.text,
+          'rakHeaderTextColor': _controllerRakHeaderText.text,
+          'rakStripBg': _controllerRakStripBg.text,
+          'rakStripText': _controllerRakStripText.text,
+          'rakKodeText': _controllerRakKodeText.text,
+          'rakBodyBg': _controllerRakBodyBg.text,
+          'rakHargaTextColor': _controllerRakHargaText.text,
+        };
+      case ModelPriceTag.produk:
+        return {
+          ...umum,
+          'kertasCetak': _kertasCetak.name,
+          'lebarRollId': _lebarRollId,
+          'tampilBarcode': _tampilBarcode,
+          'tampilKode': _tampilKode,
+          'tampilHargaProduk': _tampilHargaProduk,
+        };
+      case ModelPriceTag.promo:
+        return {
+          ...umum,
+          'tampilBarcode': _tampilBarcode,
+          'tampilKode': _tampilKode,
+          'tampilToko': _tampilToko,
+          'tampilLogo': _tampilLogo,
+          'bungkusLogo': _bungkusLogo,
+          'logoWrapBg': _controllerLogoWrapBg.text,
+          'promoDefault': _controllerPromo.text,
+          'promoHeaderBg': _controllerPromoHeaderBg.text,
+          'promoHeaderTextColor': _controllerPromoHeaderText.text,
+          'promoStripBg': _controllerPromoStripBg.text,
+          'promoStripText': _controllerPromoStripText.text,
+          'promoHargaAsliText': _controllerPromoHargaAsliText.text,
+          'promoBodyBg': _controllerPromoBodyBg.text,
+          'promoHargaTextColor': _controllerPromoHargaText.text,
+          'promoHeaderSize': _controllerPromoHeaderSize.text,
+          'promoTokoSize': _controllerPromoTokoSize.text,
+          'promoProdukSize': _controllerPromoProdukSize.text,
+          'promoHargaAsliSize': _controllerPromoHargaAsliSize.text,
+          'promoHargaSize': _controllerPromoHargaSize.text,
+          'promoKodeSize': _controllerPromoKodeSize.text,
+        };
+    }
+  }
+
+  /// Terapkan pengaturan tersimpan utk [model] (kalau ada) ke seluruh
+  /// state/controller terkait -- field yang belum pernah disimpan (mis.
+  /// pemakaian pertama kali) jatuh ke default bawaan yang sama spt sebelum
+  /// fitur penyimpanan ini ada, supaya perilaku first-run tidak berubah.
+  void _terapkanPengaturanModel(ModelPriceTag model) {
+    final data = PengaturanPriceTag.instance.untukModel(model.name);
+    String teks(String kunci, String fallback) {
+      final v = data?[kunci];
+      return (v is String && v.isNotEmpty) ? v : fallback;
+    }
+
+    bool boolean(String kunci, bool fallback) =>
+        data?[kunci] as bool? ?? fallback;
+
+    final daftarUkuran = switch (model) {
+      ModelPriceTag.rak => _ukuranRak,
+      ModelPriceTag.produk => _ukuranProduk,
+      ModelPriceTag.promo => _ukuranPromo,
+    };
+    final ukuranTersimpan = data?['ukuranId'] as String?;
+    _ukuranId = (ukuranTersimpan != null &&
+            daftarUkuran.any((u) => u.id == ukuranTersimpan))
+        ? ukuranTersimpan
+        : daftarUkuran.first.id;
+
+    _copies = ((data?['copies'] as num?)?.toInt() ?? 1).clamp(1, 999);
+    _controllerCopies.text = _copies.toString();
+
+    _tampilBarcode = boolean('tampilBarcode', true);
+    _tampilKode = boolean('tampilKode', true);
+
+    switch (model) {
+      case ModelPriceTag.rak:
+        _kertasCetak = _kertasCetakDari(data?['kertasCetak']) ?? KertasCetak.a4;
+        _lebarRollId = teks('lebarRollId', 'roll_58');
+        _tampilToko = boolean('tampilToko', true);
+        _tampilLogo = boolean('tampilLogo', false);
+        _bungkusLogo = boolean('bungkusLogo', false);
+        _controllerLogoWrapBg.text = teks('logoWrapBg', '#FFFFFF');
+        _controllerRakHeader.text = teks('rakHeader', '');
+        _controllerRakProduk.text = teks('rakProduk', '');
+        _controllerRakHarga.text = teks('rakHarga', '');
+        _controllerRakHeaderSize.text = teks('rakHeaderSize', '8');
+        _controllerRakProdukSize.text = teks('rakProdukSize', '5.8');
+        _controllerRakKodeSize.text = teks('rakKodeSize', '7');
+        _controllerRakHargaSize.text = teks('rakHargaSize', '26');
+        _controllerRakHeaderBg.text = teks('rakHeaderBg', '#505B54');
+        _controllerRakHeaderText.text = teks('rakHeaderTextColor', '#FFFFFF');
+        _controllerRakStripBg.text = teks('rakStripBg', '#E6B742');
+        _controllerRakStripText.text = teks('rakStripText', '#111827');
+        _controllerRakKodeText.text = teks('rakKodeText', '#4D403C');
+        _controllerRakBodyBg.text = teks('rakBodyBg', '#FFFFFF');
+        _controllerRakHargaText.text = teks('rakHargaTextColor', '#514B4B');
+      case ModelPriceTag.produk:
+        _kertasCetak = _kertasCetakDari(data?['kertasCetak']) ?? KertasCetak.a4;
+        _lebarRollId = teks('lebarRollId', 'roll_58');
+        _tampilHargaProduk = boolean('tampilHargaProduk', true);
+        _tampilToko = false;
+        _tampilLogo = false;
+      case ModelPriceTag.promo:
+        _tampilToko = boolean('tampilToko', true);
+        _tampilLogo = boolean('tampilLogo', false);
+        _bungkusLogo = boolean('bungkusLogo', false);
+        _controllerLogoWrapBg.text = teks('logoWrapBg', '#FFFFFF');
+        _controllerPromo.text = teks('promoDefault', 'PROMO');
+        _controllerPromoHeaderBg.text = teks('promoHeaderBg', '#64605A');
+        _controllerPromoHeaderText.text =
+            teks('promoHeaderTextColor', '#FFFFFF');
+        _controllerPromoStripBg.text = teks('promoStripBg', '#E7B640');
+        _controllerPromoStripText.text = teks('promoStripText', '#111827');
+        _controllerPromoHargaAsliText.text =
+            teks('promoHargaAsliText', '#C62828');
+        _controllerPromoBodyBg.text = teks('promoBodyBg', '#FFFFFF');
+        _controllerPromoHargaText.text =
+            teks('promoHargaTextColor', '#5F5555');
+        _controllerPromoHeaderSize.text = teks('promoHeaderSize', '20');
+        _controllerPromoTokoSize.text = teks('promoTokoSize', '9');
+        _controllerPromoProdukSize.text = teks('promoProdukSize', '7.5');
+        _controllerPromoHargaAsliSize.text =
+            teks('promoHargaAsliSize', '7.5');
+        _controllerPromoHargaSize.text = teks('promoHargaSize', '47');
+        _controllerPromoKodeSize.text = teks('promoKodeSize', '7');
+    }
+    // Batalkan penjadwalan simpan yg keterpicu krn assignment `.text` di
+    // atas (listener ikut jalan tiap controller diisi ulang) -- ini cuma
+    // menerapkan data yg SUDAH tersimpan, bukan perubahan baru dari user.
+    _debounceSimpanPengaturan?.cancel();
+  }
+
+  Future<void> _simpanPengaturanModel(ModelPriceTag model) async {
+    await PengaturanPriceTag.instance.simpan(
+      model.name,
+      _snapshotPengaturan(model),
+    );
+  }
+
+  void _jadwalkanSimpanPengaturan() {
+    final model = _model;
+    _debounceSimpanPengaturan?.cancel();
+    _debounceSimpanPengaturan = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(_simpanPengaturanModel(model)),
+    );
+  }
+
   void _ubahModel(ModelPriceTag model) {
     setStateIfMounted(() {
       _model = model;
-      _ukuranId = _ukuranTersedia.first.id;
-      if (_model == ModelPriceTag.produk) {
-        _tampilBarcode = true;
-        _tampilKode = true;
-        _tampilToko = false;
-        _tampilLogo = false;
-      } else {
-        _tampilToko = true;
-      }
+      _terapkanPengaturanModel(model);
     });
+    unawaited(_simpanPengaturanModel(model));
   }
 
   void _ubahCopies(int nilai) {
@@ -1202,8 +1442,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 .map((k) => ButtonSegment(value: k, label: Text(k.label)))
                 .toList(),
             selected: {_kertasCetak},
-            onSelectionChanged: (s) =>
-                setStateIfMounted(() => _kertasCetak = s.first),
+            onSelectionChanged: (s) {
+              setStateIfMounted(() => _kertasCetak = s.first);
+              unawaited(_simpanPengaturanModel(_model));
+            },
           ),
           const SizedBox(height: 4),
           Text(
@@ -1225,8 +1467,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                   .map((r) => ChoiceChip(
                         label: Text(r.populer ? '${r.label} ⭐' : r.label),
                         selected: _lebarRollId == r.id,
-                        onSelected: (_) =>
-                            setStateIfMounted(() => _lebarRollId = r.id),
+                        onSelected: (_) {
+                          setStateIfMounted(() => _lebarRollId = r.id);
+                          unawaited(_simpanPengaturanModel(_model));
+                        },
                       ))
                   .toList(),
             ),
@@ -1283,7 +1527,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         if (_model != ModelPriceTag.produk)
           CheckboxListTile(
             value: _tampilToko,
-            onChanged: (v) => setStateIfMounted(() => _tampilToko = v ?? false),
+            onChanged: (v) {
+              setStateIfMounted(() => _tampilToko = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
             title: const Text('Tampilkan Nama Toko'),
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -1291,7 +1538,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         if (_model != ModelPriceTag.produk)
           CheckboxListTile(
             value: _tampilLogo,
-            onChanged: (v) => setStateIfMounted(() => _tampilLogo = v ?? false),
+            onChanged: (v) {
+              setStateIfMounted(() => _tampilLogo = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
             title: const Text('Tampilkan Logo Toko'),
             subtitle: const Text('Menggunakan logo dari Konfigurasi Price Tag'),
             contentPadding: EdgeInsets.zero,
@@ -1300,8 +1550,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         if (_model != ModelPriceTag.produk && _tampilLogo) ...[
           CheckboxListTile(
             value: _bungkusLogo,
-            onChanged: (v) =>
-                setStateIfMounted(() => _bungkusLogo = v ?? false),
+            onChanged: (v) {
+              setStateIfMounted(() => _bungkusLogo = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
             title: const Text('Bungkus Logo Dengan Warna'),
             subtitle:
                 const Text('Agar logo tetap terlihat pada background gelap'),
@@ -1313,15 +1565,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         ],
         CheckboxListTile(
           value: _tampilBarcode,
-          onChanged: (v) =>
-              setStateIfMounted(() => _tampilBarcode = v ?? false),
+          onChanged: (v) {
+            setStateIfMounted(() => _tampilBarcode = v ?? false);
+            unawaited(_simpanPengaturanModel(_model));
+          },
           title: const Text('Tampilkan Barcode'),
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
         CheckboxListTile(
           value: _tampilKode,
-          onChanged: (v) => setStateIfMounted(() => _tampilKode = v ?? false),
+          onChanged: (v) {
+            setStateIfMounted(() => _tampilKode = v ?? false);
+            unawaited(_simpanPengaturanModel(_model));
+          },
           title: const Text('Tampilkan Kode'),
           contentPadding: EdgeInsets.zero,
           dense: true,
@@ -1329,8 +1586,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         if (_model == ModelPriceTag.produk)
           CheckboxListTile(
             value: _tampilHargaProduk,
-            onChanged: (v) =>
-                setStateIfMounted(() => _tampilHargaProduk = v ?? false),
+            onChanged: (v) {
+              setStateIfMounted(() => _tampilHargaProduk = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
             title: const Text('Tampilkan Harga'),
             contentPadding: EdgeInsets.zero,
             dense: true,
