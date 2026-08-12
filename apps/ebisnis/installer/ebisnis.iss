@@ -34,7 +34,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Ikon tambahan:"
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis_albahjah.exe,ebisnis_inventory_sales.exe,ebisnis_apotik.exe,ebisnis_emedik.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Microsoft Visual C++ 2015-2022 Redistributable (x64) -- WAJIB, Flutter Windows release
 ; build TIDAK static-link MSVC runtime, jadi ebisnis.exe gagal start di Windows fresh-install
 ; dgn "VCRUNTIME140.dll was not found" (gap-closure: sebelumnya pengguna harus unduh+pasang
