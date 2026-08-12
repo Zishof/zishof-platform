@@ -39,6 +39,8 @@ class KasirScreen extends StatefulWidget {
   State<KasirScreen> createState() => _KasirScreenState();
 }
 
+enum _AksiKasirMobile { kas, sinkron, muatUlang, akun, keluar }
+
 class _KasirScreenState extends State<KasirScreen> {
   bool _memuat = true;
   String? _pesanError;
@@ -1118,6 +1120,84 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  List<Widget> get _tombolAksiMobile => [
+        PopupMenuButton<_AksiKasirMobile>(
+          key: const Key('menu-aksi-kasir-mobile'),
+          icon: const Icon(Icons.more_vert),
+          tooltip: 'Aksi kasir lainnya',
+          onSelected: (aksi) {
+            switch (aksi) {
+              case _AksiKasirMobile.kas:
+                if (_kasTerbuka == true) {
+                  _bukaDialogTutupKas();
+                } else if (_kasTerbuka == false) {
+                  _bukaDialogBukaKas();
+                }
+                return;
+              case _AksiKasirMobile.sinkron:
+                if (!_sinkronBerjalan) _sinkronkanSekarang();
+                return;
+              case _AksiKasirMobile.muatUlang:
+                _muatAwal();
+                return;
+              case _AksiKasirMobile.akun:
+                _bukaAkunSaya();
+                return;
+              case _AksiKasirMobile.keluar:
+                _logout();
+                return;
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: _AksiKasirMobile.kas,
+              enabled: _kasTerbuka != null,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.point_of_sale_outlined),
+                title: Text(_kasTerbuka == true ? 'Tutup Kas' : 'Buka Kas'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _AksiKasirMobile.sinkron,
+              enabled: !_sinkronBerjalan,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.sync),
+                title: Text(_jumlahPending > 0
+                    ? 'Sync ($_jumlahPending tertunda)'
+                    : 'Sync'),
+              ),
+            ),
+            const PopupMenuItem(
+              value: _AksiKasirMobile.muatUlang,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.refresh),
+                title: Text('Muat Ulang'),
+              ),
+            ),
+            const PopupMenuItem(
+              value: _AksiKasirMobile.akun,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.account_circle_outlined),
+                title: Text('Akun Saya'),
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: _AksiKasirMobile.keluar,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.logout),
+                title: Text('Keluar'),
+              ),
+            ),
+          ],
+        ),
+      ];
+
   List<Widget> get _tombolAksi => [
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
           Padding(
@@ -1398,7 +1478,7 @@ class _KasirScreenState extends State<KasirScreen> {
           judul: 'Kasir / POS',
           tampilkanJudul: false,
           scrollable: false,
-          actionsAppBar: _tombolAksi,
+          actionsAppBar: _tombolAksiMobile,
           aksiHeader:
               Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
           bottomBar: defaultTargetPlatform == TargetPlatform.windows ||

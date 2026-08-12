@@ -8,6 +8,7 @@ import '../services/layar_pelanggan_launcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
+import 'app_components.dart';
 import '../screens/akun_saya_screen.dart';
 import '../screens/bantuan_screen.dart';
 import '../screens/kasir_screen.dart';
@@ -671,6 +672,7 @@ class _AppShellState extends State<AppShell> {
     return LayoutBuilder(builder: (context, constraints) {
       final desktop = constraints.maxWidth >= kAmbangLebarDesktop;
       if (!desktop) {
+        final aksiMobile = _bangunAksiMobile(widget.actionsAppBar);
         return Scaffold(
           backgroundColor: AppColors.pageBgOf(context),
           appBar: AppBar(
@@ -678,7 +680,7 @@ class _AppShellState extends State<AppShell> {
               backgroundColor: AppColors.sidebarBg,
               foregroundColor: Colors.white,
               actions: [
-                ...?widget.actionsAppBar,
+                ...aksiMobile,
                 IconButton(
                   onPressed: () => _bukaBantuan(context),
                   icon: const Icon(Icons.help_outline),
@@ -790,6 +792,40 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     });
+  }
+
+  /// Tombol berlabel yang nyaman di desktop mudah memenuhi seluruh AppBar
+  /// ponsel lalu bertabrakan dengan judul/tombol drawer. Bila ada lebih dari
+  /// dua aksi, pindahkan [HeaderActionButton] ke satu menu overflow; widget
+  /// khusus (misalnya PopupMenuButton bertingkat) tetap dipertahankan.
+  List<Widget> _bangunAksiMobile(List<Widget>? actions) {
+    if (actions == null || actions.isEmpty) return const [];
+    if (actions.length <= 2) return actions;
+
+    final tombolBiasa = actions.whereType<HeaderActionButton>().toList();
+    if (tombolBiasa.isEmpty) return actions;
+    final khusus = actions.where((a) => a is! HeaderActionButton).take(1);
+    return [
+      ...khusus,
+      PopupMenuButton<int>(
+        key: const Key('menu-aksi-halaman-mobile'),
+        icon: const Icon(Icons.more_vert),
+        tooltip: 'Aksi halaman lainnya',
+        onSelected: (index) => tombolBiasa[index].onPressed?.call(),
+        itemBuilder: (_) => [
+          for (var i = 0; i < tombolBiasa.length; i++)
+            PopupMenuItem<int>(
+              value: i,
+              enabled: tombolBiasa[i].onPressed != null,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(tombolBiasa[i].icon),
+                title: Text(tombolBiasa[i].label),
+              ),
+            ),
+        ],
+      ),
+    ];
   }
 
   void _bukaBantuan(BuildContext context) {

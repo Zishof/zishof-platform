@@ -9,6 +9,10 @@ import '../screens/produk_screen.dart';
 import '../screens/anggota_screen.dart';
 import '../screens/pesanan_screen.dart';
 import '../screens/stok_opname_screen.dart';
+import '../screens/kedaluwarsa_screen.dart';
+import '../screens/mutasi_antar_outlet_screen.dart';
+import '../screens/jenis_produk_screen.dart';
+import '../screens/cara_bayar_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/diskon_screen.dart';
@@ -78,390 +82,458 @@ class AppDrawer extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            DrawerHeader(
-              decoration: const BoxDecoration(color: Color(0xFF1E3A5F)),
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: Text(
-                  Sesi.instance.tokoNama.isEmpty
-                      ? AppVariant.namaAplikasi
-                      : Sesi.instance.tokoNama,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold),
+            SizedBox(
+              height: 112,
+              child: DrawerHeader(
+                margin: EdgeInsets.zero,
+                decoration: const BoxDecoration(color: Color(0xFF1E3A5F)),
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    Sesi.instance.tokoNama.isEmpty
+                        ? AppVariant.namaAplikasi
+                        : Sesi.instance.tokoNama,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),
             Expanded(
               child: ValueListenableBuilder<String>(
                 valueListenable: menuAktifNotifier,
-                builder: (context, _, __) => ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    if (AppProductProfile.aktif.isInventorySales)
-                      _ItemMenu(
-                        icon: Icons.storefront_outlined,
-                        label: 'Beranda Inventory & Sales',
-                        aktif: menuAktif == 'Beranda Inventory & Sales',
-                        onTap: () => _pindahMenu(
-                          context,
+                builder: (context, _, __) => Scrollbar(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      if (AppProductProfile.aktif.isInventorySales)
+                        _ItemMenu(
+                          icon: Icons.storefront_outlined,
                           label: 'Beranda Inventory & Sales',
-                          builder: (_) => const BerandaInventorySalesScreen(),
+                          aktif: menuAktif == 'Beranda Inventory & Sales',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Beranda Inventory & Sales',
+                            builder: (_) => const BerandaInventorySalesScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('master_supplier'))
-                      _ItemMenu(
-                        icon: Icons.local_shipping_outlined,
-                        label: 'Master Supplier',
-                        aktif: menuAktif == 'Master Supplier',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('master_supplier'))
+                        _ItemMenu(
+                          icon: Icons.local_shipping_outlined,
                           label: 'Master Supplier',
-                          builder: (_) => const MasterSupplierScreen(),
+                          aktif: menuAktif == 'Master Supplier',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Master Supplier',
+                            builder: (_) => const MasterSupplierScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('master_customer'))
-                      _ItemMenu(
-                        icon: Icons.people_alt_outlined,
-                        label: 'Master Customer',
-                        aktif: menuAktif == 'Master Customer',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('master_customer'))
+                        _ItemMenu(
+                          icon: Icons.people_alt_outlined,
                           label: 'Master Customer',
-                          builder: (_) => const MasterCustomerScreen(),
+                          aktif: menuAktif == 'Master Customer',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Master Customer',
+                            builder: (_) => const MasterCustomerScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('master_sales') &&
-                        (Sesi.instance.isPemilikSalesInventory ||
-                            Sesi.instance.isSalesKeliling))
-                      _ItemMenu(
-                        icon: Icons.badge_outlined,
-                        label: 'Master Sales',
-                        aktif: menuAktif == 'Master Sales',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('master_sales') &&
+                          (Sesi.instance.isPemilikSalesInventory ||
+                              Sesi.instance.isSalesKeliling))
+                        _ItemMenu(
+                          icon: Icons.badge_outlined,
                           label: 'Master Sales',
-                          builder: (_) => const MasterSalesScreen(),
+                          aktif: menuAktif == 'Master Sales',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Master Sales',
+                            builder: (_) => const MasterSalesScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('persediaan'))
-                      _ItemMenu(
-                        icon: Icons.warehouse_outlined,
-                        label: 'Persediaan & Kartu Stok',
-                        aktif: menuAktif == 'Persediaan & Kartu Stok',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('persediaan'))
+                        _ItemMenu(
+                          icon: Icons.warehouse_outlined,
                           label: 'Persediaan & Kartu Stok',
-                          builder: (_) => const PersediaanScreen(),
+                          aktif: menuAktif == 'Persediaan & Kartu Stok',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Persediaan & Kartu Stok',
+                            builder: (_) => const PersediaanScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('harga'))
-                      _ItemMenu(
-                        icon: Icons.price_change_outlined,
-                        label: 'Master & Analisis Harga',
-                        aktif: menuAktif == 'Master & Analisis Harga',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('harga'))
+                        _ItemMenu(
+                          icon: Icons.price_change_outlined,
                           label: 'Master & Analisis Harga',
-                          builder: (_) => const HargaScreen(),
+                          aktif: menuAktif == 'Master & Analisis Harga',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Master & Analisis Harga',
+                            builder: (_) => const HargaScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('hutang'))
-                      _ItemMenu(
-                        icon: Icons.account_balance_outlined,
-                        label: 'Hutang Supplier (AP)',
-                        aktif: menuAktif == 'Hutang Supplier (AP)',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('hutang'))
+                        _ItemMenu(
+                          icon: Icons.account_balance_outlined,
                           label: 'Hutang Supplier (AP)',
-                          builder: (_) => const HutangSupplierScreen(),
+                          aktif: menuAktif == 'Hutang Supplier (AP)',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Hutang Supplier (AP)',
+                            builder: (_) => const HutangSupplierScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('penjualan_sales') &&
-                        (Sesi.instance.isPemilikSalesInventory ||
-                            Sesi.instance.isSalesKeliling))
-                      _ItemMenu(
-                        icon: Icons.shopping_cart_checkout,
-                        label: 'Penjualan Sales',
-                        aktif: menuAktif == 'Penjualan Sales',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('penjualan_sales') &&
+                          (Sesi.instance.isPemilikSalesInventory ||
+                              Sesi.instance.isSalesKeliling))
+                        _ItemMenu(
+                          icon: Icons.shopping_cart_checkout,
                           label: 'Penjualan Sales',
-                          builder: (_) => const PenjualanSalesScreen(),
+                          aktif: menuAktif == 'Penjualan Sales',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Penjualan Sales',
+                            builder: (_) => const PenjualanSalesScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('piutang'))
-                      _ItemMenu(
-                        icon: Icons.request_quote_outlined,
-                        label: 'Piutang Customer (AR)',
-                        aktif: menuAktif == 'Piutang Customer (AR)',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('piutang'))
+                        _ItemMenu(
+                          icon: Icons.request_quote_outlined,
                           label: 'Piutang Customer (AR)',
-                          builder: (_) => const PiutangScreen(),
+                          aktif: menuAktif == 'Piutang Customer (AR)',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Piutang Customer (AR)',
+                            builder: (_) => const PiutangScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('surat_perintah_sales') &&
-                        (Sesi.instance.isPemilikSalesInventory ||
-                            Sesi.instance.isSalesKeliling))
-                      _ItemMenu(
-                        icon: Icons.assignment_outlined,
-                        label: 'Surat Perintah Sales',
-                        aktif: menuAktif == 'Surat Perintah Sales',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('surat_perintah_sales') &&
+                          (Sesi.instance.isPemilikSalesInventory ||
+                              Sesi.instance.isSalesKeliling))
+                        _ItemMenu(
+                          icon: Icons.assignment_outlined,
                           label: 'Surat Perintah Sales',
-                          builder: (_) => const SpjScreen(),
+                          aktif: menuAktif == 'Surat Perintah Sales',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Surat Perintah Sales',
+                            builder: (_) => const SpjScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('nota_sales') &&
-                        (Sesi.instance.isPemilikSalesInventory ||
-                            Sesi.instance.isSalesKeliling))
-                      _ItemMenu(
-                        icon: Icons.route_outlined,
-                        label: 'Sesi Nota Sales',
-                        aktif: menuAktif == 'Sesi Nota Sales',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('nota_sales') &&
+                          (Sesi.instance.isPemilikSalesInventory ||
+                              Sesi.instance.isSalesKeliling))
+                        _ItemMenu(
+                          icon: Icons.route_outlined,
                           label: 'Sesi Nota Sales',
-                          builder: (_) => const NotaSalesScreen(),
+                          aktif: menuAktif == 'Sesi Nota Sales',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Sesi Nota Sales',
+                            builder: (_) => const NotaSalesScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('kas_jurnal'))
-                      _ItemMenu(
-                        icon: Icons.menu_book_outlined,
-                        label: 'Kas & Jurnal',
-                        aktif: menuAktif == 'Kas & Jurnal',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('kas_jurnal'))
+                        _ItemMenu(
+                          icon: Icons.menu_book_outlined,
                           label: 'Kas & Jurnal',
-                          builder: (_) => const KasJurnalScreen(),
+                          aktif: menuAktif == 'Kas & Jurnal',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kas & Jurnal',
+                            builder: (_) => const KasJurnalScreen(),
+                          ),
                         ),
-                      ),
-                    if (AppProductProfile.aktif.isInventorySales &&
-                        Sesi.instance.bolehMenuIs('laba_rugi'))
-                      _ItemMenu(
-                        icon: Icons.stacked_line_chart,
-                        label: 'Laba Rugi',
-                        aktif: menuAktif == 'Laba Rugi',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (AppProductProfile.aktif.isInventorySales &&
+                          Sesi.instance.bolehMenuIs('laba_rugi'))
+                        _ItemMenu(
+                          icon: Icons.stacked_line_chart,
                           label: 'Laba Rugi',
-                          builder: (_) => const LabaRugiScreen(),
+                          aktif: menuAktif == 'Laba Rugi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laba Rugi',
+                            builder: (_) => const LabaRugiScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('kasir'))
-                      _ItemMenu(
-                        icon: Icons.point_of_sale,
-                        label: 'Kasir',
-                        aktif: menuAktif == 'Kasir',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('kasir'))
+                        _ItemMenu(
+                          icon: Icons.point_of_sale,
                           label: 'Kasir',
-                          builder: (_) => const KasirScreen(),
+                          aktif: menuAktif == 'Kasir',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kasir',
+                            builder: (_) => const KasirScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('ringkasan'))
-                      _ItemMenu(
-                        icon: Icons.bar_chart,
-                        label: 'Ringkasan',
-                        aktif: menuAktif == 'Ringkasan',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('ringkasan'))
+                        _ItemMenu(
+                          icon: Icons.bar_chart,
                           label: 'Ringkasan',
-                          builder: (_) => const RingkasanScreen(),
+                          aktif: menuAktif == 'Ringkasan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Ringkasan',
+                            builder: (_) => const RingkasanScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('pesanan'))
-                      _ItemMenu(
-                        icon: Icons.receipt_long,
-                        label: 'Pesanan',
-                        aktif: menuAktif == 'Pesanan',
-                        badge: PesananPoller.instance.jumlahBaru,
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('pesanan'))
+                        _ItemMenu(
+                          icon: Icons.receipt_long,
                           label: 'Pesanan',
-                          builder: (_) => const PesananScreen(),
+                          aktif: menuAktif == 'Pesanan',
+                          badge: PesananPoller.instance.jumlahBaru,
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Pesanan',
+                            builder: (_) => const PesananScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('anggota'))
-                      _ItemMenu(
-                        icon: Icons.people_outline,
-                        label: 'Customer/Anggota',
-                        aktif: menuAktif == 'Customer/Anggota',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('anggota'))
+                        _ItemMenu(
+                          icon: Icons.people_outline,
                           label: 'Customer/Anggota',
-                          builder: (_) => const AnggotaScreen(),
+                          aktif: menuAktif == 'Customer/Anggota',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Customer/Anggota',
+                            builder: (_) => const AnggotaScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('produk'))
-                      _ItemMenu(
-                        icon: Icons.inventory_2_outlined,
-                        label: 'Produk',
-                        aktif: menuAktif == 'Produk',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('produk'))
+                        _ItemMenu(
+                          icon: Icons.inventory_2_outlined,
                           label: 'Produk',
-                          builder: (_) => const ProdukScreen(),
+                          aktif: menuAktif == 'Produk',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Produk',
+                            builder: (_) => const ProdukScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('stokopname'))
-                      _ItemMenu(
-                        icon: Icons.fact_check_outlined,
-                        label: 'Stok Opname',
-                        aktif: menuAktif == 'Stok Opname',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('produk'))
+                        _ItemMenu(
+                          icon: Icons.category_outlined,
+                          label: 'Jenis Produk',
+                          aktif: menuAktif == 'Jenis Produk',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Jenis Produk',
+                            builder: (_) => const JenisProdukScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('stokopname'))
+                        _ItemMenu(
+                          icon: Icons.fact_check_outlined,
                           label: 'Stok Opname',
-                          builder: (_) => const StokOpnameScreen(),
+                          aktif: menuAktif == 'Stok Opname',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Stok Opname',
+                            builder: (_) => const StokOpnameScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('kulakan'))
-                      _ItemMenu(
-                        icon: Icons.local_shipping_outlined,
-                        label: 'Kulakan',
-                        aktif: menuAktif == 'Kulakan',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('stokopname'))
+                        _ItemMenu(
+                          icon: Icons.event_busy_outlined,
+                          label: 'Kedaluwarsa',
+                          aktif: menuAktif == 'Kedaluwarsa',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kedaluwarsa',
+                            builder: (_) => const KedaluwarsaScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('mutasistokantaroutlet'))
+                        _ItemMenu(
+                          icon: Icons.compare_arrows,
+                          label: 'Mutasi Antar Outlet',
+                          aktif: menuAktif == 'Mutasi Antar Outlet',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Mutasi Antar Outlet',
+                            builder: (_) => const MutasiAntarOutletScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('kulakan'))
+                        _ItemMenu(
+                          icon: Icons.local_shipping_outlined,
                           label: 'Kulakan',
-                          builder: (_) => const KulakanScreen(),
+                          aktif: menuAktif == 'Kulakan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kulakan',
+                            builder: (_) => const KulakanScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('penyedia'))
-                      _ItemMenu(
-                        icon: Icons.local_shipping_outlined,
-                        label: 'Supplier (Penyedia)',
-                        aktif: menuAktif == 'Supplier (Penyedia)',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('penyedia'))
+                        _ItemMenu(
+                          icon: Icons.local_shipping_outlined,
                           label: 'Supplier (Penyedia)',
-                          builder: (_) => const SupplierScreen(),
+                          aktif: menuAktif == 'Supplier (Penyedia)',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Supplier (Penyedia)',
+                            builder: (_) => const SupplierScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('diskon'))
-                      _ItemMenu(
-                        icon: Icons.sell_outlined,
-                        label: 'Aturan Diskon',
-                        aktif: menuAktif == 'Aturan Diskon',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('diskon'))
+                        _ItemMenu(
+                          icon: Icons.sell_outlined,
                           label: 'Aturan Diskon',
-                          builder: (_) => const DiskonScreen(),
+                          aktif: menuAktif == 'Aturan Diskon',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Aturan Diskon',
+                            builder: (_) => const DiskonScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('returpenjualan'))
-                      _ItemMenu(
-                        icon: Icons.assignment_return_outlined,
-                        label: 'Retur Penjualan',
-                        aktif: menuAktif == 'Retur Penjualan',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('pembayaran'))
+                        _ItemMenu(
+                          icon: Icons.payments_outlined,
+                          label: 'Cara Pembayaran',
+                          aktif: menuAktif == 'Cara Pembayaran',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Cara Pembayaran',
+                            builder: (_) => const CaraBayarScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('returpenjualan'))
+                        _ItemMenu(
+                          icon: Icons.assignment_return_outlined,
                           label: 'Retur Penjualan',
-                          builder: (_) => const ReturPenjualanScreen(),
+                          aktif: menuAktif == 'Retur Penjualan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Retur Penjualan',
+                            builder: (_) => const ReturPenjualanScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('riwayatpenjualan'))
-                      _ItemMenu(
-                        icon: Icons.history,
-                        label: 'Riwayat Penjualan',
-                        aktif: menuAktif == 'Riwayat Penjualan',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('riwayatpenjualan'))
+                        _ItemMenu(
+                          icon: Icons.history,
                           label: 'Riwayat Penjualan',
-                          builder: (_) => const RiwayatPenjualanScreen(),
+                          aktif: menuAktif == 'Riwayat Penjualan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Riwayat Penjualan',
+                            builder: (_) => const RiwayatPenjualanScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('laporantransaksi'))
-                      _ItemMenu(
-                        icon: Icons.assessment_outlined,
-                        label: 'Laporan Transaksi',
-                        aktif: menuAktif == 'Laporan Transaksi',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('laporantransaksi'))
+                        _ItemMenu(
+                          icon: Icons.assessment_outlined,
                           label: 'Laporan Transaksi',
-                          builder: (_) => const LaporanTransaksiScreen(),
+                          aktif: menuAktif == 'Laporan Transaksi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laporan Transaksi',
+                            builder: (_) => const LaporanTransaksiScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('laporan'))
-                      _ItemMenu(
-                        icon: Icons.folder_outlined,
-                        label: 'Laporan-Laporan',
-                        aktif: menuAktif == 'Laporan-Laporan',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('laporan'))
+                        _ItemMenu(
+                          icon: Icons.folder_outlined,
                           label: 'Laporan-Laporan',
-                          builder: (_) => const LaporanScreen(),
+                          aktif: menuAktif == 'Laporan-Laporan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laporan-Laporan',
+                            builder: (_) => const LaporanScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
-                      _ItemMenu(
-                        icon: Icons.sync,
-                        label: 'Riwayat Sinkronisasi',
-                        aktif: menuAktif == 'Riwayat Sinkronisasi',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('laporankeuangan'))
+                        _ItemMenu(
+                          icon: Icons.account_balance_outlined,
+                          label: 'Laporan Keuangan',
+                          aktif: menuAktif == 'Laporan Keuangan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laporan Keuangan',
+                            builder: (_) => const LaporanScreen(
+                              aksiKatalog: 'laporan_keuangan_katalog',
+                              judul: 'Laporan Keuangan',
+                              subjudul:
+                                  'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
+                            ),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
+                        _ItemMenu(
+                          icon: Icons.sync,
                           label: 'Riwayat Sinkronisasi',
-                          builder: (_) => const RiwayatSinkronisasiScreen(),
+                          aktif: menuAktif == 'Riwayat Sinkronisasi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Riwayat Sinkronisasi',
+                            builder: (_) => const RiwayatSinkronisasiScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('logerror'))
-                      _ItemMenu(
-                        icon: Icons.error_outline,
-                        label: 'Log Error',
-                        aktif: menuAktif == 'Log Error',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('logerror'))
+                        _ItemMenu(
+                          icon: Icons.error_outline,
                           label: 'Log Error',
-                          builder: (_) => const LogErrorScreen(),
+                          aktif: menuAktif == 'Log Error',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Log Error',
+                            builder: (_) => const LogErrorScreen(),
+                          ),
                         ),
-                      ),
-                    if (Sesi.instance.bolehMenu('konfigurasi'))
-                      _ItemMenu(
-                        icon: Icons.settings_outlined,
-                        label: 'Konfigurasi',
-                        aktif: menuAktif == 'Konfigurasi',
-                        onTap: () => _pindahMenu(
-                          context,
+                      if (Sesi.instance.bolehMenu('konfigurasi'))
+                        _ItemMenu(
+                          icon: Icons.settings_outlined,
                           label: 'Konfigurasi',
-                          builder: (_) => const KonfigurasiScreen(),
+                          aktif: menuAktif == 'Konfigurasi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Konfigurasi',
+                            builder: (_) => const KonfigurasiScreen(),
+                          ),
                         ),
-                      ),
-                    _ItemMenu(
-                      icon: Icons.desktop_windows_outlined,
-                      label: 'Layar Pelanggan',
-                      aktif: menuAktif == 'Layar Pelanggan',
-                      onTap: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                        bukaLayarPelanggan(context);
-                      },
-                    ),
-                    if (Sesi.instance.isAdmin)
                       _ItemMenu(
-                        icon: Icons.admin_panel_settings_outlined,
-                        label: 'Hak Akses',
-                        aktif: menuAktif == 'Hak Akses',
-                        onTap: () => _pindahMenu(
-                          context,
-                          label: 'Hak Akses',
-                          builder: (_) => const HakAksesScreen(),
-                        ),
+                        icon: Icons.desktop_windows_outlined,
+                        label: 'Layar Pelanggan',
+                        aktif: menuAktif == 'Layar Pelanggan',
+                        onTap: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          }
+                          bukaLayarPelanggan(context);
+                        },
                       ),
-                  ],
+                      if (Sesi.instance.isAdmin)
+                        _ItemMenu(
+                          icon: Icons.admin_panel_settings_outlined,
+                          label: 'Hak Akses',
+                          aktif: menuAktif == 'Hak Akses',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Hak Akses',
+                            builder: (_) => const HakAksesScreen(),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
