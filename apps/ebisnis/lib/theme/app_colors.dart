@@ -21,7 +21,14 @@ class AppColors {
       : Color(0xFF0F1C2E);
   static const sidebarBgActive =
       AppVariant.isAlBahjah ? Color(0xFFCA8A04) : Color(0xFF2563EB);
-  static const sidebarText = Color.fromARGB(255, 218, 219, 221);
+
+  /// Warna label menu TAK-aktif -- abu-kebiruan `0xFF8FA0BC` didesain kontras
+  /// thd navy referensi, tapi nyaris tenggelam di atas hijau Al-Bahjah
+  /// (feedback user: teks sidebar sulit dibaca). Al-Bahjah pakai putih
+  /// kehijauan pucat supaya tetap kontras tinggi thd [sidebarBg] hijau tanpa
+  /// terlihat putih polos (biar beda dari [sidebarTextActive]).
+  static const sidebarText =
+      AppVariant.isAlBahjah ? Color(0xFFD9F2E3) : Color(0xFF8FA0BC);
   static const sidebarTextActive = Colors.white;
 
   static const pageBg = Color(0xFFF4F6FA);

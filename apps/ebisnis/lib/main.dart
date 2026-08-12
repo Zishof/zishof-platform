@@ -7,6 +7,7 @@ import 'package:core_update/core_update.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_setting.dart';
@@ -42,6 +43,15 @@ void main() {
     // HARUS paling awal, sebelum kode lain manapun menyentuh
     // SharedPreferences (langsung/tak langsung) -- lihat JavaDoc [PrefsGuard].
     await PrefsGuard.perbaikiJikaKorup();
+    // Gap-closure "menu Mutasi Tabungan/Mutasi Hutang blank" -- keduanya
+    // pakai DateFormat(pola, 'id_ID') dgn nama bulan (MMM), yang di paket
+    // `intl` BUTUH data locale dimuat dulu lewat initializeDateFormatting
+    // sebelum dipakai; tanpa ini, format tanggal pertama yg dirender
+    // melempar LocaleDataException di tengah build() -> Flutter release
+    // mode diam-diam menggantinya jadi kotak abu-abu kosong (ErrorWidget
+    // default TANPA teks), terlihat spt menu "tidak muncul". Panggil SEKALI
+    // di sini, sebelum layar mana pun dibangun.
+    await initializeDateFormatting('id_ID', null);
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       CoreDb.instance.catatErrorLog(
