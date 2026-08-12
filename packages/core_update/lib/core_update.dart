@@ -1,31 +1,35 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 /// Info rilis terbaru dari GitHub Releases, dipakai menampilkan prompt
-/// "Update Tersedia" -- lihat [UpdateChecker.cekTerbaru].
+/// "Update Tersedia" dan auto-update komponen Windows -- lihat
+/// [UpdateChecker.cekTerbaru].
 class InfoUpdate {
   final String versi;
   final String catatanRilis;
   final String urlRilis;
   final String? urlApk;
   final String? urlExe;
+  final String? urlPaketWindows;
+  final String? sha256PaketWindows;
   const InfoUpdate({
     required this.versi,
     required this.catatanRilis,
     required this.urlRilis,
     this.urlApk,
     this.urlExe,
+    this.urlPaketWindows,
+    this.sha256PaketWindows,
   });
 }
 
 /// Cek rilis terbaru di GitHub Releases (padanan cek-manual `autoUpdater`
-/// Electron, TAPI tidak mengunduh/memasang otomatis -- Flutter di sini
-/// tidak dijalankan lewat installer yang bisa mengganti dirinya sendiri
-/// tanpa izin tambahan, jadi alurnya: cek versi -> kalau ada yang lebih
-/// baru, arahkan pengguna membuka browser ke aset rilis (APK/EXE) untuk
-/// diunduh+dipasang manual, sama seperti pola distribusi proyek ini sejak
-/// awal (rilis ganda APK+EXE per versi di GitHub Releases).
+/// Electron. Pemanggil dapat memakai paket ZIP bertanda `update` untuk
+/// mengganti komponen Windows secara otomatis, atau memakai aset APK/EXE
+/// sebagai fallback instalasi manual.
 class UpdateChecker {
   UpdateChecker._();
 
@@ -53,13 +57,11 @@ class UpdateChecker {
       if (prefix != null && prefix.isNotEmpty) {
         rilis = await _rilisVarianTerbaru(repoOwner, repoName, prefix);
       } else {
-        final resp = await http
-            .get(
-              Uri.parse(
-                  'https://api.github.com/repos/$repoOwner/$repoName/releases/latest'),
-              headers: {'Accept': 'application/vnd.github+json'},
-            )
-            .timeout(const Duration(seconds: 10));
+        final resp = await http.get(
+          Uri.parse(
+              'https://api.github.com/repos/$repoOwner/$repoName/releases/latest'),
+          headers: {'Accept': 'application/vnd.github+json'},
+        ).timeout(const Duration(seconds: 10));
         rilis = resp.statusCode == 200
             ? jsonDecode(resp.body) as Map<String, dynamic>
             : null;
@@ -81,8 +83,14 @@ class UpdateChecker {
       );
       final urlExe = _pilihAsset(
         assets,
-        ekstensi: const ['.exe', '.msix', '.zip'],
+        ekstensi: const ['.exe', '.msix'],
         keyword: keyword,
+      );
+      final paketWindows = _pilihAssetData(
+        assets,
+        ekstensi: const ['.zip'],
+        keyword: keyword,
+        kataWajib: 'update',
       );
 
       return InfoUpdate(
@@ -92,6 +100,9 @@ class UpdateChecker {
             'https://github.com/$repoOwner/$repoName/releases/latest',
         urlApk: urlApk,
         urlExe: urlExe,
+        urlPaketWindows: paketWindows?['browser_download_url'] as String?,
+        sha256PaketWindows:
+            (paketWindows?['digest'] as String?)?.replaceFirst('sha256:', ''),
       );
     } catch (_) {
       return null;
@@ -102,13 +113,11 @@ class UpdateChecker {
   /// dengan versi (x.y.z dari tag) TERTINGGI. `null` bila tak ada / gagal.
   static Future<Map<String, dynamic>?> _rilisVarianTerbaru(
       String repoOwner, String repoName, String prefix) async {
-    final resp = await http
-        .get(
-          Uri.parse(
-              'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=50'),
-          headers: {'Accept': 'application/vnd.github+json'},
-        )
-        .timeout(const Duration(seconds: 10));
+    final resp = await http.get(
+      Uri.parse(
+          'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=50'),
+      headers: {'Accept': 'application/vnd.github+json'},
+    ).timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) return null;
     final list = jsonDecode(resp.body);
     if (list is! List) return null;
@@ -168,6 +177,28 @@ class UpdateChecker {
     return fallback;
   }
 
+  static Map<String, dynamic>? _pilihAssetData(
+    List<dynamic> assets, {
+    required List<String> ekstensi,
+    String? keyword,
+    String? kataWajib,
+  }) {
+    final keywordNormal = _normalisasiNamaAsset(keyword ?? '');
+    final wajibNormal = _normalisasiNamaAsset(kataWajib ?? '');
+    for (final a in assets) {
+      if (a is! Map<String, dynamic>) continue;
+      final nama = (a['name'] as String? ?? '').toLowerCase();
+      final namaNormal = _normalisasiNamaAsset(nama);
+      if (!ekstensi.any(nama.endsWith)) continue;
+      if (keywordNormal.isNotEmpty && !namaNormal.contains(keywordNormal)) {
+        continue;
+      }
+      if (wajibNormal.isNotEmpty && !namaNormal.contains(wajibNormal)) continue;
+      if (a['browser_download_url'] is String) return a;
+    }
+    return null;
+  }
+
   static String _normalisasiNamaAsset(String nilai) =>
       nilai.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
@@ -185,5 +216,43 @@ class UpdateChecker {
     final bagian = bersih.split('.');
     return List.generate(
         3, (i) => i < bagian.length ? (int.tryParse(bagian[i]) ?? 0) : 0);
+  }
+}
+
+/// Mengunduh paket komponen Windows dan memverifikasi SHA-256 dari metadata
+/// GitHub sebelum paket diserahkan kepada helper eksternal.
+class WindowsUpdatePackage {
+  WindowsUpdatePackage._();
+
+  static Future<File> unduhDanVerifikasi({
+    required String url,
+    required String sha256Diharapkan,
+    required String versi,
+  }) async {
+    final tujuan = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}pos-update-$versi.zip');
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url));
+      request.headers['Accept'] = 'application/octet-stream';
+      final response =
+          await client.send(request).timeout(const Duration(minutes: 5));
+      if (response.statusCode != 200) {
+        throw HttpException(
+            'Unduhan pembaruan gagal (${response.statusCode}).');
+      }
+      final sink = tujuan.openWrite();
+      await response.stream.pipe(sink);
+    } finally {
+      client.close();
+    }
+    final aktual =
+        (await sha256.bind(tujuan.openRead()).first).toString().toLowerCase();
+    if (aktual != sha256Diharapkan.trim().toLowerCase()) {
+      await tujuan.delete();
+      throw const FormatException(
+          'SHA-256 paket pembaruan tidak cocok. Instalasi dibatalkan.');
+    }
+    return tujuan;
   }
 }

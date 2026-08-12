@@ -14,6 +14,7 @@ import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/pengaturan_struk.dart';
 import '../services/pengaturan_sesi_lokal.dart';
+import '../services/pengaturan_update.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -67,9 +68,8 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
     _tampilkanRiwayatCetak = AppProductProfile.aktif.isInventorySales &&
         (Sesi.instance.isPemilikSalesInventory || Sesi.instance.isAdmin);
     _tab = TabController(
-        length: 5 +
-            (_tampilkanRiwayatCetak ? 1 : 0) +
-            (_tampilkanImporDbf ? 1 : 0),
+        length:
+            5 + (_tampilkanRiwayatCetak ? 1 : 0) + (_tampilkanImporDbf ? 1 : 0),
         vsync: this);
   }
 
@@ -115,8 +115,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const Tab(text: 'Akun Pengguna'),
               const Tab(text: 'Screensaver'),
               const Tab(text: 'Alamat Server'),
-              if (_tampilkanRiwayatCetak)
-                const Tab(text: 'Riwayat Cetak'),
+              if (_tampilkanRiwayatCetak) const Tab(text: 'Riwayat Cetak'),
               if (_tampilkanImporDbf) const Tab(text: 'Impor DBF'),
             ],
           ),
@@ -193,6 +192,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   int? _caraBayarDefaultId;
   FormatNomorStruk _formatNomorStruk = FormatNomorStruk.defaultPos;
   bool _menyimpanPembayaran = false;
+  bool _updateOtomatis = true;
 
   @override
   void initState() {
@@ -215,6 +215,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     await PengaturanPembayaran.instance.muat();
     await PengaturanNomorStruk.instance.muat();
     await PengaturanSesiLokal.instance.muat();
+    await PengaturanUpdate.instance.muat();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -236,6 +237,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
                     IdentitasMesin.instance.idMesin);
         _timeoutSesiController.text =
             PengaturanSesiLokal.instance.timeoutMenit.toString();
+        _updateOtomatis = PengaturanUpdate.instance.otomatis;
         _memuat = false;
       });
     }
@@ -460,6 +462,24 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
           ],
         ),
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
+          const SizedBox(height: 16),
+          AppFormSection(
+            judul: 'Pembaruan Aplikasi',
+            deskripsi:
+                'Paket komponen diperiksa dan diverifikasi dari GitHub Releases. Aplikasi akan dibuka kembali setelah pemasangan.',
+            children: [
+              AppFormSwitchTile(
+                title: 'Silent update otomatis',
+                subtitle:
+                    'Aktif secara default. Windows mungkin tetap meminta konfirmasi UAC jika aplikasi terpasang di Program Files.',
+                value: _updateOtomatis,
+                onChanged: (v) async {
+                  await PengaturanUpdate.instance.simpanOtomatis(v);
+                  if (mounted) setStateIfMounted(() => _updateOtomatis = v);
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           AppFormSection(
             judul: 'Cash Drawer',

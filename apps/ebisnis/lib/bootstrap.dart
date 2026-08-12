@@ -16,6 +16,7 @@ import 'product_profile.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
+import 'services/pengaturan_update.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/server_config.dart';
 import 'theme/app_theme.dart';
@@ -265,7 +266,12 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         tagPrefix: AppProductProfile.aktif.tagRilisPrefix,
       );
       if (mounted && hasil != null) {
-        setStateIfMounted(() => _infoUpdate = hasil);
+        final dipasang = await PengaturanUpdate.instance
+            .cobaPasangOtomatis(hasil)
+            .catchError((_) => false);
+        if (!dipasang && mounted) {
+          setStateIfMounted(() => _infoUpdate = hasil);
+        }
       }
     } catch (_) {
       // Gagal cek (offline/rate-limit) -- diam saja, bukan alasan mengganggu.

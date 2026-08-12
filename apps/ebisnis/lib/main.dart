@@ -17,6 +17,7 @@ import 'screens/login_screen.dart';
 import 'screens/kasir_screen.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
+import 'services/pengaturan_update.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/prefs_guard.dart';
 import 'services/server_config.dart';
@@ -304,7 +305,12 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         assetKeyword: AppVariant.updateAssetKeyword,
       );
       if (mounted && hasil != null) {
-        setStateIfMounted(() => _infoUpdate = hasil);
+        final dipasang = await PengaturanUpdate.instance
+            .cobaPasangOtomatis(hasil)
+            .catchError((_) => false);
+        if (!dipasang && mounted) {
+          setStateIfMounted(() => _infoUpdate = hasil);
+        }
       }
     } catch (_) {
       // Gagal cek (offline/rate-limit) -- diam saja, bukan alasan mengganggu.

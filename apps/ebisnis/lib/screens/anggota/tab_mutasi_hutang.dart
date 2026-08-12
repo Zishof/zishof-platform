@@ -125,6 +125,31 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
     return awal >= _data.length ? [] : _data.sublist(awal, akhir);
   }
 
+  List<Map<String, dynamic>> get _rekapPerAnggota {
+    final rekap = <String, Map<String, dynamic>>{};
+    for (final r in _data) {
+      final kunci = '${r['idAnggota'] ?? r['namaAnggota']}';
+      final item = rekap.putIfAbsent(
+          kunci,
+          () => {
+                'namaAnggota': r['namaAnggota'],
+                'saldoAwal': (r['saldoAwal'] as num?)?.toDouble() ?? 0,
+                'bertambah': 0.0,
+                'berkurang': 0.0,
+              });
+      item['bertambah'] = (item['bertambah'] as double) +
+          ((r['bertambah'] as num?)?.toDouble() ?? 0);
+      item['berkurang'] = (item['berkurang'] as double) +
+          ((r['berkurang'] as num?)?.toDouble() ?? 0);
+    }
+    return rekap.values.map((r) {
+      r['saldoAkhir'] = (r['saldoAwal'] as double) +
+          (r['bertambah'] as double) -
+          (r['berkurang'] as double);
+      return r;
+    }).toList();
+  }
+
   Future<void> _bukaFormBayarHutang() async {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
@@ -179,34 +204,47 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
     doc.addPage(
       pw.MultiPage(
         pageFormat: const PdfPageFormat(842, 595.2, marginAll: 24),
-        header: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text('Mutasi Hutang (Piutang Toko)',
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-          pw.Text(
-              '${DateFormat('dd/MM/yyyy').format(_dari)} s/d ${DateFormat('dd/MM/yyyy').format(_sampai)}'),
-          pw.SizedBox(height: 8),
-        ]),
+        header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Mutasi Hutang (Piutang Toko)',
+                  style: pw.TextStyle(
+                      fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                  '${DateFormat('dd/MM/yyyy').format(_dari)} s/d ${DateFormat('dd/MM/yyyy').format(_sampai)}'),
+              pw.SizedBox(height: 8),
+            ]),
         build: (_) => [
           pw.Table.fromTextArray(
             headers: const [
-              'Nama', 'Tanggal', 'Jenis', 'Keterangan', 'Bertambah', 'Bayar', 'Saldo'
+              'Nama',
+              'Tanggal',
+              'Jenis',
+              'Keterangan',
+              'Bertambah',
+              'Bayar',
+              'Saldo'
             ],
-            data: _data.map((r) => [
-              '${r['namaAnggota'] ?? ''}',
-              '${r['waktu'] ?? ''}',
-              '${r['jenisMutasi'] ?? ''}',
-              '${r['keterangan'] ?? ''}',
-              _formatRpMutasiHutang.format(r['bertambah'] ?? 0),
-              _formatRpMutasiHutang.format(r['berkurang'] ?? 0),
-              _formatRpMutasiHutang.format(r['saldoPerAnggota'] ?? 0),
-            ]).toList(),
+            data: _data
+                .map((r) => [
+                      '${r['namaAnggota'] ?? ''}',
+                      '${r['waktu'] ?? ''}',
+                      '${r['jenisMutasi'] ?? ''}',
+                      '${r['keterangan'] ?? ''}',
+                      _formatRpMutasiHutang.format(r['bertambah'] ?? 0),
+                      _formatRpMutasiHutang.format(r['berkurang'] ?? 0),
+                      _formatRpMutasiHutang.format(r['saldoPerAnggota'] ?? 0),
+                    ])
+                .toList(),
             cellStyle: const pw.TextStyle(fontSize: 8),
-            headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+            headerStyle:
+                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
     );
-    await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'Mutasi_Hutang.pdf');
+    await Printing.layoutPdf(
+        onLayout: (_) async => doc.save(), name: 'Mutasi_Hutang.pdf');
   }
 
   Future<void> _unggahCsv() async {
@@ -225,7 +263,8 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
     int berhasil = 0, gagal = 0;
     final pesanGagal = <String>[];
     for (var i = 1; i < baris.length; i++) {
-      final kolom = baris[i].split(',').map((k) => k.replaceAll('"', '').trim()).toList();
+      final kolom =
+          baris[i].split(',').map((k) => k.replaceAll('"', '').trim()).toList();
       if (kolom.length < 2 || kolom[0].isEmpty) continue;
       final kodeAnggota = kolom[0];
       final nominal = double.tryParse(kolom[1]) ?? 0;
@@ -236,11 +275,13 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
       try {
         final cari = await ApiClient.instance
             .aksi('anggota_list', {'keyword': kodeAnggota, 'page_size': 5});
-        final list = ((cari['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final list =
+            ((cari['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         final match = list.where((m) => '${m['kode']}' == kodeAnggota).toList();
         if (match.isEmpty) {
           gagal++;
-          pesanGagal.add('Baris ${i + 1}: kode "$kodeAnggota" tidak ditemukan.');
+          pesanGagal
+              .add('Baris ${i + 1}: kode "$kodeAnggota" tidak ditemukan.');
           continue;
         }
         await ApiClient.instance.aksi('hutang_bayar_simpan', {
@@ -281,10 +322,14 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
         ),
       );
     }
-    final totalBertambah =
-        _data.fold<double>(0, (s, r) => s + ((r['bertambah'] as num?)?.toDouble() ?? 0));
-    final totalBerkurang =
-        _data.fold<double>(0, (s, r) => s + ((r['berkurang'] as num?)?.toDouble() ?? 0));
+    final totalBertambah = _data.fold<double>(
+        0, (s, r) => s + ((r['bertambah'] as num?)?.toDouble() ?? 0));
+    final totalBerkurang = _data.fold<double>(
+        0, (s, r) => s + ((r['berkurang'] as num?)?.toDouble() ?? 0));
+    final totalSaldoAwal = _rekapPerAnggota.fold<double>(
+        0, (s, r) => s + ((r['saldoAwal'] as num?)?.toDouble() ?? 0));
+    final totalSaldoAkhir = _rekapPerAnggota.fold<double>(
+        0, (s, r) => s + ((r['saldoAkhir'] as num?)?.toDouble() ?? 0));
 
     return RefreshIndicator(
       onRefresh: _muat,
@@ -311,39 +356,44 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
                 IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: _hapusFilterAnggota),
-              const Spacer(),
               if (Sesi.instance.bolehEntryTopup)
                 ElevatedButton.icon(
                   onPressed: _bukaFormBayarHutang,
                   icon: const Icon(Icons.money_off_csred_outlined, size: 18),
                   label: const Text('Bayar Hutang'),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white),
                 ),
               ElevatedButton.icon(
                 onPressed: _unduhCsv,
                 icon: const Icon(Icons.file_download_outlined, size: 18),
                 label: const Text('Download'),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success, foregroundColor: Colors.white),
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white),
               ),
               if (Sesi.instance.bolehEntryTopup)
                 ElevatedButton.icon(
                   onPressed: _mengunggah ? null : _unggahCsv,
                   icon: _mengunggah
                       ? const SizedBox(
-                          width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.file_upload_outlined, size: 18),
                   label: const Text('Upload'),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+                      backgroundColor: AppColors.warning,
+                      foregroundColor: Colors.white),
                 ),
               ElevatedButton.icon(
                 onPressed: _cetakPdf,
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                 label: const Text('Cetak PDF'),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.textSecondary, foregroundColor: Colors.white),
+                    backgroundColor: AppColors.textSecondary,
+                    foregroundColor: Colors.white),
               ),
             ],
           ),
@@ -361,7 +411,60 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
                     nilai: _formatRpMutasiHutang.format(totalBerkurang),
                     warna: AppColors.success)),
           ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+                child: _KartuTotalHutang(
+                    label: 'Saldo Hutang Awal',
+                    nilai: _formatRpMutasiHutang.format(totalSaldoAwal),
+                    warna: AppColors.info)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _KartuTotalHutang(
+                    label: 'Saldo Hutang Akhir',
+                    nilai: _formatRpMutasiHutang.format(totalSaldoAkhir),
+                    warna: AppColors.danger)),
+          ]),
           const SizedBox(height: 12),
+          const Text('Rekap Hutang per Anggota',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          AppDataTable(
+            minWidth: 760,
+            emptyText: 'Tidak ada rekap hutang pada rentang ini.',
+            columns: const [
+              AppTableColumn('Anggota', flex: 2),
+              AppTableColumn('Saldo Awal', flex: 1, align: TextAlign.right),
+              AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
+              AppTableColumn('Dibayar', flex: 1, align: TextAlign.right),
+              AppTableColumn('Saldo Akhir', flex: 1, align: TextAlign.right),
+            ],
+            rows: _rekapPerAnggota
+                .map((r) => AppTableRowData(cells: [
+                      AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
+                      AppTableCell.text(
+                          _formatRpMutasiHutang.format(r['saldoAwal']),
+                          flex: 1,
+                          align: TextAlign.right),
+                      AppTableCell.text(
+                          _formatRpMutasiHutang.format(r['bertambah']),
+                          flex: 1,
+                          align: TextAlign.right),
+                      AppTableCell.text(
+                          _formatRpMutasiHutang.format(r['berkurang']),
+                          flex: 1,
+                          align: TextAlign.right),
+                      AppTableCell.text(
+                          _formatRpMutasiHutang.format(r['saldoAkhir']),
+                          flex: 1,
+                          align: TextAlign.right),
+                    ]))
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          const Text('Rincian Mutasi & Sisa Hutang',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
           AppDataTable(
             minWidth: 900,
             emptyText: 'Tidak ada mutasi hutang pada rentang ini.',
@@ -371,14 +474,16 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
               AppTableColumn('Jenis', flex: 2),
               AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
               AppTableColumn('Bayar', flex: 1, align: TextAlign.right),
-              AppTableColumn('Saldo', flex: 1, align: TextAlign.right),
+              AppTableColumn('Sisa Hutang', flex: 1, align: TextAlign.right),
             ],
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
               return AppTableRowData(cells: [
                 AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
                 AppTableCell.text(
-                    waktu == null ? '${r['waktu']}' : _formatTglMutasiHutang.format(waktu),
+                    waktu == null
+                        ? '${r['waktu']}'
+                        : _formatTglMutasiHutang.format(waktu),
                     flex: 2),
                 AppTableCell.text('${r['jenisMutasi'] ?? ''}', flex: 2),
                 AppTableCell.text(
@@ -387,16 +492,20 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
                         : '-',
                     flex: 1,
                     align: TextAlign.right,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.danger)),
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.danger)),
                 AppTableCell.text(
                     ((r['berkurang'] as num?) ?? 0) > 0
                         ? _formatRpMutasiHutang.format(r['berkurang'])
                         : '-',
                     flex: 1,
                     align: TextAlign.right,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.success)),
-                AppTableCell.text(_formatRpMutasiHutang.format(r['saldoPerAnggota'] ?? 0),
-                    flex: 1, align: TextAlign.right),
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.success)),
+                AppTableCell.text(
+                    _formatRpMutasiHutang.format(r['saldoPerAnggota'] ?? 0),
+                    flex: 1,
+                    align: TextAlign.right),
               ]);
             }).toList(),
             pagination: AppTablePagination(
@@ -404,8 +513,9 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
               totalHalaman: _totalHalaman,
               totalData: _data.length,
               labelData: 'mutasi',
-              onSebelumnya:
-                  _halaman > 1 ? () => setStateIfMounted(() => _halaman--) : null,
+              onSebelumnya: _halaman > 1
+                  ? () => setStateIfMounted(() => _halaman--)
+                  : null,
               onBerikutnya: _halaman < _totalHalaman
                   ? () => setStateIfMounted(() => _halaman++)
                   : null,
@@ -421,7 +531,8 @@ class _KartuTotalHutang extends StatelessWidget {
   final String label;
   final String nilai;
   final Color warna;
-  const _KartuTotalHutang({required this.label, required this.nilai, required this.warna});
+  const _KartuTotalHutang(
+      {required this.label, required this.nilai, required this.warna});
 
   @override
   Widget build(BuildContext context) {
@@ -433,9 +544,13 @@ class _KartuTotalHutang extends StatelessWidget {
         border: Border.all(color: warna.withOpacity(0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 11, color: warna, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11, color: warna, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text(nilai, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: warna)),
+        Text(nilai,
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: warna)),
       ]),
     );
   }
@@ -506,7 +621,8 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.55,
         maxChildSize: 0.85,
@@ -531,8 +647,11 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
                 AppFormTextField(
                   label: 'Nominal *',
                   controller: _nominal,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (v) => (v == null || double.tryParse(v.trim()) == null || double.parse(v.trim()) <= 0)
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) => (v == null ||
+                          double.tryParse(v.trim()) == null ||
+                          double.parse(v.trim()) <= 0)
                       ? 'Nominal wajib diisi'
                       : null,
                 ),

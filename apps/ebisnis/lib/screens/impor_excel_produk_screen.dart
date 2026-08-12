@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -40,6 +41,7 @@ class _BarisImpor {
   late final TextEditingController pemasokNama;
   late final TextEditingController satuanNama;
   late final TextEditingController stokBaru;
+  final double stokLama;
   late final TextEditingController hargaJual;
   late final TextEditingController hargaBeli;
   bool disertakan = true;
@@ -52,7 +54,8 @@ class _BarisImpor {
   _BarisImpor(Map<String, dynamic> j)
       : no = (j['no'] as num?)?.toInt() ?? 0,
         baru = j['baru'] == true,
-        produkId = j['produkId'] as int? {
+        produkId = j['produkId'] as int?,
+        stokLama = (j['stokLama'] as num?)?.toDouble() ?? 0 {
     kode = TextEditingController(text: '${j['kode'] ?? ''}');
     barcode = TextEditingController(text: '${j['barcode'] ?? ''}');
     nama = TextEditingController(text: '${j['nama'] ?? ''}');
@@ -104,6 +107,14 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   List<String> _kolomTidakDitemukan = [];
   List<_BarisImpor> _baris = [];
   bool _nonaktifkanTakDiimpor = false;
+  bool _abaikanStokKosong = true;
+
+  List<_BarisImpor> get _barisTerlihat => _abaikanStokKosong
+      ? _baris.where((b) => _nilaiStok(b) != 0).toList()
+      : _baris;
+
+  double _nilaiStok(_BarisImpor b) =>
+      double.tryParse(b.stokBaru.text.replaceAll(',', '.')) ?? 0;
 
   // Progres komit per-batch (spec: tampilkan persentase, bukan spinner polos
   // saat 5000+ baris -- satu batch = 200 baris, jadi update tiap batch
@@ -168,6 +179,9 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             .map((e) => '$e')
             .toList();
         _baris = barisJson.map((j) => _BarisImpor(j)).toList();
+        for (final b in _baris.where((b) => _nilaiStok(b) == 0)) {
+          b.disertakan = false;
+        }
         _tahap = _Tahap.tinjau;
       });
     } catch (e) {
@@ -248,6 +262,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       _tahap = _Tahap.pilihBerkas;
       _error = null;
       _nonaktifkanTakDiimpor = false;
+      _abaikanStokKosong = true;
       _dinonaktifkan = null;
       _barisUntukKomit = 0;
       _barisSelesaiKomit = 0;
@@ -288,8 +303,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.upload_file_outlined,
-              size: 56, color: AppColors.primary),
+          Icon(Icons.upload_file_outlined, size: 56, color: AppColors.primary),
           const SizedBox(height: 16),
           const Text('Pilih berkas Excel (.xlsx) format Accurate',
               style: TextStyle(fontSize: 15)),
@@ -366,6 +380,23 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
               Text(
                   '${_baris.length} baris terbaca, ${_baris.where((b) => b.disertakan).length} akan diimpor.',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'Jangan tampilkan/upload/proses barang dengan stok = 0',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Aktif secara default.'),
+                value: _abaikanStokKosong,
+                onChanged: (v) => setStateIfMounted(() {
+                  _abaikanStokKosong = v ?? true;
+                  for (final b in _baris.where((b) => _nilaiStok(b) == 0)) {
+                    b.disertakan = !_abaikanStokKosong;
+                  }
+                }),
+              ),
             ],
           ),
         ),
@@ -373,8 +404,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _baris.length,
-            itemBuilder: (context, i) => _kartuBaris(_baris[i]),
+            itemCount: _barisTerlihat.length,
+            itemBuilder: (context, i) => _kartuBaris(_barisTerlihat[i]),
           ),
         ),
         SafeArea(
@@ -397,7 +428,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                     child: LinearProgressIndicator(
                       value: _progresKomit,
                       minHeight: 8,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      backgroundColor:
+                          AppColors.primary.withValues(alpha: 0.15),
                       color: AppColors.primary,
                     ),
                   ),
@@ -447,7 +479,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
 
   Widget _kartuBaris(_BarisImpor b) {
     return AppSectionCard(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -460,7 +492,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
               Expanded(
                   child: Text('Baris ${b.no}',
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 12))),
+                          fontWeight: FontWeight.bold, fontSize: 15))),
               StatusPill(
                   label: b.baru ? 'Baru' : 'Perbarui',
                   warna: b.baru ? AppColors.success : AppColors.info),
@@ -487,10 +519,28 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
               Expanded(
                   child: _autoComplete('Satuan', b.satuanNama, _satuanDikenal)),
             ]),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _kolomKecil('Stok', b.stokBaru, angka: true)),
+              Expanded(
+                  child:
+                      _kolomKecil('Stok dari Excel', b.stokBaru, angka: true)),
               const SizedBox(width: 8),
+              Expanded(child: _nilaiStokInfo('Stok Saat Ini', b.stokLama)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: b.stokBaru,
+                builder: (_, __, ___) => _nilaiStokInfo(
+                    'Selisih', _nilaiStok(b) - b.stokLama,
+                    warna: _nilaiStok(b) - b.stokLama == 0
+                        ? AppColors.textSecondary
+                        : (_nilaiStok(b) - b.stokLama > 0
+                            ? AppColors.success
+                            : AppColors.danger)),
+              )),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
               Expanded(
                   child: _kolomKecil('Harga Jual', b.hargaJual, angka: true)),
               const SizedBox(width: 8),
@@ -518,6 +568,29 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             isDense: true,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
+      );
+
+  Widget _nilaiStokInfo(String label, double nilai, {Color? warna}) =>
+      Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: (warna ?? AppColors.primary).withValues(alpha: 0.07),
+          border: Border.all(
+              color: (warna ?? AppColors.primary).withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
+          const SizedBox(height: 3),
+          Text(NumberFormat('#,##0.##', 'id_ID').format(nilai),
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: warna ?? AppColors.primary)),
+        ]),
       );
 
   Widget _autoComplete(
