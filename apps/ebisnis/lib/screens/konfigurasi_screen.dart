@@ -24,6 +24,7 @@ import 'pengaturan_server_screen.dart';
 import 'hak_akses_screen.dart';
 import 'konfigurasi/tab_screensaver.dart';
 import 'konfigurasi/tab_impor_dbf.dart';
+import 'konfigurasi/tab_riwayat_cetak.dart';
 import '../product_profile.dart';
 import '../widgets/safe_state.dart';
 
@@ -56,13 +57,20 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
   // Dihitung sekali di initState -- actorType terikat sesi login, tidak
   // berubah selama layar ini hidup.
   late final bool _tampilkanImporDbf;
+  late final bool _tampilkanRiwayatCetak;
 
   @override
   void initState() {
     super.initState();
     _tampilkanImporDbf = AppProductProfile.aktif.isInventorySales &&
         Sesi.instance.isPemilikSalesInventory;
-    _tab = TabController(length: _tampilkanImporDbf ? 6 : 5, vsync: this);
+    _tampilkanRiwayatCetak = AppProductProfile.aktif.isInventorySales &&
+        (Sesi.instance.isPemilikSalesInventory || Sesi.instance.isAdmin);
+    _tab = TabController(
+        length: 5 +
+            (_tampilkanRiwayatCetak ? 1 : 0) +
+            (_tampilkanImporDbf ? 1 : 0),
+        vsync: this);
   }
 
   @override
@@ -107,6 +115,8 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const Tab(text: 'Akun Pengguna'),
               const Tab(text: 'Screensaver'),
               const Tab(text: 'Alamat Server'),
+              if (_tampilkanRiwayatCetak)
+                const Tab(text: 'Riwayat Cetak'),
               if (_tampilkanImporDbf) const Tab(text: 'Impor DBF'),
             ],
           ),
@@ -117,6 +127,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const _TabAkunPengguna(),
               const TabScreensaver(),
               _TabAlamatServer(onUbah: _logout),
+              if (_tampilkanRiwayatCetak) const TabRiwayatCetak(),
               if (_tampilkanImporDbf) const TabImporDbf(),
             ]),
           ),
