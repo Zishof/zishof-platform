@@ -52,17 +52,35 @@ class ApiClient {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
 
+    final mulai = DateTime.now();
+    final referensiPermintaan =
+        '${mulai.millisecondsSinceEpoch.toRadixString(36).toUpperCase()}-${namaAksi.hashCode.abs().toRadixString(36).toUpperCase()}';
+    headers['X-Request-ID'] = referensiPermintaan;
+    final batasWaktu = namaAksi == 'produk_impor_excel_preview'
+        ? const Duration(minutes: 5)
+        : namaAksi == 'produk_impor_excel_komit'
+            ? const Duration(minutes: 3)
+            : const Duration(seconds: 30);
+
     http.Response resp;
     try {
       resp = await http
           .post(Uri.parse(baseUrl), headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 30));
+          .timeout(batasWaktu);
     } catch (e, stack) {
       final gagal = ApiException(
         'Aplikasi belum dapat menghubungi server.',
         offline: true,
         aktivitas: namaAksi,
-        teknis: '${e.runtimeType}: $e\n$stack',
+        kodeReferensi: referensiPermintaan,
+        teknis: 'Request ID: $referensiPermintaan\n'
+            'Waktu mulai: ${mulai.toIso8601String()}\n'
+            'Waktu gagal: ${DateTime.now().toIso8601String()}\n'
+            'Endpoint: $baseUrl\n'
+            'Action: $namaAksi\n'
+            'Batas waktu: ${batasWaktu.inSeconds} detik\n'
+            'Exception: ${e.runtimeType}: $e\n'
+            'Stack trace klien:\n$stack',
       );
       unawaited(_catatKegagalan(gagal));
       throw gagal;
@@ -79,7 +97,9 @@ class ApiClient {
         'Jawaban server belum dapat diproses.',
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
-        teknis: 'HTTP ${resp.statusCode}; ${e.runtimeType}: $e\n'
+        kodeReferensi: referensiPermintaan,
+        teknis: 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
+            'Action: $namaAksi\nHTTP ${resp.statusCode}; ${e.runtimeType}: $e\n'
             'Response: $cuplikan\n$stack',
       );
       unawaited(_catatKegagalan(gagal));
@@ -91,8 +111,15 @@ class ApiClient {
         (json['message'] ?? 'Permintaan belum berhasil.') as String,
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
-        teknis: 'HTTP ${resp.statusCode}; action=$namaAksi; '
-            'status=${json['status']}; message=${json['message']}',
+        kodeReferensi:
+            '${json['referensi'] ?? json['traceId'] ?? referensiPermintaan}',
+        teknis: '${json['teknis'] ?? json['technical'] ?? ''}'.trim().isEmpty
+            ? 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
+                'HTTP ${resp.statusCode}; action=$namaAksi; '
+                'status=${json['status']}; kode=${json['kode']}; message=${json['message']}'
+            : 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
+                'HTTP ${resp.statusCode}; action=$namaAksi\n'
+                '${json['teknis'] ?? json['technical']}',
       );
       unawaited(_catatKegagalan(gagal));
       throw gagal;
@@ -146,6 +173,7 @@ class ApiException implements Exception {
   final String? aktivitas;
   final String teknis;
   final int? statusHttp;
+  final String? kodeReferensi;
 
   /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
   /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
@@ -157,7 +185,8 @@ class ApiException implements Exception {
       {this.offline = false,
       this.aktivitas,
       this.teknis = '',
-      this.statusHttp});
+      this.statusHttp,
+      this.kodeReferensi});
 
   AppErrorInfo get info {
     final dasar = AppErrorInfo.dari(
@@ -171,7 +200,9 @@ class ApiException implements Exception {
       teknis: teknis.isEmpty
           ? 'action=${aktivitas ?? '-'}; HTTP=${statusHttp ?? '-'}; $pesan'
           : teknis,
-      kodeReferensi: dasar.kodeReferensi,
+      kodeReferensi: kodeReferensi == null || kodeReferensi!.trim().isEmpty
+          ? dasar.kodeReferensi
+          : kodeReferensi!.trim(),
     );
   }
 
