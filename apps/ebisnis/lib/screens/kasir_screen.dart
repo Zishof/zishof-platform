@@ -50,7 +50,7 @@ class KasirScreen extends StatefulWidget {
   State<KasirScreen> createState() => _KasirScreenState();
 }
 
-enum _AksiKasirMobile { kas, sinkron, muatUlang, akun, keluar }
+enum _AksiKasirMobile { transaksiBaru, kas, sinkron, muatUlang, akun, keluar }
 
 class _KasirScreenState extends State<KasirScreen> {
   bool _memuat = true;
@@ -69,6 +69,7 @@ class _KasirScreenState extends State<KasirScreen> {
   int? _draftIdSumber;
   String? _draftKodeSumber;
   Anggota? _memberAwal;
+  int _versiTransaksi = 0;
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
   /// produkId->nominal diskon dari evaluasi PUBLIK (`diskon_evaluasi` TANPA
@@ -981,6 +982,8 @@ class _KasirScreenState extends State<KasirScreen> {
 
   double get _totalKeranjang => _keranjang.fold(0, (s, i) => s + i.subtotal);
   int get _jumlahItemKeranjang => _keranjang.fold(0, (s, i) => s + i.jumlah);
+  bool get _adaTransaksiAktif =>
+      _keranjang.isNotEmpty || _draftIdSumber != null || _memberAwal != null;
 
   void _siarkanKeranjangKasir() {
     final subtotal = _keranjang.fold<double>(0, (s, i) => s + i.subtotal);
@@ -1002,6 +1005,55 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  Future<void> _transaksiBaru() async {
+    if (!_adaTransaksiAktif) {
+      setStateIfMounted(() {
+        _versiTransaksi++;
+        _kataKunciController.clear();
+        _kataKunci = '';
+      });
+      _jadwalkanFokusCariItem();
+      return;
+    }
+    if (_keranjang.isNotEmpty) {
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Mulai Transaksi Baru?'),
+          content: const Text(
+              'Keranjang aktif akan dikosongkan dan data transaksi saat ini dilepas.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Batal')),
+            ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Mulai Baru')),
+          ],
+        ),
+      );
+      if (lanjut != true) return;
+    }
+    setStateIfMounted(() {
+      _keranjang.clear();
+      _draftIdSumber = null;
+      _draftKodeSumber = null;
+      _memberAwal = null;
+      _versiTransaksi++;
+      _kataKunciController.clear();
+      _kataKunci = '';
+    });
+    LayarPelangganBroadcaster.instance
+        .jadwalkanKirim(items: const [], subtotal: 0, diskon: 0, total: 0);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Transaksi baru siap.'),
+        duration: Duration(milliseconds: 900),
+      ));
+    }
+    _jadwalkanFokusCariItem();
+  }
+
   Future<void> _bukaKeranjang() async {
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => KeranjangScreen(
@@ -1017,6 +1069,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _draftIdSumber = null;
         _draftKodeSumber = null;
         _memberAwal = null;
+        _versiTransaksi++;
       }
     });
     _jadwalkanFokusCariItem();
@@ -1166,6 +1219,9 @@ class _KasirScreenState extends State<KasirScreen> {
           tooltip: 'Aksi kasir lainnya',
           onSelected: (aksi) {
             switch (aksi) {
+              case _AksiKasirMobile.transaksiBaru:
+                _transaksiBaru();
+                return;
               case _AksiKasirMobile.kas:
                 if (_kasTerbuka == true) {
                   _bukaDialogTutupKas();
@@ -1188,6 +1244,15 @@ class _KasirScreenState extends State<KasirScreen> {
             }
           },
           itemBuilder: (context) => [
+            PopupMenuItem(
+              value: _AksiKasirMobile.transaksiBaru,
+              child: const ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.add_shopping_cart_outlined),
+                title: Text('Transaksi Baru'),
+              ),
+            ),
+            const PopupMenuDivider(),
             PopupMenuItem(
               value: _AksiKasirMobile.kas,
               enabled: _kasTerbuka != null,
@@ -1239,6 +1304,11 @@ class _KasirScreenState extends State<KasirScreen> {
 
   List<Widget> get _tombolAksi => [
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
+          _tombolToolbar(
+              icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
+              label: 'Transaksi Baru',
+              onPressed: _transaksiBaru,
+              tooltip: 'Mulai transaksi baru'),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: OutlinedButton.icon(
@@ -1591,6 +1661,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// mode F7 yang menyembunyikan grid & melebarkan panel ini sendirian.
   Widget _bodyDesktop() {
     final panel = PanelKeranjang(
+      key: ValueKey('panel-keranjang-$_versiTransaksi'),
       keranjang: _keranjang,
       draftIdSumber: _draftIdSumber,
       draftKodeSumber: _draftKodeSumber,
