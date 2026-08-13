@@ -11,6 +11,8 @@ class Produk {
   final int stok;
   final int? kategoriId;
   final String kategoriNama;
+  final int? kebijakanReturId;
+  final String kebijakanReturNama;
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -59,6 +61,8 @@ class Produk {
     required this.stok,
     required this.kategoriId,
     required this.kategoriNama,
+    this.kebijakanReturId,
+    this.kebijakanReturNama = 'Tanpa Kebijakan Retur',
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -79,6 +83,9 @@ class Produk {
         stok: (j['stok'] as num?)?.toInt() ?? 0,
         kategoriId: j['kategoriId'] as int?,
         kategoriNama: (j['kategoriNama'] ?? '') as String,
+        kebijakanReturId: (j['kebijakanReturId'] as num?)?.toInt(),
+        kebijakanReturNama:
+            (j['kebijakanReturNama'] ?? 'Tanpa Kebijakan Retur') as String,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
@@ -94,9 +101,8 @@ class Produk {
         ekstraPilihan: ((j['ekstraPilihan'] as List?) ?? [])
             .map((e) => (e as num).toInt())
             .toList(),
-        fotoUrls: ((j['fotoUrls'] as List?) ?? [])
-            .map((e) => e as String)
-            .toList(),
+        fotoUrls:
+            ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList(),
       );
 
   /// Baris utk `CoreDb.replaceProdukCache` -- dipakai bersama oleh KasirScreen
@@ -116,11 +122,32 @@ class Produk {
         'jenis_item': (j['jenisItem'] as String?)?.isNotEmpty == true
             ? j['jenisItem']
             : 'JUAL',
-        'ekstra_pilihan': jsonEncode(
-            ((j['ekstraPilihan'] as List?) ?? []).map((e) => e as num).toList()),
+        'ekstra_pilihan': jsonEncode(((j['ekstraPilihan'] as List?) ?? [])
+            .map((e) => e as num)
+            .toList()),
         'foto_urls': jsonEncode(
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),
       };
+}
+
+class KebijakanRetur {
+  final int id;
+  final String nama;
+  final String keterangan;
+  final bool aktif;
+  final bool bawaan;
+  const KebijakanRetur(
+      {required this.id,
+      required this.nama,
+      required this.keterangan,
+      required this.aktif,
+      required this.bawaan});
+  factory KebijakanRetur.fromJson(Map<String, dynamic> j) => KebijakanRetur(
+      id: (j['id'] as num).toInt(),
+      nama: '${j['nama'] ?? ''}',
+      keterangan: '${j['keterangan'] ?? ''}',
+      aktif: j['aktif'] != false,
+      bawaan: j['bawaan'] == true);
 }
 
 class Kategori {
@@ -200,8 +227,7 @@ class ItemKeranjang {
   /// mengalikan `ekstra` dgn qty induk saat checkout, lihat JavaDoc
   /// [ItemEkstra]) -- jadi total di layar (subtotal/total/kembalian) SELALU
   /// cocok dgn yang akan dihitung ulang server, bukan cuma harga produk dasar.
-  double get _hargaEkstraPerUnit =>
-      ekstra.fold(0.0, (s, e) => s + e.harga);
+  double get _hargaEkstraPerUnit => ekstra.fold(0.0, (s, e) => s + e.harga);
   double get subtotal => (produk.hargaJual + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
@@ -349,8 +375,7 @@ class ItemPesanan {
             j['aturanDiskonId'] ??
             j['aturan_diskon'] ??
             j['aturan_diskon_id']),
-        draftItemId:
-            _intNullable(j['draftItemId'] ?? j['draft_item_id']),
+        draftItemId: _intNullable(j['draftItemId'] ?? j['draft_item_id']),
         indukId: _intNullable(j['indukId'] ?? j['induk_id']),
       );
 }

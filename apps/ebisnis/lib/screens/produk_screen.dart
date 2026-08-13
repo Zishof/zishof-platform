@@ -71,6 +71,8 @@ class _ProdukScreenState extends State<ProdukScreen> {
   String? _pesanError;
   List<Produk> _semuaProduk = [];
   List<Kategori> _kategori = [];
+  List<KebijakanRetur> _kebijakanRetur = [];
+  int _tabAktif = 0;
   int? _kategoriTerpilih;
   String _kataKunci = '';
   int _halaman = 0;
@@ -102,6 +104,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
       final kategori = ((katalog['kategori'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
+      final hasilKebijakan = await ApiClient.instance
+          .aksi('kebijakan_retur_list', {'termasuk_nonaktif': true});
+      final kebijakanRetur = ((hasilKebijakan['data'] as List?) ?? [])
+          .map((e) => KebijakanRetur.fromJson(e as Map<String, dynamic>))
+          .toList();
 
       // Segarkan jg cache lokal yg dipakai Kasir, supaya produk baru/berubah
       // di sini langsung terlihat di Kasir tanpa kasir harus menekan sinkron manual.
@@ -119,6 +126,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
       setStateIfMounted(() {
         _semuaProduk = produk;
         _kategori = kategori;
+        _kebijakanRetur = kebijakanRetur;
         _statistik = statistik;
         _halaman = 0;
       });
@@ -160,10 +168,50 @@ class _ProdukScreenState extends State<ProdukScreen> {
       context: context,
       isScrollControlled: true,
       builder: (_) => _FormProduk(
-          produk: produk, kategori: _kategori, semuaProduk: _semuaProduk),
+          produk: produk,
+          kategori: _kategori,
+          kebijakanRetur: _kebijakanRetur.where((e) => e.aktif).toList(),
+          semuaProduk: _semuaProduk),
     );
     if (tersimpan == true) {
       await _muatSemua();
+    }
+  }
+
+  Future<void> _bukaFormKebijakan({KebijakanRetur? kebijakan}) async {
+    final tersimpan = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _FormKebijakanRetur(kebijakan: kebijakan),
+    );
+    if (tersimpan == true) await _muatSemua();
+  }
+
+  Future<void> _hapusKebijakan(KebijakanRetur k) async {
+    final ya = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus Kebijakan Retur?'),
+        content: Text(
+            'Kebijakan "${k.nama}" akan dihapus. Kebijakan yang masih dipakai produk tidak dapat dihapus.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (ya != true) return;
+    try {
+      await ApiClient.instance.aksi('kebijakan_retur_hapus', {'id': k.id});
+      await _muatSemua();
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -301,6 +349,72 @@ class _ProdukScreenState extends State<ProdukScreen> {
     }
   }
 
+  Widget _daftarKebijakanRetur() {
+    return RefreshIndicator(
+      onRefresh: _muatSemua,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        children: [
+          Text(
+            'Tentukan aturan retur yang dapat dipilih pada setiap produk. Produk tanpa pilihan khusus otomatis memakai “Tanpa Kebijakan Retur”.',
+            style: TextStyle(color: AppColors.textSecondaryOf(context)),
+          ),
+          const SizedBox(height: 16),
+          AppDataTable(
+            minWidth: 720,
+            emptyText: 'Belum ada Kebijakan Retur.',
+            columns: const [
+              AppTableColumn('Nama', flex: 2),
+              AppTableColumn('Keterangan', flex: 3),
+              AppTableColumn('Status', width: 100, align: TextAlign.center),
+              AppTableColumn('Aksi', width: 100, align: TextAlign.center),
+            ],
+            rows: _kebijakanRetur
+                .map((k) => AppTableRowData(
+                      onTap: Sesi.instance.bolehKelola
+                          ? () => _bukaFormKebijakan(kebijakan: k)
+                          : null,
+                      cells: [
+                        AppTableCell.text(k.nama, flex: 2),
+                        AppTableCell.text(
+                            k.keterangan.isEmpty ? '-' : k.keterangan,
+                            flex: 3),
+                        AppTableCell(
+                            width: 100,
+                            align: TextAlign.center,
+                            child: StatusPill(
+                                label: k.aktif ? 'Aktif' : 'Nonaktif',
+                                warna: k.aktif
+                                    ? AppColors.success
+                                    : AppColors.textSecondary)),
+                        AppTableCell(
+                            width: 100,
+                            align: TextAlign.center,
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                  icon:
+                                      const Icon(Icons.edit_outlined, size: 18),
+                                  onPressed: Sesi.instance.bolehKelola
+                                      ? () => _bukaFormKebijakan(kebijakan: k)
+                                      : null),
+                              if (!k.bawaan)
+                                IconButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 18, color: AppColors.danger),
+                                    onPressed: Sesi.instance.bolehKelola
+                                        ? () => _hapusKebijakan(k)
+                                        : null),
+                            ])),
+                      ],
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tombolAksi = [
@@ -339,164 +453,219 @@ class _ProdukScreenState extends State<ProdukScreen> {
         onPressed: _muatSemua,
       ),
     ];
-    return AppShell(
-      menuAktif: MenuEBisnis.produk,
-      judul: 'Manajemen Produk',
-      subjudul: 'Kelola katalog produk toko Anda',
-      aksiHeader: Wrap(
-        alignment: WrapAlignment.end,
-        runSpacing: 8,
-        children: tombolAksi,
-      ),
-      actionsAppBar: tombolAksi,
-      scrollable: false,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _bukaFormProduk(),
-        icon: const Icon(
-          Icons.add,
-          color: AppColors.darkTextPrimary,
-        ),
-        label: const Text(
-          'Tambah Produk',
-          style: TextStyle(color: AppColors.darkTextPrimary),
-        ),
-        backgroundColor: AppColors.primary,
-      ),
-      body: _memuat
-          ? const Center(child: CircularProgressIndicator())
-          : _pesanError != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline,
-                            size: 48, color: Colors.red),
-                        const SizedBox(height: 12),
-                        Text(_pesanError!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                            onPressed: _muatSemua,
-                            child: const Text('Coba Lagi')),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _muatSemua,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                    children: [
-                      if (_statistik != null)
-                        _KartuStatistik(statistik: _statistik!),
-                      const SizedBox(height: 12),
-                      AppSearchField(
-                        hintText: 'Cari produk (nama/kode/barcode)...',
-                        onChanged: (v) => setStateIfMounted(() {
-                          _kataKunci = v;
-                          _halaman = 0;
-                        }),
-                      ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                                value: 'SEMUA', label: Text('Semua')),
-                            ButtonSegment(
-                                value: 'JUAL', label: Text('Produk')),
-                            ButtonSegment(
-                                value: 'BAHAN', label: Text('Bahan')),
-                            ButtonSegment(
-                                value: 'EKSTRA', label: Text('Ekstra')),
-                          ],
-                          selected: {_filterJenisItem},
-                          onSelectionChanged: (s) => setStateIfMounted(() {
-                            _filterJenisItem = s.first;
-                            _halaman = 0;
-                          }),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 40,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: const Text('Semua'),
-                                selected: _kategoriTerpilih == null,
-                                onSelected: (_) => setStateIfMounted(() {
-                                  _kategoriTerpilih = null;
-                                  _halaman = 0;
-                                }),
-                              ),
-                            ),
-                            ..._kategori.map((k) => Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(k.nama),
-                                    selected: _kategoriTerpilih == k.id,
-                                    onSelected: (_) => setStateIfMounted(() {
-                                      _kategoriTerpilih = k.id;
-                                      _halaman = 0;
-                                    }),
+    return DefaultTabController(
+        length: 2,
+        initialIndex: _tabAktif,
+        child: AppShell(
+          menuAktif: MenuEBisnis.produk,
+          judul: 'Manajemen Produk',
+          subjudul: 'Kelola katalog produk toko Anda',
+          aksiHeader: Wrap(
+            alignment: WrapAlignment.end,
+            runSpacing: 8,
+            children: tombolAksi,
+          ),
+          actionsAppBar: tombolAksi,
+          scrollable: false,
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () =>
+                _tabAktif == 0 ? _bukaFormProduk() : _bukaFormKebijakan(),
+            icon: const Icon(
+              Icons.add,
+              color: AppColors.darkTextPrimary,
+            ),
+            label: Text(
+              _tabAktif == 0 ? 'Tambah Produk' : 'Tambah Kebijakan',
+              style: TextStyle(color: AppColors.darkTextPrimary),
+            ),
+            backgroundColor: AppColors.primary,
+          ),
+          body: Column(children: [
+            Material(
+              color: Theme.of(context).cardColor,
+              child: TabBar(
+                onTap: (i) => setStateIfMounted(() => _tabAktif = i),
+                tabs: const [
+                  Tab(
+                      text: 'Data Produk',
+                      icon: Icon(Icons.inventory_2_outlined)),
+                  Tab(
+                      text: 'Kebijakan Retur',
+                      icon: Icon(Icons.assignment_return_outlined)),
+                ],
+              ),
+            ),
+            Expanded(
+                child: _tabAktif == 1
+                    ? (_memuat
+                        ? const Center(child: CircularProgressIndicator())
+                        : _daftarKebijakanRetur())
+                    : (_memuat
+                        ? const Center(child: CircularProgressIndicator())
+                        : _pesanError != null
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.error_outline,
+                                          size: 48, color: Colors.red),
+                                      const SizedBox(height: 12),
+                                      Text(_pesanError!,
+                                          textAlign: TextAlign.center),
+                                      const SizedBox(height: 16),
+                                      ElevatedButton(
+                                          onPressed: _muatSemua,
+                                          child: const Text('Coba Lagi')),
+                                    ],
                                   ),
-                                )),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_produkTersaring.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(child: Text('Belum ada produk.')),
-                        )
-                      else
-                        LayoutBuilder(
-                          builder: (context, constraints) =>
-                              constraints.maxWidth >= kAmbangLebarDesktop
-                                  ? _TabelProduk(
-                                      produkList: _produkHalamanIni,
-                                      onTap: (p) => _bukaFormProduk(produk: p))
-                                  : Column(
-                                      children: _produkHalamanIni
-                                          .map((p) => _BarisProduk(
-                                              produk: p,
-                                              onTap: () =>
-                                                  _bukaFormProduk(produk: p)))
-                                          .toList()),
-                        ),
-                      if (_produkTersaring.length > _itemPerHalaman)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left),
-                                onPressed: _halaman > 0
-                                    ? () => setStateIfMounted(() => _halaman--)
-                                    : null,
-                              ),
-                              Text('Halaman ${_halaman + 1} / $_totalHalaman'),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right),
-                                onPressed: _halaman < _totalHalaman - 1
-                                    ? () => setStateIfMounted(() => _halaman++)
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-    );
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _muatSemua,
+                                child: ListView(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                                  children: [
+                                    if (_statistik != null)
+                                      _KartuStatistik(statistik: _statistik!),
+                                    const SizedBox(height: 12),
+                                    AppSearchField(
+                                      hintText:
+                                          'Cari produk (nama/kode/barcode)...',
+                                      onChanged: (v) => setStateIfMounted(() {
+                                        _kataKunci = v;
+                                        _halaman = 0;
+                                      }),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: SegmentedButton<String>(
+                                        segments: const [
+                                          ButtonSegment(
+                                              value: 'SEMUA',
+                                              label: Text('Semua')),
+                                          ButtonSegment(
+                                              value: 'JUAL',
+                                              label: Text('Produk')),
+                                          ButtonSegment(
+                                              value: 'BAHAN',
+                                              label: Text('Bahan')),
+                                          ButtonSegment(
+                                              value: 'EKSTRA',
+                                              label: Text('Ekstra')),
+                                        ],
+                                        selected: {_filterJenisItem},
+                                        onSelectionChanged: (s) =>
+                                            setStateIfMounted(() {
+                                          _filterJenisItem = s.first;
+                                          _halaman = 0;
+                                        }),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    SizedBox(
+                                      height: 40,
+                                      child: ListView(
+                                        scrollDirection: Axis.horizontal,
+                                        children: [
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(right: 8),
+                                            child: ChoiceChip(
+                                              label: const Text('Semua'),
+                                              selected:
+                                                  _kategoriTerpilih == null,
+                                              onSelected: (_) =>
+                                                  setStateIfMounted(() {
+                                                _kategoriTerpilih = null;
+                                                _halaman = 0;
+                                              }),
+                                            ),
+                                          ),
+                                          ..._kategori.map((k) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 8),
+                                                child: ChoiceChip(
+                                                  label: Text(k.nama),
+                                                  selected:
+                                                      _kategoriTerpilih == k.id,
+                                                  onSelected: (_) =>
+                                                      setStateIfMounted(() {
+                                                    _kategoriTerpilih = k.id;
+                                                    _halaman = 0;
+                                                  }),
+                                                ),
+                                              )),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (_produkTersaring.isEmpty)
+                                      const Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 40),
+                                        child: Center(
+                                            child: Text('Belum ada produk.')),
+                                      )
+                                    else
+                                      LayoutBuilder(
+                                        builder: (context, constraints) =>
+                                            constraints.maxWidth >=
+                                                    kAmbangLebarDesktop
+                                                ? _TabelProduk(
+                                                    produkList:
+                                                        _produkHalamanIni,
+                                                    onTap: (p) =>
+                                                        _bukaFormProduk(
+                                                            produk: p))
+                                                : Column(
+                                                    children: _produkHalamanIni
+                                                        .map((p) => _BarisProduk(
+                                                            produk: p,
+                                                            onTap: () =>
+                                                                _bukaFormProduk(
+                                                                    produk: p)))
+                                                        .toList()),
+                                      ),
+                                    if (_produkTersaring.length >
+                                        _itemPerHalaman)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.chevron_left),
+                                              onPressed: _halaman > 0
+                                                  ? () => setStateIfMounted(
+                                                      () => _halaman--)
+                                                  : null,
+                                            ),
+                                            Text(
+                                                'Halaman ${_halaman + 1} / $_totalHalaman'),
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.chevron_right),
+                                              onPressed:
+                                                  _halaman < _totalHalaman - 1
+                                                      ? () => setStateIfMounted(
+                                                          () => _halaman++)
+                                                      : null,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ))),
+          ]),
+        ));
   }
 }
 
@@ -769,14 +938,136 @@ class _BarisTabelProduk extends StatelessWidget {
   }
 }
 
+class _FormKebijakanRetur extends StatefulWidget {
+  final KebijakanRetur? kebijakan;
+  const _FormKebijakanRetur({this.kebijakan});
+  @override
+  State<_FormKebijakanRetur> createState() => _FormKebijakanReturState();
+}
+
+class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nama;
+  late final TextEditingController _keterangan;
+  bool _aktif = true;
+  bool _menyimpan = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _nama = TextEditingController(text: widget.kebijakan?.nama ?? '');
+    _keterangan =
+        TextEditingController(text: widget.kebijakan?.keterangan ?? '');
+    _aktif = widget.kebijakan?.aktif ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nama.dispose();
+    _keterangan.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _menyimpan = true;
+      _error = null;
+    });
+    try {
+      await ApiClient.instance.aksi('kebijakan_retur_simpan', {
+        if (widget.kebijakan != null) 'id': widget.kebijakan!.id,
+        'nama': _nama.text.trim(),
+        'keterangan': _keterangan.text.trim(),
+        'aktif': _aktif,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: DraggableScrollableSheet(
+          initialChildSize: .65,
+          maxChildSize: .9,
+          expand: false,
+          builder: (context, controller) => Form(
+            key: _formKey,
+            child: AppFormSheet(
+              scrollController: controller,
+              title: widget.kebijakan == null
+                  ? 'Tambah Kebijakan Retur'
+                  : 'Ubah Kebijakan Retur',
+              subtitle:
+                  'Tuliskan nama dan penjelasan aturan retur yang mudah dipahami petugas.',
+              icon: Icons.assignment_return_outlined,
+              errorText: _error,
+              children: [
+                AppFormSection(judul: 'Kebijakan', children: [
+                  AppFormTextField(
+                      label: 'Nama *',
+                      controller: _nama,
+                      enabled: widget.kebijakan?.bawaan != true,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Nama wajib diisi'
+                          : null),
+                  AppFormTextField(
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 5),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Aktif'),
+                    subtitle: Text(widget.kebijakan?.bawaan == true
+                        ? 'Kebijakan baku selalu aktif.'
+                        : 'Kebijakan aktif dapat dipilih pada produk.'),
+                    value: widget.kebijakan?.bawaan == true ? true : _aktif,
+                    onChanged: widget.kebijakan?.bawaan == true
+                        ? null
+                        : (v) => setState(() => _aktif = v),
+                  ),
+                ]),
+              ],
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: _menyimpan ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Batal'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _menyimpan ? null : _simpan,
+                  icon: _menyimpan
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 /// Form Tambah/Ubah -- bottom sheet, dipakai utk kedua mode (produk == null berarti Tambah).
 class _FormProduk extends StatefulWidget {
   final Produk? produk;
   final List<Kategori> kategori;
+  final List<KebijakanRetur> kebijakanRetur;
   final List<Produk> semuaProduk;
   const _FormProduk(
       {required this.produk,
       required this.kategori,
+      required this.kebijakanRetur,
       required this.semuaProduk});
 
   @override
@@ -831,6 +1122,7 @@ class _FormProdukState extends State<_FormProduk> {
   late final TextEditingController _stok;
   late final TextEditingController _keterangan;
   int? _kategoriId;
+  int? _kebijakanReturId;
   bool _izinkanJualMinusStok = false;
   bool _aktif = true;
   String _jenisItem = 'JUAL';
@@ -866,6 +1158,12 @@ class _FormProdukState extends State<_FormProduk> {
     _stok = TextEditingController(text: p == null ? '0' : p.stok.toString());
     _keterangan = TextEditingController(text: p?.keterangan ?? '');
     _kategoriId = p?.kategoriId;
+    _kebijakanReturId = p?.kebijakanReturId ??
+        (widget.kebijakanRetur.where((e) => e.bawaan).isNotEmpty
+            ? widget.kebijakanRetur.firstWhere((e) => e.bawaan).id
+            : (widget.kebijakanRetur.isEmpty
+                ? null
+                : widget.kebijakanRetur.first.id));
     _izinkanJualMinusStok = p?.izinkanJualMinusStok ?? false;
     _aktif = p?.aktif ?? true;
     _jenisItem = p?.jenisItem ?? 'JUAL';
@@ -908,8 +1206,7 @@ class _FormProdukState extends State<_FormProduk> {
       // "Jenis Item", produk JUAL biasa tidak boleh dipakai sbg bahan resep.
       builder: (_) => _DialogPilihProduk(
           daftar: widget.semuaProduk
-              .where((p) =>
-                  p.id != widget.produk?.id && p.jenisItem == 'BAHAN')
+              .where((p) => p.id != widget.produk?.id && p.jenisItem == 'BAHAN')
               .toList()),
     );
     if (dipilih == null) return;
@@ -983,14 +1280,21 @@ class _FormProdukState extends State<_FormProduk> {
   /// user), pengecekan SUNGGUHAN (bisa dibaca sbg gambar) tetap terjadi lewat
   /// [kompresGambar] yg melempar [FormatException] kalau `decodeImage` gagal.
   static const _ekstensiGambarValid = {
-    'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'gif',
+    'bmp',
+    'heic',
+    'heif'
   };
 
   Future<void> _pilihFoto(ImageSource sumber) async {
     if (_foto.length >= 10) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Maksimal 10 foto per produk.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Maksimal 10 foto per produk.')));
       }
       return;
     }
@@ -998,9 +1302,8 @@ class _FormProdukState extends State<_FormProduk> {
         await ImagePicker().pickImage(source: sumber, imageQuality: 100);
     if (berkas == null) return;
     final namaFile = berkas.name;
-    final ekstensi = namaFile.contains('.')
-        ? namaFile.split('.').last.toLowerCase()
-        : '';
+    final ekstensi =
+        namaFile.contains('.') ? namaFile.split('.').last.toLowerCase() : '';
     if (!_ekstensiGambarValid.contains(ekstensi)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1011,8 +1314,8 @@ class _FormProdukState extends State<_FormProduk> {
     final bytesAsli = await berkas.readAsBytes();
     if (bytesAsli.length > 10 * 1024 * 1024) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Ukuran berkas maksimal 10 MB.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ukuran berkas maksimal 10 MB.')));
       }
       return;
     }
@@ -1127,6 +1430,7 @@ class _FormProdukState extends State<_FormProduk> {
         'stok': _angka(_stok.text),
         'keterangan': _keterangan.text.trim(),
         'kategori_id': _kategoriId,
+        'kebijakan_retur_id': _kebijakanReturId,
         'izinkan_jual_minus_stok': _izinkanJualMinusStok,
         'aktif': _aktif,
         'jenis_item': _jenisItem,
@@ -1219,6 +1523,23 @@ class _FormProdukState extends State<_FormProduk> {
                     onChanged: (v) => setStateIfMounted(() => _kategoriId = v),
                   ),
                   const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    value: _kebijakanReturId,
+                    decoration: AppFormStyle.fieldDecoration(
+                      context,
+                      labelText: 'Kebijakan Retur',
+                    ),
+                    items: widget.kebijakanRetur
+                        .map((k) => DropdownMenuItem<int?>(
+                            value: k.id, child: Text(k.nama)))
+                        .toList(),
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _kebijakanReturId = v),
+                    validator: (v) => v == null
+                        ? 'Pilih kebijakan retur; nilai baku adalah Tanpa Kebijakan Retur'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text('Jenis Item',
@@ -1232,10 +1553,8 @@ class _FormProdukState extends State<_FormProduk> {
                     segments: const [
                       ButtonSegment(
                           value: 'JUAL', label: Text('Produk (Dijual)')),
-                      ButtonSegment(
-                          value: 'BAHAN', label: Text('Bahan Baku')),
-                      ButtonSegment(
-                          value: 'EKSTRA', label: Text('Ekstra')),
+                      ButtonSegment(value: 'BAHAN', label: Text('Bahan Baku')),
+                      ButtonSegment(value: 'EKSTRA', label: Text('Ekstra')),
                     ],
                     selected: {_jenisItem},
                     onSelectionChanged: (s) =>
@@ -1314,7 +1633,8 @@ class _FormProdukState extends State<_FormProduk> {
                                       child: TextField(
                                         controller: b.qty,
                                         keyboardType: TextInputType.number,
-                                        decoration: AppFormStyle.fieldDecoration(
+                                        decoration:
+                                            AppFormStyle.fieldDecoration(
                                           context,
                                           labelText: 'Qty',
                                           isDense: true,
@@ -1329,7 +1649,8 @@ class _FormProdukState extends State<_FormProduk> {
                                       child: TextField(
                                         controller: b.harga,
                                         keyboardType: TextInputType.number,
-                                        decoration: AppFormStyle.fieldDecoration(
+                                        decoration:
+                                            AppFormStyle.fieldDecoration(
                                           context,
                                           labelText: 'Harga Satuan',
                                           isDense: true,
@@ -1400,8 +1721,8 @@ class _FormProdukState extends State<_FormProduk> {
                             child: SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))),
                       )
                     : _foto.isEmpty
                         ? Text(
@@ -1431,8 +1752,8 @@ class _FormProdukState extends State<_FormProduk> {
                                                     errorBuilder:
                                                         (_, __, ___) =>
                                                             Container(
-                                                      color: AppColors
-                                                          .borderOf(context),
+                                                      color: AppColors.borderOf(
+                                                          context),
                                                       child: const Icon(
                                                           Icons
                                                               .broken_image_outlined,
@@ -1456,8 +1777,7 @@ class _FormProdukState extends State<_FormProduk> {
                                                   child:
                                                       CircularProgressIndicator(
                                                           strokeWidth: 2,
-                                                          color:
-                                                              Colors.white),
+                                                          color: Colors.white),
                                                 ),
                                               ),
                                             ),
@@ -1471,8 +1791,7 @@ class _FormProdukState extends State<_FormProduk> {
                                               child: Container(
                                                 padding:
                                                     const EdgeInsets.all(2),
-                                                decoration:
-                                                    const BoxDecoration(
+                                                decoration: const BoxDecoration(
                                                   color: Colors.black87,
                                                   shape: BoxShape.circle,
                                                 ),
