@@ -259,6 +259,11 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
     if (bytes == null) return;
     final baris = const LineSplitter().convert(utf8.decode(bytes));
     if (baris.length < 2) return;
+    var checksum = 2166136261;
+    for (final byte in bytes) {
+      checksum = ((checksum ^ byte) * 16777619) & 0xffffffff;
+    }
+    final referensiUpload = checksum.toRadixString(16);
 
     setStateIfMounted(() => _mengunggah = true);
     int berhasil = 0, gagal = 0;
@@ -286,6 +291,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
           continue;
         }
         await ApiClient.instance.aksi('topup_saldo', {
+          'idempotency_key': 'TOPUP-CSV-$referensiUpload-$i',
           'id_member': match.first['id'],
           'nominal': nominal,
           'keterangan': kolom.length > 3 ? kolom[3] : '',

@@ -45,6 +45,7 @@ class RiwayatPenjualanScreen extends StatefulWidget {
 }
 
 class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
+  final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -281,9 +282,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       return;
     }
     try {
+      final id = '${row['idTransaksi']}';
+      final key = _kunciPembatalan.putIfAbsent(
+          id, () => 'BATAL-$id-${DateTime.now().microsecondsSinceEpoch}');
       final hasil = await ApiClient.instance.aksi('batalkan_transaksi', {
         'id': row['idTransaksi'],
         'alasan': alasan,
+        'idempotency_key': key,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

@@ -212,6 +212,7 @@ class RingkasanTabUmum extends StatefulWidget {
 }
 
 class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
+  final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -554,8 +555,14 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       return;
     }
     try {
-      await ApiClient.instance.aksi('batalkan_transaksi',
-          {'id': row['idTransaksi'], 'alasan': alasanController.text.trim()});
+      final id = '${row['idTransaksi']}';
+      final key = _kunciPembatalan.putIfAbsent(
+          id, () => 'BATAL-$id-${DateTime.now().microsecondsSinceEpoch}');
+      await ApiClient.instance.aksi('batalkan_transaksi', {
+        'id': row['idTransaksi'],
+        'alasan': alasanController.text.trim(),
+        'idempotency_key': key
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Transaksi dibatalkan.')));

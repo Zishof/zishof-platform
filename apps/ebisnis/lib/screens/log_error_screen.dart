@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../api_client.dart';
 
 const _urlIssueBaruGithub =
     'https://github.com/Zishof/zishof-platform/issues/new';
@@ -44,11 +47,63 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
   int _totalInfo = 0;
   String? _tingkat;
   String _kataKunci = '';
+  Map<String, dynamic>? _health;
+  String? _healthError;
+  bool _memuatHealth = false;
 
   @override
   void initState() {
     super.initState();
     _muat();
+    _muatHealth();
+  }
+
+  Future<void> _muatHealth() async {
+    setStateIfMounted(() {
+      _memuatHealth = true;
+      _healthError = null;
+    });
+    try {
+      final value = await ApiClient.instance.aksi('error_log_health');
+      setStateIfMounted(() => _health = value);
+    } catch (e) {
+      setStateIfMounted(() => _healthError = e.toString());
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatHealth = false);
+    }
+  }
+
+  Future<void> _tampilkanHealth() async {
+    if (_health == null) return;
+    final detail = const JsonEncoder.withIndent('  ').convert(_health);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Detail Kesehatan Server & Database'),
+        content: SizedBox(
+          width: 900,
+          child: SingleChildScrollView(
+              child: SelectableText(detail,
+                  style: const TextStyle(fontFamily: 'monospace'))),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: detail));
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Detail server disalin.')));
+              }
+            },
+            icon: const Icon(Icons.copy_outlined),
+            label: const Text('Salin Detail'),
+          ),
+          FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
   }
 
   Future<void> _muat() async {
@@ -217,6 +272,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       scrollable: false,
       actionsAppBar: [
         IconButton(
+            icon: const Icon(Icons.monitor_heart_outlined),
+            onPressed: _memuatHealth ? null : _muatHealth,
+            tooltip: 'Muat Kesehatan Server'),
+        IconButton(
             icon: const Icon(Icons.copy_all_outlined),
             onPressed: _data.isEmpty ? null : _salinSemua,
             tooltip: 'Salin Semua Error'),
@@ -226,6 +285,10 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
             tooltip: 'Bersihkan Semua'),
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+            icon: const Icon(Icons.monitor_heart_outlined),
+            onPressed: _memuatHealth ? null : _muatHealth,
+            tooltip: 'Muat Kesehatan Server'),
         IconButton(
             icon: const Icon(Icons.copy_all_outlined),
             onPressed: _data.isEmpty ? null : _salinSemua,
@@ -242,6 +305,61 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                 children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.monitor_heart_outlined,
+                                color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                                child: Text('Kesehatan Server & Database',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700))),
+                            if (_memuatHealth)
+                              const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                            IconButton(
+                                onPressed: _memuatHealth ? null : _muatHealth,
+                                icon: const Icon(Icons.refresh)),
+                          ]),
+                          if (_healthError != null)
+                            Text(_healthError!,
+                                style: const TextStyle(color: AppColors.danger))
+                          else if (_health != null)
+                            Wrap(spacing: 20, runSpacing: 8, children: [
+                              Text(
+                                  'Error 24 jam: ${_health!['error24Jam'] ?? 0}'),
+                              Text(
+                                  'Error 7 hari: ${_health!['error7Hari'] ?? 0}'),
+                              Text(
+                                  'Proses DB aktif: ${(_health!['aktivitasDatabase'] as List?)?.length ?? 0}'),
+                              Text(
+                                  'Query lambat tercatat: ${(_health!['queryLambat'] as List?)?.length ?? 0}'),
+                              Text(
+                                  'Sampel lambat 24 jam: ${(_health!['queryLambatSampel24Jam'] as List?)?.length ?? 0}'),
+                              if (_health!['statistikQueryTersedia'] == false)
+                                Text('${_health!['saranStatistik'] ?? ''}',
+                                    style: const TextStyle(
+                                        color: AppColors.warning)),
+                              TextButton.icon(
+                                  onPressed: _tampilkanHealth,
+                                  icon: const Icon(Icons.open_in_new),
+                                  label: const Text('Lihat Detail')),
+                            ])
+                          else
+                            const Text(
+                                'Tekan muat ulang untuk membaca kondisi server.'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     height: 96,
                     child: ListView(

@@ -59,6 +59,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
   Map<String, dynamic>? _produkDitemukan;
   final List<_ItemReturPembelian> _items = [];
   bool _menyimpan = false;
+  String? _idempotencyKey;
 
   bool _memuatRiwayat = true;
   String? _errorRiwayat;
@@ -178,7 +179,9 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
       _errorForm = null;
     });
     try {
+      _idempotencyKey ??= 'RETUR-BELI-${DateTime.now().microsecondsSinceEpoch}';
       await ApiClient.instance.aksi('retur_pembelian_simpan', {
+        'idempotency_key': _idempotencyKey,
         'items': _items
             .map((it) => {
                   'produk_id': it.produkId,
@@ -193,7 +196,10 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
             content:
                 Text('Retur Pembelian tersimpan (${_items.length} item).')));
       }
-      setStateIfMounted(() => _items.clear());
+      setStateIfMounted(() {
+        _items.clear();
+        _idempotencyKey = null;
+      });
       _halaman = 1;
       await _muatRiwayat();
     } catch (e) {

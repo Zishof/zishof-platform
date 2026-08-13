@@ -225,6 +225,11 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
         ),
       );
       if (lanjut != true) return;
+      var checksum = 2166136261;
+      for (final byte in bytes) {
+        checksum = ((checksum ^ byte) * 16777619) & 0xffffffff;
+      }
+      final referensiUpload = checksum.toRadixString(16);
       String nilai(List<String> row, String nama) {
         final index = header[nama];
         return index == null || index >= row.length ? '' : row[index].trim();
@@ -267,6 +272,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
             idMember = (anggota.first['id'] as num).toInt();
           }
           await ApiClient.instance.aksi('topup_saldo', {
+            'idempotency_key': 'TOPUP-XLSX-$referensiUpload-$i',
             'id_member': idMember,
             'nominal': nominal,
             'keterangan': nilai(row, 'KETERANGAN'),
@@ -606,6 +612,10 @@ class _FormTopup extends StatefulWidget {
 
 class _FormTopupState extends State<_FormTopup> {
   final _formKey = GlobalKey<FormState>();
+  // Dibuat sekali saat form dibuka dan dipakai ulang pada retry tombol Simpan.
+  // Server menjadikannya exactly-once sehingga timeout tidak menggandakan saldo.
+  late final String _idempotencyKey =
+      'TOPUP-${DateTime.now().microsecondsSinceEpoch}';
   late final TextEditingController _nominal;
   late final TextEditingController _keterangan;
   late final TextEditingController _cariMember;
@@ -714,6 +724,7 @@ class _FormTopupState extends State<_FormTopup> {
       await ApiClient.instance.aksi(ubah ? 'deposit_ubah' : 'topup_saldo', {
         if (ubah) 'id': widget.deposit!['id'],
         if (!ubah) 'id_member': _idMember,
+        if (!ubah) 'idempotency_key': _idempotencyKey,
         'nominal': double.tryParse(_nominal.text.trim()) ?? 0,
         'keterangan': _keterangan.text.trim(),
         'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),

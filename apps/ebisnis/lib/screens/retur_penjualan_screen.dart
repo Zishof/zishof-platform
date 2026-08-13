@@ -121,6 +121,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   String _metodePengembalian = _daftarMetodePengembalian.first;
   bool _menyimpan = false;
   String? _errorSimpan;
+  String? _idempotencyKey;
 
   @override
   void dispose() {
@@ -154,6 +155,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   Future<void> _pilihTransaksi(Map<String, dynamic> row) async {
     setStateIfMounted(() {
       _transaksiTerpilih = row;
+      _idempotencyKey = null;
       _memuatDetail = true;
       _baris = [];
     });
@@ -178,6 +180,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
   void _batalkanPemilihan() {
     setStateIfMounted(() {
       _transaksiTerpilih = null;
+      _idempotencyKey = null;
       _baris = [];
     });
   }
@@ -205,7 +208,9 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       _errorSimpan = null;
     });
     try {
+      _idempotencyKey ??= 'RETUR-JUAL-${DateTime.now().microsecondsSinceEpoch}';
       await ApiClient.instance.aksi('retur_penjualan_simpan', {
+        'idempotency_key': _idempotencyKey,
         'pembelian_anggota_koperasi_id': _transaksiTerpilih!['idTransaksi'],
         'kode_transaksi_asal': _transaksiTerpilih!['nomorNota'],
         'nama_pembeli': _transaksiTerpilih!['pembeli'],
@@ -230,6 +235,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
           _baris = [];
           _hasilPencarian = [];
           _kataKunciController.clear();
+          _idempotencyKey = null;
         });
       }
     } catch (e) {

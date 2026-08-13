@@ -18,6 +18,7 @@ import '../widgets/app_shell.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
 import 'produk_mutasi_barang_tab.dart';
+import 'produk_rekonsiliasi_ledger_tab.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -471,7 +472,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
       ),
     ];
     return DefaultTabController(
-        length: 3,
+        length: 4,
         initialIndex: _tabAktif,
         child: AppShell(
           menuAktif: MenuEBisnis.produk,
@@ -484,7 +485,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
           ),
           actionsAppBar: tombolAksi,
           scrollable: false,
-          floatingActionButton: _tabAktif == 1
+          floatingActionButton: _tabAktif == 1 || _tabAktif == 2
               ? null
               : FloatingActionButton.extended(
                   onPressed: () =>
@@ -512,6 +513,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
                       text: 'Mutasi Barang',
                       icon: Icon(Icons.swap_horiz_outlined)),
                   Tab(
+                      text: 'Rekonsiliasi Stok',
+                      icon: Icon(Icons.fact_check_outlined)),
+                  Tab(
                       text: 'Kebijakan Retur',
                       icon: Icon(Icons.assignment_return_outlined)),
                 ],
@@ -521,200 +525,216 @@ class _ProdukScreenState extends State<ProdukScreen> {
                 child: _tabAktif == 1
                     ? const ProdukMutasiBarangTab()
                     : _tabAktif == 2
-                        ? (_memuat
-                            ? const Center(child: CircularProgressIndicator())
-                            : _daftarKebijakanRetur())
-                        : (_memuat && _semuaProduk.isEmpty
-                            ? const Center(child: CircularProgressIndicator())
-                            : _pesanError != null && _semuaProduk.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(24),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.error_outline,
-                                              size: 48, color: Colors.red),
-                                          const SizedBox(height: 12),
-                                          Text(_pesanError!,
-                                              textAlign: TextAlign.center),
-                                          const SizedBox(height: 16),
-                                          ElevatedButton(
-                                              onPressed: _muatSemua,
-                                              child: const Text('Coba Lagi')),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                : RefreshIndicator(
-                                    onRefresh: _muatSemua,
-                                    child: ListView(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          12, 12, 12, 90),
-                                      children: [
-                                        if (_statistik != null)
-                                          _KartuStatistik(
-                                              statistik: _statistik!),
-                                        const SizedBox(height: 12),
-                                        AppSearchField(
-                                          controller: _controllerCariProduk,
-                                          debounce:
-                                              const Duration(milliseconds: 350),
-                                          hintText:
-                                              'Cari produk (nama/kode/barcode)...',
-                                          onChanged: (v) {
-                                            setStateIfMounted(() {
-                                              _kataKunci = v;
-                                              _halaman = 0;
-                                            });
-                                            _muatSemua();
-                                          },
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: SegmentedButton<String>(
-                                            segments: const [
-                                              ButtonSegment(
-                                                  value: 'SEMUA',
-                                                  label: Text('Semua')),
-                                              ButtonSegment(
-                                                  value: 'JUAL',
-                                                  label: Text('Produk')),
-                                              ButtonSegment(
-                                                  value: 'BAHAN',
-                                                  label: Text('Bahan')),
-                                              ButtonSegment(
-                                                  value: 'EKSTRA',
-                                                  label: Text('Ekstra')),
+                        ? const ProdukRekonsiliasiLedgerTab()
+                        : _tabAktif == 3
+                            ? (_memuat
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : _daftarKebijakanRetur())
+                            : (_memuat && _semuaProduk.isEmpty
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : _pesanError != null && _semuaProduk.isEmpty
+                                    ? Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(24),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.error_outline,
+                                                  size: 48, color: Colors.red),
+                                              const SizedBox(height: 12),
+                                              Text(_pesanError!,
+                                                  textAlign: TextAlign.center),
+                                              const SizedBox(height: 16),
+                                              ElevatedButton(
+                                                  onPressed: _muatSemua,
+                                                  child:
+                                                      const Text('Coba Lagi')),
                                             ],
-                                            selected: {_filterJenisItem},
-                                            onSelectionChanged: (s) {
-                                              setStateIfMounted(() {
-                                                _filterJenisItem = s.first;
-                                                _halaman = 0;
-                                              });
-                                              _muatSemua();
-                                            },
                                           ),
                                         ),
-                                        const SizedBox(height: 10),
-                                        SizedBox(
-                                          height: 40,
-                                          child: ListView(
-                                            scrollDirection: Axis.horizontal,
-                                            children: [
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 8),
-                                                child: ChoiceChip(
-                                                  label: const Text('Semua'),
-                                                  selected:
-                                                      _kategoriTerpilih == null,
-                                                  onSelected: (_) {
-                                                    setStateIfMounted(() {
-                                                      _kategoriTerpilih = null;
-                                                      _halaman = 0;
-                                                    });
-                                                    _muatSemua();
-                                                  },
-                                                ),
+                                      )
+                                    : RefreshIndicator(
+                                        onRefresh: _muatSemua,
+                                        child: ListView(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              12, 12, 12, 90),
+                                          children: [
+                                            if (_statistik != null)
+                                              _KartuStatistik(
+                                                  statistik: _statistik!),
+                                            const SizedBox(height: 12),
+                                            AppSearchField(
+                                              controller: _controllerCariProduk,
+                                              debounce: const Duration(
+                                                  milliseconds: 350),
+                                              hintText:
+                                                  'Cari produk (nama/kode/barcode)...',
+                                              onChanged: (v) {
+                                                setStateIfMounted(() {
+                                                  _kataKunci = v;
+                                                  _halaman = 0;
+                                                });
+                                                _muatSemua();
+                                              },
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: SegmentedButton<String>(
+                                                segments: const [
+                                                  ButtonSegment(
+                                                      value: 'SEMUA',
+                                                      label: Text('Semua')),
+                                                  ButtonSegment(
+                                                      value: 'JUAL',
+                                                      label: Text('Produk')),
+                                                  ButtonSegment(
+                                                      value: 'BAHAN',
+                                                      label: Text('Bahan')),
+                                                  ButtonSegment(
+                                                      value: 'EKSTRA',
+                                                      label: Text('Ekstra')),
+                                                ],
+                                                selected: {_filterJenisItem},
+                                                onSelectionChanged: (s) {
+                                                  setStateIfMounted(() {
+                                                    _filterJenisItem = s.first;
+                                                    _halaman = 0;
+                                                  });
+                                                  _muatSemua();
+                                                },
                                               ),
-                                              ..._kategori.map((k) => Padding(
+                                            ),
+                                            const SizedBox(height: 10),
+                                            SizedBox(
+                                              height: 40,
+                                              child: ListView(
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                children: [
+                                                  Padding(
                                                     padding:
                                                         const EdgeInsets.only(
                                                             right: 8),
                                                     child: ChoiceChip(
-                                                      label: Text(k.nama),
+                                                      label:
+                                                          const Text('Semua'),
                                                       selected:
                                                           _kategoriTerpilih ==
-                                                              k.id,
+                                                              null,
                                                       onSelected: (_) {
                                                         setStateIfMounted(() {
                                                           _kategoriTerpilih =
-                                                              k.id;
+                                                              null;
                                                           _halaman = 0;
                                                         });
                                                         _muatSemua();
                                                       },
                                                     ),
-                                                  )),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        if (_memuat) ...[
-                                          const LinearProgressIndicator(
-                                              minHeight: 2),
-                                          const SizedBox(height: 10),
-                                        ],
-                                        if (_produkTersaring.isEmpty)
-                                          const Padding(
-                                            padding: EdgeInsets.symmetric(
-                                                vertical: 40),
-                                            child: Center(
-                                                child:
-                                                    Text('Belum ada produk.')),
-                                          )
-                                        else
-                                          LayoutBuilder(
-                                            builder: (context, constraints) => constraints
-                                                        .maxWidth >=
-                                                    kAmbangLebarDesktop
-                                                ? _TabelProduk(
-                                                    produkList:
-                                                        _produkHalamanIni,
-                                                    onTap: (p) =>
-                                                        _bukaFormProduk(
-                                                            produk: p))
-                                                : Column(
-                                                    children: _produkHalamanIni
-                                                        .map((p) => _BarisProduk(
-                                                            produk: p,
-                                                            onTap: () =>
-                                                                _bukaFormProduk(
-                                                                    produk: p)))
-                                                        .toList()),
-                                          ),
-                                        if (_totalProduk > _itemPerHalaman)
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 12),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.chevron_left),
-                                                  onPressed: _halaman > 0
-                                                      ? () {
-                                                          setStateIfMounted(
-                                                              () => _halaman--);
-                                                          _muatSemua();
-                                                        }
-                                                      : null,
-                                                ),
-                                                Text(
-                                                    'Halaman ${_halaman + 1} / $_totalHalaman'),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.chevron_right),
-                                                  onPressed: _halaman <
-                                                          _totalHalaman - 1
-                                                      ? () {
-                                                          setStateIfMounted(
-                                                              () => _halaman++);
-                                                          _muatSemua();
-                                                        }
-                                                      : null,
-                                                ),
-                                              ],
+                                                  ),
+                                                  ..._kategori.map((k) =>
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(right: 8),
+                                                        child: ChoiceChip(
+                                                          label: Text(k.nama),
+                                                          selected:
+                                                              _kategoriTerpilih ==
+                                                                  k.id,
+                                                          onSelected: (_) {
+                                                            setStateIfMounted(
+                                                                () {
+                                                              _kategoriTerpilih =
+                                                                  k.id;
+                                                              _halaman = 0;
+                                                            });
+                                                            _muatSemua();
+                                                          },
+                                                        ),
+                                                      )),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                      ],
-                                    ),
-                                  ))),
+                                            const SizedBox(height: 12),
+                                            if (_memuat) ...[
+                                              const LinearProgressIndicator(
+                                                  minHeight: 2),
+                                              const SizedBox(height: 10),
+                                            ],
+                                            if (_produkTersaring.isEmpty)
+                                              const Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: 40),
+                                                child: Center(
+                                                    child: Text(
+                                                        'Belum ada produk.')),
+                                              )
+                                            else
+                                              LayoutBuilder(
+                                                builder: (context, constraints) => constraints
+                                                            .maxWidth >=
+                                                        kAmbangLebarDesktop
+                                                    ? _TabelProduk(
+                                                        produkList:
+                                                            _produkHalamanIni,
+                                                        onTap: (p) =>
+                                                            _bukaFormProduk(
+                                                                produk: p))
+                                                    : Column(
+                                                        children: _produkHalamanIni
+                                                            .map((p) => _BarisProduk(
+                                                                produk: p,
+                                                                onTap: () =>
+                                                                    _bukaFormProduk(
+                                                                        produk:
+                                                                            p)))
+                                                            .toList()),
+                                              ),
+                                            if (_totalProduk > _itemPerHalaman)
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.chevron_left),
+                                                      onPressed: _halaman > 0
+                                                          ? () {
+                                                              setStateIfMounted(
+                                                                  () =>
+                                                                      _halaman--);
+                                                              _muatSemua();
+                                                            }
+                                                          : null,
+                                                    ),
+                                                    Text(
+                                                        'Halaman ${_halaman + 1} / $_totalHalaman'),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.chevron_right),
+                                                      onPressed: _halaman <
+                                                              _totalHalaman - 1
+                                                          ? () {
+                                                              setStateIfMounted(
+                                                                  () =>
+                                                                      _halaman++);
+                                                              _muatSemua();
+                                                            }
+                                                          : null,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ))),
           ]),
         ));
   }
