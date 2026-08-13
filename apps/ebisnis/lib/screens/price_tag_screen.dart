@@ -1817,6 +1817,182 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
+  Widget _headerTabelProduk(
+    List<Map<String, dynamic>> terfilter,
+    bool semuaTercentang,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.pageBg,
+        border: Border(
+          top: BorderSide(color: AppColors.border),
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          _selTabelHeader('Produk', flex: 4),
+          _selTabelHeader('Kode', flex: 2),
+          _selTabelHeader('Kategori', flex: 2),
+          _selTabelHeader('Harga', flex: 2, align: TextAlign.right),
+          if (_salinanBerbedaPerProduk)
+            const SizedBox(
+              width: 86,
+              child: Text(
+                'SALINAN',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          SizedBox(
+            width: 48,
+            child: Tooltip(
+              message: 'Pilih Semua (${terfilter.length})',
+              child: Checkbox(
+                value: semuaTercentang,
+                onChanged: (v) => _pilihSemua(v ?? false),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _selTabelHeader(
+    String label, {
+    int flex = 1,
+    TextAlign align = TextAlign.left,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label.toUpperCase(),
+        textAlign: align,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+
+  Widget _selTabelTeks(
+    String value, {
+    int flex = 1,
+    TextAlign align = TextAlign.left,
+    TextStyle? style,
+    int maxLines = 1,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        value,
+        textAlign: align,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: style ?? const TextStyle(fontSize: 12.5),
+      ),
+    );
+  }
+
+  Widget _barisTabelProduk(Map<String, dynamic> p, int index) {
+    final id = _idProduk(p);
+    final terpilih = _idTerpilih.contains(id);
+    final bg = terpilih
+        ? AppColors.primary.withValues(alpha: 0.06)
+        : (index.isOdd
+            ? AppColors.pageBg.withValues(alpha: 0.55)
+            : Colors.white);
+    final nama = p['nama'] as String? ?? '-';
+    final kode = '${p['kode'] ?? '-'}';
+    final kategori = _labelKategoriProduk(p);
+    final harga = _formatRupiah(p['hargaJual'] as num?);
+
+    return InkWell(
+      onTap: () => setStateIfMounted(() {
+        if (terpilih) {
+          _idTerpilih.remove(id);
+        } else {
+          _idTerpilih.add(id);
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            _selTabelTeks(
+              nama,
+              flex: 4,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: terpilih ? FontWeight.w700 : FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            _selTabelTeks(
+              kode,
+              flex: 2,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontFamily: 'monospace',
+              ),
+            ),
+            _selTabelTeks(
+              kategori,
+              flex: 2,
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            _selTabelTeks(
+              harga,
+              flex: 2,
+              align: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            if (_salinanBerbedaPerProduk)
+              SizedBox(
+                width: 86,
+                child: terpilih
+                    ? Align(
+                        alignment: Alignment.center,
+                        child: _fieldSalinanItem(id),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            SizedBox(
+              width: 48,
+              child: Center(
+                child: Checkbox(
+                  value: terpilih,
+                  onChanged: (v) => setStateIfMounted(() =>
+                      v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _panelDaftarProduk() {
     final terfilter = _terfilter;
     final tampil = _daftarProdukTampil;
@@ -1876,43 +2052,19 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             ),
           ),
         ],
-        CheckboxListTile(
-          value: semuaTercentang,
-          onChanged: (v) => _pilihSemua(v ?? false),
-          title: Text('Pilih Semua (${terfilter.length})',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          dense: true,
-        ),
-        const Divider(height: 1),
+        _headerTabelProduk(terfilter, semuaTercentang),
         Expanded(
-          child: ListView.builder(
-            itemCount: tampil.length,
-            itemBuilder: (context, i) {
-              final p = tampil[i];
-              final id = _idProduk(p);
-              final terpilih = _idTerpilih.contains(id);
-              return CheckboxListTile(
-                value: terpilih,
-                onChanged: (v) => setStateIfMounted(() =>
-                    v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(p['nama'] as String? ?? '-',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    if (_salinanBerbedaPerProduk && terpilih) ...[
-                      const SizedBox(width: 8),
-                      _fieldSalinanItem(id),
-                    ],
-                  ],
+          child: tampil.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Tidak ada produk.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: tampil.length,
+                  itemBuilder: (context, i) => _barisTabelProduk(tampil[i], i),
                 ),
-                subtitle:
-                    Text('${p['kode'] ?? '-'} - Rp ${p['hargaJual'] ?? 0}'),
-                dense: true,
-              );
-            },
-          ),
         ),
       ],
     );
@@ -2302,7 +2454,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             value: nilai,
             min: 0,
             max: 8,
-            divisions: 16,
+            divisions: 80,
             label: '${nilai.toStringAsFixed(1)} mm',
             onChanged: onChanged,
           ),
