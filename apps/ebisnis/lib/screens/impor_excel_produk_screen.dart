@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
@@ -100,7 +101,12 @@ class _BarisImpor {
 class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   _Tahap _tahap = _Tahap.pilihBerkas;
   bool _memproses = false;
-  String? _error;
+  AppErrorInfo? _error;
+
+  AppErrorInfo _infoError(Object error, String aktivitas) =>
+      error is ApiException
+          ? error.info
+          : AppErrorInfo.dari(error, aktivitas: aktivitas);
 
   List<String> _kategoriDikenal = [];
   List<String> _pemasokDikenal = [];
@@ -108,6 +114,13 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   List<String> _kolomTidakDitemukan = [];
   List<_BarisImpor> _baris = [];
   bool _nonaktifkanTakDiimpor = false;
+  int _halamanTinjau = 0;
+
+  // Seluruh hasil preview tetap berada lokal di memori aplikasi. Yang dirender
+  // hanya 25 baris per halaman dan nomor navigasi ditampilkan per kelompok
+  // maksimal lima halaman agar desktop maupun Android tetap ringan.
+  static const int _barisPerHalaman = 25;
+  static const int _maksTombolHalaman = 5;
 
   static const double _toleransiSelisihStok = 0.000001;
 
@@ -185,10 +198,12 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
         for (final b in _baris) {
           b.disertakan = _stokBerbeda(b);
         }
+        _halamanTinjau = 0;
         _tahap = _Tahap.tinjau;
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(
+          () => _error = _infoError(e, 'membaca pratinjau Excel produk'));
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }
@@ -200,8 +215,9 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     final terpilih =
         _baris.where((b) => b.disertakan && _stokBerbeda(b)).toList();
     if (terpilih.isEmpty) {
-      setStateIfMounted(
-          () => _error = 'Tidak ada baris yang disertakan utk diimpor.');
+      setStateIfMounted(() => _error = AppErrorInfo.dari(
+          'Tidak ada baris yang disertakan untuk diimpor.',
+          aktivitas: 'komit impor produk'));
       return;
     }
     setStateIfMounted(() {
@@ -209,6 +225,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       _error = null;
       _barisUntukKomit = terpilih.length;
       _barisSelesaiKomit = 0;
+      _halamanTinjau = 0;
     });
     // Untuk opsi nonaktifkan, produk dengan stok sama tetap berarti ADA di
     // berkas. Masukkan seluruh id hasil preview agar tidak salah dianggap
@@ -261,7 +278,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
 
       setStateIfMounted(() => _tahap = _Tahap.laporan);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(
+          () => _error = _infoError(e, 'menyimpan impor Excel produk'));
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }
@@ -334,8 +352,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                 decoration: BoxDecoration(
                     color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8)),
-                child:
-                    Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                child: AppErrorPanel(info: _error!, ringkas: true),
               ),
             ),
           ElevatedButton.icon(
@@ -359,6 +376,15 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   }
 
   Widget _bodyTinjau() {
+    final barisTerlihat = _barisTerlihat;
+    final jumlahHalaman = barisTerlihat.isEmpty
+        ? 0
+        : (barisTerlihat.length / _barisPerHalaman).ceil();
+    final halamanAktif =
+        jumlahHalaman == 0 ? 0 : _halamanTinjau.clamp(0, jumlahHalaman - 1);
+    final awal = halamanAktif * _barisPerHalaman;
+    final akhir = (awal + _barisPerHalaman).clamp(0, barisTerlihat.length);
+    final barisHalaman = barisTerlihat.sublist(awal, akhir);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -387,11 +413,10 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                   decoration: BoxDecoration(
                       color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(8)),
-                  child: Text(_error!,
-                      style: TextStyle(color: Colors.red.shade700)),
+                  child: AppErrorPanel(info: _error!, ringkas: true),
                 ),
               Text(
-                  '${_baris.length} baris terbaca, ${_barisTerlihat.length} memiliki selisih stok dan akan ditampilkan.',
+                  '${_baris.length} baris terbaca, ${barisTerlihat.length} memiliki selisih stok dan akan ditampilkan.',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const Padding(
                 padding: EdgeInsets.only(top: 6),
@@ -415,10 +440,13 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                 )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _barisTerlihat.length,
-                  itemBuilder: (context, i) => _kartuBaris(_barisTerlihat[i]),
+                  itemCount: barisHalaman.length,
+                  itemBuilder: (context, i) => _kartuBaris(barisHalaman[i]),
                 ),
         ),
+        if (jumlahHalaman > 1)
+          _navigasiHalaman(halamanAktif, jumlahHalaman, awal + 1, akhir,
+              barisTerlihat.length),
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -485,6 +513,74 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _navigasiHalaman(int halamanAktif, int jumlahHalaman, int barisAwal,
+      int barisAkhir, int totalBaris) {
+    final awalKelompok =
+        (halamanAktif ~/ _maksTombolHalaman) * _maksTombolHalaman;
+    final akhirKelompok =
+        (awalKelompok + _maksTombolHalaman).clamp(0, jumlahHalaman);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: const Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Menampilkan $barisAwal–$barisAkhir dari $totalBaris data · '
+              '25 data per halaman',
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Halaman sebelumnya',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: halamanAktif > 0
+                        ? () => setStateIfMounted(
+                            () => _halamanTinjau = halamanAktif - 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  for (var i = awalKelompok; i < akhirKelompok; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: i == halamanAktif
+                          ? FilledButton(
+                              onPressed: null, child: Text('${i + 1}'))
+                          : OutlinedButton(
+                              onPressed: () =>
+                                  setStateIfMounted(() => _halamanTinjau = i),
+                              child: Text('${i + 1}'),
+                            ),
+                    ),
+                  IconButton(
+                    tooltip: 'Halaman berikutnya',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: halamanAktif < jumlahHalaman - 1
+                        ? () => setStateIfMounted(
+                            () => _halamanTinjau = halamanAktif + 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
