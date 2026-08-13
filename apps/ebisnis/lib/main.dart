@@ -98,8 +98,8 @@ void main() {
     await AppThemeController.instance.muat();
     runApp(const EBisnisApp());
   }, (error, stack) {
-    unawaited(ApiClient.instance
-        .catatError(error, stack: stack, sumber: 'zone'));
+    unawaited(
+        ApiClient.instance.catatError(error, stack: stack, sumber: 'zone'));
   });
 }
 
@@ -293,8 +293,13 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         repoName: 'zishof-platform',
         versiSaatIni: info.version,
         assetKeyword: AppVariant.updateAssetKeyword,
+        tagPrefix: AppVariant.updateTagPrefix,
       );
-      if (mounted && hasil != null) {
+      final tersediaUntukPerangkat = hasil != null &&
+          (defaultTargetPlatform == TargetPlatform.android
+              ? hasil.urlApk != null
+              : (hasil.urlExe != null || hasil.urlPaketWindows != null));
+      if (mounted && tersediaUntukPerangkat) {
         final dipasang = await PengaturanUpdate.instance
             .cobaPasangOtomatis(hasil)
             .catchError((_) => false);
@@ -311,8 +316,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     final info = _infoUpdate;
     if (info == null) return;
     final url = defaultTargetPlatform == TargetPlatform.android
-        ? (info.urlApk ?? info.urlRilis)
-        : (info.urlExe ?? info.urlRilis);
+        ? info.urlApk
+        : info.urlExe;
+    if (url == null) return;
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 

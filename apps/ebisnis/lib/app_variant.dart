@@ -47,13 +47,17 @@ class AppVariant {
       : (isInventorySales
           ? 'inventorysales'
           : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
+  static const String? updateTagPrefix =
+      isApotik ? 'apotik-' : (isEmedik ? 'emedik-' : null);
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isInventorySales
           ? 'eBisnis Inventory & Sales Flutter'
           : (isApotik
               ? 'eBisnis POS Apotik Flutter'
-              : (isEmedik ? 'eBisnis POS eMedik Flutter' : 'eBisnis Flutter Pilot')));
+              : (isEmedik
+                  ? 'eBisnis POS eMedik Flutter'
+                  : 'eBisnis Flutter Pilot')));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isInventorySales
@@ -74,5 +78,7 @@ class AppVariant {
   /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
   static const subJudulLogin = isAlBahjah
       ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
-      : (isInventorySales ? 'Masuk ke Inventory & Sales' : 'Masuk sebagai Kasir');
+      : (isInventorySales
+          ? 'Masuk ke Inventory & Sales'
+          : 'Masuk sebagai Kasir');
 }

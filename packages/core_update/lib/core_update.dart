@@ -76,12 +76,12 @@ class UpdateChecker {
 
       final assets = (json['assets'] as List?) ?? [];
       final keyword = assetKeyword?.trim().toLowerCase();
-      final urlApk = _pilihAsset(
+      final urlApk = pilihAssetSesuaiVarian(
         assets,
         ekstensi: const ['.apk'],
         keyword: keyword,
       );
-      final urlExe = _pilihAsset(
+      final urlExe = pilihAssetSesuaiVarian(
         assets,
         ekstensi: const ['.exe', '.msix'],
         keyword: keyword,
@@ -153,7 +153,13 @@ class UpdateChecker {
     return 0;
   }
 
-  static String? _pilihAsset(
+  /// Memilih aset HANYA untuk varian yang diminta.
+  ///
+  /// Bila [keyword] terisi, fungsi ini bersifat fail-closed: tidak ada
+  /// fallback ke aset varian pertama. Ini mencegah Al-Bahjah, Apotik,
+  /// eMedik, atau Inventory & Sales mengunduh installer/APK eBisnis ketika
+  /// rilis belum menyediakan paket varian yang sama.
+  static String? pilihAssetSesuaiVarian(
     List<dynamic> assets, {
     required List<String> ekstensi,
     String? keyword,
@@ -174,7 +180,7 @@ class UpdateChecker {
         }
       }
     }
-    return fallback;
+    return keywordNormal.isEmpty ? fallback : null;
   }
 
   static Map<String, dynamic>? _pilihAssetData(

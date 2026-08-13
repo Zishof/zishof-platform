@@ -96,8 +96,8 @@ Future<void> bootstrap(AppProductProfile profil) async {
     await AppThemeController.instance.muat();
     runApp(const EBisnisApp());
   }, (error, stack) {
-    unawaited(ApiClient.instance
-        .catatError(error, stack: stack, sumber: 'zone'));
+    unawaited(
+        ApiClient.instance.catatError(error, stack: stack, sumber: 'zone'));
   });
 }
 
@@ -255,7 +255,11 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         assetKeyword: AppProductProfile.aktif.updateAssetKeyword,
         tagPrefix: AppProductProfile.aktif.tagRilisPrefix,
       );
-      if (mounted && hasil != null) {
+      final tersediaUntukPerangkat = hasil != null &&
+          (defaultTargetPlatform == TargetPlatform.android
+              ? hasil.urlApk != null
+              : (hasil.urlExe != null || hasil.urlPaketWindows != null));
+      if (mounted && tersediaUntukPerangkat) {
         final dipasang = await PengaturanUpdate.instance
             .cobaPasangOtomatis(hasil)
             .catchError((_) => false);
@@ -272,8 +276,9 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     final info = _infoUpdate;
     if (info == null) return;
     final url = defaultTargetPlatform == TargetPlatform.android
-        ? (info.urlApk ?? info.urlRilis)
-        : (info.urlExe ?? info.urlRilis);
+        ? info.urlApk
+        : info.urlExe;
+    if (url == null) return;
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 

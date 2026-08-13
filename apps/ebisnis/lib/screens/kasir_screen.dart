@@ -1127,12 +1127,22 @@ class _KasirScreenState extends State<KasirScreen> {
           repoOwner: 'Zishof',
           repoName: 'zishof-platform',
           versiSaatIni: info.version,
-          assetKeyword: AppVariant.updateAssetKeyword);
+          assetKeyword: AppVariant.updateAssetKeyword,
+          tagPrefix: AppVariant.updateTagPrefix);
       if (!mounted) return;
       Navigator.of(context).pop(); // tutup loading
       if (hasil == null) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Sudah menggunakan versi terbaru.')));
+        return;
+      }
+      final urlVarian = defaultTargetPlatform == TargetPlatform.android
+          ? hasil.urlApk
+          : hasil.urlExe;
+      if (urlVarian == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Versi ${hasil.versi} sudah tercatat, tetapi paket ${AppVariant.namaAplikasi} belum tersedia. Aplikasi tidak akan mengunduh paket varian lain.')));
         return;
       }
       await showDialog(
@@ -1149,10 +1159,8 @@ class _KasirScreenState extends State<KasirScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                final url = defaultTargetPlatform == TargetPlatform.android
-                    ? (hasil.urlApk ?? hasil.urlRilis)
-                    : (hasil.urlExe ?? hasil.urlRilis);
-                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                launchUrl(Uri.parse(urlVarian),
+                    mode: LaunchMode.externalApplication);
               },
               child: const Text('Unduh'),
             ),
