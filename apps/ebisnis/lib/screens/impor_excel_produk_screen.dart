@@ -54,7 +54,7 @@ class _BarisImpor {
   _BarisImpor(Map<String, dynamic> j)
       : no = (j['no'] as num?)?.toInt() ?? 0,
         baru = j['baru'] == true,
-        produkId = j['produkId'] as int?,
+        produkId = (j['produkId'] as num?)?.toInt(),
         stokLama = (j['stokLama'] as num?)?.toDouble() ?? 0 {
     kode = TextEditingController(text: '${j['kode'] ?? ''}');
     barcode = TextEditingController(text: '${j['barcode'] ?? ''}');
@@ -84,6 +84,7 @@ class _BarisImpor {
   }
 
   Map<String, dynamic> keKomit() => {
+        'produkId': produkId,
         'kode': kode.text.trim(),
         'barcode': barcode.text.trim(),
         'nama': nama.text.trim(),
@@ -107,11 +108,13 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   List<String> _kolomTidakDitemukan = [];
   List<_BarisImpor> _baris = [];
   bool _nonaktifkanTakDiimpor = false;
-  bool _abaikanStokKosong = true;
 
-  List<_BarisImpor> get _barisTerlihat => _abaikanStokKosong
-      ? _baris.where((b) => _nilaiStok(b) != 0).toList()
-      : _baris;
+  static const double _toleransiSelisihStok = 0.000001;
+
+  bool _stokBerbeda(_BarisImpor b) =>
+      (_nilaiStok(b) - b.stokLama).abs() > _toleransiSelisihStok;
+
+  List<_BarisImpor> get _barisTerlihat => _baris.where(_stokBerbeda).toList();
 
   double _nilaiStok(_BarisImpor b) =>
       double.tryParse(b.stokBaru.text.replaceAll(',', '.')) ?? 0;
@@ -179,8 +182,8 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             .map((e) => '$e')
             .toList();
         _baris = barisJson.map((j) => _BarisImpor(j)).toList();
-        for (final b in _baris.where((b) => _nilaiStok(b) == 0)) {
-          b.disertakan = false;
+        for (final b in _baris) {
+          b.disertakan = _stokBerbeda(b);
         }
         _tahap = _Tahap.tinjau;
       });
@@ -192,7 +195,10 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   }
 
   Future<void> _komitImpor() async {
-    final terpilih = _baris.where((b) => b.disertakan).toList();
+    // Nilai stok dapat diedit di layar tinjau. Hitung kembali tepat sebelum
+    // komit agar baris yang menjadi sama tidak ikut terkirim ke server.
+    final terpilih =
+        _baris.where((b) => b.disertakan && _stokBerbeda(b)).toList();
     if (terpilih.isEmpty) {
       setStateIfMounted(
           () => _error = 'Tidak ada baris yang disertakan utk diimpor.');
@@ -204,7 +210,12 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       _barisUntukKomit = terpilih.length;
       _barisSelesaiKomit = 0;
     });
-    final idBerhasilSemuaBatch = <int>[];
+    // Untuk opsi nonaktifkan, produk dengan stok sama tetap berarti ADA di
+    // berkas. Masukkan seluruh id hasil preview agar tidak salah dianggap
+    // hilang hanya karena memang tidak perlu diproses.
+    final idBerhasilSemuaBatch = <int>{
+      ..._baris.map((b) => b.produkId).whereType<int>(),
+    };
     _total = _dibuat = _diperbarui = _dilewati = _kategoriBaru =
         _pemasokBaru = _satuanBaru = _stokDiopname = _verifikasiGagal = 0;
     try {
@@ -212,8 +223,11 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       for (var awal = 0; awal < terpilih.length; awal += ukuranBatch) {
         final batch = terpilih.sublist(
             awal, (awal + ukuranBatch).clamp(0, terpilih.length));
-        final hasil = await ApiClient.instance.aksi('produk_impor_excel_komit',
-            {'baris': batch.map((b) => b.keKomit()).toList()});
+        final hasil =
+            await ApiClient.instance.aksi('produk_impor_excel_komit', {
+          'baris': batch.map((b) => b.keKomit()).toList(),
+          'hanya_stok_berbeda': true,
+        });
         setStateIfMounted(() => _barisSelesaiKomit += batch.length);
         _total += (hasil['total'] as num?)?.toInt() ?? 0;
         _dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
@@ -241,7 +255,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       if (_nonaktifkanTakDiimpor && idBerhasilSemuaBatch.isNotEmpty) {
         final hasilNon = await ApiClient.instance.aksi(
             'produk_nonaktifkan_tak_diimpor',
-            {'id_disentuh': idBerhasilSemuaBatch});
+            {'id_disentuh': idBerhasilSemuaBatch.toList()});
         _dinonaktifkan = (hasilNon['dinonaktifkan'] as num?)?.toInt();
       }
 
@@ -262,7 +276,6 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
       _tahap = _Tahap.pilihBerkas;
       _error = null;
       _nonaktifkanTakDiimpor = false;
-      _abaikanStokKosong = true;
       _dinonaktifkan = null;
       _barisUntukKomit = 0;
       _barisSelesaiKomit = 0;
@@ -378,35 +391,33 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                       style: TextStyle(color: Colors.red.shade700)),
                 ),
               Text(
-                  '${_baris.length} baris terbaca, ${_baris.where((b) => b.disertakan).length} akan diimpor.',
+                  '${_baris.length} baris terbaca, ${_barisTerlihat.length} memiliki selisih stok dan akan ditampilkan.',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text(
-                  'Jangan tampilkan/upload/proses barang dengan stok = 0',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Hanya stok berbeda yang ditampilkan dan diproses. Stok yang sama dilewati otomatis.',
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
-                subtitle: const Text('Aktif secara default.'),
-                value: _abaikanStokKosong,
-                onChanged: (v) => setStateIfMounted(() {
-                  _abaikanStokKosong = v ?? true;
-                  for (final b in _baris.where((b) => _nilaiStok(b) == 0)) {
-                    b.disertakan = !_abaikanStokKosong;
-                  }
-                }),
               ),
             ],
           ),
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _barisTerlihat.length,
-            itemBuilder: (context, i) => _kartuBaris(_barisTerlihat[i]),
-          ),
+          child: _barisTerlihat.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Tidak ada selisih stok. Semua stok Excel sudah sama dengan stok saat ini.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _barisTerlihat.length,
+                  itemBuilder: (context, i) => _kartuBaris(_barisTerlihat[i]),
+                ),
         ),
         SafeArea(
           child: Padding(
