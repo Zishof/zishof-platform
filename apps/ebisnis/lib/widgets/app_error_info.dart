@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Informasi kesalahan yang aman dibaca pengguna. Detail teknis sengaja
 /// dipisahkan agar tidak memenuhi pesan utama, tetapi tetap dapat disalin
@@ -21,9 +22,12 @@ class AppErrorInfo {
   factory AppErrorInfo.dari(Object error, {String? aktivitas}) {
     final raw = error.toString();
     final lower = raw.toLowerCase();
-    final kode = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
-    if (lower.contains('nama pengguna') || lower.contains('username') ||
-        lower.contains('kata sandi') || lower.contains('password')) {
+    final kode =
+        DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    if (lower.contains('nama pengguna') ||
+        lower.contains('username') ||
+        lower.contains('kata sandi') ||
+        lower.contains('password')) {
       return AppErrorInfo(
         judul: 'Belum dapat masuk',
         pesan: 'Nama pengguna atau kata sandi belum cocok dengan data akun.',
@@ -36,8 +40,10 @@ class AppErrorInfo {
         kodeReferensi: kode,
       );
     }
-    if (lower.contains('socket') || lower.contains('timeout') ||
-        lower.contains('tidak bisa menghubungi') || lower.contains('network')) {
+    if (lower.contains('socket') ||
+        lower.contains('timeout') ||
+        lower.contains('tidak bisa menghubungi') ||
+        lower.contains('network')) {
       return AppErrorInfo(
         judul: 'Server belum dapat dihubungi',
         pesan: 'Aplikasi belum memperoleh jawaban dari server.',
@@ -50,7 +56,9 @@ class AppErrorInfo {
         kodeReferensi: kode,
       );
     }
-    if (lower.contains('sesi') || lower.contains('401') || lower.contains('unauthorized')) {
+    if (lower.contains('sesi') ||
+        lower.contains('401') ||
+        lower.contains('unauthorized')) {
       return AppErrorInfo(
         judul: 'Sesi masuk telah berakhir',
         pesan: 'Demi keamanan, aplikasi perlu melakukan masuk ulang.',
@@ -62,11 +70,14 @@ class AppErrorInfo {
         kodeReferensi: kode,
       );
     }
-    if (lower.contains('balasan server') || lower.contains('format') ||
-        lower.contains('json') || lower.contains('http')) {
+    if (lower.contains('balasan server') ||
+        lower.contains('format') ||
+        lower.contains('json') ||
+        lower.contains('http')) {
       return AppErrorInfo(
         judul: 'Jawaban server belum dapat diproses',
-        pesan: 'Aplikasi menerima jawaban yang berbeda dari format yang dibutuhkan.',
+        pesan:
+            'Aplikasi menerima jawaban yang berbeda dari format yang dibutuhkan.',
         solusi: const [
           'Pastikan Alamat Server mengarah ke instalasi AIS/Al-Bahjah yang benar.',
           'Coba Muat Ulang. Jika server baru diperbarui, tunggu restart selesai.',
@@ -99,12 +110,16 @@ class AppErrorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detailTeknis =
+        'Kode referensi: ${info.kodeReferensi}\n${info.teknis}';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: .45),
+        color:
+            Theme.of(context).colorScheme.errorContainer.withValues(alpha: .45),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: .45)),
+        border: Border.all(
+            color: Theme.of(context).colorScheme.error.withValues(alpha: .45)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(info.judul, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -112,7 +127,8 @@ class AppErrorPanel extends StatelessWidget {
         Text(info.pesan),
         if (!ringkas) ...[
           const SizedBox(height: 8),
-          const Text('Yang dapat Anda lakukan:', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text('Yang dapat Anda lakukan:',
+              style: TextStyle(fontWeight: FontWeight.w600)),
           ...info.solusi.map((s) => Padding(
               padding: const EdgeInsets.only(top: 3), child: Text('• $s'))),
         ],
@@ -121,11 +137,32 @@ class AppErrorPanel extends StatelessWidget {
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
             childrenPadding: EdgeInsets.zero,
-            title: const Text('Informasi Teknis', style: TextStyle(fontSize: 13)),
-            children: [SelectableText(
-              'Kode referensi: ${info.kodeReferensi}\n${info.teknis}',
-              style: Theme.of(context).textTheme.bodySmall,
-            )],
+            title:
+                const Text('Informasi Teknis', style: TextStyle(fontSize: 13)),
+            children: [
+              SelectableText(
+                detailTeknis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: detailTeknis));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Informasi teknis sudah disalin. Silakan tempelkan kepada admin/developer.'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_outlined, size: 17),
+                  label: const Text('Salin Informasi Teknis'),
+                ),
+              ),
+            ],
           ),
         ),
       ]),
@@ -133,9 +170,11 @@ class AppErrorPanel extends StatelessWidget {
   }
 }
 
-Future<void> tampilkanKesalahan(
-    BuildContext context, Object error, {String? aktivitas}) {
-  final info = error is AppErrorInfo ? error : AppErrorInfo.dari(error, aktivitas: aktivitas);
+Future<void> tampilkanKesalahan(BuildContext context, Object error,
+    {String? aktivitas}) {
+  final info = error is AppErrorInfo
+      ? error
+      : AppErrorInfo.dari(error, aktivitas: aktivitas);
   return showDialog<void>(
     context: context,
     builder: (_) => AlertDialog(
@@ -144,7 +183,10 @@ Future<void> tampilkanKesalahan(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(child: AppErrorPanel(info: info)),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))],
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context), child: const Text('Tutup'))
+      ],
     ),
   );
 }

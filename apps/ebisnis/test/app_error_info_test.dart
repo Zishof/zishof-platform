@@ -1,9 +1,23 @@
 import 'package:ebisnis/widgets/app_error_info.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('informasi teknis error selalu dapat dibuka', (tester) async {
+    String? teksTersalin;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        teksTersalin = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
     const info = AppErrorInfo(
       judul: 'Proses belum berhasil',
       pesan: 'Pesan yang mudah dipahami pengguna.',
@@ -26,5 +40,11 @@ void main() {
     expect(find.textContaining('Kode referensi: REQ-123'), findsOneWidget);
     expect(
         find.textContaining('java.lang.IllegalStateException'), findsOneWidget);
+
+    await tester.tap(find.text('Salin Informasi Teknis'));
+    await tester.pumpAndSettle();
+
+    expect(teksTersalin, contains('Kode referensi: REQ-123'));
+    expect(teksTersalin, contains('java.lang.IllegalStateException'));
   });
 }

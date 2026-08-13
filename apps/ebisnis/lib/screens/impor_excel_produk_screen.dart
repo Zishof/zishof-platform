@@ -19,7 +19,7 @@ import '../widgets/safe_state.dart';
 ///
 /// Alur: pilih berkas -> preview (baca-saja, tak mengubah apa pun) -> layar
 /// Tinjau (wajib, semua baris bisa diedit + dikecualikan) -> Komit per-batch
-/// 200 baris (`produk_impor_excel_komit`, per-baris savepoint di server jadi
+/// 50 baris (`produk_impor_excel_komit`, per-baris savepoint di server jadi
 /// aman lanjut walau ada baris gagal) -> opsional "Nonaktifkan produk yang
 /// tak ditemukan di file ini" (`produk_nonaktifkan_tak_diimpor`, union id
 /// baris berhasil dari SEMUA batch) -> Laporan hasil.
@@ -45,6 +45,8 @@ class _BarisImpor {
   final double stokLama;
   late final TextEditingController hargaJual;
   late final TextEditingController hargaBeli;
+  final double hargaJualLama;
+  final double hargaBeliLama;
   bool disertakan = true;
 
   String? statusKomit; // berhasil/gagal/dilewati (diisi setelah commit)
@@ -56,7 +58,9 @@ class _BarisImpor {
       : no = (j['no'] as num?)?.toInt() ?? 0,
         baru = j['baru'] == true,
         produkId = (j['produkId'] as num?)?.toInt(),
-        stokLama = (j['stokLama'] as num?)?.toDouble() ?? 0 {
+        stokLama = (j['stokLama'] as num?)?.toDouble() ?? 0,
+        hargaJualLama = (j['hargaJualLama'] as num?)?.toDouble() ?? 0,
+        hargaBeliLama = (j['hargaBeliLama'] as num?)?.toDouble() ?? 0 {
     kode = TextEditingController(text: '${j['kode'] ?? ''}');
     barcode = TextEditingController(text: '${j['barcode'] ?? ''}');
     nama = TextEditingController(text: '${j['nama'] ?? ''}');
@@ -124,13 +128,22 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
 
   static const double _toleransiSelisihStok = 0.000001;
 
-  bool _stokBerbeda(_BarisImpor b) =>
-      (_nilaiStok(b) - b.stokLama).abs() > _toleransiSelisihStok;
+  bool _adaPerubahan(_BarisImpor b) =>
+      b.baru ||
+      (_nilaiStok(b) - b.stokLama).abs() > _toleransiSelisihStok ||
+      (_nilaiHargaJual(b) - b.hargaJualLama).abs() > _toleransiSelisihStok ||
+      (_nilaiHargaBeli(b) - b.hargaBeliLama).abs() > _toleransiSelisihStok;
 
-  List<_BarisImpor> get _barisTerlihat => _baris.where(_stokBerbeda).toList();
+  List<_BarisImpor> get _barisTerlihat => _baris.where(_adaPerubahan).toList();
 
   double _nilaiStok(_BarisImpor b) =>
       double.tryParse(b.stokBaru.text.replaceAll(',', '.')) ?? 0;
+
+  double _nilaiHargaJual(_BarisImpor b) =>
+      double.tryParse(b.hargaJual.text.replaceAll(',', '.')) ?? 0;
+
+  double _nilaiHargaBeli(_BarisImpor b) =>
+      double.tryParse(b.hargaBeli.text.replaceAll(',', '.')) ?? 0;
 
   // Progres komit per-batch (spec: tampilkan persentase, bukan spinner polos
   // saat 5000+ baris -- satu batch = 200 baris, jadi update tiap batch
@@ -139,6 +152,27 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   int _barisSelesaiKomit = 0;
   double get _progresKomit =>
       _barisUntukKomit == 0 ? 0 : _barisSelesaiKomit / _barisUntukKomit;
+
+  /// Komit dapat terputus sesaat ketika proxy AJP/Tomcat memulai ulang koneksi.
+  /// Retry aman karena server selalu mencari ulang produk berdasarkan identitas;
+  /// stok yang sudah sama dilewati dan opname selisih=0 tidak dibuat ulang.
+  Future<Map<String, dynamic>> _komitBatchDenganRetry(
+      List<_BarisImpor> batch, int nomorBatch) async {
+    const maksimumPercobaan = 5;
+    for (var percobaan = 1; percobaan <= maksimumPercobaan; percobaan++) {
+      try {
+        return await ApiClient.instance.aksi('produk_impor_excel_komit', {
+          'baris': batch.map((b) => b.keKomit()).toList(),
+          'hanya_perubahan': true,
+          'nomor_batch_klien': nomorBatch,
+        });
+      } on ApiException catch (e) {
+        if (!e.offline || percobaan == maksimumPercobaan) rethrow;
+        await Future<void>.delayed(Duration(seconds: percobaan * 2));
+      }
+    }
+    throw StateError('Percobaan komit batch berakhir tanpa hasil.');
+  }
 
   // Ringkasan hasil komit (tahap laporan)
   int _total = 0,
@@ -196,7 +230,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             .toList();
         _baris = barisJson.map((j) => _BarisImpor(j)).toList();
         for (final b in _baris) {
-          b.disertakan = _stokBerbeda(b);
+          b.disertakan = _adaPerubahan(b);
         }
         _halamanTinjau = 0;
         _tahap = _Tahap.tinjau;
@@ -213,7 +247,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     // Nilai stok dapat diedit di layar tinjau. Hitung kembali tepat sebelum
     // komit agar baris yang menjadi sama tidak ikut terkirim ke server.
     final terpilih =
-        _baris.where((b) => b.disertakan && _stokBerbeda(b)).toList();
+        _baris.where((b) => b.disertakan && _adaPerubahan(b)).toList();
     if (terpilih.isEmpty) {
       setStateIfMounted(() => _error = AppErrorInfo.dari(
           'Tidak ada baris yang disertakan untuk diimpor.',
@@ -236,15 +270,14 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     _total = _dibuat = _diperbarui = _dilewati = _kategoriBaru =
         _pemasokBaru = _satuanBaru = _stokDiopname = _verifikasiGagal = 0;
     try {
-      const ukuranBatch = 200;
+      // 50 baris menjaga durasi setiap request tetap di bawah timeout proxy/AJP
+      // pada server produksi, sekaligus membatasi transaksi dan row-lock aktif.
+      const ukuranBatch = 50;
       for (var awal = 0; awal < terpilih.length; awal += ukuranBatch) {
         final batch = terpilih.sublist(
             awal, (awal + ukuranBatch).clamp(0, terpilih.length));
         final hasil =
-            await ApiClient.instance.aksi('produk_impor_excel_komit', {
-          'baris': batch.map((b) => b.keKomit()).toList(),
-          'hanya_stok_berbeda': true,
-        });
+            await _komitBatchDenganRetry(batch, (awal ~/ ukuranBatch) + 1);
         setStateIfMounted(() => _barisSelesaiKomit += batch.length);
         _total += (hasil['total'] as num?)?.toInt() ?? 0;
         _dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
@@ -416,12 +449,12 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                   child: AppErrorPanel(info: _error!, ringkas: true),
                 ),
               Text(
-                  '${_baris.length} baris terbaca, ${barisTerlihat.length} memiliki selisih stok dan akan ditampilkan.',
+                  '${_baris.length} baris terbaca, ${barisTerlihat.length} memiliki perubahan stok atau harga dan akan ditampilkan.',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const Padding(
                 padding: EdgeInsets.only(top: 6),
                 child: Text(
-                  'Hanya stok berbeda yang ditampilkan dan diproses. Stok yang sama dilewati otomatis.',
+                  'Hanya data dengan stok, harga jual, atau harga beli berbeda yang ditampilkan dan diproses. Data yang seluruh nilainya sama dilewati otomatis.',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
               ),
@@ -433,7 +466,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
           child: _barisTerlihat.isEmpty
               ? const Center(
                   child: Text(
-                    'Tidak ada selisih stok. Semua stok Excel sudah sama dengan stok saat ini.',
+                    'Tidak ada perubahan. Semua stok, harga jual, dan harga beli Excel sudah sama dengan data saat ini.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
@@ -649,10 +682,38 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
             const SizedBox(height: 10),
             Row(children: [
               Expanded(
-                  child: _kolomKecil('Harga Jual', b.hargaJual, angka: true)),
+                  child: _kolomKecil('Harga Jual dari Excel', b.hargaJual,
+                      angka: true)),
               const SizedBox(width: 8),
               Expanded(
-                  child: _kolomKecil('Harga Beli', b.hargaBeli, angka: true)),
+                  child:
+                      _nilaiStokInfo('Harga Jual Saat Ini', b.hargaJualLama)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: b.hargaJual,
+                builder: (_, __, ___) => _nilaiStokInfo(
+                    'Selisih Harga Jual', _nilaiHargaJual(b) - b.hargaJualLama,
+                    warna: _warnaSelisih(_nilaiHargaJual(b) - b.hargaJualLama)),
+              )),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                  child: _kolomKecil('Harga Beli dari Excel', b.hargaBeli,
+                      angka: true)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child:
+                      _nilaiStokInfo('Harga Beli Saat Ini', b.hargaBeliLama)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: b.hargaBeli,
+                builder: (_, __, ___) => _nilaiStokInfo(
+                    'Selisih Harga Beli', _nilaiHargaBeli(b) - b.hargaBeliLama,
+                    warna: _warnaSelisih(_nilaiHargaBeli(b) - b.hargaBeliLama)),
+              )),
             ]),
           ],
         ],
@@ -699,6 +760,10 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                   color: warna ?? AppColors.primary)),
         ]),
       );
+
+  Color _warnaSelisih(double nilai) => nilai == 0
+      ? AppColors.textSecondary
+      : (nilai > 0 ? AppColors.success : AppColors.danger);
 
   Widget _autoComplete(
       String label, TextEditingController c, List<String> opsi) {
