@@ -11,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
+import '../models.dart';
 import '../services/pengaturan_price_tag.dart';
 import '../services/pengaturan_struk.dart';
 import '../sesi.dart';
@@ -46,8 +47,8 @@ extension _LabelModelPriceTag on ModelPriceTag {
 /// berbeda total: [thermal] langsung ke printer label roll (tiap tag =
 /// satu "halaman" pas ukuran tag, dikirim berurutan spt continuous form),
 /// ATAU ditata sbg grid di atas kertas umum ([a4]/[f4]) yg dipotong manual.
-/// Promo TIDAK memakai ini -- ukurannya (A5/A4/F4) sudah sekaligus jadi
-/// ukuran kertas.
+/// Promo juga memakai pilihan ini sekarang: ukuran Promo menentukan ukuran
+/// panel/tag, sedangkan [KertasCetak] menentukan media kertas/roll.
 enum KertasCetak { thermal, a4, f4 }
 
 extension _LabelKertasCetak on KertasCetak {
@@ -154,7 +155,7 @@ class _UkuranTag {
 /// roll thermal (`_isiGridLabel` kertasCetak==thermal) -- printer label
 /// thermal dikalibrasi cetak pas ke tepi label die-cut, beda karakteristik
 /// dgan printer kertas umum. 5mm dipilih spy konsisten dgn margin Promo
-/// (`_isiPromo`, yg sudah lebih dulu pakai nilai yang sama).
+/// (Promo kini ikut jalur grid yang sama).
 const _marginCetakAmanMm = 5.0;
 
 const _kategoriRakUtama = 'Rak / Gondola';
@@ -409,7 +410,7 @@ final _ukuranPromo = [
   _UkuranTag(
       id: 'promo_a5',
       label: 'Setengah A4',
-      detail: '148 x 210 mm',
+      detail: '148 x 210 mm / panel',
       kategori: _kategoriKertasBesar,
       lebarMm: 148,
       tinggiMm: 210,
@@ -417,18 +418,18 @@ final _ukuranPromo = [
   _UkuranTag(
       id: 'promo_a4',
       label: 'A4 - 3 Panel',
-      detail: '210 x 297 mm',
+      detail: '200 x 92 mm / panel',
       kategori: _kategoriKertasBesar,
-      lebarMm: 210,
-      tinggiMm: 297,
+      lebarMm: 200,
+      tinggiMm: 92,
       pageFormat: PdfPageFormat.a4),
   _UkuranTag(
       id: 'promo_f4',
       label: 'F4 - 3 Panel',
-      detail: '210 x 330 mm',
+      detail: '200 x 103 mm / panel',
       kategori: _kategoriKertasBesar,
-      lebarMm: 210,
-      tinggiMm: 330,
+      lebarMm: 200,
+      tinggiMm: 103,
       pageFormat:
           PdfPageFormat(210 * PdfPageFormat.mm, 330 * PdfPageFormat.mm)),
 ];
@@ -437,6 +438,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _semuaProduk = [];
+  Set<int>? _promoProdukIds;
+  bool _memuatProdukPromo = false;
+  String? _pesanProdukPromo;
+  String? _kategoriTerpilihKey;
   final _controllerCari = TextEditingController();
   final _controllerPromo = TextEditingController(text: 'PROMO');
   final _controllerCopies = TextEditingController(text: '1');
@@ -476,6 +481,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final Map<int, String> _promoHargaAsliPerProduk = {};
   final Map<int, String> _promoHargaPromoPerProduk = {};
   final Map<String, TextEditingController> _controllerPromoItem = {};
+  final Map<int, TextEditingController> _controllerSalinanItem = {};
+  final Map<int, int> _salinanPerProduk = {};
   final Set<int> _idTerpilih = {};
 
   ModelPriceTag _model = ModelPriceTag.rak;
@@ -483,6 +490,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   String _lebarRollId = 'roll_58';
   String _ukuranId = 'rak_50x30';
   int _copies = 1;
+  bool _salinanBerbedaPerProduk = false;
   bool _tampilBarcode = true;
   bool _tampilKode = true;
   // Khusus Rak & Promo -- teks angka barcode (BUKAN kolom Kode Produk),
@@ -496,11 +504,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   bool _memproses = false;
   String? _logoPath;
   double _marginKotakMm = 2;
-  // Khusus model Produk -- horizontal/vertikal bisa diatur terpisah supaya
-  // grid label bisa disesuaikan lebih dinamis dgn ketersediaan kertas/roll
-  // di lapangan (mis. roll agak sempit butuh margin horizontal lebih kecil
-  // spy tetap muat 3 kolom, tanpa perlu mengubah margin vertikal). Rak &
-  // Promo TETAP pakai [_marginKotakMm] tunggal (dari Konfigurasi) spt semula.
+  // Khusus model yang dicetak sebagai grid -- horizontal/vertikal bisa
+  // diatur terpisah supaya label bisa disesuaikan dgn kertas/roll di
+  // lapangan (mis. roll agak sempit butuh margin horizontal lebih kecil
+  // spy tetap muat kolom yang diinginkan tanpa mengubah margin vertikal).
   double _marginHorizontalMm = 2;
   double _marginVerticalMm = 2;
   Timer? _debounceSimpanPengaturan;
@@ -603,6 +610,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     for (final controller in _controllerPromoItem.values) {
       controller.dispose();
     }
+    for (final controller in _controllerSalinanItem.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -618,14 +628,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       final arr = (hasil['data'] as List?) ?? [];
       final produk =
           arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      await _lengkapiBarcodeDariCacheLokal(produk);
+      await _lengkapiMetadataProduk(produk);
       setStateIfMounted(() {
         _semuaProduk = produk;
         _logoPath = PengaturanStruk.instance.priceTagLogoPath;
         _marginKotakMm = PengaturanStruk.instance.priceTagMarginKotakMm;
-        _model = _modelDari(PengaturanPriceTag.instance.modelTerakhir) ?? _model;
+        _model =
+            _modelDari(PengaturanPriceTag.instance.modelTerakhir) ?? _model;
         _terapkanPengaturanModel(_model);
       });
+      if (_model == ModelPriceTag.promo) {
+        unawaited(_muatProdukPromoJikaPerlu());
+      }
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -633,48 +647,225 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     }
   }
 
-  /// Gap-closure "barcode dalam teks masih Kode Produk walau data Barcode
-  /// terisi": aksi server `price_tag_list_produk` ternyata TIDAK selalu
-  /// mengirim kolom `barcode` tiap produk -- padahal katalog offline-first
-  /// Kasir (`produk_cache`, disinkron via aksi katalog terpisah utk scan
-  /// barcode sehari-hari) SUDAH andal menyimpannya. Lengkapi [produk] dari
-  /// cache lokal itu (join by id) SEBELUM kode manapun (mis. [_kodeBarcode])
-  /// sempat membaca `p['barcode']`, spy fallback ke Kode Produk cuma
-  /// terjadi kalau memang benar-benar tak ada barcode di mana pun -- bukan
-  /// krn endpoint ini saja yang kebetulan tak mengirimnya.
-  Future<void> _lengkapiBarcodeDariCacheLokal(
+  /// Endpoint `price_tag_list_produk` kadang hanya membawa data minimal
+  /// (nama/kode/harga) tanpa `barcode` dan kategori. Halaman Produk memakai
+  /// endpoint `katalog` yang lebih lengkap; supaya filter kategori di sini
+  /// konsisten, lengkapi metadata dari cache lokal terlebih dahulu, lalu
+  /// fallback ke `katalog` bila cache belum berisi kategori.
+  Future<void> _lengkapiMetadataProduk(
       List<Map<String, dynamic>> produk) async {
+    var adaKategori = _adaKategoriProduk(produk);
     try {
       final cache = await CoreDb.instance.produkCache();
-      final barcodePerId = <int, String>{};
-      for (final row in cache) {
-        final id = (row['id'] as num?)?.toInt();
-        final barcode = '${row['barcode'] ?? ''}'.trim();
-        if (id != null && barcode.isNotEmpty) barcodePerId[id] = barcode;
-      }
-      if (barcodePerId.isEmpty) return;
-      for (final p in produk) {
-        if ('${p['barcode'] ?? ''}'.trim().isNotEmpty) continue;
-        final id = (p['id'] as num?)?.toInt();
-        final barcode = id == null ? null : barcodePerId[id];
-        if (barcode != null) p['barcode'] = barcode;
-      }
+      _gabungMetadataProduk(produk, cache);
+      adaKategori = _adaKategoriProduk(produk);
     } catch (_) {
-      // Cache lokal gagal dibaca (mis. belum pernah sinkron) -- bukan
-      // blocker, price tag tetap bisa dicetak, cuma fallback ke Kode
-      // Produk spt sebelum gap-closure ini ada.
+      // Cache lokal gagal dibaca (mis. belum pernah sinkron). Lanjut fallback
+      // ke endpoint katalog di bawah; kalau itu juga gagal, price tag tetap
+      // dapat dicetak hanya tanpa filter kategori yang lengkap.
     }
+
+    if (adaKategori) return;
+    try {
+      final katalog = await ApiClient.instance.aksi('katalog');
+      final produkJson =
+          ((katalog['produk'] as List?) ?? []).cast<Map<String, dynamic>>();
+      await CoreDb.instance.replaceProdukCache(
+        produkJson.map(Produk.baseKeCacheRow).toList(),
+      );
+      _gabungMetadataProduk(produk, produkJson);
+    } catch (_) {
+      // Fallback katalog gagal/offline -- biarkan daftar tampil dengan data
+      // minimal dari price_tag_list_produk.
+    }
+  }
+
+  bool _adaKategoriProduk(List<Map<String, dynamic>> produk) {
+    return produk.any((p) {
+      final id = p['kategoriId'] ?? p['kategori_id'];
+      final nama = _kategoriNamaProduk(p);
+      return id != null || nama.isNotEmpty;
+    });
+  }
+
+  void _gabungMetadataProduk(
+    List<Map<String, dynamic>> produk,
+    List<Map<String, dynamic>> sumber,
+  ) {
+    final byId = <int, Map<String, dynamic>>{};
+    final byKode = <String, Map<String, dynamic>>{};
+    for (final row in sumber) {
+      final id = (row['id'] as num?)?.toInt();
+      if (id != null) byId[id] = row;
+      final kode = '${row['kode'] ?? ''}'.trim().toLowerCase();
+      if (kode.isNotEmpty) byKode[kode] = row;
+    }
+    if (byId.isEmpty && byKode.isEmpty) return;
+
+    for (final p in produk) {
+      final id = (p['id'] as num?)?.toInt();
+      final kode = '${p['kode'] ?? ''}'.trim().toLowerCase();
+      final sumber = (id == null ? null : byId[id]) ?? byKode[kode];
+      if (sumber == null) continue;
+
+      if ('${p['barcode'] ?? ''}'.trim().isEmpty) {
+        final barcode = '${sumber['barcode'] ?? ''}'.trim();
+        if (barcode.isNotEmpty) p['barcode'] = barcode;
+      }
+
+      p['kategoriId'] ??= sumber['kategoriId'] ?? sumber['kategori_id'];
+      final kategoriNama = _nilaiStringPertama(sumber, const [
+        'kategoriNama',
+        'kategori_nama',
+        'kategori',
+      ]);
+      if (_kategoriNamaProduk(p).isEmpty && kategoriNama.isNotEmpty) {
+        p['kategoriNama'] = kategoriNama;
+      }
+    }
+  }
+
+  String _nilaiStringPertama(Map<String, dynamic> p, List<String> keys) {
+    for (final key in keys) {
+      final value = '${p[key] ?? ''}'.trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   List<Map<String, dynamic>> get _terfilter {
     final kw = _controllerCari.text.trim().toLowerCase();
-    if (kw.isEmpty) return _semuaProduk;
-    return _semuaProduk.where((p) {
+    return _produkSumberModel.where((p) {
+      final cocokKategori = _kategoriTerpilihKey == null ||
+          _kategoriKeyProduk(p) == _kategoriTerpilihKey;
+      if (!cocokKategori) return false;
+      if (kw.isEmpty) return true;
       final nama = (p['nama'] as String? ?? '').toLowerCase();
       final kode = '${p['kode'] ?? ''}'.toLowerCase();
       final barcode = '${p['barcode'] ?? ''}'.toLowerCase();
       return nama.contains(kw) || kode.contains(kw) || barcode.contains(kw);
     }).toList();
+  }
+
+  List<Map<String, dynamic>> get _daftarProdukTampil {
+    final hasilFilter = _terfilter;
+    if (_idTerpilih.isEmpty) return hasilFilter;
+
+    final terpilihDiAtas = _produkSumberModel
+        .where((p) => _idTerpilih.contains(_idProduk(p)))
+        .toList();
+    final idTerpilihDiAtas = terpilihDiAtas.map(_idProduk).toSet();
+    return [
+      ...terpilihDiAtas,
+      ...hasilFilter.where((p) => !idTerpilihDiAtas.contains(_idProduk(p))),
+    ];
+  }
+
+  Iterable<Map<String, dynamic>> get _produkSumberModel {
+    if (_model != ModelPriceTag.promo) return _semuaProduk;
+    final ids = _promoProdukIds;
+    if (ids == null) return const Iterable<Map<String, dynamic>>.empty();
+    return _semuaProduk.where((p) => ids.contains(_idProduk(p)));
+  }
+
+  String _kategoriKeyProduk(Map<String, dynamic> p) {
+    final id = p['kategoriId'] ?? p['kategori_id'];
+    if (id is num) return 'id:${id.toInt()}';
+    final nama = _kategoriNamaProduk(p).trim().toLowerCase();
+    return nama.isEmpty ? 'tanpa' : 'nama:$nama';
+  }
+
+  String _kategoriNamaProduk(Map<String, dynamic> p) {
+    return '${p['kategoriNama'] ?? p['kategori_nama'] ?? p['kategori'] ?? ''}'
+        .trim();
+  }
+
+  String _labelKategoriProduk(Map<String, dynamic> p) {
+    final nama = _kategoriNamaProduk(p);
+    return nama.isEmpty ? 'Tanpa Kategori' : nama;
+  }
+
+  List<({String key, String label, int jumlah})> get _daftarKategoriProduk {
+    final labelByKey = <String, String>{};
+    final countByKey = <String, int>{};
+    for (final p in _produkSumberModel) {
+      final key = _kategoriKeyProduk(p);
+      labelByKey.putIfAbsent(key, () => _labelKategoriProduk(p));
+      countByKey[key] = (countByKey[key] ?? 0) + 1;
+    }
+    final keys = labelByKey.keys.toList()
+      ..sort((a, b) => labelByKey[a]!.compareTo(labelByKey[b]!));
+    return [
+      for (final key in keys)
+        (key: key, label: labelByKey[key]!, jumlah: countByKey[key] ?? 0),
+    ];
+  }
+
+  Future<void> _muatProdukPromoJikaPerlu({bool paksa = false}) async {
+    if (_memuatProdukPromo) return;
+    if (!paksa && _promoProdukIds != null) return;
+    if (_semuaProduk.isEmpty) {
+      setStateIfMounted(() => _promoProdukIds = <int>{});
+      return;
+    }
+    setStateIfMounted(() {
+      _memuatProdukPromo = true;
+      _pesanProdukPromo = null;
+      if (paksa) _promoProdukIds = null;
+    });
+    try {
+      final idsPromo = <int>{};
+      const ukuranBatch = 80;
+      for (var start = 0; start < _semuaProduk.length; start += ukuranBatch) {
+        final batch = _semuaProduk.skip(start).take(ukuranBatch).toList();
+        final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
+          if (Sesi.instance.tokoId != null) 'toko_id': Sesi.instance.tokoId,
+          'items': batch
+              .map((p) => {
+                    'id': _idProduk(p),
+                    'harga': (p['hargaJual'] as num?)?.toDouble() ?? 0,
+                    'jumlah': 1,
+                  })
+              .toList(),
+        });
+        final items = (hasil['items'] as List?) ?? [];
+        for (var i = 0; i < items.length && i < batch.length; i++) {
+          final m = Map<String, dynamic>.from(items[i] as Map);
+          final p = batch[i];
+          final id = _idProduk(p);
+          final diskon = (m['diskon'] as num?)?.toDouble() ?? 0;
+          final cashback = (m['cashback'] as num?)?.toDouble() ?? 0;
+          final aturanDiskon = m['aturanDiskon'];
+          if (diskon <= 0 && cashback <= 0 && aturanDiskon == null) continue;
+          idsPromo.add(id);
+          if (diskon > 0) {
+            final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
+            final hargaPromo = max(0, harga - diskon);
+            _promoHargaAsliPerProduk.putIfAbsent(
+                id, () => _formatRupiah(harga).replaceFirst('Rp ', 'Rp. '));
+            _promoHargaPromoPerProduk.putIfAbsent(id,
+                () => _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. '));
+          }
+        }
+      }
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _promoProdukIds = idsPromo;
+        _idTerpilih.removeWhere((id) => !idsPromo.contains(id));
+        if (_kategoriTerpilihKey != null &&
+            !_daftarKategoriProduk.any((k) => k.key == _kategoriTerpilihKey)) {
+          _kategoriTerpilihKey = null;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _promoProdukIds = <int>{};
+        _pesanProdukPromo = e.toString();
+      });
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatProdukPromo = false);
+    }
   }
 
   List<_UkuranTag> get _ukuranTersedia {
@@ -694,17 +885,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         orElse: () => daftar.first);
   }
 
-  _LebarRoll get _lebarRollAktif => _daftarLebarRoll.firstWhere(
-      (r) => r.id == _lebarRollId,
-      orElse: () => _daftarLebarRoll.first);
+  _LebarRoll get _lebarRollAktif =>
+      _daftarLebarRoll.firstWhere((r) => r.id == _lebarRollId,
+          orElse: () => _daftarLebarRoll.first);
 
-  /// Margin horizontal/vertikal yang benar-benar dipakai saat ini -- Rak &
-  /// Produk (keduanya pakai grid [_isiGridLabel]) boleh atur
-  /// [_marginHorizontalMm]/[_marginVerticalMm] independen (lihat
-  /// deklarasinya), Promo tetap pakai [_marginKotakMm] tunggal utk kedua
-  /// arah spt semula (dari Konfigurasi > Profil Toko).
+  /// Margin horizontal/vertikal yang benar-benar dipakai saat ini. Semua
+  /// model yang dicetak sebagai grid memakai nilai independen ini supaya
+  /// preview dan PDF bisa disesuaikan ke media fisik yang tersedia.
   bool get _modelBolehMarginIndependen =>
-      _model == ModelPriceTag.produk || _model == ModelPriceTag.rak;
+      _model == ModelPriceTag.produk ||
+      _model == ModelPriceTag.rak ||
+      _model == ModelPriceTag.promo;
   double get _marginHorizontalAktifMm =>
       _modelBolehMarginIndependen ? _marginHorizontalMm : _marginKotakMm;
   double get _marginVerticalAktifMm =>
@@ -746,7 +937,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.unfold_more, size: 18, color: AppColors.textSecondary),
+            const Icon(Icons.unfold_more,
+                size: 18, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -834,8 +1026,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color:
-                                    terpilih ? AppColors.primary : null)),
+                                color: terpilih ? AppColors.primary : null)),
                       ),
                       if (u.populer) ...[
                         const SizedBox(width: 6),
@@ -866,11 +1057,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       ('Panjang label', '10 - 2.286 mm (0,39" - 90")'),
       ('Ketebalan media', '0,06 - 0,19 mm (2,36 - 7,48 mil)'),
       ('Kapasitas roll (OD) standar', '110 mm (4,33") - dudukan internal'),
-      ('Kapasitas roll (OD) opsional', '214 mm (8,4") - dgn external roll mount, core 1" atau 3"'),
+      (
+        'Kapasitas roll (OD) opsional',
+        '214 mm (8,4") - dgn external roll mount, core 1" atau 3"'
+      ),
       ('Diameter core roll', '25,4 - 76,2 mm (1" - 3")'),
       ('Jenis media', 'Continuous, die-cut, black mark, fan-fold, notched'),
-      ('Ribbon (thermal transfer)', 'lebar 40 - 110 mm, maks. panjang 300 m, core 1"'),
-      ('Resolusi / kecepatan', '203 dpi (8 dot/mm), maks. 127 mm (5") per detik'),
+      (
+        'Ribbon (thermal transfer)',
+        'lebar 40 - 110 mm, maks. panjang 300 m, core 1"'
+      ),
+      (
+        'Resolusi / kecepatan',
+        '203 dpi (8 dot/mm), maks. 127 mm (5") per detik'
+      ),
     ];
     return showDialog(
       context: context,
@@ -883,7 +1083,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Printer thermal transfer + direct thermal, 203 dpi.',
+                const Text(
+                    'Printer thermal transfer + direct thermal, 203 dpi.',
                     style: TextStyle(
                         fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 10),
@@ -934,8 +1135,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   Map<String, dynamic>? get _produkPreview {
-    for (final p in _semuaProduk) {
-      if (_idTerpilih.contains(p['id'] as int)) return p;
+    for (final p in _produkSumberModel) {
+      if (_idTerpilih.contains(_idProduk(p))) return p;
     }
     return _terfilter.isNotEmpty ? _terfilter.first : null;
   }
@@ -963,6 +1164,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final umum = <String, dynamic>{
       'ukuranId': _ukuranId,
       'copies': _copies,
+      'salinanBerbedaPerProduk': _salinanBerbedaPerProduk,
     };
     switch (model) {
       case ModelPriceTag.rak:
@@ -1010,6 +1212,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       case ModelPriceTag.promo:
         return {
           ...umum,
+          'kertasCetak': _kertasCetak.name,
+          'lebarRollId': _lebarRollId,
+          'marginHorizontalMm': _marginHorizontalMm,
+          'marginVerticalMm': _marginVerticalMm,
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
           'tampilBarcodeTeks': _tampilBarcodeTeks,
@@ -1063,6 +1269,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         : daftarUkuran.first.id;
 
     _copies = ((data?['copies'] as num?)?.toInt() ?? 1).clamp(1, 999);
+    _salinanBerbedaPerProduk = boolean('salinanBerbedaPerProduk', false);
     _controllerCopies.text = _copies.toString();
 
     _tampilBarcode = boolean('tampilBarcode', true);
@@ -1103,6 +1310,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _tampilBarcodeTeks = false;
         _muatMarginIndependen(data);
       case ModelPriceTag.promo:
+        _kertasCetak = _kertasCetakDari(data?['kertasCetak']) ?? KertasCetak.a4;
+        _lebarRollId = teks('lebarRollId', 'roll_58');
+        _muatMarginIndependen(data);
         _tampilToko = boolean('tampilToko', true);
         _tampilLogo = boolean('tampilLogo', false);
         _bungkusLogo = boolean('bungkusLogo', false);
@@ -1116,13 +1326,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerPromoHargaAsliText.text =
             teks('promoHargaAsliText', '#C62828');
         _controllerPromoBodyBg.text = teks('promoBodyBg', '#FFFFFF');
-        _controllerPromoHargaText.text =
-            teks('promoHargaTextColor', '#5F5555');
+        _controllerPromoHargaText.text = teks('promoHargaTextColor', '#5F5555');
         _controllerPromoHeaderSize.text = teks('promoHeaderSize', '20');
         _controllerPromoTokoSize.text = teks('promoTokoSize', '9');
         _controllerPromoProdukSize.text = teks('promoProdukSize', '7.5');
-        _controllerPromoHargaAsliSize.text =
-            teks('promoHargaAsliSize', '7.5');
+        _controllerPromoHargaAsliSize.text = teks('promoHargaAsliSize', '7.5');
         _controllerPromoHargaSize.text = teks('promoHargaSize', '47');
         _controllerPromoKodeSize.text = teks('promoKodeSize', '7');
         _controllerPromoHeaderTinggi.text = teks('promoHeaderTinggi', '');
@@ -1171,6 +1379,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       _model = model;
       _terapkanPengaturanModel(model);
     });
+    if (model == ModelPriceTag.promo) {
+      unawaited(_muatProdukPromoJikaPerlu());
+    }
     unawaited(_simpanPengaturanModel(model));
   }
 
@@ -1182,6 +1393,31 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       _controllerCopies.selection =
           TextSelection.collapsed(offset: _controllerCopies.text.length);
     });
+  }
+
+  int _salinanProduk(int id) =>
+      (_salinanPerProduk[id] ?? _copies).clamp(1, 999);
+
+  TextEditingController _controllerSalinanProduk(int id) {
+    return _controllerSalinanItem.putIfAbsent(
+      id,
+      () => TextEditingController(text: _salinanProduk(id).toString()),
+    );
+  }
+
+  void _ubahSalinanProduk(int id, String value) {
+    final parsed = int.tryParse(value);
+    if (parsed == null || parsed <= 0) return;
+    setStateIfMounted(() => _salinanPerProduk[id] = parsed.clamp(1, 999));
+  }
+
+  int get _totalTagTerpilih {
+    if (!_salinanBerbedaPerProduk) return _idTerpilih.length * _copies;
+    var total = 0;
+    for (final id in _idTerpilih) {
+      total += _salinanProduk(id);
+    }
+    return total;
   }
 
   void _pilihSemua(bool centang) {
@@ -1205,12 +1441,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           const SnackBar(content: Text('Pilih minimal satu produk.')));
       return;
     }
-    _ubahCopies(int.tryParse(_controllerCopies.text) ?? _copies);
+    if (!_salinanBerbedaPerProduk) {
+      _ubahCopies(int.tryParse(_controllerCopies.text) ?? _copies);
+    }
     setStateIfMounted(() => _memproses = true);
     try {
       final semuaTag = <Map<String, dynamic>>[];
       for (final p in terpilih) {
-        for (var i = 0; i < _copies; i++) {
+        final id = _idProduk(p);
+        final jumlah = _salinanBerbedaPerProduk ? _salinanProduk(id) : _copies;
+        for (var i = 0; i < jumlah; i++) {
           semuaTag.add(p);
         }
       }
@@ -1266,8 +1506,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         promoHargaAsliSize: _ukuranTeks(_controllerPromoHargaAsliSize, 7.5),
         promoHargaSize: _ukuranTeks(_controllerPromoHargaSize, 47),
         promoKodeSize: _ukuranTeks(_controllerPromoKodeSize, 7),
-        rakHeaderTinggiMm: _tinggiOpsional(
-            _controllerRakHeaderTinggi, _rakHeaderTinggiAutoMm),
+        rakHeaderTinggiMm:
+            _tinggiOpsional(_controllerRakHeaderTinggi, _rakHeaderTinggiAutoMm),
         rakStripTinggiMm:
             _tinggiOpsional(_controllerRakStripTinggi, _rakStripTinggiAutoMm),
         promoHeaderTinggiPt: _tinggiOpsional(
@@ -1418,7 +1658,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   List<Map<String, dynamic>> get _produkPromoEditor {
-    final dipilih = _semuaProduk.where((p) => _idTerpilih.contains(p['id']));
+    final dipilih =
+        _produkSumberModel.where((p) => _idTerpilih.contains(_idProduk(p)));
     final daftar = dipilih.take(8).toList();
     if (daftar.isNotEmpty) return daftar;
     final preview = _produkPreview;
@@ -1474,7 +1715,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           children: [
             Expanded(
               child: Text(
-                '${_idTerpilih.length} produk dipilih - $_copies salinan - ${_ukuranAktif.label}',
+                _salinanBerbedaPerProduk
+                    ? '${_idTerpilih.length} produk dipilih - $_totalTagTerpilih tag - ${_ukuranAktif.label}'
+                    : '${_idTerpilih.length} produk dipilih - $_copies salinan - ${_ukuranAktif.label}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1508,10 +1751,253 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
+  void _ubahKategoriProduk(String? key) {
+    setStateIfMounted(() {
+      _kategoriTerpilihKey = key;
+      if (key != null) {
+        final ids = _produkSumberModel
+            .where((p) => _kategoriKeyProduk(p) == key)
+            .map(_idProduk)
+            .where((id) => id > 0);
+        _idTerpilih
+          ..clear()
+          ..addAll(ids);
+      }
+    });
+  }
+
+  Widget _filterKategoriProduk() {
+    final kategori = _daftarKategoriProduk;
+    final selectedValid = _kategoriTerpilihKey == null ||
+        kategori.any((k) => k.key == _kategoriTerpilihKey);
+    final value = selectedValid ? _kategoriTerpilihKey : null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: DropdownButtonFormField<String?>(
+        value: value,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Kategori Barang',
+          helperText: 'Pilih kategori untuk otomatis memilih semua itemnya.',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: [
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('Semua Kategori'),
+          ),
+          ...kategori.map((k) => DropdownMenuItem<String?>(
+                value: k.key,
+                child: Text('${k.label} (${k.jumlah})'),
+              )),
+        ],
+        onChanged: _ubahKategoriProduk,
+      ),
+    );
+  }
+
+  Widget _fieldSalinanItem(int id) {
+    return SizedBox(
+      width: 74,
+      child: TextField(
+        controller: _controllerSalinanProduk(id),
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: const InputDecoration(
+          labelText: 'Salinan',
+          border: OutlineInputBorder(),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        ),
+        onChanged: (v) => _ubahSalinanProduk(id, v),
+        onSubmitted: (v) => _ubahSalinanProduk(id, v),
+      ),
+    );
+  }
+
+  Widget _headerTabelProduk(
+    List<Map<String, dynamic>> terfilter,
+    bool semuaTercentang,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.pageBg,
+        border: Border(
+          top: BorderSide(color: AppColors.border),
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          _selTabelHeader('Produk', flex: 4),
+          _selTabelHeader('Kode', flex: 2),
+          _selTabelHeader('Kategori', flex: 2),
+          _selTabelHeader('Harga', flex: 2, align: TextAlign.right),
+          if (_salinanBerbedaPerProduk)
+            const SizedBox(
+              width: 86,
+              child: Text(
+                'SALINAN',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          SizedBox(
+            width: 48,
+            child: Tooltip(
+              message: 'Pilih Semua (${terfilter.length})',
+              child: Checkbox(
+                value: semuaTercentang,
+                onChanged: (v) => _pilihSemua(v ?? false),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _selTabelHeader(
+    String label, {
+    int flex = 1,
+    TextAlign align = TextAlign.left,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label.toUpperCase(),
+        textAlign: align,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+
+  Widget _selTabelTeks(
+    String value, {
+    int flex = 1,
+    TextAlign align = TextAlign.left,
+    TextStyle? style,
+    int maxLines = 1,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        value,
+        textAlign: align,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: style ?? const TextStyle(fontSize: 12.5),
+      ),
+    );
+  }
+
+  Widget _barisTabelProduk(Map<String, dynamic> p, int index) {
+    final id = _idProduk(p);
+    final terpilih = _idTerpilih.contains(id);
+    final bg = terpilih
+        ? AppColors.primary.withValues(alpha: 0.06)
+        : (index.isOdd
+            ? AppColors.pageBg.withValues(alpha: 0.55)
+            : Colors.white);
+    final nama = p['nama'] as String? ?? '-';
+    final kode = '${p['kode'] ?? '-'}';
+    final kategori = _labelKategoriProduk(p);
+    final harga = _formatRupiah(p['hargaJual'] as num?);
+
+    return InkWell(
+      onTap: () => setStateIfMounted(() {
+        if (terpilih) {
+          _idTerpilih.remove(id);
+        } else {
+          _idTerpilih.add(id);
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            _selTabelTeks(
+              nama,
+              flex: 4,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: terpilih ? FontWeight.w700 : FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            _selTabelTeks(
+              kode,
+              flex: 2,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontFamily: 'monospace',
+              ),
+            ),
+            _selTabelTeks(
+              kategori,
+              flex: 2,
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            _selTabelTeks(
+              harga,
+              flex: 2,
+              align: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            if (_salinanBerbedaPerProduk)
+              SizedBox(
+                width: 86,
+                child: terpilih
+                    ? Align(
+                        alignment: Alignment.center,
+                        child: _fieldSalinanItem(id),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            SizedBox(
+              width: 48,
+              child: Center(
+                child: Checkbox(
+                  value: terpilih,
+                  onChanged: (v) => setStateIfMounted(() =>
+                      v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _panelDaftarProduk() {
-    final tampil = _terfilter;
-    final semuaTercentang =
-        tampil.isNotEmpty && tampil.every((p) => _idTerpilih.contains(p['id']));
+    final terfilter = _terfilter;
+    final tampil = _daftarProdukTampil;
+    final semuaTercentang = terfilter.isNotEmpty &&
+        terfilter.every((p) => _idTerpilih.contains(_idProduk(p)));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1528,32 +2014,57 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             onChanged: (_) => setStateIfMounted(() {}),
           ),
         ),
-        CheckboxListTile(
-          value: semuaTercentang,
-          onChanged: (v) => _pilihSemua(v ?? false),
-          title: Text('Pilih Semua (${tampil.length})',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          dense: true,
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView.builder(
-            itemCount: tampil.length,
-            itemBuilder: (context, i) {
-              final p = tampil[i];
-              final id = p['id'] as int;
-              return CheckboxListTile(
-                value: _idTerpilih.contains(id),
-                onChanged: (v) => setStateIfMounted(() =>
-                    v == true ? _idTerpilih.add(id) : _idTerpilih.remove(id)),
-                title: Text(p['nama'] as String? ?? '-',
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle:
-                    Text('${p['kode'] ?? '-'} - Rp ${p['hargaJual'] ?? 0}'),
-                dense: true,
-              );
-            },
+        _filterKategoriProduk(),
+        if (_model == ModelPriceTag.promo) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                if (_memuatProdukPromo)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  const Icon(Icons.local_offer_outlined,
+                      size: 16, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _memuatProdukPromo
+                        ? 'Memuat produk yang terhubung promo...'
+                        : _pesanProdukPromo != null
+                            ? 'Gagal memuat produk promo: $_pesanProdukPromo'
+                            : 'Produk promo aktif: ${_promoProdukIds?.length ?? 0}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _memuatProdukPromo
+                      ? null
+                      : () => unawaited(_muatProdukPromoJikaPerlu(paksa: true)),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: 'Muat ulang produk promo',
+                ),
+              ],
+            ),
           ),
+        ],
+        _headerTabelProduk(terfilter, semuaTercentang),
+        Expanded(
+          child: tampil.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Tidak ada produk.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: tampil.length,
+                  itemBuilder: (context, i) => _barisTabelProduk(tampil[i], i),
+                ),
         ),
       ],
     );
@@ -1580,7 +2091,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _tombolPilihUkuran(),
-        if (_model != ModelPriceTag.promo) ...[
+        ...[
           const SizedBox(height: 16),
           Row(
             children: [
@@ -1616,8 +2127,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             _kertasCetak == KertasCetak.thermal
                 ? 'Tag ditata berjajar melintasi lebar roll, tinggi halaman menyesuaikan jumlah tag (roll maju terus).'
                 : 'Tag ditata berjajar (grid) di atas kertas ${_kertasCetak.label}.',
-            style: const TextStyle(
-                fontSize: 11.5, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
           if (_kertasCetak == KertasCetak.thermal) ...[
             const SizedBox(height: 12),
@@ -1657,8 +2168,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             'disesuaikan langsung dgn ketersediaan kertas/roll di lapangan. '
             'Nilai awal ikut Margin Antar Kotak di Konfigurasi, tapi '
             'perubahan di sini hanya berlaku utk ${_model.label}.',
-            style: const TextStyle(
-                fontSize: 11.5, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
           _sliderMarginKotak(
@@ -1682,42 +2193,61 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         const Text('Salinan per Produk',
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            IconButton(
-              onPressed: _copies > 1 ? () => _ubahCopies(_copies - 1) : null,
-              icon: const Icon(Icons.remove_circle_outline),
-              tooltip: 'Kurangi salinan',
-            ),
-            SizedBox(
-              width: 76,
-              child: TextField(
-                controller: _controllerCopies,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-                ),
-                onChanged: (v) {
-                  final nilai = int.tryParse(v);
-                  if (nilai != null && nilai > 0) {
-                    setStateIfMounted(() => _copies = nilai.clamp(1, 999));
-                  }
-                },
-                onSubmitted: (v) => _ubahCopies(int.tryParse(v) ?? _copies),
-              ),
-            ),
-            IconButton(
-              onPressed: () => _ubahCopies(_copies + 1),
-              icon: const Icon(Icons.add_circle_outline),
-              tooltip: 'Tambah salinan',
-            ),
-          ],
+        CheckboxListTile(
+          value: _salinanBerbedaPerProduk,
+          onChanged: (v) {
+            setStateIfMounted(() => _salinanBerbedaPerProduk = v ?? false);
+            unawaited(_simpanPengaturanModel(_model));
+          },
+          title: const Text('Atur salinan berbeda tiap produk'),
+          subtitle: const Text(
+              'Saat aktif, isi jumlah salinan dari daftar produk yang dipilih.'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
         ),
+        if (!_salinanBerbedaPerProduk)
+          Row(
+            children: [
+              IconButton(
+                onPressed: _copies > 1 ? () => _ubahCopies(_copies - 1) : null,
+                icon: const Icon(Icons.remove_circle_outline),
+                tooltip: 'Kurangi salinan',
+              ),
+              SizedBox(
+                width: 76,
+                child: TextField(
+                  controller: _controllerCopies,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                  ),
+                  onChanged: (v) {
+                    final nilai = int.tryParse(v);
+                    if (nilai != null && nilai > 0) {
+                      setStateIfMounted(() => _copies = nilai.clamp(1, 999));
+                    }
+                  },
+                  onSubmitted: (v) => _ubahCopies(int.tryParse(v) ?? _copies),
+                ),
+              ),
+              IconButton(
+                onPressed: () => _ubahCopies(_copies + 1),
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Tambah salinan',
+              ),
+            ],
+          )
+        else
+          Text(
+            '$_totalTagTerpilih tag akan dicetak dari ${_idTerpilih.length} produk terpilih.',
+            style:
+                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
         const SizedBox(height: 16),
         if (_model != ModelPriceTag.produk)
           CheckboxListTile(
@@ -1916,15 +2446,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         SizedBox(
           width: 78,
           child: Text(label,
-              style: const TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600)),
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
         Expanded(
           child: Slider(
             value: nilai,
             min: 0,
             max: 8,
-            divisions: 16,
+            divisions: 80,
             label: '${nilai.toStringAsFixed(1)} mm',
             onChanged: onChanged,
           ),
@@ -2264,11 +2794,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     double paperWidth;
     double paperHeight;
     String pageLabel;
-    if (_model == ModelPriceTag.promo) {
-      paperWidth = ukuran.lebarMm;
-      paperHeight = ukuran.tinggiMm;
-      pageLabel = '${ukuran.label} (${ukuran.detail})';
-    } else if (_kertasCetak == KertasCetak.thermal) {
+    if (_kertasCetak == KertasCetak.thermal) {
       paperWidth = _lebarRollAktif.lebarMm;
       // Tinggi cuma representatif (beberapa baris) -- roll sungguhan maju
       // terus tanpa batas tinggi tetap spt A4/F4, lihat [_previewIsiKertas].
@@ -2321,18 +2847,6 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   Widget _previewIsiKertas(Map<String, dynamic> produk) {
-    if (_model == ModelPriceTag.promo) {
-      final panelCount = _ukuranAktif.id == 'promo_a5' ? 1 : 3;
-      return Column(
-        children: [
-          for (var i = 0; i < panelCount; i++) ...[
-            Expanded(child: _previewPromoPanelKecil(produk)),
-            if (i != panelCount - 1) const SizedBox(height: 4),
-          ],
-        ],
-      );
-    }
-
     final ukuran = _ukuranAktif;
     // Roll thermal: lebar tetap (mengikuti lebar roll dipilih), tinggi
     // representatif beberapa baris saja (roll sungguhan maju terus-menerus,
@@ -2356,8 +2870,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         : max(
             1,
             ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) -
-                        2 * _marginCetakAmanMm +
-                        gutterVMm) ~/
+                    2 * _marginCetakAmanMm +
+                    gutterVMm) ~/
                 (ukuran.tinggiMm + gutterVMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
@@ -2372,8 +2886,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       itemBuilder: (_, i) => Opacity(
         opacity: i == 0 ? 1 : 0.28,
         child: Padding(
-          padding:
-              EdgeInsets.all((min(gutterHMm, gutterVMm) / 2).clamp(0, 4)),
+          padding: EdgeInsets.all((min(gutterHMm, gutterVMm) / 2).clamp(0, 4)),
           child: _previewTagMini(produk),
         ),
       ),
@@ -2386,9 +2899,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final barcode = _kodeBarcode(p);
     final harga = _formatRupiah(p['hargaJual'] as num?);
     final bulat = _model == ModelPriceTag.produk && _ukuranAktif.bulat;
-    final isi = _model == ModelPriceTag.produk
-        ? _previewProdukMini(nama, kode, barcode, harga)
-        : _previewRakMini(nama, kode, barcode, harga);
+    final isi = switch (_model) {
+      ModelPriceTag.produk => _previewProdukMini(nama, kode, barcode, harga),
+      ModelPriceTag.promo => _previewPromo(p),
+      ModelPriceTag.rak => _previewRakMini(nama, kode, barcode, harga),
+    };
     return Container(
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
@@ -2489,23 +3004,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 4.2, fontWeight: FontWeight.w900)),
+              style:
+                  const TextStyle(fontSize: 4.2, fontWeight: FontWeight.w900)),
       ],
-    );
-  }
-
-  Widget _previewPromoPanelKecil(Map<String, dynamic> p) {
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: AppColors.border)),
-      child: _previewPromo(p),
     );
   }
 
   Widget _previewIsi(Map<String, dynamic> p) {
     final ukuran = _ukuranAktif;
-    final ratio = _model == ModelPriceTag.promo && ukuran.id != 'promo_a5'
-        ? ukuran.lebarMm / (ukuran.tinggiMm / 3)
-        : ukuran.lebarMm / ukuran.tinggiMm;
+    final ratio = ukuran.lebarMm / ukuran.tinggiMm;
     final nama = p['nama'] as String? ?? '-';
     final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
@@ -2546,8 +3053,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     : BorderStyle.solid),
             borderRadius: bulat
                 ? null
-                : BorderRadius.circular(
-                    _model == ModelPriceTag.produk ? 4 : 8),
+                : BorderRadius.circular(_model == ModelPriceTag.produk ? 4 : 8),
             shape: bulat ? BoxShape.circle : BoxShape.rectangle,
           ),
           child: bulat ? ClipOval(child: isi) : isi,
@@ -2708,7 +3214,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     );
   }
 
-  Widget _previewProduk(String nama, String kode, String barcode, String harga) {
+  Widget _previewProduk(
+      String nama, String kode, String barcode, String harga) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2776,9 +3283,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final kodeSize = _ukuranTeks(_controllerPromoKodeSize, 7) * (10 / 7);
     // Skala 1.5x cocok dgn tinggi bawaan lama (28pt*1.5=42px) -- custom
     // tinggi Header/Strip Produk ikut skala yang sama di preview.
-    final headerTinggiPx =
-        _tinggiOpsional(_controllerPromoHeaderTinggi, _promoHeaderTinggiAutoPt) *
-            1.5;
+    final headerTinggiPx = _tinggiOpsional(
+            _controllerPromoHeaderTinggi, _promoHeaderTinggiAutoPt) *
+        1.5;
     final stripTinggiPx =
         _tinggiOpsional(_controllerPromoStripTinggi, _promoStripTinggiAutoPt) *
             1.5;
@@ -3069,7 +3576,7 @@ class _PriceTagPdfBuilder {
         _isiGridLabel(doc, _kotakProduk);
         break;
       case ModelPriceTag.promo:
-        _isiPromo(doc);
+        _isiGridLabel(doc, _kotakPromo);
         break;
     }
     return doc.save();
@@ -3116,9 +3623,8 @@ class _PriceTagPdfBuilder {
     final marginV = marginVerticalMm.clamp(0, 8).toDouble();
     final gutterH = marginH * PdfPageFormat.mm;
     final gutterV = marginV * PdfPageFormat.mm;
-    final innerPadding =
-        (min(marginH, marginV) * 0.25).clamp(0, 1).toDouble() *
-            PdfPageFormat.mm;
+    final innerPadding = (min(marginH, marginV) * 0.25).clamp(0, 1).toDouble() *
+        PdfPageFormat.mm;
 
     if (kertasCetak == KertasCetak.thermal) {
       // Roll thermal: LEBAR halaman tetap (mengikuti lebar roll dipilih --
@@ -3318,8 +3824,7 @@ class _PriceTagPdfBuilder {
                     pw.Expanded(
                       flex: 1,
                       child: pw.Padding(
-                        padding:
-                            const pw.EdgeInsets.symmetric(horizontal: 8),
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 8),
                         child: bcw == null
                             ? pw.Center(
                                 child: pw.Text(barcode,
@@ -3412,34 +3917,6 @@ class _PriceTagPdfBuilder {
     );
   }
 
-  void _isiPromo(pw.Document doc) {
-    final page = ukuran.pageFormat ?? PdfPageFormat.a4.landscape;
-    final perHalaman = ukuran.id == 'promo_a5' ? 1 : 3;
-    for (var start = 0; start < tag.length; start += perHalaman) {
-      final slice = tag.skip(start).take(perHalaman).toList();
-      doc.addPage(
-        pw.Page(
-          pageFormat: page.copyWith(
-            marginLeft: 5 * PdfPageFormat.mm,
-            marginTop: 5 * PdfPageFormat.mm,
-            marginRight: 5 * PdfPageFormat.mm,
-            marginBottom: 5 * PdfPageFormat.mm,
-          ),
-          build: (_) => pw.Column(
-            children: [
-              for (var i = 0; i < slice.length; i++) ...[
-                pw.Expanded(child: _kotakPromo(slice[i], page)),
-                if (i != slice.length - 1) pw.SizedBox(height: 8),
-              ],
-              for (var i = slice.length; i < perHalaman; i++)
-                pw.Expanded(child: pw.SizedBox()),
-            ],
-          ),
-        ),
-      );
-    }
-  }
-
   int _idProdukPdf(Map<String, dynamic> p) => (p['id'] as num?)?.toInt() ?? -1;
 
   String _teksPromoPdf(Map<String, dynamic> p) {
@@ -3475,7 +3952,7 @@ class _PriceTagPdfBuilder {
     );
   }
 
-  pw.Widget _kotakPromo(Map<String, dynamic> p, PdfPageFormat page) {
+  pw.Widget _kotakPromo(Map<String, dynamic> p) {
     final kode = '${p['kode'] ?? ''}';
     final barcode = _kodeBarcode(p);
     final bcw = _barcode(barcode, height: 18);
@@ -3583,7 +4060,7 @@ class _PriceTagPdfBuilder {
               color: PdfColor.fromHex(promoBodyBgHex),
               child: pw.Center(
                 child: pw.Text(kode,
-                  style: pw.TextStyle(fontSize: promoKodeSize * skala)),
+                    style: pw.TextStyle(fontSize: promoKodeSize * skala)),
               ),
             ),
           pw.SizedBox(height: 3),
