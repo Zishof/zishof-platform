@@ -7,7 +7,8 @@ import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
 
-final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// Label chip "Hari Aktif" -- kunci ISO weekday (1=Senin..7=Minggu), SAMA
 /// persis dgn konvensi CSV `hari_aktif` yg dibaca/dikirim server (lihat
@@ -40,7 +41,7 @@ class TabAturanDiskon extends StatefulWidget {
 }
 
 class _TabAturanDiskonState extends State<TabAturanDiskon> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -90,8 +91,12 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
       final hasilTipe = await ApiClient.instance.aksi('tipe_anggota_list');
       if (mounted) {
         setStateIfMounted(() {
-          _jenisAnggota = ((hasilJenis['data'] as List?) ?? []).map((e) => Kategori.fromJson(e as Map<String, dynamic>)).toList();
-          _tipeAnggota = ((hasilTipe['data'] as List?) ?? []).map((e) => Kategori.fromJson(e as Map<String, dynamic>)).toList();
+          _jenisAnggota = ((hasilJenis['data'] as List?) ?? [])
+              .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _tipeAnggota = ((hasilTipe['data'] as List?) ?? [])
+              .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
+              .toList();
         });
       }
     } catch (_) {
@@ -114,7 +119,10 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FormDiskon(aturan: aturan, jenisAnggota: _jenisAnggota, tipeAnggota: _tipeAnggota),
+      builder: (_) => _FormDiskon(
+          aturan: aturan,
+          jenisAnggota: _jenisAnggota,
+          tipeAnggota: _tipeAnggota),
     );
     if (tersimpan == true) await _muatDaftar();
   }
@@ -126,7 +134,10 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: Sesi.instance.bolehKelola
-          ? FloatingActionButton.extended(onPressed: () => _bukaForm(), icon: const Icon(Icons.add), label: const Text('Tambah Aturan'))
+          ? FloatingActionButton.extended(
+              onPressed: () => _bukaForm(),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Aturan'))
           : null,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -137,11 +148,14 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const Icon(Icons.error_outline,
+                            size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 16),
-                        ElevatedButton(onPressed: _muatSemua, child: const Text('Coba Lagi')),
+                        ElevatedButton(
+                            onPressed: _muatSemua,
+                            child: const Text('Coba Lagi')),
                       ],
                     ),
                   ),
@@ -156,14 +170,21 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
-                            SizedBox(width: 190, child: AppKpiCard(icon: Icons.sell_outlined, warna: AppColors.primary, nilai: '$_total', label: 'Total Aturan')),
+                            SizedBox(
+                                width: 190,
+                                child: AppKpiCard(
+                                    icon: Icons.sell_outlined,
+                                    warna: AppColors.primary,
+                                    nilai: '$_total',
+                                    label: 'Total Aturan')),
                             const SizedBox(width: 8),
                             SizedBox(
                               width: 190,
                               child: AppKpiCard(
                                 icon: Icons.check_circle_outline,
                                 warna: AppColors.success,
-                                nilai: '${_data.where((a) => a['aktif'] == true).length}',
+                                nilai:
+                                    '${_data.where((a) => a['aktif'] == true).length}',
                                 label: 'Aktif (hal. ini)',
                               ),
                             ),
@@ -173,7 +194,8 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                               child: AppKpiCard(
                                 icon: Icons.percent_outlined,
                                 warna: AppColors.teal,
-                                nilai: '${_data.where((a) => a['potonganLangsung'] == true).length}',
+                                nilai:
+                                    '${_data.where((a) => a['potonganLangsung'] == true).length}',
                                 label: 'Potong Struk (hal. ini)',
                               ),
                             ),
@@ -182,7 +204,11 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
-                        decoration: const InputDecoration(hintText: 'Cari nama aturan...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
+                        decoration: const InputDecoration(
+                            hintText: 'Cari nama aturan...',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                            isDense: true),
                         onSubmitted: _cariUlang,
                       ),
                       const SizedBox(height: 12),
@@ -193,18 +219,30 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                           AppTableColumn('Aturan', flex: 3),
                           AppTableColumn('Target', flex: 3),
                           AppTableColumn('Jenis', flex: 2),
-                          AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
-                          AppTableColumn('Status', flex: 2, align: TextAlign.center),
+                          AppTableColumn('Nilai',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Status',
+                              flex: 2, align: TextAlign.center),
                         ],
                         rows: _data.map((a) {
                           final persen = ((a['persentase'] as num?) ?? 0);
-                          final nilai = persen > 0 ? '$persen%' : _formatRupiah.format(a['nominal'] ?? 0);
-                          final produk = (a['produkNama'] as String?)?.isNotEmpty == true ? a['produkNama'] : 'Semua Produk';
-                          final toko = (a['tokoNama'] as String?)?.isNotEmpty == true ? a['tokoNama'] : 'Semua Toko';
+                          final nilai = persen > 0
+                              ? '$persen%'
+                              : _formatRupiah.format(a['nominal'] ?? 0);
+                          final produk =
+                              (a['produkNama'] as String?)?.isNotEmpty == true
+                                  ? a['produkNama']
+                                  : 'Semua Produk';
+                          final toko =
+                              (a['tokoNama'] as String?)?.isNotEmpty == true
+                                  ? a['tokoNama']
+                                  : 'Semua Toko';
                           final aktif = a['aktif'] == true;
                           final manual = a['aktivasiManual'] == true;
                           return AppTableRowData(
-                            onTap: Sesi.instance.bolehKelola ? () => _bukaForm(aturan: a) : null,
+                            onTap: Sesi.instance.bolehKelola
+                                ? () => _bukaForm(aturan: a)
+                                : null,
                             cells: [
                               AppTableCell(
                                 flex: 3,
@@ -213,24 +251,41 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                                   children: [
                                     Flexible(
                                       child: Text('${a['namaAturan']}',
-                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis),
                                     ),
                                     if (manual) ...[
                                       const SizedBox(width: 6),
-                                      const Icon(Icons.touch_app_outlined, size: 14, color: AppColors.info),
+                                      const Icon(Icons.touch_app_outlined,
+                                          size: 14, color: AppColors.info),
                                     ],
                                   ],
                                 ),
                               ),
-                              AppTableCell.text('$produk - $toko', flex: 3, maxLines: 2),
-                              AppTableCell.text(a['potonganLangsung'] == true ? 'Potong Struk' : 'Cashback', flex: 2),
-                              AppTableCell.text(nilai, flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              AppTableCell.text('$produk - $toko',
+                                  flex: 3, maxLines: 2),
+                              AppTableCell.text(
+                                  a['potonganLangsung'] == true
+                                      ? 'Potong Struk'
+                                      : 'Cashback',
+                                  flex: 2),
+                              AppTableCell.text(nilai,
+                                  flex: 2,
+                                  align: TextAlign.right,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5)),
                               AppTableCell(
                                 flex: 2,
                                 align: TextAlign.center,
-                                child: StatusPill(label: aktif ? 'Aktif' : 'Nonaktif', warna: aktif ? AppColors.success : AppColors.danger),
+                                child: StatusPill(
+                                    label: aktif ? 'Aktif' : 'Nonaktif',
+                                    warna: aktif
+                                        ? AppColors.success
+                                        : AppColors.danger),
                               ),
                             ],
                           );
@@ -240,8 +295,11 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                           totalHalaman: _totalHalaman,
                           totalData: _total,
                           labelData: 'aturan',
-                          onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                          onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+                          onSebelumnya:
+                              _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                          onBerikutnya: _halaman < _totalHalaman
+                              ? () => _pindah(_halaman + 1)
+                              : null,
                         ),
                       ),
                     ],
@@ -255,7 +313,10 @@ class _FormDiskon extends StatefulWidget {
   final Map<String, dynamic>? aturan;
   final List<Kategori> jenisAnggota;
   final List<Kategori> tipeAnggota;
-  const _FormDiskon({required this.aturan, required this.jenisAnggota, required this.tipeAnggota});
+  const _FormDiskon(
+      {required this.aturan,
+      required this.jenisAnggota,
+      required this.tipeAnggota});
 
   @override
   State<_FormDiskon> createState() => _FormDiskonState();
@@ -336,7 +397,8 @@ class _FormDiskonState extends State<_FormDiskon> {
       final bagian = s.trim().split(' ');
       final tgl = bagian[0].split('-');
       final jam = bagian.length > 1 ? bagian[1].split(':') : ['0', '0'];
-      return DateTime(int.parse(tgl[2]), int.parse(tgl[1]), int.parse(tgl[0]), int.parse(jam[0]), int.parse(jam[1]));
+      return DateTime(int.parse(tgl[2]), int.parse(tgl[1]), int.parse(tgl[0]),
+          int.parse(jam[0]), int.parse(jam[1]));
     } catch (_) {
       return null;
     }
@@ -349,11 +411,17 @@ class _FormDiskonState extends State<_FormDiskon> {
 
   Future<void> _pilihTanggalJam({required bool mulai}) async {
     final awal = (mulai ? _mulai : _selesai) ?? DateTime.now();
-    final tanggal = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2020), lastDate: DateTime(2100));
+    final tanggal = await showDatePicker(
+        context: context,
+        initialDate: awal,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
     if (tanggal == null) return;
     if (!mounted) return;
-    final jam = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(awal));
-    final hasil = DateTime(tanggal.year, tanggal.month, tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0);
+    final jam = await showTimePicker(
+        context: context, initialTime: TimeOfDay.fromDateTime(awal));
+    final hasil = DateTime(tanggal.year, tanggal.month, tanggal.day,
+        jam?.hour ?? 0, jam?.minute ?? 0);
     setStateIfMounted(() => mulai ? _mulai = hasil : _selesai = hasil);
   }
 
@@ -385,19 +453,22 @@ class _FormDiskonState extends State<_FormDiskon> {
         'berlaku_semua_member': _berlakuSemuaMember,
         if (!_berlakuSemuaMember) 'jenis_anggota_id': _jenisAnggotaId,
         if (!_berlakuSemuaMember) 'tipe_anggota_id': _tipeAnggotaId,
-        'persentase': double.tryParse(_persentase.text.replaceAll(',', '.')) ?? 0,
+        'persentase':
+            double.tryParse(_persentase.text.replaceAll(',', '.')) ?? 0,
         'nominal': double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
-        'maksimal_potongan': double.tryParse(_maksimalPotongan.text.replaceAll(',', '.')) ?? 0,
+        'maksimal_potongan':
+            double.tryParse(_maksimalPotongan.text.replaceAll(',', '.')) ?? 0,
         'potongan_langsung': _potonganLangsung,
         'berlaku_per_hari_dan_per_toko': _berlakuPerHariDanPerToko,
         'aktif': _aktif,
         'aktivasi_manual': _aktivasiManual,
         'tanggal_mulai': _mulai == null ? '' : _formatUntukSimpan(_mulai!),
-        'tanggal_selesai': _selesai == null ? '' : _formatUntukSimpan(_selesai!),
-        'hari_aktif': _hariAktif.isEmpty
-            ? ''
-            : (_hariAktif.toList()..sort()).join(','),
-        if (Sesi.instance.isAdmin) 'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
+        'tanggal_selesai':
+            _selesai == null ? '' : _formatUntukSimpan(_selesai!),
+        'hari_aktif':
+            _hariAktif.isEmpty ? '' : (_hariAktif.toList()..sort()).join(','),
+        if (Sesi.instance.isAdmin)
+          'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -411,7 +482,8 @@ class _FormDiskonState extends State<_FormDiskon> {
   Widget build(BuildContext context) {
     final ubah = widget.aturan != null;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.9,
         maxChildSize: 0.95,
@@ -521,9 +593,8 @@ class _FormDiskonState extends State<_FormDiskon> {
                         child: AppFormTextField(
                           label: 'Persentase (%)',
                           controller: _persentase,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                                  decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -531,9 +602,8 @@ class _FormDiskonState extends State<_FormDiskon> {
                         child: AppFormTextField(
                           label: 'Nominal (Rp)',
                           controller: _nominal,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                                  decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                         ),
                       ),
                     ],
@@ -547,8 +617,8 @@ class _FormDiskonState extends State<_FormDiskon> {
                   AppFormSwitchTile(
                     title: 'Berlaku Per Hari & Per Toko',
                     value: _berlakuPerHariDanPerToko,
-                    onChanged: (v) => setStateIfMounted(
-                        () => _berlakuPerHariDanPerToko = v),
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _berlakuPerHariDanPerToko = v),
                   ),
                   AppFormSwitchTile(
                     title: 'Aktivasi Manual',

@@ -29,7 +29,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
-  static const _pageSize = 20;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -174,7 +174,8 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
               const AppTableColumn('Kode', flex: 1),
               const AppTableColumn('Nama Tipe', flex: 2),
               const AppTableColumn('Keterangan', flex: 3),
-              const AppTableColumn('Maks. Utang', flex: 2, align: TextAlign.right),
+              const AppTableColumn('Maks. Utang',
+                  flex: 2, align: TextAlign.right),
               const AppTableColumn('Status', flex: 1, align: TextAlign.center),
               AppTableColumn('Aksi',
                   width: Sesi.instance.bolehKelola ? 88 : 56,
@@ -183,9 +184,8 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
             rows: _daftar.map((t) {
               final aktif = t['aktif'] == true;
               return AppTableRowData(
-                onTap: Sesi.instance.bolehKelola
-                    ? () => _bukaForm(tipe: t)
-                    : null,
+                onTap:
+                    Sesi.instance.bolehKelola ? () => _bukaForm(tipe: t) : null,
                 cells: [
                   AppTableCell.text('${t['kode'] ?? '-'}', flex: 1),
                   AppTableCell.text('${t['nama'] ?? ''}', flex: 2),
@@ -210,7 +210,8 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
                     align: TextAlign.center,
                     child: StatusPill(
                       label: aktif ? 'Aktif' : 'Nonaktif',
-                      warna: aktif ? AppColors.success : AppColors.textSecondary,
+                      warna:
+                          aktif ? AppColors.success : AppColors.textSecondary,
                     ),
                   ),
                   AppTableCell(
@@ -352,12 +353,15 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
                         (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
                   AppFormTextField(
-                      label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                   AppFormTextField(
                     label: 'Maksimal Boleh Utang',
                     controller: _maksimalBolehUtang,
                     hintText: '0 = tidak boleh berhutang',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                   ),
                   AppFormSwitchTile(
                       title: 'Aktif',

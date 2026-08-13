@@ -104,7 +104,7 @@ class _TabKulakanFaktur extends StatefulWidget {
 }
 
 class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
 
   // ==== Header faktur (diisi SEKALI, diikuti banyak baris produk) ====
   final _fakturController = TextEditingController();

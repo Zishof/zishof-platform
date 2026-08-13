@@ -102,7 +102,7 @@ class PanelKeranjang extends StatefulWidget {
 }
 
 class _PanelKeranjangState extends State<PanelKeranjang> {
-  static const _pageSizeKeranjang = 12;
+  static const _pageSizeKeranjang = 15;
   List<CaraBayar> _caraBayarTersedia = [];
   CaraBayar? _caraBayarTerpilih;
 
@@ -449,8 +449,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 })
             .toList(),
       });
-      daftar =
-          ((hasil['promo'] as List?) ?? []).cast<Map<String, dynamic>>();
+      daftar = ((hasil['promo'] as List?) ?? []).cast<Map<String, dynamic>>();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -1634,8 +1633,7 @@ class _SheetPilihMetodeSplit extends StatefulWidget {
   });
 
   @override
-  State<_SheetPilihMetodeSplit> createState() =>
-      _SheetPilihMetodeSplitState();
+  State<_SheetPilihMetodeSplit> createState() => _SheetPilihMetodeSplitState();
 }
 
 class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
@@ -1675,7 +1673,8 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
     final n = _terpilih.length;
     final rata = (widget.total / n).floorToDouble();
     for (var i = 0; i < n; i++) {
-      _terpilih[i].nominal = (i == n - 1) ? (widget.total - rata * (n - 1)) : rata;
+      _terpilih[i].nominal =
+          (i == n - 1) ? (widget.total - rata * (n - 1)) : rata;
     }
   }
 
@@ -1688,7 +1687,8 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1739,8 +1739,8 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
                                 isDense: true,
                                 border: OutlineInputBorder(),
                               ),
-                              onChanged: (v) =>
-                                  setState(() => s.nominal = double.tryParse(v) ?? 0),
+                              onChanged: (v) => setState(
+                                  () => s.nominal = double.tryParse(v) ?? 0),
                             ),
                           ),
                         ],
@@ -1755,7 +1755,9 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
                           style: TextStyle(fontSize: 12)),
                       Text(
                         NumberFormat.currency(
-                                locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0)
+                                locale: 'id_ID',
+                                symbol: 'Rp ',
+                                decimalDigits: 0)
                             .format(_sisa),
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -1767,8 +1769,9 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
                   child: ElevatedButton(
-                    onPressed:
-                        _seimbang ? () => Navigator.of(context).pop(_terpilih) : null,
+                    onPressed: _seimbang
+                        ? () => Navigator.of(context).pop(_terpilih)
+                        : null,
                     child: const Text('Terapkan Split Pembayaran'),
                   ),
                 ),

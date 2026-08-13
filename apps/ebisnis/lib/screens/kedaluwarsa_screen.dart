@@ -20,7 +20,7 @@ class KedaluwarsaScreen extends StatefulWidget {
 }
 
 class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
-  static const _pageSize = 30;
+  static const _pageSize = 15;
   final _cari = TextEditingController();
   bool _memuat = true;
   String? _error;

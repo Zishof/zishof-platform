@@ -39,7 +39,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
   String _kataKunci = '';
   Map<String, dynamic>? _statistik;
 
-  static const _pageSize = 20;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -225,7 +225,8 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _muatSemua, child: const Text('Coba Lagi')),
+              ElevatedButton(
+                  onPressed: _muatSemua, child: const Text('Coba Lagi')),
             ],
           ),
         ),
@@ -236,7 +237,8 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          if (_statistik != null) _KartuStatistikAnggota(statistik: _statistik!),
+          if (_statistik != null)
+            _KartuStatistikAnggota(statistik: _statistik!),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -714,8 +716,8 @@ class _FormAnggotaState extends State<_FormAnggota> {
                       if (_tanggalKadaluarsa != null)
                         IconButton(
                           icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () =>
-                              setStateIfMounted(() => _tanggalKadaluarsa = null),
+                          onPressed: () => setStateIfMounted(
+                              () => _tanggalKadaluarsa = null),
                         ),
                     ],
                   ),

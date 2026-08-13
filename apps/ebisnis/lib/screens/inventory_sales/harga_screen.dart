@@ -9,7 +9,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'cetak_util.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
 /// <h3>Master & Analisis Harga -- layar legacy 11-13 & 17-19.</h3>
@@ -88,7 +89,7 @@ class _TabAnalisisHarga extends StatefulWidget {
 }
 
 class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -152,13 +153,13 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
   }
 
   /// SCR-12/13/14: pilih jenis cetak (Harga Jual umum / + Harga Beli berizin),
-  /// parameter diteruskan APA ADANYA ke PDF/CSV; menyembunyikan kolom beli
+  /// parameter diteruskan APA ADANYA ke PDF/Excel; menyembunyikan kolom beli
   /// tidak mengubah kolom lain.
   Future<void> _cetakAtauEkspor({required bool pdf}) async {
     final sertakanBeli = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(pdf ? 'Cetak Daftar Harga' : 'Ekspor Harga (CSV)'),
+        title: Text(pdf ? 'Cetak Daftar Harga' : 'Ekspor Harga (Excel)'),
         content: const Text(
             'Sertakan kolom Harga Beli? (Harga beli adalah data terbatas -- '
             'hanya untuk peran berwenang; pilih "Jual Saja" untuk daftar harga customer/umum.)'),
@@ -176,9 +177,13 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
     try {
       final (data, terpotong) = await _ambilSemua();
       final headers = [
-        'Kode', 'Nama Barang', 'Sat', 'Stok',
+        'Kode',
+        'Nama Barang',
+        'Sat',
+        'Stok',
         if (sertakanBeli) 'Hrg Beli',
-        'Hrg Jual', 'Jual Umum Efektif',
+        'Hrg Jual',
+        'Jual Umum Efektif',
         if (sertakanBeli) 'Margin %',
       ];
       final rows = data
@@ -187,8 +192,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
                 '${p['nama']}',
                 '${p['satuan'] ?? ''}',
                 '${p['stok'] ?? 0}',
-                if (sertakanBeli)
-                  _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
+                if (sertakanBeli) _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
                 _fmtRp.format((p['hargaJual'] as num?) ?? 0),
                 p['hargaJualUmumEfektif'] == null
                     ? '-'
@@ -205,18 +209,19 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
       if (!mounted) return;
       if (pdf) {
         await CetakUtilIs.cetakPdfTabel(
-          judul: sertakanBeli
-              ? 'ANALISIS HARGA BELI & JUAL'
-              : 'DAFTAR HARGA JUAL',
+          judul:
+              sertakanBeli ? 'ANALISIS HARGA BELI & JUAL' : 'DAFTAR HARGA JUAL',
           parameter: parameter,
           headers: headers,
           rows: rows,
-          namaFile: sertakanBeli ? 'analisis-harga.pdf' : 'daftar-harga-jual.pdf',
+          namaFile:
+              sertakanBeli ? 'analisis-harga.pdf' : 'daftar-harga-jual.pdf',
         );
       } else {
-        await CetakUtilIs.eksporCsv(
+        await CetakUtilIs.eksporExcel(
           context: context,
-          namaFile: sertakanBeli ? 'analisis-harga.csv' : 'daftar-harga-jual.csv',
+          namaFile:
+              sertakanBeli ? 'analisis-harga.xlsx' : 'daftar-harga-jual.xlsx',
           headers: headers,
           rows: rows,
         );
@@ -273,7 +278,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
                 onPressed: () => _cetakAtauEkspor(pdf: true)),
             IconButton(
                 icon: const Icon(Icons.table_view_outlined),
-                tooltip: 'Ekspor CSV harga',
+                tooltip: 'Ekspor Excel harga',
                 onPressed: () => _cetakAtauEkspor(pdf: false)),
             const SizedBox(width: 8),
             SizedBox(
@@ -311,8 +316,8 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
               AppTableColumn('Stok', flex: 1, align: TextAlign.right),
               AppTableColumn('Hrg Beli', flex: 2, align: TextAlign.right),
               AppTableColumn('Hrg Jual', flex: 2, align: TextAlign.right),
-              AppTableColumn('Jual Umum Efektif', flex: 2,
-                  align: TextAlign.right),
+              AppTableColumn('Jual Umum Efektif',
+                  flex: 2, align: TextAlign.right),
               AppTableColumn('Margin', flex: 1, align: TextAlign.right),
             ],
             rows: _data.map((p) {
@@ -321,20 +326,16 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
               return AppTableRowData(cells: [
                 AppTableCell.text('${p['kode']}',
                     flex: 1,
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 12)),
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12)),
                 AppTableCell.text('${p['nama']}', flex: 3, maxLines: 2),
                 AppTableCell.text('${p['satuan'] ?? ''}', flex: 1),
                 AppTableCell.text('${p['stok'] ?? 0}',
                     flex: 1, align: TextAlign.right),
-                AppTableCell.text(
-                    _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
-                    flex: 2,
-                    align: TextAlign.right),
-                AppTableCell.text(
-                    _fmtRp.format((p['hargaJual'] as num?) ?? 0),
-                    flex: 2,
-                    align: TextAlign.right),
+                AppTableCell.text(_fmtRp.format((p['hargaBeli'] as num?) ?? 0),
+                    flex: 2, align: TextAlign.right),
+                AppTableCell.text(_fmtRp.format((p['hargaJual'] as num?) ?? 0),
+                    flex: 2, align: TextAlign.right),
                 AppTableCell.text(
                     p['hargaJualUmumEfektif'] == null
                         ? '-'
@@ -350,9 +351,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
                     style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: negatif
-                            ? AppColors.danger
-                            : AppColors.success),
+                        color: negatif ? AppColors.danger : AppColors.success),
                   ),
                 ),
               ]);
@@ -393,7 +392,7 @@ class _TabHargaVersi extends StatefulWidget {
 }
 
 class _TabHargaVersiState extends State<_TabHargaVersi> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -415,8 +414,8 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-          _beli ? 'si_supplier_price_list' : 'si_customer_price_list', {
+      final hasil = await ApiClient.instance
+          .aksi(_beli ? 'si_supplier_price_list' : 'si_customer_price_list', {
         if (!_beli && _hanyaUmum) 'hanya_umum': true,
         'page': _halaman,
         'page_size': _pageSize,
@@ -436,7 +435,8 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
-  Future<void> _nonaktifkan(Map<String, dynamic> v, {required bool aktifkan}) async {
+  Future<void> _nonaktifkan(Map<String, dynamic> v,
+      {required bool aktifkan}) async {
     try {
       await ApiClient.instance.aksi(
           _beli ? 'si_supplier_price_save' : 'si_customer_price_save',
@@ -521,8 +521,8 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
                 const AppTableColumn('Produk', flex: 3),
                 const AppTableColumn('Harga', flex: 2, align: TextAlign.right),
                 const AppTableColumn('Tgl Efektif', flex: 2),
-                const AppTableColumn('Status', flex: 1,
-                    align: TextAlign.center),
+                const AppTableColumn('Status',
+                    flex: 1, align: TextAlign.center),
                 const AppTableColumn('', flex: 1, align: TextAlign.center),
               ],
               rows: _data.map((v) {
@@ -547,8 +547,7 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
                     align: TextAlign.center,
                     child: StatusPill(
                         label: aktif ? 'Aktif' : 'Nonaktif',
-                        warna:
-                            aktif ? AppColors.success : AppColors.danger),
+                        warna: aktif ? AppColors.success : AppColors.danger),
                   ),
                   AppTableCell(
                     flex: 1,
@@ -560,14 +559,11 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
                                     ? Icons.block
                                     : Icons.check_circle_outline,
                                 size: 18,
-                                color: aktif
-                                    ? Colors.red
-                                    : AppColors.success),
+                                color: aktif ? Colors.red : AppColors.success),
                             tooltip: aktif
                                 ? 'Nonaktifkan versi (padanan aman Hapus Versi)'
                                 : 'Aktifkan versi',
-                            onPressed: () =>
-                                _nonaktifkan(v, aktifkan: !aktif),
+                            onPressed: () => _nonaktifkan(v, aktifkan: !aktif),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -689,7 +685,8 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.8,
         expand: false,
@@ -803,8 +800,8 @@ class _SheetCariState extends State<_SheetCari> {
     try {
       final hasil = await ApiClient.instance
           .aksi(widget.aksi, {'keyword': v.trim(), 'page_size': 30});
-      setStateIfMounted(() =>
-          _hasil = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _hasil =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (_) {
       // Gagal cari -- biarkan hasil lama.
     } finally {

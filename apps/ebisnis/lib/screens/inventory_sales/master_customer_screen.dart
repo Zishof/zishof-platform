@@ -9,7 +9,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Master Customer -- layar legacy 04-06 (Data Customer / Buka-Tutup Daftar).</h3>
 ///
@@ -27,7 +28,7 @@ class MasterCustomerScreen extends StatefulWidget {
 }
 
 class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -171,11 +172,13 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
         Tooltip(
           message:
               'Cetak/ekspor daftar customer tersedia di fase laporan (P2-F) -- belum aktif di rilis ini.',
-          child:
-              IconButton(icon: const Icon(Icons.print_outlined), onPressed: null),
+          child: IconButton(
+              icon: const Icon(Icons.print_outlined), onPressed: null),
         ),
         IconButton(
-            icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
       ]),
       floatingActionButton: bolehTambah
           ? FloatingActionButton.extended(
@@ -232,7 +235,8 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                                 isDense: true,
                                 border: OutlineInputBorder()),
                             items: const [
-                              DropdownMenuItem(value: null, child: Text('Semua')),
+                              DropdownMenuItem(
+                                  value: null, child: Text('Semua')),
                               DropdownMenuItem(
                                   value: 'aktif', child: Text('Aktif')),
                               DropdownMenuItem(
@@ -256,8 +260,10 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                                 isDense: true,
                                 border: OutlineInputBorder()),
                             items: const [
-                              DropdownMenuItem(value: 'kode', child: Text('Kode')),
-                              DropdownMenuItem(value: 'nama', child: Text('Nama')),
+                              DropdownMenuItem(
+                                  value: 'kode', child: Text('Kode')),
+                              DropdownMenuItem(
+                                  value: 'nama', child: Text('Nama')),
                               DropdownMenuItem(
                                   value: 'wilayah', child: Text('Wilayah')),
                             ],
@@ -286,9 +292,11 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                           AppTableColumn('Kode', flex: 1),
                           AppTableColumn('Nama Customer', flex: 3),
                           AppTableColumn('Wilayah', flex: 2),
-                          AppTableColumn('Termin', flex: 1, align: TextAlign.right),
+                          AppTableColumn('Termin',
+                              flex: 1, align: TextAlign.right),
                           AppTableColumn('Sales', flex: 2),
-                          AppTableColumn('Status', flex: 1, align: TextAlign.center),
+                          AppTableColumn('Status',
+                              flex: 1, align: TextAlign.center),
                         ],
                         rows: _data.map((c) {
                           final aktif = c['aktif'] == true;
@@ -301,8 +309,10 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
                                       fontSize: 12.5)),
-                              AppTableCell.text('${c['nama']}', flex: 3, maxLines: 2),
-                              AppTableCell.text('${c['wilayah'] ?? ''}', flex: 2),
+                              AppTableCell.text('${c['nama']}',
+                                  flex: 3, maxLines: 2),
+                              AppTableCell.text('${c['wilayah'] ?? ''}',
+                                  flex: 2),
                               AppTableCell.text('${c['terminHari'] ?? 0} hr',
                                   flex: 1, align: TextAlign.right),
                               AppTableCell.text('${c['salesOwnerNama'] ?? ''}',
@@ -353,8 +363,9 @@ class _DetailCustomerSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final aktif = data['aktif'] == true;
     final bolehUbah = Sesi.instance.bolehAksiIs('master_customer', 'update');
-    final bolehNonaktif = Sesi.instance.bolehAksiIs('master_customer', 'delete') ||
-        Sesi.instance.bolehAksiIs('master_customer', 'update');
+    final bolehNonaktif =
+        Sesi.instance.bolehAksiIs('master_customer', 'delete') ||
+            Sesi.instance.bolehAksiIs('master_customer', 'update');
     Widget baris(String label, String nilai) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -380,8 +391,8 @@ class _DetailCustomerSheet extends StatelessWidget {
           Row(children: [
             Expanded(
               child: Text('${data['kode']} — ${data['nama']}',
-                  style:
-                      const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             StatusPill(
                 label: aktif ? 'Aktif' : 'Nonaktif',
@@ -393,7 +404,8 @@ class _DetailCustomerSheet extends StatelessWidget {
             baris('Nama', '${data['nama'] ?? ''}'),
             baris('Alamat', '${data['alamat'] ?? ''}'),
             baris('Wilayah', '${data['wilayah'] ?? ''}'),
-            baris('Telepon', '${data['telp'] ?? ''} ${data['hp'] ?? ''}'.trim()),
+            baris(
+                'Telepon', '${data['telp'] ?? ''} ${data['hp'] ?? ''}'.trim()),
             baris('Email', '${data['email'] ?? ''}'),
           ]),
           const SizedBox(height: 12),
@@ -418,44 +430,50 @@ class _DetailCustomerSheet extends StatelessWidget {
             baris('Waktu perubahan', '${data['auditWaktu'] ?? ''}'),
           ]),
           const SizedBox(height: 16),
-          Wrap(alignment: WrapAlignment.end, spacing: 10, runSpacing: 10, children: [
-            // Paritas aksi "Riwayat Audit" legacy (revisi Envers profil customer);
-            // disabled beralasan bila belum ada profil varian.
-            Tooltip(
-              message: data['profilId'] == null
-                  ? 'Belum ada profil varian tersimpan — belum ada revisi audit.'
-                  : 'Riwayat perubahan (Envers)',
-              child: OutlinedButton.icon(
-                  onPressed: data['profilId'] == null
-                      ? null
-                      : () => tampilkanRiwayatAudit(context, 'customer',
-                          data['profilId'] as Object, '${data['nama']}'),
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text('Riwayat Audit')),
-            ),
-            OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Tutup')),
-            if (bolehNonaktif)
-              OutlinedButton.icon(
-                  onPressed: () =>
-                      Navigator.pop(context, aktif ? 'nonaktif' : 'aktifkan'),
-                  icon: Icon(aktif ? Icons.block : Icons.check_circle_outline,
-                      size: 18, color: aktif ? Colors.red : AppColors.success),
-                  label: Text(aktif ? 'Nonaktifkan' : 'Aktifkan',
-                      style: TextStyle(
-                          color: aktif ? Colors.red : AppColors.success))),
-            if (bolehUbah)
-              ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context, 'ubah'),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Ubah'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0)),
-          ]),
+          Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                // Paritas aksi "Riwayat Audit" legacy (revisi Envers profil customer);
+                // disabled beralasan bila belum ada profil varian.
+                Tooltip(
+                  message: data['profilId'] == null
+                      ? 'Belum ada profil varian tersimpan — belum ada revisi audit.'
+                      : 'Riwayat perubahan (Envers)',
+                  child: OutlinedButton.icon(
+                      onPressed: data['profilId'] == null
+                          ? null
+                          : () => tampilkanRiwayatAudit(context, 'customer',
+                              data['profilId'] as Object, '${data['nama']}'),
+                      icon: const Icon(Icons.history, size: 18),
+                      label: const Text('Riwayat Audit')),
+                ),
+                OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Tutup')),
+                if (bolehNonaktif)
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(
+                          context, aktif ? 'nonaktif' : 'aktifkan'),
+                      icon: Icon(
+                          aktif ? Icons.block : Icons.check_circle_outline,
+                          size: 18,
+                          color: aktif ? Colors.red : AppColors.success),
+                      label: Text(aktif ? 'Nonaktifkan' : 'Aktifkan',
+                          style: TextStyle(
+                              color: aktif ? Colors.red : AppColors.success))),
+                if (bolehUbah)
+                  ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, 'ubah'),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Ubah'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0)),
+              ]),
         ],
       ),
     );
@@ -513,8 +531,19 @@ class _FormCustomerState extends State<_FormCustomer> {
     _bank = TextEditingController(text: d?['bank'] ?? '');
     _salesOwnerId = (d?['salesOwnerId'] as num?)?.toInt();
     for (final c in [
-      _kode, _nama, _alamat, _telp, _hp, _email, _termin, _diskon,
-      _limitKredit, _wilayah, _noRekening, _atasNama, _bank
+      _kode,
+      _nama,
+      _alamat,
+      _telp,
+      _hp,
+      _email,
+      _termin,
+      _diskon,
+      _limitKredit,
+      _wilayah,
+      _noRekening,
+      _atasNama,
+      _bank
     ]) {
       c.addListener(() => _adaPerubahan = true);
     }
@@ -535,8 +564,19 @@ class _FormCustomerState extends State<_FormCustomer> {
   @override
   void dispose() {
     for (final c in [
-      _kode, _nama, _alamat, _telp, _hp, _email, _termin, _diskon,
-      _limitKredit, _wilayah, _noRekening, _atasNama, _bank
+      _kode,
+      _nama,
+      _alamat,
+      _telp,
+      _hp,
+      _email,
+      _termin,
+      _diskon,
+      _limitKredit,
+      _wilayah,
+      _noRekening,
+      _atasNama,
+      _bank
     ]) {
       c.dispose();
     }
@@ -584,8 +624,8 @@ class _FormCustomerState extends State<_FormCustomer> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Perubahan belum disimpan'),
-        content:
-            const Text('Ada perubahan yang belum disimpan. Tutup tanpa menyimpan?'),
+        content: const Text(
+            'Ada perubahan yang belum disimpan. Tutup tanpa menyimpan?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -647,8 +687,8 @@ class _FormCustomerState extends State<_FormCustomer> {
                       label: 'Alamat', controller: _alamat, maxLines: 2),
                   Row(children: [
                     Expanded(
-                        child:
-                            AppFormTextField(label: 'Telepon', controller: _telp)),
+                        child: AppFormTextField(
+                            label: 'Telepon', controller: _telp)),
                     const SizedBox(width: 8),
                     Expanded(
                         child: AppFormTextField(label: 'HP', controller: _hp)),

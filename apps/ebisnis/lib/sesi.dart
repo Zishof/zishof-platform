@@ -25,6 +25,7 @@ class Sesi {
   /// dari hak kelola CRUD member. Server tetap menegakkan gerbang sungguhan
   /// di `KantinHelper.topupSaldo/depositUbah/depositHapus` -- ini murni UI.
   bool bolehEntryTopup = false;
+  bool bolehHapusPesanan = false;
 
   /// Multi-toko (spec: akun boleh akses lebih dari satu toko, dipilih via
   /// `Tbmrole.tokoAksesJson`) -- `konfigurasi` sudah lama mengembalikan
@@ -108,6 +109,7 @@ class Sesi {
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
+    bolehHapusPesanan = konfig['bolehHapusPesanan'] == true || bolehKelola;
     caraBayar = ((konfig['caraBayar'] as List?) ?? [])
         .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -129,7 +131,8 @@ class Sesi {
     actorType = (aktor['actorType'] ?? '') as String;
     activeRoleId = '${aktor['activeRoleId'] ?? ''}';
     roleIds = ((aktor['roleIds'] as List?) ?? []).map((e) => '$e').toList();
-    salesId = aktor['salesId'] is num ? (aktor['salesId'] as num).toInt() : null;
+    salesId =
+        aktor['salesId'] is num ? (aktor['salesId'] as num).toInt() : null;
     salesKode = (aktor['salesKode'] ?? '') as String;
     salesNama = (aktor['salesNama'] ?? '') as String;
     currentTripId = aktor['currentTripId'] is num
@@ -164,6 +167,7 @@ class Sesi {
     wajibSesiKas = false;
     isAdmin = false;
     supervisorPedagang = false;
+    bolehHapusPesanan = false;
     bolehEntryTopup = false;
     aksesMenu = {};
     multiToko = false;

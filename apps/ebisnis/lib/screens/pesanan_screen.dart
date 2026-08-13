@@ -18,7 +18,7 @@ final _formatRupiah =
 enum _Filter { semua, online, tertahan }
 
 const _tinggiKartuKpiPesanan = 96.0;
-const _pageSizePesanan = 20;
+const _pageSizePesanan = 15;
 
 /// Layar Pesanan (padanan pesanan.html/pesanan-renderer.js Electron) --
 /// gabungan 2 jenis draft (lihat JavaDoc [Pesanan]): Pesanan Online (dibuat
@@ -50,6 +50,8 @@ class _PesananScreenState extends State<PesananScreen> {
   final _pedagangController = TextEditingController();
   bool _filterTerbuka = false;
   int _halamanPesanan = 1;
+  int _totalPesanan = 0;
+  Map<String, dynamic> _ringkasan = const {};
 
   @override
   void initState() {
@@ -72,7 +74,12 @@ class _PesananScreenState extends State<PesananScreen> {
       _pesanError = null;
     });
     try {
-      final payload = <String, dynamic>{'limit': 200};
+      final payload = <String, dynamic>{
+        'page': _halamanPesanan,
+        'page_size': _pageSizePesanan,
+      };
+      if (_filter == _Filter.online) payload['asal'] = 'online';
+      if (_filter == _Filter.tertahan) payload['asal'] = 'tertahan';
       // BUG LAMA (fixed): sebelumnya `hanya_belum_lunas` selalu true, jadi
       // pesanan yang SUDAH lunas tak pernah ikut termuat sama sekali --
       // sekarang opsional lewat chip filter, default menampilkan semua.
@@ -94,7 +101,9 @@ class _PesananScreenState extends State<PesananScreen> {
           .toList();
       setStateIfMounted(() {
         _semua = data;
-        _halamanPesanan = 1;
+        _totalPesanan = (hasil['total'] as num?)?.toInt() ?? data.length;
+        _ringkasan =
+            (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ?? const {};
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -321,7 +330,7 @@ class _PesananScreenState extends State<PesananScreen> {
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: const Text('Verifikasi & Selesaikan'),
             ),
-          if (Sesi.instance.bolehKelola && !_sudahTerbayar(p))
+          if (Sesi.instance.bolehHapusPesanan)
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -331,7 +340,9 @@ class _PesananScreenState extends State<PesananScreen> {
                   backgroundColor: AppColors.danger,
                   foregroundColor: Colors.white),
               icon: const Icon(Icons.cancel_outlined, size: 18),
-              label: const Text('Batalkan'),
+              label: Text(_sudahTerbayar(p)
+                  ? 'Batalkan Pembelian'
+                  : 'Batalkan Pesanan'),
             ),
         ],
       ),
@@ -716,13 +727,15 @@ class _PesananScreenState extends State<PesananScreen> {
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Batalkan Pesanan?'),
+        title: Text(
+            _sudahTerbayar(p) ? 'Batalkan Pembelian?' : 'Batalkan Pesanan?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-                '${p.kode} akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.'),
+            Text(_sudahTerbayar(p)
+                ? '${p.kode} sudah terbayar. Pembatalan akan mengoreksi stok, saldo, dan transaksi terkait serta menyimpan jejak audit. Tindakan ini tidak dapat dipulihkan otomatis.'
+                : '${p.kode} akan dibatalkan dan dihapus dari daftar pesanan aktif. Tindakan ini tidak bisa dibatalkan.'),
             const SizedBox(height: 12),
             TextField(
               controller: alasanController,
@@ -754,8 +767,15 @@ class _PesananScreenState extends State<PesananScreen> {
       return;
     }
     try {
-      await ApiClient.instance
+      final hasil = await ApiClient.instance
           .aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(hasil['description']?.toString() ??
+                (_sudahTerbayar(p)
+                    ? 'Pembelian berhasil dibatalkan.'
+                    : 'Pesanan berhasil dibatalkan.'))));
+      }
       await _muat();
     } catch (e) {
       if (mounted) {
@@ -769,21 +789,19 @@ class _PesananScreenState extends State<PesananScreen> {
   Widget build(BuildContext context) {
     final semua = _semua;
     final pesananTersaring = _tersaring;
-    final totalHalamanPesanan = (pesananTersaring.length / _pageSizePesanan)
-        .ceil()
-        .clamp(1, 999999)
-        .toInt();
+    final totalHalamanPesanan =
+        (_totalPesanan / _pageSizePesanan).ceil().clamp(1, 999999).toInt();
     final halamanPesanan =
         _halamanPesanan.clamp(1, totalHalamanPesanan).toInt();
-    final awalPesanan = (halamanPesanan - 1) * _pageSizePesanan;
-    final pesananHalamanIni =
-        pesananTersaring.skip(awalPesanan).take(_pageSizePesanan).toList();
+    final pesananHalamanIni = pesananTersaring;
     final belumTerbayar = semua.where((p) => !_sudahTerbayar(p)).toList();
-    final jumlahOnline = belumTerbayar.where((p) => p.dariPembeliOnline).length;
-    final jumlahTertahan =
+    final jumlahOnline = (_ringkasan['online'] as num?)?.toInt() ??
+        belumTerbayar.where((p) => p.dariPembeliOnline).length;
+    final jumlahTertahan = (_ringkasan['tertahan'] as num?)?.toInt() ??
         belumTerbayar.where((p) => !p.dariPembeliOnline).length;
-    final jumlahTerbayar = semua.where(_sudahTerbayar).length;
-    final nilaiMenunggu =
+    final jumlahTerbayar = (_ringkasan['terbayar'] as num?)?.toInt() ??
+        semua.where(_sudahTerbayar).length;
+    final nilaiMenunggu = (_ringkasan['nilaiMenunggu'] as num?)?.toDouble() ??
         belumTerbayar.fold<double>(0, (s, p) => s + p.totalBiaya);
     final tombolAksi = [
       HeaderActionButton(
@@ -846,8 +864,11 @@ class _PesananScreenState extends State<PesananScreen> {
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
-                            _kartuKpi(Icons.receipt_long_outlined, 'Total',
-                                '${semua.length}', const Color(0xFF1E3A5F)),
+                            _kartuKpi(
+                                Icons.receipt_long_outlined,
+                                'Total',
+                                '${(_ringkasan['total'] as num?)?.toInt() ?? _totalPesanan}',
+                                const Color(0xFF1E3A5F)),
                             const SizedBox(width: 8),
                             _kartuKpi(Icons.public, 'Online', '$jumlahOnline',
                                 const Color(0xFF0284C7)),
@@ -978,28 +999,37 @@ class _PesananScreenState extends State<PesananScreen> {
                           ChoiceChip(
                             label: const Text('Semua'),
                             selected: _filter == _Filter.semua,
-                            onSelected: (_) => setStateIfMounted(() {
-                              _filter = _Filter.semua;
-                              _halamanPesanan = 1;
-                            }),
+                            onSelected: (_) {
+                              setStateIfMounted(() {
+                                _filter = _Filter.semua;
+                                _halamanPesanan = 1;
+                              });
+                              _muat();
+                            },
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Online'),
                             selected: _filter == _Filter.online,
-                            onSelected: (_) => setStateIfMounted(() {
-                              _filter = _Filter.online;
-                              _halamanPesanan = 1;
-                            }),
+                            onSelected: (_) {
+                              setStateIfMounted(() {
+                                _filter = _Filter.online;
+                                _halamanPesanan = 1;
+                              });
+                              _muat();
+                            },
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('Tertahan'),
                             selected: _filter == _Filter.tertahan,
-                            onSelected: (_) => setStateIfMounted(() {
-                              _filter = _Filter.tertahan;
-                              _halamanPesanan = 1;
-                            }),
+                            onSelected: (_) {
+                              setStateIfMounted(() {
+                                _filter = _Filter.tertahan;
+                                _halamanPesanan = 1;
+                              });
+                              _muat();
+                            },
                           ),
                         ],
                       ),
@@ -1110,12 +1140,18 @@ class _PesananScreenState extends State<PesananScreen> {
                           totalData: pesananTersaring.length,
                           labelData: 'pesanan',
                           onSebelumnya: halamanPesanan > 1
-                              ? () => setStateIfMounted(
-                                  () => _halamanPesanan = halamanPesanan - 1)
+                              ? () {
+                                  setStateIfMounted(() =>
+                                      _halamanPesanan = halamanPesanan - 1);
+                                  _muat();
+                                }
                               : null,
                           onBerikutnya: halamanPesanan < totalHalamanPesanan
-                              ? () => setStateIfMounted(
-                                  () => _halamanPesanan = halamanPesanan + 1)
+                              ? () {
+                                  setStateIfMounted(() =>
+                                      _halamanPesanan = halamanPesanan + 1);
+                                  _muat();
+                                }
                               : null,
                         ),
                       ),
@@ -1175,10 +1211,12 @@ class _PesananScreenState extends State<PesananScreen> {
                   _hitungUlang(p);
                 },
               ),
-            if (Sesi.instance.bolehKelola && !_sudahTerbayar(p))
+            if (Sesi.instance.bolehHapusPesanan)
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Batalkan'),
+                title: Text(_sudahTerbayar(p)
+                    ? 'Batalkan Pembelian'
+                    : 'Batalkan Pesanan'),
                 onTap: () {
                   Navigator.of(context).pop();
                   _batalkan(p);

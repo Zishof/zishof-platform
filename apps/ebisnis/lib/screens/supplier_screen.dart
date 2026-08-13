@@ -21,7 +21,7 @@ class SupplierScreen extends StatefulWidget {
 }
 
 class _SupplierScreenState extends State<SupplierScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
@@ -103,8 +103,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance
-          .aksi('penyedia_hapus', {'id': supplier['id']});
+      await ApiClient.instance.aksi('penyedia_hapus', {'id': supplier['id']});
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -395,7 +394,9 @@ class _FormSupplierState extends State<_FormSupplier> {
                 judul: 'Lainnya',
                 children: [
                   AppFormTextField(
-                      label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                 ],
               ),
             ],

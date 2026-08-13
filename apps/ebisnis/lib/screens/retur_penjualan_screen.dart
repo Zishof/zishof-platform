@@ -754,7 +754,7 @@ class _TabelTransaksiRetur extends StatelessWidget {
 }
 
 class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -909,8 +909,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       await ApiClient.instance.aksi('retur_penjualan_ubah', {
         'id': r['id'],
         'qty': parseDesimal(qtyController.text) ?? r['qty'],
-        'harga_satuan':
-            parseDesimal(hargaController.text) ?? r['hargaSatuan'],
+        'harga_satuan': parseDesimal(hargaController.text) ?? r['hargaSatuan'],
         'alasan': alasan,
         'kondisi_barang': kondisi,
         'kembalikan_ke_stok': !kondisi.toLowerCase().contains('rusak'),

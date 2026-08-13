@@ -7,7 +7,8 @@ import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
 
-final _formatRupiahPd = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiahPd =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 const _opsiStatus = ['PENDING', 'BERHASIL', 'DITOLAK'];
 
@@ -33,7 +34,7 @@ class TabPencairanDiskon extends StatefulWidget {
 }
 
 class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -96,20 +97,27 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Hapus Pencairan?'),
-        content: Text('Hapus pencairan "${data['kodePencairan']}"? Tindakan ini tidak bisa dibatalkan.'),
+        content: Text(
+            'Hapus pencairan "${data['kodePencairan']}"? Tindakan ini tidak bisa dibatalkan.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus', style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
     if (yakin != true) return;
     try {
-      await ApiClient.instance.aksi('pencairan_diskon_hapus', {'id': data['id']});
+      await ApiClient.instance
+          .aksi('pencairan_diskon_hapus', {'id': data['id']});
       if (mounted) await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
       }
     }
   }
@@ -122,7 +130,9 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
       backgroundColor: Colors.transparent,
       floatingActionButton: Sesi.instance.bolehKelola
           ? FloatingActionButton.extended(
-              onPressed: () => _bukaForm(), icon: const Icon(Icons.add), label: const Text('Catat Pencairan'))
+              onPressed: () => _bukaForm(),
+              icon: const Icon(Icons.add),
+              label: const Text('Catat Pencairan'))
           : null,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -133,11 +143,14 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const Icon(Icons.error_outline,
+                            size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 16),
-                        ElevatedButton(onPressed: _muatDaftar, child: const Text('Coba Lagi')),
+                        ElevatedButton(
+                            onPressed: _muatDaftar,
+                            child: const Text('Coba Lagi')),
                       ],
                     ),
                   ),
@@ -172,8 +185,11 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                                 border: OutlineInputBorder(),
                               ),
                               items: [
-                                const DropdownMenuItem<String?>(value: null, child: Text('- Semua -')),
-                                ..._opsiStatus.map((s) => DropdownMenuItem<String?>(value: s, child: Text(s))),
+                                const DropdownMenuItem<String?>(
+                                    value: null, child: Text('- Semua -')),
+                                ..._opsiStatus.map((s) =>
+                                    DropdownMenuItem<String?>(
+                                        value: s, child: Text(s))),
                               ],
                               onChanged: (v) {
                                 _statusFilter = v;
@@ -191,13 +207,17 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                           AppTableColumn('Waktu & No. Ref', flex: 3),
                           AppTableColumn('Anggota', flex: 3),
                           AppTableColumn('Cara Pencairan', flex: 2),
-                          AppTableColumn('Nominal', flex: 2, align: TextAlign.right),
-                          AppTableColumn('Status', flex: 2, align: TextAlign.center),
+                          AppTableColumn('Nominal',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Status',
+                              flex: 2, align: TextAlign.center),
                           AppTableColumn('', flex: 1, align: TextAlign.center),
                         ],
                         rows: _data.map((p) {
                           return AppTableRowData(
-                            onTap: Sesi.instance.bolehKelola ? () => _bukaForm(data: p) : null,
+                            onTap: Sesi.instance.bolehKelola
+                                ? () => _bukaForm(data: p)
+                                : null,
                             cells: [
                               AppTableCell(
                                 flex: 3,
@@ -206,9 +226,14 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text('${p['kodePencairan']}',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12.5)),
                                     Text('${p['waktuPencairan'] ?? '-'}',
-                                        style: TextStyle(fontSize: 11, color: AppColors.textSecondaryOf(context))),
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textSecondaryOf(
+                                                context))),
                                   ],
                                 ),
                               ),
@@ -216,20 +241,31 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                                   '${p['anggotaNama'] ?? '-'}${(p['anggotaKode'] as String?)?.isNotEmpty == true ? ' (${p['anggotaKode']})' : ''}',
                                   flex: 3,
                                   maxLines: 2),
-                              AppTableCell.text('${p['caraPembayaranNama'] ?? '-'}', flex: 2),
-                              AppTableCell.text(_formatRupiahPd.format(p['nominalCair'] ?? 0),
-                                  flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              AppTableCell.text(
+                                  '${p['caraPembayaranNama'] ?? '-'}',
+                                  flex: 2),
+                              AppTableCell.text(
+                                  _formatRupiahPd.format(p['nominalCair'] ?? 0),
+                                  flex: 2,
+                                  align: TextAlign.right,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5)),
                               AppTableCell(
                                 flex: 2,
                                 align: TextAlign.center,
-                                child: StatusPill(label: '${p['status'] ?? '-'}', warna: _warnaStatus(p['status'] as String?)),
+                                child: StatusPill(
+                                    label: '${p['status'] ?? '-'}',
+                                    warna:
+                                        _warnaStatus(p['status'] as String?)),
                               ),
                               AppTableCell(
                                 flex: 1,
                                 align: TextAlign.center,
                                 child: Sesi.instance.bolehKelola
                                     ? IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 18, color: Colors.red),
                                         onPressed: () => _hapus(p),
                                         tooltip: 'Hapus',
                                       )
@@ -243,8 +279,11 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                           totalHalaman: _totalHalaman,
                           totalData: _total,
                           labelData: 'pencairan',
-                          onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                          onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+                          onSebelumnya:
+                              _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                          onBerikutnya: _halaman < _totalHalaman
+                              ? () => _pindah(_halaman + 1)
+                              : null,
                         ),
                       ),
                     ],
@@ -287,15 +326,22 @@ class _FormPencairanState extends State<_FormPencairan> {
     super.initState();
     final d = widget.data;
     _kodePencairan = TextEditingController(text: d?['kodePencairan'] ?? '');
-    _nominal = TextEditingController(text: d == null ? '' : '${(d['nominalCair'] as num?)?.toStringAsFixed(0) ?? ''}');
+    _nominal = TextEditingController(
+        text: d == null
+            ? ''
+            : '${(d['nominalCair'] as num?)?.toStringAsFixed(0) ?? ''}');
     _keterangan = TextEditingController(text: d?['keterangan'] ?? '');
-    _tokoId = TextEditingController(text: d?['tokoId'] == null ? '' : '${d!['tokoId']}');
+    _tokoId = TextEditingController(
+        text: d?['tokoId'] == null ? '' : '${d!['tokoId']}');
     _cariAnggota = TextEditingController(
-        text: d == null ? '' : '${d['anggotaNama'] ?? ''}${(d['anggotaKode'] as String?)?.isNotEmpty == true ? ' (${d['anggotaKode']})' : ''}');
+        text: d == null
+            ? ''
+            : '${d['anggotaNama'] ?? ''}${(d['anggotaKode'] as String?)?.isNotEmpty == true ? ' (${d['anggotaKode']})' : ''}');
     _anggotaId = d?['anggotaId'] as int?;
     _caraPembayaranId = d?['caraPembayaranId'] as int?;
     _status = (d?['status'] as String?) ?? 'PENDING';
-    _waktu = _uraiWaktuRaw(d?['waktuPencairanRaw'] as String?) ?? DateTime.now();
+    _waktu =
+        _uraiWaktuRaw(d?['waktuPencairanRaw'] as String?) ?? DateTime.now();
     _tanggalExpired = _uraiTanggal(d?['tanggalExpired'] as String?);
     if (!_ubah) {
       _kodePencairan.text = 'WD-${DateTime.now().millisecondsSinceEpoch}';
@@ -329,11 +375,13 @@ class _FormPencairanState extends State<_FormPencairan> {
     }
     setStateIfMounted(() => _mencariSaldo = true);
     try {
-      final hasil = await ApiClient.instance.aksi('pencairan_diskon_saldo_member', {
+      final hasil =
+          await ApiClient.instance.aksi('pencairan_diskon_saldo_member', {
         'anggota_koperasi_id': _anggotaId,
         if (_ubah) 'except_id': widget.data!['id'],
       });
-      setStateIfMounted(() => _sisaSaldo = (hasil['sisaSaldo'] as num?)?.toDouble() ?? 0);
+      setStateIfMounted(
+          () => _sisaSaldo = (hasil['sisaSaldo'] as num?)?.toDouble() ?? 0);
     } catch (_) {
       setStateIfMounted(() => _sisaSaldo = null);
     } finally {
@@ -352,8 +400,10 @@ class _FormPencairanState extends State<_FormPencairan> {
     }
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       try {
-        final hasil = await ApiClient.instance.aksi('anggota_list', {'keyword': v.trim(), 'page_size': 20});
-        setStateIfMounted(() => _hasilCariAnggota = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        final hasil = await ApiClient.instance
+            .aksi('anggota_list', {'keyword': v.trim(), 'page_size': 20});
+        setStateIfMounted(() => _hasilCariAnggota =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
       } catch (_) {
         // Pencarian gagal -- biarkan daftar lama, bukan blocker.
       }
@@ -377,16 +427,25 @@ class _FormPencairanState extends State<_FormPencairan> {
 
   Future<void> _pilihWaktu() async {
     final tanggal = await showDatePicker(
-        context: context, initialDate: _waktu ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+        context: context,
+        initialDate: _waktu ?? DateTime.now(),
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
     if (tanggal == null) return;
     if (!mounted) return;
-    final jam = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_waktu ?? DateTime.now()));
-    setStateIfMounted(() => _waktu = DateTime(tanggal.year, tanggal.month, tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0));
+    final jam = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_waktu ?? DateTime.now()));
+    setStateIfMounted(() => _waktu = DateTime(tanggal.year, tanggal.month,
+        tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0));
   }
 
   Future<void> _pilihTanggalExpired() async {
     final tanggal = await showDatePicker(
-        context: context, initialDate: _tanggalExpired ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+        context: context,
+        initialDate: _tanggalExpired ?? DateTime.now(),
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100));
     if (tanggal == null) return;
     setStateIfMounted(() => _tanggalExpired = tanggal);
   }
@@ -415,7 +474,8 @@ class _FormPencairanState extends State<_FormPencairan> {
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     if (_anggotaId == null) {
-      setStateIfMounted(() => _error = 'Pilih anggota koperasi terlebih dahulu.');
+      setStateIfMounted(
+          () => _error = 'Pilih anggota koperasi terlebih dahulu.');
       return;
     }
     if (_caraPembayaranId == null) {
@@ -432,12 +492,15 @@ class _FormPencairanState extends State<_FormPencairan> {
         'kode_pencairan': _kodePencairan.text.trim(),
         'anggota_koperasi_id': _anggotaId,
         'cara_pembayaran_id': _caraPembayaranId,
-        'nominal_cair': double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
+        'nominal_cair':
+            double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
         'waktu_pencairan': _fmtWaktu(_waktu ?? DateTime.now()),
-        'tanggal_expired': _tanggalExpired == null ? '' : _fmtTanggal(_tanggalExpired!),
+        'tanggal_expired':
+            _tanggalExpired == null ? '' : _fmtTanggal(_tanggalExpired!),
         'status': _status,
         'keterangan': _keterangan.text.trim(),
-        if (Sesi.instance.isAdmin) 'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
+        if (Sesi.instance.isAdmin)
+          'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -450,7 +513,8 @@ class _FormPencairanState extends State<_FormPencairan> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.9,
         maxChildSize: 0.95,
@@ -467,7 +531,8 @@ class _FormPencairanState extends State<_FormPencairan> {
               AppFormSection(
                 judul: 'Referensi & Waktu',
                 children: [
-                  AppFormTextField(label: 'No. Referensi', controller: _kodePencairan),
+                  AppFormTextField(
+                      label: 'No. Referensi', controller: _kodePencairan),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _pilihWaktu,
@@ -485,7 +550,8 @@ class _FormPencairanState extends State<_FormPencairan> {
                   AppFormTextField(
                     label: 'Cari Anggota *',
                     controller: _cariAnggota,
-                    validator: (v) => _anggotaId == null ? 'Pilih anggota dari daftar' : null,
+                    validator: (v) =>
+                        _anggotaId == null ? 'Pilih anggota dari daftar' : null,
                   ),
                   if (_hasilCariAnggota.isNotEmpty)
                     Container(
@@ -520,16 +586,28 @@ class _FormPencairanState extends State<_FormPencairan> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                          const Icon(Icons.account_balance_wallet_outlined,
+                              size: 16),
                           const SizedBox(width: 8),
-                          Text('Sisa Saldo Cashback: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondaryOf(context))),
+                          Text('Sisa Saldo Cashback: ',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondaryOf(context))),
                           _mencariSaldo
-                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
                               : Text(
-                                  _sisaSaldo == null ? '-' : _formatRupiahPd.format(_sisaSaldo),
+                                  _sisaSaldo == null
+                                      ? '-'
+                                      : _formatRupiahPd.format(_sisaSaldo),
                                   style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: (_sisaSaldo ?? 0) <= 0 ? AppColors.danger : AppColors.primary),
+                                      color: (_sisaSaldo ?? 0) <= 0
+                                          ? AppColors.danger
+                                          : AppColors.primary),
                                 ),
                         ],
                       ),
@@ -542,20 +620,28 @@ class _FormPencairanState extends State<_FormPencairan> {
                 judul: 'Detail Pencairan',
                 children: [
                   DropdownButtonFormField<int?>(
-                    value: Sesi.instance.caraBayar.any((c) => c.id == _caraPembayaranId) ? _caraPembayaranId : null,
-                    decoration: AppFormStyle.fieldDecoration(context, labelText: 'Cara Pencairan *'),
+                    value: Sesi.instance.caraBayar
+                            .any((c) => c.id == _caraPembayaranId)
+                        ? _caraPembayaranId
+                        : null,
+                    decoration: AppFormStyle.fieldDecoration(context,
+                        labelText: 'Cara Pencairan *'),
                     items: Sesi.instance.caraBayar
-                        .map((c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.nama)))
+                        .map((c) => DropdownMenuItem<int?>(
+                            value: c.id, child: Text(c.nama)))
                         .toList(),
-                    onChanged: (v) => setStateIfMounted(() => _caraPembayaranId = v),
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _caraPembayaranId = v),
                   ),
                   const SizedBox(height: 12),
                   AppFormTextField(
                     label: 'Nominal Pencairan (Rp) *',
                     controller: _nominal,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     validator: (v) {
-                      final n = double.tryParse((v ?? '').replaceAll(',', '.')) ?? 0;
+                      final n =
+                          double.tryParse((v ?? '').replaceAll(',', '.')) ?? 0;
                       return n <= 0 ? 'Harus lebih dari 0' : null;
                     },
                   ),
@@ -572,18 +658,29 @@ class _FormPencairanState extends State<_FormPencairan> {
                         ),
                       ),
                       if (_tanggalExpired != null)
-                        IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setStateIfMounted(() => _tanggalExpired = null)),
+                        IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () => setStateIfMounted(
+                                () => _tanggalExpired = null)),
                     ],
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _status,
-                    decoration: AppFormStyle.fieldDecoration(context, labelText: 'Status'),
-                    items: _opsiStatus.map((s) => DropdownMenuItem<String>(value: s, child: Text(s))).toList(),
-                    onChanged: (v) => setStateIfMounted(() => _status = v ?? 'PENDING'),
+                    decoration: AppFormStyle.fieldDecoration(context,
+                        labelText: 'Status'),
+                    items: _opsiStatus
+                        .map((s) =>
+                            DropdownMenuItem<String>(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _status = v ?? 'PENDING'),
                   ),
                   const SizedBox(height: 12),
-                  AppFormTextField(label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                  AppFormTextField(
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                   if (Sesi.instance.isAdmin) ...[
                     const SizedBox(height: 12),
                     AppFormTextField(
@@ -597,21 +694,26 @@ class _FormPencairanState extends State<_FormPencairan> {
             ],
             actions: [
               OutlinedButton.icon(
-                onPressed: _menyimpan ? null : () => Navigator.of(context).pop(false),
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
                 icon: const Icon(Icons.close, size: 18),
                 label: const Text('Batal'),
               ),
               ElevatedButton.icon(
                 onPressed: _menyimpan ? null : _simpan,
                 icon: _menyimpan
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.save_outlined, size: 18),
                 label: const Text('Simpan'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
               ),
             ],

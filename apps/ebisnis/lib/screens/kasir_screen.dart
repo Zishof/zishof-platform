@@ -704,8 +704,14 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _perbaruiJumlahPending() async {
-    final n = await CoreDb.instance.jumlahTransaksiPending();
-    if (mounted) setStateIfMounted(() => _jumlahPending = n);
+    try {
+      final n = await CoreDb.instance.jumlahTransaksiPending();
+      if (mounted) setStateIfMounted(() => _jumlahPending = n);
+    } catch (e) {
+      // Gangguan penghitung antrean lokal tidak boleh memblokir seluruh layar
+      // Kasir. Sinkron tetap dapat dicoba lagi dari tombol header.
+      if (kDebugMode) debugPrint('Gagal membaca jumlah antrean lokal: $e');
+    }
     unawaited(_muatKasSaatIni());
   }
 

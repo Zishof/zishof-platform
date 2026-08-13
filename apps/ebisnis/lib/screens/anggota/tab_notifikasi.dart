@@ -24,7 +24,7 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
-  static const _pageSize = 20;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -214,7 +214,8 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
                     align: TextAlign.center,
                     child: StatusPill(
                       label: dibaca ? 'Dibaca' : 'Belum',
-                      warna: dibaca ? AppColors.success : AppColors.textSecondary,
+                      warna:
+                          dibaca ? AppColors.success : AppColors.textSecondary,
                     ),
                   ),
                   AppTableCell(

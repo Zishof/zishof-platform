@@ -36,7 +36,8 @@ class CoreDb {
 
   Future<Database> get db async {
     final currentDb = _db;
-    if (currentDb != null) return currentDb;
+    if (currentDb != null && currentDb.isOpen) return currentDb;
+    if (currentDb != null && !currentDb.isOpen) _db = null;
 
     final openingDb = _openingDb ??= _buka();
     try {
@@ -471,10 +472,34 @@ class CoreDb {
   }
 
   Future<int> jumlahTransaksiPending() async {
-    final database = await db;
-    final hasil = await database.rawQuery(
-        "SELECT COUNT(*) AS n FROM transaksi_pending WHERE status = 'PENDING'");
-    return (hasil.first['n'] as int?) ?? 0;
+    Future<int> baca() async {
+      final database = await db;
+      final hasil = await database.query('transaksi_pending',
+          columns: const ['COUNT(*) AS n'],
+          where: 'status = ?',
+          whereArgs: const ['PENDING']);
+      return (hasil.first['n'] as num?)?.toInt() ?? 0;
+    }
+
+    try {
+      return await baca();
+    } catch (e) {
+      // sqlite_error 21/API misuse biasanya berarti handle FFI lama sudah
+      // tidak valid (mis. aplikasi sebelumnya ditutup paksa), bukan data
+      // transaksi rusak. Buka ulang SATU kali tanpa menghapus/mencadangkan DB.
+      final pesan = e.toString().toLowerCase();
+      if (!pesan.contains('code 21') &&
+          !pesan.contains('sqlite_error 21') &&
+          !pesan.contains('api misuse')) {
+        rethrow;
+      }
+      final lama = _db;
+      _db = null;
+      try {
+        if (lama != null && lama.isOpen) await lama.close();
+      } catch (_) {}
+      return baca();
+    }
   }
 
   // ============================== CACHE REFERENSI (generik) ==============================

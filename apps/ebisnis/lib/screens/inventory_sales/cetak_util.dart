@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -9,10 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../sesi.dart';
+import '../../services/simple_xlsx.dart';
 
 /// Util cetak/ekspor bersama layar varian Inventory & Sales (SCR-12..16 dkk):
-/// PDF client-side (pola voucher P3, package pdf+printing) + CSV client-side
-/// (pola persis `LaporanDetailScreen._eksporCsv`). Header PDF memuat konteks
+/// PDF client-side (pola voucher P3, package pdf+printing) + XLSX client-side
+/// (workbook OOXML asli, bukan CSV berganti ekstensi). Header PDF memuat konteks
 /// wajib paritas (pengguna, toko, waktu cetak, parameter) -- Matriks 48 layar:
 /// "cetak membawa parameter, jumlah baris, pengguna, waktu".
 class CetakUtilIs {
@@ -32,8 +31,7 @@ class CetakUtilIs {
       pageFormat: PdfPageFormat.a4,
       build: (ctx) => [
         pw.Text(judul,
-            style:
-                pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 2),
         pw.Text(
             'Toko: ${Sesi.instance.tokoNama.isEmpty ? "(global)" : Sesi.instance.tokoNama}'
@@ -61,43 +59,36 @@ class CetakUtilIs {
     await Printing.layoutPdf(onLayout: (_) => doc.save(), name: namaFile);
   }
 
-  static Future<void> eksporCsv({
+  static Future<void> eksporExcel({
     required BuildContext context,
     required String namaFile,
     required List<String> headers,
     required List<List<String>> rows,
   }) async {
-    String escapeCsv(String s) {
-      if (s.contains(',') || s.contains('"') || s.contains('\n')) {
-        return '"${s.replaceAll('"', '""')}"';
-      }
-      return s;
-    }
-
-    final buffer = StringBuffer();
-    buffer.writeln(headers.map(escapeCsv).join(','));
-    for (final r in rows) {
-      buffer.writeln(r.map(escapeCsv).join(','));
-    }
     try {
-      final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+      final bytes = buildSimpleXlsx(
+        sheetName: 'Data',
+        headers: headers,
+        rows: rows,
+      );
+      final fileName = namaFile.replaceFirst(RegExp(r'\.[^.]+$'), '.xlsx');
       final path = await FilePicker.platform.saveFile(
-          dialogTitle: 'Simpan CSV',
-          fileName: namaFile,
+          dialogTitle: 'Simpan Excel',
+          fileName: fileName,
           bytes: bytes,
           type: FileType.custom,
-          allowedExtensions: ['csv']);
+          allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Desktop hanya mengembalikan path (bytes belum tertulis); mobile sudah
       // menulis via `bytes` -- tulis ulang idempoten (pola LaporanDetailScreen).
       await File(path).writeAsBytes(bytes);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('CSV disimpan: $path')));
+          .showSnackBar(SnackBar(content: Text('Excel disimpan: $path')));
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal mengekspor CSV: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengekspor Excel: $e')));
       }
     }
   }

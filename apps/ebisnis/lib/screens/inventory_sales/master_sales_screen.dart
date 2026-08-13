@@ -9,7 +9,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Master Sales -- layar legacy 07 (Data Sales atau Penjual Keliling).</h3>
 ///
@@ -26,7 +27,7 @@ class MasterSalesScreen extends StatefulWidget {
 }
 
 class _MasterSalesScreenState extends State<MasterSalesScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -144,11 +145,13 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
         Tooltip(
           message:
               'Cetak/ekspor daftar sales & mapping perkiraan tersedia di fase laporan (P2-F).',
-          child:
-              IconButton(icon: const Icon(Icons.print_outlined), onPressed: null),
+          child: IconButton(
+              icon: const Icon(Icons.print_outlined), onPressed: null),
         ),
         IconButton(
-            icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
       ]),
       floatingActionButton: bolehTambah
           ? FloatingActionButton.extended(
@@ -204,7 +207,8 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                                 isDense: true,
                                 border: OutlineInputBorder()),
                             items: const [
-                              DropdownMenuItem(value: null, child: Text('Semua')),
+                              DropdownMenuItem(
+                                  value: null, child: Text('Semua')),
                               DropdownMenuItem(
                                   value: 'aktif', child: Text('Aktif')),
                               DropdownMenuItem(
@@ -227,12 +231,12 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                           AppTableColumn('Nama Sales', flex: 3),
                           AppTableColumn('No. Perkiraan', flex: 2),
                           AppTableColumn('Area', flex: 2),
-                          AppTableColumn('Target/Bln', flex: 2,
-                              align: TextAlign.right),
-                          AppTableColumn('Customer', flex: 1,
-                              align: TextAlign.right),
-                          AppTableColumn('Status', flex: 1,
-                              align: TextAlign.center),
+                          AppTableColumn('Target/Bln',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Customer',
+                              flex: 1, align: TextAlign.right),
+                          AppTableColumn('Status',
+                              flex: 1, align: TextAlign.center),
                           AppTableColumn('', flex: 1, align: TextAlign.center),
                         ],
                         rows: _data.map((s) {
@@ -260,8 +264,8 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                                       Text('Akun: ${s['userId']}',
                                           style: TextStyle(
                                               fontSize: 11,
-                                              color: AppColors
-                                                  .textSecondaryOf(context))),
+                                              color: AppColors.textSecondaryOf(
+                                                  context))),
                                   ],
                                 ),
                               ),
@@ -269,7 +273,8 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                                   flex: 2),
                               AppTableCell.text('${s['area'] ?? ''}', flex: 2),
                               AppTableCell.text(
-                                  _fmtRp.format((s['targetBulanan'] as num?) ?? 0),
+                                  _fmtRp.format(
+                                      (s['targetBulanan'] as num?) ?? 0),
                                   flex: 2,
                                   align: TextAlign.right),
                               AppTableCell.text('${s['jumlahCustomer'] ?? 0}',
@@ -296,11 +301,10 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                                             color: aktif
                                                 ? Colors.red
                                                 : AppColors.success),
-                                        tooltip: aktif
-                                            ? 'Nonaktifkan'
-                                            : 'Aktifkan',
-                                        onPressed: () => _ubahStatus(s,
-                                            aktifkan: !aktif),
+                                        tooltip:
+                                            aktif ? 'Nonaktifkan' : 'Aktifkan',
+                                        onPressed: () =>
+                                            _ubahStatus(s, aktifkan: !aktif),
                                       )
                                     : const SizedBox.shrink(),
                               ),
@@ -374,8 +378,15 @@ class _FormSalesState extends State<_FormSales> {
         text: (d?['limitPenagihan'] as num?)?.toStringAsFixed(0) ?? '0');
     _akun = TextEditingController(text: d?['userId'] ?? '');
     for (final c in [
-      _kode, _nama, _nomorPerkiraan, _area, _telepon, _alamat, _target,
-      _limit, _akun
+      _kode,
+      _nama,
+      _nomorPerkiraan,
+      _area,
+      _telepon,
+      _alamat,
+      _target,
+      _limit,
+      _akun
     ]) {
       c.addListener(() => _adaPerubahan = true);
     }
@@ -384,8 +395,15 @@ class _FormSalesState extends State<_FormSales> {
   @override
   void dispose() {
     for (final c in [
-      _kode, _nama, _nomorPerkiraan, _area, _telepon, _alamat, _target,
-      _limit, _akun
+      _kode,
+      _nama,
+      _nomorPerkiraan,
+      _area,
+      _telepon,
+      _alamat,
+      _target,
+      _limit,
+      _akun
     ]) {
       c.dispose();
     }
@@ -428,8 +446,8 @@ class _FormSalesState extends State<_FormSales> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Perubahan belum disimpan'),
-        content:
-            const Text('Ada perubahan yang belum disimpan. Tutup tanpa menyimpan?'),
+        content: const Text(
+            'Ada perubahan yang belum disimpan. Tutup tanpa menyimpan?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),

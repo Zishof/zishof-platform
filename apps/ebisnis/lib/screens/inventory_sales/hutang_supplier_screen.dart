@@ -94,7 +94,7 @@ class _TabHutang extends StatefulWidget {
 }
 
 class _TabHutangState extends State<_TabHutang> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -274,7 +274,7 @@ class _TabPembayaran extends StatefulWidget {
 }
 
 class _TabPembayaranState extends State<_TabPembayaran> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1181,7 +1181,7 @@ class _TabFaktur extends StatefulWidget {
 }
 
 class _TabFakturState extends State<_TabFaktur> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];

@@ -9,7 +9,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Master Supplier -- layar legacy 01-03 (Data Supplier / Buka-Tutup Daftar).</h3>
 ///
@@ -34,7 +35,7 @@ class MasterSupplierScreen extends StatefulWidget {
 }
 
 class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -169,7 +170,8 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
     return AppShell(
       menuAktif: MenuEBisnis.masterSupplier,
       judul: 'Master Supplier',
-      subjudul: 'Identitas pemasok, termin, wilayah, dan rekening (layar legacy 01-03)',
+      subjudul:
+          'Identitas pemasok, termin, wilayah, dan rekening (layar legacy 01-03)',
       scrollable: false,
       actionsAppBar: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
@@ -178,10 +180,13 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
         Tooltip(
           message:
               'Cetak/ekspor daftar supplier tersedia di fase laporan (P2-F) -- belum aktif di rilis ini.',
-          child: IconButton(icon: const Icon(Icons.print_outlined), onPressed: null),
+          child: IconButton(
+              icon: const Icon(Icons.print_outlined), onPressed: null),
         ),
         IconButton(
-            icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
       ]),
       floatingActionButton: bolehTambah
           ? FloatingActionButton.extended(
@@ -196,11 +201,13 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Colors.red),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                      ElevatedButton(
+                          onPressed: _muat, child: const Text('Coba Lagi')),
                     ]),
                   ),
                 )
@@ -235,8 +242,10 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                                 isDense: true,
                                 border: OutlineInputBorder()),
                             items: const [
-                              DropdownMenuItem(value: null, child: Text('Semua')),
-                              DropdownMenuItem(value: 'aktif', child: Text('Aktif')),
+                              DropdownMenuItem(
+                                  value: null, child: Text('Semua')),
+                              DropdownMenuItem(
+                                  value: 'aktif', child: Text('Aktif')),
                               DropdownMenuItem(
                                   value: 'nonaktif', child: Text('Nonaktif')),
                             ],
@@ -258,8 +267,10 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                                 isDense: true,
                                 border: OutlineInputBorder()),
                             items: const [
-                              DropdownMenuItem(value: 'kode', child: Text('Kode')),
-                              DropdownMenuItem(value: 'nama', child: Text('Nama')),
+                              DropdownMenuItem(
+                                  value: 'kode', child: Text('Kode')),
+                              DropdownMenuItem(
+                                  value: 'nama', child: Text('Nama')),
                               DropdownMenuItem(
                                   value: 'wilayah', child: Text('Wilayah')),
                             ],
@@ -278,9 +289,11 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                           AppTableColumn('Kode', flex: 1),
                           AppTableColumn('Nama Supplier', flex: 3),
                           AppTableColumn('Wilayah', flex: 2),
-                          AppTableColumn('Termin', flex: 1, align: TextAlign.right),
+                          AppTableColumn('Termin',
+                              flex: 1, align: TextAlign.right),
                           AppTableColumn('Telepon', flex: 2),
-                          AppTableColumn('Status', flex: 1, align: TextAlign.center),
+                          AppTableColumn('Status',
+                              flex: 1, align: TextAlign.center),
                         ],
                         rows: _data.map((s) {
                           final aktif = s['aktif'] == true;
@@ -293,8 +306,10 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
                                       fontSize: 12.5)),
-                              AppTableCell.text('${s['nama']}', flex: 3, maxLines: 2),
-                              AppTableCell.text('${s['wilayah'] ?? ''}', flex: 2),
+                              AppTableCell.text('${s['nama']}',
+                                  flex: 3, maxLines: 2),
+                              AppTableCell.text('${s['wilayah'] ?? ''}',
+                                  flex: 2),
                               AppTableCell.text('${s['terminHari'] ?? 0} hr',
                                   flex: 1, align: TextAlign.right),
                               AppTableCell.text('${s['telp'] ?? ''}', flex: 2),
@@ -345,8 +360,9 @@ class _DetailSupplierSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final aktif = data['aktif'] == true;
     final bolehUbah = Sesi.instance.bolehAksiIs('master_supplier', 'update');
-    final bolehNonaktif = Sesi.instance.bolehAksiIs('master_supplier', 'delete') ||
-        Sesi.instance.bolehAksiIs('master_supplier', 'update');
+    final bolehNonaktif =
+        Sesi.instance.bolehAksiIs('master_supplier', 'delete') ||
+            Sesi.instance.bolehAksiIs('master_supplier', 'update');
     Widget baris(String label, String nilai) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -417,46 +433,51 @@ class _DetailSupplierSheet extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 16),
-          Wrap(alignment: WrapAlignment.end, spacing: 10, runSpacing: 10, children: [
-            // Paritas aksi "Riwayat Audit" legacy: baca revisi Envers profil.
-            // Disabled beralasan bila supplier belum punya profil varian
-            // (belum ada revisi untuk dibaca) -- bukan disembunyikan.
-            Tooltip(
-              message: data['profilId'] == null
-                  ? 'Belum ada profil varian tersimpan — belum ada revisi audit.'
-                  : 'Riwayat perubahan (Envers)',
-              child: OutlinedButton.icon(
-                  onPressed: data['profilId'] == null
-                      ? null
-                      : () => tampilkanRiwayatAudit(context, 'supplier',
-                          data['profilId'] as Object, '${data['nama']}'),
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text('Riwayat Audit')),
-            ),
-            OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Tutup')),
-            if (bolehNonaktif)
-              OutlinedButton.icon(
-                  onPressed: () =>
-                      Navigator.pop(context, aktif ? 'nonaktif' : 'aktifkan'),
-                  icon: Icon(aktif ? Icons.block : Icons.check_circle_outline,
-                      size: 18,
-                      color: aktif ? Colors.red : AppColors.success),
-                  label: Text(aktif ? 'Nonaktifkan' : 'Aktifkan',
-                      style: TextStyle(
-                          color: aktif ? Colors.red : AppColors.success))),
-            if (bolehUbah)
-              ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context, 'ubah'),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Ubah'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0)),
-          ]),
+          Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                // Paritas aksi "Riwayat Audit" legacy: baca revisi Envers profil.
+                // Disabled beralasan bila supplier belum punya profil varian
+                // (belum ada revisi untuk dibaca) -- bukan disembunyikan.
+                Tooltip(
+                  message: data['profilId'] == null
+                      ? 'Belum ada profil varian tersimpan — belum ada revisi audit.'
+                      : 'Riwayat perubahan (Envers)',
+                  child: OutlinedButton.icon(
+                      onPressed: data['profilId'] == null
+                          ? null
+                          : () => tampilkanRiwayatAudit(context, 'supplier',
+                              data['profilId'] as Object, '${data['nama']}'),
+                      icon: const Icon(Icons.history, size: 18),
+                      label: const Text('Riwayat Audit')),
+                ),
+                OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Tutup')),
+                if (bolehNonaktif)
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(
+                          context, aktif ? 'nonaktif' : 'aktifkan'),
+                      icon: Icon(
+                          aktif ? Icons.block : Icons.check_circle_outline,
+                          size: 18,
+                          color: aktif ? Colors.red : AppColors.success),
+                      label: Text(aktif ? 'Nonaktifkan' : 'Aktifkan',
+                          style: TextStyle(
+                              color: aktif ? Colors.red : AppColors.success))),
+                if (bolehUbah)
+                  ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, 'ubah'),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Ubah'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0)),
+              ]),
         ],
       ),
     );
@@ -510,8 +531,19 @@ class _FormSupplierState extends State<_FormSupplier> {
     _bank = TextEditingController(text: d?['bank'] ?? '');
     _alamatBank = TextEditingController(text: d?['alamatBank'] ?? '');
     for (final c in [
-      _kode, _nama, _alamat, _telp, _kontak, _email, _keterangan, _termin,
-      _wilayah, _noRekening, _atasNama, _bank, _alamatBank
+      _kode,
+      _nama,
+      _alamat,
+      _telp,
+      _kontak,
+      _email,
+      _keterangan,
+      _termin,
+      _wilayah,
+      _noRekening,
+      _atasNama,
+      _bank,
+      _alamatBank
     ]) {
       c.addListener(() => _adaPerubahan = true);
     }
@@ -520,8 +552,19 @@ class _FormSupplierState extends State<_FormSupplier> {
   @override
   void dispose() {
     for (final c in [
-      _kode, _nama, _alamat, _telp, _kontak, _email, _keterangan, _termin,
-      _wilayah, _noRekening, _atasNama, _bank, _alamatBank
+      _kode,
+      _nama,
+      _alamat,
+      _telp,
+      _kontak,
+      _email,
+      _keterangan,
+      _termin,
+      _wilayah,
+      _noRekening,
+      _atasNama,
+      _bank,
+      _alamatBank
     ]) {
       c.dispose();
     }
@@ -574,8 +617,7 @@ class _FormSupplierState extends State<_FormSupplier> {
               child: const Text('Kembali')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child:
-                  const Text('Buang', style: TextStyle(color: Colors.red))),
+              child: const Text('Buang', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -593,7 +635,8 @@ class _FormSupplierState extends State<_FormSupplier> {
         }
       },
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: DraggableScrollableSheet(
           initialChildSize: 0.9,
           maxChildSize: 0.95,
@@ -638,7 +681,9 @@ class _FormSupplierState extends State<_FormSupplier> {
                   ]),
                   AppFormTextField(label: 'Email', controller: _email),
                   AppFormTextField(
-                      label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                 ]),
                 const SizedBox(height: 12),
                 AppFormSection(judul: 'Kontrol Relasi & Saldo', children: [

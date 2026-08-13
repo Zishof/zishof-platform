@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -39,7 +40,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
   String? _error;
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   late DateTime _dari;
   late DateTime _sampai;
   int? _idAnggotaFilter;
@@ -159,40 +160,48 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
     if (tersimpan == true) await _muat();
   }
 
-  Future<void> _unduhCsv() async {
+  Future<void> _unduhExcel() async {
     if (_data.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Tidak ada data untuk diunduh.')));
       return;
     }
-    final buffer = StringBuffer();
-    buffer.writeln(
-        'NAMA_ANGGOTA,TANGGAL,JENIS_MUTASI,KETERANGAN,HUTANG_BERTAMBAH,PEMBAYARAN,SALDO_HUTANG_ANGGOTA,SALDO_HUTANG_TOTAL');
-    for (final r in _data) {
-      buffer.writeln([
-        _csv('${r['namaAnggota'] ?? ''}'),
-        _csv('${r['waktu'] ?? ''}'),
-        _csv('${r['jenisMutasi'] ?? ''}'),
-        _csv('${r['keterangan'] ?? ''}'),
-        r['bertambah'] ?? 0,
-        r['berkurang'] ?? 0,
-        r['saldoPerAnggota'] ?? 0,
-        r['saldoTotal'] ?? 0,
-      ].join(','));
-    }
-    final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+    final bytes = buildSimpleXlsx(
+      sheetName: 'Mutasi Hutang',
+      headers: const [
+        'NAMA_ANGGOTA',
+        'TANGGAL',
+        'JENIS_MUTASI',
+        'KETERANGAN',
+        'HUTANG_BERTAMBAH',
+        'PEMBAYARAN',
+        'SALDO_HUTANG_ANGGOTA',
+        'SALDO_HUTANG_TOTAL',
+      ],
+      rows: _data
+          .map((r) => <Object?>[
+                r['namaAnggota'] ?? '',
+                r['waktu'] ?? '',
+                r['jenisMutasi'] ?? '',
+                r['keterangan'] ?? '',
+                (r['bertambah'] as num?) ?? 0,
+                (r['berkurang'] as num?) ?? 0,
+                (r['saldoPerAnggota'] as num?) ?? 0,
+                (r['saldoTotal'] as num?) ?? 0,
+              ])
+          .toList(),
+    );
     final nama =
-        'Mutasi_Hutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.csv';
-    await FilePicker.platform.saveFile(
-      dialogTitle: 'Simpan Mutasi Hutang',
+        'Mutasi_Hutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Simpan Mutasi Hutang (Excel)',
       fileName: nama,
       bytes: bytes,
       type: FileType.custom,
-      allowedExtensions: const ['csv'],
+      allowedExtensions: const ['xlsx'],
     );
+    if (path != null) await File(path).writeAsBytes(bytes);
   }
-
-  String _csv(String v) => '"${v.replaceAll('"', '""')}"';
 
   Future<void> _cetakPdf() async {
     if (_data.isEmpty) {
@@ -366,9 +375,9 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
                       foregroundColor: Colors.white),
                 ),
               ElevatedButton.icon(
-                onPressed: _unduhCsv,
+                onPressed: _unduhExcel,
                 icon: const Icon(Icons.file_download_outlined, size: 18),
-                label: const Text('Download'),
+                label: const Text('Download Excel'),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white),

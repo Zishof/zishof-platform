@@ -41,7 +41,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   final _controllerCari = TextEditingController();
   String _kategoriDipilih = '';
   int _halaman = 1;
-  static const int _pageSize = 10;
+  static const int _pageSize = 15;
 
   @override
   void initState() {
@@ -67,7 +67,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
         _kategori =
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         if (_kategoriDipilih.isNotEmpty &&
-            !_kategori.any((e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
+            !_kategori
+                .any((e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
           _kategoriDipilih = '';
         }
         _halaman = 1;
@@ -84,13 +85,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
     if (url != null && url.isNotEmpty) {
       final origin = Uri.parse(ApiClient.baseUrl).origin;
       final uri = Uri.parse('$origin$url');
-      final berhasil = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final berhasil =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!berhasil && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tidak bisa membuka $uri')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Tidak bisa membuka $uri')));
       }
       return;
     }
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
+    await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
   }
 
   List<_LaporanKatalogBaris> get _terfilter {
@@ -133,8 +137,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
     return data.sublist(mulai, sampai);
   }
 
-  Color _warnaBiruGelap(BuildContext context) =>
-      AppColors.gelap(context) ? AppColors.darkTextPrimary : AppColors.sidebarBg;
+  Color _warnaBiruGelap(BuildContext context) => AppColors.gelap(context)
+      ? AppColors.darkTextPrimary
+      : AppColors.sidebarBg;
 
   List<String> get _opsiKategori {
     final kategori = _kategori
@@ -152,8 +157,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
       menuAktif: widget.menuAktif,
       judul: widget.judul,
       subjudul: widget.subjudul,
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat, tooltip: 'Muat ulang'),
-      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _muat, tooltip: 'Muat ulang')],
+      aksiHeader: IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _muat,
+          tooltip: 'Muat ulang'),
+      actionsAppBar: [
+        IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _muat,
+            tooltip: 'Muat ulang')
+      ],
       scrollable: true,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -165,159 +178,166 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     final totalHalaman = _totalHalaman(data.length);
                     final halamanData = _halamanData(data);
                     return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final sempit = constraints.maxWidth < 720;
-                          final kategoriDropdown = DropdownButtonFormField<String>(
-                            value: _kategoriDipilih,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Kategori',
-                              prefixIcon: Icon(Icons.category_outlined),
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            items: [
-                              const DropdownMenuItem(
-                                value: '',
-                                child: Text('Semua kategori'),
-                              ),
-                              ..._opsiKategori.map(
-                                (kategori) => DropdownMenuItem(
-                                  value: kategori,
-                                  child: Text(
-                                    kategori,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final sempit = constraints.maxWidth < 720;
+                              final kategoriDropdown =
+                                  DropdownButtonFormField<String>(
+                                value: _kategoriDipilih,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Kategori',
+                                  prefixIcon: Icon(Icons.category_outlined),
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                items: [
+                                  const DropdownMenuItem(
+                                    value: '',
+                                    child: Text('Semua kategori'),
+                                  ),
+                                  ..._opsiKategori.map(
+                                    (kategori) => DropdownMenuItem(
+                                      value: kategori,
+                                      child: Text(
+                                        kategori,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (value) => setStateIfMounted(() {
+                                  _kategoriDipilih = value ?? '';
+                                  _halaman = 1;
+                                }),
+                              );
+                              final pencarian = TextField(
+                                controller: _controllerCari,
+                                decoration: const InputDecoration(
+                                    hintText: 'Cari laporan...',
+                                    prefixIcon: Icon(Icons.search),
+                                    border: OutlineInputBorder(),
+                                    isDense: true),
+                                onChanged: (_) =>
+                                    setStateIfMounted(() => _halaman = 1),
+                              );
+                              if (sempit) {
+                                return Column(
+                                  children: [
+                                    kategoriDropdown,
+                                    const SizedBox(height: 8),
+                                    pencarian,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  SizedBox(width: 320, child: kategoriDropdown),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: pencarian),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        AppDataTable(
+                          minWidth: 920,
+                          emptyText: 'Tidak ada laporan yang cocok.',
+                          columns: const [
+                            AppTableColumn('Kategori', flex: 2),
+                            AppTableColumn('Laporan', flex: 3),
+                            AppTableColumn('Keterangan', flex: 4),
+                            AppTableColumn('Format',
+                                width: 96, align: TextAlign.center),
+                            AppTableColumn('Aksi',
+                                width: 82, align: TextAlign.center),
+                          ],
+                          rows: halamanData.map((baris) {
+                            final item = baris.item;
+                            final adaUrl =
+                                (item['url'] as String? ?? '').isNotEmpty;
+                            return AppTableRowData(
+                              onTap: () => _bukaItem(item),
+                              cells: [
+                                AppTableCell.text(
+                                  baris.kategori,
+                                  flex: 2,
+                                  maxLines: 2,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimaryOf(context),
                                   ),
                                 ),
-                              ),
-                            ],
-                            onChanged: (value) => setStateIfMounted(() {
-                              _kategoriDipilih = value ?? '';
-                              _halaman = 1;
-                            }),
-                          );
-                          final pencarian = TextField(
-                            controller: _controllerCari,
-                            decoration: const InputDecoration(
-                                hintText: 'Cari laporan...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                                isDense: true),
-                            onChanged: (_) =>
-                                setStateIfMounted(() => _halaman = 1),
-                          );
-                          if (sempit) {
-                            return Column(
-                              children: [
-                                kategoriDropdown,
-                                const SizedBox(height: 8),
-                                pencarian,
+                                AppTableCell.text(
+                                  item['judul'] as String? ?? '-',
+                                  flex: 3,
+                                  maxLines: 2,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: _warnaBiruGelap(context),
+                                  ),
+                                ),
+                                AppTableCell.text(
+                                  item['ket'] as String? ?? '-',
+                                  flex: 4,
+                                  maxLines: 2,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondaryOf(context),
+                                  ),
+                                ),
+                                AppTableCell(
+                                  width: 96,
+                                  align: TextAlign.center,
+                                  child: StatusPill(
+                                    label: adaUrl ? 'Link' : 'Data',
+                                    warna: adaUrl
+                                        ? AppColors.info
+                                        : AppColors.primary,
+                                  ),
+                                ),
+                                AppTableCell(
+                                  width: 82,
+                                  align: TextAlign.center,
+                                  child: IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: adaUrl
+                                        ? 'Buka laporan'
+                                        : 'Jalankan laporan',
+                                    icon: Icon(
+                                      adaUrl
+                                          ? Icons.open_in_new
+                                          : Icons.chevron_right,
+                                      size: 20,
+                                      color: _warnaBiruGelap(context),
+                                    ),
+                                    onPressed: () => _bukaItem(item),
+                                  ),
+                                ),
                               ],
                             );
-                          }
-                          return Row(
-                            children: [
-                              SizedBox(width: 320, child: kategoriDropdown),
-                              const SizedBox(width: 10),
-                              Expanded(child: pencarian),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                    AppDataTable(
-                      minWidth: 920,
-                      emptyText: 'Tidak ada laporan yang cocok.',
-                      columns: const [
-                        AppTableColumn('Kategori', flex: 2),
-                        AppTableColumn('Laporan', flex: 3),
-                        AppTableColumn('Keterangan', flex: 4),
-                        AppTableColumn('Format', width: 96, align: TextAlign.center),
-                        AppTableColumn('Aksi', width: 82, align: TextAlign.center),
+                          }).toList(),
+                          pagination: AppTablePagination(
+                            halaman: _halaman,
+                            totalHalaman: totalHalaman,
+                            totalData: data.length,
+                            labelData: 'laporan',
+                            onSebelumnya: _halaman > 1
+                                ? () => setStateIfMounted(() => _halaman--)
+                                : null,
+                            onBerikutnya: _halaman < totalHalaman
+                                ? () => setStateIfMounted(() => _halaman++)
+                                : null,
+                          ),
+                        ),
                       ],
-                      rows: halamanData.map((baris) {
-                        final item = baris.item;
-                        final adaUrl =
-                            (item['url'] as String? ?? '').isNotEmpty;
-                        return AppTableRowData(
-                          onTap: () => _bukaItem(item),
-                          cells: [
-                            AppTableCell.text(
-                              baris.kategori,
-                              flex: 2,
-                              maxLines: 2,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimaryOf(context),
-                              ),
-                            ),
-                            AppTableCell.text(
-                              item['judul'] as String? ?? '-',
-                              flex: 3,
-                              maxLines: 2,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: _warnaBiruGelap(context),
-                              ),
-                            ),
-                            AppTableCell.text(
-                              item['ket'] as String? ?? '-',
-                              flex: 4,
-                              maxLines: 2,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondaryOf(context),
-                              ),
-                            ),
-                            AppTableCell(
-                              width: 96,
-                              align: TextAlign.center,
-                              child: StatusPill(
-                                label: adaUrl ? 'Link' : 'Data',
-                                warna: adaUrl ? AppColors.info : AppColors.primary,
-                              ),
-                            ),
-                            AppTableCell(
-                              width: 82,
-                              align: TextAlign.center,
-                              child: IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: adaUrl ? 'Buka laporan' : 'Jalankan laporan',
-                                icon: Icon(
-                                  adaUrl
-                                      ? Icons.open_in_new
-                                      : Icons.chevron_right,
-                                  size: 20,
-                                  color: _warnaBiruGelap(context),
-                                ),
-                                onPressed: () => _bukaItem(item),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                      pagination: AppTablePagination(
-                        halaman: _halaman,
-                        totalHalaman: totalHalaman,
-                        totalData: data.length,
-                        labelData: 'laporan',
-                        onSebelumnya: _halaman > 1
-                            ? () => setStateIfMounted(() => _halaman--)
-                            : null,
-                        onBerikutnya: _halaman < totalHalaman
-                            ? () => setStateIfMounted(() => _halaman++)
-                            : null,
-                      ),
-                    ),
-                  ],
                     );
                   },
                 ),

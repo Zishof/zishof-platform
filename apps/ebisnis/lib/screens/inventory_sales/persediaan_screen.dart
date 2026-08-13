@@ -8,7 +8,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'cetak_util.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtQty = NumberFormat('#,##0.##', 'id_ID');
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
@@ -28,7 +29,7 @@ class PersediaanScreen extends StatefulWidget {
 }
 
 class _PersediaanScreenState extends State<PersediaanScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -138,8 +139,16 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
       .toList();
 
   static const _headerCetak = [
-    'Kode', 'Nama Barang', 'Sat', 'Hrg Beli', 'Awal', 'Masuk', 'Keluar',
-    'Akhir', 'Total Harga', 'Min'
+    'Kode',
+    'Nama Barang',
+    'Sat',
+    'Hrg Beli',
+    'Awal',
+    'Masuk',
+    'Keluar',
+    'Akhir',
+    'Total Harga',
+    'Min'
   ];
 
   String get _parameterCetak =>
@@ -155,7 +164,8 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
       }
       await CetakUtilIs.cetakPdfTabel(
         judul: 'LAPORAN PERSEDIAAN (DAFTAR STOK)',
-        parameter: _parameterCetak + (terpotong ? ' · TERPOTONG 1000 baris' : ''),
+        parameter:
+            _parameterCetak + (terpotong ? ' · TERPOTONG 1000 baris' : ''),
         headers: _headerCetak,
         rows: _barisCetak(data),
         barisTotal:
@@ -170,7 +180,7 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
     }
   }
 
-  Future<void> _eksporCsv() async {
+  Future<void> _eksporExcel() async {
     try {
       final (data, terpotong) = await _ambilSemua();
       if (terpotong && mounted) {
@@ -178,9 +188,9 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
             content: Text('Data melebihi 1000 baris — ekspor terpotong.')));
       }
       if (!mounted) return;
-      await CetakUtilIs.eksporCsv(
+      await CetakUtilIs.eksporExcel(
         context: context,
-        namaFile: 'persediaan-${_fmtTgl.format(_sampai)}.csv',
+        namaFile: 'persediaan-${_fmtTgl.format(_sampai)}.xlsx',
         headers: _headerCetak,
         rows: _barisCetak(data),
       );
@@ -219,14 +229,17 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
             icon: const Icon(Icons.print_outlined),
-            tooltip: 'Cetak/Preview PDF Laporan Persediaan (parameter = filter aktif)',
+            tooltip:
+                'Cetak/Preview PDF Laporan Persediaan (parameter = filter aktif)',
             onPressed: _cetakPdf),
         IconButton(
             icon: const Icon(Icons.table_view_outlined),
-            tooltip: 'Ekspor CSV (kolom legacy lengkap)',
-            onPressed: _eksporCsv),
+            tooltip: 'Ekspor Excel (kolom legacy lengkap)',
+            onPressed: _eksporExcel),
         IconButton(
-            icon: const Icon(Icons.refresh), tooltip: 'Muat Ulang', onPressed: _muat),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
       ]),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -321,22 +334,25 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                           AppTableColumn('Kode', flex: 1),
                           AppTableColumn('Nama Barang', flex: 3),
                           AppTableColumn('Sat', flex: 1),
-                          AppTableColumn('Hrg Beli', flex: 2,
-                              align: TextAlign.right),
-                          AppTableColumn('Awal', flex: 1, align: TextAlign.right),
-                          AppTableColumn('Masuk', flex: 1,
-                              align: TextAlign.right),
-                          AppTableColumn('Keluar', flex: 1,
-                              align: TextAlign.right),
-                          AppTableColumn('Akhir', flex: 1,
-                              align: TextAlign.right),
-                          AppTableColumn('Total Harga', flex: 2,
-                              align: TextAlign.right),
-                          AppTableColumn('Min', flex: 1, align: TextAlign.right),
+                          AppTableColumn('Hrg Beli',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Awal',
+                              flex: 1, align: TextAlign.right),
+                          AppTableColumn('Masuk',
+                              flex: 1, align: TextAlign.right),
+                          AppTableColumn('Keluar',
+                              flex: 1, align: TextAlign.right),
+                          AppTableColumn('Akhir',
+                              flex: 1, align: TextAlign.right),
+                          AppTableColumn('Total Harga',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Min',
+                              flex: 1, align: TextAlign.right),
                         ],
                         rows: _data.map((p) {
                           final akhir = (p['akhir'] as num?)?.toDouble() ?? 0;
-                          final min = (p['stokMinimum'] as num?)?.toDouble() ?? 0;
+                          final min =
+                              (p['stokMinimum'] as num?)?.toDouble() ?? 0;
                           final negatif = akhir < 0;
                           final diBawahMin = akhir <= min && min > 0;
                           return AppTableRowData(
@@ -348,7 +364,8 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                                       fontFamily: 'monospace', fontSize: 12)),
                               AppTableCell.text('${p['nama']}',
                                   flex: 3, maxLines: 2),
-                              AppTableCell.text('${p['satuan'] ?? ''}', flex: 1),
+                              AppTableCell.text('${p['satuan'] ?? ''}',
+                                  flex: 1),
                               AppTableCell.text(
                                   _fmtRp.format((p['hargaBeli'] as num?) ?? 0),
                                   flex: 2,
@@ -378,8 +395,8 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                                           ? AppColors.danger
                                           : (diBawahMin
                                               ? AppColors.warning
-                                              : AppColors
-                                                  .textPrimaryOf(context))),
+                                              : AppColors.textPrimaryOf(
+                                                  context))),
                                 ),
                               ),
                               AppTableCell.text(
@@ -482,7 +499,8 @@ class _KartuStokSheetState extends State<_KartuStokSheet> {
         padding: const EdgeInsets.all(20),
         children: [
           Text('Kartu Stok — ${widget.kode} ${widget.nama}',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              style:
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(
               'Periode ${_fmtTgl.format(widget.dari)} s.d. ${_fmtTgl.format(widget.sampai)} · '
@@ -500,7 +518,8 @@ class _KartuStokSheetState extends State<_KartuStokSheet> {
               child: Column(children: [
                 Text(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                ElevatedButton(
+                    onPressed: _muat, child: const Text('Coba Lagi')),
               ]),
             )
           else if (_baris.isEmpty)
@@ -508,8 +527,7 @@ class _KartuStokSheetState extends State<_KartuStokSheet> {
               padding: const EdgeInsets.all(24),
               child: Text('Tidak ada mutasi pada periode ini.',
                   textAlign: TextAlign.center,
-                  style:
-                      TextStyle(color: AppColors.textSecondaryOf(context))),
+                  style: TextStyle(color: AppColors.textSecondaryOf(context))),
             )
           else
             AppDataTable(
@@ -525,8 +543,7 @@ class _KartuStokSheetState extends State<_KartuStokSheet> {
               rows: _baris
                   .map((b) => AppTableRowData(cells: [
                         AppTableCell.text('${b['waktu']}'.split('.').first,
-                            flex: 2,
-                            style: const TextStyle(fontSize: 11.5)),
+                            flex: 2, style: const TextStyle(fontSize: 11.5)),
                         AppTableCell.text('${b['jenis']}', flex: 3),
                         AppTableCell.text('${b['referensi'] ?? ''}', flex: 1),
                         AppTableCell.text(

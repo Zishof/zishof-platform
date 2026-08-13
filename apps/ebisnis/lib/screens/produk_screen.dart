@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -21,7 +21,7 @@ import '../widgets/safe_state.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-const _itemPerHalaman = 20;
+const _itemPerHalaman = 15;
 
 /// Palet warna avatar placeholder (foto belum ada) -- deterministik dari
 /// nama, sama persis dgn `_paletKartuProduk` di kasir_screen.dart, tapi
@@ -76,6 +76,8 @@ class _ProdukScreenState extends State<ProdukScreen> {
   int? _kategoriTerpilih;
   String _kataKunci = '';
   int _halaman = 0;
+  int _totalProduk = 0;
+  Timer? _timerCari;
   Map<String, dynamic>? _statistik;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
@@ -90,18 +92,32 @@ class _ProdukScreenState extends State<ProdukScreen> {
     _muatSemua();
   }
 
+  @override
+  void dispose() {
+    _timerCari?.cancel();
+    super.dispose();
+  }
+
   Future<void> _muatSemua() async {
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
-      final katalog = await ApiClient.instance.aksi('katalog');
+      final katalog = await ApiClient.instance.aksi('katalog', {
+        'page': _halaman + 1,
+        'page_size': _itemPerHalaman,
+        if (_kataKunci.trim().isNotEmpty) 'keyword': _kataKunci.trim(),
+        if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
+        if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
+      });
       final produkJson = (katalog['produk'] as List?) ?? [];
       final produk = produkJson
           .map((e) => Produk.fromJson(e as Map<String, dynamic>))
           .toList();
-      final kategori = ((katalog['kategori'] as List?) ?? [])
+      final hasilKategori = await ApiClient.instance
+          .aksi('jenis_produk_list', {'page': 1, 'page_size': 100});
+      final kategori = ((hasilKategori['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
       final hasilKebijakan = await ApiClient.instance
@@ -109,12 +125,6 @@ class _ProdukScreenState extends State<ProdukScreen> {
       final kebijakanRetur = ((hasilKebijakan['data'] as List?) ?? [])
           .map((e) => KebijakanRetur.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      // Segarkan jg cache lokal yg dipakai Kasir, supaya produk baru/berubah
-      // di sini langsung terlihat di Kasir tanpa kasir harus menekan sinkron manual.
-      await CoreDb.instance.replaceProdukCache(produkJson
-          .map((e) => Produk.baseKeCacheRow(e as Map<String, dynamic>))
-          .toList());
 
       Map<String, dynamic>? statistik;
       try {
@@ -125,10 +135,10 @@ class _ProdukScreenState extends State<ProdukScreen> {
 
       setStateIfMounted(() {
         _semuaProduk = produk;
+        _totalProduk = (katalog['total'] as num?)?.toInt() ?? produk.length;
         _kategori = kategori;
         _kebijakanRetur = kebijakanRetur;
         _statistik = statistik;
-        _halaman = 0;
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -137,33 +147,38 @@ class _ProdukScreenState extends State<ProdukScreen> {
     }
   }
 
-  List<Produk> get _produkTersaring {
-    return _semuaProduk.where((p) {
-      final cocokKategori =
-          _kategoriTerpilih == null || p.kategoriId == _kategoriTerpilih;
-      final kw = _kataKunci.toLowerCase();
-      final cocokKeyword = kw.isEmpty ||
-          p.nama.toLowerCase().contains(kw) ||
-          p.kode.toLowerCase().contains(kw) ||
-          p.barcode.toLowerCase().contains(kw);
-      final cocokJenisItem =
-          _filterJenisItem == 'SEMUA' || p.jenisItem == _filterJenisItem;
-      return cocokKategori && cocokKeyword && cocokJenisItem;
-    }).toList();
-  }
+  List<Produk> get _produkTersaring => _semuaProduk;
 
   List<Produk> get _produkHalamanIni {
     final semua = _produkTersaring;
-    final awal = _halaman * _itemPerHalaman;
-    if (awal >= semua.length) return [];
-    final akhir = (awal + _itemPerHalaman).clamp(0, semua.length);
-    return semua.sublist(awal, akhir);
+    return semua;
   }
 
   int get _totalHalaman =>
-      (_produkTersaring.length / _itemPerHalaman).ceil().clamp(1, 999999);
+      (_totalProduk / _itemPerHalaman).ceil().clamp(1, 999999);
 
   Future<void> _bukaFormProduk({Produk? produk}) async {
+    // Daftar relasi resep/ekstra bukan tabel utama, namun tetap dimuat secara
+    // terukur (maks. 100 per jenis) agar paging katalog 15 baris tidak membuat
+    // pilihan Bahan/Ekstra hanya berisi produk pada halaman yang sedang terlihat.
+    final pilihanRelasi = <int, Produk>{for (final p in _semuaProduk) p.id: p};
+    for (final jenis in const ['BAHAN', 'EKSTRA']) {
+      try {
+        final hasil = await ApiClient.instance.aksi('katalog', {
+          'page': 1,
+          'page_size': 100,
+          'jenisItem': jenis,
+        });
+        for (final raw in (hasil['produk'] as List?) ?? const []) {
+          final p = Produk.fromJson(raw as Map<String, dynamic>);
+          pilihanRelasi[p.id] = p;
+        }
+      } catch (_) {
+        // Form tetap dapat dibuka memakai data halaman aktif bila jaringan
+        // untuk data pilihan tambahan sedang terganggu.
+      }
+    }
+    if (!mounted) return;
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -171,7 +186,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
           produk: produk,
           kategori: _kategori,
           kebijakanRetur: _kebijakanRetur.where((e) => e.aktif).toList(),
-          semuaProduk: _semuaProduk),
+          semuaProduk: pilihanRelasi.values.toList()),
     );
     if (tersimpan == true) {
       await _muatSemua();
@@ -534,10 +549,16 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                     AppSearchField(
                                       hintText:
                                           'Cari produk (nama/kode/barcode)...',
-                                      onChanged: (v) => setStateIfMounted(() {
-                                        _kataKunci = v;
-                                        _halaman = 0;
-                                      }),
+                                      onChanged: (v) {
+                                        setStateIfMounted(() {
+                                          _kataKunci = v;
+                                          _halaman = 0;
+                                        });
+                                        _timerCari?.cancel();
+                                        _timerCari = Timer(
+                                            const Duration(milliseconds: 350),
+                                            _muatSemua);
+                                      },
                                     ),
                                     const SizedBox(height: 10),
                                     Align(
@@ -558,11 +579,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               label: Text('Ekstra')),
                                         ],
                                         selected: {_filterJenisItem},
-                                        onSelectionChanged: (s) =>
-                                            setStateIfMounted(() {
-                                          _filterJenisItem = s.first;
-                                          _halaman = 0;
-                                        }),
+                                        onSelectionChanged: (s) {
+                                          setStateIfMounted(() {
+                                            _filterJenisItem = s.first;
+                                            _halaman = 0;
+                                          });
+                                          _muatSemua();
+                                        },
                                       ),
                                     ),
                                     const SizedBox(height: 10),
@@ -578,11 +601,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               label: const Text('Semua'),
                                               selected:
                                                   _kategoriTerpilih == null,
-                                              onSelected: (_) =>
-                                                  setStateIfMounted(() {
-                                                _kategoriTerpilih = null;
-                                                _halaman = 0;
-                                              }),
+                                              onSelected: (_) {
+                                                setStateIfMounted(() {
+                                                  _kategoriTerpilih = null;
+                                                  _halaman = 0;
+                                                });
+                                                _muatSemua();
+                                              },
                                             ),
                                           ),
                                           ..._kategori.map((k) => Padding(
@@ -592,11 +617,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                   label: Text(k.nama),
                                                   selected:
                                                       _kategoriTerpilih == k.id,
-                                                  onSelected: (_) =>
-                                                      setStateIfMounted(() {
-                                                    _kategoriTerpilih = k.id;
-                                                    _halaman = 0;
-                                                  }),
+                                                  onSelected: (_) {
+                                                    setStateIfMounted(() {
+                                                      _kategoriTerpilih = k.id;
+                                                      _halaman = 0;
+                                                    });
+                                                    _muatSemua();
+                                                  },
                                                 ),
                                               )),
                                         ],
@@ -630,8 +657,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                                     produk: p)))
                                                         .toList()),
                                       ),
-                                    if (_produkTersaring.length >
-                                        _itemPerHalaman)
+                                    if (_totalProduk > _itemPerHalaman)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(
                                             vertical: 12),
@@ -643,8 +669,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               icon: const Icon(
                                                   Icons.chevron_left),
                                               onPressed: _halaman > 0
-                                                  ? () => setStateIfMounted(
-                                                      () => _halaman--)
+                                                  ? () {
+                                                      setStateIfMounted(
+                                                          () => _halaman--);
+                                                      _muatSemua();
+                                                    }
                                                   : null,
                                             ),
                                             Text(
@@ -654,8 +683,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                   Icons.chevron_right),
                                               onPressed:
                                                   _halaman < _totalHalaman - 1
-                                                      ? () => setStateIfMounted(
-                                                          () => _halaman++)
+                                                      ? () {
+                                                          setStateIfMounted(
+                                                              () => _halaman++);
+                                                          _muatSemua();
+                                                        }
                                                       : null,
                                             ),
                                           ],

@@ -8,7 +8,8 @@ import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
-const _urlIssueBaruGithub = 'https://github.com/Zishof/zishof-platform/issues/new';
+const _urlIssueBaruGithub =
+    'https://github.com/Zishof/zishof-platform/issues/new';
 
 String _formatWaktu(String iso) {
   try {
@@ -32,7 +33,7 @@ class LogErrorScreen extends StatefulWidget {
 }
 
 class _LogErrorScreenState extends State<LogErrorScreen> {
-  static const _pageSize = 30;
+  static const _pageSize = 15;
   bool _memuat = true;
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
@@ -61,7 +62,8 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
     final total = await CoreDb.instance.jumlahErrorLog(tingkat: _tingkat);
     final totalSemua = await CoreDb.instance.jumlahErrorLog();
     final totalError = await CoreDb.instance.jumlahErrorLog(tingkat: 'ERROR');
-    final totalPeringatan = await CoreDb.instance.jumlahErrorLog(tingkat: 'PERINGATAN');
+    final totalPeringatan =
+        await CoreDb.instance.jumlahErrorLog(tingkat: 'PERINGATAN');
     final totalInfo = await CoreDb.instance.jumlahErrorLog(tingkat: 'INFO');
     if (mounted) {
       setStateIfMounted(() {
@@ -96,10 +98,15 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Bersihkan Semua Log?'),
-        content: const Text('Seluruh log error lokal di perangkat ini akan dihapus permanen.'),
+        content: const Text(
+            'Seluruh log error lokal di perangkat ini akan dihapus permanen.'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Ya, Hapus Semua')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Ya, Hapus Semua')),
         ],
       ),
     );
@@ -128,7 +135,9 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
   Future<void> _salinSemua() async {
     final teks = _data.map(_teksSatuError).join('\n\n---\n\n');
     await Clipboard.setData(ClipboardData(text: teks));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_data.length} baris disalin ke clipboard.')));
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${_data.length} baris disalin ke clipboard.')));
   }
 
   Future<void> _laporkanKeGithub(Map<String, dynamic> e) async {
@@ -155,8 +164,13 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                     context: context,
                     builder: (_) => AlertDialog(
                       title: Text('${e['pesan']}'),
-                      content: SingleChildScrollView(child: Text('${e['detail']}')),
-                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Tutup'))],
+                      content:
+                          SingleChildScrollView(child: Text('${e['detail']}')),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Tutup'))
+                      ],
                     ),
                   );
                 },
@@ -167,7 +181,9 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
               onTap: () async {
                 Navigator.of(context).pop();
                 await Clipboard.setData(ClipboardData(text: _teksSatuError(e)));
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disalin ke clipboard.')));
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Disalin ke clipboard.')));
               },
             ),
             ListTile(
@@ -200,12 +216,24 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       subjudul: 'Riwayat error lokal perangkat ini',
       scrollable: false,
       actionsAppBar: [
-        IconButton(icon: const Icon(Icons.copy_all_outlined), onPressed: _data.isEmpty ? null : _salinSemua, tooltip: 'Salin Semua Error'),
-        IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
+        IconButton(
+            icon: const Icon(Icons.copy_all_outlined),
+            onPressed: _data.isEmpty ? null : _salinSemua,
+            tooltip: 'Salin Semua Error'),
+        IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            onPressed: _data.isEmpty ? null : _bersihkanSemua,
+            tooltip: 'Bersihkan Semua'),
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(icon: const Icon(Icons.copy_all_outlined), onPressed: _data.isEmpty ? null : _salinSemua, tooltip: 'Salin Semua Error'),
-        IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _data.isEmpty ? null : _bersihkanSemua, tooltip: 'Bersihkan Semua'),
+        IconButton(
+            icon: const Icon(Icons.copy_all_outlined),
+            onPressed: _data.isEmpty ? null : _salinSemua,
+            tooltip: 'Salin Semua Error'),
+        IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            onPressed: _data.isEmpty ? null : _bersihkanSemua,
+            tooltip: 'Bersihkan Semua'),
       ]),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -219,13 +247,37 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.list_alt_outlined, warna: AppColors.primary, nilai: '$_totalSemua', label: 'Total Log')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.list_alt_outlined,
+                                warna: AppColors.primary,
+                                nilai: '$_totalSemua',
+                                label: 'Total Log')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.error_outline, warna: AppColors.danger, nilai: '$_totalError', label: 'Error')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.error_outline,
+                                warna: AppColors.danger,
+                                nilai: '$_totalError',
+                                label: 'Error')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.warning_amber_outlined, warna: AppColors.warning, nilai: '$_totalPeringatan', label: 'Peringatan')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.warning_amber_outlined,
+                                warna: AppColors.warning,
+                                nilai: '$_totalPeringatan',
+                                label: 'Peringatan')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.info_outline, warna: AppColors.teal, nilai: '$_totalInfo', label: 'Info')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.info_outline,
+                                warna: AppColors.teal,
+                                nilai: '$_totalInfo',
+                                label: 'Info')),
                       ],
                     ),
                   ),
@@ -233,10 +285,13 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                   Wrap(
                     spacing: 6,
                     children: [
-                      ChoiceChip(label: const Text('Semua'), selected: _tingkat == null, onSelected: (_) {
-                        _tingkat = null;
-                        _terapkanFilter();
-                      }),
+                      ChoiceChip(
+                          label: const Text('Semua'),
+                          selected: _tingkat == null,
+                          onSelected: (_) {
+                            _tingkat = null;
+                            _terapkanFilter();
+                          }),
                       ..._tingkatOpsi.map((t) => ChoiceChip(
                             label: Text(t),
                             selected: _tingkat == t,
@@ -249,7 +304,11 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    decoration: const InputDecoration(hintText: 'Cari pesan...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                        hintText: 'Cari pesan...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                        isDense: true),
                     onSubmitted: (v) {
                       _kataKunci = v;
                       _terapkanFilter();
@@ -264,28 +323,35 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                       AppTableColumn('Tingkat', flex: 2),
                       AppTableColumn('Sumber', flex: 2),
                       AppTableColumn('Pesan', flex: 5),
-                      AppTableColumn('Aksi', width: 64, align: TextAlign.center),
+                      AppTableColumn('Aksi',
+                          width: 64, align: TextAlign.center),
                     ],
                     rows: _data
                         .map((e) => AppTableRowData(
                               onTap: () => _tampilkanAksiBaris(e),
                               cells: [
-                                AppTableCell.text(_formatWaktu(e['waktu'] as String), flex: 2),
+                                AppTableCell.text(
+                                    _formatWaktu(e['waktu'] as String),
+                                    flex: 2),
                                 AppTableCell(
                                   flex: 2,
                                   child: StatusPill(
                                     label: '${e['tingkat'] ?? '-'}',
-                                    warna: _warnaTingkat(e['tingkat'] as String?),
+                                    warna:
+                                        _warnaTingkat(e['tingkat'] as String?),
                                   ),
                                 ),
-                                AppTableCell.text('${e['sumber'] ?? '-'}', flex: 2),
-                                AppTableCell.text('${e['pesan']}', flex: 5, maxLines: 2),
+                                AppTableCell.text('${e['sumber'] ?? '-'}',
+                                    flex: 2),
+                                AppTableCell.text('${e['pesan']}',
+                                    flex: 5, maxLines: 2),
                                 AppTableCell(
                                   width: 64,
                                   align: TextAlign.center,
                                   child: IconButton(
                                     visualDensity: VisualDensity.compact,
-                                    icon: const Icon(Icons.delete_outline, size: 20),
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 20),
                                     onPressed: () => _hapus(e['id'] as int),
                                   ),
                                 ),
@@ -297,8 +363,11 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
                       totalHalaman: _totalHalaman,
                       totalData: _total,
                       labelData: 'log',
-                      onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                      onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+                      onSebelumnya:
+                          _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                      onBerikutnya: _halaman < _totalHalaman
+                          ? () => _pindah(_halaman + 1)
+                          : null,
                     ),
                   ),
                 ],

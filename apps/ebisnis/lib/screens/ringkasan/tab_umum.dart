@@ -212,7 +212,7 @@ class RingkasanTabUmum extends StatefulWidget {
 }
 
 class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
-  static const _pageSize = 10;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;

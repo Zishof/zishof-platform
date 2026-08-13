@@ -1,8 +1,15 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -32,7 +39,8 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
-  static const _pageSize = 20;
+  bool _memprosesBerkas = false;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -77,6 +85,269 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
   Future<void> _pindahHalaman(int h) async {
     setStateIfMounted(() => _halaman = h);
     await _muatDaftar();
+  }
+
+  Future<List<Map<String, dynamic>>> _ambilSemuaData() async {
+    final semua = <Map<String, dynamic>>[];
+    var page = 1;
+    while (true) {
+      final hasil = await ApiClient.instance.aksi('deposit_list', {
+        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+        'page': page,
+        'page_size': 100,
+      });
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      semua.addAll(data);
+      final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+      if (data.isEmpty || semua.length >= total) return semua;
+      page++;
+    }
+  }
+
+  void _info(String pesan) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+  }
+
+  Future<void> _downloadExcel() async {
+    setStateIfMounted(() => _memprosesBerkas = true);
+    try {
+      final data = await _ambilSemuaData();
+      final bytes = buildSimpleXlsx(
+        sheetName: 'Topup',
+        headers: const [
+          'ID_MEMBER',
+          'KODE_MEMBER',
+          'NAMA_MEMBER',
+          'NOMINAL',
+          'WAKTU',
+          'TANGGAL_EXPIRED',
+          'METODE_PEMBAYARAN',
+          'KETERANGAN',
+        ],
+        rows: data
+            .map((d) => <Object?>[
+                  d['idMember'] ?? '',
+                  d['kodeMember'] ?? '',
+                  d['namaMember'] ?? '',
+                  (d['nominal'] as num?) ?? 0,
+                  d['waktu'] ?? '',
+                  d['tanggalExpired'] ?? '',
+                  d['jenisPembayaranNama'] ?? '',
+                  d['keterangan'] ?? '',
+                ])
+            .toList(),
+      );
+      final lokasi = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Riwayat Topup',
+        fileName:
+            'Topup_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (lokasi != null) {
+        await File(lokasi).writeAsBytes(bytes);
+        _info('${data.length} data topup berhasil diekspor.');
+      }
+    } catch (e) {
+      _info('Excel belum berhasil dibuat. Silakan coba lagi. Detail: $e');
+    } finally {
+      setStateIfMounted(() => _memprosesBerkas = false);
+    }
+  }
+
+  Future<void> _uploadExcel() async {
+    final dipilih = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Pilih Excel Topup',
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    if (dipilih == null || dipilih.files.isEmpty) return;
+    final file = dipilih.files.single;
+    final bytes = file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null) {
+      _info('File tidak dapat dibaca. Pilih kembali file Excel.');
+      return;
+    }
+    setStateIfMounted(() => _memprosesBerkas = true);
+    var berhasil = 0;
+    var gagal = 0;
+    final rincian = <String>[];
+    try {
+      final tabel = readSimpleXlsx(Uint8List.fromList(bytes));
+      if (tabel.length < 2) {
+        throw const FormatException('Excel tidak memiliki baris data.');
+      }
+      final header = <String, int>{};
+      for (var i = 0; i < tabel.first.length; i++) {
+        header[tabel.first[i].trim().toUpperCase()] = i;
+      }
+      final kolomKode = header['KODE_MEMBER'];
+      final kolomId = header['ID_MEMBER'];
+      final kolomNominal = header['NOMINAL'];
+      if ((kolomKode == null && kolomId == null) || kolomNominal == null) {
+        throw const FormatException(
+            'Kolom ID_MEMBER atau KODE_MEMBER, serta NOMINAL wajib tersedia.');
+      }
+      final jumlahCalon = tabel.skip(1).where((row) {
+        final kode = kolomKode != null && kolomKode < row.length
+            ? row[kolomKode].trim()
+            : '';
+        final id =
+            kolomId != null && kolomId < row.length ? row[kolomId].trim() : '';
+        return kode.isNotEmpty || id.isNotEmpty;
+      }).length;
+      if (!mounted) return;
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Konfirmasi Upload Topup'),
+          content: Text(
+            'Ditemukan $jumlahCalon baris yang akan diperiksa. Setiap baris '
+            'valid akan menambah saldo member dan tercatat sebagai transaksi '
+            'baru. Pastikan file ini belum pernah diunggah agar saldo tidak '
+            'bertambah dua kali.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Ya, Proses'),
+            ),
+          ],
+        ),
+      );
+      if (lanjut != true) return;
+      String nilai(List<String> row, String nama) {
+        final index = header[nama];
+        return index == null || index >= row.length ? '' : row[index].trim();
+      }
+
+      for (var i = 1; i < tabel.length; i++) {
+        final row = tabel[i];
+        final kode = kolomKode == null || kolomKode >= row.length
+            ? ''
+            : row[kolomKode].trim();
+        final idMemberText = kolomId == null || kolomId >= row.length
+            ? ''
+            : row[kolomId].trim().replaceFirst(RegExp(r'\.0$'), '');
+        int? idMember = int.tryParse(idMemberText);
+        final nominalText = kolomNominal >= row.length
+            ? ''
+            : row[kolomNominal]
+                .replaceAll(RegExp(r'[^0-9,.-]'), '')
+                .replaceAll(',', '.');
+        final nominal = double.tryParse(nominalText) ?? 0;
+        if (kode.isEmpty && idMember == null && nominal == 0) continue;
+        if ((kode.isEmpty && idMember == null) || nominal <= 0) {
+          gagal++;
+          rincian.add('Baris ${i + 1}: kode kosong atau nominal tidak valid.');
+          continue;
+        }
+        try {
+          if (idMember == null) {
+            final cari = await ApiClient.instance.aksi('anggota_list', {
+              'keyword': kode,
+              'page_size': 10,
+            });
+            final anggota = ((cari['data'] as List?) ?? [])
+                .cast<Map<String, dynamic>>()
+                .where((m) => '${m['kode']}'.trim() == kode)
+                .toList();
+            if (anggota.isEmpty) {
+              throw FormatException('kode member "$kode" tidak ditemukan.');
+            }
+            idMember = (anggota.first['id'] as num).toInt();
+          }
+          await ApiClient.instance.aksi('topup_saldo', {
+            'id_member': idMember,
+            'nominal': nominal,
+            'keterangan': nilai(row, 'KETERANGAN'),
+            if (nilai(row, 'WAKTU').isNotEmpty) 'waktu': nilai(row, 'WAKTU'),
+            if (nilai(row, 'TANGGAL_EXPIRED').isNotEmpty)
+              'tanggal_expired': nilai(row, 'TANGGAL_EXPIRED'),
+          });
+          berhasil++;
+        } catch (e) {
+          gagal++;
+          rincian.add('Baris ${i + 1}: $e');
+        }
+      }
+      _info('Upload selesai: $berhasil berhasil, $gagal gagal.'
+          '${rincian.isEmpty ? '' : ' ${rincian.take(3).join(' ')}'}');
+      await _muatDaftar();
+    } catch (e) {
+      _info(
+          'Excel belum dapat diproses. Gunakan hasil Download Excel sebagai template. Detail: $e');
+    } finally {
+      setStateIfMounted(() => _memprosesBerkas = false);
+    }
+  }
+
+  Future<void> _cetakPdf() async {
+    setStateIfMounted(() => _memprosesBerkas = true);
+    try {
+      final data = await _ambilSemuaData();
+      if (data.isEmpty) {
+        _info('Tidak ada data topup untuk dicetak.');
+        return;
+      }
+      final doc = pw.Document();
+      doc.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        header: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('Riwayat Topup Member',
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            if (_kataKunci.isNotEmpty) pw.Text('Filter: $_kataKunci'),
+            pw.Text(
+                'Dicetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}'),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        build: (_) => [
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'Waktu',
+              'Kode',
+              'Member',
+              'Nominal',
+              'Metode',
+              'Keterangan'
+            ],
+            data: data
+                .map((d) => [
+                      '${d['waktu'] ?? ''}',
+                      '${d['kodeMember'] ?? ''}',
+                      '${d['namaMember'] ?? ''}',
+                      _formatRupiah.format((d['nominal'] as num?) ?? 0),
+                      '${d['jenisPembayaranNama'] ?? ''}',
+                      '${d['keterangan'] ?? ''}',
+                    ])
+                .toList(),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            headerStyle:
+                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          )
+        ],
+      ));
+      await Printing.layoutPdf(
+          onLayout: (_) => doc.save(), name: 'Riwayat_Topup.pdf');
+    } catch (e) {
+      _info('PDF belum berhasil dibuat. Silakan coba lagi. Detail: $e');
+    } finally {
+      setStateIfMounted(() => _memprosesBerkas = false);
+    }
   }
 
   Future<void> _bukaForm({Map<String, dynamic>? deposit}) async {
@@ -168,29 +439,67 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
                 ],
               ),
             ),
-          Row(
-            children: [
-              Expanded(
-                child: AppSearchField(
-                  hintText: 'Cari nama member...',
-                  debounce: const Duration(milliseconds: 450),
-                  onChanged: _cariUlang,
+          LayoutBuilder(builder: (context, constraints) {
+            final sempit = constraints.maxWidth < 850;
+            final pencarian = AppSearchField(
+              hintText: 'Cari nama member...',
+              debounce: const Duration(milliseconds: 450),
+              onChanged: _cariUlang,
+            );
+            final aksi = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _memprosesBerkas ? null : _downloadExcel,
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  label: const Text('Download Excel'),
                 ),
-              ),
-              if (bolehEdit) ...[
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => _bukaForm(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Tambah Topup'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                if (bolehEdit)
+                  OutlinedButton.icon(
+                    onPressed: _memprosesBerkas ? null : _uploadExcel,
+                    icon: const Icon(Icons.file_upload_outlined, size: 18),
+                    label: const Text('Upload Excel'),
                   ),
+                OutlinedButton.icon(
+                  onPressed: _memprosesBerkas ? null : _cetakPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Cetak PDF'),
                 ),
+                if (bolehEdit)
+                  ElevatedButton.icon(
+                    onPressed: _memprosesBerkas ? null : () => _bukaForm(),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Tambah Topup'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
               ],
-            ],
-          ),
+            );
+            if (sempit) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  pencarian,
+                  const SizedBox(height: 8),
+                  aksi,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: pencarian),
+                const SizedBox(width: 8),
+                Flexible(child: aksi),
+              ],
+            );
+          }),
+          if (_memprosesBerkas) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(),
+          ],
           const SizedBox(height: 12),
           AppDataTable(
             minWidth: 900,
@@ -322,7 +631,8 @@ class _FormTopupState extends State<_FormTopup> {
       _namaMemberDipilih = '${d['namaMember'] ?? ''}';
       if (d['waktu'] != null) {
         try {
-          _waktu = DateTime.parse((d['waktu'] as String).replaceFirst(' ', 'T'));
+          _waktu =
+              DateTime.parse((d['waktu'] as String).replaceFirst(' ', 'T'));
         } catch (_) {}
       }
       if (d['tanggalExpired'] != null) {
@@ -344,8 +654,8 @@ class _FormTopupState extends State<_FormTopup> {
 
   void _saatCariMemberBerubah() {
     _debounceCariMember?.cancel();
-    _debounceCariMember = Timer(
-        const Duration(milliseconds: 400), () => _cariAnggota(_cariMember.text));
+    _debounceCariMember = Timer(const Duration(milliseconds: 400),
+        () => _cariAnggota(_cariMember.text));
   }
 
   Future<void> _cariAnggota(String kata) async {
@@ -376,8 +686,8 @@ class _FormTopupState extends State<_FormTopup> {
     if (tanggal == null || !mounted) return;
     final jam = await showTimePicker(
         context: context, initialTime: TimeOfDay.fromDateTime(_waktu));
-    setStateIfMounted(() => _waktu = DateTime(
-        tanggal.year, tanggal.month, tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0));
+    setStateIfMounted(() => _waktu = DateTime(tanggal.year, tanggal.month,
+        tanggal.day, jam?.hour ?? 0, jam?.minute ?? 0));
   }
 
   Future<void> _pilihTanggalExpired() async {
@@ -439,6 +749,9 @@ class _FormTopupState extends State<_FormTopup> {
                 : 'Isi saldo member secara manual.',
             icon: Icons.add_card_outlined,
             errorText: _pesanError,
+            // Urutan ini mengikuti struktur form lama; children sengaja tetap
+            // sebelum actions agar diff layar Topup mudah diaudit.
+            // ignore: sort_child_properties_last
             children: [
               AppFormSection(
                 judul: 'Member',
@@ -472,7 +785,8 @@ class _FormTopupState extends State<_FormTopup> {
                       Container(
                         constraints: const BoxConstraints(maxHeight: 200),
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.borderOf(context)),
+                          border:
+                              Border.all(color: AppColors.borderOf(context)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: ListView.separated(

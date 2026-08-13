@@ -11,7 +11,8 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
-final _formatRupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 String _formatWaktu(String iso) {
   try {
@@ -34,11 +35,12 @@ const _statusOpsi = ['PENDING', 'SYNCED'];
 class RiwayatSinkronisasiScreen extends StatefulWidget {
   const RiwayatSinkronisasiScreen({super.key});
   @override
-  State<RiwayatSinkronisasiScreen> createState() => _RiwayatSinkronisasiScreenState();
+  State<RiwayatSinkronisasiScreen> createState() =>
+      _RiwayatSinkronisasiScreenState();
 }
 
 class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   bool _sinkronBerjalan = false;
   List<Map<String, dynamic>> _cache = [];
@@ -57,7 +59,10 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
     final cache = await CoreDb.instance.listCacheReferensi();
-    final hasil = await CoreDb.instance.listTransaksiPending(limit: _pageSize, offset: (_halaman - 1) * _pageSize, status: _statusFilter);
+    final hasil = await CoreDb.instance.listTransaksiPending(
+        limit: _pageSize,
+        offset: (_halaman - 1) * _pageSize,
+        status: _statusFilter);
     final totalPending = await CoreDb.instance.jumlahTransaksiPending();
     if (mounted) {
       setStateIfMounted(() {
@@ -97,7 +102,8 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
       var berhasil = 0;
       for (final row in pending) {
         final kodeUnik = row['kode_unik'] as String;
-        final payload = jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         try {
           final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
           await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
@@ -114,7 +120,10 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
           }
         }
       }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$berhasil dari ${pending.length} transaksi berhasil disinkron.')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '$berhasil dari ${pending.length} transaksi berhasil disinkron.')));
       await _muat();
     } finally {
       if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);
@@ -145,7 +154,9 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
       judul: 'Riwayat Sinkronisasi',
       subjudul: 'Transaksi tertunda & cache lokal perangkat ini',
       scrollable: false,
-      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)],
+      actionsAppBar: [
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
+      ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -159,16 +170,36 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.cloud_download_outlined, warna: AppColors.primary, nilai: '${_cache.length}', label: 'Cache Lokal')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.cloud_download_outlined,
+                                warna: AppColors.primary,
+                                nilai: '${_cache.length}',
+                                label: 'Cache Lokal')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.pending_actions_outlined, warna: AppColors.warning, nilai: '$_totalPending', label: 'Tertunda')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.pending_actions_outlined,
+                                warna: AppColors.warning,
+                                nilai: '$_totalPending',
+                                label: 'Tertunda')),
                         const SizedBox(width: 8),
-                        SizedBox(width: 190, child: AppKpiCard(icon: Icons.receipt_long, warna: AppColors.teal, nilai: '$_total', label: 'Total Transaksi')),
+                        SizedBox(
+                            width: 190,
+                            child: AppKpiCard(
+                                icon: Icons.receipt_long,
+                                warna: AppColors.teal,
+                                nilai: '$_total',
+                                label: 'Total Transaksi')),
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text('Sinkron Masuk', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('Sinkron Masuk',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
                   AppDataTable(
                     minWidth: 720,
@@ -183,13 +214,23 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                                 flex: 3,
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7), size: 18),
+                                    const Icon(Icons.cloud_download_outlined,
+                                        color: Color(0xFF0284C7), size: 18),
                                     const SizedBox(width: 8),
-                                    Expanded(child: Text(_labelKunci('${c['kunci']}'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                                    Expanded(
+                                        child: Text(
+                                            _labelKunci('${c['kunci']}'),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13))),
                                   ],
                                 ),
                               ),
-                              AppTableCell.text(_formatWaktu('${c['diperbarui_pada']}'), flex: 3),
+                              AppTableCell.text(
+                                  _formatWaktu('${c['diperbarui_pada']}'),
+                                  flex: 3),
                             ]))
                         .toList(),
                   ),
@@ -197,10 +238,19 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Sinkron Keluar (Transaksi)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const Text('Sinkron Keluar (Transaksi)',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
                       TextButton.icon(
-                        onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
-                        icon: _sinkronBerjalan ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync, size: 18),
+                        onPressed:
+                            _sinkronBerjalan ? null : _sinkronkanSekarang,
+                        icon: _sinkronBerjalan
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.sync, size: 18),
                         label: const Text('Sinkronkan Sekarang'),
                       ),
                     ],
@@ -208,10 +258,13 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                   Wrap(
                     spacing: 6,
                     children: [
-                      ChoiceChip(label: const Text('Semua'), selected: _statusFilter == null, onSelected: (_) {
-                        _statusFilter = null;
-                        _terapkanFilter();
-                      }),
+                      ChoiceChip(
+                          label: const Text('Semua'),
+                          selected: _statusFilter == null,
+                          onSelected: (_) {
+                            _statusFilter = null;
+                            _terapkanFilter();
+                          }),
                       ..._statusOpsi.map((s) => ChoiceChip(
                             label: Text(s),
                             selected: _statusFilter == s,
@@ -232,25 +285,47 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                       AppTableColumn('Kasir', flex: 2),
                       AppTableColumn('Metode', flex: 2),
                       AppTableColumn('Total', flex: 2, align: TextAlign.right),
-                      AppTableColumn('Status', flex: 2, align: TextAlign.center),
+                      AppTableColumn('Status',
+                          flex: 2, align: TextAlign.center),
                     ],
                     rows: _transaksi.map((t) {
-                      final payload = jsonDecode(t['payload_json'] as String) as Map<String, dynamic>;
+                      final payload = jsonDecode(t['payload_json'] as String)
+                          as Map<String, dynamic>;
                       final caraBayarId = payload['caraBayar'];
-                      final cocok = Sesi.instance.caraBayar.where((c) => c.id == caraBayarId);
-                      final namaCaraBayar = cocok.isEmpty ? '-' : cocok.first.nama;
+                      final cocok = Sesi.instance.caraBayar
+                          .where((c) => c.id == caraBayarId);
+                      final namaCaraBayar =
+                          cocok.isEmpty ? '-' : cocok.first.nama;
                       final synced = t['status'] == 'SYNCED';
                       final pesanError = (t['pesan_error'] as String?) ?? '';
                       return AppTableRowData(cells: [
-                        AppTableCell.text('${payload['kodeUnik'] ?? t['kode_unik']}', flex: 3),
-                        AppTableCell.text(_formatWaktu('${t['dibuat_pada']}'), flex: 2),
-                        AppTableCell.text('${payload['kasir'] ?? '-'}', flex: 2),
-                        AppTableCell.text(pesanError.isEmpty ? namaCaraBayar : '$namaCaraBayar - $pesanError', flex: 2, maxLines: 2),
-                        AppTableCell.text(_formatRupiah.format(payload['total'] ?? 0), flex: 2, align: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                        AppTableCell.text(
+                            '${payload['kodeUnik'] ?? t['kode_unik']}',
+                            flex: 3),
+                        AppTableCell.text(_formatWaktu('${t['dibuat_pada']}'),
+                            flex: 2),
+                        AppTableCell.text('${payload['kasir'] ?? '-'}',
+                            flex: 2),
+                        AppTableCell.text(
+                            pesanError.isEmpty
+                                ? namaCaraBayar
+                                : '$namaCaraBayar - $pesanError',
+                            flex: 2,
+                            maxLines: 2),
+                        AppTableCell.text(
+                            _formatRupiah.format(payload['total'] ?? 0),
+                            flex: 2,
+                            align: TextAlign.right,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12.5)),
                         AppTableCell(
                           flex: 2,
                           align: TextAlign.center,
-                          child: StatusPill(label: synced ? 'Tersinkron' : 'Tertunda', warna: synced ? AppColors.success : AppColors.warning),
+                          child: StatusPill(
+                              label: synced ? 'Tersinkron' : 'Tertunda',
+                              warna: synced
+                                  ? AppColors.success
+                                  : AppColors.warning),
                         ),
                       ]);
                     }).toList(),
@@ -259,8 +334,11 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                       totalHalaman: _totalHalaman,
                       totalData: _total,
                       labelData: 'transaksi',
-                      onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
-                      onBerikutnya: _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+                      onSebelumnya:
+                          _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                      onBerikutnya: _halaman < _totalHalaman
+                          ? () => _pindah(_halaman + 1)
+                          : null,
                     ),
                   ),
                 ],

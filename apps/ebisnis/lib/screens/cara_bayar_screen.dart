@@ -20,7 +20,7 @@ class CaraBayarScreen extends StatefulWidget {
 }
 
 class _CaraBayarScreenState extends State<CaraBayarScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
@@ -121,8 +121,11 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
       judul: 'Cara Pembayaran',
       subjudul: 'Kelola metode pembayaran koperasi/kantin',
       scrollable: false,
-      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+      actionsAppBar: [
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)
+      ],
+      aksiHeader:
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -251,13 +254,16 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            icon: const Icon(Icons.edit_outlined,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            icon: const Icon(
+                                                Icons.edit_outlined,
                                                 size: 18),
                                             onPressed: () => _bukaForm(cara: c),
                                           ),
                                           IconButton(
-                                            visualDensity: VisualDensity.compact,
+                                            visualDensity:
+                                                VisualDensity.compact,
                                             icon: const Icon(
                                                 Icons.delete_outline,
                                                 size: 18,
@@ -331,9 +337,11 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
     _memotongDeposit = c?['memotongDeposit'] == true;
     _masukSebagaiHutang = c?['masukSebagaiHutang'] == true;
     if (c == null) {
-      _adaKembalian = false; // nama masih kosong -- mengikuti field Nama begitu diketik
+      _adaKembalian =
+          false; // nama masih kosong -- mengikuti field Nama begitu diketik
     } else {
-      _adaKembalian = c['adaKembalian'] == true; // nilai final dari server (sudah di-COALESCE)
+      _adaKembalian = c['adaKembalian'] ==
+          true; // nilai final dari server (sudah di-COALESCE)
       _kembalianDisentuhManual = true;
     }
     _aktif = c == null ? true : (c['aktif'] != false);
@@ -412,7 +420,9 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
                         (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
                   AppFormTextField(
-                      label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                 ],
               ),
               AppFormSection(
@@ -420,7 +430,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
                 children: [
                   AppFormSwitchTile(
                       title: 'Verifikasi Manual',
-                      subtitle: 'Aktif = butuh verifikasi admin (mis. transfer bank).',
+                      subtitle:
+                          'Aktif = butuh verifikasi admin (mis. transfer bank).',
                       value: _manual,
                       onChanged: (v) => setStateIfMounted(() => _manual = v)),
                   AppFormSwitchTile(
@@ -429,7 +440,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
                       onChanged: (v) => setStateIfMounted(() => _online = v)),
                   AppFormSwitchTile(
                       title: 'Memotong Deposit',
-                      subtitle: 'Transaksi dgn metode ini memotong saldo tabungan anggota.',
+                      subtitle:
+                          'Transaksi dgn metode ini memotong saldo tabungan anggota.',
                       value: _memotongDeposit,
                       onChanged: (v) =>
                           setStateIfMounted(() => _memotongDeposit = v)),

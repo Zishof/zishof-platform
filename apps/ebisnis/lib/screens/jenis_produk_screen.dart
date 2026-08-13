@@ -18,7 +18,7 @@ class JenisProdukScreen extends StatefulWidget {
 }
 
 class _JenisProdukScreenState extends State<JenisProdukScreen> {
-  static const _pageSize = 20;
+  static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
@@ -194,7 +194,8 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
                         rows: _daftar.map((j) {
                           final aktif = j['aktif'] == true;
                           final isDefault = j['defaultProduk'] == true;
-                          final maks = (j['maksimalHarian'] as num?)?.toDouble() ?? 0;
+                          final maks =
+                              (j['maksimalHarian'] as num?)?.toDouble() ?? 0;
                           return AppTableRowData(
                             onTap: Sesi.instance.bolehKelola
                                 ? () => _bukaForm(jenis: j)
@@ -205,9 +206,7 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
                                   '${j['akunPendapatanNama'] ?? '-'}',
                                   flex: 2),
                               AppTableCell.text(
-                                  maks > 0
-                                      ? maks.toStringAsFixed(0)
-                                      : '-',
+                                  maks > 0 ? maks.toStringAsFixed(0) : '-',
                                   flex: 1,
                                   align: TextAlign.right),
                               AppTableCell(
@@ -238,14 +237,17 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            icon: const Icon(Icons.edit_outlined,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            icon: const Icon(
+                                                Icons.edit_outlined,
                                                 size: 18),
                                             onPressed: () =>
                                                 _bukaForm(jenis: j),
                                           ),
                                           IconButton(
-                                            visualDensity: VisualDensity.compact,
+                                            visualDensity:
+                                                VisualDensity.compact,
                                             icon: const Icon(
                                                 Icons.delete_outline,
                                                 size: 18,
@@ -362,7 +364,8 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
       _pesanError = null;
     });
     try {
-      final maks = double.tryParse(_maksHarian.text.trim().replaceAll(',', '.'));
+      final maks =
+          double.tryParse(_maksHarian.text.trim().replaceAll(',', '.'));
       await ApiClient.instance.aksi('jenis_produk_simpan', {
         if (widget.jenis != null) 'id': widget.jenis!['id'],
         'nama': _nama.text.trim(),

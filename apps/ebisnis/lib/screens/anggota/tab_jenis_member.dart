@@ -26,7 +26,7 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
-  static const _pageSize = 20;
+  static const _pageSize = 15;
 
   @override
   void initState() {
@@ -119,8 +119,7 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance
-          .aksi('jenis_anggota_hapus', {'id': jenis['id']});
+      await ApiClient.instance.aksi('jenis_anggota_hapus', {'id': jenis['id']});
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -146,7 +145,8 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _muatSemua, child: const Text('Coba Lagi')),
+              ElevatedButton(
+                  onPressed: _muatSemua, child: const Text('Coba Lagi')),
             ],
           ),
         ),
@@ -241,7 +241,8 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
                     align: TextAlign.center,
                     child: StatusPill(
                       label: aktif ? 'Aktif' : 'Nonaktif',
-                      warna: aktif ? AppColors.success : AppColors.textSecondary,
+                      warna:
+                          aktif ? AppColors.success : AppColors.textSecondary,
                     ),
                   ),
                   AppTableCell(
@@ -328,8 +329,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
         TextEditingController(text: '${j?['istilahSisaSaldo'] ?? 'Saldo Kas'}');
     _istilahCashback =
         TextEditingController(text: '${j?['istilahCashback'] ?? 'Cashback'}');
-    _minimalSaldo =
-        TextEditingController(text: '${j?['minimalSaldo'] ?? 0}');
+    _minimalSaldo = TextEditingController(text: '${j?['minimalSaldo'] ?? 0}');
     _targetFrekuensi =
         TextEditingController(text: '${j?['targetFrekuensiBelanja'] ?? 0}');
     _maksimalPelanggaran =
@@ -431,7 +431,9 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
                         (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
                   AppFormTextField(
-                      label: 'Keterangan', controller: _keterangan, maxLines: 2),
+                      label: 'Keterangan',
+                      controller: _keterangan,
+                      maxLines: 2),
                   AppFormSwitchTile(
                       title: 'Aktif',
                       value: _aktif,
@@ -503,7 +505,8 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
                 const SizedBox(height: 12),
                 AppFormSection(
                   judul: 'Cara Pembayaran yang Boleh Dipilih',
-                  deskripsi: 'Kosongkan semua = semua cara bayar boleh dipilih.',
+                  deskripsi:
+                      'Kosongkan semua = semua cara bayar boleh dipilih.',
                   children: [
                     Wrap(
                       spacing: 8,
