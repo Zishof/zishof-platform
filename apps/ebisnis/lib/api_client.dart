@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:core_db/core_db.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/server_config.dart';
+import 'widgets/app_error_info.dart';
 
 /// Klien HTTP untuk endpoint Api_eBisnis (branded alias PosApi.java, kontrak
 /// JSON identik -- lihat JavaDoc ais.action.servlet.ApiEBisnis di server).
@@ -54,30 +57,95 @@ class ApiClient {
       resp = await http
           .post(Uri.parse(baseUrl), headers: headers, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 30));
-    } catch (e) {
-      throw ApiException(
-          'Tidak bisa menghubungi server. Periksa koneksi internet Anda.',
-          offline: true);
+    } catch (e, stack) {
+      final gagal = ApiException(
+        'Aplikasi belum dapat menghubungi server.',
+        offline: true,
+        aktivitas: namaAksi,
+        teknis: '${e.runtimeType}: $e\n$stack',
+      );
+      unawaited(_catatKegagalan(gagal));
+      throw gagal;
     }
 
     Map<String, dynamic> json;
     try {
       json = jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (e) {
-      throw ApiException(
-          'Balasan server tidak valid (HTTP ${resp.statusCode}).');
+    } catch (e, stack) {
+      final cuplikan = resp.body.length > 1200
+          ? '${resp.body.substring(0, 1200)}…'
+          : resp.body;
+      final gagal = ApiException(
+        'Jawaban server belum dapat diproses.',
+        aktivitas: namaAksi,
+        statusHttp: resp.statusCode,
+        teknis: 'HTTP ${resp.statusCode}; ${e.runtimeType}: $e\n'
+            'Response: $cuplikan\n$stack',
+      );
+      unawaited(_catatKegagalan(gagal));
+      throw gagal;
     }
 
     if (json['status'] != 'success') {
-      throw ApiException((json['message'] ??
-          'Terjadi kesalahan yang tidak diketahui.') as String);
+      final gagal = ApiException(
+        (json['message'] ?? 'Permintaan belum berhasil.') as String,
+        aktivitas: namaAksi,
+        statusHttp: resp.statusCode,
+        teknis: 'HTTP ${resp.statusCode}; action=$namaAksi; '
+            'status=${json['status']}; message=${json['message']}',
+      );
+      unawaited(_catatKegagalan(gagal));
+      throw gagal;
     }
     return json;
+  }
+
+  Future<void> _catatKegagalan(ApiException gagal) async {
+    final info = gagal.info;
+    await CoreDb.instance.catatErrorLog(
+      sumber: 'api:${gagal.aktivitas ?? 'unknown'}',
+      tingkat: 'ERROR',
+      pesan: '${info.judul}: ${info.pesan}',
+      detail: 'Referensi ${info.kodeReferensi}\n${gagal.teknis}',
+    );
+    // Best effort: endpoint ini tidak memakai [aksi] agar kegagalan pencatatan
+    // tidak memanggil dirinya sendiri tanpa akhir. Password, token, dan body
+    // permintaan tidak pernah dimasukkan ke payload audit.
+    try {
+      await http
+          .post(Uri.parse(baseUrl),
+              headers: const {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'action': 'client_error_log',
+                'sumber': gagal.aktivitas ?? 'unknown',
+                'pesan': info.pesan,
+                'detail': gagal.teknis,
+                'referensi': info.kodeReferensi,
+              }))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Catatan lokal sudah tersimpan dan dapat disinkronkan/diperiksa nanti.
+    }
+  }
+
+  /// Dipakai penangkap error global dan operasi lokal/non-HTTP agar seluruh
+  /// exception tetap masuk error_log lokal dan, bila server tersedia, AIS.
+  Future<void> catatError(Object error,
+      {StackTrace? stack, String sumber = 'aplikasi'}) async {
+    final gagal = ApiException(
+      error.toString(),
+      aktivitas: sumber,
+      teknis: '${error.runtimeType}: $error${stack == null ? '' : '\n$stack'}',
+    );
+    await _catatKegagalan(gagal);
   }
 }
 
 class ApiException implements Exception {
   final String pesan;
+  final String? aktivitas;
+  final String teknis;
+  final int? statusHttp;
 
   /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
   /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
@@ -85,7 +153,28 @@ class ApiException implements Exception {
   /// utk memutuskan "tetap simpan lokal & lanjut" (offline=true) vs "batalkan
   /// & tampilkan pesan" (offline=false).
   final bool offline;
-  ApiException(this.pesan, {this.offline = false});
+  ApiException(this.pesan,
+      {this.offline = false,
+      this.aktivitas,
+      this.teknis = '',
+      this.statusHttp});
+
+  AppErrorInfo get info {
+    final dasar = AppErrorInfo.dari(
+      offline ? 'network timeout: $pesan' : pesan,
+      aktivitas: aktivitas,
+    );
+    return AppErrorInfo(
+      judul: dasar.judul,
+      pesan: dasar.pesan,
+      solusi: dasar.solusi,
+      teknis: teknis.isEmpty
+          ? 'action=${aktivitas ?? '-'}; HTTP=${statusHttp ?? '-'}; $pesan'
+          : teknis,
+      kodeReferensi: dasar.kodeReferensi,
+    );
+  }
+
   @override
-  String toString() => pesan;
+  String toString() => '${info.pesan} ${info.solusi.first}';
 }

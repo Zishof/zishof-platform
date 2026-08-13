@@ -5,6 +5,7 @@ import '../product_profile.dart';
 import '../theme/app_colors.dart';
 import 'pengaturan_server_screen.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/app_error_info.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,12 +18,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _memproses = false;
-  String? _pesanError;
+  AppErrorInfo? _pesanError;
 
   Future<void> _login() async {
     if (_userCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
-      setStateIfMounted(
-          () => _pesanError = 'Username dan password wajib diisi.');
+      setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
+          'Nama pengguna dan kata sandi tidak boleh kosong.',
+          aktivitas: 'login'));
       return;
     }
     setStateIfMounted(() {
@@ -42,7 +44,8 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (_) => AppProductProfile.aktif.buatLayarAwal()),
       );
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError =
+          e is ApiException ? e.info : AppErrorInfo.dari(e, aktivitas: 'login'));
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }
@@ -106,8 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     if (_pesanError != null) ...[
                       const SizedBox(height: 12),
-                      Text(_pesanError!,
-                          style: const TextStyle(color: AppColors.danger)),
+                      AppErrorPanel(info: _pesanError!),
                     ],
                     const SizedBox(height: 20),
                     ElevatedButton(

@@ -55,19 +55,12 @@ void main() {
     await initializeDateFormatting('id_ID', null);
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
-      CoreDb.instance.catatErrorLog(
-        sumber: 'flutter',
-        tingkat: 'ERROR',
-        pesan: details.exceptionAsString(),
-        detail: details.stack?.toString(),
-      );
+      unawaited(ApiClient.instance.catatError(details.exception,
+          stack: details.stack, sumber: 'flutter'));
     };
     PlatformDispatcher.instance.onError = (error, stack) {
-      CoreDb.instance.catatErrorLog(
-          sumber: 'flutter',
-          tingkat: 'ERROR',
-          pesan: error.toString(),
-          detail: stack.toString());
+      unawaited(ApiClient.instance
+          .catatError(error, stack: stack, sumber: 'platform'));
       return true;
     };
 
@@ -105,11 +98,8 @@ void main() {
     await AppThemeController.instance.muat();
     runApp(const EBisnisApp());
   }, (error, stack) {
-    CoreDb.instance.catatErrorLog(
-        sumber: 'zone',
-        tingkat: 'ERROR',
-        pesan: error.toString(),
-        detail: stack.toString());
+    unawaited(ApiClient.instance
+        .catatError(error, stack: stack, sumber: 'zone'));
   });
 }
 
