@@ -33,7 +33,18 @@ final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 class KasirScreen extends StatefulWidget {
-  const KasirScreen({super.key});
+  final List<ItemKeranjang> keranjangAwal;
+  final int? draftIdSumber;
+  final String? draftKodeSumber;
+  final Anggota? memberAwal;
+
+  const KasirScreen({
+    super.key,
+    this.keranjangAwal = const [],
+    this.draftIdSumber,
+    this.draftKodeSumber,
+    this.memberAwal,
+  });
 
   @override
   State<KasirScreen> createState() => _KasirScreenState();
@@ -55,6 +66,9 @@ class _KasirScreenState extends State<KasirScreen> {
   final _fokusKataKunci = FocusNode();
 
   final List<ItemKeranjang> _keranjang = [];
+  int? _draftIdSumber;
+  String? _draftKodeSumber;
+  Anggota? _memberAwal;
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
   /// produkId->nominal diskon dari evaluasi PUBLIK (`diskon_evaluasi` TANPA
@@ -121,8 +135,17 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void initState() {
     super.initState();
+    _keranjang.addAll(widget.keranjangAwal);
+    _draftIdSumber = widget.draftIdSumber;
+    _draftKodeSumber = widget.draftKodeSumber;
+    _memberAwal = widget.memberAwal;
     _muatPreferensiTampilan();
     _muatAwal();
+    if (_keranjang.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _siarkanKeranjangKasir();
+      });
+    }
     _jadwalkanFokusCariItem();
     _timerSinkronSesiKas = Timer.periodic(
         const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
@@ -695,6 +718,11 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   void _setelahTransaksiSelesai() {
+    setStateIfMounted(() {
+      _draftIdSumber = null;
+      _draftKodeSumber = null;
+      _memberAwal = null;
+    });
     unawaited(_perbaruiJumlahPending());
     _jadwalkanFokusCariItem();
   }
@@ -976,10 +1004,21 @@ class _KasirScreenState extends State<KasirScreen> {
 
   Future<void> _bukaKeranjang() async {
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => KeranjangScreen(keranjang: _keranjang),
+      builder: (_) => KeranjangScreen(
+        keranjang: _keranjang,
+        draftIdSumber: _draftIdSumber,
+        draftKodeSumber: _draftKodeSumber,
+        memberAwal: _memberAwal,
+      ),
     ));
     await _perbaruiJumlahPending();
-    setStateIfMounted(() {});
+    setStateIfMounted(() {
+      if (_keranjang.isEmpty) {
+        _draftIdSumber = null;
+        _draftKodeSumber = null;
+        _memberAwal = null;
+      }
+    });
     _jadwalkanFokusCariItem();
   }
 
@@ -1553,6 +1592,9 @@ class _KasirScreenState extends State<KasirScreen> {
   Widget _bodyDesktop() {
     final panel = PanelKeranjang(
       keranjang: _keranjang,
+      draftIdSumber: _draftIdSumber,
+      draftKodeSumber: _draftKodeSumber,
+      memberAwal: _memberAwal,
       pencarianBarang: _fokusKeranjang ? _kotakPencarian() : null,
       tampilkanJudul: !_fokusKeranjang,
       aksiHeader: _fokusKeranjang

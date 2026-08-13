@@ -8,7 +8,7 @@ import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
-import 'keranjang_screen.dart';
+import 'kasir_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 
@@ -301,7 +301,7 @@ class _PesananScreenState extends State<PesananScreen> {
           // Keranjang Tertahan (draft lokal, BUKAN pesanan online) -- gap-closure:
           // sebelumnya dialog ini murni tampilan, satu-satunya jalan lanjut
           // (Muat ke Keranjang) tersembunyi di menu tekan-tahan yang tak lazim
-          // dipakai mouse desktop. Tombol ini langsung ke KeranjangScreen sama
+          // dipakai mouse desktop. Tombol ini langsung ke KasirScreen sama
           // seperti _tampilkanAksi, bukan alur baru.
           if (!p.dariPembeliOnline && !_sudahTerbayar(p))
             ElevatedButton.icon(
@@ -442,7 +442,8 @@ class _PesananScreenState extends State<PesananScreen> {
             flex: 4,
             style: TextStyle(
               fontSize: 12.5,
-              fontWeight: item.indukId != null ? FontWeight.w500 : FontWeight.w700,
+              fontWeight:
+                  item.indukId != null ? FontWeight.w500 : FontWeight.w700,
               color: item.indukId != null
                   ? AppColors.textSecondaryOf(context)
                   : AppColors.textPrimaryOf(context),
@@ -622,7 +623,10 @@ class _PesananScreenState extends State<PesananScreen> {
         ekstra.add(ItemEkstra(
             id: idEkstra, kode: e.kode, nama: e.nama, harga: e.harga));
       }
-      if (ekstraGagal) continue; // batalkan seluruh muat (lihat gerbang di bawah)
+      if (ekstraGagal) {
+        // Batalkan seluruh muat (lihat gerbang di bawah).
+        continue;
+      }
       keranjang.add(
         ItemKeranjang(
           produk: Produk(
@@ -663,8 +667,8 @@ class _PesananScreenState extends State<PesananScreen> {
     }
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => KeranjangScreen(
-        keranjang: keranjang,
+      builder: (_) => KasirScreen(
+        keranjangAwal: keranjang,
         draftIdSumber: p.id,
         draftKodeSumber: p.kode,
         memberAwal: member,
