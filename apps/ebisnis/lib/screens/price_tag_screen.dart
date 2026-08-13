@@ -432,6 +432,18 @@ final _ukuranPromo = [
       tinggiMm: 103,
       pageFormat:
           PdfPageFormat(210 * PdfPageFormat.mm, 330 * PdfPageFormat.mm)),
+  for (final u in _ukuranRak)
+    _UkuranTag(
+      id: 'promo_${u.id}',
+      label: 'Promo - ${u.label}',
+      detail: u.detail,
+      kategori: 'Ukuran Rak untuk Promo',
+      lebarMm: u.lebarMm,
+      tinggiMm: u.tinggiMm,
+      bulat: u.bulat,
+      populer: u.populer,
+      pageFormat: u.pageFormat,
+    ),
 ];
 
 class _PriceTagScreenState extends State<PriceTagScreen> {
@@ -443,6 +455,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   String? _pesanProdukPromo;
   String? _kategoriTerpilihKey;
   final _controllerCari = TextEditingController();
+  final _fokusCari = FocusNode();
   final _controllerPromo = TextEditingController(text: 'PROMO');
   final _controllerCopies = TextEditingController(text: '1');
   final _controllerRakHeader = TextEditingController();
@@ -480,6 +493,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final Map<int, String> _promoTeksPerProduk = {};
   final Map<int, String> _promoHargaAsliPerProduk = {};
   final Map<int, String> _promoHargaPromoPerProduk = {};
+  final Map<int, String> _promoHargaAsliDefaultPerProduk = {};
+  final Map<int, String> _promoHargaPromoDefaultPerProduk = {};
+  final Map<int, String> _promoMasaPerProduk = {};
+  Map<int, Map<String, dynamic>>? _aturanDiskonPromoById;
   final Map<String, TextEditingController> _controllerPromoItem = {};
   final Map<int, TextEditingController> _controllerSalinanItem = {};
   final Map<int, int> _salinanPerProduk = {};
@@ -573,6 +590,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       c.removeListener(_jadwalkanSimpanPengaturan);
     }
     _controllerCari.dispose();
+    _fokusCari.dispose();
     _controllerPromo.dispose();
     _controllerCopies.dispose();
     _controllerRakHeader.dispose();
@@ -733,6 +751,87 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     return '';
   }
 
+  Future<Map<int, Map<String, dynamic>>> _muatAturanDiskonPromoById() async {
+    final cache = _aturanDiskonPromoById;
+    if (cache != null) return cache;
+    final byId = <int, Map<String, dynamic>>{};
+    try {
+      final hasil = await ApiClient.instance.aksi('diskon_list', {
+        'page': 1,
+        'page_size': 1000,
+      });
+      final data = (hasil['data'] as List?) ?? [];
+      for (final row in data) {
+        final m = Map<String, dynamic>.from(row as Map);
+        final id =
+            _intDari(m['id'] ?? m['aturanDiskon'] ?? m['aturanDiskonId']);
+        if (id != null) byId[id] = m;
+      }
+    } catch (_) {
+      // Masa promo bukan blocker cetak. Kalau gagal, tag tetap tampil tanpa periode.
+    }
+    _aturanDiskonPromoById = byId;
+    return byId;
+  }
+
+  int? _intDari(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}'.trim());
+  }
+
+  String _masaPromoDariEvaluasi(
+    Map<String, dynamic> data,
+    Map<int, Map<String, dynamic>> aturanById,
+  ) {
+    final langsung = _nilaiStringPertama(data, const [
+      'masaPromo',
+      'masa_promo',
+      'periodePromo',
+      'periode_promo',
+      'berlaku',
+      'masaBerlaku',
+    ]);
+    if (langsung.isNotEmpty) return langsung;
+
+    final aturan = data['aturan'] ?? data['aturanDiskonDetail'];
+    final sumberLangsung =
+        aturan is Map ? {...data, ...Map<String, dynamic>.from(aturan)} : data;
+    final dariLangsung = _masaPromoDariSumber(sumberLangsung);
+    if (dariLangsung.isNotEmpty) return dariLangsung;
+
+    final aturanId = _intDari(data['aturanDiskon'] ??
+        data['aturanDiskonId'] ??
+        data['aturan_diskon'] ??
+        data['aturan_diskon_id']);
+    final sumberAturan = aturanId == null ? null : aturanById[aturanId];
+    if (sumberAturan == null) return '';
+    return _masaPromoDariSumber(sumberAturan);
+  }
+
+  String _masaPromoDariSumber(Map<String, dynamic> sumber) {
+    final mulai = _nilaiStringPertama(sumber, const [
+      'tanggalMulai',
+      'tanggal_mulai',
+      'mulai',
+      'start',
+      'startDate',
+      'berlakuMulai',
+    ]);
+    final selesai = _nilaiStringPertama(sumber, const [
+      'tanggalSelesai',
+      'tanggal_selesai',
+      'selesai',
+      'end',
+      'endDate',
+      'berlakuSampai',
+    ]);
+    if (mulai.isEmpty && selesai.isEmpty) return '';
+    if (mulai.isEmpty) return 's.d. $selesai';
+    if (selesai.isEmpty) return 'Mulai $mulai';
+    return '$mulai - $selesai';
+  }
+
   List<Map<String, dynamic>> get _terfilter {
     final kw = _controllerCari.text.trim().toLowerCase();
     return _produkSumberModel.where((p) {
@@ -745,6 +844,23 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       final barcode = '${p['barcode'] ?? ''}'.toLowerCase();
       return nama.contains(kw) || kode.contains(kw) || barcode.contains(kw);
     }).toList();
+  }
+
+  void _submitCariProduk(String nilai) {
+    final v = nilai.trim();
+    if (v.isEmpty) return;
+    final cocok = _produkSumberModel.where((p) {
+      final kode = '${p['kode'] ?? ''}'.trim();
+      final barcode = '${p['barcode'] ?? ''}'.trim();
+      return kode == v || barcode == v;
+    }).toList();
+    setStateIfMounted(() {
+      if (cocok.isNotEmpty) {
+        _idTerpilih.add(_idProduk(cocok.first));
+      }
+      _controllerCari.clear();
+    });
+    _fokusCari.requestFocus();
   }
 
   List<Map<String, dynamic>> get _daftarProdukTampil {
@@ -815,6 +931,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     });
     try {
       final idsPromo = <int>{};
+      _promoHargaAsliDefaultPerProduk.clear();
+      _promoHargaPromoDefaultPerProduk.clear();
+      _promoMasaPerProduk.clear();
+      final aturanById = await _muatAturanDiskonPromoById();
       const ukuranBatch = 80;
       for (var start = 0; start < _semuaProduk.length; start += ukuranBatch) {
         final batch = _semuaProduk.skip(start).take(ukuranBatch).toList();
@@ -838,13 +958,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           final aturanDiskon = m['aturanDiskon'];
           if (diskon <= 0 && cashback <= 0 && aturanDiskon == null) continue;
           idsPromo.add(id);
-          if (diskon > 0) {
-            final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
-            final hargaPromo = max(0, harga - diskon);
-            _promoHargaAsliPerProduk.putIfAbsent(
-                id, () => _formatRupiah(harga).replaceFirst('Rp ', 'Rp. '));
-            _promoHargaPromoPerProduk.putIfAbsent(id,
-                () => _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. '));
+          final harga = (p['hargaJual'] as num?)?.toDouble() ?? 0;
+          final hargaPromo = max(0, harga - diskon);
+          final hargaAsliText =
+              _formatRupiah(harga).replaceFirst('Rp ', 'Rp. ');
+          final hargaPromoText =
+              _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
+          _promoHargaAsliDefaultPerProduk[id] = hargaAsliText;
+          _promoHargaPromoDefaultPerProduk[id] = hargaPromoText;
+          p['hargaAsliPromoTag'] = harga;
+          p['hargaPromoTag'] = hargaPromo;
+          final masaPromo = _masaPromoDariEvaluasi(m, aturanById);
+          if (masaPromo.isNotEmpty) {
+            _promoMasaPerProduk[id] = masaPromo;
+            p['masaPromoTag'] = masaPromo;
           }
         }
       }
@@ -1484,6 +1611,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             Map<int, String>.from(_promoHargaAsliPerProduk),
         promoHargaPromoPerProduk:
             Map<int, String>.from(_promoHargaPromoPerProduk),
+        promoMasaPerProduk: Map<int, String>.from(_promoMasaPerProduk),
         promoHeaderBgHex: _hexPdf(_controllerPromoHeaderBg, '#64605A'),
         promoHeaderTextHex: _hexPdf(_controllerPromoHeaderText, '#FFFFFF'),
         promoStripBgHex: _hexPdf(_controllerPromoStripBg, '#E7B640'),
@@ -1633,16 +1761,34 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   String? _hargaAsliPromoUntuk(Map<String, dynamic> p) {
-    final custom = _promoHargaAsliPerProduk[_idProduk(p)]?.trim();
+    final id = _idProduk(p);
+    final custom = _promoHargaAsliPerProduk[id]?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
-    final nilai = _hargaLama(p);
-    return nilai == null ? null : _formatRupiah(nilai);
+    final defaultPromo = _promoHargaAsliDefaultPerProduk[id]?.trim();
+    if (defaultPromo != null && defaultPromo.isNotEmpty) return defaultPromo;
+    return _formatRupiah(p['hargaJual'] as num?).replaceFirst('Rp ', 'Rp. ');
   }
 
   String _hargaPromoUntuk(Map<String, dynamic> p) {
-    final custom = _promoHargaPromoPerProduk[_idProduk(p)]?.trim();
+    final id = _idProduk(p);
+    final custom = _promoHargaPromoPerProduk[id]?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
+    final defaultPromo = _promoHargaPromoDefaultPerProduk[id]?.trim();
+    if (defaultPromo != null && defaultPromo.isNotEmpty) return defaultPromo;
+    final hargaPromo = p['hargaPromoTag'];
+    if (hargaPromo is num) {
+      return _formatRupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
+    }
     return _formatRupiah(p['hargaJual'] as num?).replaceFirst('Rp ', 'Rp. ');
+  }
+
+  String? _masaPromoUntuk(Map<String, dynamic> p) {
+    final custom = _promoMasaPerProduk[_idProduk(p)]?.trim();
+    if (custom != null && custom.isNotEmpty) return custom;
+    final value =
+        '${p['masaPromoTag'] ?? p['masaPromo'] ?? p['masa_promo'] ?? ''}'
+            .trim();
+    return value.isEmpty ? null : value;
   }
 
   TextEditingController _controllerPromoManual(
@@ -1651,10 +1797,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     String initialValue,
   ) {
     final key = '$id-$field';
-    return _controllerPromoItem.putIfAbsent(
+    final controller = _controllerPromoItem.putIfAbsent(
       key,
       () => TextEditingController(text: initialValue),
     );
+    if (controller.text.isEmpty && initialValue.isNotEmpty) {
+      controller.text = initialValue;
+    }
+    return controller;
   }
 
   List<Map<String, dynamic>> get _produkPromoEditor {
@@ -2005,6 +2155,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           padding: const EdgeInsets.all(12),
           child: TextField(
             controller: _controllerCari,
+            focusNode: _fokusCari,
             decoration: const InputDecoration(
               hintText: 'Cari nama/kode/barcode produk...',
               prefixIcon: Icon(Icons.search),
@@ -2012,6 +2163,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               isDense: true,
             ),
             onChanged: (_) => setStateIfMounted(() {}),
+            onSubmitted: _submitCariProduk,
           ),
         ),
         _filterKategoriProduk(),
@@ -2611,6 +2763,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   Widget _editorPromoProduk(Map<String, dynamic> p) {
     final id = _idProduk(p);
     final nama = '${p['nama'] ?? '-'}';
+    final masaPromo = _masaPromoUntuk(p);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -2626,6 +2779,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (masaPromo != null) ...[
+            const SizedBox(height: 4),
+            Text('Masa Promo: $masaPromo',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          ],
           const SizedBox(height: 8),
           _fieldPromoItem(
             label: 'Teks Promo',
@@ -2648,7 +2809,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                   controller: _controllerPromoManual(
                     id,
                     'hargaAsli',
-                    _promoHargaAsliPerProduk[id] ?? '',
+                    _promoHargaAsliPerProduk[id] ??
+                        _hargaAsliPromoUntuk(p) ??
+                        '',
                   ),
                   hint: _hargaAsliPromoUntuk(p) ?? 'Opsional',
                   onChanged: (v) => _promoHargaAsliPerProduk[id] = v,
@@ -2661,7 +2824,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                   controller: _controllerPromoManual(
                     id,
                     'hargaPromo',
-                    _promoHargaPromoPerProduk[id] ?? '',
+                    _promoHargaPromoPerProduk[id] ?? _hargaPromoUntuk(p),
                   ),
                   hint: _hargaPromoUntuk(p),
                   onChanged: (v) => _promoHargaPromoPerProduk[id] = v,
@@ -3262,6 +3425,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final promo = _teksPromoUntuk(p);
     final hargaLama = _hargaAsliPromoUntuk(p);
     final harga = _hargaPromoUntuk(p);
+    final masaPromo = _masaPromoUntuk(p);
     final headerBg =
         _warnaRak(_controllerPromoHeaderBg, const Color(0xFF64605A));
     final headerText = _warnaRak(_controllerPromoHeaderText, Colors.white);
@@ -3369,6 +3533,21 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             ),
           ),
         ),
+        if (masaPromo != null)
+          ColoredBox(
+            color: bodyBg,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Text(masaPromo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: kodeSize,
+                      fontWeight: FontWeight.w700,
+                      color: stripText)),
+            ),
+          ),
         if (_tampilBarcode)
           ColoredBox(
             color: bodyBg,
@@ -3486,6 +3665,7 @@ class _PriceTagPdfBuilder {
   final Map<int, String> promoTeksPerProduk;
   final Map<int, String> promoHargaAsliPerProduk;
   final Map<int, String> promoHargaPromoPerProduk;
+  final Map<int, String> promoMasaPerProduk;
   final String promoHeaderBgHex;
   final String promoHeaderTextHex;
   final String promoStripBgHex;
@@ -3539,6 +3719,7 @@ class _PriceTagPdfBuilder {
     required this.promoTeksPerProduk,
     required this.promoHargaAsliPerProduk,
     required this.promoHargaPromoPerProduk,
+    required this.promoMasaPerProduk,
     required this.promoHeaderBgHex,
     required this.promoHeaderTextHex,
     required this.promoStripBgHex,
@@ -3928,14 +4109,26 @@ class _PriceTagPdfBuilder {
   String? _hargaAsliPromoPdf(Map<String, dynamic> p) {
     final custom = promoHargaAsliPerProduk[_idProdukPdf(p)]?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
-    final nilai = _hargaLama(p);
-    return nilai == null ? null : _rupiah(nilai);
+    return _rupiah(p['hargaJual'] as num?).replaceFirst('Rp ', 'Rp. ');
   }
 
   String _hargaPromoPdf(Map<String, dynamic> p) {
     final custom = promoHargaPromoPerProduk[_idProdukPdf(p)]?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
+    final hargaPromo = p['hargaPromoTag'];
+    if (hargaPromo is num) {
+      return _rupiah(hargaPromo).replaceFirst('Rp ', 'Rp. ');
+    }
     return _rupiah(p['hargaJual'] as num?).replaceFirst('Rp ', 'Rp. ');
+  }
+
+  String? _masaPromoPdf(Map<String, dynamic> p) {
+    final custom = promoMasaPerProduk[_idProdukPdf(p)]?.trim();
+    if (custom != null && custom.isNotEmpty) return custom;
+    final value =
+        '${p['masaPromoTag'] ?? p['masaPromo'] ?? p['masa_promo'] ?? ''}'
+            .trim();
+    return value.isEmpty ? null : value;
   }
 
   pw.Widget _logoPdf(double height) {
@@ -3959,6 +4152,7 @@ class _PriceTagPdfBuilder {
     final teksPromo = _teksPromoPdf(p);
     final skala = ukuran.id == 'promo_a5' ? 1.25 : 1.0;
     final hargaLama = _hargaAsliPromoPdf(p);
+    final masaPromo = _masaPromoPdf(p);
     return pw.Container(
       width: double.infinity,
       height: double.infinity,
@@ -4040,6 +4234,20 @@ class _PriceTagPdfBuilder {
               ),
             ),
           ),
+          if (masaPromo != null)
+            pw.Container(
+              color: PdfColor.fromHex(promoBodyBgHex),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              child: pw.Center(
+                child: pw.Text(masaPromo,
+                    maxLines: 1,
+                    style: pw.TextStyle(
+                        fontSize: promoKodeSize * skala,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex(promoStripTextHex))),
+              ),
+            ),
           if (bcw != null)
             pw.Container(
               color: PdfColor.fromHex(promoBodyBgHex),
@@ -4074,25 +4282,6 @@ String _kodeBarcode(Map<String, dynamic> p) {
   final barcode = '${p['barcode'] ?? ''}'.trim();
   if (barcode.isNotEmpty) return barcode;
   return '${p['kode'] ?? ''}'.trim();
-}
-
-num? _hargaLama(Map<String, dynamic> p) {
-  final hargaKini = p['hargaJual'] as num?;
-  const kandidat = [
-    'hargaLama',
-    'hargaNormal',
-    'hargaSebelum',
-    'hargaJualNormal',
-    'hargaAsli',
-    'hargaCoret',
-  ];
-  for (final key in kandidat) {
-    final nilai = p[key];
-    if (nilai is num && nilai > 0 && (hargaKini == null || nilai > hargaKini)) {
-      return nilai;
-    }
-  }
-  return null;
 }
 
 String _formatRupiah(num? v) {
