@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:io';
 
+import 'package:intl/intl.dart';
+
 import 'package:barcode/barcode.dart' as bc;
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
@@ -444,6 +446,18 @@ final _ukuranPromo = [
       populer: u.populer,
       pageFormat: u.pageFormat,
     ),
+  for (final u in _ukuranProduk)
+    _UkuranTag(
+      id: 'promo_${u.id}',
+      label: 'Promo - ${u.label}',
+      detail: u.detail,
+      kategori: 'Ukuran Price Tag Produk untuk Promo',
+      lebarMm: u.lebarMm,
+      tinggiMm: u.tinggiMm,
+      bulat: u.bulat,
+      populer: u.populer,
+      pageFormat: u.pageFormat,
+    ),
 ];
 
 class _PriceTagScreenState extends State<PriceTagScreen> {
@@ -464,7 +478,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   final _controllerRakHeaderSize = TextEditingController(text: '8');
   final _controllerRakProdukSize = TextEditingController(text: '5.8');
   final _controllerRakKodeSize = TextEditingController(text: '7');
-  final _controllerRakHargaSize = TextEditingController(text: '26');
+  final _controllerRakHargaSize = TextEditingController(text: '20');
   final _controllerRakHeaderTinggi = TextEditingController();
   final _controllerRakStripTinggi = TextEditingController();
   final _controllerRakHeaderBg = TextEditingController(text: '#505B54');
@@ -514,6 +528,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   // independen dari [_tampilBarcode] (gambar batang) supaya bisa
   // ditampilkan salah satu, keduanya, atau tak satu pun.
   bool _tampilBarcodeTeks = false;
+  bool _tampilTanggalCetak = false;
   bool _tampilToko = true;
   bool _tampilLogo = false;
   bool _tampilHargaProduk = true;
@@ -1302,6 +1317,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
           'tampilBarcodeTeks': _tampilBarcodeTeks,
+          'tampilTanggalCetak': _tampilTanggalCetak,
           'tampilToko': _tampilToko,
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
@@ -1346,6 +1362,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'tampilBarcode': _tampilBarcode,
           'tampilKode': _tampilKode,
           'tampilBarcodeTeks': _tampilBarcodeTeks,
+          'tampilTanggalCetak': _tampilTanggalCetak,
           'tampilToko': _tampilToko,
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
@@ -1402,6 +1419,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     _tampilBarcode = boolean('tampilBarcode', true);
     _tampilKode = boolean('tampilKode', true);
     _tampilBarcodeTeks = boolean('tampilBarcodeTeks', false);
+    _tampilTanggalCetak = boolean('tampilTanggalCetak', false);
 
     switch (model) {
       case ModelPriceTag.rak:
@@ -1417,7 +1435,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _controllerRakHeaderSize.text = teks('rakHeaderSize', '8');
         _controllerRakProdukSize.text = teks('rakProdukSize', '5.8');
         _controllerRakKodeSize.text = teks('rakKodeSize', '7');
-        _controllerRakHargaSize.text = teks('rakHargaSize', '26');
+        _controllerRakHargaSize.text = teks('rakHargaSize', '20');
         _controllerRakHeaderTinggi.text = teks('rakHeaderTinggi', '');
         _controllerRakStripTinggi.text = teks('rakStripTinggi', '');
         _controllerRakHeaderBg.text = teks('rakHeaderBg', '#505B54');
@@ -1591,6 +1609,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         tampilBarcode: _tampilBarcode,
         tampilKode: _tampilKode,
         tampilBarcodeTeks: _tampilBarcodeTeks,
+        tampilTanggalCetak: _tampilTanggalCetak,
+        tanggalCetakText: _tanggalCetakText,
         tampilToko: _tampilToko,
         tampilHargaProduk: _tampilHargaProduk,
         promo: _controllerPromo.text.trim(),
@@ -1627,7 +1647,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         rakHeaderSize: _ukuranTeks(_controllerRakHeaderSize, 8),
         rakProdukSize: _ukuranTeks(_controllerRakProdukSize, 5.8),
         rakKodeSize: _ukuranTeks(_controllerRakKodeSize, 7),
-        rakHargaSize: _ukuranTeks(_controllerRakHargaSize, 26),
+        rakHargaSize: _ukuranTeks(_controllerRakHargaSize, 20),
         promoHeaderSize: _ukuranTeks(_controllerPromoHeaderSize, 20),
         promoTokoSize: _ukuranTeks(_controllerPromoTokoSize, 9),
         promoProdukSize: _ukuranTeks(_controllerPromoProdukSize, 7.5),
@@ -1750,6 +1770,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     final custom = _controllerRakHarga.text.trim();
     return custom.isNotEmpty ? custom : harga.replaceFirst('Rp ', 'Rp. ');
   }
+
+  String get _tanggalCetakText =>
+      DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
   int _idProduk(Map<String, dynamic> p) => (p['id'] as num?)?.toInt() ?? -1;
 
@@ -2470,6 +2493,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
             title: const Text('Tampilkan Barcode dalam Teks'),
             subtitle: const Text(
                 'Barcode produk sbg teks; kosong = pakai Kode Produk'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+        if (_model != ModelPriceTag.produk)
+          CheckboxListTile(
+            value: _tampilTanggalCetak,
+            onChanged: (v) {
+              setStateIfMounted(() => _tampilTanggalCetak = v ?? false);
+              unawaited(_simpanPengaturanModel(_model));
+            },
+            title: const Text('Tampilkan Tanggal Cetak'),
+            subtitle: const Text('Ditampilkan kecil di pojok kiri bawah'),
             contentPadding: EdgeInsets.zero,
             dense: true,
           ),
@@ -3321,17 +3356,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           flex: flexBody,
           child: ColoredBox(
             color: bodyBg,
-            child: Column(
+            child: Stack(
               children: [
-                Expanded(
-                  // Harga dominan (flex 3), barcode kebagian flex 1 -- BUKAN
-                  // tinggi tetap spt sebelumnya, jadi selalu pas dgn sisa
-                  // ruang body (yang kini bisa berubah krn tinggi Header/
-                  // Strip Produk bisa dikustom), tak lagi terpotong.
-                  flex: tampilAreaBarcode ? 3 : 1,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                Positioned.fill(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        8,
+                        4,
+                        tampilAreaBarcode ? 86 : 8,
+                        _tampilTanggalCetak ? 18 : 6),
+                    child: Center(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(_teksRakHarga(harga),
@@ -3343,30 +3377,43 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                     ),
                   ),
                 ),
+                if (_tampilTanggalCetak)
+                  Positioned(
+                    left: 6,
+                    bottom: 4,
+                    child: Text(_tanggalCetakText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: kodeSize * 0.45,
+                            fontWeight: FontWeight.w600,
+                            color: kodeText)),
+                  ),
                 if (tampilAreaBarcode)
-                  Expanded(
-                    flex: 1,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 2),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_tampilBarcode)
-                            Expanded(
-                              child: _PreviewBarcode(
-                                  data: barcode, height: double.infinity),
-                            ),
-                          if (_tampilBarcodeTeks && barcode.isNotEmpty)
-                            Text(barcode,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: kodeSize * 0.7,
-                                    letterSpacing: 1,
-                                    color: kodeText)),
-                        ],
-                      ),
+                  Positioned(
+                    right: 6,
+                    bottom: 4,
+                    width: 72,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_tampilBarcode)
+                          SizedBox(
+                            height: 18,
+                            child: _PreviewBarcode(
+                                data: barcode, height: double.infinity),
+                          ),
+                        if ((_tampilBarcode || _tampilBarcodeTeks) &&
+                            barcode.isNotEmpty)
+                          Text(barcode,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: kodeSize * 0.45,
+                                  letterSpacing: 0.5,
+                                  color: kodeText)),
+                      ],
                     ),
                   ),
               ],
@@ -3548,6 +3595,23 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                       color: stripText)),
             ),
           ),
+        if (_tampilTanggalCetak)
+          ColoredBox(
+            color: bodyBg,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_tanggalCetakText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: kodeSize * 0.8,
+                        fontWeight: FontWeight.w600,
+                        color: stripText)),
+              ),
+            ),
+          ),
         if (_tampilBarcode)
           ColoredBox(
             color: bodyBg,
@@ -3647,6 +3711,8 @@ class _PriceTagPdfBuilder {
   final bool tampilBarcode;
   final bool tampilKode;
   final bool tampilBarcodeTeks;
+  final bool tampilTanggalCetak;
+  final String tanggalCetakText;
   final bool tampilToko;
   final bool tampilHargaProduk;
   final String promo;
@@ -3701,6 +3767,8 @@ class _PriceTagPdfBuilder {
     required this.tampilBarcode,
     required this.tampilKode,
     required this.tampilBarcodeTeks,
+    required this.tampilTanggalCetak,
+    required this.tanggalCetakText,
     required this.tampilToko,
     required this.tampilHargaProduk,
     required this.promo,
@@ -3977,57 +4045,73 @@ class _PriceTagPdfBuilder {
           pw.Expanded(
             child: pw.Container(
               color: PdfColor.fromHex(rakBodyBgHex),
-              // Harga (flex 3) + barcode (flex 1) berbagi Expanded yang
-              // SAMA -- bukan barcode ditaruh sbg sibling tetap di luar
-              // Expanded spt sebelumnya (bisa memaksa total tinggi melebihi
-              // kotak & terpotong di margin bawah kalau tinggi Header/Strip
-              // Produk dikustom lebih besar). FittedBox pada barcode jadi
-              // jaring pengaman kedua thd lebar yang melebihi kotak.
-              child: pw.Column(
+              child: pw.Stack(
                 children: [
-                  pw.Expanded(
-                    flex: tampilAreaBarcode ? 3 : 1,
-                    child: pw.Center(
-                      child: pw.FittedBox(
-                        fit: pw.BoxFit.scaleDown,
-                        child: pw.Text(
-                          _teksHargaRakPdf(p),
-                          style: pw.TextStyle(
-                            fontSize: rakHargaSize * skala,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColor.fromHex(rakHargaTextHex),
+                  pw.Positioned.fill(
+                    child: pw.Padding(
+                      padding: pw.EdgeInsets.fromLTRB(
+                          4,
+                          2,
+                          tampilAreaBarcode ? 34 : 4,
+                          tampilTanggalCetak ? 9 : 3),
+                      child: pw.Center(
+                        child: pw.FittedBox(
+                          fit: pw.BoxFit.scaleDown,
+                          child: pw.Text(
+                            _teksHargaRakPdf(p),
+                            style: pw.TextStyle(
+                              fontSize: rakHargaSize * skala,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColor.fromHex(rakHargaTextHex),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                  if (tampilTanggalCetak)
+                    pw.Positioned(
+                      left: 3,
+                      bottom: 2,
+                      child: pw.Text(tanggalCetakText,
+                          maxLines: 1,
+                          style: pw.TextStyle(
+                              fontSize: rakKodeSize * skala * 0.45,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColor.fromHex(rakKodeTextHex))),
+                    ),
                   if (tampilAreaBarcode)
-                    pw.Expanded(
-                      flex: 1,
-                      child: pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 8),
+                    pw.Positioned(
+                      right: 3,
+                      bottom: 2,
+                      child: pw.SizedBox(
+                        width: ukuran.lebarMm * PdfPageFormat.mm * 0.34,
                         child: bcw == null
-                            ? pw.Center(
-                                child: pw.Text(barcode,
-                                    maxLines: 1,
-                                    style: pw.TextStyle(
-                                        fontSize: rakKodeSize * skala,
-                                        letterSpacing: 1,
-                                        color:
-                                            PdfColor.fromHex(rakKodeTextHex))),
-                              )
+                            ? pw.Text(barcode,
+                                maxLines: 1,
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                    fontSize: rakKodeSize * skala * 0.45,
+                                    letterSpacing: 0.5,
+                                    color: PdfColor.fromHex(rakKodeTextHex)))
                             : pw.Column(
+                                mainAxisSize: pw.MainAxisSize.min,
                                 children: [
-                                  pw.Expanded(
-                                    child: pw.FittedBox(
-                                        fit: pw.BoxFit.scaleDown, child: bcw),
-                                  ),
-                                  if (tampilBarcodeTeks && barcode.isNotEmpty)
+                                  if (tampilBarcode)
+                                    pw.SizedBox(
+                                      height: 8,
+                                      child: pw.FittedBox(
+                                          fit: pw.BoxFit.scaleDown, child: bcw),
+                                    ),
+                                  if ((tampilBarcode || tampilBarcodeTeks) &&
+                                      barcode.isNotEmpty)
                                     pw.Text(barcode,
                                         maxLines: 1,
+                                        textAlign: pw.TextAlign.center,
                                         style: pw.TextStyle(
-                                            fontSize: rakKodeSize * skala,
-                                            letterSpacing: 1,
+                                            fontSize:
+                                                rakKodeSize * skala * 0.45,
+                                            letterSpacing: 0.5,
                                             color: PdfColor.fromHex(
                                                 rakKodeTextHex))),
                                 ],
@@ -4244,6 +4328,21 @@ class _PriceTagPdfBuilder {
                     maxLines: 1,
                     style: pw.TextStyle(
                         fontSize: promoKodeSize * skala,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex(promoStripTextHex))),
+              ),
+            ),
+          if (tampilTanggalCetak)
+            pw.Container(
+              color: PdfColor.fromHex(promoBodyBgHex),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              child: pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(tanggalCetakText,
+                    maxLines: 1,
+                    style: pw.TextStyle(
+                        fontSize: promoKodeSize * skala * 0.8,
                         fontWeight: pw.FontWeight.bold,
                         color: PdfColor.fromHex(promoStripTextHex))),
               ),

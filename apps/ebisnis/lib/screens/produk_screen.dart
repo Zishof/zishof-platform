@@ -76,9 +76,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
   int _tabAktif = 0;
   int? _kategoriTerpilih;
   String _kataKunci = '';
+  final _controllerCariProduk = TextEditingController();
   int _halaman = 0;
   int _totalProduk = 0;
-  Timer? _timerCari;
   Map<String, dynamic>? _statistik;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
@@ -95,7 +95,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
 
   @override
   void dispose() {
-    _timerCari?.cancel();
+    _controllerCariProduk.dispose();
     super.dispose();
   }
 
@@ -225,9 +225,10 @@ class _ProdukScreenState extends State<ProdukScreen> {
       await ApiClient.instance.aksi('kebijakan_retur_hapus', {'id': k.id});
       await _muatSemua();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -523,9 +524,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
                         ? (_memuat
                             ? const Center(child: CircularProgressIndicator())
                             : _daftarKebijakanRetur())
-                        : (_memuat
+                        : (_memuat && _semuaProduk.isEmpty
                             ? const Center(child: CircularProgressIndicator())
-                            : _pesanError != null
+                            : _pesanError != null && _semuaProduk.isEmpty
                                 ? Center(
                                     child: Padding(
                                       padding: const EdgeInsets.all(24),
@@ -556,6 +557,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               statistik: _statistik!),
                                         const SizedBox(height: 12),
                                         AppSearchField(
+                                          controller: _controllerCariProduk,
+                                          debounce:
+                                              const Duration(milliseconds: 350),
                                           hintText:
                                               'Cari produk (nama/kode/barcode)...',
                                           onChanged: (v) {
@@ -563,11 +567,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               _kataKunci = v;
                                               _halaman = 0;
                                             });
-                                            _timerCari?.cancel();
-                                            _timerCari = Timer(
-                                                const Duration(
-                                                    milliseconds: 350),
-                                                _muatSemua);
+                                            _muatSemua();
                                           },
                                         ),
                                         const SizedBox(height: 10),
@@ -643,6 +643,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 12),
+                                        if (_memuat) ...[
+                                          const LinearProgressIndicator(
+                                              minHeight: 2),
+                                          const SizedBox(height: 10),
+                                        ],
                                         if (_produkTersaring.isEmpty)
                                           const Padding(
                                             padding: EdgeInsets.symmetric(
