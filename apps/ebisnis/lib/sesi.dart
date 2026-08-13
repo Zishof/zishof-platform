@@ -41,6 +41,13 @@ class Sesi {
   Map<String, bool> aksesMenu = {};
   bool bolehMenu(String kunci) => aksesMenu[kunci] ?? true;
 
+  /// CRUD granular POS biasa. Kunci/aksi lama yang belum dikirim server
+  /// tetap mengikuti kompatibilitas lama (boleh), sementara server selalu
+  /// menjadi gerbang keamanan yang sebenarnya.
+  Map<String, Map<String, bool>> crudPos = {};
+  bool bolehAksiPos(String kunci, String aksi) =>
+      bolehKelola || (crudPos[kunci]?[aksi] ?? true);
+
   /// Gerbang menu KUNCI VARIAN BARU (apotik_/emedik_/kunci fail-closed lain di
   /// `aksesMenu`) -- KEBALIKAN [bolehMenu]: kunci hilang = TIDAK boleh.
   /// Padanan server: `EbisnisMenuKatalog.KUNCI_DEFAULT_NONAKTIF` (PosApi selalu
@@ -115,6 +122,14 @@ class Sesi {
         .toList();
     aksesMenu = ((konfig['aksesMenu'] as Map<String, dynamic>?) ?? {})
         .map((k, v) => MapEntry(k, v == true));
+    final crudPosRaw = konfig['aksesMenuCrud'];
+    crudPos = crudPosRaw is Map<String, dynamic>
+        ? crudPosRaw.map((k, v) => MapEntry(
+            k,
+            v is Map<String, dynamic>
+                ? v.map((aksi, nilai) => MapEntry(aksi, nilai == true))
+                : <String, bool>{}))
+        : {};
     multiToko = konfig['multiToko'] == true;
     daftarToko =
         ((konfig['daftarToko'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -170,6 +185,7 @@ class Sesi {
     bolehHapusPesanan = false;
     bolehEntryTopup = false;
     aksesMenu = {};
+    crudPos = {};
     multiToko = false;
     daftarToko = [];
     actorType = '';

@@ -5,6 +5,7 @@ import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -199,6 +200,17 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             ),
           ),
           actions: [
+            if (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
+                Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject'))
+              TextButton.icon(
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Batalkan Transaksi'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _batalkanTransaksi(row);
+                },
+              ),
             TextButton.icon(
               icon: const Icon(Icons.print_outlined, size: 18),
               label: const Text('Cetak Struk'),
@@ -213,6 +225,71 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           ],
         ),
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _batalkanTransaksi(Map<String, dynamic> row) async {
+    final alasanController = TextEditingController();
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan Transaksi?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Transaksi ${row['nomorNota'] ?? ''} akan dibatalkan. Stok dan saldo terkait akan dikoreksi, serta pembatalan dicatat dalam arsip audit.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: alasanController,
+              autofocus: true,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Alasan pembatalan *',
+                hintText: 'Contoh: transaksi ganda atau salah input kasir',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Kembali')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Ya, Batalkan'),
+          ),
+        ],
+      ),
+    );
+    final alasan = alasanController.text.trim();
+    alasanController.dispose();
+    if (setuju != true) return;
+    if (alasan.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Alasan pembatalan wajib diisi.')));
+      }
+      return;
+    }
+    try {
+      final hasil = await ApiClient.instance.aksi('batalkan_transaksi', {
+        'id': row['idTransaksi'],
+        'alasan': alasan,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(hasil['description']?.toString() ??
+              'Transaksi berhasil dibatalkan.')));
+      await _muat();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
