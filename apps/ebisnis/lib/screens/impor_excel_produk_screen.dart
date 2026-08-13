@@ -140,6 +140,27 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   double get _progresKomit =>
       _barisUntukKomit == 0 ? 0 : _barisSelesaiKomit / _barisUntukKomit;
 
+  /// Komit dapat terputus sesaat ketika proxy AJP/Tomcat memulai ulang koneksi.
+  /// Retry aman karena server selalu mencari ulang produk berdasarkan identitas;
+  /// stok yang sudah sama dilewati dan opname selisih=0 tidak dibuat ulang.
+  Future<Map<String, dynamic>> _komitBatchDenganRetry(
+      List<_BarisImpor> batch, int nomorBatch) async {
+    const maksimumPercobaan = 5;
+    for (var percobaan = 1; percobaan <= maksimumPercobaan; percobaan++) {
+      try {
+        return await ApiClient.instance.aksi('produk_impor_excel_komit', {
+          'baris': batch.map((b) => b.keKomit()).toList(),
+          'hanya_stok_berbeda': true,
+          'nomor_batch_klien': nomorBatch,
+        });
+      } on ApiException catch (e) {
+        if (!e.offline || percobaan == maksimumPercobaan) rethrow;
+        await Future<void>.delayed(Duration(seconds: percobaan * 2));
+      }
+    }
+    throw StateError('Percobaan komit batch berakhir tanpa hasil.');
+  }
+
   // Ringkasan hasil komit (tahap laporan)
   int _total = 0,
       _dibuat = 0,
@@ -236,15 +257,14 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     _total = _dibuat = _diperbarui = _dilewati = _kategoriBaru =
         _pemasokBaru = _satuanBaru = _stokDiopname = _verifikasiGagal = 0;
     try {
-      const ukuranBatch = 200;
+      // 50 baris menjaga durasi setiap request tetap di bawah timeout proxy/AJP
+      // pada server produksi, sekaligus membatasi transaksi dan row-lock aktif.
+      const ukuranBatch = 50;
       for (var awal = 0; awal < terpilih.length; awal += ukuranBatch) {
         final batch = terpilih.sublist(
             awal, (awal + ukuranBatch).clamp(0, terpilih.length));
         final hasil =
-            await ApiClient.instance.aksi('produk_impor_excel_komit', {
-          'baris': batch.map((b) => b.keKomit()).toList(),
-          'hanya_stok_berbeda': true,
-        });
+            await _komitBatchDenganRetry(batch, (awal ~/ ukuranBatch) + 1);
         setStateIfMounted(() => _barisSelesaiKomit += batch.length);
         _total += (hasil['total'] as num?)?.toInt() ?? 0;
         _dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
