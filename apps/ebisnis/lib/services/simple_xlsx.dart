@@ -35,30 +35,61 @@ Uint8List buildSimpleXlsx({
   required List<String> headers,
   required List<List<Object?>> rows,
 }) {
+  return buildSimpleXlsxReport(
+    sheetName: sheetName,
+    rows: [headers, ...rows],
+    boldRows: const {1},
+  );
+}
+
+Uint8List buildSimpleXlsxReport({
+  required String sheetName,
+  required List<List<Object?>> rows,
+  Set<int> boldRows = const {},
+  Set<int> darkRows = const {},
+  List<double> columnWidths = const [],
+}) {
   final sheet = StringBuffer()
     ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     ..write(
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>');
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
 
-  void writeRow(int rowNumber, List<Object?> values, {bool header = false}) {
+  if (columnWidths.isNotEmpty) {
+    sheet.write('<cols>');
+    for (var i = 0; i < columnWidths.length; i++) {
+      final width = columnWidths[i].clamp(6, 80).toStringAsFixed(2);
+      sheet.write(
+          '<col min="${i + 1}" max="${i + 1}" width="$width" customWidth="1"/>');
+    }
+    sheet.write('</cols>');
+  }
+
+  sheet.write('<sheetData>');
+
+  void writeRow(int rowNumber, List<Object?> values) {
+    final style = darkRows.contains(rowNumber)
+        ? 2
+        : boldRows.contains(rowNumber)
+            ? 1
+            : 0;
     sheet.write('<row r="$rowNumber">');
     for (var i = 0; i < values.length; i++) {
       final value = values[i];
       if (value == null) continue;
       final reference = '${_columnName(i)}$rowNumber';
-      if (!header && value is num) {
-        sheet.write('<c r="$reference"><v>$value</v></c>');
+      final styleAttr = style > 0 ? ' s="$style"' : '';
+      if (value is num) {
+        sheet.write('<c r="$reference"$styleAttr><v>$value</v></c>');
       } else {
         sheet.write(
-            '<c r="$reference" t="inlineStr"${header ? ' s="1"' : ''}><is><t xml:space="preserve">${_xml(value.toString())}</t></is></c>');
+            '<c r="$reference" t="inlineStr"$styleAttr><is><t xml:space="preserve">${_xml(value.toString())}</t></is></c>');
       }
     }
     sheet.write('</row>');
   }
 
-  writeRow(1, headers, header: true);
   for (var i = 0; i < rows.length; i++) {
-    writeRow(i + 2, rows[i]);
+    writeRow(i + 1, rows[i]);
   }
   sheet.write('</sheetData></worksheet>');
 
@@ -89,11 +120,11 @@ Uint8List buildSimpleXlsx({
       '</Relationships>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-      '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+      '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>'
+      '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F3B5F"/><bgColor indexed="64"/></patternFill></fill></fills>'
       '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-      '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'
+      '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>'
       '</styleSheet>';
 
   final archive = Archive()

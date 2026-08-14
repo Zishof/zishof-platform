@@ -152,22 +152,64 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
   Future<void> _muatKategori() async {
     setStateIfMounted(() => _memuatKategori = true);
     try {
-      final hasil = await ApiClient.instance
-          .aksi('jenis_produk_list', {'page': 1, 'page_size': 100});
+      final hasil = await ApiClient.instance.aksi('jenis_produk_list', {
+        'page': 1,
+        'page_size': 500,
+        'termasuk_nonaktif': true,
+      });
+      var kategori = _parseKategoriResponse(hasil);
+      if (kategori.isEmpty) {
+        final katalog = await ApiClient.instance
+            .aksi('katalog', {'page': 1, 'page_size': 1});
+        kategori = _parseKategoriResponse(katalog);
+      }
       if (!mounted) return;
       setStateIfMounted(() {
-        _kategori = ((hasil['data'] as List?) ?? [])
-            .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
-            .toList();
+        _kategori = kategori;
+        for (final row in _rows) {
+          _resolveKategoriDariNama(row);
+        }
       });
-      for (final row in _rows) {
-        _resolveKategoriDariNama(row);
-      }
     } catch (_) {
       // Kategori bersifat pelengkap untuk produk baru; form tetap bisa dipakai.
     } finally {
       if (mounted) setStateIfMounted(() => _memuatKategori = false);
     }
+  }
+
+  List<Kategori> _parseKategoriResponse(Map<String, dynamic> hasil) {
+    final sumber = hasil['data'] ??
+        hasil['kategori'] ??
+        hasil['categories'] ??
+        hasil['jenis_produk'] ??
+        hasil['jenisProduk'] ??
+        hasil['items'] ??
+        hasil['rows'];
+    final data = sumber is List ? sumber : const [];
+    final unik = <int, Kategori>{};
+    for (final item in data) {
+      final kategori = _parseKategoriItem(item);
+      if (kategori != null) unik[kategori.id] = kategori;
+    }
+    final daftar = unik.values.toList()
+      ..sort((a, b) => a.nama.toLowerCase().compareTo(b.nama.toLowerCase()));
+    return daftar;
+  }
+
+  Kategori? _parseKategoriItem(dynamic item) {
+    if (item is! Map) return null;
+    final map = Map<String, dynamic>.from(item);
+    final id = map['id'] ??
+        map['kategoriId'] ??
+        map['kategori_id'] ??
+        map['jenisProdukId'] ??
+        map['jenis_produk_id'];
+    final idNilai = id is num ? id.toInt() : int.tryParse('$id');
+    final nama =
+        '${map['nama'] ?? map['jenisProdukNama'] ?? map['jenis_produk_nama'] ?? map['kategoriNama'] ?? map['kategori_nama'] ?? map['label'] ?? ''}'
+            .trim();
+    if (idNilai == null || nama.isEmpty) return null;
+    return Kategori(id: idNilai, nama: nama);
   }
 
   double? get _totalFaktur => parseDesimal(_totalManual.text);
@@ -179,8 +221,14 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
       .toList();
 
   void _setKategoriDariProduk(_BulkRow row, Map<String, dynamic> produk) {
-    row.kategoriId = (produk['kategoriId'] as num?)?.toInt();
-    row.kategoriNama = '${produk['kategoriNama'] ?? ''}'.trim();
+    final id = produk['kategoriId'] ??
+        produk['kategori_id'] ??
+        produk['jenisProdukId'] ??
+        produk['jenis_produk_id'];
+    row.kategoriId = id is num ? id.toInt() : int.tryParse('$id');
+    row.kategoriNama =
+        '${produk['kategoriNama'] ?? produk['kategori_nama'] ?? produk['jenisProdukNama'] ?? produk['jenis_produk_nama'] ?? ''}'
+            .trim();
   }
 
   void _resolveKategoriDariNama(_BulkRow row) {
@@ -202,7 +250,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
         if (kategori.id == row.kategoriId) return kategori.nama;
       }
     }
-    return 'Tanpa Kategori';
+    return 'Tanpa Jenis Produk';
   }
 
   Future<void> _pilihSupplier() async {
@@ -699,6 +747,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
             'keterangan':
                 'Dibuat dari Bulk Entry Kulakan faktur ${_faktur.text.trim()}',
             'kategori_id': row.kategoriId,
+            'jenis_produk_id': row.kategoriId,
             'kebijakan_retur_id': null,
             'izinkan_jual_minus_stok': false,
             'aktif': true,
@@ -757,7 +806,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
           'batch [OPSIONAL]',
           'expired [OPSIONAL yyyy-MM-dd]',
           'harga_jual [WAJIB utk barang baru]',
-          'kategori [OPSIONAL utk barang baru]',
+          'jenis_produk [OPSIONAL utk barang baru]',
           'catatan',
         ],
         rows: const [
@@ -797,7 +846,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
             'Opsional untuk non-batch.',
             'Format yyyy-MM-dd atau dd/MM/yyyy.',
             'Wajib hanya untuk produk baru.',
-            'Isi nama kategori atau ID kategori, opsional.',
+            'Isi nama jenis produk atau ID jenis produk, opsional.',
             'Hapus baris panduan sebelum paste/import ke aplikasi.'
           ],
         ],
@@ -976,11 +1025,11 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 9),
         border: OutlineInputBorder(),
       ),
-      hint: Text(_memuatKategori ? 'Memuat...' : 'Pilih kategori'),
+      hint: Text(_memuatKategori ? 'Memuat...' : 'Pilih jenis produk'),
       items: [
         const DropdownMenuItem<int?>(
           value: null,
-          child: Text('Tanpa Kategori'),
+          child: Text('Tanpa Jenis Produk'),
         ),
         ..._kategori.map((kategori) => DropdownMenuItem<int?>(
               value: kategori.id,
@@ -1003,6 +1052,32 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
     );
   }
 
+  Widget _headerCell(String label,
+      {required double width, TextAlign align = TextAlign.left}) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: AppColors.borderOf(context)),
+          ),
+        ),
+        child: Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: align,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimaryOf(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _bulkTable() {
     return AppSectionCard(
       padding: EdgeInsets.zero,
@@ -1019,82 +1094,35 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
                   color: AppColors.pageBgOf(context),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: const Row(children: [
-                    SizedBox(
-                        width: 44,
-                        child: Text('NO',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(width: 8),
-                    SizedBox(
-                        width: 170,
-                        child: Text('KODE / BARCODE',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 210,
-                        child: Text('NAMA PRODUK',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(width: 8),
-                    SizedBox(
-                        width: 160,
-                        child: Text('KATEGORI',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 80,
-                        child: Text('QTY',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 120,
-                        child: Text('HARGA BELI',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 100,
-                        child: Text('DISKON',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 100,
-                        child: Text('PPN',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 105,
-                        child: Text('HPP UNIT',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 120,
-                        child: Text('BATCH',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 120,
-                        child: Text('EXPIRED',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 100,
-                        child: Text('HARGA JUAL',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(
-                        width: 155,
-                        child: Text('STATUS',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w800))),
-                    SizedBox(width: 60),
+                  child: Row(children: [
+                    _headerCell('NO', width: 44, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('KODE / BARCODE', width: 170),
+                    const SizedBox(width: 8),
+                    _headerCell('NAMA PRODUK', width: 202),
+                    const SizedBox(width: 8),
+                    _headerCell('JENIS PRODUK', width: 160),
+                    const SizedBox(width: 8),
+                    _headerCell('QTY', width: 72, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('HARGA BELI',
+                        width: 112, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('DISKON', width: 92, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('PPN', width: 92, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('HPP UNIT', width: 97, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('BATCH', width: 112),
+                    const SizedBox(width: 8),
+                    _headerCell('EXPIRED', width: 112),
+                    const SizedBox(width: 8),
+                    _headerCell('HARGA JUAL',
+                        width: 92, align: TextAlign.right),
+                    const SizedBox(width: 8),
+                    _headerCell('STATUS', width: 147),
+                    const SizedBox(width: 52),
                   ]),
                 ),
                 ..._rows.asMap().entries.map((entry) {

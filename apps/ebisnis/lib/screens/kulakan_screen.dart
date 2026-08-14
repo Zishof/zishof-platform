@@ -1,4 +1,10 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:core_hw/core_hw.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -9,6 +15,7 @@ import '../widgets/app_components.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
 
@@ -127,6 +134,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   Map<String, dynamic>? _produkDitemukan;
   final List<_ItemFaktur> _itemsFaktur = [];
   bool _menyimpanFaktur = false;
+  VoidCallback? _refreshHalamanEntri;
 
   // ==== Riwayat (per-faktur) ====
   bool _memuatRiwayat = true;
@@ -135,6 +143,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunciRiwayat = '';
+
+  void _setStateEntri(VoidCallback fn) {
+    setStateIfMounted(fn);
+    _refreshHalamanEntri?.call();
+  }
 
   @override
   void initState() {
@@ -156,7 +169,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
 
   Future<void> _muatRiwayat() async {
     if (!mounted) return;
-    setStateIfMounted(() {
+    _setStateEntri(() {
       _memuatRiwayat = true;
       _errorRiwayat = null;
     });
@@ -167,16 +180,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
         if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
       });
       if (!mounted) return;
-      setStateIfMounted(() {
+      _setStateEntri(() {
         _riwayat =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _errorRiwayat = e.toString());
+      _setStateEntri(() => _errorRiwayat = e.toString());
     } finally {
-      if (mounted) setStateIfMounted(() => _memuatRiwayat = false);
+      if (mounted) _setStateEntri(() => _memuatRiwayat = false);
     }
   }
 
@@ -189,7 +202,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     final kode = barcode.trim();
     if (kode.isEmpty) return;
     if (!mounted) return;
-    setStateIfMounted(() {
+    _setStateEntri(() {
       _mencari = true;
       _errorForm = null;
       _produkDitemukan = null;
@@ -198,16 +211,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       final hasil =
           await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       if (!mounted) return;
-      setStateIfMounted(() {
+      _setStateEntri(() {
         _produkDitemukan = hasil;
         _qtyController.clear();
         _hargaController.clear();
       });
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _errorForm = e.toString());
+      _setStateEntri(() => _errorForm = e.toString());
     } finally {
-      if (mounted) setStateIfMounted(() => _mencari = false);
+      if (mounted) _setStateEntri(() => _mencari = false);
     }
   }
 
@@ -227,21 +240,21 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     final qty = parseDesimal(_qtyController.text);
     final harga = parseDesimal(_hargaController.text);
     if (qty == null || qty <= 0) {
-      setStateIfMounted(() => _errorForm = 'Jumlah masuk harus lebih dari 0.');
+      _setStateEntri(() => _errorForm = 'Jumlah masuk harus lebih dari 0.');
       return;
     }
     if (harga == null || harga <= 0) {
-      setStateIfMounted(
+      _setStateEntri(
           () => _errorForm = 'Harga beli satuan harus lebih dari 0.');
       return;
     }
     if (_kelolaBatch &&
         (_batchController.text.trim().isEmpty || _tanggalExpired == null)) {
-      setStateIfMounted(() => _errorForm =
+      _setStateEntri(() => _errorForm =
           'Nomor batch dan tanggal kedaluwarsa wajib diisi untuk stok terpantau.');
       return;
     }
-    setStateIfMounted(() {
+    _setStateEntri(() {
       _itemsFaktur.add(_ItemFaktur(
         produkId: p['produkId'] as int,
         nama: '${p['nama'] ?? ''}',
@@ -274,13 +287,13 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       lastDate: DateTime(2100),
     );
     if (hasil != null) {
-      setStateIfMounted(
+      _setStateEntri(
           () => expired ? _tanggalExpired = hasil : _tanggalProduksi = hasil);
     }
   }
 
   void _hapusDariDaftar(int index) {
-    setStateIfMounted(() => _itemsFaktur.removeAt(index));
+    _setStateEntri(() => _itemsFaktur.removeAt(index));
   }
 
   double get _totalHitung =>
@@ -302,7 +315,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 1)),
     );
-    if (hasil != null) setStateIfMounted(() => _tanggalFaktur = hasil);
+    if (hasil != null) _setStateEntri(() => _tanggalFaktur = hasil);
   }
 
   Future<void> _pilihSupplier() async {
@@ -311,21 +324,21 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       isScrollControlled: true,
       builder: (_) => const _SheetPilihSupplier(),
     );
-    if (dipilih != null) setStateIfMounted(() => _supplierTerpilih = dipilih);
+    if (dipilih != null) _setStateEntri(() => _supplierTerpilih = dipilih);
   }
 
-  Future<void> _simpanFaktur() async {
+  Future<void> _simpanFaktur({bool tutupSetelahSimpan = false}) async {
     final nomorFaktur = _fakturController.text.trim();
     if (nomorFaktur.isEmpty) {
-      setStateIfMounted(() => _errorForm = 'Nomor Faktur wajib diisi.');
+      _setStateEntri(() => _errorForm = 'Nomor Faktur wajib diisi.');
       return;
     }
     if (_itemsFaktur.isEmpty) {
-      setStateIfMounted(() =>
+      _setStateEntri(() =>
           _errorForm = 'Belum ada barang yang dimasukkan untuk faktur ini.');
       return;
     }
-    setStateIfMounted(() {
+    _setStateEntri(() {
       _menyimpanFaktur = true;
       _errorForm = null;
     });
@@ -359,7 +372,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                 : 'Faktur tersimpan (${_itemsFaktur.length} item).')));
       }
       if (!mounted) return;
-      setStateIfMounted(() {
+      _setStateEntri(() {
         _fakturController.clear();
         _totalManualController.clear();
         _keteranganController.clear();
@@ -369,12 +382,299 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       });
       _halaman = 1;
       await _muatRiwayat();
+      if (tutupSetelahSimpan && mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _errorForm = e.toString());
+      _setStateEntri(() => _errorForm = e.toString());
     } finally {
-      if (mounted) setStateIfMounted(() => _menyimpanFaktur = false);
+      if (mounted) _setStateEntri(() => _menyimpanFaktur = false);
     }
+  }
+
+  Future<void> _bukaEntriFaktur() async {
+    final berubah = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _KulakanFakturEntryPage(state: this),
+      ),
+    );
+    if (berubah == true && mounted) {
+      _halaman = 1;
+      await _muatRiwayat();
+    }
+  }
+
+  Widget _buildFormEntriFaktur() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        AppFormSection(
+          judul: 'Faktur Baru',
+          deskripsi:
+              'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _fakturController,
+                    decoration: AppFormStyle.fieldDecoration(context,
+                        labelText: 'Nomor Faktur *'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: _pilihTanggal,
+                    child: InputDecorator(
+                      decoration: AppFormStyle.fieldDecoration(context,
+                          labelText: 'Tanggal Faktur *'),
+                      child: Text(_formatTanggal.format(_tanggalFaktur)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pilihSupplier,
+              child: InputDecorator(
+                decoration: AppFormStyle.fieldDecoration(context,
+                    labelText: 'Supplier (opsional)',
+                    prefixIcon: const Icon(Icons.local_shipping_outlined)),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: Text(_supplierTerpilih == null
+                            ? '-- Pilih Supplier --'
+                            : '${_supplierTerpilih!['nama']}')),
+                    const Icon(Icons.arrow_drop_down),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _totalManualController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: AppFormStyle.fieldDecoration(context,
+                  labelText: 'Total Faktur (opsional)',
+                  hintText: 'Kosongkan bila sama dgn hitungan baris di bawah'),
+              onChanged: (_) => _setStateEntri(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _keteranganController,
+              decoration: AppFormStyle.fieldDecoration(context,
+                  labelText: 'Keterangan (opsional)'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppFormSection(
+          judul: 'Tambah Barang',
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: PencarianProdukBanbox(
+                    controller: _barcodeController,
+                    label: 'Kode / Barcode / Nama Produk',
+                    icon: Icons.search,
+                    onPilih: _cariProduk,
+                    decorationBuilder: (context) =>
+                        AppFormStyle.fieldDecoration(context,
+                            labelText: 'Kode / Barcode / Nama Produk',
+                            prefixIcon: const Icon(Icons.search)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                    onPressed: _scanKamera,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: 'Scan pakai kamera'),
+              ],
+            ),
+            if (_mencari)
+              const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Center(child: CircularProgressIndicator())),
+            if (_errorForm != null)
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(top: 12),
+                decoration: BoxDecoration(
+                    color: AppColors.latarLembut(AppColors.danger),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(_errorForm!,
+                    style: TextStyle(color: AppColors.danger)),
+              ),
+            if (_produkDitemukan != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: AppColors.latarLembut(AppColors.warning),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${_produkDitemukan!['nama'] ?? ''}',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                        'Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
+                        style: const TextStyle(fontSize: 11.5)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _qtyController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: AppFormStyle.fieldDecoration(context,
+                                labelText: 'Jumlah Masuk *', isDense: true),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _hargaController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: AppFormStyle.fieldDecoration(context,
+                                labelText: 'Harga Beli Satuan *',
+                                isDense: true),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                            onPressed: _tambahKeDaftar,
+                            icon: const Icon(Icons.add),
+                            tooltip: 'Tambah ke daftar'),
+                      ],
+                    ),
+                    CheckboxListTile(
+                      value: _kelolaBatch,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                          'Pantau batch & kedaluwarsa (disarankan)',
+                          style: TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      subtitle: const Text(
+                          'Stok dari penerimaan ini akan dikeluarkan otomatis dengan FEFO.',
+                          style: TextStyle(fontSize: 11)),
+                      onChanged: (v) =>
+                          _setStateEntri(() => _kelolaBatch = v ?? true),
+                    ),
+                    if (_kelolaBatch) ...[
+                      Row(children: [
+                        Expanded(
+                            child: TextField(
+                          controller: _batchController,
+                          decoration: AppFormStyle.fieldDecoration(context,
+                              labelText: 'Nomor Batch / Lot *', isDense: true),
+                        )),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: InkWell(
+                          onTap: () => _pilihTanggalBatch(expired: false),
+                          child: InputDecorator(
+                            decoration: AppFormStyle.fieldDecoration(context,
+                                labelText: 'Tanggal Produksi', isDense: true),
+                            child: Text(_tanggalProduksi == null
+                                ? 'Opsional'
+                                : _formatTanggal.format(_tanggalProduksi!)),
+                          ),
+                        )),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: InkWell(
+                          onTap: () => _pilihTanggalBatch(expired: true),
+                          child: InputDecorator(
+                            decoration: AppFormStyle.fieldDecoration(context,
+                                labelText: 'Tanggal Kedaluwarsa *',
+                                isDense: true),
+                            child: Text(_tanggalExpired == null
+                                ? 'Pilih tanggal'
+                                : _formatTanggal.format(_tanggalExpired!)),
+                          ),
+                        )),
+                      ]),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (_itemsFaktur.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('Barang di Faktur Ini',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              ..._itemsFaktur.asMap().entries.map((e) {
+                final it = e.value;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    dense: true,
+                    title: Text(it.nama, style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(
+                        '${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}'
+                        '${it.nomorBatch == null ? '' : ' · Batch ${it.nomorBatch} · Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
+                        style: const TextStyle(fontSize: 11.5)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_formatRupiah.format(it.total),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 12.5)),
+                        IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => _hapusDariDaftar(e.key)),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const Divider(height: 20),
+              _barisRingkas(
+                  'Total Hitungan Baris', _formatRupiah.format(_totalHitung)),
+              if (_diskonPreview > 0)
+                _barisRingkas('Diskon/Potongan (kelebihan hitungan)',
+                    '- ${_formatRupiah.format(_diskonPreview)}'),
+              _barisRingkas('Total Faktur',
+                  _formatRupiah.format(_totalManual ?? _totalHitung),
+                  tebal: true),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: _menyimpanFaktur
+                      ? null
+                      : () => _simpanFaktur(tutupSetelahSimpan: true),
+                  icon: _menyimpanFaktur
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan Faktur'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
@@ -398,6 +698,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       builder: (_) => AppDetailDialogShell(
         title: 'Detail Faktur ${header['nomorFaktur'] ?? ''}',
         actions: [
+          OutlinedButton.icon(
+            onPressed: () => _unduhFakturPdf(header, items),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Pdf'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _unduhFakturExcel(header, items),
+            icon: const Icon(Icons.table_view_outlined, size: 18),
+            label: const Text('Excel'),
+          ),
           TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Tutup'))
@@ -467,6 +777,412 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     );
   }
 
+  _LaporanFakturKulakan _buatLaporanFaktur(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) {
+    String teks(Map<String, dynamic> sumber, List<String> kunci,
+        {String fallback = ''}) {
+      for (final k in kunci) {
+        final nilai = sumber[k];
+        if (nilai != null && '$nilai'.trim().isNotEmpty) return '$nilai'.trim();
+      }
+      return fallback;
+    }
+
+    double angka(Map<String, dynamic> sumber, List<String> kunci) {
+      for (final k in kunci) {
+        final nilai = sumber[k];
+        if (nilai is num) return nilai.toDouble();
+        final raw = '$nilai'.trim();
+        if (raw.isEmpty || raw == 'null') continue;
+        final normal = raw.contains(',')
+            ? raw.replaceAll('.', '').replaceAll(',', '.')
+            : raw;
+        final parsed = double.tryParse(normal) ??
+            double.tryParse(raw.replaceAll('.', '').replaceAll(',', '.'));
+        if (parsed != null) return parsed;
+      }
+      return 0;
+    }
+
+    final nomorFaktur = teks(header, ['nomorFaktur', 'nomor_faktur'],
+        fallback: 'Faktur Kulakan');
+    final nomorReferensi = teks(
+      header,
+      ['nomorReferensi', 'nomorRiwayat', 'nomorPembelian', 'nomorRef'],
+      fallback: nomorFaktur.startsWith('PI.')
+          ? nomorFaktur.replaceFirst('PI.', 'RI.')
+          : '',
+    );
+    final daftarItem = items.map((it) {
+      final qty = angka(it, ['qty', 'jumlah', 'kts']);
+      final harga = angka(it, [
+        'hargaBeliSatuan',
+        'hargaSatuan',
+        'harga_beli_satuan',
+        'hargaBeli',
+        'harga'
+      ]);
+      final diskon = angka(it, ['diskon', 'diskonBaris', 'potongan']);
+      final total = angka(it, ['totalHarga', 'total', 'jumlahHarga']);
+      return _ItemLaporanFakturKulakan(
+        kode: teks(it, ['kodeBarang', 'kodeProduk', 'barcode', 'sku', 'kode'],
+            fallback: '-'),
+        nama: teks(it, ['namaProduk', 'namaBarang', 'nama', 'produk'],
+            fallback: '-'),
+        qty: qty,
+        harga: harga,
+        diskon: diskon,
+        total: total > 0 ? total : (qty * harga) - diskon,
+      );
+    }).toList();
+    final subtotalHeader = angka(header, ['totalHitung', 'subtotal']);
+    final subtotal = subtotalHeader > 0
+        ? subtotalHeader
+        : daftarItem.fold<double>(0, (sum, it) => sum + it.total);
+    final diskon = angka(header, ['diskon', 'potongan']);
+    final ppn = angka(header, ['ppn', 'pajak']);
+    final biayaLain = angka(header, ['biayaLain', 'biaya_lain']);
+    final totalHeader =
+        angka(header, ['totalFakturFinal', 'totalFaktur', 'total']);
+    final total =
+        totalHeader > 0 ? totalHeader : subtotal - diskon + ppn + biayaLain;
+
+    return _LaporanFakturKulakan(
+      toko: Sesi.instance.tokoNama.trim().isEmpty
+          ? 'Ekonomi Syariah'
+          : Sesi.instance.tokoNama.trim(),
+      alamat: Sesi.instance.tokoAlamat.trim().isEmpty
+          ? 'Kab. Cirebon Jawa Barat 45611\nIndonesia'
+          : Sesi.instance.tokoAlamat.trim(),
+      supplier: teks(header, ['namaSupplier', 'supplier', 'supplierNama'],
+          fallback: '-'),
+      nomorFaktur: nomorFaktur,
+      nomorReferensi: nomorReferensi,
+      tanggal: _formatTanggalLaporan(header['tanggalFaktur']),
+      keterangan: teks(header, ['keterangan', 'catatan']),
+      subtotal: subtotal,
+      diskon: diskon,
+      ppn: ppn,
+      biayaLain: biayaLain,
+      total: total,
+      items: daftarItem,
+    );
+  }
+
+  String _formatTanggalLaporan(Object? nilai) {
+    if (nilai is DateTime) {
+      return DateFormat('dd MMM yyyy', 'id_ID').format(nilai);
+    }
+    final raw = '$nilai'.trim();
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      return DateFormat('dd MMM yyyy', 'id_ID').format(parsed);
+    }
+    return raw.isEmpty || raw == 'null' ? '-' : raw;
+  }
+
+  String _formatQtyLaporan(double nilai) {
+    if (nilai == nilai.roundToDouble()) {
+      return _formatAngka.format(nilai.round());
+    }
+    return _formatAngka.format(nilai);
+  }
+
+  String _namaFileAman(String nilai) => nilai
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+
+  Future<void> _simpanUnduhanLaporan({
+    required String namaFile,
+    required Uint8List bytes,
+    required String ekstensi,
+    required String judulDialog,
+    required String pesanSukses,
+  }) async {
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: judulDialog,
+      fileName: namaFile,
+      type: FileType.custom,
+      allowedExtensions: [ekstensi],
+      bytes: bytes,
+    );
+    if (path == null) return;
+    await File(path).writeAsBytes(bytes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(pesanSukses)));
+  }
+
+  Future<void> _unduhFakturExcel(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
+    try {
+      final data = _buatLaporanFaktur(header, items);
+      const tableRow = 9;
+      final totalRow = tableRow + data.items.length + 5;
+      final rows = <List<Object?>>[
+        ['', '', data.toko],
+        ['', '', data.alamat],
+        const [],
+        ['Dari', '', '', '', 'Faktur Pembelian'],
+        [data.supplier, '', '', '', ': ${data.nomorFaktur}'],
+        [
+          '',
+          '',
+          '',
+          '',
+          if (data.nomorReferensi.isEmpty) '' else ': ${data.nomorReferensi}'
+        ],
+        ['', '', '', '', ': ${data.tanggal}'],
+        const [],
+        const [
+          'Kode Barang',
+          'Nama Barang',
+          'Kts.',
+          '@Harga',
+          'Diskon',
+          'Total Harga'
+        ],
+        ...data.items.map((it) => [
+              it.kode,
+              it.nama,
+              it.qty,
+              it.harga,
+              it.diskon,
+              it.total,
+            ]),
+        ['Keterangan', data.keterangan, '', '', 'Sub Total', data.subtotal],
+        ['', '', '', '', 'Diskon', data.diskon],
+        ['', '', '', '', 'PPN (0%)', data.ppn],
+        ['Bagian Pembelian,', '', '', '', 'Biaya Lain-lain', data.biayaLain],
+        ['Tgl.', '', '', '', 'Total', data.total],
+        ['', '', '', '', 'Halaman 1 dari', 1],
+      ];
+      final bytes = buildSimpleXlsxReport(
+        sheetName: 'Faktur Pembelian',
+        rows: rows,
+        boldRows: {1, 4, totalRow},
+        darkRows: {tableRow, totalRow},
+        columnWidths: const [16, 36, 10, 14, 12, 16],
+      );
+      final aman = _namaFileAman(data.nomorFaktur);
+      await _simpanUnduhanLaporan(
+        namaFile: 'Faktur-Pembelian-$aman.xlsx',
+        bytes: bytes,
+        ekstensi: 'xlsx',
+        judulDialog: 'Simpan Faktur Pembelian Excel',
+        pesanSukses: 'File Excel faktur berhasil dibuat.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuat Excel faktur: $e')));
+    }
+  }
+
+  Future<void> _unduhFakturPdf(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
+    try {
+      final data = _buatLaporanFaktur(header, items);
+      final biru = PdfColor.fromInt(0xff0f3b5f);
+      final abu = PdfColor.fromInt(0xffe5e7eb);
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          footer: (ctx) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text('Halaman ${ctx.pageNumber} dari ${ctx.pagesCount}',
+                style: const pw.TextStyle(fontSize: 8)),
+          ),
+          build: (_) => [
+            pw.Center(
+              child: pw.Column(children: [
+                pw.Text(data.toko,
+                    style: pw.TextStyle(
+                        fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 8),
+                pw.Text(data.alamat,
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 9)),
+              ]),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Container(
+                        width: double.infinity,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                        decoration: pw.BoxDecoration(
+                            border: pw.Border(bottom: pw.BorderSide(width: 1))),
+                        child: pw.Text('Dari',
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                      ),
+                      pw.Container(
+                        width: double.infinity,
+                        height: 42,
+                        color: PdfColor.fromInt(0xffd8dde5),
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(data.supplier,
+                            style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 42),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Container(
+                        width: double.infinity,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                        decoration: pw.BoxDecoration(
+                            border: pw.Border(bottom: pw.BorderSide(width: 1))),
+                        child: pw.Text('Faktur Pembelian',
+                            style: const pw.TextStyle(fontSize: 18)),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(': ${data.nomorFaktur}'),
+                      if (data.nomorReferensi.isNotEmpty)
+                        pw.Text(': ${data.nomorReferensi}'),
+                      pw.Text(': ${data.tanggal}'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+            pw.TableHelper.fromTextArray(
+              border: pw.TableBorder.all(color: abu, width: 0.4),
+              headerDecoration: pw.BoxDecoration(color: biru),
+              headerStyle: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 8),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              cellPadding:
+                  const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(75),
+                1: const pw.FlexColumnWidth(2.2),
+                2: const pw.FixedColumnWidth(45),
+                3: const pw.FixedColumnWidth(70),
+                4: const pw.FixedColumnWidth(60),
+                5: const pw.FixedColumnWidth(80),
+              },
+              cellAlignments: {
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+              },
+              headers: const [
+                'Kode Barang',
+                'Nama Barang',
+                'Kts.',
+                '@Harga',
+                'Diskon',
+                'Total Harga'
+              ],
+              data: data.items
+                  .map((it) => [
+                        it.kode,
+                        it.nama,
+                        _formatQtyLaporan(it.qty),
+                        _formatAngka.format(it.harga),
+                        _formatAngka.format(it.diskon),
+                        _formatAngka.format(it.total),
+                      ])
+                  .toList(),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Keterangan',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Container(
+                        width: double.infinity,
+                        height: 54,
+                        padding: const pw.EdgeInsets.all(5),
+                        decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: biru, width: 0.8)),
+                        child: pw.Text(data.keterangan),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text('Bagian Pembelian,'),
+                      pw.SizedBox(height: 12),
+                      pw.Text('Tgl.'),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 28),
+                pw.Container(
+                  width: 230,
+                  child: pw.Column(children: [
+                    _barisTotalPdf('Sub Total', data.subtotal),
+                    _barisTotalPdf('Diskon', data.diskon),
+                    _barisTotalPdf('PPN (0%)', data.ppn),
+                    _barisTotalPdf('Biaya Lain-lain', data.biayaLain),
+                    _barisTotalPdf('Total', data.total,
+                        gelap: true, warnaGelap: biru),
+                  ]),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final aman = _namaFileAman(data.nomorFaktur);
+      await _simpanUnduhanLaporan(
+        namaFile: 'Faktur-Pembelian-$aman.pdf',
+        bytes: await doc.save(),
+        ekstensi: 'pdf',
+        judulDialog: 'Simpan Faktur Pembelian PDF',
+        pesanSukses: 'File PDF faktur berhasil dibuat.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuat PDF faktur: $e')));
+    }
+  }
+
+  pw.Widget _barisTotalPdf(String label, double nilai,
+      {bool gelap = false, PdfColor? warnaGelap}) {
+    return pw.Container(
+      color: gelap ? warnaGelap : PdfColors.white,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                  color: gelap ? PdfColors.white : PdfColors.black,
+                  fontWeight: gelap ? pw.FontWeight.bold : pw.FontWeight.normal,
+                  fontSize: 8)),
+          pw.Text(_formatAngka.format(nilai),
+              style: pw.TextStyle(
+                  color: gelap ? PdfColors.white : PdfColors.black,
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 8)),
+        ],
+      ),
+    );
+  }
+
   Widget _barisRingkas(String label, String nilai, {bool tebal = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -498,298 +1214,32 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           if (Sesi.instance.bolehKelola) ...[
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: () async {
-                  final berubah = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) => const KulakanBulkEntryScreen(),
-                    ),
-                  );
-                  if (berubah == true) {
-                    _halaman = 1;
-                    await _muatRiwayat();
-                  }
-                },
-                icon: const Icon(Icons.playlist_add_outlined, size: 18),
-                label: const Text('Bulk Entry Faktur'),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _bukaEntriFaktur,
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('Entri Faktur'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final berubah = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => const KulakanBulkEntryScreen(),
+                        ),
+                      );
+                      if (berubah == true) {
+                        _halaman = 1;
+                        await _muatRiwayat();
+                      }
+                    },
+                    icon: const Icon(Icons.playlist_add_outlined, size: 18),
+                    label: const Text('Bulk Entry Faktur'),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            AppFormSection(
-              judul: 'Faktur Baru',
-              deskripsi:
-                  'Isi info faktur sekali, lalu tambahkan barang-barang di faktur ini di bawah.',
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _fakturController,
-                        decoration: AppFormStyle.fieldDecoration(context,
-                            labelText: 'Nomor Faktur *'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: InkWell(
-                        onTap: _pilihTanggal,
-                        child: InputDecorator(
-                          decoration: AppFormStyle.fieldDecoration(context,
-                              labelText: 'Tanggal Faktur *'),
-                          child: Text(_formatTanggal.format(_tanggalFaktur)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                InkWell(
-                  onTap: _pilihSupplier,
-                  child: InputDecorator(
-                    decoration: AppFormStyle.fieldDecoration(context,
-                        labelText: 'Supplier (opsional)',
-                        prefixIcon: const Icon(Icons.local_shipping_outlined)),
-                    child: Row(
-                      children: [
-                        Expanded(
-                            child: Text(_supplierTerpilih == null
-                                ? '-- Pilih Supplier --'
-                                : '${_supplierTerpilih!['nama']}')),
-                        const Icon(Icons.arrow_drop_down),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _totalManualController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: AppFormStyle.fieldDecoration(context,
-                      labelText: 'Total Faktur (opsional)',
-                      hintText:
-                          'Kosongkan bila sama dgn hitungan baris di bawah'),
-                  onChanged: (_) => setStateIfMounted(() {}),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _keteranganController,
-                  decoration: AppFormStyle.fieldDecoration(context,
-                      labelText: 'Keterangan (opsional)'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            AppFormSection(
-              judul: 'Tambah Barang',
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: PencarianProdukBanbox(
-                        controller: _barcodeController,
-                        label: 'Kode / Barcode / Nama Produk',
-                        icon: Icons.search,
-                        onPilih: _cariProduk,
-                        decorationBuilder: (context) =>
-                            AppFormStyle.fieldDecoration(context,
-                                labelText: 'Kode / Barcode / Nama Produk',
-                                prefixIcon: const Icon(Icons.search)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                        onPressed: _scanKamera,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        tooltip: 'Scan pakai kamera'),
-                  ],
-                ),
-                if (_mencari)
-                  const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: Center(child: CircularProgressIndicator())),
-                if (_errorForm != null)
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(top: 12),
-                    decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(_errorForm!,
-                        style: TextStyle(color: Colors.red.shade700)),
-                  ),
-                if (_produkDitemukan != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                        color: AppColors.latarLembut(AppColors.warning),
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${_produkDitemukan!['nama'] ?? ''}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(
-                            'Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
-                            style: const TextStyle(fontSize: 11.5)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _qtyController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration: AppFormStyle.fieldDecoration(
-                                    context,
-                                    labelText: 'Jumlah Masuk *',
-                                    isDense: true),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                controller: _hargaController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration: AppFormStyle.fieldDecoration(
-                                    context,
-                                    labelText: 'Harga Beli Satuan *',
-                                    isDense: true),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton.filled(
-                                onPressed: _tambahKeDaftar,
-                                icon: const Icon(Icons.add),
-                                tooltip: 'Tambah ke daftar'),
-                          ],
-                        ),
-                        CheckboxListTile(
-                          value: _kelolaBatch,
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                          title: const Text(
-                              'Pantau batch & kedaluwarsa (disarankan)',
-                              style: TextStyle(
-                                  fontSize: 12.5, fontWeight: FontWeight.w600)),
-                          subtitle: const Text(
-                              'Stok dari penerimaan ini akan dikeluarkan otomatis dengan FEFO.',
-                              style: TextStyle(fontSize: 11)),
-                          onChanged: (v) =>
-                              setStateIfMounted(() => _kelolaBatch = v ?? true),
-                        ),
-                        if (_kelolaBatch) ...[
-                          Row(children: [
-                            Expanded(
-                                child: TextField(
-                              controller: _batchController,
-                              decoration: AppFormStyle.fieldDecoration(context,
-                                  labelText: 'Nomor Batch / Lot *',
-                                  isDense: true),
-                            )),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: InkWell(
-                              onTap: () => _pilihTanggalBatch(expired: false),
-                              child: InputDecorator(
-                                decoration: AppFormStyle.fieldDecoration(
-                                    context,
-                                    labelText: 'Tanggal Produksi',
-                                    isDense: true),
-                                child: Text(_tanggalProduksi == null
-                                    ? 'Opsional'
-                                    : _formatTanggal.format(_tanggalProduksi!)),
-                              ),
-                            )),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: InkWell(
-                              onTap: () => _pilihTanggalBatch(expired: true),
-                              child: InputDecorator(
-                                decoration: AppFormStyle.fieldDecoration(
-                                    context,
-                                    labelText: 'Tanggal Kedaluwarsa *',
-                                    isDense: true),
-                                child: Text(_tanggalExpired == null
-                                    ? 'Pilih tanggal'
-                                    : _formatTanggal.format(_tanggalExpired!)),
-                              ),
-                            )),
-                          ]),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-                if (_itemsFaktur.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text('Barang di Faktur Ini',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  ..._itemsFaktur.asMap().entries.map((e) {
-                    final it = e.value;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      child: ListTile(
-                        dense: true,
-                        title:
-                            Text(it.nama, style: const TextStyle(fontSize: 13)),
-                        subtitle: Text(
-                            '${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}'
-                            '${it.nomorBatch == null ? '' : ' · Batch ${it.nomorBatch} · Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
-                            style: const TextStyle(fontSize: 11.5)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_formatRupiah.format(it.total),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12.5)),
-                            IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () => _hapusDariDaftar(e.key)),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  const Divider(height: 20),
-                  _barisRingkas('Total Hitungan Baris',
-                      _formatRupiah.format(_totalHitung)),
-                  if (_diskonPreview > 0)
-                    _barisRingkas('Diskon/Potongan (kelebihan hitungan)',
-                        '- ${_formatRupiah.format(_diskonPreview)}'),
-                  _barisRingkas('Total Faktur',
-                      _formatRupiah.format(_totalManual ?? _totalHitung),
-                      tebal: true),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: _menyimpanFaktur ? null : _simpanFaktur,
-                      icon: _menyimpanFaktur
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.save_outlined, size: 18),
-                      label: const Text('Simpan Faktur'),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 12)),
-                    ),
-                  ),
-                ],
-              ],
             ),
             const SizedBox(height: 16),
           ] else
@@ -901,6 +1351,49 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _KulakanFakturEntryPage extends StatefulWidget {
+  final _TabKulakanFakturState state;
+
+  const _KulakanFakturEntryPage({required this.state});
+
+  @override
+  State<_KulakanFakturEntryPage> createState() =>
+      _KulakanFakturEntryPageState();
+}
+
+class _KulakanFakturEntryPageState extends State<_KulakanFakturEntryPage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.state._refreshHalamanEntri = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    if (widget.state._refreshHalamanEntri != null) {
+      widget.state._refreshHalamanEntri = null;
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      menuAktif: MenuEBisnis.kulakan,
+      judul: 'Entri Faktur Kulakan',
+      subjudul: 'Input faktur pembelian dan barang yang diterima',
+      body: widget.state._buildFormEntriFaktur(),
+      aksiHeader: OutlinedButton.icon(
+        onPressed: () => Navigator.of(context).pop(false),
+        icon: const Icon(Icons.arrow_back, size: 18),
+        label: const Text('Kembali'),
       ),
     );
   }
@@ -1051,4 +1544,54 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
       ),
     );
   }
+}
+
+class _LaporanFakturKulakan {
+  final String toko;
+  final String alamat;
+  final String supplier;
+  final String nomorFaktur;
+  final String nomorReferensi;
+  final String tanggal;
+  final String keterangan;
+  final double subtotal;
+  final double diskon;
+  final double ppn;
+  final double biayaLain;
+  final double total;
+  final List<_ItemLaporanFakturKulakan> items;
+
+  const _LaporanFakturKulakan({
+    required this.toko,
+    required this.alamat,
+    required this.supplier,
+    required this.nomorFaktur,
+    required this.nomorReferensi,
+    required this.tanggal,
+    required this.keterangan,
+    required this.subtotal,
+    required this.diskon,
+    required this.ppn,
+    required this.biayaLain,
+    required this.total,
+    required this.items,
+  });
+}
+
+class _ItemLaporanFakturKulakan {
+  final String kode;
+  final String nama;
+  final double qty;
+  final double harga;
+  final double diskon;
+  final double total;
+
+  const _ItemLaporanFakturKulakan({
+    required this.kode,
+    required this.nama,
+    required this.qty,
+    required this.harga,
+    required this.diskon,
+    required this.total,
+  });
 }
