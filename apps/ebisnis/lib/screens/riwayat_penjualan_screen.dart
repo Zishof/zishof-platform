@@ -8,6 +8,7 @@ import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -40,6 +41,313 @@ List<Map<String, dynamic>> _normalisasiDaftarTransaksi(
       .whereType<Map>()
       .map((row) => _normalisasiTransaksi(Map<String, dynamic>.from(row)))
       .toList();
+}
+
+class _BarisKoreksiTransaksi {
+  _BarisKoreksiTransaksi({
+    this.pembelianId,
+    required this.produkId,
+    required this.nama,
+    required this.harga,
+    required double qty,
+  }) : qtyController = TextEditingController(text: _formatQtyKoreksi(qty));
+
+  final dynamic pembelianId;
+  final dynamic produkId;
+  final String nama;
+  final double harga;
+  final TextEditingController qtyController;
+
+  void dispose() => qtyController.dispose();
+}
+
+String _formatQtyKoreksi(double value) =>
+    value == value.roundToDouble() ? value.toInt().toString() : '$value';
+
+class _DialogEditTransaksi extends StatefulWidget {
+  const _DialogEditTransaksi({required this.nomor, required this.items});
+
+  final String nomor;
+  final List<Map<String, dynamic>> items;
+
+  @override
+  State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
+}
+
+class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
+  final _alasanController = TextEditingController();
+  final _cariController = TextEditingController();
+  late final List<_BarisKoreksiTransaksi> _baris;
+  List<Map<String, dynamic>> _hasilCari = [];
+  bool _mencari = false;
+  String? _pesan;
+
+  @override
+  void initState() {
+    super.initState();
+    _baris = widget.items
+        .map((i) => _BarisKoreksiTransaksi(
+              pembelianId: i['pembelianId'],
+              produkId: i['produkId'],
+              nama: '${i['nama'] ?? 'Produk'}',
+              harga: (i['harga'] as num?)?.toDouble() ?? 0,
+              qty: (i['qty'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    for (final b in _baris) {
+      b.dispose();
+    }
+    _alasanController.dispose();
+    _cariController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cariProduk() async {
+    final kata = _cariController.text.trim();
+    if (kata.length < 2) {
+      setState(() =>
+          _pesan = 'Ketik sedikitnya 2 karakter kode, barcode, atau nama.');
+      return;
+    }
+    setState(() {
+      _mencari = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('katalog', {
+        'keyword': kata,
+        'page': 1,
+        'pageSize': 15,
+      });
+      if (!mounted) return;
+      setState(() => _hasilCari = ((hasil['produk'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList());
+    } catch (e) {
+      if (mounted) {
+        setState(() => _pesan =
+            'Produk belum dapat dicari. Periksa koneksi, lalu coba kembali.');
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'mencari produk untuk koreksi transaksi');
+      }
+    } finally {
+      if (mounted) setState(() => _mencari = false);
+    }
+  }
+
+  void _tambahkan(Map<String, dynamic> produk) {
+    final pid = '${produk['id']}';
+    for (final b in _baris) {
+      if ('${b.produkId}' == pid) {
+        final lama = double.tryParse(b.qtyController.text) ?? 0;
+        b.qtyController.text = _formatQtyKoreksi(lama + 1);
+        setState(() => _hasilCari = []);
+        return;
+      }
+    }
+    setState(() {
+      _baris.add(_BarisKoreksiTransaksi(
+        produkId: produk['id'],
+        nama: '${produk['nama'] ?? 'Produk'}',
+        harga: (produk['hargaJual'] as num?)?.toDouble() ?? 0,
+        qty: 1,
+      ));
+      _hasilCari = [];
+    });
+  }
+
+  void _simpan() {
+    final alasan = _alasanController.text.trim();
+    if (alasan.length < 5) {
+      setState(() => _pesan = 'Alasan koreksi minimal 5 karakter.');
+      return;
+    }
+    if (_baris.isEmpty) {
+      setState(
+          () => _pesan = 'Transaksi harus memiliki sedikitnya satu barang.');
+      return;
+    }
+    final item = <Map<String, dynamic>>[];
+    for (var i = 0; i < _baris.length; i++) {
+      final qty = double.tryParse(
+          _baris[i].qtyController.text.trim().replaceAll(',', '.'));
+      if (qty == null || qty <= 0) {
+        setState(
+            () => _pesan = 'Jumlah pada baris ${i + 1} harus lebih dari nol.');
+        return;
+      }
+      item.add({
+        if (_baris[i].pembelianId != null)
+          'pembelian_id': _baris[i].pembelianId,
+        'produk_id': _baris[i].produkId,
+        'qty': qty,
+      });
+    }
+    Navigator.of(context).pop({'alasan': alasan, 'item': item});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Edit Transaksi ${widget.nomor}'),
+      content: SizedBox(
+        width: 760,
+        height: 600,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: const Text(
+                'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan rincian sebelum/sesudah pada audit JSON. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _cariController,
+                  onSubmitted: (_) => _cariProduk(),
+                  decoration: const InputDecoration(
+                    labelText: 'Tambah produk (kode / barcode / nama)',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _mencari ? null : _cariProduk,
+                icon: _mencari
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.add),
+                label: const Text('Cari'),
+              ),
+            ]),
+            if (_hasilCari.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 150),
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(8)),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _hasilCari
+                      .map((p) => ListTile(
+                            dense: true,
+                            title:
+                                Text('${p['kode'] ?? ''} — ${p['nama'] ?? ''}'),
+                            subtitle: Text(
+                                '${_formatRupiah.format(p['hargaJual'] ?? 0)} · stok ${p['stok'] ?? 0}'),
+                            trailing: const Icon(Icons.add_circle_outline),
+                            onTap: () => _tambahkan(p),
+                          ))
+                      .toList(),
+                ),
+              ),
+            const SizedBox(height: 10),
+            const Text('Rincian setelah koreksi',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _baris.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final b = _baris[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(b.nama),
+                    subtitle: Text(_formatRupiah.format(b.harga)),
+                    trailing: SizedBox(
+                      width: 220,
+                      child: Row(children: [
+                        IconButton(
+                          tooltip: 'Kurangi',
+                          onPressed: () {
+                            final n =
+                                double.tryParse(b.qtyController.text) ?? 1;
+                            if (n > 1) {
+                              b.qtyController.text = _formatQtyKoreksi(n - 1);
+                            }
+                          },
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: b.qtyController,
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration:
+                                const InputDecoration(labelText: 'Jumlah'),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Tambah',
+                          onPressed: () {
+                            final n =
+                                double.tryParse(b.qtyController.text) ?? 0;
+                            b.qtyController.text = _formatQtyKoreksi(n + 1);
+                          },
+                          icon: const Icon(Icons.add_circle_outline),
+                        ),
+                        IconButton(
+                          tooltip: 'Hapus barang',
+                          color: Colors.red,
+                          onPressed: () => setState(() {
+                            final dihapus = _baris.removeAt(index);
+                            dihapus.dispose();
+                          }),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ]),
+                    ),
+                  );
+                },
+              ),
+            ),
+            TextField(
+              controller: _alasanController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Alasan koreksi *',
+                hintText: 'Contoh: tiga barang pada struk belum tersimpan',
+              ),
+            ),
+            if (_pesan != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_pesan!, style: const TextStyle(color: Colors.red)),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal')),
+        FilledButton.icon(
+          onPressed: _simpan,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Simpan Koreksi'),
+        ),
+      ],
+    );
+  }
 }
 
 Map<String, dynamic> _normalisasiTransaksi(Map<String, dynamic> row) {
@@ -334,6 +642,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             ),
           ),
           actions: [
+            if (hasil['bolehEditTransaksi'] == true)
+              TextButton.icon(
+                icon: const Icon(Icons.edit_note_outlined, size: 19),
+                label: const Text('Edit Transaksi'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _editTransaksi(row, hasil, items);
+                },
+              ),
             if (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
                 Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject'))
               TextButton.icon(
@@ -432,6 +749,36 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _editTransaksi(Map<String, dynamic> row,
+      Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
+    final hasilEdit = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogEditTransaksi(
+        nomor: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
+        items: items,
+      ),
+    );
+    if (hasilEdit == null || !mounted) return;
+    try {
+      final hasil = await ApiClient.instance.aksi('edit_transaksi', {
+        'id': row['idTransaksi'],
+        'alasan': hasilEdit['alasan'],
+        'item': hasilEdit['item'],
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(hasil['description']?.toString() ??
+              'Transaksi berhasil dikoreksi.')));
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'edit transaksi');
       }
     }
   }
