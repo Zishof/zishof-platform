@@ -193,10 +193,23 @@ class ApiException implements Exception {
       offline ? 'network timeout: $pesan' : pesan,
       aktivitas: aktivitas,
     );
+    final aktivitasPembayaran = aktivitas == 'bayar' ||
+        aktivitas == 'pembayaran' ||
+        (aktivitas?.endsWith('_bayar') ?? false);
     return AppErrorInfo(
-      judul: dasar.judul,
-      pesan: dasar.pesan,
-      solusi: dasar.solusi,
+      judul: aktivitasPembayaran && !offline
+          ? 'Pembayaran belum berhasil'
+          : dasar.judul,
+      // `message` pada kontrak API memang ditujukan kepada pengguna dan
+      // sudah disanitasi server. Stack/SQL tetap hanya muncul di [teknis].
+      pesan: offline ? dasar.pesan : pesan,
+      solusi: aktivitasPembayaran && !offline
+          ? const [
+              'Jangan langsung menekan Bayar berulang kali. Periksa Riwayat Penjualan dan Riwayat Sinkronisasi untuk memastikan transaksi pertama belum tercatat.',
+              'Periksa kembali keranjang, metode pembayaran, nominal uang diterima, member/saldo, serta status sesi kas.',
+              'Buka Informasi Teknis di bawah ini. Jika belum terselesaikan, salin seluruh detailnya dan kirimkan kepada admin/developer.',
+            ]
+          : dasar.solusi,
       teknis: teknis.isEmpty
           ? 'action=${aktivitas ?? '-'}; HTTP=${statusHttp ?? '-'}; $pesan'
           : teknis,

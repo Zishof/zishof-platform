@@ -1,9 +1,25 @@
+import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/widgets/app_error_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('penolakan pembayaran mempertahankan pesan aman dari server', () {
+    final gagal = ApiException(
+      'Stok TELUR AYAM tidak mencukupi untuk jumlah yang diminta.',
+      aktivitas: 'bayar',
+      kodeReferensi: 'REQ-BAYAR-1',
+      teknis: 'Exception server: contoh detail teknis',
+    );
+
+    expect(gagal.info.judul, 'Pembayaran belum berhasil');
+    expect(gagal.info.pesan,
+        'Stok TELUR AYAM tidak mencukupi untuk jumlah yang diminta.');
+    expect(gagal.info.teknis, contains('detail teknis'));
+    expect(gagal.info.solusi, isNotEmpty);
+  });
+
   testWidgets('informasi teknis error selalu dapat dibuka', (tester) async {
     String? teksTersalin;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

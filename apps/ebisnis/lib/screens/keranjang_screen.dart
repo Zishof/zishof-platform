@@ -18,6 +18,7 @@ import '../theme/app_colors.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -878,8 +879,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           // Server MENOLAK (bukan sekadar offline) -- batalkan, jangan lanjut ke struk.
           await CoreDb.instance.hapusTransaksiPending(kodeUnik);
           if (mounted) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(e.toString())));
+            await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+                aktivitas: 'pembayaran');
           }
           return;
         }
