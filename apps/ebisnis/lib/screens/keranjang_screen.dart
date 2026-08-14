@@ -14,6 +14,7 @@ import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../widgets/panduan_stok_kosong.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -879,8 +880,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           // Server MENOLAK (bukan sekadar offline) -- batalkan, jangan lanjut ke struk.
           await CoreDb.instance.hapusTransaksiPending(kodeUnik);
           if (mounted) {
-            await tampilkanKesalahan(context, e is ApiException ? e.info : e,
-                aktivitas: 'pembayaran');
+            if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(e.pesan),
+                backgroundColor: Colors.orange.shade800,
+                duration: const Duration(seconds: 8),
+              ));
+              await tampilkanPanduanStokKosong(context, detail: e.pesan);
+            } else {
+              await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+                  aktivitas: 'pembayaran');
+            }
           }
           return;
         }

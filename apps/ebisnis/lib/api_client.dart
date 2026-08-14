@@ -113,6 +113,7 @@ class ApiClient {
         statusHttp: resp.statusCode,
         kodeReferensi:
             '${json['referensi'] ?? json['traceId'] ?? referensiPermintaan}',
+        kode: '${json['kode'] ?? ''}',
         teknis: '${json['teknis'] ?? json['technical'] ?? ''}'.trim().isEmpty
             ? 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
                 'HTTP ${resp.statusCode}; action=$namaAksi; '
@@ -174,6 +175,7 @@ class ApiException implements Exception {
   final String teknis;
   final int? statusHttp;
   final String? kodeReferensi;
+  final String? kode;
 
   /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
   /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
@@ -186,7 +188,8 @@ class ApiException implements Exception {
       this.aktivitas,
       this.teknis = '',
       this.statusHttp,
-      this.kodeReferensi});
+      this.kodeReferensi,
+      this.kode});
 
   AppErrorInfo get info {
     final dasar = AppErrorInfo.dari(
