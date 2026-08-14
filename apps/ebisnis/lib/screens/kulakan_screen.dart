@@ -10,6 +10,7 @@ import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import 'retur_pembelian_screen.dart';
+import 'kulakan_bulk_entry_screen.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -272,9 +273,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (hasil != null)
+    if (hasil != null) {
       setStateIfMounted(
           () => expired ? _tanggalExpired = hasil : _tanggalProduksi = hasil);
+    }
   }
 
   void _hapusDariDaftar(int index) {
@@ -395,6 +397,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       context: context,
       builder: (_) => AppDetailDialogShell(
         title: 'Detail Faktur ${header['nomorFaktur'] ?? ''}',
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup'))
+        ],
         children: [
           Wrap(
             spacing: 8,
@@ -456,11 +463,6 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
             ),
           ),
         ],
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Tutup'))
-        ],
       ),
     );
   }
@@ -494,6 +496,25 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
         padding: const EdgeInsets.all(16),
         children: [
           if (Sesi.instance.bolehKelola) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final berubah = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const KulakanBulkEntryScreen(),
+                    ),
+                  );
+                  if (berubah == true) {
+                    _halaman = 1;
+                    await _muatRiwayat();
+                  }
+                },
+                icon: const Icon(Icons.playlist_add_outlined, size: 18),
+                label: const Text('Bulk Entry Faktur'),
+              ),
+            ),
+            const SizedBox(height: 12),
             AppFormSection(
               judul: 'Faktur Baru',
               deskripsi:
@@ -936,8 +957,9 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
     try {
       final hasil =
           await ApiClient.instance.aksi('penyedia_simpan', {'nama': nama});
-      if (mounted)
+      if (mounted) {
         Navigator.of(context).pop({'id': hasil['id'], 'nama': hasil['nama']});
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
