@@ -735,9 +735,11 @@ class StrukScreen extends StatelessWidget {
                           Navigator.of(context).pushReplacement(
                         MaterialPageRoute(builder: (_) => const KasirScreen()),
                       ),
-                      onKembali: modeCetakUlang
-                          ? () => Navigator.of(context).maybePop()
-                          : null,
+                      // Alur pembayaran dari Pesanan membuka Kasir sebagai
+                      // route sementara, lalu menggantinya dengan layar struk.
+                      // Pop dari sini karena itu mengembalikan kasir ke daftar
+                      // Pesanan asal tanpa membuat transaksi kosong baru.
+                      onKembali: () => Navigator.of(context).maybePop(),
                     ),
                   ],
                 ),
@@ -1283,7 +1285,7 @@ class _TombolStruk extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        if (tampilkanTransaksiBaru)
+        if (tampilkanTransaksiBaru) ...[
           ElevatedButton(
             onPressed: onTransaksiBaru,
             style: ElevatedButton.styleFrom(
@@ -1292,12 +1294,14 @@ class _TombolStruk extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             child: const Text('Transaksi Baru'),
-          )
-        else
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (onKembali != null || !tampilkanTransaksiBaru)
           OutlinedButton.icon(
             onPressed: onKembali ?? () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.arrow_back_outlined, size: 18),
-            label: const Text('Kembali'),
+            label: const Text('Kembali ke Halaman Sebelumnya'),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),

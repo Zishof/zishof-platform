@@ -959,6 +959,21 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           saldo: saldoStruk,
         ),
       ));
+    } catch (e, stackTrace) {
+      // Kegagalan sebelum pemanggilan API (mis. tulis outbox SQLite, pembuatan
+      // nomor struk, atau serialisasi payload) dahulu hanya sampai ke zone
+      // handler global. Akibatnya tombol kembali normal tanpa penjelasan dan
+      // kasir mengira tombol Bayar tidak bekerja. Semua kegagalan checkout
+      // sekarang selalu dicatat dan ditampilkan dengan detail yang bisa disalin.
+      await CoreDb.instance.catatErrorLog(
+        sumber: 'checkout-pos',
+        tingkat: 'ERROR',
+        pesan: e.toString(),
+        detail: stackTrace.toString(),
+      );
+      if (mounted) {
+        await tampilkanKesalahan(context, e, aktivitas: 'menyimpan pembayaran');
+      }
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }
