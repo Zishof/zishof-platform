@@ -410,16 +410,24 @@ const _ukuranProduk = [
 
 final _ukuranPromo = [
   _UkuranTag(
-      id: 'promo_a5',
-      label: 'Setengah A4',
-      detail: '148 x 210 mm / panel',
+      id: 'promo_a4_full',
+      label: 'A4 Penuh',
+      detail: '200 x 287 mm / halaman',
       kategori: _kategoriKertasBesar,
-      lebarMm: 148,
-      tinggiMm: 210,
-      pageFormat: PdfPageFormat.a5),
+      lebarMm: 200,
+      tinggiMm: 287,
+      pageFormat: PdfPageFormat.a4),
+  _UkuranTag(
+      id: 'promo_a5',
+      label: 'A4 dibagi 2',
+      detail: '200 x 142.5 mm / panel',
+      kategori: _kategoriKertasBesar,
+      lebarMm: 200,
+      tinggiMm: 142.5,
+      pageFormat: PdfPageFormat.a4),
   _UkuranTag(
       id: 'promo_a4',
-      label: 'A4 - 3 Panel',
+      label: 'A4 dibagi 3',
       detail: '200 x 92 mm / panel',
       kategori: _kategoriKertasBesar,
       lebarMm: 200,
@@ -465,6 +473,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   String? _pesanError;
   List<Map<String, dynamic>> _semuaProduk = [];
   Set<int>? _promoProdukIds;
+  bool _promoTampilkanSemuaProduk = false;
   bool _memuatProdukPromo = false;
   String? _pesanProdukPromo;
   String? _kategoriTerpilihKey;
@@ -894,9 +903,27 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
 
   Iterable<Map<String, dynamic>> get _produkSumberModel {
     if (_model != ModelPriceTag.promo) return _semuaProduk;
+    if (_promoTampilkanSemuaProduk) return _semuaProduk;
     final ids = _promoProdukIds;
     if (ids == null) return const Iterable<Map<String, dynamic>>.empty();
     return _semuaProduk.where((p) => ids.contains(_idProduk(p)));
+  }
+
+  void _aturPromoTampilkanSemuaProduk(bool value) {
+    setStateIfMounted(() {
+      _promoTampilkanSemuaProduk = value;
+      if (!value) {
+        final ids = _promoProdukIds;
+        if (ids != null) {
+          _idTerpilih.removeWhere((id) => !ids.contains(id));
+        }
+        if (_kategoriTerpilihKey != null &&
+            !_daftarKategoriProduk.any((k) => k.key == _kategoriTerpilihKey)) {
+          _kategoriTerpilihKey = null;
+        }
+      }
+    });
+    unawaited(_simpanPengaturanModel(_model));
   }
 
   String _kategoriKeyProduk(Map<String, dynamic> p) {
@@ -993,10 +1020,13 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       if (!mounted) return;
       setStateIfMounted(() {
         _promoProdukIds = idsPromo;
-        _idTerpilih.removeWhere((id) => !idsPromo.contains(id));
-        if (_kategoriTerpilihKey != null &&
-            !_daftarKategoriProduk.any((k) => k.key == _kategoriTerpilihKey)) {
-          _kategoriTerpilihKey = null;
+        if (!_promoTampilkanSemuaProduk) {
+          _idTerpilih.removeWhere((id) => !idsPromo.contains(id));
+          if (_kategoriTerpilihKey != null &&
+              !_daftarKategoriProduk
+                  .any((k) => k.key == _kategoriTerpilihKey)) {
+            _kategoriTerpilihKey = null;
+          }
         }
       });
     } catch (e) {
@@ -1030,6 +1060,41 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   _LebarRoll get _lebarRollAktif =>
       _daftarLebarRoll.firstWhere((r) => r.id == _lebarRollId,
           orElse: () => _daftarLebarRoll.first);
+
+  PdfPageFormat get _formatKertasPdfAktif {
+    if (_kertasCetak == KertasCetak.thermal) {
+      return PdfPageFormat(
+        _lebarRollAktif.lebarMm * PdfPageFormat.mm,
+        max(_ukuranAktif.tinggiMm, 20) * PdfPageFormat.mm,
+        marginAll: 0,
+      );
+    }
+    if (_model == ModelPriceTag.promo && _ukuranAktif.pageFormat != null) {
+      return _ukuranAktif.pageFormat!;
+    }
+    return _kertasCetak.pageFormat ?? PdfPageFormat.a4;
+  }
+
+  double get _lebarKertasAktifMm => _kertasCetak == KertasCetak.thermal
+      ? _lebarRollAktif.lebarMm
+      : _formatKertasPdfAktif.width / PdfPageFormat.mm;
+
+  double get _tinggiKertasAktifMm => _kertasCetak == KertasCetak.thermal
+      ? _ukuranAktif.tinggiMm * 4
+      : _formatKertasPdfAktif.height / PdfPageFormat.mm;
+
+  String get _labelKertasPreviewAktif {
+    final ukuran = _ukuranAktif;
+    if (_kertasCetak == KertasCetak.thermal) {
+      return 'Roll ${_lebarRollAktif.label} - tag ${ukuran.detail}';
+    }
+    final lebar = _lebarKertasAktifMm.toStringAsFixed(0);
+    final tinggi = _tinggiKertasAktifMm.toStringAsFixed(0);
+    if (_model == ModelPriceTag.promo && ukuran.pageFormat != null) {
+      return '${ukuran.label} pada $lebar x $tinggi mm - panel ${ukuran.detail}';
+    }
+    return '${_kertasCetak.label} ($lebar x $tinggi mm) - tag ${ukuran.detail}';
+  }
 
   /// Margin horizontal/vertikal yang benar-benar dipakai saat ini. Semua
   /// model yang dicetak sebagai grid memakai nilai independen ini supaya
@@ -1363,6 +1428,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
           'tampilKode': _tampilKode,
           'tampilBarcodeTeks': _tampilBarcodeTeks,
           'tampilTanggalCetak': _tampilTanggalCetak,
+          'promoTampilkanSemuaProduk': _promoTampilkanSemuaProduk,
           'tampilToko': _tampilToko,
           'tampilLogo': _tampilLogo,
           'bungkusLogo': _bungkusLogo,
@@ -1458,6 +1524,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _kertasCetak = _kertasCetakDari(data?['kertasCetak']) ?? KertasCetak.a4;
         _lebarRollId = teks('lebarRollId', 'roll_58');
         _muatMarginIndependen(data);
+        _promoTampilkanSemuaProduk =
+            boolean('promoTampilkanSemuaProduk', false);
         _tampilToko = boolean('tampilToko', true);
         _tampilLogo = boolean('tampilLogo', false);
         _bungkusLogo = boolean('bungkusLogo', false);
@@ -1666,7 +1734,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       final bytes = await builder.bangun();
       if (!mounted) return;
       await Printing.layoutPdf(
-          onLayout: (_) async => bytes, name: 'price-tag.pdf');
+        format: _formatKertasPdfAktif,
+        dynamicLayout: false,
+        onLayout: (_) async => bytes,
+        name: 'price-tag.pdf',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -2192,6 +2264,19 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         _filterKategoriProduk(),
         if (_model == ModelPriceTag.promo) ...[
           Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: CheckboxListTile(
+              value: _promoTampilkanSemuaProduk,
+              onChanged: (v) => _aturPromoTampilkanSemuaProduk(v ?? false),
+              title: const Text('Tampilkan semua barang'),
+              subtitle:
+                  const Text('Termasuk barang yang tidak terkait promo aktif.'),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Row(
               children: [
@@ -2211,7 +2296,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
                         ? 'Memuat produk yang terhubung promo...'
                         : _pesanProdukPromo != null
                             ? 'Gagal memuat produk promo: $_pesanProdukPromo'
-                            : 'Produk promo aktif: ${_promoProdukIds?.length ?? 0}',
+                            : _promoTampilkanSemuaProduk
+                                ? 'Menampilkan semua produk: ${_semuaProduk.length} - promo aktif: ${_promoProdukIds?.length ?? 0}'
+                                : 'Produk promo aktif: ${_promoProdukIds?.length ?? 0}',
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -2988,25 +3075,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
   }
 
   Widget _previewKertas(Map<String, dynamic> produk) {
-    final ukuran = _ukuranAktif;
-    double paperWidth;
-    double paperHeight;
-    String pageLabel;
-    if (_kertasCetak == KertasCetak.thermal) {
-      paperWidth = _lebarRollAktif.lebarMm;
-      // Tinggi cuma representatif (beberapa baris) -- roll sungguhan maju
-      // terus tanpa batas tinggi tetap spt A4/F4, lihat [_previewIsiKertas].
-      paperHeight = ukuran.tinggiMm * 4;
-      pageLabel = 'Roll ${_lebarRollAktif.label} - tag ${ukuran.detail}';
-    } else if (_kertasCetak == KertasCetak.f4) {
-      paperWidth = 210;
-      paperHeight = 330;
-      pageLabel = 'F4 (210 x 330 mm) - tag ${ukuran.detail}';
-    } else {
-      paperWidth = 210;
-      paperHeight = 297;
-      pageLabel = 'A4 (210 x 297 mm) - tag ${ukuran.detail}';
-    }
+    final paperWidth = _lebarKertasAktifMm;
+    final paperHeight = _tinggiKertasAktifMm;
+    final pageLabel = _labelKertasPreviewAktif;
     final paperRatio = paperWidth / paperHeight;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3053,8 +3124,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
     // kedua sisi supaya jumlah kolom/baris preview ini SAMA dgn PDF
     // sesungguhnya (yang jg sudah pakai margin aman itu, bukan 0).
     final lebarKertas = _kertasCetak == KertasCetak.thermal
-        ? _lebarRollAktif.lebarMm
-        : 210.0 - 2 * _marginCetakAmanMm;
+        ? _lebarKertasAktifMm
+        : _lebarKertasAktifMm - 2 * _marginCetakAmanMm;
+    final tinggiKertas = _kertasCetak == KertasCetak.thermal
+        ? _tinggiKertasAktifMm
+        : _tinggiKertasAktifMm - 2 * _marginCetakAmanMm;
     // Pakai margin H/V sungguhan (bukan hardcode) supaya preview ini benar-
     // benar mencerminkan slider Margin Antar Kotak -- kalau tidak, user
     // menggeser slider tapi preview-nya diam saja, jadi tidak berguna utk
@@ -3065,12 +3139,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         max(1, (lebarKertas + gutterHMm) ~/ (ukuran.lebarMm + gutterHMm));
     final baris = _kertasCetak == KertasCetak.thermal
         ? 4
-        : max(
-            1,
-            ((_kertasCetak == KertasCetak.f4 ? 330.0 : 297.0) -
-                    2 * _marginCetakAmanMm +
-                    gutterVMm) ~/
-                (ukuran.tinggiMm + gutterVMm));
+        : max(1, (tinggiKertas + gutterVMm) ~/ (ukuran.tinggiMm + gutterVMm));
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
@@ -3925,7 +3994,10 @@ class _PriceTagPdfBuilder {
     // margin 0 spt sebelumnya, supaya grid tag tak nempel ke tepi mutlak
     // kertas & tak terpotong saat dicetak langsung ke printer fisik umum.
     final marginAman = _marginCetakAmanMm * PdfPageFormat.mm;
-    final page = (kertasCetak.pageFormat ?? PdfPageFormat.a4).copyWith(
+    final basePage = model == ModelPriceTag.promo && ukuran.pageFormat != null
+        ? ukuran.pageFormat!
+        : (kertasCetak.pageFormat ?? PdfPageFormat.a4);
+    final page = basePage.copyWith(
       marginLeft: marginAman,
       marginTop: marginAman,
       marginRight: marginAman,

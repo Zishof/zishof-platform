@@ -496,7 +496,8 @@ class AppFormSheet extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.latarLembut(AppColors.primary),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+            border:
+                Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -642,8 +643,8 @@ class AppDetailChip extends StatelessWidget {
   }
 }
 
-/// Kartu KPI: lingkaran ikon berwarna + angka besar + label + delta opsional
-/// (naik/turun dibanding periode sebelumnya) + tautan opsional ("Lihat Detail").
+/// Kartu KPI shared: mengikuti gaya Dashboard Bisnis - Ringkasan Umum, yaitu
+/// kartu putih dengan ikon bulat di kiri dan teks ringkas di kanan.
 class AppKpiCard extends StatelessWidget {
   final IconData icon;
   final Color warna;
@@ -688,20 +689,20 @@ class AppKpiCard extends StatelessWidget {
               children: [
                 Text(nilai,
                     style: TextStyle(
-                        fontSize: 19,
-                        height: 1.1,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        height: 1.12,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.textPrimaryOf(context)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                    maxLines: 2,
+                    overflow: TextOverflow.visible),
                 Text(label,
                     style: TextStyle(
                         fontSize: 13,
                         height: 1.1,
                         color: AppColors.textSecondaryOf(context),
                         fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                    maxLines: 2,
+                    overflow: TextOverflow.visible),
                 if (delta != null) ...[
                   const SizedBox(height: 4),
                   Row(

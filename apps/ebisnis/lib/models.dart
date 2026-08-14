@@ -162,12 +162,30 @@ class CaraBayar {
   final int id;
   final String nama;
   final bool manual;
-  CaraBayar({required this.id, required this.nama, required this.manual});
-  factory CaraBayar.fromJson(Map<String, dynamic> j) => CaraBayar(
-        id: j['id'] as int,
-        nama: (j['nama'] ?? '') as String,
-        manual: j['manual'] == true,
-      );
+  final bool memotongDeposit;
+  CaraBayar({
+    required this.id,
+    required this.nama,
+    required this.manual,
+    this.memotongDeposit = false,
+  });
+  factory CaraBayar.fromJson(Map<String, dynamic> j) {
+    final nama = (j['nama'] ?? '') as String;
+    final namaLower = nama.toLowerCase();
+    return CaraBayar(
+      id: j['id'] as int,
+      nama: nama,
+      manual: j['manual'] == true,
+      memotongDeposit: j['memotongDeposit'] == true ||
+          j['memotong_deposit'] == true ||
+          j['potongSaldo'] == true ||
+          j['potong_saldo'] == true ||
+          j['memotongSaldo'] == true ||
+          j['memotong_saldo'] == true ||
+          namaLower.contains('deposit') ||
+          namaLower.contains('saldo'),
+    );
+  }
 }
 
 /// Satu pilihan Produk Ekstra (add-on/modifier) yang dilekatkan ke satu baris

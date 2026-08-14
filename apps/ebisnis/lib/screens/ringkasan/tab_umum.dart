@@ -155,7 +155,7 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Text(
-                '${row['metode'] ?? '-'}',
+                StrukScreen.labelPembayaran(row),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12.5),
@@ -265,6 +265,10 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         'kodeTransaksi': _kodeTransaksi,
         'kode': _kodeTransaksi,
       },
+      'includePembayaran': true,
+      'includeSplitPembayaran': true,
+      'sertakanPembayaran': true,
+      'withPayments': true,
       'page': _halaman,
       'pageSize': _pageSize,
     };
@@ -502,16 +506,21 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             (row['totalBiaya'] as num?)?.toDouble() ??
             0,
         metode: '${hasil['metode'] ?? row['metode'] ?? ''}',
+        pembayaran: StrukScreen.pembayaranDariSumber(hasil, row),
         pajak: (hasil['pajak'] as num?)?.toDouble() ??
             (row['pajak'] as num?)?.toDouble() ??
             0,
         pelanggan: '${hasil['pembeli'] ?? row['pembeli'] ?? ''}',
+        modeCetakUlang: true,
       );
-      await struk.cetakLangsung();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => struk),
+      );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal cetak: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal membuka preview struk: $e')));
       }
     }
   }
@@ -696,7 +705,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         _chipDetailTransaksi(Icons.person_outline,
             'Pembeli: ${row['pembeli'] ?? hasil['pembeli'] ?? '-'}'),
         _chipDetailTransaksi(Icons.payments_outlined,
-            'Metode: ${row['metode'] ?? hasil['metode'] ?? '-'}'),
+            'Metode: ${StrukScreen.labelPembayaran(hasil, row)}'),
         _chipDetailTransaksi(
           row['terlayani'] == true
               ? Icons.check_circle_outline

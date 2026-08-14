@@ -264,6 +264,107 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   bool get _splitAktif => _splitBayar.length >= 2;
 
+  bool _metodeMemotongDeposit(CaraBayar caraBayar) {
+    final nama = caraBayar.nama.toLowerCase();
+    return caraBayar.memotongDeposit ||
+        nama.contains('deposit') ||
+        nama.contains('saldo');
+  }
+
+  double _nominalDepositTerpakai() {
+    if (_splitAktif) {
+      return _splitBayar
+          .where((slot) => _metodeMemotongDeposit(slot.caraBayar))
+          .fold<double>(0, (sum, slot) => sum + slot.nominal);
+    }
+    final caraBayar = _caraBayarTerpilih;
+    if (caraBayar == null || !_metodeMemotongDeposit(caraBayar)) return 0;
+    return _total;
+  }
+
+  List<Map<String, dynamic>> _pembayaranStruk() {
+    if (_splitAktif) {
+      return _splitBayar
+          .map((slot) => {
+                'nama': slot.caraBayar.nama,
+                'nominal': slot.nominal,
+              })
+          .toList();
+    }
+    final caraBayar = _caraBayarTerpilih;
+    if (caraBayar == null) return const [];
+    return [
+      {'nama': caraBayar.nama, 'nominal': _total}
+    ];
+  }
+
+  List<Map<String, dynamic>> _pembayaranPayload() {
+    final slots = _splitAktif
+        ? _splitBayar
+        : (_caraBayarTerpilih == null
+            ? const <_SlotBayar>[]
+            : [_SlotBayar(_caraBayarTerpilih!, _total)]);
+    return slots
+        .map((slot) => {
+              'caraBayar': slot.caraBayar.id,
+              'caraBayarId': slot.caraBayar.id,
+              'idCaraBayar': slot.caraBayar.id,
+              'nama': slot.caraBayar.nama,
+              'namaCaraBayar': slot.caraBayar.nama,
+              'metode': slot.caraBayar.nama,
+              'metodePembayaran': slot.caraBayar.nama,
+              'nominal': slot.nominal,
+              'jumlah': slot.nominal,
+              'amount': slot.nominal,
+            })
+        .toList();
+  }
+
+  double? _angkaDariMap(Map<String, dynamic>? map, Iterable<String> keys) {
+    if (map == null) return null;
+    for (final key in keys) {
+      final nilai = map[key];
+      if (nilai is num) return nilai.toDouble();
+      if (nilai is String) {
+        final parsed =
+            double.tryParse(nilai.replaceAll(RegExp('[^0-9.-]'), ''));
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  double? _saldoDepositDariResponse(Map<String, dynamic>? hasil) {
+    const keys = [
+      'saldo',
+      'saldoSisa',
+      'sisaSaldo',
+      'saldoAkhir',
+      'saldoMember',
+      'sisaDeposit',
+      'depositSisa',
+      'depositAkhir',
+    ];
+    final langsung = _angkaDariMap(hasil, keys);
+    if (langsung != null) return langsung;
+    final data = hasil?['data'];
+    if (data is Map<String, dynamic>) return _angkaDariMap(data, keys);
+    if (data is Map) {
+      return _angkaDariMap(Map<String, dynamic>.from(data), keys);
+    }
+    return null;
+  }
+
+  double? _saldoDepositSetelahBayar(Map<String, dynamic>? hasilBayar) {
+    final saldoResponse = _saldoDepositDariResponse(hasilBayar);
+    if (saldoResponse != null) return saldoResponse;
+    final nominalDeposit = _nominalDepositTerpakai();
+    final saldoAwal = _saldoMember;
+    if (nominalDeposit <= 0 || saldoAwal == null) return null;
+    final saldoAkhir = saldoAwal - nominalDeposit;
+    return saldoAkhir < 0 ? 0 : saldoAkhir;
+  }
+
   // Saat split aktif, "Uang Diterima" mengacu ke TOTAL transaksi tapi kasir
   // membaginya ke beberapa metode -- validasi "uang kurang dari total" tidak
   // relevan lagi (kasir bisa saja terima Rp0 tunai kalau semua slot non-tunai),
@@ -324,6 +425,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (item.jumlah <= 0) {
         widget.keranjang.remove(item);
       }
+      _sinkronkanUangDiterima();
+    });
+    _siarkanKeranjang();
+    _jadwalkanEvaluasiDiskon();
+  }
+
+  void _aturJumlahItem(ItemKeranjang item, int jumlah) {
+    final jumlahBaru = jumlah < 1 ? 1 : jumlah;
+    if (!widget.keranjang.contains(item) || item.jumlah == jumlahBaru) return;
+    setStateIfMounted(() {
+      item.jumlah = jumlahBaru;
       _sinkronkanUangDiterima();
     });
     _siarkanKeranjang();
@@ -584,6 +696,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     DateTime waktu, {
     bool sertakanStatusPelayanan = false,
   }) {
+    final pembayaranSplit =
+        _splitAktif ? _pembayaranPayload() : const <Map<String, dynamic>>[];
+    final pembayaranUtama =
+        pembayaranSplit.isNotEmpty ? pembayaranSplit.first['nominal'] : null;
     return {
       'kodeUnik': kodeUnik,
       'clientTrxId': kodeUnik,
@@ -592,11 +708,29 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'kasir': Sesi.instance.userId,
       'waktu': _formatWaktuServer(waktu),
       'caraBayar': _caraBayarTerpilih!.id,
-      if (_splitAktif)
+      if (_splitAktif) ...{
+        'caraBayarNominal': pembayaranUtama,
+        'nominalCaraBayar': pembayaranUtama,
+        'caraBayarUtamaNominal': pembayaranUtama,
         'caraBayarTambahan': _splitBayar
             .skip(1)
-            .map((s) => {'caraBayar': s.caraBayar.id, 'nominal': s.nominal})
+            .map((s) => {
+                  'caraBayar': s.caraBayar.id,
+                  'caraBayarId': s.caraBayar.id,
+                  'nama': s.caraBayar.nama,
+                  'namaCaraBayar': s.caraBayar.nama,
+                  'metode': s.caraBayar.nama,
+                  'metodePembayaran': s.caraBayar.nama,
+                  'nominal': s.nominal,
+                  'jumlah': s.nominal,
+                })
             .toList(),
+        'pembayaran': pembayaranSplit,
+        'rincianPembayaran': pembayaranSplit,
+        'metodePembayaranList': pembayaranSplit,
+        'splitPembayaran': pembayaranSplit,
+        'multiPembayaran': pembayaranSplit,
+      },
       'total': _total,
       'pajak': _pajak,
       'id_member': _memberTerpilih?.id,
@@ -730,8 +864,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           .simpanTransaksiPending(kodeUnik, jsonEncode(payload));
 
       String? pesanTundaMenuju;
+      Map<String, dynamic>? hasilBayarSukses;
       try {
         final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+        hasilBayarSukses = hasilBayar;
         await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
       } catch (e) {
@@ -779,8 +915,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final pelangganStruk = _memberTerpilih?.nama;
       final totalStruk = _total;
       final pajakStruk = _pajak;
-      final uangDiterimaStruk = _uangDiterima;
-      final kembalianStruk = _kembalian < 0 ? 0.0 : _kembalian;
+      final pembayaranStruk = _pembayaranStruk();
+      final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
+      final double? kembalianStruk =
+          _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
+      final saldoStruk = _saldoDepositSetelahBayar(hasilBayarSukses);
       widget.keranjang.clear();
       // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
       // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
@@ -800,11 +939,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           item: itemStruk,
           total: totalStruk,
           metode: metodeNama,
+          pembayaran: pembayaranStruk,
           pajak: pajakStruk,
           tersinkron: pesanTundaMenuju == null,
           pelanggan: pelangganStruk,
           uangDiterima: uangDiterimaStruk,
           kembalian: kembalianStruk,
+          saldo: saldoStruk,
         ),
       ));
     } finally {
@@ -1212,7 +1353,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       columns: const [
         AppTableColumn('Item', flex: 4),
         AppTableColumn('Harga', flex: 2, align: TextAlign.right),
-        AppTableColumn('Qty', width: 118, align: TextAlign.center),
+        AppTableColumn('Qty', width: 154, align: TextAlign.center),
         AppTableColumn('Subtotal', flex: 2, align: TextAlign.right),
       ],
       rows: itemHalamanIni
@@ -1252,7 +1393,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 AppTableCell.text(_formatRupiah.format(item.produk.hargaJual),
                     flex: 2, align: TextAlign.right),
                 AppTableCell(
-                  width: 118,
+                  width: 154,
                   align: TextAlign.center,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1266,6 +1407,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                                 const TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
+                      const SizedBox(width: 4),
+                      _tombolQtyManual(item),
                     ],
                   ),
                 ),
@@ -1592,6 +1735,35 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     );
   }
 
+  Future<void> _bukaDialogQtyManual(ItemKeranjang item) async {
+    final jumlah = await showDialog<int>(
+      context: context,
+      builder: (_) => _DialogInputJumlahKeranjang(
+        namaProduk: item.produk.nama,
+        jumlahAwal: item.jumlah,
+      ),
+    );
+    if (jumlah != null) _aturJumlahItem(item, jumlah);
+  }
+
+  Widget _tombolQtyManual(ItemKeranjang item) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: IconButton(
+        tooltip: 'Input qty manual',
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.edit_outlined, size: 15),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.pageBgOf(context),
+          foregroundColor: AppColors.primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () => _bukaDialogQtyManual(item),
+      ),
+    );
+  }
+
   Widget _tombolBulat(IconData icon, VoidCallback onPressed) {
     return SizedBox(
       width: 30,
@@ -1605,6 +1777,102 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             shape: const CircleBorder()),
         onPressed: onPressed,
       ),
+    );
+  }
+}
+
+class _DialogInputJumlahKeranjang extends StatefulWidget {
+  final String namaProduk;
+  final int jumlahAwal;
+  const _DialogInputJumlahKeranjang({
+    required this.namaProduk,
+    required this.jumlahAwal,
+  });
+  @override
+  State<_DialogInputJumlahKeranjang> createState() =>
+      _DialogInputJumlahKeranjangState();
+}
+
+class _DialogInputJumlahKeranjangState
+    extends State<_DialogInputJumlahKeranjang> {
+  late final TextEditingController _controller;
+  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.jumlahAwal.toString());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _controller.text.length,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _terapkan() {
+    final nilai = int.tryParse(_controller.text.trim());
+    if (nilai == null || nilai < 1) {
+      setState(() => _error = 'Qty minimal 1.');
+      return;
+    }
+    Navigator.of(context).pop(nilai);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Input Qty Manual'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.namaProduk,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textInputAction: TextInputAction.done,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              decoration: InputDecoration(
+                labelText: 'Qty',
+                errorText: _error,
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+              onSubmitted: (_) => _terapkan(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: _terapkan,
+          child: const Text('Terapkan'),
+        ),
+      ],
     );
   }
 }

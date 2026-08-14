@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
+import 'struk_screen.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -316,40 +317,6 @@ class _FilterTanggal extends StatelessWidget {
   }
 }
 
-class _PaginasiBar extends StatelessWidget {
-  final int halaman;
-  final int total;
-  final int pageSize;
-  final ValueChanged<int> onPindah;
-  const _PaginasiBar(
-      {required this.halaman,
-      required this.total,
-      required this.pageSize,
-      required this.onPindah});
-
-  @override
-  Widget build(BuildContext context) {
-    if (total <= pageSize) return const SizedBox.shrink();
-    final totalHalaman = (total / pageSize).ceil().clamp(1, 999999);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-              icon: const Icon(Icons.chevron_left),
-              onPressed: halaman > 1 ? () => onPindah(halaman - 1) : null),
-          Text('Halaman $halaman / $totalHalaman ($total baris)'),
-          IconButton(
-              icon: const Icon(Icons.chevron_right),
-              onPressed:
-                  halaman < totalHalaman ? () => onPindah(halaman + 1) : null),
-        ],
-      ),
-    );
-  }
-}
-
 Widget _kartuStatusMuat(
     {required bool memuat, String? error, required VoidCallback onCoba}) {
   if (memuat) {
@@ -407,6 +374,10 @@ class _TabOrderState extends State<_TabOrder> {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+        'includePembayaran': true,
+        'includeSplitPembayaran': true,
+        'sertakanPembayaran': true,
+        'withPayments': true,
         'page': _halaman,
         'pageSize': _pageSize,
       });
@@ -430,6 +401,9 @@ class _TabOrderState extends State<_TabOrder> {
     setStateIfMounted(() => _halaman = 1);
     await _muat();
   }
+
+  int get _totalHalaman =>
+      _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
 
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
@@ -458,6 +432,10 @@ class _TabOrderState extends State<_TabOrder> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(spacing: 8, runSpacing: 8, children: [
+                    _chipRingkasan(
+                        'Metode',
+                        StrukScreen.labelPembayaran(hasil, row),
+                        AppColors.primary),
                     _chipRingkasan('Diskon', _formatRupiah.format(diskonHeader),
                         Colors.orange),
                     _chipRingkasan('Pajak', _formatRupiah.format(pajakHeader),
@@ -484,7 +462,7 @@ class _TabOrderState extends State<_TabOrder> {
                               style:
                                   const TextStyle(fontWeight: FontWeight.w600)),
                           Text(
-                            'Harga ${_formatRupiah.format(i['harga'])} · Diskon ${_formatRupiah.format(i['diskon'] ?? 0)} · Pajak ${_formatRupiah.format(pajakBaris)} · Subtotal ${_formatRupiah.format(subtotal)}',
+                            'Harga ${_formatRupiah.format(i['harga'])} - Diskon ${_formatRupiah.format(i['diskon'] ?? 0)} - Pajak ${_formatRupiah.format(pajakBaris)} - Subtotal ${_formatRupiah.format(subtotal)}',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondaryOf(context),
@@ -525,6 +503,81 @@ class _TabOrderState extends State<_TabOrder> {
     );
   }
 
+  Widget _tabelOrder() {
+    return AppDataTable(
+      minWidth: 980,
+      emptyText: 'Belum ada order pada rentang ini.',
+      columns: const [
+        AppTableColumn('Nota', flex: 4),
+        AppTableColumn('Waktu', flex: 2),
+        AppTableColumn('Pembeli', flex: 2),
+        AppTableColumn('Kasir / Mesin', flex: 2),
+        AppTableColumn('Metode', flex: 2),
+        AppTableColumn('Total', flex: 2, align: TextAlign.right),
+        AppTableColumn('Aksi', width: 74, align: TextAlign.center),
+      ],
+      rows: _data.map((row) {
+        final kasir = '${row['kasir'] ?? '-'}';
+        final mesin = '${row['namaMesin'] ?? ''}'.trim();
+        final kasirMesin = mesin.isEmpty ? kasir : '$kasir / $mesin';
+        return AppTableRowData(
+          onTap: () => _lihatDetail(row),
+          cells: [
+            AppTableCell.text(
+              '${row['nomorNota'] ?? '-'}',
+              flex: 4,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
+            AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
+            AppTableCell.text(kasirMesin, flex: 2),
+            AppTableCell(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: StatusPill(
+                  label: StrukScreen.labelPembayaran(row),
+                  warna: AppColors.primary,
+                ),
+              ),
+            ),
+            AppTableCell.text(
+              _formatRupiah.format(row['totalBiaya'] ?? 0),
+              flex: 2,
+              align: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+            ),
+            AppTableCell(
+              width: 74,
+              align: TextAlign.center,
+              child: Tooltip(
+                message: 'Detail transaksi',
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  onPressed: () => _lihatDetail(row),
+                ),
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+      pagination: _total > _pageSize
+          ? AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: _total,
+              labelData: 'transaksi',
+              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+              onBerikutnya:
+                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -546,41 +599,11 @@ class _TabOrderState extends State<_TabOrder> {
           ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
-          else if (_data.isEmpty)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: Text('Belum ada order pada rentang ini.')))
-          else ...[
-            ..._data.map((row) => Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: ListTile(
-                    title: Text(row['nomorNota']?.toString() ?? '-',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    subtitle: Text(
-                        '${_formatWaktu(row['waktu'])} · ${row['pembeli']} · ${row['kasir']}${row['namaMesin'] != null ? " · ${row['namaMesin']}" : ""}'),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(_formatRupiah.format(row['totalBiaya'] ?? 0),
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('${row['metode']}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF0284C7))),
-                      ],
-                    ),
-                    onTap: () => _lihatDetail(row),
-                  ),
-                )),
-            _PaginasiBar(
-                halaman: _halaman,
-                total: _total,
-                pageSize: _pageSize,
-                onPindah: _pindah),
-          ],
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _tabelOrder(),
+            ),
         ],
       ),
     );
@@ -642,6 +665,70 @@ class _TabSesiState extends State<_TabSesi> {
     await _muat();
   }
 
+  int get _totalHalaman =>
+      _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
+
+  Widget _tabelSesi() {
+    return AppDataTable(
+      minWidth: 920,
+      emptyText: 'Belum ada sesi pada rentang ini.',
+      columns: const [
+        AppTableColumn('Kode Sesi', flex: 3),
+        AppTableColumn('Kasir', flex: 2),
+        AppTableColumn('Waktu Buka', flex: 2),
+        AppTableColumn('Waktu Tutup', flex: 2),
+        AppTableColumn('Status', flex: 2),
+        AppTableColumn('Saldo Akhir', flex: 2, align: TextAlign.right),
+      ],
+      rows: _data.map((row) {
+        final tutup = row['status']?.toString().toUpperCase() == 'TUTUP';
+        final proyeksi = row['saldoAkhirDikonfirmasi'] != true;
+        final labelStatus = proyeksi ? 'Proyeksi' : (tutup ? 'Tutup' : 'Buka');
+        final warnaStatus = tutup
+            ? AppColors.textSecondaryOf(context)
+            : const Color(0xFF2E7D32);
+        return AppTableRowData(
+          cells: [
+            AppTableCell.text(
+              '${row['sesiKode'] ?? '-'}',
+              flex: 3,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            AppTableCell.text('${row['kasir'] ?? '-'}', flex: 2),
+            AppTableCell.text(_formatWaktu(row['waktuBuka']), flex: 2),
+            AppTableCell.text(_formatWaktu(row['waktuTutup']), flex: 2),
+            AppTableCell(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: StatusPill(label: labelStatus, warna: warnaStatus),
+              ),
+            ),
+            AppTableCell.text(
+              _formatRupiah.format(row['saldoAkhir'] ?? 0),
+              flex: 2,
+              align: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+            ),
+          ],
+        );
+      }).toList(),
+      pagination: _total > _pageSize
+          ? AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: _total,
+              labelData: 'sesi',
+              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+              onBerikutnya:
+                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -658,45 +745,11 @@ class _TabSesiState extends State<_TabSesi> {
           ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
-          else if (_data.isEmpty)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: Text('Belum ada sesi pada rentang ini.')))
-          else ...[
-            ..._data.map((row) {
-              final tutup = row['status']?.toString().toUpperCase() == 'TUTUP';
-              final proyeksi = row['saldoAkhirDikonfirmasi'] != true;
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: ListTile(
-                  title: Text('${row['sesiKode']} · ${row['kasir']}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text(
-                      'Buka ${_formatWaktu(row['waktuBuka'])} · Tutup ${_formatWaktu(row['waktuTutup'])}'),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(_formatRupiah.format(row['saldoAkhir'] ?? 0),
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(proyeksi ? 'Proyeksi' : (tutup ? 'Tutup' : 'Buka'),
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: tutup
-                                  ? AppColors.textSecondaryOf(context)
-                                  : const Color(0xFF2E7D32))),
-                    ],
-                  ),
-                ),
-              );
-            }),
-            _PaginasiBar(
-                halaman: _halaman,
-                total: _total,
-                pageSize: _pageSize,
-                onPindah: _pindah),
-          ],
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _tabelSesi(),
+            ),
         ],
       ),
     );
@@ -758,6 +811,65 @@ class _TabPaymentState extends State<_TabPayment> {
     await _muat();
   }
 
+  int get _totalHalaman =>
+      _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
+
+  Widget _tabelPayment() {
+    return AppDataTable(
+      minWidth: 860,
+      emptyText: 'Belum ada pembayaran pada rentang ini.',
+      columns: const [
+        AppTableColumn('Order', flex: 3),
+        AppTableColumn('Waktu', flex: 2),
+        AppTableColumn('Sesi', flex: 2),
+        AppTableColumn('Metode', flex: 2),
+        AppTableColumn('Jumlah', flex: 2, align: TextAlign.right),
+      ],
+      rows: _data.map((row) {
+        return AppTableRowData(
+          cells: [
+            AppTableCell.text(
+              '${row['orderKode'] ?? '-'}',
+              flex: 3,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+            AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
+            AppTableCell.text('${row['sesiKode'] ?? '-'}', flex: 2),
+            AppTableCell(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: StatusPill(
+                  label: StrukScreen.labelPembayaran(row),
+                  warna: AppColors.primary,
+                ),
+              ),
+            ),
+            AppTableCell.text(
+              _formatRupiah.format(row['jumlah'] ?? 0),
+              flex: 2,
+              align: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+            ),
+          ],
+        );
+      }).toList(),
+      pagination: _total > _pageSize
+          ? AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: _total,
+              labelData: 'pembayaran',
+              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+              onBerikutnya:
+                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -774,41 +886,11 @@ class _TabPaymentState extends State<_TabPayment> {
           ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
-          else if (_data.isEmpty)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                    child: Text('Belum ada pembayaran pada rentang ini.')))
-          else ...[
-            ..._data.map((row) => Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: ListTile(
-                    title: Text('${row['orderKode']}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    subtitle: Text(
-                        '${_formatWaktu(row['waktu'])} · ${row['sesiKode']}'),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(_formatRupiah.format(row['jumlah'] ?? 0),
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('${row['metode']}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF0284C7))),
-                      ],
-                    ),
-                  ),
-                )),
-            _PaginasiBar(
-                halaman: _halaman,
-                total: _total,
-                pageSize: _pageSize,
-                onPindah: _pindah),
-          ],
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _tabelPayment(),
+            ),
         ],
       ),
     );

@@ -23,6 +23,127 @@ final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 /// terakhir walau offline sesaat", bukan pengganti data real-time.
 const _kunciCacheRiwayat = 'riwayat_penjualan_default';
 
+List<Map<String, dynamic>> _normalisasiDaftarTransaksi(
+    Map<String, dynamic> hasil) {
+  dynamic raw = hasil['data'];
+  if (raw is Map) {
+    raw = raw['rows'] ?? raw['items'] ?? raw['list'] ?? raw['data'];
+  }
+  raw ??= hasil['rows'] ??
+      hasil['items'] ??
+      hasil['list'] ??
+      hasil['orders'] ??
+      hasil['transaksi'] ??
+      hasil['riwayat'];
+  if (raw is! List) return const [];
+  return raw
+      .whereType<Map>()
+      .map((row) => _normalisasiTransaksi(Map<String, dynamic>.from(row)))
+      .toList();
+}
+
+Map<String, dynamic> _normalisasiTransaksi(Map<String, dynamic> row) {
+  dynamic pilih(List<String> kunci) {
+    for (final k in kunci) {
+      final v = row[k];
+      if (v != null && v.toString().trim().isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  return {
+    ...row,
+    'idTransaksi': pilih([
+      'idTransaksi',
+      'transaksiId',
+      'pembelianAnggotaKoperasiId',
+      'pembelianId',
+      'orderId',
+      'id',
+    ]),
+    'nomorNota': pilih([
+          'nomorNota',
+          'nomorTransaksi',
+          'noTransaksi',
+          'kodeTransaksi',
+          'kode',
+          'kodeUnik',
+          'nomorIdOrder',
+          'noNota',
+        ]) ??
+        '-',
+    'waktu': pilih([
+      'waktu',
+      'tanggal',
+      'tanggalTransaksi',
+      'tglTransaksi',
+      'createdAt',
+      'dibuatPada',
+    ]),
+    'pembeli': pilih([
+          'pembeli',
+          'namaPembeli',
+          'pelanggan',
+          'namaPelanggan',
+          'memberNama',
+          'anggotaNama',
+          'customerNama',
+        ]) ??
+        'Umum',
+    'totalBiaya': pilih([
+          'totalBiaya',
+          'total_biaya',
+          'grandTotal',
+          'totalBayar',
+          'totalPenjualan',
+          'total',
+          'nilai',
+        ]) ??
+        0,
+    'metode': pilih([
+          'metode',
+          'metodePembayaran',
+          'caraBayar',
+          'cara_bayar',
+          'jenisPembayaran',
+        ]) ??
+        '-',
+    'kasir': pilih(['kasir', 'namaKasir', 'operator', 'petugas']),
+    'namaMesin': pilih(['namaMesin', 'mesin', 'perangkat', 'deviceName']),
+    'pajak': pilih(['pajak', 'totalPajak']) ?? 0,
+    'totalDiskon': pilih(['totalDiskon', 'diskon', 'nilaiDiskon']) ?? 0,
+  };
+}
+
+int _normalisasiTotalTransaksi(Map<String, dynamic> hasil, int jumlahData) {
+  final kandidat = <dynamic>[
+    hasil['total'],
+    hasil['totalData'],
+    hasil['totalRows'],
+    hasil['recordsTotal'],
+    hasil['count'],
+    hasil['jumlah'],
+    hasil['totalTransaksi'],
+  ];
+  final data = hasil['data'];
+  if (data is Map) {
+    kandidat.addAll([
+      data['total'],
+      data['totalData'],
+      data['totalRows'],
+      data['recordsTotal'],
+      data['count'],
+      data['jumlah'],
+    ]);
+  }
+  for (final v in kandidat) {
+    if (v is num) return v.toInt();
+    final parsed = int.tryParse(v?.toString() ?? '');
+    if (parsed != null) return parsed;
+  }
+  return jumlahData;
+}
+
 String _formatWaktu(dynamic raw) {
   final s = raw?.toString() ?? '';
   if (s.isEmpty) return '-';
@@ -74,16 +195,28 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_order_list', {
+      final payload = {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
-        if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+        if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
+        'includePembayaran': true,
+        'includeSplitPembayaran': true,
+        'sertakanPembayaran': true,
+        'withPayments': true,
         'page': _halaman,
         'pageSize': _pageSize,
-      });
+      };
+      var hasil = await ApiClient.instance.aksi('laporan_order_list', payload);
+      var data = _normalisasiDaftarTransaksi(hasil);
+      if (data.isEmpty && _cariPembeli.isNotEmpty) {
+        final fallback = {...payload}..remove('keyword');
+        fallback['cariPembeli'] = _cariPembeli;
+        hasil = await ApiClient.instance.aksi('laporan_order_list', fallback);
+        data = _normalisasiDaftarTransaksi(hasil);
+      }
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _data = data;
+        _total = _normalisasiTotalTransaksi(hasil, data.length);
       });
       if (_defaultTanpaFilter) {
         unawaited(CoreDb.instance
@@ -97,10 +230,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             await CoreDb.instance.ambilCacheReferensi(_kunciCacheRiwayat);
         if (tersimpan != null) {
           final hasil = jsonDecode(tersimpan) as Map<String, dynamic>;
+          final data = _normalisasiDaftarTransaksi(hasil);
           setStateIfMounted(() {
-            _data =
-                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-            _total = (hasil['total'] as num?)?.toInt() ?? 0;
+            _data = data;
+            _total = _normalisasiTotalTransaksi(hasil, data.length);
             _error = null;
           });
           if (mounted) setStateIfMounted(() => _memuat = false);
@@ -317,6 +450,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             (row['totalBiaya'] as num?)?.toDouble() ??
             0,
         metode: '${row['metode'] ?? ''}',
+        pembayaran: StrukScreen.pembayaranDariSumber(detail, row),
         pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
         pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
       ),
@@ -431,57 +565,79 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                   child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       child: Text(_error!)))
-            else if (_data.isEmpty)
-              const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(
-                      child: Text('Belum ada transaksi pada rentang ini.')))
-            else ...[
-              ..._data.map((row) => Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      title: Text('${row['nomorNota']}',
+            else
+              AppDataTable(
+                minWidth: 980,
+                emptyText: 'Belum ada transaksi pada rentang ini.',
+                columns: const [
+                  AppTableColumn('Nota', flex: 4),
+                  AppTableColumn('Waktu', flex: 2),
+                  AppTableColumn('Pembeli', flex: 2),
+                  AppTableColumn('Kasir / Mesin', flex: 2),
+                  AppTableColumn('Metode', flex: 2),
+                  AppTableColumn('Total', flex: 2, align: TextAlign.right),
+                  AppTableColumn('Aksi', width: 74, align: TextAlign.center),
+                ],
+                rows: _data.map((row) {
+                  final kasir = '${row['kasir'] ?? '-'}';
+                  final mesin = '${row['namaMesin'] ?? ''}'.trim();
+                  final kasirMesin = mesin.isEmpty ? kasir : '$kasir / $mesin';
+                  return AppTableRowData(
+                    onTap: () => _lihatDetail(row),
+                    cells: [
+                      AppTableCell.text('${row['nomorNota'] ?? '-'}',
+                          flex: 4,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13)),
-                      subtitle: Text(
-                          '${_formatWaktu(row['waktu'])} · ${row['pembeli']}'),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(_formatRupiah.format(row['totalBiaya'] ?? 0),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                          Text('${row['metode']}',
-                              style: TextStyle(
-                                  fontSize: 11, color: AppColors.primary)),
-                        ],
+                              fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
+                      AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
+                      AppTableCell.text(kasirMesin, flex: 2),
+                      AppTableCell(
+                        flex: 2,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: StatusPill(
+                              label: StrukScreen.labelPembayaran(row),
+                              warna: AppColors.primary),
+                        ),
                       ),
-                      onTap: () => _lihatDetail(row),
-                    ),
-                  )),
-              if (_total > _pageSize)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                          icon: const Icon(Icons.chevron_left),
-                          onPressed: _halaman > 1
-                              ? () => _pindah(_halaman - 1)
-                              : null),
-                      Text(
-                          'Halaman $_halaman / $_totalHalaman ($_total transaksi)'),
-                      IconButton(
-                          icon: const Icon(Icons.chevron_right),
-                          onPressed: _halaman < _totalHalaman
-                              ? () => _pindah(_halaman + 1)
-                              : null),
+                      AppTableCell.text(
+                        _formatRupiah.format(row['totalBiaya'] ?? 0),
+                        flex: 2,
+                        align: TextAlign.right,
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w800),
+                      ),
+                      AppTableCell(
+                        width: 74,
+                        align: TextAlign.center,
+                        child: Tooltip(
+                          message: 'Detail transaksi',
+                          child: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon:
+                                const Icon(Icons.visibility_outlined, size: 18),
+                            onPressed: () => _lihatDetail(row),
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
-                ),
-            ],
+                  );
+                }).toList(),
+                pagination: _total > _pageSize
+                    ? AppTablePagination(
+                        halaman: _halaman,
+                        totalHalaman: _totalHalaman,
+                        totalData: _total,
+                        labelData: 'transaksi',
+                        onSebelumnya:
+                            _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                        onBerikutnya: _halaman < _totalHalaman
+                            ? () => _pindah(_halaman + 1)
+                            : null,
+                      )
+                    : null,
+              ),
           ],
         ),
       ),
