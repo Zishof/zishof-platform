@@ -2278,7 +2278,7 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
               controller: _controller,
               autofocus: true,
               decoration: const InputDecoration(
-                  hintText: 'Cari nama/kode/nomor telepon...',
+                  hintText: 'Cari nama/kode/telepon/email...',
                   prefixIcon: Icon(Icons.search)),
               onChanged: _onBerubah,
             ),
@@ -2310,7 +2310,12 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
                         return ListTile(
                           leading: const Icon(Icons.person),
                           title: Text(a.nama),
-                          subtitle: Text(a.kodeIdentitas),
+                          subtitle: Text([
+                            if (a.kodeIdentitas.isNotEmpty) a.kodeIdentitas,
+                            if (a.hp.isNotEmpty) a.hp,
+                            if (a.hp.isEmpty && a.telp.isNotEmpty) a.telp,
+                            if (a.email.isNotEmpty) a.email,
+                          ].join(' • ')),
                           trailing: a.wajibPin
                               ? const Icon(Icons.pin,
                                   size: 18, color: Colors.orange)

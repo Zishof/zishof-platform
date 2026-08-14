@@ -83,7 +83,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -185,6 +185,20 @@ class CoreDb {
         // Kolom kemungkinan sudah ada -- aman diabaikan, bukan error fatal.
       }
     }
+    if (versiLama < 6) {
+      try {
+        await db.execute(_ddlTokoAktifAkun);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada akibat upgrade parsial.
+      }
+      for (final kolom in const ['telp', 'email']) {
+        try {
+          await db.execute('ALTER TABLE anggota_cache ADD COLUMN $kolom TEXT');
+        } catch (_) {
+          // Kolom kemungkinan sudah ada akibat upgrade parsial.
+        }
+      }
+    }
   }
 
   static const _ddlOutboxIs = '''
@@ -197,6 +211,14 @@ class CoreDb {
         pesan_error TEXT,
         percobaan INTEGER DEFAULT 0,
         dibuat_pada TEXT NOT NULL
+      )
+    ''';
+
+  static const _ddlTokoAktifAkun = '''
+      CREATE TABLE toko_aktif_akun (
+        akun_kunci TEXT PRIMARY KEY,
+        toko_id INTEGER NOT NULL,
+        diperbarui_pada TEXT NOT NULL
       )
     ''';
 
@@ -230,6 +252,8 @@ class CoreDb {
         nama TEXT,
         kode_identitas TEXT,
         hp TEXT,
+        telp TEXT,
+        email TEXT,
         jenis_nama TEXT,
         wajib_pin INTEGER DEFAULT 0,
         foto_url TEXT
@@ -281,6 +305,39 @@ class CoreDb {
     ''');
 
     await db.execute(_ddlOutboxIs);
+    await db.execute(_ddlTokoAktifAkun);
+  }
+
+  /// Pilihan toko terakhir per kombinasi server+akun. Penyimpanan ini sengaja
+  /// berada di SQLite (bukan preferences global) agar dua akun pada perangkat
+  /// yang sama tidak saling menimpa toko aktif.
+  Future<int?> tokoAktifAkunBaca(String akunKunci) async {
+    final database = await db;
+    final rows = await database.query('toko_aktif_akun',
+        columns: ['toko_id'],
+        where: 'akun_kunci = ?',
+        whereArgs: [akunKunci],
+        limit: 1);
+    if (rows.isEmpty) return null;
+    return (rows.first['toko_id'] as num?)?.toInt();
+  }
+
+  Future<void> tokoAktifAkunSimpan(String akunKunci, int tokoId) async {
+    final database = await db;
+    await database.insert(
+        'toko_aktif_akun',
+        {
+          'akun_kunci': akunKunci,
+          'toko_id': tokoId,
+          'diperbarui_pada': DateTime.now().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> tokoAktifAkunHapus(String akunKunci) async {
+    final database = await db;
+    await database.delete('toko_aktif_akun',
+        where: 'akun_kunci = ?', whereArgs: [akunKunci]);
   }
 
   // ============================== OUTBOX INVENTORY & SALES (P7) ==============================
@@ -422,8 +479,9 @@ class CoreDb {
     final kw = '%$kataKunci%';
     return database.query(
       'anggota_cache',
-      where: 'nama LIKE ? OR kode LIKE ? OR kode_identitas LIKE ?',
-      whereArgs: [kw, kw, kw],
+      where: 'nama LIKE ? OR kode LIKE ? OR kode_identitas LIKE ? '
+          'OR hp LIKE ? OR telp LIKE ? OR email LIKE ?',
+      whereArgs: [kw, kw, kw, kw, kw, kw],
       orderBy: 'nama ASC',
       limit: limit,
     );

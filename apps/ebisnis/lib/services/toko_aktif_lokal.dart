@@ -1,6 +1,8 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:core_db/core_db.dart';
 
-/// Toko aktif utk PERANGKAT/INSTALASI INI SAJA (bukan akun) -- gap-closure
+import '../api_client.dart';
+
+/// Toko aktif per SERVER + AKUN pada perangkat ini.
 /// bug "toko berubah sendiri saat pindah menu": server hanya menyimpan toko
 /// aktif per AKUN (`Tbmuser.tokoAktifMultiToko`, satu kolom polos di baris
 /// user), BUKAN per perangkat. Kalau akun kasir yang sama login di lebih dari
@@ -11,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// `KasirScreen`), toko yang ditampilkan diam-diam ikut berubah walau kasir
 /// di jendela itu tidak pernah memilihnya.
 ///
-/// Nilai di sini adalah "klaim" perangkat ini atas satu toko dari
+/// Nilai di sini adalah "klaim" akun pada perangkat ini atas satu toko dari
 /// `Sesi.instance.daftarToko` -- TIDAK PERNAH ditimpa otomatis oleh respons
 /// server `konfigurasi` (lihat `_terapkanKonfigDenganGuardToko` di
 /// `kasir_screen.dart`); hanya alur eksplisit "Pilih Toko"/"Ganti Toko" yang
@@ -21,20 +23,18 @@ class TokoAktifLokal {
   TokoAktifLokal._();
   static final TokoAktifLokal instance = TokoAktifLokal._();
 
-  static const _kunciTokoId = 'toko_aktif_lokal_id';
+  String _kunci(String userId) =>
+      '${ApiClient.baseUrl.trim().toLowerCase()}|${userId.trim().toLowerCase()}';
 
-  Future<int?> muat() async {
-    final sp = await SharedPreferences.getInstance();
-    return sp.getInt(_kunciTokoId);
+  Future<int?> muat(String userId) async {
+    return CoreDb.instance.tokoAktifAkunBaca(_kunci(userId));
   }
 
-  Future<void> simpan(int tokoId) async {
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt(_kunciTokoId, tokoId);
+  Future<void> simpan(String userId, int tokoId) async {
+    await CoreDb.instance.tokoAktifAkunSimpan(_kunci(userId), tokoId);
   }
 
-  Future<void> hapus() async {
-    final sp = await SharedPreferences.getInstance();
-    await sp.remove(_kunciTokoId);
+  Future<void> hapus(String userId) async {
+    await CoreDb.instance.tokoAktifAkunHapus(_kunci(userId));
   }
 }

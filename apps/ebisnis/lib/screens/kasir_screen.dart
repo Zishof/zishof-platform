@@ -309,20 +309,31 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _terapkanKonfigDenganGuardToko(Map<String, dynamic> konfig,
       {bool klaimBaru = false}) async {
     _terapkanKonfig(konfig);
-    if (!Sesi.instance.multiToko) return;
-
-    if (klaimBaru) {
+    final userId = Sesi.instance.userId;
+    if (userId.isEmpty) return;
+    if (!Sesi.instance.multiToko) {
       if (Sesi.instance.tokoId != null) {
-        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
       }
       return;
     }
 
-    final idKlaimLokal = await TokoAktifLokal.instance.muat();
-    if (idKlaimLokal == null) {
-      // Belum ada klaim di perangkat ini -- saran server jadi klaim awal.
+    if (klaimBaru) {
       if (Sesi.instance.tokoId != null) {
-        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+      }
+      return;
+    }
+
+    final idKlaimLokal = await TokoAktifLokal.instance.muat(userId);
+    if (idKlaimLokal == null) {
+      // Belum ada pilihan lokal: terima pilihan terakhir server. Jika server
+      // juga belum pernah menyimpan pilihan, nilai ini adalah toko bawaan
+      // Tbmuser/Pedagang yang dikirim konfigurasi. Simpan pada KEDUA sisi.
+      if (Sesi.instance.tokoId != null) {
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+        await ApiClient.instance
+            .aksi('pilih_toko_aktif', {'id_toko': Sesi.instance.tokoId!});
       }
       return;
     }
@@ -333,17 +344,26 @@ class _KasirScreenState extends State<KasirScreen> {
       // Klaim lama sudah tak berlaku (mis. akses toko itu dicabut) -- lepas
       // klaim lama, terima saran server sbg klaim baru.
       if (Sesi.instance.tokoId != null) {
-        await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+        await TokoAktifLokal.instance.simpan(userId, Sesi.instance.tokoId!);
+        await ApiClient.instance
+            .aksi('pilih_toko_aktif', {'id_toko': Sesi.instance.tokoId!});
       } else {
-        await TokoAktifLokal.instance.hapus();
+        await TokoAktifLokal.instance.hapus(userId);
       }
       return;
     }
 
     // Klaim lokal masih valid -- MENANG atas saran server, apa pun toko yang
     // server sarankan (bisa jadi hasil pilihan jendela/mesin lain).
+    final idDariServer = Sesi.instance.tokoId;
     Sesi.instance.tokoId = idKlaimLokal;
     Sesi.instance.tokoNama = '${tokoKlaim.first['nama'] ?? ''}';
+    if (idDariServer != idKlaimLokal) {
+      // Pilihan lokal adalah pengalaman login terakhir pada instalasi ini;
+      // sinkronkan kembali ke Tbmuser agar API server memakai toko yang sama.
+      await ApiClient.instance
+          .aksi('pilih_toko_aktif', {'id_toko': idKlaimLokal});
+    }
   }
 
   /// Multi-toko -- gerbang "pilih toko" WAJIB sebelum apa pun lain kalau akun
