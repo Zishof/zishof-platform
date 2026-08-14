@@ -492,12 +492,25 @@ class CoreDb {
   Future<int> simpanTransaksiPending(
       String kodeUnik, String payloadJson) async {
     final database = await db;
-    return database.insert('transaksi_pending', {
-      'kode_unik': kodeUnik,
-      'payload_json': payloadJson,
-      'status': 'PENDING',
-      'dibuat_pada': DateTime.now().toIso8601String(),
-    });
+    // `kode_unik` juga menjadi idempotency key server. Saat kasir memuat
+    // kembali pesanan tertahan, kode draft yang sama memang WAJIB dipakai
+    // kembali agar server memperbarui draft, bukan membuat transaksi baru.
+    // Karena itu penyimpanan outbox lokal harus idempotent pula: INSERT biasa
+    // akan melempar UNIQUE constraint bila kode tersebut pernah dicoba dari
+    // perangkat ini dan membuat tombol Bayar tampak tidak bereaksi sebelum
+    // request sempat dikirim. REPLACE aman di sini karena satu kode hanya boleh
+    // mempunyai satu payload/status outbox terbaru.
+    return database.insert(
+      'transaksi_pending',
+      {
+        'kode_unik': kodeUnik,
+        'payload_json': payloadJson,
+        'status': 'PENDING',
+        'pesan_error': null,
+        'dibuat_pada': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> tandaiTransaksiSinkron(String kodeUnik) async {
