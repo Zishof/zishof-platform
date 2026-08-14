@@ -10,6 +10,7 @@ import 'ringkasan/tab_resep.dart';
 import 'ringkasan/tab_ramalan.dart';
 import 'ringkasan/tab_promo.dart';
 import 'ringkasan/tab_kepatuhan.dart';
+import 'ringkasan/tab_sesi_kas.dart';
 
 /// Layar Ringkasan (padanan ringkasan.html/ringkasan-renderer.js Electron) --
 /// 9 sub-tab dasbor lintas-modul. Setiap tab adalah StatefulWidget terpisah
@@ -31,7 +32,7 @@ class _RingkasanScreenState extends State<RingkasanScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 9, vsync: this);
+    _tab = TabController(length: 10, vsync: this);
   }
 
   @override
@@ -67,6 +68,7 @@ class _RingkasanScreenState extends State<RingkasanScreen>
               Tab(text: 'Ramalan Penjualan'),
               Tab(text: 'Promo & Cashback'),
               Tab(text: 'Kepatuhan Operasional'),
+              Tab(text: 'Riwayat Sesi Kas'),
             ],
           ),
           Expanded(
@@ -80,6 +82,7 @@ class _RingkasanScreenState extends State<RingkasanScreen>
               RingkasanTabRamalan(),
               RingkasanTabPromo(),
               RingkasanTabKepatuhan(),
+              RingkasanTabSesiKas(),
             ]),
           ),
         ],

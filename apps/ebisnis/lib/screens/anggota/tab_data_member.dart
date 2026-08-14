@@ -623,6 +623,32 @@ class _FormAnggotaState extends State<_FormAnggota> {
                 : 'Lengkapi identitas pelanggan/member agar transaksi dan laporan lebih mudah dilacak.',
             icon: ubah ? Icons.edit_outlined : Icons.person_add_alt_1_outlined,
             errorText: _pesanError,
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+            ],
             children: [
               AppFormSection(
                 judul: 'Identitas',
@@ -680,9 +706,17 @@ class _FormAnggotaState extends State<_FormAnggota> {
                 judul: 'Kontak & Status',
                 children: [
                   AppFormTextField(
-                    label: 'No. HP',
+                    label: 'No. HP *',
                     controller: _hp,
                     keyboardType: TextInputType.phone,
+                    validator: (v) {
+                      final digit = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                      if (digit.isEmpty) return 'Nomor HP wajib diisi';
+                      if (digit.length < 9 || digit.length > 16) {
+                        return 'Nomor HP belum valid';
+                      }
+                      return null;
+                    },
                   ),
                   AppFormTextField(
                     label: 'Telepon',
@@ -742,32 +776,6 @@ class _FormAnggotaState extends State<_FormAnggota> {
                     obscureText: true,
                   ),
                 ],
-              ),
-            ],
-            actions: [
-              OutlinedButton.icon(
-                onPressed:
-                    _menyimpan ? null : () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Batal'),
-              ),
-              ElevatedButton.icon(
-                onPressed: _menyimpan ? null : _simpan,
-                icon: _menyimpan
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Simpan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                ),
               ),
             ],
           ),

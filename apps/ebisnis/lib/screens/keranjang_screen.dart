@@ -2256,6 +2256,15 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
     }
   }
 
+  Future<void> _tambahMemberBaru() async {
+    final anggota = await showDialog<Anggota>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DialogTambahMemberCepat(),
+    );
+    if (anggota != null && mounted) Navigator.of(context).pop(anggota);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -2269,7 +2278,7 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
               controller: _controller,
               autofocus: true,
               decoration: const InputDecoration(
-                  hintText: 'Cari nama/kode identitas...',
+                  hintText: 'Cari nama/kode/nomor telepon...',
                   prefixIcon: Icon(Icons.search)),
               onChanged: _onBerubah,
             ),
@@ -2315,9 +2324,142 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
         ),
       ),
       actions: [
+        TextButton.icon(
+            onPressed: _tambahMemberBaru,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Tambah Member Baru')),
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Batal')),
+      ],
+    );
+  }
+}
+
+class _DialogTambahMemberCepat extends StatefulWidget {
+  const _DialogTambahMemberCepat();
+
+  @override
+  State<_DialogTambahMemberCepat> createState() =>
+      _DialogTambahMemberCepatState();
+}
+
+class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
+  final _formKey = GlobalKey<FormState>();
+  final _nama = TextEditingController();
+  final _hp = TextEditingController();
+  bool _menyimpan = false;
+
+  @override
+  void dispose() {
+    _nama.dispose();
+    _hp.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _menyimpan = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('anggota_simpan_cepat', {
+        'nama': _nama.text.trim(),
+        'hp': _hp.text.trim(),
+      });
+      final raw = hasil['member'];
+      if (raw is! Map) {
+        throw const FormatException('Data member tidak tersedia pada balasan.');
+      }
+      final anggota = Anggota.fromJson(Map<String, dynamic>.from(raw));
+      if (!mounted) return;
+      final sudahAda = hasil['dipakaiYangSudahAda'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(sudahAda
+            ? 'Nomor sudah terdaftar. Member ${anggota.nama} dipilih; tidak dibuat duplikat.'
+            : 'Member ${anggota.nama} berhasil ditambahkan.'),
+      ));
+      Navigator.of(context).pop(anggota);
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'menambahkan member');
+      }
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tambah Member Baru'),
+      content: SizedBox(
+        width: 380,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Nomor telepon menjadi identitas unik. Jika nomor sudah terdaftar, aplikasi otomatis memilih member lama dan tidak membuat data ganda.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nama,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Member *',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Nama member wajib diisi.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _hp,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+() -]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Nomor Telepon / WhatsApp *',
+                  hintText: 'Contoh: 081234567890',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+                validator: (v) {
+                  final digit = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                  if (digit.isEmpty) return 'Nomor telepon wajib diisi.';
+                  if (digit.length < 9 || digit.length > 16) {
+                    return 'Nomor telepon belum valid.';
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) {
+                  if (!_menyimpan) _simpan();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _menyimpan ? null : () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        FilledButton.icon(
+          onPressed: _menyimpan ? null : _simpan,
+          icon: _menyimpan
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save_outlined),
+          label: Text(_menyimpan ? 'Menyimpan...' : 'Simpan & Pilih'),
+        ),
       ],
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_device/core_device.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:core_update/core_update.dart';
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,7 @@ import '../services/pesanan_poller.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/app_error_info.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
@@ -638,19 +640,9 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _bukaKas(double modalAwal, String catatan) async {
     final kode =
         'kas-${Sesi.instance.tokoId}-${DateTime.now().millisecondsSinceEpoch}';
-    // disinkronkan:false -- baris ini OPTIMISTIC (ditulis lokal sebelum tahu hasil
-    // panggilan server di bawah), jadi PENDING sampai terkonfirmasi. Kalau panggilan
-    // server gagal, `_cobaSinkronBukaKasPending` (dipanggil dari `_muatKasSaatIni`
-    // tiap selesai transaksi) akan retry pakai `kode` yang sama (idempoten di server,
-    // lihat SesiKasUtil.cariByKode) -- SEBELUMNYA baris pending ini tak pernah
-    // di-retry sama sekali walau komentarnya mengklaim begitu, sumber bug topbar
-    // "Kas Terbuka" tapi checkout ditolak server (gerbang wajib permanen 2026-08-11).
-    await CoreDb.instance
-        .bukaSesiKasLokal(kode, modalAwal, disinkronkan: false);
-    if (mounted) {
-      setStateIfMounted(() => _kasTerbuka = true);
-      _jadwalkanFokusCariItem();
-    }
+    // Buka kas wajib mendapat lease server dahulu. Ini satu-satunya cara menjamin
+    // akun yang sama tidak membuka kas pada dua perangkat ketika keduanya berbeda
+    // database lokal. Operasi penjualan tetap dapat offline setelah lease diperoleh.
     try {
       await ApiClient.instance.aksi('sesi_kas_buka', {
         'id_toko': Sesi.instance.tokoId,
@@ -660,11 +652,21 @@ class _KasirScreenState extends State<KasirScreen> {
         // (KantinHelper.sesiKasBuka -> SesiKasUtil.buka -> setKeterangan) --
         // hanya form Buka Kas yg belum pernah mengirimkannya.
         'keterangan': catatan,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
       });
-      await CoreDb.instance.tandaiSesiKasTersinkron(kode);
-    } catch (_) {
-      // Gagal tersinkron ke server -- tetap dianggap terbuka secara lokal
-      // (local-first), akan di-retry `_cobaSinkronBukaKasPending`.
+      await CoreDb.instance
+          .bukaSesiKasLokal(kode, modalAwal, disinkronkan: true);
+      if (mounted) {
+        setStateIfMounted(() => _kasTerbuka = true);
+        _jadwalkanFokusCariItem();
+      }
+    } catch (e) {
+      if (mounted) setStateIfMounted(() => _kasTerbuka = false);
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'membuka sesi kas');
+      }
     }
   }
 
@@ -682,10 +684,16 @@ class _KasirScreenState extends State<KasirScreen> {
           'id_toko': Sesi.instance.tokoId,
           'kode': kode,
           'modal_awal': row['modal_awal'],
+          'id_perangkat': IdentitasMesin.instance.idMesin,
+          'nama_perangkat': IdentitasMesin.instance.namaMesin,
         });
         await CoreDb.instance.tandaiSesiKasTersinkron(kode);
-      } catch (_) {
-        // Masih gagal -- coba lagi di kesempatan berikutnya.
+      } catch (e) {
+        if (e is ApiException && !e.offline) {
+          await CoreDb.instance.tutupSesiKasLokal(kode);
+          if (mounted) setStateIfMounted(() => _kasTerbuka = false);
+        }
+        // Gangguan jaringan masih dicoba lagi di kesempatan berikutnya.
       }
     }
   }
