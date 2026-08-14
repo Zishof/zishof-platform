@@ -244,7 +244,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
             children: [
               Expanded(
                 child: AppSearchField(
-                  hintText: 'Cari nama/kode/kode identitas...',
+                  hintText: 'Cari nama/kode/telepon/email...',
                   debounce: const Duration(milliseconds: 450),
                   onChanged: _cariUlang,
                 ),
