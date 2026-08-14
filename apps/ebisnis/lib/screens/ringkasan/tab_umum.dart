@@ -222,6 +222,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   DateTime? _sampai;
   String _cariPembeli = '';
   String _kodeTransaksi = '';
+  String? _metodeBayar;
   final _pembeliController = TextEditingController();
   final _kodeTransaksiController = TextEditingController();
   int _halaman = 1;
@@ -265,6 +266,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         'kodeTransaksi': _kodeTransaksi,
         'kode': _kodeTransaksi,
       },
+      if (_metodeBayar != null && _metodeBayar!.isNotEmpty)
+        'metodeBayar': _metodeBayar,
       'includePembayaran': true,
       'includeSplitPembayaran': true,
       'sertakanPembayaran': true,
@@ -316,6 +319,30 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   Future<void> _pindah(int h) async {
     _halaman = h;
     await _muat();
+  }
+
+  Future<void> _terapkanRentangKartu(DateTime mulai, DateTime sampai) async {
+    setStateIfMounted(() {
+      _mulai = DateTime(mulai.year, mulai.month, mulai.day);
+      _sampai = DateTime(sampai.year, sampai.month, sampai.day);
+      _metodeBayar = null;
+    });
+    await _terapkan();
+  }
+
+  Future<void> _pilihMetodeBayar(String metode) async {
+    final sekarang = DateTime.now();
+    setStateIfMounted(() {
+      _metodeBayar = _metodeBayar == metode ? null : metode;
+      // Angka kartu metode pembayaran berasal dari 30 hari terakhir ketika
+      // pengguna belum memilih tanggal. Samakan rentang tabel saat kartu diklik.
+      if (_mulai == null && _sampai == null) {
+        _mulai = DateTime(sekarang.year, sekarang.month, sekarang.day)
+            .subtract(const Duration(days: 29));
+        _sampai = DateTime(sekarang.year, sekarang.month, sekarang.day);
+      }
+    });
+    await _terapkan();
   }
 
   Future<void> _pilihTanggal({required bool mulai}) async {
@@ -874,6 +901,18 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          if (_metodeBayar != null) ...[
+            const SizedBox(height: 8),
+            InputChip(
+              avatar:
+                  const Icon(Icons.account_balance_wallet_outlined, size: 17),
+              label: Text('Jenis pembayaran: $_metodeBayar'),
+              onDeleted: () async {
+                setStateIfMounted(() => _metodeBayar = null);
+                await _terapkan();
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -1067,6 +1106,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         ((transaksi['data'] as List?) ?? []).cast<Map<String, dynamic>>();
     final total = (transaksi['total'] as num?)?.toInt() ?? 0;
     final totalHalaman = (total / _pageSize).ceil().clamp(1, 999999);
+    final metodePembayaran =
+        ((d['metodeBayar'] as List?) ?? []).cast<Map<String, dynamic>>();
 
     Map<String, dynamic> k(String key) =>
         (kpi[key] as Map<String, dynamic>?) ?? {};
@@ -1101,31 +1142,103 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     icon: Icons.receipt_long,
                     warna: AppColors.primary,
                     nilai: '${k('hariIni')['trx'] ?? 0}',
-                    label: 'Transaksi Hari Ini'),
+                    label: 'Transaksi Hari Ini',
+                    tooltip: 'Klik untuk menampilkan transaksi hari ini',
+                    onTap: () {
+                      final n = DateTime.now();
+                      _terapkanRentangKartu(n, n);
+                    }),
                 AppKpiCard(
                     icon: Icons.payments_outlined,
                     warna: AppColors.success,
                     nilai: formatRupiahDasbor.format(k('hariIni')['rp'] ?? 0),
-                    label: 'Omzet Hari Ini'),
+                    label: 'Omzet Hari Ini',
+                    tooltip: 'Klik untuk menampilkan omzet hari ini',
+                    onTap: () {
+                      final n = DateTime.now();
+                      _terapkanRentangKartu(n, n);
+                    }),
                 AppKpiCard(
                     icon: Icons.calendar_view_week_outlined,
                     warna: AppColors.info,
                     nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0),
-                    label: 'Omzet Minggu Ini'),
+                    label: 'Omzet Minggu Ini',
+                    tooltip: 'Klik untuk menampilkan transaksi minggu ini',
+                    onTap: () {
+                      final n = DateTime.now();
+                      final awal = n.subtract(Duration(days: n.weekday - 1));
+                      _terapkanRentangKartu(awal, n);
+                    }),
                 AppKpiCard(
                     icon: Icons.calendar_month_outlined,
                     warna: AppColors.warning,
                     nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0),
-                    label: 'Omzet Bulan Ini'),
+                    label: 'Omzet Bulan Ini',
+                    tooltip: 'Klik untuk menampilkan transaksi bulan ini',
+                    onTap: () {
+                      final n = DateTime.now();
+                      _terapkanRentangKartu(DateTime(n.year, n.month, 1), n);
+                    }),
                 AppKpiCard(
                     icon: Icons.stacked_line_chart,
                     warna: AppColors.teal,
                     nilai:
                         formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0),
-                    label: 'Omzet Semester Ini'),
+                    label: 'Omzet Semester Ini',
+                    tooltip:
+                        'Klik untuk menampilkan transaksi enam bulan terakhir',
+                    onTap: () {
+                      final n = DateTime.now();
+                      _terapkanRentangKartu(
+                          DateTime(n.year, n.month - 6, n.day), n);
+                    }),
               ],
             );
           }),
+          if (metodePembayaran.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Omzet per Jenis Pembayaran',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondaryOf(context))),
+            const SizedBox(height: 8),
+            LayoutBuilder(builder: (context, c) {
+              final kolom =
+                  c.maxWidth >= 1000 ? 5 : (c.maxWidth >= 700 ? 3 : 2);
+              final lebarKolom = (c.maxWidth - (12 * (kolom - 1))) / kolom;
+              final warna = [
+                AppColors.primary,
+                AppColors.success,
+                AppColors.info,
+                AppColors.warning,
+                AppColors.teal,
+              ];
+              return GridView.count(
+                crossAxisCount: kolom,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: lebarKolom / 96,
+                children: [
+                  for (var i = 0; i < metodePembayaran.length; i++)
+                    AppKpiCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      warna: warna[i % warna.length],
+                      nilai: formatRupiahDasbor
+                          .format(metodePembayaran[i]['nilai'] ?? 0),
+                      label: '${metodePembayaran[i]['label'] ?? 'Lainnya'}'
+                          '${_metodeBayar == '${metodePembayaran[i]['label'] ?? 'Lainnya'}' ? ' • Aktif' : ''}',
+                      tooltip:
+                          'Klik untuk menyaring transaksi dengan jenis pembayaran ${metodePembayaran[i]['label'] ?? 'Lainnya'}',
+                      onTap: () => _pilihMetodeBayar(
+                          '${metodePembayaran[i]['label'] ?? 'Lainnya'}'),
+                    ),
+                ],
+              );
+            }),
+          ],
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,

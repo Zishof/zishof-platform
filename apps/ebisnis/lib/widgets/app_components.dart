@@ -654,6 +654,8 @@ class AppKpiCard extends StatelessWidget {
   final bool deltaPositif;
   final String? tautan;
   final VoidCallback? onTautanTap;
+  final VoidCallback? onTap;
+  final String? tooltip;
 
   const AppKpiCard({
     super.key,
@@ -665,11 +667,13 @@ class AppKpiCard extends StatelessWidget {
     this.deltaPositif = true,
     this.tautan,
     this.onTautanTap,
+    this.onTap,
+    this.tooltip,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AppSectionCard(
+    final kartu = AppSectionCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -755,6 +759,24 @@ class AppKpiCard extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return kartu;
+
+    Widget hasil = Semantics(
+      button: true,
+      label: tooltip ?? '$label: $nilai',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: kartu,
+        ),
+      ),
+    );
+    if (tooltip != null && tooltip!.isNotEmpty) {
+      hasil = Tooltip(message: tooltip!, child: hasil);
+    }
+    return hasil;
   }
 }
 
