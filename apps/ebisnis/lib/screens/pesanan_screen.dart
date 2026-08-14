@@ -53,6 +53,7 @@ class _PesananScreenState extends State<PesananScreen> {
   int _halamanPesanan = 1;
   int _totalPesanan = 0;
   Map<String, dynamic> _ringkasan = const {};
+  bool _sedangMembayarSemuaTertahan = false;
 
   @override
   void initState() {
@@ -75,27 +76,10 @@ class _PesananScreenState extends State<PesananScreen> {
       _pesanError = null;
     });
     try {
-      final payload = <String, dynamic>{
-        'page': _halamanPesanan,
-        'page_size': _pageSizePesanan,
-      };
-      if (_filter == _Filter.online) payload['asal'] = 'online';
-      if (_filter == _Filter.tertahan) payload['asal'] = 'tertahan';
-      // BUG LAMA (fixed): sebelumnya `hanya_belum_lunas` selalu true, jadi
-      // pesanan yang SUDAH lunas tak pernah ikut termuat sama sekali --
-      // sekarang opsional lewat chip filter, default menampilkan semua.
-      if (_hanyaBelumLunas) payload['hanya_belum_lunas'] = true;
-      if (_sejak != null) payload['sejak'] = _formatTanggalIso(_sejak!);
-      if (_sampai != null) payload['sampai'] = _formatTanggalIso(_sampai!);
-      if (_kodeController.text.trim().isNotEmpty) {
-        payload['kode'] = _kodeController.text.trim();
-      }
-      if (_pembeliController.text.trim().isNotEmpty) {
-        payload['pembeli'] = _pembeliController.text.trim();
-      }
-      if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
-        payload['pedagang'] = _pedagangController.text.trim();
-      }
+      final payload = _payloadDaftarPesanan(
+        page: _halamanPesanan,
+        pageSize: _pageSizePesanan,
+      );
       final hasil = await ApiClient.instance.aksi('pesanan_list', payload);
       final data = ((hasil['pesanan'] as List?) ?? [])
           .map((e) => Pesanan.fromJson(e as Map<String, dynamic>))
@@ -115,6 +99,42 @@ class _PesananScreenState extends State<PesananScreen> {
 
   String _formatTanggalIso(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Map<String, dynamic> _payloadDaftarPesanan({
+    required int page,
+    required int pageSize,
+    _Filter? filter,
+    bool? hanyaBelumLunas,
+    bool gunakanFilterTambahan = true,
+  }) {
+    final filterEfektif = filter ?? _filter;
+    final payload = <String, dynamic>{
+      'page': page,
+      'page_size': pageSize,
+    };
+    if (filterEfektif == _Filter.online) payload['asal'] = 'online';
+    if (filterEfektif == _Filter.tertahan) payload['asal'] = 'tertahan';
+    // BUG LAMA (fixed): sebelumnya `hanya_belum_lunas` selalu true, jadi
+    // pesanan yang SUDAH lunas tak pernah ikut termuat sama sekali --
+    // sekarang opsional lewat chip filter, default menampilkan semua.
+    if (hanyaBelumLunas ?? _hanyaBelumLunas) {
+      payload['hanya_belum_lunas'] = true;
+    }
+    if (gunakanFilterTambahan) {
+      if (_sejak != null) payload['sejak'] = _formatTanggalIso(_sejak!);
+      if (_sampai != null) payload['sampai'] = _formatTanggalIso(_sampai!);
+      if (_kodeController.text.trim().isNotEmpty) {
+        payload['kode'] = _kodeController.text.trim();
+      }
+      if (_pembeliController.text.trim().isNotEmpty) {
+        payload['pembeli'] = _pembeliController.text.trim();
+      }
+      if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
+        payload['pedagang'] = _pedagangController.text.trim();
+      }
+    }
+    return payload;
+  }
 
   Future<void> _pilihTanggal({required bool mulai}) async {
     final awal = (mulai ? _sejak : _sampai) ?? DateTime.now();
@@ -152,57 +172,181 @@ class _PesananScreenState extends State<PesananScreen> {
     }
   }
 
-  /// "Bayar Semua" massal -- TIDAK ADA aksi batch di server, jadi cukup
-  /// panggil ulang [_verifikasiDanSelesaikan] (aksi `bayar` yg SUDAH ADA)
-  /// satu per satu utk tiap pesanan online yang masih belum lunas, dgn SATU
-  /// metode pembayaran yang dipilih di depan -- sama seperti kasir memproses
-  /// banyak pesanan manual berturut-turut, hanya diotomatisasi.
-  Future<void> _bayarSemua() async {
-    final belumLunas = _tersaring
-        .where((p) => p.dariPembeliOnline && !_sudahTerbayar(p))
-        .toList();
-    if (belumLunas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Tidak ada pesanan online yang perlu dibayar.')));
-      return;
+  /// Mengambil SELURUH keranjang tertahan yang belum lunas, bukan hanya 15
+  /// baris pada halaman yang sedang terlihat. Data dibekukan dulu sebelum
+  /// pembayaran dimulai agar paging tidak bergeser ketika sebagian draft
+  /// berubah menjadi lunas.
+  Future<List<Pesanan>> _ambilSemuaTertahanBelumLunas() async {
+    final hasilSemua = <Pesanan>[];
+    final idSudahAda = <int>{};
+    var page = 1;
+    while (true) {
+      final hasil = await ApiClient.instance.aksi(
+        'pesanan_list',
+        _payloadDaftarPesanan(
+          page: page,
+          pageSize: 100,
+          filter: _Filter.tertahan,
+          hanyaBelumLunas: true,
+          gunakanFilterTambahan: false,
+        ),
+      );
+      final data = ((hasil['pesanan'] as List?) ?? [])
+          .map((e) => Pesanan.fromJson(e as Map<String, dynamic>))
+          .where((p) => !p.dariPembeliOnline && !_sudahTerbayar(p))
+          .toList();
+      for (final pesanan in data) {
+        if (idSudahAda.add(pesanan.id)) hasilSemua.add(pesanan);
+      }
+      final total = (hasil['total'] as num?)?.toInt() ?? hasilSemua.length;
+      if (data.isEmpty || page * 100 >= total) break;
+      page++;
     }
-    final caraBayar = await showDialog<CaraBayar>(
-      context: context,
-      builder: (_) => SimpleDialog(
-        title:
-            Text('Bayar Semua (${belumLunas.length} pesanan) -- Pilih Metode'),
-        children: Sesi.instance.caraBayar
-            .map((c) => SimpleDialogOption(
-                onPressed: () => Navigator.of(context).pop(c),
-                child: Text(c.nama)))
-            .toList(),
-      ),
-    );
-    if (caraBayar == null) return;
+    return hasilSemua;
+  }
 
-    var berhasil = 0;
-    String? detailStokKurang;
-    for (final p in belumLunas) {
-      try {
-        await ApiClient.instance
-            .aksi('bayar', _payloadVerifikasi(p, caraBayar));
-        berhasil++;
-      } catch (e) {
-        if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
-          detailStokKurang ??= '${p.kode}: ${e.pesan}';
-        }
-        // Satu pesanan gagal (mis. stok berubah) -- lanjut ke berikutnya, jangan hentikan seluruh proses.
+  Future<void> _bayarkanSemuaYangTertahan() async {
+    if (_sedangMembayarSemuaTertahan) return;
+    setStateIfMounted(() => _sedangMembayarSemuaTertahan = true);
+    try {
+      final tertahan = await _ambilSemuaTertahanBelumLunas();
+      if (!mounted) return;
+      if (tertahan.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tidak ada transaksi tertahan yang perlu dibayar.'),
+        ));
+        return;
       }
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+
+      final totalNominal = tertahan.fold<double>(
+        0,
+        (jumlah, pesanan) => jumlah + pesanan.totalBiaya,
+      );
+      final caraBayar = await showDialog<CaraBayar>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Pilih Metode Pembayaran'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              child: Text(
+                '${tertahan.length} transaksi tertahan dengan total '
+                '${_formatRupiah.format(totalNominal)} akan menggunakan '
+                'satu metode pembayaran yang sama.',
+              ),
+            ),
+            ...Sesi.instance.caraBayar.map(
+              (cara) => SimpleDialogOption(
+                onPressed: () => Navigator.of(dialogContext).pop(cara),
+                child: Text(cara.nama),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (caraBayar == null || !mounted) return;
+
+      final dikonfirmasi = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Bayarkan Semua yang Tertahan?'),
           content: Text(
-              '$berhasil dari ${belumLunas.length} pesanan berhasil dibayar.')));
-      if (detailStokKurang != null) {
-        await tampilkanPanduanStokKosong(context, detail: detailStokKurang);
+            'Anda akan membayar ${tertahan.length} transaksi tertahan '
+            'senilai ${_formatRupiah.format(totalNominal)} menggunakan '
+            '${caraBayar.nama}.\n\n'
+            'Setiap transaksi akan diperiksa dan disimpan satu per satu. '
+            'Transaksi yang gagal tidak akan ditandai terbayar dan akan '
+            'tetap berada di daftar Tertahan.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Ya, Bayarkan Semua'),
+            ),
+          ],
+        ),
+      );
+      if (dikonfirmasi != true) return;
+
+      var berhasil = 0;
+      var nilaiBerhasil = 0.0;
+      final gagal = <String>[];
+      String? detailStokKurang;
+      for (final pesanan in tertahan) {
+        try {
+          await ApiClient.instance
+              .aksi('bayar', _payloadVerifikasi(pesanan, caraBayar));
+          berhasil++;
+          nilaiBerhasil += pesanan.totalBiaya;
+        } catch (e) {
+          if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
+            detailStokKurang ??= '${pesanan.kode}: ${e.pesan}';
+          }
+          gagal.add('${pesanan.kode}: $e');
+        }
       }
+
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Pembayaran Massal Selesai'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$berhasil dari ${tertahan.length} transaksi berhasil '
+                  'dibayar (${_formatRupiah.format(nilaiBerhasil)}).',
+                ),
+                if (gagal.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '${gagal.length} transaksi tetap tertahan karena belum '
+                    'berhasil diproses:',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  ...gagal.take(10).map((pesan) => Text('• $pesan')),
+                  if (gagal.length > 10)
+                    Text('• ... dan ${gagal.length - 10} transaksi lainnya.'),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      if (detailStokKurang != null && mounted) {
+        await tampilkanPanduanStokKosong(
+          context,
+          detail: detailStokKurang,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Daftar transaksi tertahan belum dapat diproses. '
+            'Periksa koneksi lalu coba lagi. Detail: $e',
+          ),
+        ));
+      }
+    } finally {
+      setStateIfMounted(() => _sedangMembayarSemuaTertahan = false);
+      if (mounted) await _muat();
     }
-    await _muat();
   }
 
   Map<String, dynamic> _payloadVerifikasi(Pesanan p, CaraBayar caraBayar) {
@@ -830,8 +974,19 @@ class _PesananScreenState extends State<PesananScreen> {
       if (Sesi.instance.bolehKelola)
         HeaderActionButton(
           icon: Icons.playlist_add_check,
-          label: 'Bayar Semua',
-          onPressed: _bayarSemua,
+          label: _sedangMembayarSemuaTertahan
+              ? 'Memproses...'
+              : 'Bayarkan Semua yang Tertahan',
+          tooltip: 'Bayarkan seluruh transaksi berstatus Tertahan',
+          loading: _sedangMembayarSemuaTertahan
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : null,
+          onPressed: _sedangMembayarSemuaTertahan || jumlahTertahan == 0
+              ? null
+              : _bayarkanSemuaYangTertahan,
         ),
       HeaderActionButton(
         icon: Icons.refresh,
