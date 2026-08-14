@@ -8,6 +8,7 @@ import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/panduan_stok_kosong.dart';
 import 'kasir_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -180,12 +181,16 @@ class _PesananScreenState extends State<PesananScreen> {
     if (caraBayar == null) return;
 
     var berhasil = 0;
+    String? detailStokKurang;
     for (final p in belumLunas) {
       try {
         await ApiClient.instance
             .aksi('bayar', _payloadVerifikasi(p, caraBayar));
         berhasil++;
-      } catch (_) {
+      } catch (e) {
+        if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
+          detailStokKurang ??= '${p.kode}: ${e.pesan}';
+        }
         // Satu pesanan gagal (mis. stok berubah) -- lanjut ke berikutnya, jangan hentikan seluruh proses.
       }
     }
@@ -193,6 +198,9 @@ class _PesananScreenState extends State<PesananScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
               '$berhasil dari ${belumLunas.length} pesanan berhasil dibayar.')));
+      if (detailStokKurang != null) {
+        await tampilkanPanduanStokKosong(context, detail: detailStokKurang);
+      }
     }
     await _muat();
   }
@@ -711,8 +719,17 @@ class _PesananScreenState extends State<PesananScreen> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.pesan),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 8),
+          ));
+          await tampilkanPanduanStokKosong(context, detail: e.pesan);
+        } else {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(e.toString())));
+        }
       }
     }
   }
