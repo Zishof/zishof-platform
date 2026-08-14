@@ -84,7 +84,7 @@ class _ReturPenjualanScreenState extends State<ReturPenjualanScreen>
 
 class _BarisRetur {
   final Map<String, dynamic>
-      item; // dari detail_transaksi: {nama, qty, harga, diskon, cashback, produkId}
+      item; // detail_transaksi, termasuk pembelianId dan sisa qty yang boleh diretur
   bool disertakan = false;
   late final TextEditingController qtyController;
   String alasan = _daftarAlasan.first;
@@ -93,10 +93,16 @@ class _BarisRetur {
   double get qty =>
       double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 0;
   double get hargaSatuan => (item['harga'] as num?)?.toDouble() ?? 0;
+  double get qtyDibeli => (item['qty'] as num?)?.toDouble() ?? 0;
+  double get qtySudahDiretur =>
+      (item['qtySudahDiretur'] as num?)?.toDouble() ?? 0;
+  double get qtyMaksRetur =>
+      (item['qtyMaksRetur'] as num?)?.toDouble() ?? qtyDibeli;
+  bool get sudahDireturSemua => qtyMaksRetur <= 0;
   double get subtotal => qty * hargaSatuan;
 
   _BarisRetur(this.item) {
-    final qtyAsli = (item['qty'] as num?)?.toDouble() ?? 0;
+    final qtyAsli = qtyMaksRetur;
     qtyController = TextEditingController(
         text: qtyAsli
             .toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2));
@@ -196,10 +202,10 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
       return;
     }
     for (final b in dipilih) {
-      final qtyAsli = (b.item['qty'] as num?)?.toDouble() ?? 0;
+      final qtyAsli = b.qtyMaksRetur;
       if (b.qty <= 0 || b.qty > qtyAsli) {
         setStateIfMounted(() => _errorSimpan =
-            'Qty Retur "${b.item['nama']}" harus antara 0 dan ${qtyAsli.toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2)} (jumlah asli dibeli).');
+            'Qty Retur "${b.item['nama']}" harus lebih dari 0 dan maksimal ${qtyAsli.toStringAsFixed(qtyAsli == qtyAsli.roundToDouble() ? 0 : 2)} (sisa yang belum pernah diretur).');
         return;
       }
     }
@@ -218,6 +224,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
         'items': dipilih
             .map((b) => {
                   'produk_id': b.item['produkId'],
+                  'pembelian_id': b.item['pembelianId'],
                   'qty': b.qty,
                   'harga_satuan': b.hargaSatuan,
                   'alasan': b.alasan,
@@ -465,7 +472,7 @@ class _KartuBarangRetur extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: StatefulBuilder(
           builder: (context, setBarisState) {
-            final qtyAsli = (baris.item['qty'] as num?)?.toDouble() ?? 0;
+            final qtyAsli = baris.qtyMaksRetur;
             final qtyLebih = baris.qty > qtyAsli;
             final statusColor =
                 baris.kembalikanKeStok ? AppColors.success : AppColors.danger;
@@ -490,8 +497,10 @@ class _KartuBarangRetur extends StatelessWidget {
                   children: [
                     Checkbox(
                       value: baris.disertakan,
-                      onChanged: (v) =>
-                          ubahBaris(() => baris.disertakan = v ?? true),
+                      onChanged: baris.sudahDireturSemua
+                          ? null
+                          : (v) =>
+                              ubahBaris(() => baris.disertakan = v ?? true),
                     ),
                     Container(
                       width: 38,
@@ -531,6 +540,24 @@ class _KartuBarangRetur extends StatelessWidget {
                                   color: AppColors.textSecondaryOf(context),
                                 ),
                               ),
+                              if (baris.qtySudahDiretur > 0)
+                                Text(
+                                  'Sudah diretur: ${baris.qtySudahDiretur}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.warning,
+                                  ),
+                                ),
+                              Text(
+                                'Sisa dapat diretur: ${baris.qtyMaksRetur}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: baris.sudahDireturSemua
+                                      ? AppColors.danger
+                                      : AppColors.success,
+                                ),
+                              ),
                               Text(
                                 'Harga: ${_formatRupiah.format(baris.hargaSatuan)}',
                                 style: TextStyle(
@@ -565,7 +592,9 @@ class _KartuBarangRetur extends StatelessWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            baris.disertakan ? 'Dipilih' : 'Dilewati',
+                            baris.sudahDireturSemua
+                                ? 'Sudah diretur semua'
+                                : (baris.disertakan ? 'Dipilih' : 'Dilewati'),
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -600,11 +629,12 @@ class _KartuBarangRetur extends StatelessWidget {
                               decoration: AppFormStyle.fieldDecoration(
                                 context,
                                 labelText: 'Qty Retur',
-                                helperText: 'Maks ${baris.item['qty']}',
+                                helperText: 'Maks ${baris.qtyMaksRetur}',
                                 isDense: true,
                               ).copyWith(
-                                errorText:
-                                    qtyLebih ? 'Melebihi jumlah dibeli' : null,
+                                errorText: qtyLebih
+                                    ? 'Melebihi sisa yang dapat diretur'
+                                    : null,
                               ),
                               onChanged: (_) => ubahBaris(() {}),
                             ),
