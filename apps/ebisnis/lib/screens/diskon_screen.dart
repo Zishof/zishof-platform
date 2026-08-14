@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import 'diskon/tab_aturan_diskon.dart';
+import 'diskon/tab_diskon_grup.dart';
 import 'diskon/tab_pencairan_diskon.dart';
 import 'diskon/tab_monitor_diskon.dart';
 
@@ -25,7 +26,7 @@ class _DiskonScreenState extends State<DiskonScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -41,7 +42,10 @@ class _DiskonScreenState extends State<DiskonScreen>
       judul: 'Diskon & Promo',
       subjudul: 'Aturan diskon, pencairan cashback, dan monitor performa promo',
       scrollable: false,
-      actionsAppBar: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() {}))],
+      actionsAppBar: [
+        IconButton(
+            icon: const Icon(Icons.refresh), onPressed: () => setState(() {}))
+      ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -54,6 +58,7 @@ class _DiskonScreenState extends State<DiskonScreen>
             tabAlignment: TabAlignment.start,
             tabs: const [
               Tab(text: 'Aturan Diskon'),
+              Tab(text: 'Diskon Grup'),
               Tab(text: 'Pencairan Diskon'),
               Tab(text: 'Monitor Diskon'),
             ],
@@ -63,6 +68,7 @@ class _DiskonScreenState extends State<DiskonScreen>
               controller: _tab,
               children: const [
                 TabAturanDiskon(),
+                TabDiskonGrup(),
                 TabPencairanDiskon(),
                 TabMonitorDiskon(),
               ],
