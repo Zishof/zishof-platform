@@ -5,6 +5,7 @@ import '../app_variant.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
 import '../services/layar_pelanggan_launcher.dart';
+import '../services/toko_aktif_lokal.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
@@ -430,6 +431,72 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
   _menuAktifNotifier.value = item.kunci;
 }
 
+/// Pemilih toko global untuk semua halaman Desktop/Android. Otorisasi tetap
+/// diverifikasi server oleh `pilih_toko_aktif`; daftar di UI bukan sumber hak.
+Future<bool> _pilihTokoGlobal(BuildContext context) async {
+  final daftar = Sesi.instance.daftarToko;
+  if (!Sesi.instance.multiToko || daftar.length < 2) return false;
+  final dipilih = await showDialog<int>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Pindah Toko'),
+      content: SizedBox(
+        width: 360,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 420),
+          child: ListView(
+            shrinkWrap: true,
+            children: daftar
+                .map((t) => RadioListTile<int>(
+                      value: t['id'] as int,
+                      groupValue: Sesi.instance.tokoId,
+                      title: Text('${t['nama'] ?? 'Tanpa nama'}'),
+                      subtitle: t['id'] == Sesi.instance.tokoId
+                          ? const Text('Toko aktif saat ini')
+                          : null,
+                      onChanged: (id) => Navigator.pop(dialogContext, id),
+                    ))
+                .toList(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal')),
+      ],
+    ),
+  );
+  if (dipilih == null || dipilih == Sesi.instance.tokoId) return false;
+  try {
+    await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': dipilih});
+    final konfig = await ApiClient.instance.aksi('konfigurasi');
+    Sesi.instance.terapkanKonfig(konfig);
+    if (Sesi.instance.tokoId != null) {
+      await TokoAktifLokal.instance.simpan(Sesi.instance.tokoId!);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Toko aktif diubah ke ${Sesi.instance.tokoNama}.')));
+    }
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Toko belum dapat dipindahkan. Muat ulang hak akses lalu coba lagi. Detail: $e')));
+    }
+    return false;
+  }
+}
+
+void _muatUlangHalamanAktif(BuildContext context) {
+  final item = _itemMenu(_menuAktifNotifier.value);
+  if (item?.builder == null) return;
+  Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => item!.builder!(context)));
+}
+
 String _labelDrawer(MenuEBisnis kunci) {
   switch (kunci) {
     case MenuEBisnis.kasir:
@@ -681,6 +748,16 @@ class _AppShellState extends State<AppShell> {
               foregroundColor: Colors.white,
               actions: [
                 ...aksiMobile,
+                if (Sesi.instance.multiToko)
+                  IconButton(
+                    onPressed: () async {
+                      if (await _pilihTokoGlobal(context) && context.mounted) {
+                        _muatUlangHalamanAktif(context);
+                      }
+                    },
+                    icon: const Icon(Icons.storefront_outlined),
+                    tooltip: 'Pindah toko',
+                  ),
                 IconButton(
                   onPressed: () => _bukaBantuan(context),
                   icon: const Icon(Icons.help_outline),
@@ -1028,6 +1105,12 @@ class _AppTopbarState extends State<_AppTopbar> {
     );
   }
 
+  Future<void> _pindahToko() async {
+    if (await _pilihTokoGlobal(context) && mounted) {
+      _muatUlangHalamanAktif(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final kasTerbuka = _kasAktif != null;
@@ -1041,16 +1124,33 @@ class _AppTopbarState extends State<_AppTopbar> {
       ),
       child: Row(
         children: [
-          Icon(Icons.storefront_outlined,
-              color: AppColors.textSecondaryOf(context), size: 18),
-          const SizedBox(width: 6),
-          Text(
-              Sesi.instance.tokoNama.isEmpty
-                  ? AppVariant.namaAplikasi
-                  : Sesi.instance.tokoNama,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimaryOf(context))),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: Sesi.instance.multiToko ? _pindahToko : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Row(children: [
+                  Icon(Icons.storefront_outlined,
+                      color: AppColors.textSecondaryOf(context), size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                      Sesi.instance.tokoNama.isEmpty
+                          ? AppVariant.namaAplikasi
+                          : Sesi.instance.tokoNama,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryOf(context))),
+                  if (Sesi.instance.multiToko) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down,
+                        size: 18, color: AppColors.textSecondaryOf(context)),
+                  ],
+                ]),
+              ),
+            ),
+          ),
           const Spacer(),
           if (tampilkanStatusKas) ...[
             _chipStatus(
