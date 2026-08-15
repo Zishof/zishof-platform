@@ -66,10 +66,15 @@ String _formatQtyKoreksi(double value) =>
     value == value.roundToDouble() ? value.toInt().toString() : '$value';
 
 class _DialogEditTransaksi extends StatefulWidget {
-  const _DialogEditTransaksi({required this.nomor, required this.items});
+  const _DialogEditTransaksi({
+    required this.nomor,
+    required this.items,
+    required this.waktu,
+  });
 
   final String nomor;
   final List<Map<String, dynamic>> items;
+  final DateTime waktu;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -82,10 +87,12 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   List<Map<String, dynamic>> _hasilCari = [];
   bool _mencari = false;
   String? _pesan;
+  late DateTime _waktu;
 
   @override
   void initState() {
     super.initState();
+    _waktu = widget.waktu;
     _baris = widget.items
         .map((i) => _BarisKoreksiTransaksi(
               pembelianId: i['pembelianId'],
@@ -189,7 +196,33 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         'qty': qty,
       });
     }
-    Navigator.of(context).pop({'alasan': alasan, 'item': item});
+    Navigator.of(context).pop({
+      'alasan': alasan,
+      'item': item,
+      'waktu': _waktu.toIso8601String(),
+    });
+  }
+
+  Future<void> _pilihWaktu() async {
+    final tanggal = await showDatePicker(
+      context: context,
+      initialDate: _waktu,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (tanggal == null || !mounted) return;
+    final jam = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_waktu),
+    );
+    if (jam == null || !mounted) return;
+    setState(() => _waktu = DateTime(
+          tanggal.year,
+          tanggal.month,
+          tanggal.day,
+          jam.hour,
+          jam.minute,
+        ));
   }
 
   @override
@@ -214,6 +247,17 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               ),
             ),
             const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_outlined),
+              title: const Text('Tanggal dan jam transaksi'),
+              subtitle: Text(DateFormat('dd-MM-yyyy HH:mm').format(_waktu)),
+              trailing: OutlinedButton.icon(
+                onPressed: _pilihWaktu,
+                icon: const Icon(Icons.edit_calendar_outlined),
+                label: const Text('Ubah'),
+              ),
+            ),
             Row(children: [
               Expanded(
                 child: TextField(
@@ -461,6 +505,20 @@ String _formatWaktu(dynamic raw) {
   } catch (_) {
     return s;
   }
+}
+
+DateTime _parseWaktuKoreksi(dynamic raw) {
+  final nilai = raw?.toString().trim() ?? '';
+  final iso = DateTime.tryParse(nilai);
+  if (iso != null) return iso;
+  for (final pola in ['dd-MM-yyyy HH:mm:ss', 'dd-MM-yyyy HH:mm']) {
+    try {
+      return DateFormat(pola).parseStrict(nilai);
+    } catch (_) {
+      // Coba pola berikutnya.
+    }
+  }
+  return DateTime.now();
 }
 
 /// Layar Riwayat Penjualan (spec §11) -- SENGAJA terpisah dari Laporan
@@ -797,6 +855,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       builder: (_) => _DialogEditTransaksi(
         nomor: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
         items: items,
+        waktu: _parseWaktuKoreksi(detail['waktu'] ?? row['waktu']),
       ),
     );
     if (hasilEdit == null || !mounted) return;
@@ -805,6 +864,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         'id': row['idTransaksi'],
         'alasan': hasilEdit['alasan'],
         'item': hasilEdit['item'],
+        'waktu': hasilEdit['waktu'],
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

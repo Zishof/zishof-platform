@@ -518,7 +518,7 @@ class _PesananScreenState extends State<PesananScreen> {
           pageSize: 100,
           filter: _Filter.tertahan,
           hanyaBelumLunas: true,
-          gunakanFilterTambahan: false,
+          gunakanFilterTambahan: true,
         ),
       );
       final data = ((hasil['pesanan'] as List?) ?? [])

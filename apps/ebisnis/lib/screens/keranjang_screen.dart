@@ -276,6 +276,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         : _nilaiDiskonFaktur;
     return nilai.clamp(0, _dasarDiskonFaktur).toDouble();
   }
+
   double get _totalDiskonSemua => _totalDiskon + _diskonFaktur;
 
   /// `basisPajak = subtotal - totalDiskon`; `pajak = basisPajak * pajakPersen%`;
@@ -636,6 +637,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final aturanId = promo['id'] as int;
     try {
       final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
+        'toko_id': Sesi.instance.tokoId,
         'id_member': _memberTerpilih?.id,
         'items': [
           {
@@ -1195,8 +1197,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     segments: const [
                       ButtonSegment(
                           value: 'NOMINAL', label: Text('Nominal Rupiah')),
-                      ButtonSegment(
-                          value: 'PERSEN', label: Text('Persentase')),
+                      ButtonSegment(value: 'PERSEN', label: Text('Persentase')),
                     ],
                     selected: {tipe},
                     onSelectionChanged: (nilai) =>
@@ -1229,13 +1230,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Batal')),
               TextButton(
-                  onPressed: () => Navigator.pop(dialogContext,
-                      {'tipe': 'NOMINAL', 'nilai': 0.0}),
+                  onPressed: () => Navigator.pop(
+                      dialogContext, {'tipe': 'NOMINAL', 'nilai': 0.0}),
                   child: const Text('Hapus Potongan')),
               FilledButton(
                 onPressed: () {
-                  final nilai = double.tryParse(
-                          controller.text.replaceAll('.', '').replaceAll(',', '.')) ??
+                  final nilai = double.tryParse(controller.text
+                          .replaceAll('.', '')
+                          .replaceAll(',', '.')) ??
                       0;
                   Navigator.pop(dialogContext, {'tipe': tipe, 'nilai': nilai});
                 },
