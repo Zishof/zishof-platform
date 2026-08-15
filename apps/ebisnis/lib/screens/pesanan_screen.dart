@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -560,6 +561,10 @@ class _PesananScreenState extends State<PesananScreen> {
     if (_sedangMembayarSemuaTertahan) return;
     setStateIfMounted(() => _sedangMembayarSemuaTertahan = true);
     try {
+      // Jalur pembayaran massal tidak melewati KeranjangScreen, sehingga
+      // identitas perangkat harus dipastikan tersedia sebelum payload bayar
+      // dibentuk. Server memakai identitas ini untuk mencocokkan sesi kas.
+      await IdentitasMesin.instance.muat();
       final tertahan = await _ambilSemuaTertahanBelumLunas();
       if (!mounted) return;
       if (tertahan.isEmpty) {
@@ -714,6 +719,9 @@ class _PesananScreenState extends State<PesananScreen> {
       'idToko': Sesi.instance.tokoId,
       'tokoId': Sesi.instance.tokoId,
       'kasir': Sesi.instance.userId,
+      'id_perangkat': IdentitasMesin.instance.idMesin,
+      'nama_perangkat': IdentitasMesin.instance.namaMesin,
+      'nama_mesin': IdentitasMesin.instance.namaMesin,
       'waktu': _formatWaktuServer(DateTime.now()),
       'caraBayar': caraBayar.id,
       'total': p.totalBiaya,
