@@ -162,21 +162,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   int _halamanKeranjang = 1;
   ItemKeranjang? _itemTeratasTerakhir;
   bool _langsungTerlayani = true;
-  String? _alasanTahanTerpilih;
   late DateTime _waktuTransaksi;
-
-  List<String> get _daftarAlasanTahan => Sesi.instance.alasanTahan.isEmpty
-      ? _alasanTahanBawaan
-      : Sesi.instance.alasanTahan;
 
   @override
   void initState() {
     super.initState();
     _memberTerpilih = widget.memberAwal;
     _waktuTransaksi = widget.waktuTransaksiAwal ?? DateTime.now();
-    if (_daftarAlasanTahan.isNotEmpty) {
-      _alasanTahanTerpilih = _daftarAlasanTahan.first;
-    }
     _caraBayarTersedia = List<CaraBayar>.of(Sesi.instance.caraBayar);
     if (_caraBayarTersedia.isNotEmpty) {
       _caraBayarTerpilih =
@@ -991,7 +983,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// baik gagal jelas drpd diam-diam antre lokal tanpa ada layar Pesanan
   /// utk memuatnya kembali).
   Future<String?> _pilihAlasanTahan() async {
-    final daftar = _daftarAlasanTahan;
+    final daftar = Sesi.instance.alasanTahan.isEmpty
+        ? _alasanTahanBawaan
+        : Sesi.instance.alasanTahan;
     var pilihan = daftar.first;
     final lainController = TextEditingController();
     try {
@@ -1088,9 +1082,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
-    final alasanTahan = _alasanTahanTerpilih == '__LAINNYA__'
-        ? await _pilihAlasanTahan()
-        : _alasanTahanTerpilih;
+    final alasanTahan = await _pilihAlasanTahan();
     if (alasanTahan == null || alasanTahan.isEmpty) return;
     setStateIfMounted(() => _memproses = true);
     try {
@@ -1113,8 +1105,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _splitBayar = [];
         _nilaiDiskonFaktur = 0;
         _tipeDiskonFaktur = 'NOMINAL';
-        _alasanTahanTerpilih =
-            _daftarAlasanTahan.isEmpty ? null : _daftarAlasanTahan.first;
       });
       unawaited(_muatCaraBayarUntukMember(null));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2208,32 +2198,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _alasanTahanTerpilih,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Alasan transaksi ditahan',
-                prefixIcon: Icon(Icons.pause_circle_outline),
-                border: OutlineInputBorder(),
-                helperText: 'Alasan ikut disimpan pada struktur pembayaran.',
-              ),
-              items: [
-                for (final alasan in _daftarAlasanTahan)
-                  DropdownMenuItem<String>(
-                    value: alasan,
-                    child: Text(alasan, overflow: TextOverflow.ellipsis),
-                  ),
-                const DropdownMenuItem<String>(
-                  value: '__LAINNYA__',
-                  child: Text('Alasan lainnya...'),
-                ),
-              ],
-              onChanged: _memproses
-                  ? null
-                  : (nilai) =>
-                      setStateIfMounted(() => _alasanTahanTerpilih = nilai),
             ),
             const SizedBox(height: 8),
             Row(
