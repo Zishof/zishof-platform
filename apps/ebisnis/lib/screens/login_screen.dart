@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../product_profile.dart';
@@ -20,6 +21,27 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _memproses = false;
   AppErrorInfo? _pesanError;
+  String _versiAplikasi = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _muatVersiAplikasi();
+  }
+
+  Future<void> _muatVersiAplikasi() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      final nomorBuild = info.buildNumber.trim();
+      setStateIfMounted(() => _versiAplikasi = nomorBuild.isEmpty
+          ? 'Versi ${info.version}'
+          : 'Versi ${info.version} (build $nomorBuild)');
+    } catch (_) {
+      // Informasi versi bersifat pelengkap; kegagalan membacanya tidak boleh
+      // menghalangi pengguna masuk atau mengubah alamat server.
+    }
+  }
 
   Future<void> _login() async {
     if (_userCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
@@ -140,6 +162,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text('Ubah Alamat Server'),
                       ),
                     ),
+                    if (_versiAplikasi.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _versiAplikasi,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: warnaSubjudul,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
