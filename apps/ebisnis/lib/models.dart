@@ -250,6 +250,17 @@ class ItemKeranjang {
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
 
+/// Menempatkan baris yang baru ditambahkan/dipindai di urutan pertama.
+///
+/// Fungsi ini memindahkan objek yang sama (bukan membuat salinan), sehingga
+/// qty, diskon, cashback, ekstra, dan referensi yang dipakai checkout tetap
+/// utuh. Produk yang dipindai ulang juga kembali terlihat paling atas.
+void tempatkanItemKeranjangTerbaruDiDepan(
+    List<ItemKeranjang> keranjang, ItemKeranjang item) {
+  keranjang.remove(item);
+  keranjang.insert(0, item);
+}
+
 /// Anggota/member koperasi -- superset bentuk JSON dari 3 aksi berbeda:
 /// `cari_member` (subset ringkas: id/nama/kodeIdentitas/wajibPin/minSaldo,
 /// dipakai picker Kasir), `anggota_list`/`anggota_sync_list` (lengkap, dipakai

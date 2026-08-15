@@ -29,6 +29,7 @@ import 'login_screen.dart';
 import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
 import 'akun_saya_screen.dart';
+import 'laporan_tutup_kas_dialog.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -667,50 +668,23 @@ class _KasirScreenState extends State<KasirScreen> {
       final stokMenipis =
           ((hasil['stokMenipis'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (!mounted) return;
+      final laporan = hasil['laporanTutupKas'] is Map
+          ? Map<String, dynamic>.from(hasil['laporanTutupKas'] as Map)
+          : <String, dynamic>{
+              'kasSeharusnya': kasSaatIni,
+              'jumlahKasTunai': hasilTutup['uangFisik'],
+              'selisih': selisih,
+            };
       await showDialog(
         context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Kas Ditutup'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Kas Seharusnya: ${_formatRupiah.format(kasSaatIni)}'),
-              Text(
-                  'Uang Fisik: ${_formatRupiah.format(hasilTutup['uangFisik'])}'),
-              const SizedBox(height: 8),
-              Text('Selisih: ${_formatRupiah.format(selisih)}',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: selisih < 0 ? Colors.red : Colors.green.shade700)),
-              if (stokMenipis.isNotEmpty) ...[
-                const Divider(height: 24),
-                Text('${stokMenipis.length} Produk Perlu Direstok:',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: stokMenipis
-                          .map((p) => Text(
-                              '• ${p['nama']} (stok ${p['stok']}, min ${p['stokMinimum']})',
-                              style: const TextStyle(fontSize: 12)))
-                          .toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Tutup'))
-          ],
-        ),
+        builder: (_) => LaporanTutupKasDialog(laporan: laporan),
       );
+      if (stokMenipis.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${stokMenipis.length} produk perlu direstok.'),
+          duration: const Duration(seconds: 6),
+        ));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -918,9 +892,11 @@ class _KasirScreenState extends State<KasirScreen> {
           .where((i) => i.produk.id == p.id && i.ekstra.isEmpty)
           .toList();
       if (existing.isNotEmpty) {
-        existing.first.jumlah++;
+        final item = existing.first;
+        item.jumlah++;
+        tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.add(ItemKeranjang(produk: p));
+        _keranjang.insert(0, ItemKeranjang(produk: p));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -945,9 +921,11 @@ class _KasirScreenState extends State<KasirScreen> {
           .where((i) => i.produk.id == p.id && _ekstraSama(i.ekstra, dipilih))
           .toList();
       if (existing.isNotEmpty) {
-        existing.first.jumlah++;
+        final item = existing.first;
+        item.jumlah++;
+        tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.add(ItemKeranjang(produk: p, ekstra: dipilih));
+        _keranjang.insert(0, ItemKeranjang(produk: p, ekstra: dipilih));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();

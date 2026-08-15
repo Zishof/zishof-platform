@@ -153,6 +153,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   final _uangDiterimaController = TextEditingController(text: '0');
   bool _uangDiterimaManual = false;
   int _halamanKeranjang = 1;
+  ItemKeranjang? _itemTeratasTerakhir;
   bool _langsungTerlayani = true;
 
   @override
@@ -1481,6 +1482,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   Widget _daftarItemKeranjang({bool dibungkusCard = true}) {
     if (widget.keranjang.isEmpty) {
+      _itemTeratasTerakhir = null;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1493,6 +1495,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           ],
         ),
       );
+    }
+    // Bila hasil scan baru mengubah item teratas ketika kasir sedang berada
+    // di halaman paging berikutnya, langsung kembali ke halaman pertama agar
+    // item yang baru dipindai benar-benar terlihat tanpa klik tambahan.
+    final itemTeratas = widget.keranjang.first;
+    if (!identical(_itemTeratasTerakhir, itemTeratas)) {
+      _itemTeratasTerakhir = itemTeratas;
+      _halamanKeranjang = 1;
     }
     final totalHalaman = (widget.keranjang.length / _pageSizeKeranjang)
         .ceil()

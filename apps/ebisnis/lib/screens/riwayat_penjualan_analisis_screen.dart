@@ -39,6 +39,8 @@ class _RiwayatPenjualanAnalisisScreenState
       Map<String, dynamic>.from((_hasil?['kpi'] as Map?) ?? const {});
   Map<String, dynamic> get _pembanding =>
       Map<String, dynamic>.from((_hasil?['pembanding'] as Map?) ?? const {});
+  Map<String, dynamic> get _retur =>
+      Map<String, dynamic>.from((_hasil?['retur'] as Map?) ?? const {});
 
   List<Map<String, dynamic>> _daftar(String kunci) =>
       ((_hasil?[kunci] as List?) ?? const [])
@@ -107,6 +109,13 @@ class _RiwayatPenjualanAnalisisScreenState
     final jam = _daftar('jam');
     final produk = _daftar('produk');
     final member = _angka(_kpi, 'transaksiMember');
+    final diskon = _angka(_kpi, 'diskon');
+    final cashback = _angka(_kpi, 'cashback');
+    final nilaiTidakValid = _angka(_kpi, 'nilaiTidakValid');
+    final nilaiRetur = _angka(_retur, 'nilai');
+    final transaksiRetur = _angka(_retur, 'transaksi');
+    final hari = _daftar('hari');
+    final keranjang = _daftar('keranjang');
 
     if (invalid > 0) {
       hasil.add(_InsightPenjualan(
@@ -118,6 +127,17 @@ class _RiwayatPenjualanAnalisisScreenState
         tindakan:
             'Aktifkan filter “Transaksi tidak valid” pada Riwayat Penjualan, periksa selisih, lalu koreksi hanya dengan otorisasi supervisor.',
       ));
+      if (nilaiTidakValid > 0) {
+        hasil.add(_InsightPenjualan(
+          warna: AppColors.danger,
+          ikon: Icons.price_check_outlined,
+          judul: 'Eksposur selisih data ${_rpAnalisis.format(nilaiTidakValid)}',
+          alasan:
+              'Nilai ini adalah akumulasi selisih absolut antara total master dan jumlah rincian transaksi yang tidak konsisten.',
+          tindakan:
+              'Dahulukan transaksi dengan selisih terbesar, cocokkan dengan struk dan log sinkronisasi, lalu dokumentasikan koreksi supervisor.',
+        ));
+      }
     }
     hasil.add(_InsightPenjualan(
       warna: tumbuh >= 0 ? AppColors.success : AppColors.danger,
@@ -163,6 +183,10 @@ class _RiwayatPenjualanAnalisisScreenState
     }
     if (produk.isNotEmpty && omzet > 0) {
       final porsi = _angka(produk.first, 'omzet') / omzet * 100;
+      final omzetLimaTeratas = produk
+          .take(5)
+          .fold<double>(0, (jumlah, e) => jumlah + _angka(e, 'omzet'));
+      final porsiLima = omzetLimaTeratas / omzet * 100;
       hasil.add(_InsightPenjualan(
         warna: AppColors.teal,
         ikon: Icons.inventory_2_outlined,
@@ -173,6 +197,18 @@ class _RiwayatPenjualanAnalisisScreenState
             ? 'Jaga stok pengaman dan siapkan produk alternatif karena ketergantungan omzet pada satu produk cukup tinggi.'
             : 'Pertahankan ketersediaannya dan gunakan sebagai pasangan promosi untuk membantu produk dengan perputaran lebih lambat.',
       ));
+      if (porsiLima >= 70) {
+        hasil.add(_InsightPenjualan(
+          warna: AppColors.warning,
+          ikon: Icons.donut_large_outlined,
+          judul:
+              'Konsentrasi produk tinggi: 5 produk menyumbang ${porsiLima.toStringAsFixed(1)}%',
+          alasan:
+              'Omzet sangat bergantung pada sedikit produk sehingga kekosongan stok dapat langsung menekan penjualan.',
+          tindakan:
+              'Tetapkan stok pengaman untuk lima produk tersebut dan siapkan produk pengganti yang margin serta kegunaannya sebanding.',
+        ));
+      }
     }
     if (transaksi > 0 && member / transaksi < .3) {
       hasil.add(_InsightPenjualan(
@@ -185,6 +221,63 @@ class _RiwayatPenjualanAnalisisScreenState
         tindakan:
             'Tawarkan pendaftaran member secara wajar dan pastikan nomor telepon unik agar riwayat pelanggan dapat dianalisis dengan benar.',
       ));
+    }
+    if (nilaiRetur > 0 && omzet > 0) {
+      final rasio = nilaiRetur / omzet * 100;
+      hasil.add(_InsightPenjualan(
+        warna: rasio >= 3 ? AppColors.danger : AppColors.warning,
+        ikon: Icons.assignment_return_outlined,
+        judul:
+            'Retur ${_rpAnalisis.format(nilaiRetur)} (${rasio.toStringAsFixed(2)}% omzet)',
+        alasan:
+            '${transaksiRetur.toInt()} transaksi memiliki retur pada periode terpilih. Rasio yang meningkat dapat menunjukkan masalah kualitas, salah ambil, atau informasi produk.',
+        tindakan:
+            'Kelompokkan alasan retur, periksa produk yang berulang, lalu tindak lanjuti ke pemasok, penataan rak, atau pengarahan kasir sesuai penyebabnya.',
+      ));
+    }
+    if ((diskon + cashback) > 0 && omzet > 0) {
+      final rasioPromo = (diskon + cashback) / (omzet + diskon) * 100;
+      hasil.add(_InsightPenjualan(
+        warna: rasioPromo >= 15 ? AppColors.warning : AppColors.teal,
+        ikon: Icons.local_offer_outlined,
+        judul:
+            'Biaya promo ${_rpAnalisis.format(diskon + cashback)} (${rasioPromo.toStringAsFixed(1)}% nilai sebelum diskon)',
+        alasan:
+            'Terdiri dari diskon ${_rpAnalisis.format(diskon)} dan cashback ${_rpAnalisis.format(cashback)}.',
+        tindakan:
+            'Bandingkan pertumbuhan transaksi dan nilai keranjang dengan biaya promo. Pertahankan promo hanya bila kenaikan penjualan atau retensi menutup biaya tersebut.',
+      ));
+    }
+    if (hari.length >= 2) {
+      final urut = [...hari]
+        ..sort((a, b) => _angka(b, 'omzet').compareTo(_angka(a, 'omzet')));
+      hasil.add(_InsightPenjualan(
+        warna: AppColors.primary,
+        ikon: Icons.calendar_month_outlined,
+        judul:
+            'Hari terkuat ${urut.first['nama']}; hari terlemah ${urut.last['nama']}',
+        alasan:
+            'Omzet hari terkuat ${_rpAnalisis.format(urut.first['omzet'] ?? 0)}, sedangkan hari terlemah ${_rpAnalisis.format(urut.last['omzet'] ?? 0)}.',
+        tindakan:
+            'Atur jadwal petugas dan pengisian stok mengikuti hari terkuat; uji bundling atau aktivasi pelanggan pada hari terlemah.',
+      ));
+    }
+    if (keranjang.isNotEmpty && transaksi > 0) {
+      final rendah = keranjang
+          .where((e) => '${e['rentang']}'.startsWith('<'))
+          .fold<double>(0, (jumlah, e) => jumlah + _angka(e, 'transaksi'));
+      if (rendah / transaksi >= .5) {
+        hasil.add(_InsightPenjualan(
+          warna: AppColors.warning,
+          ikon: Icons.shopping_basket_outlined,
+          judul:
+              '${(rendah / transaksi * 100).toStringAsFixed(0)}% transaksi bernilai di bawah Rp25 ribu',
+          alasan:
+              'Mayoritas keranjang bernilai kecil sehingga peluang menaikkan nilai per kunjungan masih besar.',
+          tindakan:
+              'Uji rekomendasi produk pelengkap dan paket hemat yang relevan; jangan memaksa pembelian atau mengorbankan margin.',
+        ));
+      }
     }
     return hasil;
   }
@@ -280,6 +373,14 @@ class _RiwayatPenjualanAnalisisScreenState
               '${_pembanding['qty'] ?? 0}'
             ],
             ['Transaksi tidak valid', '${_kpi['tidakValid'] ?? 0}', '-'],
+            [
+              'Nilai selisih transaksi',
+              _rpAnalisis.format(_kpi['nilaiTidakValid'] ?? 0),
+              '-'
+            ],
+            ['Diskon', _rpAnalisis.format(_kpi['diskon'] ?? 0), '-'],
+            ['Cashback', _rpAnalisis.format(_kpi['cashback'] ?? 0), '-'],
+            ['Nilai retur', _rpAnalisis.format(_retur['nilai'] ?? 0), '-'],
           ]),
           tabel('Analisis dan Rekomendasi', ['Prioritas', 'Temuan', 'Tindakan'],
               insight.map((e) => [e.judul, e.alasan, e.tindakan]).toList()),
@@ -310,6 +411,27 @@ class _RiwayatPenjualanAnalisisScreenState
               _daftar('jam')
                   .map((e) => [
                         '${e['jam']}:00',
+                        '${e['transaksi']}',
+                        _rpAnalisis.format(e['omzet'] ?? 0)
+                      ])
+                  .toList()),
+          tabel(
+              'Pola Hari dalam Minggu',
+              ['Hari', 'Transaksi', 'Omzet', 'Rata-rata'],
+              _daftar('hari')
+                  .map((e) => [
+                        '${e['nama']}',
+                        '${e['transaksi']}',
+                        _rpAnalisis.format(e['omzet'] ?? 0),
+                        _rpAnalisis.format(e['rataRata'] ?? 0)
+                      ])
+                  .toList()),
+          tabel(
+              'Distribusi Nilai Keranjang',
+              ['Rentang', 'Transaksi', 'Omzet'],
+              _daftar('keranjang')
+                  .map((e) => [
+                        '${e['rentang']}',
                         '${e['transaksi']}',
                         _rpAnalisis.format(e['omzet'] ?? 0)
                       ])
@@ -450,6 +572,24 @@ class _RiwayatPenjualanAnalisisScreenState
         '${_kpi['tidakValid'] ?? 0}',
         'Transaksi tidak valid'
       ),
+      (
+        Icons.assignment_return_outlined,
+        AppColors.warning,
+        _rpAnalisis.format(_retur['nilai'] ?? 0),
+        'Nilai retur · ${_retur['transaksi'] ?? 0} transaksi'
+      ),
+      (
+        Icons.local_offer_outlined,
+        Colors.purple,
+        _rpAnalisis.format(_angka(_kpi, 'diskon') + _angka(_kpi, 'cashback')),
+        'Diskon + cashback'
+      ),
+      (
+        Icons.price_check_outlined,
+        AppColors.danger,
+        _rpAnalisis.format(_kpi['nilaiTidakValid'] ?? 0),
+        'Eksposur selisih data'
+      ),
     ];
     return SizedBox(
       height: 98,
@@ -552,6 +692,43 @@ class _RiwayatPenjualanAnalisisScreenState
                 children: [cards[0], const SizedBox(height: 12), cards[1]]);
       });
 
+  Widget _risikoDanPeluang() => Column(children: [
+        LayoutBuilder(builder: (_, c) {
+          final cards = [
+            _kartuGrafik(
+                judul: 'Pola Omzet per Hari dalam Minggu',
+                child: _BarRanking(
+                    data: _daftar('hari'),
+                    labelKey: 'nama',
+                    valueKey: 'omzet',
+                    format: _rpAnalisis.format,
+                    warna: AppColors.primary)),
+            _kartuGrafik(
+                judul: 'Distribusi Nilai Keranjang',
+                child: _BarRanking(
+                    data: _daftar('keranjang'),
+                    labelKey: 'rentang',
+                    valueKey: 'transaksi',
+                    format: (v) => '${v.toInt()} transaksi',
+                    warna: Colors.purple)),
+          ];
+          return c.maxWidth >= 900
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: cards[1])
+                ])
+              : Column(
+                  children: [cards[0], const SizedBox(height: 12), cards[1]]);
+        }),
+        const SizedBox(height: 12),
+        _kartuGrafik(
+          judul: 'Rekap Risiko, Promo, dan Retur',
+          child: _RekapRisikoPromo(
+              kpi: _kpi, retur: _retur, omzet: _angka(_kpi, 'omzet')),
+        ),
+      ]);
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -591,6 +768,10 @@ class _RiwayatPenjualanAnalisisScreenState
                         label: const Text('Operasional & Kasir'),
                         selected: _bagian == 2,
                         onSelected: (_) => setState(() => _bagian = 2)),
+                    ChoiceChip(
+                        label: const Text('Risiko & Peluang'),
+                        selected: _bagian == 3,
+                        onSelected: (_) => setState(() => _bagian = 3)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -610,8 +791,10 @@ class _RiwayatPenjualanAnalisisScreenState
                   _ringkasan()
                 else if (_bagian == 1)
                   _produkPembayaran()
+                else if (_bagian == 2)
+                  _operasional()
                 else
-                  _operasional(),
+                  _risikoDanPeluang(),
               ],
             ),
           ),
@@ -666,6 +849,96 @@ class _InsightCard extends StatelessWidget {
               ])),
         ]),
       );
+}
+
+class _RekapRisikoPromo extends StatelessWidget {
+  const _RekapRisikoPromo(
+      {required this.kpi, required this.retur, required this.omzet});
+
+  final Map<String, dynamic> kpi;
+  final Map<String, dynamic> retur;
+  final double omzet;
+
+  double _n(Map<String, dynamic> sumber, String kunci) =>
+      (sumber[kunci] as num?)?.toDouble() ?? 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final transaksi = _n(kpi, 'transaksi');
+    final invalid = _n(kpi, 'tidakValid');
+    final diskon = _n(kpi, 'diskon');
+    final cashback = _n(kpi, 'cashback');
+    final nilaiRetur = _n(retur, 'nilai');
+    final sebelumDiskon = omzet + diskon;
+    final rows = <(String, String, String, Color)>[
+      (
+        'Kualitas transaksi',
+        '${invalid.toInt()} dari ${transaksi.toInt()}',
+        transaksi == 0
+            ? '100,0% valid'
+            : '${((transaksi - invalid) / transaksi * 100).clamp(0, 100).toStringAsFixed(1)}% valid',
+        invalid > 0 ? AppColors.danger : AppColors.success
+      ),
+      (
+        'Eksposur selisih data',
+        _rpAnalisis.format(_n(kpi, 'nilaiTidakValid')),
+        'Perlu rekonsiliasi supervisor',
+        _n(kpi, 'nilaiTidakValid') > 0 ? AppColors.danger : AppColors.success
+      ),
+      (
+        'Diskon',
+        _rpAnalisis.format(diskon),
+        sebelumDiskon == 0
+            ? '0,0% nilai sebelum diskon'
+            : '${(diskon / sebelumDiskon * 100).toStringAsFixed(1)}% nilai sebelum diskon',
+        AppColors.warning
+      ),
+      (
+        'Cashback',
+        _rpAnalisis.format(cashback),
+        omzet == 0
+            ? '0,0% omzet'
+            : '${(cashback / omzet * 100).toStringAsFixed(1)}% omzet',
+        Colors.purple
+      ),
+      (
+        'Retur penjualan',
+        _rpAnalisis.format(nilaiRetur),
+        omzet == 0
+            ? '${_n(retur, 'transaksi').toInt()} transaksi'
+            : '${(nilaiRetur / omzet * 100).toStringAsFixed(2)}% omzet · ${_n(retur, 'transaksi').toInt()} transaksi',
+        nilaiRetur > 0 ? AppColors.warning : AppColors.success
+      ),
+    ];
+    return Column(
+      children: rows
+          .map((r) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.latarLembut(r.$4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(children: [
+                  Icon(Icons.circle, size: 10, color: r.$4),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(r.$1,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Text(r.$2,
+                      style:
+                          TextStyle(color: r.$4, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                      width: 210,
+                      child: Text(r.$3,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 12))),
+                ]),
+              ))
+          .toList(),
+    );
+  }
 }
 
 class _BarRanking extends StatelessWidget {

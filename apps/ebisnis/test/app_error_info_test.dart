@@ -20,6 +20,21 @@ void main() {
     expect(gagal.info.solusi, isNotEmpty);
   });
 
+  test('ketidaksamaan rincian pesanan diterjemahkan untuk kasir', () {
+    final gagal = ApiException(
+      'Rincian pesanan tersimpan berjumlah 2, sedangkan keranjang pembayaran berjumlah 4. Muat ulang pesanan sebelum mencoba kembali.',
+      aktivitas: 'bayar',
+      teknis:
+          'java.lang.IllegalStateException: Rincian pesanan tersimpan berjumlah 2',
+    );
+
+    expect(gagal.info.judul, 'Pesanan perlu dimuat ulang');
+    expect(gagal.info.pesan, contains('Pembayaran dihentikan'));
+    expect(gagal.info.pesan, isNot(contains('IllegalStateException')));
+    expect(gagal.info.teknis, contains('IllegalStateException'));
+    expect(gagal.info.solusi.join(' '), contains('muat ulang'));
+  });
+
   testWidgets('informasi teknis error selalu dapat dibuka', (tester) async {
     String? teksTersalin;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

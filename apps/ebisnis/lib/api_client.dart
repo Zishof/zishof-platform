@@ -114,6 +114,13 @@ class ApiClient {
         kodeReferensi:
             '${json['referensi'] ?? json['traceId'] ?? referensiPermintaan}',
         kode: '${json['kode'] ?? ''}',
+        judul: '${json['judul'] ?? ''}',
+        solusi: json['solusi'] is List
+            ? (json['solusi'] as List)
+                .map((e) => '$e'.trim())
+                .where((e) => e.isNotEmpty)
+                .toList()
+            : const [],
         teknis: '${json['teknis'] ?? json['technical'] ?? ''}'.trim().isEmpty
             ? 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
                 'HTTP ${resp.statusCode}; action=$namaAksi; '
@@ -176,6 +183,8 @@ class ApiException implements Exception {
   final int? statusHttp;
   final String? kodeReferensi;
   final String? kode;
+  final String? judul;
+  final List<String> solusi;
 
   /// true bila kegagalan murni jaringan/timeout (server tidak terjangkau sama
   /// sekali) -- BEDA dari penolakan bisnis (status="error" dgn pesan dari
@@ -189,7 +198,9 @@ class ApiException implements Exception {
       this.teknis = '',
       this.statusHttp,
       this.kodeReferensi,
-      this.kode});
+      this.kode,
+      this.judul,
+      this.solusi = const []});
 
   AppErrorInfo get info {
     final dasar = AppErrorInfo.dari(
@@ -199,20 +210,41 @@ class ApiException implements Exception {
     final aktivitasPembayaran = aktivitas == 'bayar' ||
         aktivitas == 'pembayaran' ||
         (aktivitas?.endsWith('_bayar') ?? false);
+    final lower = pesan.toLowerCase();
+    final rincianPesananBerbeda =
+        (lower.contains('rincian pesanan') && lower.contains('keranjang')) ||
+            lower.contains('produk rincian pesanan tidak sama');
+    final solusiPesananBerbeda = const [
+      'Tutup jendela pembayaran, lalu muat ulang daftar pesanan.',
+      'Buka kembali pesanan tersebut dan periksa nama produk serta jumlahnya.',
+      'Jika masih berbeda, jangan membuat transaksi pengganti. Salin Detail Error dan hubungi supervisor/admin.',
+    ];
     return AppErrorInfo(
-      judul: aktivitasPembayaran && !offline
-          ? 'Pembayaran belum berhasil'
-          : dasar.judul,
+      judul: judul != null && judul!.trim().isNotEmpty
+          ? judul!.trim()
+          : rincianPesananBerbeda
+              ? 'Pesanan perlu dimuat ulang'
+              : aktivitasPembayaran && !offline
+                  ? 'Pembayaran belum berhasil'
+                  : dasar.judul,
       // `message` pada kontrak API memang ditujukan kepada pengguna dan
       // sudah disanitasi server. Stack/SQL tetap hanya muncul di [teknis].
-      pesan: offline ? dasar.pesan : pesan,
-      solusi: aktivitasPembayaran && !offline
-          ? const [
-              'Jangan langsung menekan Bayar berulang kali. Periksa Riwayat Penjualan dan Riwayat Sinkronisasi untuk memastikan transaksi pertama belum tercatat.',
-              'Periksa kembali keranjang, metode pembayaran, nominal uang diterima, member/saldo, serta status sesi kas.',
-              'Buka Informasi Teknis di bawah ini. Jika belum terselesaikan, salin seluruh detailnya dan kirimkan kepada admin/developer.',
-            ]
-          : dasar.solusi,
+      pesan: offline
+          ? dasar.pesan
+          : rincianPesananBerbeda
+              ? 'Isi pesanan di server berbeda dengan keranjang yang sedang tampil. Pembayaran dihentikan agar barang atau jumlah yang salah tidak tersimpan.'
+              : pesan,
+      solusi: solusi.isNotEmpty
+          ? solusi
+          : rincianPesananBerbeda
+              ? solusiPesananBerbeda
+              : aktivitasPembayaran && !offline
+                  ? const [
+                      'Jangan langsung menekan Bayar berulang kali. Periksa Riwayat Penjualan dan Riwayat Sinkronisasi untuk memastikan transaksi pertama belum tercatat.',
+                      'Periksa kembali keranjang, metode pembayaran, nominal uang diterima, member/saldo, serta status sesi kas.',
+                      'Buka Informasi Teknis di bawah ini. Jika belum terselesaikan, salin seluruh detailnya dan kirimkan kepada admin/developer.',
+                    ]
+                  : dasar.solusi,
       teknis: teknis.isEmpty
           ? 'action=${aktivitas ?? '-'}; HTTP=${statusHttp ?? '-'}; $pesan'
           : teknis,

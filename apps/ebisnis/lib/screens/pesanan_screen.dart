@@ -7,6 +7,7 @@ import '../sesi.dart';
 import '../services/pesanan_poller.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/panduan_stok_kosong.dart';
 import 'kasir_screen.dart';
@@ -166,8 +167,8 @@ class _PesananScreenState extends State<PesananScreen> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'menghitung ulang pesanan');
       }
     }
   }
@@ -277,6 +278,7 @@ class _PesananScreenState extends State<PesananScreen> {
       var nilaiBerhasil = 0.0;
       final gagal = <String>[];
       String? detailStokKurang;
+      Object? errorPertama;
       for (final pesanan in tertahan) {
         try {
           await ApiClient.instance
@@ -284,10 +286,14 @@ class _PesananScreenState extends State<PesananScreen> {
           berhasil++;
           nilaiBerhasil += pesanan.totalBiaya;
         } catch (e) {
+          errorPertama ??= e;
           if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
             detailStokKurang ??= '${pesanan.kode}: ${e.pesan}';
           }
-          gagal.add('${pesanan.kode}: $e');
+          final pesanMudah = e is ApiException
+              ? e.info.pesan
+              : AppErrorInfo.dari(e, aktivitas: 'membayar pesanan').pesan;
+          gagal.add('${pesanan.kode}: $pesanMudah');
         }
       }
 
@@ -334,14 +340,15 @@ class _PesananScreenState extends State<PesananScreen> {
           detail: detailStokKurang,
         );
       }
+      if (errorPertama != null && mounted) {
+        final e = errorPertama;
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'membayar semua transaksi tertahan');
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Daftar transaksi tertahan belum dapat diproses. '
-            'Periksa koneksi lalu coba lagi. Detail: $e',
-          ),
-        ));
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'membayar semua transaksi tertahan');
       }
     } finally {
       setStateIfMounted(() => _sedangMembayarSemuaTertahan = false);
@@ -873,8 +880,8 @@ class _PesananScreenState extends State<PesananScreen> {
           ));
           await tampilkanPanduanStokKosong(context, detail: e.pesan);
         } else {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.toString())));
+          await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+              aktivitas: 'menyelesaikan pembayaran pesanan');
         }
       }
     }
@@ -942,8 +949,8 @@ class _PesananScreenState extends State<PesananScreen> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'membatalkan pesanan');
       }
     }
   }
