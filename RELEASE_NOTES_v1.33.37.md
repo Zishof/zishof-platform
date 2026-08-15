@@ -17,3 +17,13 @@
   dan interval retry otomatis yang dapat diatur (bawaan 10 menit).
 - Mempertahankan transaksi yang sudah sukses di jurnal lokal sebagai bahan
   audit; hanya statusnya yang berubah menjadi Sukses dan datanya tidak dihapus.
+- Menambahkan kartu keputusan dashboard per kasir, jenis produk, produk
+  terlaris, dan toko; seluruh kartu dapat diklik untuk melihat ringkasannya.
+- Menambahkan pengendalian benturan promo pada Aturan Diskon dan Diskon Grup:
+  prioritas, izin penggabungan, dasar perhitungan bertingkat, serta grup
+  eksklusif. Bawaan aman memilih satu promo berprioritas tertinggi.
+- Menyeragamkan urutan dan penumpukan diskon pada API POS, ZK Kasir, dan toko
+  online anggota, termasuk penerapan promo grup pada jalur ZK.
+- Memindahkan seluruh tombol tindakan setelah pembayaran ke atas pratinjau
+  struk agar kasir dapat langsung memulai transaksi baru tanpa menggulir
+  rincian struk yang panjang.

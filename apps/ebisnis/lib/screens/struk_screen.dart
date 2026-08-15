@@ -730,6 +730,20 @@ class StrukScreen extends StatelessWidget {
                   children: [
                     _StatusTransaksi(tersinkron: tersinkron),
                     const SizedBox(height: 14),
+                    _TombolStruk(
+                      onCetak: _cetakStruk,
+                      tampilkanTransaksiBaru: !modeCetakUlang,
+                      tampilkanBukaLaci: !modeCetakUlang,
+                      onTransaksiBaru: () =>
+                          Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const KasirScreen()),
+                      ),
+                      // Alur pembayaran dari Pesanan membuka Kasir sebagai
+                      // route sementara, lalu menggantinya dengan layar struk.
+                      // Pop dari sini mengembalikan kasir ke daftar Pesanan.
+                      onKembali: () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(height: 16),
                     _StrukPreview(
                       kode: kode,
                       waktu: waktu,
@@ -752,21 +766,6 @@ class StrukScreen extends StatelessWidget {
                       formatUang: _formatUang,
                       formatAngka: (v) => _formatAngka.format(v),
                       formatQty: _formatQty,
-                    ),
-                    const SizedBox(height: 16),
-                    _TombolStruk(
-                      onCetak: _cetakStruk,
-                      tampilkanTransaksiBaru: !modeCetakUlang,
-                      tampilkanBukaLaci: !modeCetakUlang,
-                      onTransaksiBaru: () =>
-                          Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const KasirScreen()),
-                      ),
-                      // Alur pembayaran dari Pesanan membuka Kasir sebagai
-                      // route sementara, lalu menggantinya dengan layar struk.
-                      // Pop dari sini karena itu mengembalikan kasir ke daftar
-                      // Pesanan asal tanpa membuat transaksi kosong baru.
-                      onKembali: () => Navigator.of(context).maybePop(),
                     ),
                   ],
                 ),

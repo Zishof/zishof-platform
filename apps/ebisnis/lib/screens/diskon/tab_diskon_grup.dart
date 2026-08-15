@@ -138,6 +138,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
                     DataColumn(label: Text('PRODUK'), numeric: true),
                     DataColumn(label: Text('NILAI')),
                     DataColumn(label: Text('JENIS')),
+                    DataColumn(label: Text('PRIORITAS')),
                     DataColumn(label: Text('STATUS')),
                   ],
                   rows: _data.map((e) {
@@ -163,6 +164,8 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
                         DataCell(Text(e['potonganLangsung'] == true
                             ? 'Potong struk'
                             : 'Cashback')),
+                        DataCell(Text(
+                            '${e['prioritas'] ?? 100}${e['dapatDigabung'] == true ? ' • Gabung' : ' • Tunggal'}')),
                         DataCell(Chip(
                             label: Text(
                                 e['aktif'] == true ? 'Aktif' : 'Nonaktif'))),
@@ -227,14 +230,18 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
       _persen,
       _nominal,
       _cashback,
-      _maks;
+      _maks,
+      _prioritas,
+      _grupEksklusif;
   late List<Map<String, dynamic>> _produk;
   DateTime? _mulai, _selesai;
   bool _langsung = true,
       _aktif = true,
       _khususMember = false,
+      _dapatDigabung = false,
       _saving = false,
       _loadingKriteria = true;
+  String _dasarPerhitungan = 'SETELAH_DISKON';
   List<Map<String, dynamic>> _jenisMember = [], _tipeMember = [];
   final Set<int> _jenisTerpilih = {}, _tipeTerpilih = {};
   String? _error;
@@ -249,9 +256,14 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
     _nominal = TextEditingController(text: '${a?['nominal'] ?? 0}');
     _cashback = TextEditingController(text: '${a?['cashback'] ?? 0}');
     _maks = TextEditingController(text: '${a?['maksimalPotongan'] ?? 0}');
+    _prioritas = TextEditingController(text: '${a?['prioritas'] ?? 100}');
+    _grupEksklusif =
+        TextEditingController(text: '${a?['grupEksklusif'] ?? ''}');
     _langsung = a?['potonganLangsung'] ?? true;
     _aktif = a?['aktif'] ?? true;
     _khususMember = a?['khususMember'] ?? false;
+    _dapatDigabung = a?['dapatDigabung'] ?? false;
+    _dasarPerhitungan = '${a?['dasarPerhitungan'] ?? 'SETELAH_DISKON'}';
     for (final x in (a?['jenisMemberJson'] as List?) ?? const []) {
       if (x is num) _jenisTerpilih.add(x.toInt());
     }
@@ -282,7 +294,16 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
 
   @override
   void dispose() {
-    for (final c in [_nama, _ket, _persen, _nominal, _cashback, _maks]) {
+    for (final c in [
+      _nama,
+      _ket,
+      _persen,
+      _nominal,
+      _cashback,
+      _maks,
+      _prioritas,
+      _grupEksklusif
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -454,6 +475,10 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
         'cashback': double.tryParse(_cashback.text.replaceAll(',', '.')) ?? 0,
         'maksimal_potongan':
             double.tryParse(_maks.text.replaceAll(',', '.')) ?? 0,
+        'prioritas': int.tryParse(_prioritas.text) ?? 100,
+        'dapat_digabung': _dapatDigabung,
+        'dasar_perhitungan': _dasarPerhitungan,
+        'grup_eksklusif': _grupEksklusif.text.trim(),
         'potongan_langsung': _langsung,
         'tanggal_mulai': _iso(_mulai),
         'tanggal_selesai': _iso(_selesai),
@@ -550,6 +575,54 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
                           ? 'Selesai'
                           : date.format(_selesai!))),
                 ]),
+                SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Boleh digabung dengan promo lain'),
+                    subtitle: const Text(
+                        'Default mati. Jika aktif, aturan dihitung dari prioritas terbesar ke terkecil.'),
+                    value: _dapatDigabung,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _dapatDigabung = v)),
+                Wrap(spacing: 12, runSpacing: 12, children: [
+                  SizedBox(
+                    width: 210,
+                    child: TextFormField(
+                      controller: _prioritas,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          labelText: 'Prioritas',
+                          helperText: 'Lebih besar dihitung lebih dahulu'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 260,
+                    child: DropdownButtonFormField<String>(
+                      value: _dasarPerhitungan,
+                      decoration: const InputDecoration(
+                          labelText: 'Dasar perhitungan promo berikutnya'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'SETELAH_DISKON',
+                            child: Text('Harga setelah diskon sebelumnya')),
+                        DropdownMenuItem(
+                            value: 'HARGA_AWAL', child: Text('Harga awal')),
+                      ],
+                      onChanged: (v) => setStateIfMounted(
+                          () => _dasarPerhitungan = v ?? 'SETELAH_DISKON'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 260,
+                    child: TextFormField(
+                      controller: _grupEksklusif,
+                      decoration: const InputDecoration(
+                          labelText: 'Grup eksklusif (opsional)',
+                          helperText: 'Kode sama tidak dapat ditumpuk'),
+                    ),
+                  ),
+                ]),
+                const Text(
+                    'Contoh: promo 50% prioritas 200 lalu promo 20% prioritas 100 dengan dasar harga setelah diskon menghasilkan potongan efektif 60%.'),
                 SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Potong langsung di struk'),

@@ -213,7 +213,7 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                       ),
                       const SizedBox(height: 12),
                       AppDataTable(
-                        minWidth: 920,
+                        minWidth: 1080,
                         emptyText: 'Belum ada aturan diskon.',
                         columns: const [
                           AppTableColumn('Aturan', flex: 3),
@@ -221,6 +221,8 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                           AppTableColumn('Jenis', flex: 2),
                           AppTableColumn('Nilai',
                               flex: 2, align: TextAlign.right),
+                          AppTableColumn('Prioritas',
+                              flex: 2, align: TextAlign.center),
                           AppTableColumn('Status',
                               flex: 2, align: TextAlign.center),
                         ],
@@ -278,6 +280,10 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 12.5)),
+                              AppTableCell.text(
+                                  '${a['prioritas'] ?? 100}${a['dapatDigabung'] == true ? ' • Gabung' : ' • Tunggal'}',
+                                  flex: 2,
+                                  align: TextAlign.center),
                               AppTableCell(
                                 flex: 2,
                                 align: TextAlign.center,
@@ -330,6 +336,8 @@ class _FormDiskonState extends State<_FormDiskon> {
   late final TextEditingController _persentase;
   late final TextEditingController _nominal;
   late final TextEditingController _maksimalPotongan;
+  late final TextEditingController _prioritas;
+  late final TextEditingController _grupEksklusif;
   late final TextEditingController _tokoId;
   bool _berlakuSemuaProduk = true;
   bool _berlakuSemuaMember = true;
@@ -337,6 +345,8 @@ class _FormDiskonState extends State<_FormDiskon> {
   bool _berlakuPerHariDanPerToko = false;
   bool _aktif = true;
   bool _aktivasiManual = false;
+  bool _dapatDigabung = false;
+  String _dasarPerhitungan = 'SETELAH_DISKON';
   int? _jenisAnggotaId;
   int? _tipeAnggotaId;
   bool _menyimpan = false;
@@ -366,10 +376,15 @@ class _FormDiskonState extends State<_FormDiskon> {
     _persentase = TextEditingController(text: '${a?['persentase'] ?? 0}');
     _nominal = TextEditingController(text: '${a?['nominal'] ?? 0}');
     _maksimalPotongan = TextEditingController();
+    _prioritas = TextEditingController(text: '${a?['prioritas'] ?? 100}');
+    _grupEksklusif =
+        TextEditingController(text: '${a?['grupEksklusif'] ?? ''}');
     _tokoId = TextEditingController();
     _potonganLangsung = a?['potonganLangsung'] ?? true;
     _aktif = a?['aktif'] ?? true;
     _aktivasiManual = a?['aktivasiManual'] == true;
+    _dapatDigabung = a?['dapatDigabung'] == true;
+    _dasarPerhitungan = '${a?['dasarPerhitungan'] ?? 'SETELAH_DISKON'}';
     _berlakuSemuaProduk = (a?['produkNama'] as String?)?.isEmpty ?? true;
     _mulai = _uraiTanggalServer(a?['tanggalMulai'] as String?);
     _selesai = _uraiTanggalServer(a?['tanggalSelesai'] as String?);
@@ -433,6 +448,8 @@ class _FormDiskonState extends State<_FormDiskon> {
     _persentase.dispose();
     _nominal.dispose();
     _maksimalPotongan.dispose();
+    _prioritas.dispose();
+    _grupEksklusif.dispose();
     _tokoId.dispose();
     super.dispose();
   }
@@ -458,6 +475,10 @@ class _FormDiskonState extends State<_FormDiskon> {
         'nominal': double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
         'maksimal_potongan':
             double.tryParse(_maksimalPotongan.text.replaceAll(',', '.')) ?? 0,
+        'prioritas': int.tryParse(_prioritas.text) ?? 100,
+        'dapat_digabung': _dapatDigabung,
+        'dasar_perhitungan': _dasarPerhitungan,
+        'grup_eksklusif': _grupEksklusif.text.trim(),
         'potongan_langsung': _potonganLangsung,
         'berlaku_per_hari_dan_per_toko': _berlakuPerHariDanPerToko,
         'aktif': _aktif,
@@ -490,6 +511,8 @@ class _FormDiskonState extends State<_FormDiskon> {
         expand: false,
         builder: (context, scrollController) => Form(
           key: _formKey,
+          // AppFormSheet menempatkan actions setelah children secara semantik.
+          // ignore: sort_child_properties_last
           child: AppFormSheet(
             scrollController: scrollController,
             title: ubah ? 'Ubah Aturan Diskon' : 'Tambah Aturan Diskon',
@@ -498,6 +521,7 @@ class _FormDiskonState extends State<_FormDiskon> {
                 : 'Susun aturan potongan yang akan dipakai saat transaksi kasir.',
             icon: ubah ? Icons.edit_calendar_outlined : Icons.discount_outlined,
             errorText: _error,
+            // ignore: sort_child_properties_last
             children: [
               AppFormSection(
                 judul: 'Informasi Aturan',
@@ -613,6 +637,46 @@ class _FormDiskonState extends State<_FormDiskon> {
                     controller: _maksimalPotongan,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Boleh Digabung dengan Promo Lain',
+                    subtitle:
+                        'Default mati. Jika aktif, promo dihitung menurut prioritas terbesar lebih dahulu.',
+                    value: _dapatDigabung,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _dapatDigabung = v),
+                  ),
+                  Row(children: [
+                    Expanded(
+                      child: AppFormTextField(
+                        label: 'Prioritas (lebih besar lebih dahulu)',
+                        controller: _prioritas,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _dasarPerhitungan,
+                        decoration: AppFormStyle.fieldDecoration(context,
+                            labelText: 'Dasar Perhitungan'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'SETELAH_DISKON',
+                              child: Text('Harga setelah diskon')),
+                          DropdownMenuItem(
+                              value: 'HARGA_AWAL', child: Text('Harga awal')),
+                        ],
+                        onChanged: (v) => setStateIfMounted(
+                            () => _dasarPerhitungan = v ?? 'SETELAH_DISKON'),
+                      ),
+                    ),
+                  ]),
+                  AppFormTextField(
+                    label: 'Grup Eksklusif (opsional)',
+                    controller: _grupEksklusif,
+                    helperText:
+                        'Promo dengan kode grup yang sama tidak boleh ditumpuk.',
                   ),
                   AppFormSwitchTile(
                     title: 'Berlaku Per Hari & Per Toko',

@@ -1094,6 +1094,98 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     );
   }
 
+  Future<void> _lihatRingkasanKartu(
+      String judul, Map<String, dynamic> baris) async {
+    final label = '${baris['label'] ?? 'Tidak diketahui'}';
+    final qty = (baris['qty'] as num?)?.toDouble();
+    final trx = (baris['trx'] as num?)?.toInt();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(judul),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            Text('Omzet: ${formatRupiahDasbor.format(baris['nilai'] ?? 0)}'),
+            if (trx != null) Text('Jumlah transaksi: $trx'),
+            if (qty != null)
+              Text(
+                  'Jumlah barang: ${qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)}'),
+            const SizedBox(height: 12),
+            Text(
+              'Angka mengikuti periode, toko, dan filter yang sedang dipilih pada dashboard.',
+              style: TextStyle(color: AppColors.textSecondaryOf(context)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuAnalitik({
+    required String judul,
+    required List<Map<String, dynamic>> data,
+    required IconData ikon,
+  }) {
+    if (data.isEmpty) return const SizedBox.shrink();
+    final warna = [
+      AppColors.primary,
+      AppColors.success,
+      AppColors.info,
+      AppColors.warning,
+      AppColors.teal,
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(judul,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondaryOf(context))),
+          const SizedBox(height: 8),
+          LayoutBuilder(builder: (context, c) {
+            final kolom = c.maxWidth >= 1000 ? 4 : (c.maxWidth >= 700 ? 3 : 2);
+            final lebarKolom = (c.maxWidth - (12 * (kolom - 1))) / kolom;
+            return GridView.count(
+              crossAxisCount: kolom,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: lebarKolom / 102,
+              children: [
+                for (var i = 0; i < data.length; i++)
+                  AppKpiCard(
+                    icon: ikon,
+                    warna: warna[i % warna.length],
+                    nilai: formatRupiahDasbor.format(data[i]['nilai'] ?? 0),
+                    label: '${data[i]['label'] ?? 'Tidak diketahui'}'
+                        '${data[i]['trx'] != null ? ' • ${data[i]['trx']} trx' : ''}'
+                        '${data[i]['qty'] != null ? ' • ${(data[i]['qty'] as num).toStringAsFixed(0)} item' : ''}',
+                    tooltip: 'Klik untuk melihat ringkasan $judul',
+                    onTap: () => _lihatRingkasanKartu(judul, data[i]),
+                  ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_memuat || _error != null) {
@@ -1108,6 +1200,14 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     final totalHalaman = (total / _pageSize).ceil().clamp(1, 999999);
     final metodePembayaran =
         ((d['metodeBayar'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final omzetKasir =
+        ((d['omzetKasir'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final omzetKategori =
+        ((d['omzetKategori'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final produkTerlaris =
+        ((d['produkTerlaris'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final omzetToko =
+        ((d['omzetToko'] as List?) ?? []).cast<Map<String, dynamic>>();
 
     Map<String, dynamic> k(String key) =>
         (kpi[key] as Map<String, dynamic>?) ?? {};
@@ -1239,6 +1339,22 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               );
             }),
           ],
+          _kartuAnalitik(
+              judul: 'Omzet per Kasir',
+              data: omzetKasir,
+              ikon: Icons.badge_outlined),
+          _kartuAnalitik(
+              judul: 'Omzet per Jenis Produk',
+              data: omzetKategori,
+              ikon: Icons.category_outlined),
+          _kartuAnalitik(
+              judul: 'Produk Terlaris',
+              data: produkTerlaris,
+              ikon: Icons.local_fire_department_outlined),
+          _kartuAnalitik(
+              judul: 'Omzet per Toko',
+              data: omzetToko,
+              ikon: Icons.storefront_outlined),
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
