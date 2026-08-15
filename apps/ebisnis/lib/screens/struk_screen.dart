@@ -320,6 +320,18 @@ class StrukScreen extends StatelessWidget {
 
   double _subtotalBaris(Map<String, dynamic> i) => _harga(i) * _qty(i);
 
+  double _diskonBaris(Map<String, dynamic> i) =>
+      (i['diskon'] as num?)?.toDouble() ?? 0;
+
+  double _cashbackBaris(Map<String, dynamic> i) =>
+      (i['cashback'] as num?)?.toDouble() ?? 0;
+
+  double get _totalDiskonItem =>
+      item.fold<double>(0, (sum, i) => sum + _diskonBaris(i));
+
+  double get _totalCashbackItem =>
+      item.fold<double>(0, (sum, i) => sum + _cashbackBaris(i));
+
   String _formatUang(num nilai) => '${_formatAngka.format(nilai)},-';
 
   String _formatQty(num nilai) {
@@ -490,12 +502,16 @@ class StrukScreen extends StatelessWidget {
           pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
           pw.SizedBox(height: 4),
           _totalPdf('Subtotal', _formatUang(_subtotal)),
+          if (_totalDiskonItem > 0)
+            _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
           if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
           _totalPdf(
             'Grand Total',
             _formatUang(total),
             besar: true,
           ),
+          if (_totalCashbackItem > 0)
+            _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
           if (uangDiterima != null)
             _totalPdf('Tunai', _formatUang(uangDiterima!)),
           if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
@@ -647,6 +663,12 @@ class StrukScreen extends StatelessWidget {
               pw.Text(_formatUang(_subtotalBaris(i))),
             ],
           ),
+          if (_diskonBaris(i) > 0)
+            pw.Text('Diskon -${_formatUang(_diskonBaris(i))}',
+                style: const pw.TextStyle(fontSize: 8)),
+          if (_cashbackBaris(i) > 0)
+            pw.Text('Cashback +${_formatUang(_cashbackBaris(i))}',
+                style: const pw.TextStyle(fontSize: 8)),
         ],
       ),
     );
@@ -715,6 +737,8 @@ class StrukScreen extends StatelessWidget {
                       pembayaran: _pembayaranEfektif,
                       tersinkron: tersinkron,
                       subtotal: _subtotal,
+                      totalDiskon: _totalDiskonItem,
+                      totalCashback: _totalCashbackItem,
                       jumlahItem: _jumlahItem,
                       kasir: _labelKasir(),
                       pelanggan: _labelPelanggan(),
@@ -800,6 +824,8 @@ class _StrukPreview extends StatelessWidget {
   final List<Map<String, dynamic>> pembayaran;
   final bool tersinkron;
   final double subtotal;
+  final double totalDiskon;
+  final double totalCashback;
   final int jumlahItem;
   final String kasir;
   final String pelanggan;
@@ -821,6 +847,8 @@ class _StrukPreview extends StatelessWidget {
     required this.pembayaran,
     required this.tersinkron,
     required this.subtotal,
+    required this.totalDiskon,
+    required this.totalCashback,
     required this.jumlahItem,
     required this.kasir,
     required this.pelanggan,
@@ -914,12 +942,18 @@ class _StrukPreview extends StatelessWidget {
                   subtotal: formatUang(
                     (i['harga'] as num) * (i['qty'] as num),
                   ),
+                  diskon: (i['diskon'] as num?)?.toDouble() ?? 0,
+                  cashback: (i['cashback'] as num?)?.toDouble() ?? 0,
+                  formatUang: formatUang,
                 ),
               ),
               const _GarisStruk(),
               Text('$jumlahItem item'),
               const SizedBox(height: 8),
               _TotalStruk(label: 'Subtotal', value: formatUang(subtotal)),
+              if (totalDiskon > 0)
+                _TotalStruk(
+                    label: 'Diskon', value: '-${formatUang(totalDiskon)}'),
               if (pajak > 0)
                 _TotalStruk(label: 'Pajak', value: formatUang(pajak)),
               _TotalStruk(
@@ -927,6 +961,9 @@ class _StrukPreview extends StatelessWidget {
                 value: formatUang(total),
                 emphasized: true,
               ),
+              if (totalCashback > 0)
+                _TotalStruk(
+                    label: 'Cashback', value: '+${formatUang(totalCashback)}'),
               if (uangDiterima != null)
                 _TotalStruk(label: 'Tunai', value: formatUang(uangDiterima!)),
               if (kembalian != null)
@@ -1141,12 +1178,18 @@ class _ItemStruk extends StatelessWidget {
   final String qty;
   final String harga;
   final String subtotal;
+  final double diskon;
+  final double cashback;
+  final String Function(num nilai) formatUang;
 
   const _ItemStruk({
     required this.nama,
     required this.qty,
     required this.harga,
     required this.subtotal,
+    required this.diskon,
+    required this.cashback,
+    required this.formatUang,
   });
 
   @override
@@ -1176,6 +1219,12 @@ class _ItemStruk extends StatelessWidget {
               ),
             ],
           ),
+          if (diskon > 0)
+            Text('Diskon -${formatUang(diskon)}',
+                style: const TextStyle(fontSize: 11)),
+          if (cashback > 0)
+            Text('Cashback +${formatUang(cashback)}',
+                style: const TextStyle(fontSize: 11, color: AppColors.success)),
         ],
       ),
     );

@@ -319,18 +319,20 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
   'riwayatPenjualan': SpesifikasiBantuanMenu(
       judul: 'Riwayat Penjualan',
       tujuan:
-          'menelusuri transaksi, mencetak ulang, memeriksa pembayaran, dan membuka rincian',
+          'menelusuri transaksi, mencetak ulang, memeriksa pembayaran, membuka rincian, dan menemukan perbedaan total master dengan rincian',
       workflow: [
         'Pilih periode',
         'Cari transaksi',
+        'Aktifkan Transaksi tidak valid bila perlu',
         'Buka detail',
-        'Cocokkan pembayaran',
+        'Cocokkan total master dan rincian',
         'Cetak ulang bila perlu',
         'Ekspor'
       ],
       ilustrasi: [
         'Filter periode',
         'Pencarian nomor',
+        'Checkbox transaksi tidak valid',
         'Tabel transaksi',
         'Detail item',
         'Aksi cetak'

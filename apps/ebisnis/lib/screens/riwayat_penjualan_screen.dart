@@ -11,6 +11,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import 'struk_screen.dart';
+import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -481,21 +482,31 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
   int _total = 0;
+  double _omzetTotal = 0;
   DateTime? _mulai;
   DateTime? _sampai;
   String _cariPembeli = '';
+  bool _hanyaTransaksiTidakValid = false;
 
   @override
   void initState() {
     super.initState();
+    final hariIni = DateTime.now();
+    _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
+    _sampai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _muat();
   }
 
-  bool get _defaultTanpaFilter =>
-      _mulai == null &&
-      _sampai == null &&
-      _cariPembeli.isEmpty &&
-      _halaman == 1;
+  bool get _defaultTanpaFilter {
+    final hariIni = _formatTanggalServer.format(DateTime.now());
+    return _mulai != null &&
+        _sampai != null &&
+        _formatTanggalServer.format(_mulai!) == hariIni &&
+        _formatTanggalServer.format(_sampai!) == hariIni &&
+        _cariPembeli.isEmpty &&
+        !_hanyaTransaksiTidakValid &&
+        _halaman == 1;
+  }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -511,6 +522,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         'includeSplitPembayaran': true,
         'sertakanPembayaran': true,
         'withPayments': true,
+        'transaksiTidakValid': _hanyaTransaksiTidakValid,
         'page': _halaman,
         'pageSize': _pageSize,
       };
@@ -525,6 +537,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       setStateIfMounted(() {
         _data = data;
         _total = _normalisasiTotalTransaksi(hasil, data.length);
+        _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
+            data.fold<double>(
+                0, (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
       });
       if (_defaultTanpaFilter) {
         unawaited(CoreDb.instance
@@ -542,6 +557,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           setStateIfMounted(() {
             _data = data;
             _total = _normalisasiTotalTransaksi(hasil, data.length);
+            _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
+                data.fold<double>(0,
+                    (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
             _error = null;
           });
           if (mounted) setStateIfMounted(() => _memuat = false);
@@ -612,6 +630,24 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                         _formatRupiah.format(hasil['totalBiaya'] ?? 0),
                         AppColors.success),
                   ]),
+                  if (row['transaksiTidakValid'] == true) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(AppColors.danger),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Transaksi tidak valid: total master ${_formatRupiah.format(row['totalMaster'] ?? 0)}, total rincian ${_formatRupiah.format(row['totalDetail'] ?? 0)}, selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}.',
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Divider(),
                   ...List.generate(items.length, (idx) {
                     final i = items[idx];
@@ -786,7 +822,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   Future<void> _cetakUlang(Map<String, dynamic> row,
       Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
     final itemStruk = items
-        .map((i) => {'nama': i['nama'], 'qty': i['qty'], 'harga': i['harga']})
+        .map((i) => {
+              'nama': i['nama'],
+              'qty': i['qty'],
+              'harga': i['harga'],
+              'diskon': i['diskon'] ?? 0,
+              'cashback': i['cashback'] ?? 0,
+            })
         .toList();
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => StrukScreen(
@@ -818,6 +860,19 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 20),
           children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                icon: const Icon(Icons.insights_outlined, size: 18),
+                label: const Text('Analisis Penjualan'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const RiwayatPenjualanAnalisisScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               height: 96,
               child: ListView(
@@ -836,9 +891,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                     child: AppKpiCard(
                       icon: Icons.payments_outlined,
                       warna: AppColors.success,
-                      nilai: _formatRupiah.format(_data.fold<num>(
-                          0, (a, r) => a + ((r['totalBiaya'] as num?) ?? 0))),
-                      label: 'Omzet (hal. ini)',
+                      nilai: _formatRupiah.format(_omzetTotal),
+                      label: _mulai != null &&
+                              _sampai != null &&
+                              _formatTanggalServer.format(_mulai!) ==
+                                  _formatTanggalServer.format(_sampai!)
+                          ? 'Omzet ${_formatTanggalServer.format(_mulai!)}'
+                          : 'Omzet seluruh hasil filter',
                     ),
                   ),
                 ],
@@ -892,12 +951,50 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  AppSearchField(
-                    hintText: 'Cari nama pembeli / nomor nota...',
-                    debounce: const Duration(milliseconds: 450),
-                    onChanged: (v) {
-                      _cariPembeli = v;
-                      _terapkan();
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final pencarian = AppSearchField(
+                        hintText: 'Cari nama pembeli / nomor nota...',
+                        debounce: const Duration(milliseconds: 450),
+                        onChanged: (v) {
+                          _cariPembeli = v;
+                          _terapkan();
+                        },
+                      );
+                      final filterTidakValid = SizedBox(
+                        width: 250,
+                        child: CheckboxListTile(
+                          value: _hanyaTransaksiTidakValid,
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 0),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text('Transaksi tidak valid'),
+                          subtitle: const Text('Total master ≠ total rincian'),
+                          onChanged: (value) {
+                            setState(() =>
+                                _hanyaTransaksiTidakValid = value ?? false);
+                            _terapkan();
+                          },
+                        ),
+                      );
+                      if (constraints.maxWidth < 700) {
+                        return Column(
+                          children: [
+                            pencarian,
+                            Align(
+                                alignment: Alignment.centerLeft,
+                                child: filterTidakValid),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: pencarian),
+                          const SizedBox(width: 12),
+                          filterTidakValid,
+                        ],
+                      );
                     },
                   ),
                 ],
@@ -948,12 +1045,34 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                               warna: AppColors.primary),
                         ),
                       ),
-                      AppTableCell.text(
-                        _formatRupiah.format(row['totalBiaya'] ?? 0),
+                      AppTableCell(
                         flex: 2,
                         align: TextAlign.right,
-                        style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w800),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatRupiah.format(row['totalBiaya'] ?? 0),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: row['transaksiTidakValid'] == true
+                                    ? AppColors.danger
+                                    : null,
+                              ),
+                            ),
+                            if (row['transaksiTidakValid'] == true)
+                              Text(
+                                'Selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                       AppTableCell(
                         width: 74,

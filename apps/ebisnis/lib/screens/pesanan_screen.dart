@@ -516,6 +516,8 @@ class _PesananScreenState extends State<PesananScreen> {
                     'nama': i.indukId != null ? '   + ${i.nama}' : i.nama,
                     'qty': i.jumlah,
                     'harga': i.harga,
+                    'diskon': i.diskon,
+                    'cashback': i.cashback,
                   })
               .toList(),
           total: p.totalBiaya,

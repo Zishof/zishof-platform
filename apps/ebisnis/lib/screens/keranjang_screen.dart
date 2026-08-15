@@ -920,6 +920,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           'nama': i.produk.nama,
           'qty': i.jumlah,
           'harga': i.produk.hargaJual,
+          'diskon': i.diskon,
+          'cashback': i.cashback,
         });
         for (final e in i.ekstra) {
           itemStruk.add({

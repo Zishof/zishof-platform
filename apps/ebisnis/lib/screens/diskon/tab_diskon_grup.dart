@@ -222,10 +222,21 @@ class _FormDiskonGrup extends StatefulWidget {
 
 class _FormDiskonGrupState extends State<_FormDiskonGrup> {
   final _form = GlobalKey<FormState>();
-  late final TextEditingController _nama, _ket, _persen, _nominal, _maks;
+  late final TextEditingController _nama,
+      _ket,
+      _persen,
+      _nominal,
+      _cashback,
+      _maks;
   late List<Map<String, dynamic>> _produk;
   DateTime? _mulai, _selesai;
-  bool _langsung = true, _aktif = true, _saving = false;
+  bool _langsung = true,
+      _aktif = true,
+      _khususMember = false,
+      _saving = false,
+      _loadingKriteria = true;
+  List<Map<String, dynamic>> _jenisMember = [], _tipeMember = [];
+  final Set<int> _jenisTerpilih = {}, _tipeTerpilih = {};
   String? _error;
 
   @override
@@ -236,17 +247,42 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
     _ket = TextEditingController(text: '${a?['keterangan'] ?? ''}');
     _persen = TextEditingController(text: '${a?['persentase'] ?? 0}');
     _nominal = TextEditingController(text: '${a?['nominal'] ?? 0}');
+    _cashback = TextEditingController(text: '${a?['cashback'] ?? 0}');
     _maks = TextEditingController(text: '${a?['maksimalPotongan'] ?? 0}');
     _langsung = a?['potonganLangsung'] ?? true;
     _aktif = a?['aktif'] ?? true;
+    _khususMember = a?['khususMember'] ?? false;
+    for (final x in (a?['jenisMemberJson'] as List?) ?? const []) {
+      if (x is num) _jenisTerpilih.add(x.toInt());
+    }
+    for (final x in (a?['tipeMemberJson'] as List?) ?? const []) {
+      if (x is num) _tipeTerpilih.add(x.toInt());
+    }
     _mulai = DateTime.tryParse('${a?['tanggalMulai'] ?? ''}');
     _selesai = DateTime.tryParse('${a?['tanggalSelesai'] ?? ''}');
     _produk = List<Map<String, dynamic>>.from(widget.detailAwal);
+    _muatKriteriaMember();
+  }
+
+  Future<void> _muatKriteriaMember() async {
+    try {
+      final r = await ApiClient.instance.aksi('diskon_grup_opsi_member', {});
+      setStateIfMounted(() {
+        _jenisMember =
+            ((r['jenisMember'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _tipeMember =
+            ((r['tipeMember'] as List?) ?? []).cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = 'Pilihan member gagal dimuat: $e');
+    } finally {
+      setStateIfMounted(() => _loadingKriteria = false);
+    }
   }
 
   @override
   void dispose() {
-    for (final c in [_nama, _ket, _persen, _nominal, _maks]) {
+    for (final c in [_nama, _ket, _persen, _nominal, _cashback, _maks]) {
       c.dispose();
     }
     super.dispose();
@@ -415,12 +451,16 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
         'keterangan': _ket.text.trim(),
         'persentase': double.tryParse(_persen.text.replaceAll(',', '.')) ?? 0,
         'nominal': double.tryParse(_nominal.text.replaceAll(',', '.')) ?? 0,
+        'cashback': double.tryParse(_cashback.text.replaceAll(',', '.')) ?? 0,
         'maksimal_potongan':
             double.tryParse(_maks.text.replaceAll(',', '.')) ?? 0,
         'potongan_langsung': _langsung,
         'tanggal_mulai': _iso(_mulai),
         'tanggal_selesai': _iso(_selesai),
-        'berlaku_semua_member': true,
+        'berlaku_semua_member': !_khususMember,
+        'khusus_member': _khususMember,
+        'jenis_member_ids': _jenisTerpilih.toList(),
+        'tipe_member_ids': _tipeTerpilih.toList(),
         'aktif': _aktif,
         'produk': _produk.map((p) => {'id': p['id']}).toList(),
       });
@@ -487,6 +527,13 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
                   SizedBox(
                       width: 210,
                       child: TextFormField(
+                          controller: _cashback,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Cashback per item'))),
+                  SizedBox(
+                      width: 210,
+                      child: TextFormField(
                           controller: _maks,
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
@@ -510,6 +557,49 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
                         const Text('Matikan untuk menjadikannya cashback.'),
                     value: _langsung,
                     onChanged: (v) => setStateIfMounted(() => _langsung = v)),
+                SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Khusus untuk member'),
+                    subtitle: const Text(
+                        'Jika mati, promo berlaku juga untuk pembeli umum. Jika aktif, jenis dan tipe member dapat dibatasi.'),
+                    value: _khususMember,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _khususMember = v)),
+                if (_khususMember) ...[
+                  const SizedBox(height: 8),
+                  Text('Jenis Member (boleh lebih dari satu)',
+                      style: Theme.of(context).textTheme.titleSmall),
+                  if (_loadingKriteria)
+                    const LinearProgressIndicator()
+                  else
+                    Wrap(
+                        spacing: 8,
+                        children: _jenisMember.map((e) {
+                          final id = (e['id'] as num).toInt();
+                          return FilterChip(
+                              label: Text('${e['nama']}'),
+                              selected: _jenisTerpilih.contains(id),
+                              onSelected: (v) => setStateIfMounted(() => v
+                                  ? _jenisTerpilih.add(id)
+                                  : _jenisTerpilih.remove(id)));
+                        }).toList()),
+                  const SizedBox(height: 8),
+                  Text('Tipe Member (boleh lebih dari satu)',
+                      style: Theme.of(context).textTheme.titleSmall),
+                  Wrap(
+                      spacing: 8,
+                      children: _tipeMember.map((e) {
+                        final id = (e['id'] as num).toInt();
+                        return FilterChip(
+                            label: Text('${e['nama']}'),
+                            selected: _tipeTerpilih.contains(id),
+                            onSelected: (v) => setStateIfMounted(() => v
+                                ? _tipeTerpilih.add(id)
+                                : _tipeTerpilih.remove(id)));
+                      }).toList()),
+                  const Text(
+                      'Jika tidak ada pilihan, promo berlaku untuk semua member. Pilihan disimpan sebagai JSON agar mendukung banyak kriteria.'),
+                ],
                 SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Aktif'),
