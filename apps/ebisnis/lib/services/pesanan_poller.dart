@@ -19,14 +19,18 @@ class PesananPoller {
   static final PesananPoller instance = PesananPoller._();
 
   static const _kunciSejakId = 'pesanan_poller_sejak_id';
+  static const _intervalNormal = Duration(seconds: 20);
+  static const _intervalGagal = Duration(minutes: 10);
 
   final ValueNotifier<int> jumlahBaru = ValueNotifier<int>(0);
   Timer? _timer;
+  bool _aktif = false;
+  bool _sedangPolling = false;
 
   void mulai() {
-    if (_timer != null) return;
-    _polling();
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _polling());
+    if (_aktif) return;
+    _aktif = true;
+    unawaited(_polling());
   }
 
   void tandaiSudahDilihat() {
@@ -34,20 +38,39 @@ class PesananPoller {
   }
 
   Future<void> _polling() async {
+    if (_sedangPolling) return;
+    _sedangPolling = true;
+    var sukses = false;
     try {
       final sp = await SharedPreferences.getInstance();
-      final sudahAdaBaseline = sp.containsKey(_kunciSejakId);
-      final sejakId = sp.getInt(_kunciSejakId) ?? 0;
-      final hasil = await ApiClient.instance.aksi('pesanan_online_baru', {'id_toko': Sesi.instance.tokoId, 'sejak_id': sejakId});
+      // Cursor wajib terpisah per akun+toko. Cursor global dapat membuat toko
+      // B melewatkan pesanan hanya karena ID terakhir toko A lebih besar.
+      final kunci =
+          '${_kunciSejakId}_${Sesi.instance.userId}_${Sesi.instance.tokoId}';
+      final sudahAdaBaseline = sp.containsKey(kunci);
+      final sejakId = sp.getInt(kunci) ?? 0;
+      final hasil = await ApiClient.instance.aksi('pesanan_online_baru', {
+        'id_toko': Sesi.instance.tokoId,
+        'sejak_id': sejakId,
+      });
       final pesanan = (hasil['pesanan'] as List?) ?? [];
       final maksId = (hasil['maksId'] as num?)?.toInt() ?? sejakId;
-      await sp.setInt(_kunciSejakId, maksId);
+      await sp.setInt(kunci, maksId);
+      sukses = true;
       if (!sudahAdaBaseline) return;
       if (pesanan.isNotEmpty) {
         jumlahBaru.value += pesanan.length;
       }
     } catch (_) {
-      // Offline/gagal -- coba lagi di siklus polling 20 detik berikutnya, bukan alasan crash.
+      // Cursor tidak diubah: seluruh pesanan yang muncul selama offline tetap
+      // akan diminta lagi setelah koneksi pulih.
+    } finally {
+      _sedangPolling = false;
+      if (_aktif) {
+        _timer?.cancel();
+        _timer = Timer(sukses ? _intervalNormal : _intervalGagal,
+            () => unawaited(_polling()));
+      }
     }
   }
 }

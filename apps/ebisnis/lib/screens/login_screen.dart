@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import 'pengaturan_server_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/app_error_info.dart';
+import '../services/transaksi_outbox_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,14 +39,16 @@ class _LoginScreenState extends State<LoginScreen> {
         'labelPerangkat': AppVariant.labelPerangkat,
       });
       await ApiClient.instance.simpanToken(hasil['token'] as String);
+      TransaksiOutboxService.instance.mulai();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
             builder: (_) => AppProductProfile.aktif.buatLayarAwal()),
       );
     } catch (e) {
-      setStateIfMounted(() => _pesanError =
-          e is ApiException ? e.info : AppErrorInfo.dari(e, aktivitas: 'login'));
+      setStateIfMounted(() => _pesanError = e is ApiException
+          ? e.info
+          : AppErrorInfo.dari(e, aktivitas: 'login'));
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }

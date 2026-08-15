@@ -83,7 +83,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 6,
+        version: 7,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -199,6 +199,30 @@ class CoreDb {
         }
       }
     }
+    if (versiLama < 7) {
+      // Kepemilikan outbox harus eksplisit. Tanpa ini, transaksi offline Udin
+      // dapat terkirim memakai token Susi bila akun berganti sebelum retry.
+      for (final definisi in const [
+        'akun_kunci TEXT',
+        'toko_id INTEGER',
+        'id_perangkat TEXT',
+        'percobaan INTEGER NOT NULL DEFAULT 0',
+        'terakhir_dicoba TEXT',
+      ]) {
+        try {
+          await db
+              .execute('ALTER TABLE transaksi_pending ADD COLUMN $definisi');
+        } catch (_) {
+          // Upgrade parsial: kolom yang sudah ada aman dilewati.
+        }
+      }
+      try {
+        await db.execute(
+            'CREATE INDEX idx_transaksi_pending_pemilik ON transaksi_pending(status, akun_kunci, toko_id)');
+      } catch (_) {
+        // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
+      }
+    }
   }
 
   static const _ddlOutboxIs = '''
@@ -269,9 +293,16 @@ class CoreDb {
         payload_json TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'PENDING',
         pesan_error TEXT,
-        dibuat_pada TEXT NOT NULL
+        dibuat_pada TEXT NOT NULL,
+        akun_kunci TEXT,
+        toko_id INTEGER,
+        id_perangkat TEXT,
+        percobaan INTEGER NOT NULL DEFAULT 0,
+        terakhir_dicoba TEXT
       )
     ''');
+    await db.execute(
+        'CREATE INDEX idx_transaksi_pending_pemilik ON transaksi_pending(status, akun_kunci, toko_id)');
 
     await db.execute('''
       CREATE TABLE cache_referensi (
@@ -489,8 +520,8 @@ class CoreDb {
 
   // ============================== TRANSAKSI PENDING ==============================
 
-  Future<int> simpanTransaksiPending(
-      String kodeUnik, String payloadJson) async {
+  Future<int> simpanTransaksiPending(String kodeUnik, String payloadJson,
+      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
     final database = await db;
     // `kode_unik` juga menjadi idempotency key server. Saat kasir memuat
     // kembali pesanan tertahan, kode draft yang sama memang WAJIB dipakai
@@ -508,6 +539,11 @@ class CoreDb {
         'status': 'PENDING',
         'pesan_error': null,
         'dibuat_pada': DateTime.now().toIso8601String(),
+        'akun_kunci': akunKunci,
+        'toko_id': tokoId,
+        'id_perangkat': idPerangkat,
+        'percobaan': 0,
+        'terakhir_dicoba': null,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -522,8 +558,26 @@ class CoreDb {
 
   Future<void> tandaiTransaksiGagal(String kodeUnik, String pesanError) async {
     final database = await db;
-    await database.update('transaksi_pending', {'pesan_error': pesanError},
-        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    await database.rawUpdate(
+      'UPDATE transaksi_pending SET pesan_error = ?, '
+      'percobaan = COALESCE(percobaan, 0) + 1, terakhir_dicoba = ? '
+      'WHERE kode_unik = ?',
+      [pesanError, DateTime.now().toIso8601String(), kodeUnik],
+    );
+  }
+
+  /// Penolakan permanen dari server atau payload lokal rusak. Dipisahkan dari
+  /// PENDING supaya retry otomatis tidak mengirim ulang kesalahan bisnis tanpa
+  /// akhir, tetapi baris dan pesan teknis tetap tersedia di Riwayat Sinkronisasi.
+  Future<void> tandaiTransaksiDitolak(
+      String kodeUnik, String pesanError) async {
+    final database = await db;
+    await database.update(
+      'transaksi_pending',
+      {'status': 'GAGAL', 'pesan_error': pesanError},
+      where: 'kode_unik = ?',
+      whereArgs: [kodeUnik],
+    );
   }
 
   /// Dipakai saat server MENOLAK transaksi krn alasan bisnis (bukan jaringan
@@ -536,10 +590,27 @@ class CoreDb {
         where: 'kode_unik = ?', whereArgs: [kodeUnik]);
   }
 
-  Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron() async {
+  Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron(
+      {String? akunKunci, int? tokoId}) async {
     final database = await db;
-    return database.query('transaksi_pending',
-        where: "status = 'PENDING'", orderBy: 'id ASC');
+    final klausa = <String>["status = 'PENDING'"];
+    final args = <Object?>[];
+    if (akunKunci != null && akunKunci.isNotEmpty) {
+      // NULL adalah baris versi lama; service memeriksa field `kasir` di
+      // payload sebelum mengirim agar migrasi tidak kehilangan transaksi.
+      klausa.add('(akun_kunci = ? OR akun_kunci IS NULL)');
+      args.add(akunKunci);
+    }
+    if (tokoId != null) {
+      klausa.add('(toko_id = ? OR toko_id IS NULL)');
+      args.add(tokoId);
+    }
+    return database.query(
+      'transaksi_pending',
+      where: klausa.join(' AND '),
+      whereArgs: args,
+      orderBy: 'id ASC',
+    );
   }
 
   Future<int> jumlahTransaksiPending() async {

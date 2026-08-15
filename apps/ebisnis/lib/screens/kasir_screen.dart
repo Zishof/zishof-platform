@@ -18,10 +18,10 @@ import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/layar_pelanggan_launcher.dart';
-import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../services/toko_aktif_lokal.dart';
+import '../services/transaksi_outbox_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_error_info.dart';
@@ -152,6 +152,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _jadwalkanFokusCariItem();
     _timerSinkronSesiKas = Timer.periodic(
         const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
+    TransaksiOutboxService.instance.mulai();
   }
 
   @override
@@ -743,15 +744,6 @@ class _KasirScreenState extends State<KasirScreen> {
     unawaited(_muatKasSaatIni());
   }
 
-  Future<void> _tandaiTerlayaniJikaPerlu(
-      Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
-    await PelayananTransaksi.tandaiJikaPerlu(
-      payload: payload,
-      hasilBayar: hasil,
-      percobaanCari: 1,
-    );
-  }
-
   void _setelahTransaksiSelesai() {
     setStateIfMounted(() {
       _draftIdSumber = null;
@@ -766,38 +758,13 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      final pending = await CoreDb.instance.transaksiPendingBelumSinkron();
-      var berhasil = 0;
-      for (final row in pending) {
-        final kodeUnik = row['kode_unik'] as String;
-        final payload =
-            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
-        try {
-          final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
-          await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
-          await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-          berhasil++;
-        } catch (e) {
-          final pesan = e.toString();
-          // Kode transaksi ini sudah pernah sampai di percobaan sebelumnya --
-          // anggap SUKSES, bukan gagal (idempotensi retry offline-first).
-          if (pesan.toLowerCase().contains('sudah tercatat')) {
-            await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-            berhasil++;
-          } else {
-            await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
-            if (e is ApiException && e.offline) {
-              break; // masih offline -- hentikan, coba lagi nanti
-            }
-          }
-        }
-      }
+      final hasil = await TransaksiOutboxService.instance.sinkronkan();
       await _perbaruiJumlahPending();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  '$berhasil dari ${pending.length} transaksi berhasil disinkron.')),
+                  '${hasil.berhasil} dari ${hasil.total} transaksi berhasil disinkron.')),
         );
       }
     } finally {
