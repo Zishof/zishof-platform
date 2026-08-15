@@ -24,6 +24,29 @@ import '../widgets/app_error_info.dart';
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+const _alasanTahanBawaan = <String>[
+  'Pelanggan masih memilih barang',
+  'Pelanggan mengambil uang',
+  'Pelanggan mengambil kartu pembayaran',
+  'Pelanggan membuka aplikasi pembayaran',
+  'Menunggu konfirmasi harga',
+  'Menunggu pengecekan stok',
+  'Menunggu persetujuan supervisor',
+  'Menunggu data member',
+  'Menunggu perubahan metode pembayaran',
+  'Menunggu pembayaran tunai',
+  'Menunggu pembayaran QRIS',
+  'Menunggu pembayaran transfer',
+  'Menunggu saldo member mencukupi',
+  'Menunggu pesanan dilengkapi',
+  'Barang perlu ditimbang ulang',
+  'Barcode atau produk perlu diperiksa',
+  'Antrean dialihkan sementara',
+  'Pelanggan akan kembali',
+  'Pesanan perlu dikonfirmasi ulang',
+  'Kendala jaringan atau perangkat sementara',
+];
+
 /// Layar Keranjang + Checkout, versi Mobile/Android -- bungkus tipis
 /// `Scaffold`+`AppBar` di sekitar [PanelKeranjang] (dipush via Navigator,
 /// full-screen, padanan pola lama). Di Windows Desktop, [PanelKeranjang]
@@ -799,6 +822,99 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// Bayar: TIDAK offline-first (draft yg gagal tersimpan krn offline lebih
   /// baik gagal jelas drpd diam-diam antre lokal tanpa ada layar Pesanan
   /// utk memuatnya kembali).
+  Future<String?> _pilihAlasanTahan() async {
+    final daftar = Sesi.instance.alasanTahan.isEmpty
+        ? _alasanTahanBawaan
+        : Sesi.instance.alasanTahan;
+    var pilihan = daftar.first;
+    final lainController = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Mengapa transaksi ditahan?'),
+            content: SizedBox(
+              width: 520,
+              height: 520,
+              child: Column(
+                children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Pilih satu alasan. Alasan akan disimpan dan ditampilkan pada daftar Pesanan.',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final alasan in daftar)
+                          RadioListTile<String>(
+                            dense: true,
+                            value: alasan,
+                            groupValue: pilihan,
+                            title: Text(alasan),
+                            onChanged: (nilai) => setDialogState(
+                                () => pilihan = nilai ?? pilihan),
+                          ),
+                        RadioListTile<String>(
+                          dense: true,
+                          value: '__LAINNYA__',
+                          groupValue: pilihan,
+                          title: const Text('Lainnya'),
+                          onChanged: (_) =>
+                              setDialogState(() => pilihan = '__LAINNYA__'),
+                        ),
+                        if (pilihan == '__LAINNYA__')
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: TextField(
+                              controller: lainController,
+                              autofocus: true,
+                              maxLength: 200,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                labelText: 'Tuliskan alasan lainnya',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final hasil = pilihan == '__LAINNYA__'
+                      ? lainController.text.trim()
+                      : pilihan;
+                  if (hasil.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Alasan lainnya wajib diisi.')));
+                    return;
+                  }
+                  Navigator.pop(dialogContext, hasil);
+                },
+                child: const Text('Tahan Transaksi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      lainController.dispose();
+    }
+  }
+
   Future<void> _tahan() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
@@ -806,10 +922,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
+    final alasanTahan = await _pilihAlasanTahan();
+    if (alasanTahan == null || alasanTahan.isEmpty) return;
     setStateIfMounted(() => _memproses = true);
     try {
       final kodeUnik = await _buatKodeUnik();
       final payload = _buatPayload(kodeUnik, DateTime.now());
+      payload['keterangan'] = alasanTahan;
       await ApiClient.instance.aksi('draft_bayar', payload);
       widget.keranjang.clear();
       LayarPelangganBroadcaster.instance

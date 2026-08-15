@@ -636,6 +636,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   final _jamOperasional = TextEditingController();
   final _keterangan = TextEditingController();
   final _pesanTerimaKasih = TextEditingController();
+  final _alasanTahan = TextEditingController();
 
   @override
   void initState() {
@@ -658,7 +659,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _npwp,
       _jamOperasional,
       _keterangan,
-      _pesanTerimaKasih
+      _pesanTerimaKasih,
+      _alasanTahan
     ]) {
       c.dispose();
     }
@@ -687,6 +689,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _jamOperasional.text = '${d['jamOperasional'] ?? ''}';
       _keterangan.text = '${d['keterangan'] ?? ''}';
       _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
+      _alasanTahan.text =
+          ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
             ? Sesi.instance.tokoNama
@@ -819,6 +823,11 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'jam_operasional': _jamOperasional.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
+        'alasan_tahan': _alasanTahan.text
+            .split(RegExp(r'[\r\n]+'))
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
       });
       if (mounted) {
         Sesi.instance
@@ -830,7 +839,12 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
           ].join(', ')
           ..tokoTelp =
               _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
-          ..pesanTerimaKasih = _pesanTerimaKasih.text.trim();
+          ..pesanTerimaKasih = _pesanTerimaKasih.text.trim()
+          ..alasanTahan = _alasanTahan.text
+              .split(RegExp(r'[\r\n]+'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profil toko tersimpan.')));
       }
@@ -1206,6 +1220,11 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Keterangan', _keterangan, maxLines: 2),
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
+            _field(
+              'Pilihan Alasan Transaksi Ditahan (satu alasan per baris)',
+              _alasanTahan,
+              maxLines: 12,
+            ),
             _pengaturanLogoStruk(),
             _pengaturanPriceTag(),
             if (_bolehUbah)

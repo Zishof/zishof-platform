@@ -1209,11 +1209,12 @@ class _PesananScreenState extends State<PesananScreen> {
                       ),
                       const SizedBox(height: 12),
                       AppDataTable(
-                        minWidth: 960,
+                        minWidth: 1120,
                         emptyText: 'Tidak ada pesanan.',
                         columns: const [
                           AppTableColumn('Kode', flex: 2),
                           AppTableColumn('Pemesan', flex: 3),
+                          AppTableColumn('Alasan Ditahan', flex: 3),
                           AppTableColumn('Status',
                               flex: 2, align: TextAlign.center),
                           AppTableColumn('Item', flex: 4),
@@ -1254,6 +1255,13 @@ class _PesananScreenState extends State<PesananScreen> {
                                     ? '(Tanpa member)'
                                     : p.pemesan,
                                 flex: 3,
+                              ),
+                              AppTableCell.text(
+                                p.dariPembeliOnline || p.keterangan.isEmpty
+                                    ? '-'
+                                    : p.keterangan,
+                                flex: 3,
+                                maxLines: 2,
                               ),
                               AppTableCell(
                                 flex: 2,
