@@ -17,6 +17,7 @@ class Sesi {
   String pesanTerimaKasih = '';
   List<String> alasanTahan = [];
   bool wajibSesiKas = false;
+  bool bolehTransaksiStokHabis = false;
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
@@ -118,6 +119,7 @@ class Sesi {
         .where((e) => e.isNotEmpty)
         .toList();
     wajibSesiKas = konfig['wajibSesiKas'] == true;
+    bolehTransaksiStokHabis = konfig['bolehTransaksiStokHabis'] == true;
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
@@ -186,6 +188,7 @@ class Sesi {
     pesanTerimaKasih = '';
     alasanTahan = [];
     wajibSesiKas = false;
+    bolehTransaksiStokHabis = false;
     isAdmin = false;
     supervisorPedagang = false;
     bolehHapusPesanan = false;

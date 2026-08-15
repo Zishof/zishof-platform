@@ -145,13 +145,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Anggota? _memberTerpilih;
   double? _saldoMember;
 
-  /// Promo terakhir dipilih lewat picker "Promo Manual" -- MURNI utk tampilan
-  /// (nama rule + tombol lepas), sumber kebenaran sesungguhnya tetap per-baris
-  /// [ItemKeranjang.promoManual]/[ItemKeranjang.promoManualAturanId]. `null`
-  /// = belum ada promo manual dipilih ATAU baru saja dilepas ([_hapusPromoManual]).
-  Map<String, dynamic>? _promoManualTerpilih;
+  /// Metadata tampilan promo manual, dipetakan berdasarkan id aturan. Sumber
+  /// kebenaran tetap berada pada setiap [ItemKeranjang], sehingga dua barang
+  /// dalam transaksi yang sama boleh menggunakan promo/cashback berbeda.
+  final Map<int, Map<String, dynamic>> _metadataPromoManual = {};
   Timer? _debounceDiskon;
   final _uangDiterimaController = TextEditingController(text: '0');
+  String _tipeDiskonFaktur = 'NOMINAL';
+  double _nilaiDiskonFaktur = 0;
   bool _uangDiterimaManual = false;
   int _halamanKeranjang = 1;
   ItemKeranjang? _itemTeratasTerakhir;
@@ -255,7 +256,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               })
           .toList(),
       subtotal: _subtotal,
-      diskon: _totalDiskon,
+      diskon: _totalDiskonSemua,
       total: _total,
       memberNama: _memberTerpilih?.nama,
     );
@@ -266,11 +267,22 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   double get _totalCashback =>
       widget.keranjang.fold(0, (s, i) => s + i.cashback);
 
+  double get _dasarDiskonFaktur =>
+      (_subtotal - _totalDiskon).clamp(0, double.infinity).toDouble();
+  double get _diskonFaktur {
+    if (_nilaiDiskonFaktur <= 0) return 0;
+    final nilai = _tipeDiskonFaktur == 'PERSEN'
+        ? _dasarDiskonFaktur * _nilaiDiskonFaktur.clamp(0, 100) / 100
+        : _nilaiDiskonFaktur;
+    return nilai.clamp(0, _dasarDiskonFaktur).toDouble();
+  }
+  double get _totalDiskonSemua => _totalDiskon + _diskonFaktur;
+
   /// `basisPajak = subtotal - totalDiskon`; `pajak = basisPajak * pajakPersen%`;
   /// `total = basisPajak + pajak` -- persis rumus Desktop (spesifikasi §3.3).
   /// `pajakPersen` bernilai 0 utk toko yg tak mengaktifkan PPN, jadi rumus ini
   /// otomatis identik dgn perilaku lama (tanpa pajak) tanpa perlu flag terpisah.
-  double get _basisPajak => _subtotal - _totalDiskon;
+  double get _basisPajak => _subtotal - _totalDiskonSemua;
   double get _pajak => _basisPajak * Sesi.instance.pajakPersen / 100;
   double get _total => _basisPajak + _pajak;
 
@@ -493,6 +505,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // TANPA `hanya_aturan_id`, jadi satu batch call ini otomatis mendukung
       // keranjang campuran (sebagian manual, sebagian auto).
       final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
+        // Wajib dikirim juga untuk akun admin/multi-toko. Tanpa ini server hanya
+        // dapat menebak toko dari akun pedagang; pada kasir multi-toko evaluasi
+        // gagal lalu keranjang tampak seolah tidak memperoleh diskon grup.
+        'toko_id': Sesi.instance.tokoId,
         'id_member': _memberTerpilih?.id,
         'items': widget.keranjang
             .map((i) => {
@@ -573,20 +589,28 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// `diskon_manual_list` (HANYA rule `aktivasiManual=true` yg eligible utk
   /// minimal satu item keranjang saat ini, lihat kontrak server di JavaDoc
   /// modul ini). Batal (tutup sheet tanpa pilih) -- tidak mengubah apa pun.
-  Future<void> _bukaPickerPromoManual() async {
+  Future<void> _bukaPickerPromoManual([ItemKeranjang? itemPilihan]) async {
     if (widget.keranjang.isEmpty) return;
+    final target = itemPilihan ??
+        await showModalBottomSheet<ItemKeranjang>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => _SheetPilihItemPromoManual(
+              daftar: List<ItemKeranjang>.of(widget.keranjang)),
+        );
+    if (target == null || !mounted) return;
     List<Map<String, dynamic>> daftar;
     try {
       final hasil = await ApiClient.instance.aksi('diskon_manual_list', {
         'toko_id': Sesi.instance.tokoId,
         'id_member': _memberTerpilih?.id,
-        'items': widget.keranjang
-            .map((i) => {
-                  'id': i.produk.id,
-                  'harga': i.produk.hargaJual,
-                  'jumlah': i.jumlah,
-                })
-            .toList(),
+        'items': [
+          {
+            'id': target.produk.id,
+            'harga': target.produk.hargaJual,
+            'jumlah': target.jumlah,
+          }
+        ],
       });
       daftar = ((hasil['promo'] as List?) ?? []).cast<Map<String, dynamic>>();
     } catch (e) {
@@ -599,61 +623,50 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SheetPilihPromoManual(daftar: daftar),
+      builder: (_) =>
+          _SheetPilihPromoManual(daftar: daftar, namaItem: target.produk.nama),
     );
-    if (dipilih != null) await _terapkanPromoManual(dipilih);
+    if (dipilih != null) await _terapkanPromoManual(target, dipilih);
   }
 
-  /// Terapkan satu AturanDiskon yang sengaja dipilih kasir ke SELURUH baris
-  /// keranjang dlm satu batch call (`hanya_aturan_id` per item, lihat kontrak
-  /// server) -- baris yg cocok ditandai [ItemKeranjang.promoManual] supaya
-  /// `_evaluasiDiskon` (auto-recalc) tidak menimpanya balik ke auto-apply;
-  /// baris yg TIDAK cocok (server balas `aturanDiskon: null`) dilepas dari
-  /// mode manual (kembali diperlakukan auto-apply di recalc berikutnya) --
-  /// sama seperti server, TANPA duplikasi cek eligibilitas di klien.
-  Future<void> _terapkanPromoManual(Map<String, dynamic> promo) async {
+  /// Terapkan satu aturan hanya pada satu baris barang. Server tetap menjadi
+  /// sumber kebenaran untuk eligibilitas dan nominal diskon/cashback.
+  Future<void> _terapkanPromoManual(
+      ItemKeranjang target, Map<String, dynamic> promo) async {
     final aturanId = promo['id'] as int;
     try {
       final hasil = await ApiClient.instance.aksi('diskon_evaluasi', {
         'id_member': _memberTerpilih?.id,
-        'items': widget.keranjang
-            .map((i) => {
-                  'id': i.produk.id,
-                  'harga': i.produk.hargaJual,
-                  'jumlah': i.jumlah,
-                  'hanya_aturan_id': aturanId,
-                })
-            .toList(),
+        'items': [
+          {
+            'id': target.produk.id,
+            'harga': target.produk.hargaJual,
+            'jumlah': target.jumlah,
+            'hanya_aturan_id': aturanId,
+          }
+        ],
       });
       final items = (hasil['items'] as List?) ?? [];
       if (!mounted) return;
-      var adaYangCocok = false;
+      final m = items.isEmpty ? null : items.first as Map<String, dynamic>;
+      final aturanDiskon = m?['aturanDiskon'] as int?;
+      final cocok = aturanDiskon != null;
       setStateIfMounted(() {
-        // Per-indeks, sama alasan dgn _evaluasiDiskon di atas (2 baris keranjang
-        // boleh berbagi produk.id yg sama via kombinasi Produk Ekstra berbeda).
-        for (var idx = 0;
-            idx < items.length && idx < widget.keranjang.length;
-            idx++) {
-          final m = items[idx] as Map<String, dynamic>;
-          final aturanDiskon = m['aturanDiskon'] as int?;
-          final cocok = aturanDiskon != null;
-          if (cocok) adaYangCocok = true;
-          widget.keranjang[idx]
-            ..diskon = (m['diskon'] as num?)?.toDouble() ?? 0
-            ..cashback = (m['cashback'] as num?)?.toDouble() ?? 0
-            ..aturanDiskonId = aturanDiskon
-            ..promoManual = cocok
-            ..promoManualAturanId = cocok ? aturanId : null;
-        }
-        if (adaYangCocok) _promoManualTerpilih = promo;
+        target
+          ..diskon = (m?['diskon'] as num?)?.toDouble() ?? 0
+          ..cashback = (m?['cashback'] as num?)?.toDouble() ?? 0
+          ..aturanDiskonId = aturanDiskon
+          ..promoManual = cocok
+          ..promoManualAturanId = cocok ? aturanId : null;
+        if (cocok) _metadataPromoManual[aturanId] = promo;
         _sinkronkanUangDiterima();
       });
       _siarkanKeranjang();
       if (!mounted) return;
-      if (!adaYangCocok) {
+      if (!cocok) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                'Promo "${promo['namaAturan'] ?? ''}" tidak berlaku untuk item di keranjang ini.')));
+                'Promo "${promo['namaAturan'] ?? ''}" tidak berlaku untuk ${target.produk.nama}.')));
       }
     } catch (e) {
       if (!mounted) return;
@@ -662,8 +675,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
-  /// Lepas promo manual dari SELURUH baris yang memakainya -- baris kembali
-  /// diperlakukan auto-apply mulai recalc berikutnya ([_jadwalkanEvaluasiDiskon]).
+  void _hapusPromoManualItem(ItemKeranjang item) {
+    setStateIfMounted(() {
+      item
+        ..promoManual = false
+        ..promoManualAturanId = null;
+    });
+    _jadwalkanEvaluasiDiskon();
+  }
+
+  /// Lepas semua promo manual; setiap baris kembali ke evaluasi otomatis.
   void _hapusPromoManual() {
     setStateIfMounted(() {
       for (final i in widget.keranjang) {
@@ -672,7 +693,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           i.promoManualAturanId = null;
         }
       }
-      _promoManualTerpilih = null;
+      _metadataPromoManual.clear();
     });
     _jadwalkanEvaluasiDiskon();
   }
@@ -760,6 +781,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       },
       'total': _total,
       'pajak': _pajak,
+      'diskon_faktur_tipe': _tipeDiskonFaktur,
+      'diskon_faktur_nilai': _nilaiDiskonFaktur,
       'id_member': _memberTerpilih?.id,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
@@ -943,6 +966,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _uangDiterimaManual = false;
         _uangDiterimaController.text = '0';
         _splitBayar = [];
+        _nilaiDiskonFaktur = 0;
+        _tipeDiskonFaktur = 'NOMINAL';
       });
       unawaited(_muatCaraBayarUntukMember(null));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1057,6 +1082,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final metodeNama = _caraBayarTerpilih!.nama;
       final pelangganStruk = _memberTerpilih?.nama;
       final totalStruk = _total;
+      final diskonFakturStruk = _diskonFaktur;
       final pajakStruk = _pajak;
       final pembayaranStruk = _pembayaranStruk();
       final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
@@ -1072,6 +1098,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _langsungTerlayani = true;
         _splitBayar = [];
+        _nilaiDiskonFaktur = 0;
+        _tipeDiskonFaktur = 'NOMINAL';
       });
       widget.onSelesai?.call();
       if (!mounted) return;
@@ -1084,6 +1112,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           metode: metodeNama,
           pembayaran: pembayaranStruk,
           pajak: pajakStruk,
+          diskonFaktur: diskonFakturStruk,
           tersinkron: pesanTundaMenuju == null,
           pelanggan: pelangganStruk,
           uangDiterima: uangDiterimaStruk,
@@ -1136,6 +1165,100 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       _caraBayarTerpilih = hasil.first.caraBayar;
       _splitBayar = hasil.length >= 2 ? hasil : [];
     });
+  }
+
+  Future<void> _aturDiskonFaktur() async {
+    var tipe = _tipeDiskonFaktur;
+    final controller = TextEditingController(
+        text: _nilaiDiskonFaktur > 0
+            ? _nilaiDiskonFaktur.toStringAsFixed(
+                _nilaiDiskonFaktur == _nilaiDiskonFaktur.roundToDouble()
+                    ? 0
+                    : 2)
+            : '');
+    try {
+      final hasil = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Potongan Faktur'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                      'Potongan ini mengurangi total pembelian dan akan tercetak pada struk.'),
+                  const SizedBox(height: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: 'NOMINAL', label: Text('Nominal Rupiah')),
+                      ButtonSegment(
+                          value: 'PERSEN', label: Text('Persentase')),
+                    ],
+                    selected: {tipe},
+                    onSelectionChanged: (nilai) =>
+                        setDialogState(() => tipe = nilai.first),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                    ],
+                    decoration: InputDecoration(
+                      labelText: tipe == 'PERSEN'
+                          ? 'Persentase potongan (%)'
+                          : 'Nominal potongan (Rp)',
+                      helperText: tipe == 'PERSEN'
+                          ? 'Maksimal 100%'
+                          : 'Maksimal sebesar total barang',
+                      border: _radiusInput,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Batal')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext,
+                      {'tipe': 'NOMINAL', 'nilai': 0.0}),
+                  child: const Text('Hapus Potongan')),
+              FilledButton(
+                onPressed: () {
+                  final nilai = double.tryParse(
+                          controller.text.replaceAll('.', '').replaceAll(',', '.')) ??
+                      0;
+                  Navigator.pop(dialogContext, {'tipe': tipe, 'nilai': nilai});
+                },
+                child: const Text('Terapkan'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (hasil == null) return;
+      setStateIfMounted(() {
+        _tipeDiskonFaktur = hasil['tipe'] as String;
+        final nilai = (hasil['nilai'] as num).toDouble();
+        _nilaiDiskonFaktur = _tipeDiskonFaktur == 'PERSEN'
+            ? nilai.clamp(0, 100).toDouble()
+            : nilai.clamp(0, _dasarDiskonFaktur).toDouble();
+        _splitBayar = [];
+        _sinkronkanUangDiterima();
+      });
+      _siarkanKeranjang();
+    } finally {
+      controller.dispose();
+    }
   }
 
   /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
@@ -1307,21 +1430,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     );
   }
 
-  /// Tombol/chip "Promo Manual" (gap-closure "Aktivasi Manual", Fase 2
-  /// Stretch) -- padanan visual persis [_pemilihMember] di atas: belum ada
-  /// promo dipilih -> tombol garis penuh-lebar; sudah dipilih -> chip warna
-  /// dgn tombol lepas ("x"). Disembunyikan total saat keranjang kosong (tidak
-  /// ada gunanya membuka picker tanpa item apa pun).
+  /// Pintu masuk pengaturan promo per barang. Kasir memilih barang dahulu,
+  /// kemudian memilih promo/cashback yang eligible khusus untuk barang itu.
   Widget _promoManualPicker() {
     if (widget.keranjang.isEmpty) return const SizedBox.shrink();
-    // Jaga thd chip "hantu": bila baris terakhir yg memakai promo manual
-    // sudah dihapus/qty-nol lewat _ubahJumlah (tanpa lewat _hapusPromoManual),
-    // `_promoManualTerpilih` bisa saja masih menyimpan cache promo lama --
-    // TIDAK ditampilkan lagi kalau sungguhan tak ada baris keranjang yang
-    // masih bertanda [ItemKeranjang.promoManual].
-    final promo = widget.keranjang.any((i) => i.promoManual)
-        ? _promoManualTerpilih
-        : null;
+    final jumlahAktif = widget.keranjang.where((i) => i.promoManual).length;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1329,76 +1442,34 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         children: [
           _labelBagian('Promo Manual'),
           const SizedBox(height: 8),
-          promo == null
-              ? SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _bukaPickerPromoManual,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.sell_outlined, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            'Pilih Promo Manual',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              : Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.latarLembut(AppColors.info),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.info,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.sell, size: 18),
-                    ),
-                    title: Text('${promo['namaAturan'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text(_keteranganPromo(promo),
-                        style: const TextStyle(fontSize: 11.5)),
-                    trailing: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: _hapusPromoManual),
-                  ),
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _bukaPickerPromoManual(),
+              icon: const Icon(Icons.sell_outlined, size: 18),
+              label: Text(jumlahAktif == 0
+                  ? 'Atur Promo per Item'
+                  : '$jumlahAktif item memakai promo manual'),
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          if (jumlahAktif > 0)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _hapusPromoManual,
+                icon: const Icon(Icons.close, size: 16),
+                label: const Text('Lepas semua promo manual'),
+              ),
+            ),
         ],
       ),
     );
-  }
-
-  /// "Potongan X%"/"Potongan Rp Y" (+" (cashback)" bila bukan potongan
-  /// langsung) -- padanan deskripsi baris di [_SheetPilihPromoManual], dipakai
-  /// ulang di sini utk chip promo terpilih supaya kasir tetap lihat bentuk
-  /// promonya walau sheet sudah tertutup.
-  String _keteranganPromo(Map<String, dynamic> promo) {
-    final persentase = (promo['persentase'] as num?)?.toDouble() ?? 0;
-    final nominal = (promo['nominal'] as num?)?.toDouble() ?? 0;
-    final potonganLangsung = promo['potonganLangsung'] != false;
-    final besaran = persentase > 0
-        ? 'Potongan ${persentase.toStringAsFixed(0)}%'
-        : 'Potongan ${_formatRupiah.format(nominal)}';
-    return potonganLangsung ? besaran : '$besaran (cashback)';
   }
 
   Widget _labelBagian(String teks) {
@@ -1546,14 +1617,50 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                                 color: AppColors.textSecondaryOf(context),
                                 fontSize: 11.5)),
                       if (item.diskon > 0)
-                        Text(
-                            item.promoManual
-                                ? 'Diskon ${_formatRupiah.format(item.diskon)} (Promo Manual)'
-                                : 'Diskon ${_formatRupiah.format(item.diskon)}',
+                        Text('Diskon ${_formatRupiah.format(item.diskon)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: AppColors.warning, fontSize: 11.5)),
+                      if (item.cashback > 0)
+                        Text('Cashback ${_formatRupiah.format(item.cashback)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: AppColors.success, fontSize: 11.5)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _bukaPickerPromoManual(item),
+                            style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 28),
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap),
+                            icon: Icon(
+                                item.promoManual
+                                    ? Icons.sell
+                                    : Icons.sell_outlined,
+                                size: 14),
+                            label: Text(
+                              item.promoManual
+                                  ? '${_metadataPromoManual[item.promoManualAturanId]?['namaAturan'] ?? 'Promo manual'}'
+                                  : 'Atur promo item',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                          if (item.promoManual)
+                            IconButton(
+                              tooltip: 'Lepas promo item ini',
+                              onPressed: () => _hapusPromoManualItem(item),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                  minWidth: 28, minHeight: 28),
+                              icon: const Icon(Icons.close, size: 14),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1706,6 +1813,22 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   ],
                 ),
               ),
+            if (_diskonFaktur > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                        _tipeDiskonFaktur == 'PERSEN'
+                            ? 'Potongan Faktur (${_nilaiDiskonFaktur.toStringAsFixed(2).replaceFirst(RegExp(r'\.00$'), '')}%)'
+                            : 'Potongan Faktur',
+                        style: const TextStyle(color: Color(0xFFC0563D))),
+                    Text('-${_formatRupiah.format(_diskonFaktur)}',
+                        style: const TextStyle(color: Color(0xFFC0563D))),
+                  ],
+                ),
+              ),
             if (_totalCashback > 0)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -1756,6 +1879,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.bold)),
               ],
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _memproses || widget.keranjang.isEmpty
+                    ? null
+                    : _aturDiskonFaktur,
+                icon: const Icon(Icons.percent_outlined, size: 18),
+                label: Text(_diskonFaktur > 0
+                    ? 'Ubah Potongan Faktur'
+                    : 'Tambah Potongan Faktur'),
+              ),
             ),
             const SizedBox(height: 12),
             Divider(height: 1, color: AppColors.borderOf(context)),
@@ -2220,6 +2356,56 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
   }
 }
 
+/// Langkah pertama promo manual: pilih tepat satu baris keranjang. Object
+/// dikembalikan berdasarkan identitas baris, sehingga dua baris produk sama
+/// dengan ekstra berbeda tidak saling tertukar.
+class _SheetPilihItemPromoManual extends StatelessWidget {
+  final List<ItemKeranjang> daftar;
+  const _SheetPilihItemPromoManual({required this.daftar});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .75),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.shopping_cart_outlined),
+              title: Text('Pilih item yang akan diberi promo',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Promo/cashback manual diterapkan per item.'),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: daftar.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = daftar[index];
+                  return ListTile(
+                    leading: CircleAvatar(child: Text('${index + 1}')),
+                    title: Text(item.produk.nama),
+                    subtitle: Text([
+                      '${item.jumlah} x ${_formatRupiah.format(item.produk.hargaJual)}',
+                      if (item.promoManual) 'Sudah memakai promo manual',
+                    ].join(' - ')),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).pop(item),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Bottom sheet "Promo Manual" (gap-closure "Aktivasi Manual", Fase 2 Stretch)
 /// -- padanan visual `_SheetPilihEkstra` (kasir_screen.dart): daftar
 /// ListTile, tap SATU baris = pilih & tutup (tanpa tombol konfirmasi
@@ -2230,7 +2416,8 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
 /// [_PanelKeranjangState._bukaPickerPromoManual]).
 class _SheetPilihPromoManual extends StatelessWidget {
   final List<Map<String, dynamic>> daftar;
-  const _SheetPilihPromoManual({required this.daftar});
+  final String namaItem;
+  const _SheetPilihPromoManual({required this.daftar, required this.namaItem});
 
   String _keterangan(Map<String, dynamic> promo) {
     final persentase = (promo['persentase'] as num?)?.toDouble() ?? 0;
@@ -2262,7 +2449,7 @@ class _SheetPilihPromoManual extends StatelessWidget {
                         size: 18, color: AppColors.textPrimaryOf(context)),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text('Pilih Promo Manual',
+                      child: Text('Pilih promo untuk $namaItem',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -2278,7 +2465,7 @@ class _SheetPilihPromoManual extends StatelessWidget {
                     ? Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                            'Tidak ada promo manual yang berlaku untuk item di keranjang ini.',
+                            'Tidak ada promo manual yang berlaku untuk $namaItem.',
                             style: TextStyle(
                                 color: AppColors.textSecondaryOf(context))),
                       )

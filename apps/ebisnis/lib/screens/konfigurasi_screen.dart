@@ -617,6 +617,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   bool _memilihLogoPriceTag = false;
   String? _error;
   bool _bolehUbah = false;
+  bool _bolehTransaksiStokHabis = false;
   String? _logoStrukPath;
   String? _logoPriceTagPath;
   String _logoStrukMode = 'persegi';
@@ -691,6 +692,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
       _alasanTahan.text =
           ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
+      _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
             ? Sesi.instance.tokoNama
@@ -823,6 +825,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'jam_operasional': _jamOperasional.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
+        'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
         'alasan_tahan': _alasanTahan.text
             .split(RegExp(r'[\r\n]+'))
             .map((e) => e.trim())
@@ -840,6 +843,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
           ..tokoTelp =
               _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
           ..pesanTerimaKasih = _pesanTerimaKasih.text.trim()
+          ..bolehTransaksiStokHabis = _bolehTransaksiStokHabis
           ..alasanTahan = _alasanTahan.text
               .split(RegExp(r'[\r\n]+'))
               .map((e) => e.trim())
@@ -1220,6 +1224,16 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Keterangan', _keterangan, maxLines: 2),
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
+            AppFormSwitchTile(
+              title: 'Boleh transaksi saat stok habis',
+              subtitle:
+                  'Default OFF. Jika ON, penjualan tetap dapat diproses saat stok toko ini nol atau minus. Tidak memengaruhi toko lain dan produk kedaluwarsa tetap ditolak.',
+              value: _bolehTransaksiStokHabis,
+              onChanged: _bolehUbah
+                  ? (nilai) =>
+                      setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
+                  : null,
+            ),
             _field(
               'Pilihan Alasan Transaksi Ditahan (satu alasan per baris)',
               _alasanTahan,

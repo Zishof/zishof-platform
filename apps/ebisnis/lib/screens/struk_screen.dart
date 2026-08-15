@@ -31,6 +31,7 @@ class StrukScreen extends StatelessWidget {
   final String metode;
   final List<Map<String, dynamic>> pembayaran;
   final double pajak;
+  final double diskonFaktur;
   final bool tersinkron;
   final String? statusLabel;
   final String? pelanggan;
@@ -48,6 +49,7 @@ class StrukScreen extends StatelessWidget {
     required this.metode,
     this.pembayaran = const [],
     this.pajak = 0,
+    this.diskonFaktur = 0,
     this.tersinkron = true,
     this.statusLabel,
     this.pelanggan,
@@ -62,7 +64,7 @@ class StrukScreen extends StatelessWidget {
         (sum, i) => sum + _subtotalBaris(i),
       );
 
-  double get _subtotal => pajak > 0 ? total - pajak : _subtotalItem;
+  double get _subtotal => _subtotalItem;
 
   List<Map<String, dynamic>> get _pembayaranEfektif =>
       _normalisasiDaftarPembayaran(pembayaran);
@@ -504,6 +506,8 @@ class StrukScreen extends StatelessWidget {
           _totalPdf('Subtotal', _formatUang(_subtotal)),
           if (_totalDiskonItem > 0)
             _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
+          if (diskonFaktur > 0)
+            _totalPdf('Potongan Faktur', '-${_formatUang(diskonFaktur)}'),
           if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
           _totalPdf(
             'Grand Total',
@@ -755,6 +759,7 @@ class StrukScreen extends StatelessWidget {
                       tersinkron: tersinkron,
                       subtotal: _subtotal,
                       totalDiskon: _totalDiskonItem,
+                      diskonFaktur: diskonFaktur,
                       totalCashback: _totalCashbackItem,
                       jumlahItem: _jumlahItem,
                       kasir: _labelKasir(),
@@ -827,6 +832,7 @@ class _StrukPreview extends StatelessWidget {
   final bool tersinkron;
   final double subtotal;
   final double totalDiskon;
+  final double diskonFaktur;
   final double totalCashback;
   final int jumlahItem;
   final String kasir;
@@ -850,6 +856,7 @@ class _StrukPreview extends StatelessWidget {
     required this.tersinkron,
     required this.subtotal,
     required this.totalDiskon,
+    required this.diskonFaktur,
     required this.totalCashback,
     required this.jumlahItem,
     required this.kasir,
@@ -956,6 +963,10 @@ class _StrukPreview extends StatelessWidget {
               if (totalDiskon > 0)
                 _TotalStruk(
                     label: 'Diskon', value: '-${formatUang(totalDiskon)}'),
+              if (diskonFaktur > 0)
+                _TotalStruk(
+                    label: 'Potongan Faktur',
+                    value: '-${formatUang(diskonFaktur)}'),
               if (pajak > 0)
                 _TotalStruk(label: 'Pajak', value: formatUang(pajak)),
               _TotalStruk(
