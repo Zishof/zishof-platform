@@ -647,21 +647,30 @@ class _KasirScreenState extends State<KasirScreen> {
     final hasilTutup = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _DialogTutupKas(status: status!),
+      builder: (_) => _DialogTutupKas(
+        status: status!,
+        bolehKoreksiNominal: Sesi.instance.bolehKelola,
+      ),
     );
     if (hasilTutup == null) return;
 
     final kodeLokal =
         (await CoreDb.instance.sesiKasAktif())?['kode'] as String?;
     try {
-      final hasil = await ApiClient.instance.aksi('sesi_kas_tutup', {
+      final payloadTutup = <String, dynamic>{
         'id_toko': Sesi.instance.tokoId,
         'kode': kodeLokal,
         'id_perangkat': IdentitasMesin.instance.idMesin,
         'nama_perangkat': IdentitasMesin.instance.namaMesin,
         'uang_fisik': hasilTutup['uangFisik'],
         'keterangan': hasilTutup['keterangan'],
-      });
+      };
+      if (hasilTutup['modalAwalKoreksi'] != null) {
+        payloadTutup['modal_awal_koreksi'] = hasilTutup['modalAwalKoreksi'];
+        payloadTutup['alasan_koreksi'] = hasilTutup['alasanKoreksi'];
+      }
+      final hasil =
+          await ApiClient.instance.aksi('sesi_kas_tutup', payloadTutup);
       if (kodeLokal != null) await CoreDb.instance.tutupSesiKasLokal(kodeLokal);
       if (mounted) setStateIfMounted(() => _kasTerbuka = false);
       final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
@@ -700,7 +709,7 @@ class _KasirScreenState extends State<KasirScreen> {
     // akun yang sama tidak membuka kas pada dua perangkat ketika keduanya berbeda
     // database lokal. Operasi penjualan tetap dapat offline setelah lease diperoleh.
     try {
-      await ApiClient.instance.aksi('sesi_kas_buka', {
+      final hasilBuka = await ApiClient.instance.aksi('sesi_kas_buka', {
         'id_toko': Sesi.instance.tokoId,
         'kode': kode,
         'modal_awal': modalAwal,
@@ -711,8 +720,11 @@ class _KasirScreenState extends State<KasirScreen> {
         'id_perangkat': IdentitasMesin.instance.idMesin,
         'nama_perangkat': IdentitasMesin.instance.namaMesin,
       });
+      final kodeAktif = '${hasilBuka['kode'] ?? kode}';
+      final modalAktif =
+          (hasilBuka['modalAwal'] as num?)?.toDouble() ?? modalAwal;
       await CoreDb.instance
-          .bukaSesiKasLokal(kode, modalAwal, disinkronkan: true);
+          .bukaSesiKasLokal(kodeAktif, modalAktif, disinkronkan: true);
       if (mounted) {
         setStateIfMounted(() => _kasTerbuka = true);
         _jadwalkanFokusCariItem();
@@ -736,14 +748,26 @@ class _KasirScreenState extends State<KasirScreen> {
     for (final row in pending) {
       final kode = row['kode'] as String;
       try {
-        await ApiClient.instance.aksi('sesi_kas_buka', {
+        final hasilBuka = await ApiClient.instance.aksi('sesi_kas_buka', {
           'id_toko': Sesi.instance.tokoId,
           'kode': kode,
           'modal_awal': row['modal_awal'],
           'id_perangkat': IdentitasMesin.instance.idMesin,
           'nama_perangkat': IdentitasMesin.instance.namaMesin,
         });
-        await CoreDb.instance.tandaiSesiKasTersinkron(kode);
+        final kodeServer = '${hasilBuka['kode'] ?? kode}';
+        if (kodeServer != kode) {
+          await CoreDb.instance.tutupSesiKasLokal(kode);
+          await CoreDb.instance.bukaSesiKasLokal(
+            kodeServer,
+            (hasilBuka['modalAwal'] as num?)?.toDouble() ??
+                (row['modal_awal'] as num?)?.toDouble() ??
+                0,
+            disinkronkan: true,
+          );
+        } else {
+          await CoreDb.instance.tandaiSesiKasTersinkron(kode);
+        }
       } catch (e) {
         if (e is ApiException && !e.offline) {
           await CoreDb.instance.tutupSesiKasLokal(kode);
@@ -2516,7 +2540,11 @@ class _KartuProdukState extends State<_KartuProduk> {
 /// yang menghitung dari riwayat transaksi lengkap, lihat _bukaDialogTutupKas).
 class _DialogTutupKas extends StatefulWidget {
   final Map<String, dynamic> status;
-  const _DialogTutupKas({required this.status});
+  final bool bolehKoreksiNominal;
+  const _DialogTutupKas({
+    required this.status,
+    required this.bolehKoreksiNominal,
+  });
 
   @override
   State<_DialogTutupKas> createState() => _DialogTutupKasState();
@@ -2524,38 +2552,72 @@ class _DialogTutupKas extends StatefulWidget {
 
 class _DialogTutupKasState extends State<_DialogTutupKas> {
   late final TextEditingController _uangFisikController;
+  late final TextEditingController _modalAwalController;
   final _keteranganController = TextEditingController();
+  final _alasanKoreksiController = TextEditingController();
+  bool _modeKoreksi = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
     _uangFisikController =
         TextEditingController(text: kasSaatIni.toStringAsFixed(0));
+    _modalAwalController =
+        TextEditingController(text: modalAwal.toStringAsFixed(0));
+    _modalAwalController.addListener(_perbaruiTampilanKoreksi);
+  }
+
+  void _perbaruiTampilanKoreksi() {
+    if (mounted && _modeKoreksi) setState(() {});
   }
 
   @override
   void dispose() {
     _uangFisikController.dispose();
+    _modalAwalController
+      ..removeListener(_perbaruiTampilanKoreksi)
+      ..dispose();
     _keteranganController.dispose();
+    _alasanKoreksiController.dispose();
     super.dispose();
   }
 
   void _konfirmasi() {
     final uangFisik = double.tryParse(
         _uangFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
-    if (uangFisik == null) {
-      setStateIfMounted(() => _error = 'Uang fisik wajib diisi angka.');
+    if (uangFisik == null || uangFisik < 0) {
+      setStateIfMounted(
+          () => _error = 'Uang fisik wajib berupa angka nol atau lebih.');
       return;
     }
     if (_keteranganController.text.trim().isEmpty) {
       setStateIfMounted(() => _error = 'Catatan penutupan wajib diisi.');
       return;
     }
-    Navigator.of(context).pop({
+    double? modalAwalKoreksi;
+    if (_modeKoreksi) {
+      modalAwalKoreksi = double.tryParse(
+          _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
+      if (modalAwalKoreksi == null || modalAwalKoreksi < 0) {
+        setStateIfMounted(
+            () => _error = 'Modal awal hasil koreksi wajib berupa angka.');
+        return;
+      }
+      if (_alasanKoreksiController.text.trim().length < 5) {
+        setStateIfMounted(() => _error =
+            'Alasan koreksi supervisor wajib diisi minimal 5 karakter.');
+        return;
+      }
+    }
+    Navigator.of(context).pop(<String, dynamic>{
       'uangFisik': uangFisik,
-      'keterangan': _keteranganController.text.trim()
+      'keterangan': _keteranganController.text.trim(),
+      if (modalAwalKoreksi != null) 'modalAwalKoreksi': modalAwalKoreksi,
+      if (modalAwalKoreksi != null)
+        'alasanKoreksi': _alasanKoreksiController.text.trim(),
     });
   }
 
@@ -2600,11 +2662,17 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
 
   @override
   Widget build(BuildContext context) {
-    final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final modalAwalAsli = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final modalAwalInput = double.tryParse(
+        _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    final modalAwal =
+        _modeKoreksi && modalAwalInput != null ? modalAwalInput : modalAwalAsli;
     final totalTunai = (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
     final totalNonTunai =
         (widget.status['totalNonTunai'] as num?)?.toDouble() ?? 0;
-    final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final kasSaatIniAsli =
+        (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final kasSaatIni = kasSaatIniAsli + modalAwal - modalAwalAsli;
     final waktuBuka = _waktuBukaFormatted;
     return AlertDialog(
       title: const Text('Sesi Kasir'),
@@ -2652,6 +2720,49 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
                 const SizedBox(width: 10),
                 _kartuStat('Kas Seharusnya', _formatRupiah.format(kasSaatIni))
               ]),
+              if (widget.bolehKoreksiNominal) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() {
+                      _modeKoreksi = !_modeKoreksi;
+                      _error = null;
+                      if (!_modeKoreksi) {
+                        _modalAwalController.text =
+                            modalAwalAsli.toStringAsFixed(0);
+                        _alasanKoreksiController.clear();
+                      }
+                    }),
+                    icon: Icon(_modeKoreksi ? Icons.close : Icons.edit_outlined,
+                        size: 17),
+                    label: Text(
+                        _modeKoreksi ? 'Batalkan Edit' : 'Edit Nominal Sesi'),
+                  ),
+                ),
+              ],
+              if (_modeKoreksi) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _modalAwalController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Modal Awal Hasil Koreksi (Rp) *',
+                    helperText:
+                        'Omzet tidak dapat diedit dan tetap mengikuti transaksi.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _alasanKoreksiController,
+                  decoration: const InputDecoration(
+                    labelText: 'Alasan Koreksi Supervisor *',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
               const SizedBox(height: 16),
               if (_error != null)
                 Padding(

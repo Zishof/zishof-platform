@@ -849,8 +849,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toList();
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profil toko tersimpan.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Profil dan kebijakan toko tersimpan.')));
       }
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -1204,6 +1204,34 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             ),
           ),
         AppFormSection(
+          judul: 'Kebijakan Stok Toko Aktif',
+          deskripsi:
+              'Berlaku hanya untuk ${_nama.text.trim().isEmpty ? 'toko yang sedang dipilih' : _nama.text.trim()}. Toko lain tidak ikut berubah.',
+          children: [
+            AppFormSwitchTile(
+              title: 'Paksa semua produk boleh stok minus',
+              subtitle: _bolehTransaksiStokHabis
+                  ? 'AKTIF — seluruh produk di toko ini boleh dijual saat stok nol atau minus, walaupun izin pada produk tidak dicentang.'
+                  : 'NONAKTIF — ikuti izin “Boleh dijual walau stok minus” pada masing-masing produk. Ini adalah pilihan default yang lebih aman.',
+              value: _bolehTransaksiStokHabis,
+              onChanged: _bolehUbah
+                  ? (nilai) =>
+                      setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
+                  : null,
+            ),
+            if (_bolehUbah)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTombolAksi(
+                  icon: Icons.save_outlined,
+                  label: _menyimpan ? 'Menyimpan...' : 'Simpan Kebijakan Stok',
+                  onPressed: _menyimpan ? null : _simpan,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppFormSection(
           judul: 'Profil Toko',
           deskripsi:
               'Data ini dipakai untuk informasi operasional, laporan, dan teks pada struk.',
@@ -1224,17 +1252,6 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Keterangan', _keterangan, maxLines: 2),
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
-            AppFormSwitchTile(
-              title: 'Paksa semua produk boleh stok minus',
-              subtitle: _bolehTransaksiStokHabis
-                  ? 'Mode aktif: seluruh produk di toko ini boleh dijual saat stok nol atau minus, walaupun izin pada produk tidak dicentang. Toko lain tidak terpengaruh.'
-                  : 'Mode normal: ikuti izin “Boleh dijual walau stok minus” pada masing-masing produk. Produk yang tidak diizinkan tetap ditolak saat stok tidak cukup.',
-              value: _bolehTransaksiStokHabis,
-              onChanged: _bolehUbah
-                  ? (nilai) =>
-                      setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
-                  : null,
-            ),
             _field(
               'Pilihan Alasan Transaksi Ditahan (satu alasan per baris)',
               _alasanTahan,
