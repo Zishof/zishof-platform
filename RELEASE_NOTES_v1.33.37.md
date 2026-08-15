@@ -24,6 +24,9 @@
   eksklusif. Bawaan aman memilih satu promo berprioritas tertinggi.
 - Menyeragamkan urutan dan penumpukan diskon pada API POS, ZK Kasir, dan toko
   online anggota, termasuk penerapan promo grup pada jalur ZK.
+- Menyediakan konfigurasi prioritas dan penggabungan pada CRUD Android,
+  Windows, JSP, dan ZK. Server menghitung ulang promo pada evaluasi serta
+  finalisasi sehingga semua kanal dan API menghasilkan keputusan yang sama.
 - Memindahkan seluruh tombol tindakan setelah pembayaran ke atas pratinjau
   struk agar kasir dapat langsung memulai transaksi baru tanpa menggulir
   rincian struk yang panjang.
