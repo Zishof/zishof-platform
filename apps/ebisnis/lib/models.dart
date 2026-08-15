@@ -231,6 +231,9 @@ class ItemKeranjang {
   final List<ItemEkstra> ekstra;
   bool promoManual;
   int? promoManualAturanId;
+  bool diskonBebas;
+  String diskonBebasTipe;
+  double diskonBebasNilai;
   ItemKeranjang(
       {required this.produk,
       this.jumlah = 1,
@@ -239,7 +242,10 @@ class ItemKeranjang {
       this.aturanDiskonId,
       this.ekstra = const [],
       this.promoManual = false,
-      this.promoManualAturanId});
+      this.promoManualAturanId,
+      this.diskonBebas = false,
+      this.diskonBebasTipe = 'NOMINAL',
+      this.diskonBebasNilai = 0});
 
   /// Harga ekstra dijumlahkan PER UNIT produk induk (padanan cara server
   /// mengalikan `ekstra` dgn qty induk saat checkout, lihat JavaDoc

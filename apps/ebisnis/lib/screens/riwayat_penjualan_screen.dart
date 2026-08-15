@@ -70,11 +70,15 @@ class _DialogEditTransaksi extends StatefulWidget {
     required this.nomor,
     required this.items,
     required this.waktu,
+    required this.kasirUserId,
+    required this.kasirNama,
   });
 
   final String nomor;
   final List<Map<String, dynamic>> items;
   final DateTime waktu;
+  final String kasirUserId;
+  final String kasirNama;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -83,9 +87,14 @@ class _DialogEditTransaksi extends StatefulWidget {
 class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   final _alasanController = TextEditingController();
   final _cariController = TextEditingController();
+  final _cariKasirController = TextEditingController();
   late final List<_BarisKoreksiTransaksi> _baris;
   List<Map<String, dynamic>> _hasilCari = [];
   bool _mencari = false;
+  List<Map<String, dynamic>> _hasilCariKasir = [];
+  bool _mencariKasir = false;
+  late String _kasirUserId;
+  late String _kasirNama;
   String? _pesan;
   late DateTime _waktu;
 
@@ -93,6 +102,8 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   void initState() {
     super.initState();
     _waktu = widget.waktu;
+    _kasirUserId = widget.kasirUserId;
+    _kasirNama = widget.kasirNama;
     _baris = widget.items
         .map((i) => _BarisKoreksiTransaksi(
               pembelianId: i['pembelianId'],
@@ -111,7 +122,48 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     }
     _alasanController.dispose();
     _cariController.dispose();
+    _cariKasirController.dispose();
     super.dispose();
+  }
+
+  Future<void> _cariKasir() async {
+    final kata = _cariKasirController.text.trim();
+    if (kata.length < 2) {
+      setState(
+          () => _pesan = 'Ketik sedikitnya 2 karakter ID atau nama kasir.');
+      return;
+    }
+    setState(() {
+      _mencariKasir = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('edit_transaksi_kasir_cari', {'keyword': kata});
+      if (!mounted) return;
+      setState(() => _hasilCariKasir = ((hasil['data'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList());
+    } catch (e) {
+      if (mounted) {
+        setState(() => _pesan =
+            'Akun kasir belum dapat dicari. Periksa koneksi, lalu coba kembali.');
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'mencari akun kasir');
+      }
+    } finally {
+      if (mounted) setState(() => _mencariKasir = false);
+    }
+  }
+
+  void _pilihKasir(Map<String, dynamic> akun) {
+    setState(() {
+      _kasirUserId = '${akun['userId'] ?? ''}'.trim();
+      _kasirNama = '${akun['nama'] ?? akun['userId'] ?? ''}'.trim();
+      _hasilCariKasir = [];
+      _cariKasirController.clear();
+    });
   }
 
   Future<void> _cariProduk() async {
@@ -200,15 +252,18 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       'alasan': alasan,
       'item': item,
       'waktu': _waktu.toIso8601String(),
+      if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
   }
 
   Future<void> _pilihWaktu() async {
+    final sekarang = DateTime.now();
+    final tanggalAwal = _waktu.isAfter(sekarang) ? sekarang : _waktu;
     final tanggal = await showDatePicker(
       context: context,
-      initialDate: _waktu,
+      initialDate: tanggalAwal,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      lastDate: sekarang,
     );
     if (tanggal == null || !mounted) return;
     final jam = await showTimePicker(
@@ -216,13 +271,17 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       initialTime: TimeOfDay.fromDateTime(_waktu),
     );
     if (jam == null || !mounted) return;
-    setState(() => _waktu = DateTime(
-          tanggal.year,
-          tanggal.month,
-          tanggal.day,
-          jam.hour,
-          jam.minute,
-        ));
+    final pilihan = DateTime(
+        tanggal.year, tanggal.month, tanggal.day, jam.hour, jam.minute);
+    if (pilihan.isAfter(DateTime.now())) {
+      setState(() => _pesan =
+          'Tanggal dan jam transaksi tidak boleh berada di masa depan.');
+      return;
+    }
+    setState(() {
+      _waktu = pilihan;
+      _pesan = null;
+    });
   }
 
   @override
@@ -258,6 +317,56 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 label: const Text('Ubah'),
               ),
             ),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _cariKasirController,
+                  onSubmitted: (_) => _cariKasir(),
+                  decoration: InputDecoration(
+                    labelText: 'Kasir transaksi',
+                    hintText: 'Cari ID atau nama pada tbmuser',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    helperText: _kasirNama.isEmpty
+                        ? 'Kasir saat ini belum tercatat'
+                        : 'Terpilih: $_kasirNama${_kasirUserId.isEmpty ? '' : ' ($_kasirUserId)'}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _mencariKasir ? null : _cariKasir,
+                icon: _mencariKasir
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search),
+                label: const Text('Cari Kasir'),
+              ),
+            ]),
+            if (_hasilCariKasir.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(8)),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _hasilCariKasir
+                      .map((akun) => ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.person_outline),
+                            title:
+                                Text('${akun['nama'] ?? akun['userId'] ?? ''}'),
+                            subtitle: Text('${akun['userId'] ?? ''}'),
+                            trailing: const Icon(Icons.check_circle_outline),
+                            onTap: () => _pilihKasir(akun),
+                          ))
+                      .toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
             Row(children: [
               Expanded(
                 child: TextField(
@@ -973,6 +1082,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         nomor: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
         items: items,
         waktu: _parseWaktuKoreksi(detail['waktu'] ?? row['waktu']),
+        kasirUserId: '${detail['kasirUserId'] ?? ''}',
+        kasirNama: '${detail['kasirNama'] ?? row['kasir'] ?? ''}',
       ),
     );
     if (hasilEdit == null || !mounted) return;
@@ -982,6 +1093,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         'alasan': hasilEdit['alasan'],
         'item': hasilEdit['item'],
         'waktu': hasilEdit['waktu'],
+        if (hasilEdit['kasir_user_id'] != null)
+          'kasir_user_id': hasilEdit['kasir_user_id'],
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

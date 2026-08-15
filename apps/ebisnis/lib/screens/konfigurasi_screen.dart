@@ -26,6 +26,7 @@ import 'hak_akses_screen.dart';
 import 'konfigurasi/tab_screensaver.dart';
 import 'konfigurasi/tab_impor_dbf.dart';
 import 'konfigurasi/tab_riwayat_cetak.dart';
+import 'konfigurasi/tab_sesi_kasir.dart';
 import '../product_profile.dart';
 import '../widgets/safe_state.dart';
 
@@ -69,7 +70,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
         (Sesi.instance.isPemilikSalesInventory || Sesi.instance.isAdmin);
     _tab = TabController(
         length:
-            5 + (_tampilkanRiwayatCetak ? 1 : 0) + (_tampilkanImporDbf ? 1 : 0),
+            6 + (_tampilkanRiwayatCetak ? 1 : 0) + (_tampilkanImporDbf ? 1 : 0),
         vsync: this);
   }
 
@@ -115,6 +116,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const Tab(text: 'Akun Pengguna'),
               const Tab(text: 'Screensaver'),
               const Tab(text: 'Alamat Server'),
+              const Tab(text: 'Sesi Kasir'),
               if (_tampilkanRiwayatCetak) const Tab(text: 'Riwayat Cetak'),
               if (_tampilkanImporDbf) const Tab(text: 'Impor DBF'),
             ],
@@ -126,6 +128,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const _TabAkunPengguna(),
               const TabScreensaver(),
               _TabAlamatServer(onUbah: _logout),
+              const TabSesiKasir(),
               if (_tampilkanRiwayatCetak) const TabRiwayatCetak(),
               if (_tampilkanImporDbf) const TabImporDbf(),
             ]),

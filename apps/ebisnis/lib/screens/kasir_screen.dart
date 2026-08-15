@@ -40,6 +40,7 @@ class KasirScreen extends StatefulWidget {
   final int? draftIdSumber;
   final String? draftKodeSumber;
   final Anggota? memberAwal;
+  final DateTime? waktuTransaksiAwal;
 
   const KasirScreen({
     super.key,
@@ -47,6 +48,7 @@ class KasirScreen extends StatefulWidget {
     this.draftIdSumber,
     this.draftKodeSumber,
     this.memberAwal,
+    this.waktuTransaksiAwal,
   });
 
   @override
@@ -72,6 +74,7 @@ class _KasirScreenState extends State<KasirScreen> {
   int? _draftIdSumber;
   String? _draftKodeSumber;
   Anggota? _memberAwal;
+  DateTime? _waktuTransaksiAwal;
   int _versiTransaksi = 0;
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
@@ -147,6 +150,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _draftIdSumber = widget.draftIdSumber;
     _draftKodeSumber = widget.draftKodeSumber;
     _memberAwal = widget.memberAwal;
+    _waktuTransaksiAwal = widget.waktuTransaksiAwal;
     _muatPreferensiTampilan();
     _muatAwal();
     if (_keranjang.isNotEmpty) {
@@ -669,6 +673,11 @@ class _KasirScreenState extends State<KasirScreen> {
         payloadTutup['modal_awal_koreksi'] = hasilTutup['modalAwalKoreksi'];
         payloadTutup['alasan_koreksi'] = hasilTutup['alasanKoreksi'];
       }
+      if (hasilTutup['penjualanTunaiKoreksi'] != null) {
+        payloadTutup['penjualan_tunai_koreksi'] =
+            hasilTutup['penjualanTunaiKoreksi'];
+        payloadTutup['alasan_koreksi'] = hasilTutup['alasanKoreksi'];
+      }
       final hasil =
           await ApiClient.instance.aksi('sesi_kas_tutup', payloadTutup);
       if (kodeLokal != null) await CoreDb.instance.tutupSesiKasLokal(kodeLokal);
@@ -808,6 +817,7 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftIdSumber = null;
       _draftKodeSumber = null;
       _memberAwal = null;
+      _waktuTransaksiAwal = null;
     });
     unawaited(_perbaruiJumlahPending());
     // Segarkan katalog segera setelah checkout. Server sudah menghitung ulang stok dari jurnal
@@ -1117,6 +1127,7 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftIdSumber = null;
       _draftKodeSumber = null;
       _memberAwal = null;
+      _waktuTransaksiAwal = null;
       _versiTransaksi++;
       _kataKunciController.clear();
       _kataKunci = '';
@@ -1139,6 +1150,7 @@ class _KasirScreenState extends State<KasirScreen> {
         draftIdSumber: _draftIdSumber,
         draftKodeSumber: _draftKodeSumber,
         memberAwal: _memberAwal,
+        waktuTransaksiAwal: _waktuTransaksiAwal,
       ),
     ));
     await _perbaruiJumlahPending();
@@ -1147,6 +1159,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _draftIdSumber = null;
         _draftKodeSumber = null;
         _memberAwal = null;
+        _waktuTransaksiAwal = null;
         _versiTransaksi++;
       }
     });
@@ -1770,6 +1783,7 @@ class _KasirScreenState extends State<KasirScreen> {
       draftIdSumber: _draftIdSumber,
       draftKodeSumber: _draftKodeSumber,
       memberAwal: _memberAwal,
+      waktuTransaksiAwal: _waktuTransaksiAwal,
       pencarianBarang: _fokusKeranjang ? _kotakPencarian() : null,
       tampilkanJudul: !_fokusKeranjang,
       aksiHeader: _fokusKeranjang
@@ -2553,6 +2567,7 @@ class _DialogTutupKas extends StatefulWidget {
 class _DialogTutupKasState extends State<_DialogTutupKas> {
   late final TextEditingController _uangFisikController;
   late final TextEditingController _modalAwalController;
+  late final TextEditingController _penjualanTunaiController;
   final _keteranganController = TextEditingController();
   final _alasanKoreksiController = TextEditingController();
   bool _modeKoreksi = false;
@@ -2563,11 +2578,16 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
     super.initState();
     final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
     final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final penjualanTunai =
+        (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
     _uangFisikController =
         TextEditingController(text: kasSaatIni.toStringAsFixed(0));
     _modalAwalController =
         TextEditingController(text: modalAwal.toStringAsFixed(0));
+    _penjualanTunaiController =
+        TextEditingController(text: penjualanTunai.toStringAsFixed(0));
     _modalAwalController.addListener(_perbaruiTampilanKoreksi);
+    _penjualanTunaiController.addListener(_perbaruiTampilanKoreksi);
   }
 
   void _perbaruiTampilanKoreksi() {
@@ -2578,6 +2598,9 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
   void dispose() {
     _uangFisikController.dispose();
     _modalAwalController
+      ..removeListener(_perbaruiTampilanKoreksi)
+      ..dispose();
+    _penjualanTunaiController
       ..removeListener(_perbaruiTampilanKoreksi)
       ..dispose();
     _keteranganController.dispose();
@@ -2598,12 +2621,20 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
       return;
     }
     double? modalAwalKoreksi;
+    double? penjualanTunaiKoreksi;
     if (_modeKoreksi) {
       modalAwalKoreksi = double.tryParse(
           _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
       if (modalAwalKoreksi == null || modalAwalKoreksi < 0) {
         setStateIfMounted(
             () => _error = 'Modal awal hasil koreksi wajib berupa angka.');
+        return;
+      }
+      penjualanTunaiKoreksi = double.tryParse(
+          _penjualanTunaiController.text.replaceAll(RegExp('[^0-9.]'), ''));
+      if (penjualanTunaiKoreksi == null || penjualanTunaiKoreksi < 0) {
+        setStateIfMounted(
+            () => _error = 'Penjualan tunai hasil koreksi wajib berupa angka.');
         return;
       }
       if (_alasanKoreksiController.text.trim().length < 5) {
@@ -2616,6 +2647,8 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
       'uangFisik': uangFisik,
       'keterangan': _keteranganController.text.trim(),
       if (modalAwalKoreksi != null) 'modalAwalKoreksi': modalAwalKoreksi,
+      if (penjualanTunaiKoreksi != null)
+        'penjualanTunaiKoreksi': penjualanTunaiKoreksi,
       if (modalAwalKoreksi != null)
         'alasanKoreksi': _alasanKoreksiController.text.trim(),
     });
@@ -2667,12 +2700,22 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
         _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
     final modalAwal =
         _modeKoreksi && modalAwalInput != null ? modalAwalInput : modalAwalAsli;
-    final totalTunai = (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
+    final totalTunaiAsli =
+        (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
+    final totalTunaiInput = double.tryParse(
+        _penjualanTunaiController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    final totalTunai = _modeKoreksi && totalTunaiInput != null
+        ? totalTunaiInput
+        : totalTunaiAsli;
     final totalNonTunai =
         (widget.status['totalNonTunai'] as num?)?.toDouble() ?? 0;
     final kasSaatIniAsli =
         (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
-    final kasSaatIni = kasSaatIniAsli + modalAwal - modalAwalAsli;
+    final kasSaatIni = kasSaatIniAsli +
+        modalAwal -
+        modalAwalAsli +
+        totalTunai -
+        totalTunaiAsli;
     final waktuBuka = _waktuBukaFormatted;
     return AlertDialog(
       title: const Text('Sesi Kasir'),
@@ -2731,6 +2774,8 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
                       if (!_modeKoreksi) {
                         _modalAwalController.text =
                             modalAwalAsli.toStringAsFixed(0);
+                        _penjualanTunaiController.text =
+                            totalTunaiAsli.toStringAsFixed(0);
                         _alasanKoreksiController.clear();
                       }
                     }),
@@ -2748,8 +2793,17 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Modal Awal Hasil Koreksi (Rp) *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _penjualanTunaiController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Penjualan Tunai Hasil Koreksi (Rp) *',
                     helperText:
-                        'Omzet tidak dapat diedit dan tetap mengikuti transaksi.',
+                        'Kas seharusnya dihitung ulang otomatis dari koreksi ini.',
                     border: OutlineInputBorder(),
                   ),
                 ),

@@ -247,6 +247,27 @@ class _PesananScreenState extends State<PesananScreen> {
     }
   }
 
+  DateTime _tanggalTransaksiTertahan(String nilai) {
+    final teks = nilai.trim();
+    if (teks.isEmpty) return DateTime.now();
+    final iso = DateTime.tryParse(teks);
+    if (iso != null) return iso;
+    final pola = <String>[
+      'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'dd/MM/yyyy HH:mm:ss',
+      'dd/MM/yyyy HH:mm',
+    ];
+    for (final format in pola) {
+      try {
+        return DateFormat(format).parseStrict(teks);
+      } catch (_) {
+        // Coba pola tanggal server berikutnya.
+      }
+    }
+    return DateTime.now();
+  }
+
   Future<void> _lihatDetailPending(Map<String, dynamic> row) async {
     final payload = _payloadPending(row);
     final items = (payload['transaksi'] as List?) ?? const [];
@@ -1147,6 +1168,9 @@ class _PesananScreenState extends State<PesananScreen> {
           diskon: i.diskon,
           cashback: i.cashback,
           aturanDiskonId: i.aturanDiskonId,
+          diskonBebas: i.diskon > 0 && i.aturanDiskonId == null,
+          diskonBebasTipe: 'NOMINAL',
+          diskonBebasNilai: i.diskon,
           ekstra: ekstra,
         ),
       );
@@ -1175,6 +1199,7 @@ class _PesananScreenState extends State<PesananScreen> {
         draftIdSumber: p.id,
         draftKodeSumber: p.kode,
         memberAwal: member,
+        waktuTransaksiAwal: _tanggalTransaksiTertahan(p.tanggalPembayaran),
       ),
     ));
     await _muat();

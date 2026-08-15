@@ -65,12 +65,14 @@ class KeranjangScreen extends StatelessWidget {
   final int? draftIdSumber;
   final String? draftKodeSumber;
   final Anggota? memberAwal;
+  final DateTime? waktuTransaksiAwal;
   const KeranjangScreen(
       {super.key,
       required this.keranjang,
       this.draftIdSumber,
       this.draftKodeSumber,
-      this.memberAwal});
+      this.memberAwal,
+      this.waktuTransaksiAwal});
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +82,8 @@ class KeranjangScreen extends StatelessWidget {
           keranjang: keranjang,
           draftIdSumber: draftIdSumber,
           draftKodeSumber: draftKodeSumber,
-          memberAwal: memberAwal),
+          memberAwal: memberAwal,
+          waktuTransaksiAwal: waktuTransaksiAwal),
     );
   }
 }
@@ -98,6 +101,7 @@ class PanelKeranjang extends StatefulWidget {
   final int? draftIdSumber;
   final String? draftKodeSumber;
   final Anggota? memberAwal;
+  final DateTime? waktuTransaksiAwal;
   final Widget? pencarianBarang;
 
   /// Header "Keranjang" + [aksiHeader] di kanannya (mis. tombol toggle Fokus
@@ -117,6 +121,7 @@ class PanelKeranjang extends StatefulWidget {
     this.draftIdSumber,
     this.draftKodeSumber,
     this.memberAwal,
+    this.waktuTransaksiAwal,
     this.pencarianBarang,
     this.tampilkanJudul = false,
     this.aksiHeader,
@@ -157,11 +162,21 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   int _halamanKeranjang = 1;
   ItemKeranjang? _itemTeratasTerakhir;
   bool _langsungTerlayani = true;
+  String? _alasanTahanTerpilih;
+  late DateTime _waktuTransaksi;
+
+  List<String> get _daftarAlasanTahan => Sesi.instance.alasanTahan.isEmpty
+      ? _alasanTahanBawaan
+      : Sesi.instance.alasanTahan;
 
   @override
   void initState() {
     super.initState();
     _memberTerpilih = widget.memberAwal;
+    _waktuTransaksi = widget.waktuTransaksiAwal ?? DateTime.now();
+    if (_daftarAlasanTahan.isNotEmpty) {
+      _alasanTahanTerpilih = _daftarAlasanTahan.first;
+    }
     _caraBayarTersedia = List<CaraBayar>.of(Sesi.instance.caraBayar);
     if (_caraBayarTersedia.isNotEmpty) {
       _caraBayarTerpilih =
@@ -535,6 +550,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             idx < items.length && idx < widget.keranjang.length;
             idx++) {
           final m = items[idx] as Map<String, dynamic>;
+          final item = widget.keranjang[idx];
+          if (item.diskonBebas) {
+            final nilaiBaris = item.subtotal;
+            final diskon = item.diskonBebasTipe == 'PERSEN'
+                ? nilaiBaris * item.diskonBebasNilai.clamp(0, 100) / 100
+                : item.diskonBebasNilai.clamp(0, nilaiBaris);
+            item
+              ..diskon = diskon.toDouble()
+              ..cashback = 0
+              ..aturanDiskonId = null;
+            continue;
+          }
           widget.keranjang[idx]
             ..diskon = (m['diskon'] as num?)?.toDouble() ?? 0
             ..cashback = (m['cashback'] as num?)?.toDouble() ?? 0
@@ -614,11 +641,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ],
       });
       daftar = ((hasil['promo'] as List?) ?? []).cast<Map<String, dynamic>>();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal memuat promo: $e')));
-      return;
+    } catch (_) {
+      // Diskon bebas tetap tersedia saat daftar master promo tidak dapat
+      // dimuat, termasuk ketika kasir sedang offline.
+      daftar = <Map<String, dynamic>>[];
     }
     if (!mounted) return;
     final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
@@ -627,7 +653,111 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       builder: (_) =>
           _SheetPilihPromoManual(daftar: daftar, namaItem: target.produk.nama),
     );
-    if (dipilih != null) await _terapkanPromoManual(target, dipilih);
+    if (dipilih == null) return;
+    if (dipilih['diskonBebas'] == true) {
+      await _terapkanDiskonBebas(target);
+    } else {
+      await _terapkanPromoManual(target, dipilih);
+    }
+  }
+
+  Future<void> _terapkanDiskonBebas(ItemKeranjang target) async {
+    var tipe = target.diskonBebas ? target.diskonBebasTipe : 'NOMINAL';
+    final controller = TextEditingController(
+        text: target.diskonBebas && target.diskonBebasNilai > 0
+            ? target.diskonBebasNilai.toStringAsFixed(0)
+            : '');
+    String? pesan;
+    final hasil = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Diskon Bebas - ${target.produk.nama}'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: tipe,
+                  decoration: const InputDecoration(
+                      labelText: 'Jenis diskon', border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'NOMINAL', child: Text('Nominal (Rp)')),
+                    DropdownMenuItem(
+                        value: 'PERSEN', child: Text('Persentase (%)')),
+                  ],
+                  onChanged: (v) => setDialogState(() {
+                    tipe = v ?? 'NOMINAL';
+                    pesan = null;
+                  }),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: tipe == 'PERSEN'
+                        ? 'Persentase diskon'
+                        : 'Nominal diskon',
+                    suffixText: tipe == 'PERSEN' ? '%' : 'Rp',
+                    helperText:
+                        'Maksimal nilai item ${_formatRupiah.format(target.subtotal)}.',
+                    errorText: pesan,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final nilai = double.tryParse(
+                    controller.text.replaceAll(',', '.').trim());
+                final tidakValid = nilai == null ||
+                    nilai < 0 ||
+                    (tipe == 'PERSEN' && nilai > 100) ||
+                    (tipe == 'NOMINAL' && nilai > target.subtotal);
+                if (tidakValid) {
+                  setDialogState(() => pesan = tipe == 'PERSEN'
+                      ? 'Persentase harus antara 0 sampai 100.'
+                      : 'Nominal tidak boleh melebihi nilai item.');
+                  return;
+                }
+                Navigator.pop(dialogContext, {'tipe': tipe, 'nilai': nilai});
+              },
+              child: const Text('Terapkan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (hasil == null || !mounted) return;
+    final nilai = (hasil['nilai'] as num).toDouble();
+    final jenis = '${hasil['tipe']}';
+    setStateIfMounted(() {
+      target
+        ..diskonBebas = true
+        ..diskonBebasTipe = jenis
+        ..diskonBebasNilai = nilai
+        ..diskon = jenis == 'PERSEN'
+            ? target.subtotal * nilai / 100
+            : nilai.clamp(0, target.subtotal).toDouble()
+        ..cashback = 0
+        ..aturanDiskonId = null
+        ..promoManual = false
+        ..promoManualAturanId = null;
+      _sinkronkanUangDiterima();
+    });
+    _siarkanKeranjang();
   }
 
   /// Terapkan satu aturan hanya pada satu baris barang. Server tetap menjadi
@@ -659,7 +789,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           ..cashback = (m?['cashback'] as num?)?.toDouble() ?? 0
           ..aturanDiskonId = aturanDiskon
           ..promoManual = cocok
-          ..promoManualAturanId = cocok ? aturanId : null;
+          ..promoManualAturanId = cocok ? aturanId : null
+          ..diskonBebas = false
+          ..diskonBebasNilai = 0;
         if (cocok) _metadataPromoManual[aturanId] = promo;
         _sinkronkanUangDiterima();
       });
@@ -681,7 +813,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     setStateIfMounted(() {
       item
         ..promoManual = false
-        ..promoManualAturanId = null;
+        ..promoManualAturanId = null
+        ..diskonBebas = false
+        ..diskonBebasNilai = 0;
     });
     _jadwalkanEvaluasiDiskon();
   }
@@ -690,9 +824,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   void _hapusPromoManual() {
     setStateIfMounted(() {
       for (final i in widget.keranjang) {
-        if (i.promoManual) {
+        if (i.promoManual || i.diskonBebas) {
           i.promoManual = false;
           i.promoManualAturanId = null;
+          i.diskonBebas = false;
+          i.diskonBebasNilai = 0;
         }
       }
       _metadataPromoManual.clear();
@@ -826,6 +962,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 'jumlah': i.jumlah,
                 'diskon': i.diskon,
                 'aturanDiskon': i.aturanDiskonId,
+                'diskon_bebas': i.diskonBebas,
+                if (i.diskonBebas) ...{
+                  'diskon_bebas_tipe': i.diskonBebasTipe,
+                  'diskon_bebas_nilai': i.diskonBebasNilai,
+                },
                 'cashback': i.cashback,
                 // Purely ADDITIVE (gap-closure "Produk Ekstra") -- selalu
                 // disertakan sbg array, kosong utk mayoritas baris tanpa
@@ -850,9 +991,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// baik gagal jelas drpd diam-diam antre lokal tanpa ada layar Pesanan
   /// utk memuatnya kembali).
   Future<String?> _pilihAlasanTahan() async {
-    final daftar = Sesi.instance.alasanTahan.isEmpty
-        ? _alasanTahanBawaan
-        : Sesi.instance.alasanTahan;
+    final daftar = _daftarAlasanTahan;
     var pilihan = daftar.first;
     final lainController = TextEditingController();
     try {
@@ -949,12 +1088,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text('Pilih metode pembayaran terlebih dahulu.')));
       return;
     }
-    final alasanTahan = await _pilihAlasanTahan();
+    final alasanTahan = _alasanTahanTerpilih == '__LAINNYA__'
+        ? await _pilihAlasanTahan()
+        : _alasanTahanTerpilih;
     if (alasanTahan == null || alasanTahan.isEmpty) return;
     setStateIfMounted(() => _memproses = true);
     try {
       final kodeUnik = await _buatKodeUnik();
-      final payload = _buatPayload(kodeUnik, DateTime.now());
+      final waktu =
+          widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
+      final payload = _buatPayload(kodeUnik, waktu);
       payload['keterangan'] = alasanTahan;
       await ApiClient.instance.aksi('draft_bayar', payload);
       widget.keranjang.clear();
@@ -970,6 +1113,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _splitBayar = [];
         _nilaiDiskonFaktur = 0;
         _tipeDiskonFaktur = 'NOMINAL';
+        _alasanTahanTerpilih =
+            _daftarAlasanTahan.isEmpty ? null : _daftarAlasanTahan.first;
       });
       unawaited(_muatCaraBayarUntukMember(null));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1005,7 +1150,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (!await _verifikasiPinJikaPerlu()) return;
 
       final kodeUnik = await _buatKodeUnik();
-      final waktu = DateTime.now();
+      final waktu =
+          widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
       final payload =
           _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
       final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
@@ -1432,11 +1578,80 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     );
   }
 
+  Future<void> _pilihWaktuTransaksi() async {
+    final sekarang = DateTime.now();
+    final tanggalAwal =
+        _waktuTransaksi.isAfter(sekarang) ? sekarang : _waktuTransaksi;
+    final tanggal = await showDatePicker(
+      context: context,
+      initialDate: tanggalAwal,
+      firstDate: DateTime(2000),
+      lastDate: sekarang,
+      helpText: 'Pilih tanggal transaksi',
+    );
+    if (tanggal == null || !mounted) return;
+    final jam = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_waktuTransaksi),
+      helpText: 'Pilih jam transaksi',
+    );
+    if (jam == null || !mounted) return;
+    final pilihan = DateTime(
+      tanggal.year,
+      tanggal.month,
+      tanggal.day,
+      jam.hour,
+      jam.minute,
+    );
+    if (pilihan.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Tanggal dan jam transaksi tidak boleh di masa depan.')));
+      return;
+    }
+    setStateIfMounted(() => _waktuTransaksi = pilihan);
+  }
+
+  Widget _pemilihWaktuTransaksiTertahan() {
+    if (widget.draftIdSumber == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _labelBagian('Tanggal transaksi'),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _memproses ? null : _pilihWaktuTransaksi,
+            borderRadius: BorderRadius.circular(10),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Tanggal dan jam transaksi',
+                helperText:
+                    'Transaksi tertahan akan disimpan pada tanggal/jam ini.',
+                border: _radiusInput,
+                isDense: true,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(DateFormat('dd-MM-yyyy HH:mm').format(_waktuTransaksi)),
+                  const Icon(Icons.calendar_month_outlined, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Pintu masuk pengaturan promo per barang. Kasir memilih barang dahulu,
   /// kemudian memilih promo/cashback yang eligible khusus untuk barang itu.
   Widget _promoManualPicker() {
     if (widget.keranjang.isEmpty) return const SizedBox.shrink();
-    final jumlahAktif = widget.keranjang.where((i) => i.promoManual).length;
+    final jumlahAktif =
+        widget.keranjang.where((i) => i.promoManual || i.diskonBebas).length;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1451,7 +1666,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               icon: const Icon(Icons.sell_outlined, size: 18),
               label: Text(jumlahAktif == 0
                   ? 'Atur Promo per Item'
-                  : '$jumlahAktif item memakai promo manual'),
+                  : '$jumlahAktif item memakai promo/diskon bebas'),
               style: OutlinedButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
@@ -1466,7 +1681,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               child: TextButton.icon(
                 onPressed: _hapusPromoManual,
                 icon: const Icon(Icons.close, size: 16),
-                label: const Text('Lepas semua promo manual'),
+                label: const Text('Lepas semua promo/diskon'),
               ),
             ),
         ],
@@ -1641,18 +1856,20 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                                 tapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap),
                             icon: Icon(
-                                item.promoManual
+                                item.promoManual || item.diskonBebas
                                     ? Icons.sell
                                     : Icons.sell_outlined,
                                 size: 14),
                             label: Text(
-                              item.promoManual
-                                  ? '${_metadataPromoManual[item.promoManualAturanId]?['namaAturan'] ?? 'Promo manual'}'
-                                  : 'Atur promo item',
+                              item.diskonBebas
+                                  ? 'Diskon bebas ${item.diskonBebasTipe == 'PERSEN' ? '${item.diskonBebasNilai.toStringAsFixed(0)}%' : _formatRupiah.format(item.diskonBebasNilai)}'
+                                  : item.promoManual
+                                      ? '${_metadataPromoManual[item.promoManualAturanId]?['namaAturan'] ?? 'Promo manual'}'
+                                      : 'Atur promo item',
                               style: const TextStyle(fontSize: 11),
                             ),
                           ),
-                          if (item.promoManual)
+                          if (item.promoManual || item.diskonBebas)
                             IconButton(
                               tooltip: 'Lepas promo item ini',
                               onPressed: () => _hapusPromoManualItem(item),
@@ -1755,6 +1972,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _pemilihWaktuTransaksiTertahan(),
             _pemilihMember(),
             _promoManualPicker(),
             Divider(height: 1, color: AppColors.borderOf(context)),
@@ -1990,6 +2208,32 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _alasanTahanTerpilih,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Alasan transaksi ditahan',
+                prefixIcon: Icon(Icons.pause_circle_outline),
+                border: OutlineInputBorder(),
+                helperText: 'Alasan ikut disimpan pada struktur pembayaran.',
+              ),
+              items: [
+                for (final alasan in _daftarAlasanTahan)
+                  DropdownMenuItem<String>(
+                    value: alasan,
+                    child: Text(alasan, overflow: TextOverflow.ellipsis),
+                  ),
+                const DropdownMenuItem<String>(
+                  value: '__LAINNYA__',
+                  child: Text('Alasan lainnya...'),
+                ),
+              ],
+              onChanged: _memproses
+                  ? null
+                  : (nilai) =>
+                      setStateIfMounted(() => _alasanTahanTerpilih = nilai),
             ),
             const SizedBox(height: 8),
             Row(
@@ -2393,6 +2637,7 @@ class _SheetPilihItemPromoManual extends StatelessWidget {
                     title: Text(item.produk.nama),
                     subtitle: Text([
                       '${item.jumlah} x ${_formatRupiah.format(item.produk.hargaJual)}',
+                      if (item.diskonBebas) 'Sudah memakai diskon bebas',
                       if (item.promoManual) 'Sudah memakai promo manual',
                     ].join(' - ')),
                     trailing: const Icon(Icons.chevron_right),
@@ -2463,33 +2708,35 @@ class _SheetPilihPromoManual extends StatelessWidget {
                 ),
               ),
               Flexible(
-                child: daftar.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                            'Tidak ada promo manual yang berlaku untuk $namaItem.',
-                            style: TextStyle(
-                                color: AppColors.textSecondaryOf(context))),
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        itemCount: daftar.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final p = daftar[i];
-                          return ListTile(
-                            leading: const Icon(Icons.sell_outlined),
-                            title: Text('${p['namaAturan'] ?? ''}'),
-                            subtitle: Text([
-                              _keterangan(p),
-                              if ('${p['keterangan'] ?? ''}'.isNotEmpty)
-                                '${p['keterangan']}',
-                            ].join(' - ')),
-                            onTap: () => Navigator.of(context).pop(p),
-                          );
-                        },
-                      ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: daftar.length + 1,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return ListTile(
+                        leading: const Icon(Icons.percent_outlined),
+                        title: const Text('Diskon Bebas'),
+                        subtitle: const Text(
+                            'Masukkan potongan nominal atau persentase tanpa master promo.'),
+                        onTap: () => Navigator.of(context)
+                            .pop(<String, dynamic>{'diskonBebas': true}),
+                      );
+                    }
+                    final p = daftar[i - 1];
+                    return ListTile(
+                      leading: const Icon(Icons.sell_outlined),
+                      title: Text('${p['namaAturan'] ?? ''}'),
+                      subtitle: Text([
+                        _keterangan(p),
+                        if ('${p['keterangan'] ?? ''}'.isNotEmpty)
+                          '${p['keterangan']}',
+                      ].join(' - ')),
+                      onTap: () => Navigator.of(context).pop(p),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 8),
             ],
