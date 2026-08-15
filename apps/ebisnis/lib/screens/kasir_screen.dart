@@ -1274,6 +1274,13 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  /// Semua aksi operasional pada halaman Kasir dikunci sampai sesi kas aktif.
+  /// Navigasi sidebar dikelola AppShell dan Logout sengaja tetap tersedia.
+  bool get _aksiKasirAktif =>
+      !Sesi.instance.wajibSesiKas || _kasTerbuka == true;
+
+  bool get _bolehMembukaKas => _kasTerbuka == false && !_sesiKasDiPerangkatLain;
+
   List<Widget> get _tombolAksiMobile => [
         PopupMenuButton<_AksiKasirMobile>(
           key: const Key('menu-aksi-kasir-mobile'),
@@ -1308,6 +1315,7 @@ class _KasirScreenState extends State<KasirScreen> {
           itemBuilder: (context) => [
             PopupMenuItem(
               value: _AksiKasirMobile.transaksiBaru,
+              enabled: _aksiKasirAktif,
               child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.add_shopping_cart_outlined),
@@ -1317,7 +1325,7 @@ class _KasirScreenState extends State<KasirScreen> {
             const PopupMenuDivider(),
             PopupMenuItem(
               value: _AksiKasirMobile.kas,
-              enabled: _kasTerbuka != null,
+              enabled: _kasTerbuka == true || _bolehMembukaKas,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.point_of_sale_outlined),
@@ -1326,7 +1334,7 @@ class _KasirScreenState extends State<KasirScreen> {
             ),
             PopupMenuItem(
               value: _AksiKasirMobile.sinkron,
-              enabled: !_sinkronBerjalan,
+              enabled: _aksiKasirAktif && !_sinkronBerjalan,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.sync),
@@ -1335,17 +1343,19 @@ class _KasirScreenState extends State<KasirScreen> {
                     : 'Sync'),
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _AksiKasirMobile.muatUlang,
-              child: ListTile(
+              enabled: _aksiKasirAktif,
+              child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.refresh),
                 title: Text('Muat Ulang'),
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _AksiKasirMobile.akun,
-              child: ListTile(
+              enabled: _aksiKasirAktif,
+              child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.account_circle_outlined),
                 title: Text('Akun Saya'),
@@ -1369,12 +1379,12 @@ class _KasirScreenState extends State<KasirScreen> {
           _tombolToolbar(
               icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
               label: 'Transaksi Baru',
-              onPressed: _transaksiBaru,
+              onPressed: _aksiKasirAktif ? _transaksiBaru : null,
               tooltip: 'Mulai transaksi baru'),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: OutlinedButton.icon(
-              onPressed: _toggleFokusKeranjang,
+              onPressed: _aksiKasirAktif ? _toggleFokusKeranjang : null,
               icon: Icon(
                   _fokusKeranjang
                       ? Icons.grid_view_outlined
@@ -1462,17 +1472,17 @@ class _KasirScreenState extends State<KasirScreen> {
             _tombolToolbar(
                 icon: const Icon(Icons.storefront_outlined, size: 18),
                 label: 'Toko',
-                onPressed: _gantiToko,
+                onPressed: _aksiKasirAktif ? _gantiToko : null,
                 tooltip: 'Ganti Toko'),
           _tombolToolbar(
               icon: const Icon(Icons.desktop_windows_outlined, size: 18),
               label: 'Layar',
-              onPressed: _bukaLayarPelanggan,
+              onPressed: _aksiKasirAktif ? _bukaLayarPelanggan : null,
               tooltip: 'Layar Pelanggan (F9)'),
           _tombolToolbar(
               icon: const Icon(Icons.cloud_download_outlined, size: 18),
               label: 'Update',
-              onPressed: _cekUpdateManual,
+              onPressed: _aksiKasirAktif ? _cekUpdateManual : null,
               tooltip: 'Cek Update Sistem'),
           _tombolToolbar(
             icon: _bukaLaciBerjalan
@@ -1482,7 +1492,7 @@ class _KasirScreenState extends State<KasirScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.point_of_sale, size: 18),
             label: 'Laci',
-            onPressed: _bukaLaciBerjalan ? null : _bukaLaci,
+            onPressed: !_aksiKasirAktif || _bukaLaciBerjalan ? null : _bukaLaci,
             tooltip: 'Buka Laci (F6)',
           ),
         ],
@@ -1491,11 +1501,12 @@ class _KasirScreenState extends State<KasirScreen> {
           label: _kasTerbuka == true
               ? 'Kas'
               : (_kasTerbuka == null ? 'Cek Kas' : 'Buka Kas'),
-          onPressed: _kasTerbuka == null
-              ? null
-              : (_kasTerbuka == true
-                  ? _bukaDialogTutupKas
-                  : _bukaDialogBukaKas),
+          onPressed:
+              _kasTerbuka == null || (_kasTerbuka == false && !_bolehMembukaKas)
+                  ? null
+                  : (_kasTerbuka == true
+                      ? _bukaDialogTutupKas
+                      : _bukaDialogBukaKas),
           tooltip: _kasTerbuka == true
               ? 'Sesi Kasir / Tutup Kas'
               : 'Buka sesi kasir',
@@ -1512,18 +1523,19 @@ class _KasirScreenState extends State<KasirScreen> {
                 : const Icon(Icons.sync, size: 18),
           ),
           label: 'Sync',
-          onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
+          onPressed:
+              !_aksiKasirAktif || _sinkronBerjalan ? null : _sinkronkanSekarang,
           tooltip: 'Sinkronkan transaksi tertunda (F8)',
         ),
         _tombolToolbar(
             icon: const Icon(Icons.refresh, size: 18),
             label: 'Muat Ulang',
-            onPressed: _muatAwal,
+            onPressed: _aksiKasirAktif ? _muatAwal : null,
             tooltip: 'Muat ulang katalog'),
         _tombolToolbar(
             icon: const Icon(Icons.account_circle_outlined, size: 18),
             label: 'Akun Saya',
-            onPressed: _bukaAkunSaya,
+            onPressed: _aksiKasirAktif ? _bukaAkunSaya : null,
             tooltip: 'Akun Saya'),
         _tombolToolbar(
             icon: const Icon(Icons.logout, size: 18),
@@ -1542,6 +1554,7 @@ class _KasirScreenState extends State<KasirScreen> {
       return KeyEventResult.ignored;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (!_aksiKasirAktif) return KeyEventResult.handled;
     if (event.logicalKey == LogicalKeyboardKey.f1) {
       _bukaBantuan();
       return KeyEventResult.handled;

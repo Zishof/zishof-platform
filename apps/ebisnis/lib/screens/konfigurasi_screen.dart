@@ -1225,9 +1225,10 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
             AppFormSwitchTile(
-              title: 'Boleh transaksi saat stok habis',
-              subtitle:
-                  'Default OFF. Jika ON, penjualan tetap dapat diproses saat stok toko ini nol atau minus. Tidak memengaruhi toko lain dan produk kedaluwarsa tetap ditolak.',
+              title: 'Paksa semua produk boleh stok minus',
+              subtitle: _bolehTransaksiStokHabis
+                  ? 'Mode aktif: seluruh produk di toko ini boleh dijual saat stok nol atau minus, walaupun izin pada produk tidak dicentang. Toko lain tidak terpengaruh.'
+                  : 'Mode normal: ikuti izin “Boleh dijual walau stok minus” pada masing-masing produk. Produk yang tidak diizinkan tetap ditolak saat stok tidak cukup.',
               value: _bolehTransaksiStokHabis,
               onChanged: _bolehUbah
                   ? (nilai) =>
