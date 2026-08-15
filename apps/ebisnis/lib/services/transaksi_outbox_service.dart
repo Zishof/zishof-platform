@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api_client.dart';
 import '../sesi.dart';
@@ -13,24 +14,64 @@ import 'pelayanan_transaksi.dart';
 /// retry tidak bergantung pada layar Kasir sedang terbuka atau tombol Sinkron
 /// ditekan pengguna.
 ///
-/// Hanya kegagalan jaringan/timeout yang terus dicoba. Penolakan bisnis yang
-/// pasti (stok/saldo/hak akses/payload tidak valid) ditandai GAGAL agar tidak
-/// membanjiri server setiap sepuluh menit. Semua retry memakai `kode_unik`
-/// asli, sehingga aman terhadap respons yang hilang setelah server sempat
-/// menyimpan transaksi.
+/// Kegagalan jaringan/timeout dan gangguan teknis server terus dicoba sesuai
+/// interval yang dapat dikonfigurasi. Penolakan bisnis yang pasti
+/// (stok/saldo/hak akses/payload tidak valid) ditandai GAGAL agar tidak
+/// membanjiri server. Semua retry memakai `kode_unik` asli, sehingga aman
+/// terhadap respons yang hilang setelah server sempat menyimpan transaksi.
 class TransaksiOutboxService {
   TransaksiOutboxService._();
 
   static final TransaksiOutboxService instance = TransaksiOutboxService._();
-  static const intervalRetry = Duration(minutes: 10);
+  static const int intervalRetryMenitDefault = 10;
+  static const String _kunciIntervalRetry =
+      'transaksi_pending_interval_retry_menit';
 
   Timer? _timer;
   Future<HasilSinkronisasiTransaksi>? _prosesAktif;
+  bool _sedangMemulai = false;
+  int _intervalRetryMenit = intervalRetryMenitDefault;
+
+  int get intervalRetryMenit => _intervalRetryMenit;
 
   void mulai() {
-    if (_timer != null) return;
+    if (_timer != null || _sedangMemulai) return;
+    _sedangMemulai = true;
+    unawaited(_mulaiInternal());
+  }
+
+  Future<void> _mulaiInternal() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      _intervalRetryMenit = _normalisasiInterval(
+          sp.getInt(_kunciIntervalRetry) ?? intervalRetryMenitDefault);
+      _pasangTimer();
+    } finally {
+      _sedangMemulai = false;
+    }
     unawaited(sinkronkan());
-    _timer = Timer.periodic(intervalRetry, (_) => unawaited(sinkronkan()));
+  }
+
+  int _normalisasiInterval(int menit) => menit.clamp(1, 1440).toInt();
+
+  void _pasangTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(
+        Duration(minutes: _intervalRetryMenit), (_) => unawaited(sinkronkan()));
+  }
+
+  Future<void> aturIntervalRetryMenit(int menit) async {
+    _intervalRetryMenit = _normalisasiInterval(menit);
+    final sp = await SharedPreferences.getInstance();
+    await sp.setInt(_kunciIntervalRetry, _intervalRetryMenit);
+    _pasangTimer();
+  }
+
+  Future<int> muatIntervalRetryMenit() async {
+    final sp = await SharedPreferences.getInstance();
+    _intervalRetryMenit = _normalisasiInterval(
+        sp.getInt(_kunciIntervalRetry) ?? intervalRetryMenitDefault);
+    return _intervalRetryMenit;
   }
 
   Future<HasilSinkronisasiTransaksi> sinkronkan() {
@@ -97,16 +138,34 @@ class TransaksiOutboxService {
           continue;
         }
         await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
-        if (e is ApiException && e.offline) {
-          // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
-          // menghasilkan error yang sama; timer akan mencoba lagi 10 menit.
-          break;
+        if (dapatDicobaUlang(e)) {
+          if (e is ApiException && e.offline) {
+            // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
+            // menghasilkan error yang sama; timer akan mencoba lagi sesuai
+            // interval yang dikonfigurasi.
+            break;
+          }
+          // Error teknis server dapat bersifat khusus pada satu payload.
+          // Biarkan tetap PENDING, lalu lanjutkan transaksi berikutnya.
+          continue;
         }
+        // Penolakan bisnis yang pasti tidak akan membaik hanya dengan retry
+        // (mis. stok/saldo/hak akses). Simpan sebagai GAGAL untuk audit, jangan
+        // hapus, dan jangan membanjiri server setiap interval.
         await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, pesan);
       }
     }
     return HasilSinkronisasiTransaksi(
         total: pending.length, berhasil: berhasil);
+  }
+
+  /// Network, HTTP 5xx, respons server yang tidak valid, dan error internal
+  /// tanpa kode bisnis adalah kegagalan teknis yang aman dicoba ulang dengan
+  /// idempotency key yang sama.
+  bool dapatDicobaUlang(Object error) {
+    if (error is! ApiException) return true;
+    if (error.offline || (error.statusHttp ?? 0) >= 500) return true;
+    return (error.kode ?? '').trim().isEmpty;
   }
 }
 

@@ -710,8 +710,11 @@ class StrukScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            Text(modeCetakUlang ? 'Preview Cetak Struk' : 'Transaksi Berhasil'),
+        title: Text(modeCetakUlang
+            ? 'Preview Cetak Struk'
+            : tersinkron
+                ? 'Transaksi Berhasil'
+                : 'Transaksi Tersimpan Pending'),
         automaticallyImplyLeading: modeCetakUlang,
       ),
       body: Center(

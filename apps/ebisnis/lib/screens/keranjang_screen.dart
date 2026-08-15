@@ -14,6 +14,7 @@ import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
+import '../services/transaksi_outbox_service.dart';
 import '../widgets/panduan_stok_kosong.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
@@ -1000,12 +1001,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
       } catch (e) {
-        if (e is ApiException && e.offline) {
+        if (TransaksiOutboxService.instance.dapatDicobaUlang(e)) {
+          await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, e.toString());
           pesanTundaMenuju =
-              'Tidak ada koneksi -- transaksi tersimpan & akan disinkron otomatis nanti.';
+              'Transaksi tersimpan sebagai Pending. Kasir dapat melayani transaksi lain; aplikasi akan mencoba mengirimkannya kembali secara otomatis.';
         } else {
-          // Server MENOLAK (bukan sekadar offline) -- batalkan, jangan lanjut ke struk.
-          await CoreDb.instance.hapusTransaksiPending(kodeUnik);
+          // Penolakan bisnis bukan antrean retry, namun rekamannya tetap
+          // disimpan sebagai GAGAL untuk audit dan tidak pernah dihapus.
+          await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, e.toString());
           if (mounted) {
             if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(

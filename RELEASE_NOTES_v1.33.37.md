@@ -10,5 +10,10 @@
 - Memperjelas pesan kesalahan pembayaran untuk pengguna dengan detail teknis
   yang tetap dapat dibuka dan disalin.
 - Menampilkan barang yang baru dipindai pada urutan teratas keranjang.
-- Menjaga transaksi yang gagal karena jaringan di antrean lokal untuk dicoba
-  ulang secara otomatis.
+- Menjaga transaksi yang gagal karena jaringan atau gangguan teknis server di
+  antrean lokal agar kasir dapat langsung melayani pelanggan berikutnya.
+- Menambahkan tab **Transaksi Pending** pada menu Pesanan, lengkap dengan
+  status Pending/Sukses/Gagal, rincian barang, kendala terakhir, retry manual,
+  dan interval retry otomatis yang dapat diatur (bawaan 10 menit).
+- Mempertahankan transaksi yang sudah sukses di jurnal lokal sebagai bahan
+  audit; hanya statusnya yang berubah menjadi Sukses dan datanya tidak dihapus.

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/pesanan_poller.dart';
+import '../services/transaksi_outbox_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
@@ -17,7 +20,7 @@ import '../widgets/safe_state.dart';
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-enum _Filter { semua, online, tertahan }
+enum _Filter { semua, online, tertahan, pending }
 
 const _tinggiKartuKpiPesanan = 96.0;
 const _pageSizePesanan = 15;
@@ -55,11 +58,19 @@ class _PesananScreenState extends State<PesananScreen> {
   int _totalPesanan = 0;
   Map<String, dynamic> _ringkasan = const {};
   bool _sedangMembayarSemuaTertahan = false;
+  bool _sedangSinkronPending = false;
+  List<Map<String, dynamic>> _transaksiPending = [];
+  int _totalTransaksiPending = 0;
+  int _jumlahPendingAktif = 0;
+  int _halamanPending = 1;
+  String? _statusPending;
+  int _intervalRetryMenit = TransaksiOutboxService.intervalRetryMenitDefault;
 
   @override
   void initState() {
     super.initState();
     _muat();
+    _muatRingkasanPending();
     PesananPoller.instance.tandaiSudahDilihat();
   }
 
@@ -77,6 +88,10 @@ class _PesananScreenState extends State<PesananScreen> {
       _pesanError = null;
     });
     try {
+      if (_filter == _Filter.pending) {
+        await _muatTransaksiPending(aturLoading: false);
+        return;
+      }
       final payload = _payloadDaftarPesanan(
         page: _halamanPesanan,
         pageSize: _pageSizePesanan,
@@ -96,6 +111,311 @@ class _PesananScreenState extends State<PesananScreen> {
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
+  }
+
+  Future<void> _muatTransaksiPending({bool aturLoading = true}) async {
+    if (aturLoading) setStateIfMounted(() => _memuat = true);
+    try {
+      final hasil = await CoreDb.instance.listTransaksiPending(
+        limit: _pageSizePesanan,
+        offset: (_halamanPending - 1) * _pageSizePesanan,
+        status: _statusPending,
+      );
+      final jumlahAktif = await CoreDb.instance.jumlahTransaksiPending();
+      final interval =
+          await TransaksiOutboxService.instance.muatIntervalRetryMenit();
+      setStateIfMounted(() {
+        _transaksiPending = hasil.data.cast<Map<String, dynamic>>();
+        _totalTransaksiPending = hasil.total;
+        _jumlahPendingAktif = jumlahAktif;
+        _intervalRetryMenit = interval;
+        _pesanError = null;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = e.toString());
+    } finally {
+      if (aturLoading && mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _muatRingkasanPending() async {
+    final jumlah = await CoreDb.instance.jumlahTransaksiPending();
+    final interval =
+        await TransaksiOutboxService.instance.muatIntervalRetryMenit();
+    setStateIfMounted(() {
+      _jumlahPendingAktif = jumlah;
+      _intervalRetryMenit = interval;
+    });
+  }
+
+  Future<void> _sinkronkanPendingSekarang() async {
+    if (_sedangSinkronPending) return;
+    setStateIfMounted(() => _sedangSinkronPending = true);
+    try {
+      final hasil = await TransaksiOutboxService.instance.sinkronkan();
+      await _muatTransaksiPending(aturLoading: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${hasil.berhasil} dari ${hasil.total} transaksi berhasil dikirim.'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'sinkron transaksi pending');
+      }
+    } finally {
+      setStateIfMounted(() => _sedangSinkronPending = false);
+    }
+  }
+
+  Future<void> _aturIntervalRetry() async {
+    final controller =
+        TextEditingController(text: _intervalRetryMenit.toString());
+    final simpan = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Interval Retry Transaksi Pending'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'Aplikasi akan mencoba mengirim ulang transaksi Pending secara otomatis. Nilai bawaan adalah 10 menit.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Interval (menit)',
+                helperText: 'Minimal 1 menit, maksimal 1.440 menit',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (simpan != true) {
+      controller.dispose();
+      return;
+    }
+    final menit = int.tryParse(controller.text.trim());
+    controller.dispose();
+    if (menit == null || menit < 1 || menit > 1440) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Interval harus antara 1 sampai 1.440 menit.')));
+      }
+      return;
+    }
+    await TransaksiOutboxService.instance.aturIntervalRetryMenit(menit);
+    setStateIfMounted(() => _intervalRetryMenit = menit);
+  }
+
+  Map<String, dynamic> _payloadPending(Map<String, dynamic> row) {
+    try {
+      return Map<String, dynamic>.from(
+          jsonDecode('${row['payload_json']}') as Map);
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  String _waktuPending(Object? nilai) {
+    try {
+      return DateFormat('dd-MM-yyyy HH:mm:ss').format(DateTime.parse('$nilai'));
+    } catch (_) {
+      return '$nilai';
+    }
+  }
+
+  Future<void> _lihatDetailPending(Map<String, dynamic> row) async {
+    final payload = _payloadPending(row);
+    final items = (payload['transaksi'] as List?) ?? const [];
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Transaksi ${row['kode_unik'] ?? '-'}'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    'Status: ${row['status'] == 'SYNCED' ? 'Sukses' : row['status']}'),
+                Text('Dibuat: ${_waktuPending(row['dibuat_pada'])}'),
+                Text('Percobaan kirim: ${row['percobaan'] ?? 0}'),
+                Text(
+                    'Terakhir dicoba: ${row['terakhir_dicoba'] == null ? '-' : _waktuPending(row['terakhir_dicoba'])}'),
+                const Divider(height: 24),
+                const Text('Rincian barang',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                ...items.map((item) {
+                  final map = item is Map ? item : const {};
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(
+                        '${map['nama'] ?? map['kode'] ?? '-'} × ${map['jumlah'] ?? 0} — ${_formatRupiah.format((map['harga'] as num?)?.toDouble() ?? 0)}'),
+                  );
+                }),
+                const Divider(height: 24),
+                Text(
+                    'Total: ${_formatRupiah.format((payload['total'] as num?)?.toDouble() ?? 0)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                if ('${row['pesan_error'] ?? ''}'.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Kendala terakhir',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SelectableText('${row['pesan_error']}'),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabelTransaksiPending() {
+    final totalHalaman =
+        (_totalTransaksiPending / _pageSizePesanan).ceil().clamp(1, 999999);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSectionCard(
+          judul: 'Transaksi Pending Lokal',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  'Transaksi tetap tersimpan di perangkat ini sebagai jurnal audit. Yang masih Pending dicoba ulang setiap $_intervalRetryMenit menit dan tidak dihapus setelah Sukses.'),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final opsi in <String?, String>{
+                    null: 'Semua',
+                    'PENDING': 'Pending',
+                    'SYNCED': 'Sukses',
+                    'GAGAL': 'Gagal',
+                  }.entries)
+                    ChoiceChip(
+                      label: Text(opsi.value),
+                      selected: _statusPending == opsi.key,
+                      onSelected: (_) {
+                        setStateIfMounted(() {
+                          _statusPending = opsi.key;
+                          _halamanPending = 1;
+                        });
+                        _muatTransaksiPending();
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppDataTable(
+          minWidth: 1080,
+          emptyText: 'Belum ada transaksi pending pada perangkat ini.',
+          columns: const [
+            AppTableColumn('Waktu', flex: 2),
+            AppTableColumn('Kode Transaksi', flex: 3),
+            AppTableColumn('Kasir / Toko', flex: 2),
+            AppTableColumn('Total', flex: 2, align: TextAlign.right),
+            AppTableColumn('Percobaan', flex: 1, align: TextAlign.center),
+            AppTableColumn('Status', flex: 1, align: TextAlign.center),
+            AppTableColumn('Kendala Terakhir', flex: 4),
+            AppTableColumn('Aksi', width: 64, align: TextAlign.center),
+          ],
+          rows: _transaksiPending.map((row) {
+            final payload = _payloadPending(row);
+            final status = '${row['status'] ?? 'PENDING'}';
+            final label = status == 'SYNCED'
+                ? 'Sukses'
+                : status == 'GAGAL'
+                    ? 'Gagal'
+                    : 'Pending';
+            final warna = status == 'SYNCED'
+                ? AppColors.success
+                : status == 'GAGAL'
+                    ? Colors.red
+                    : AppColors.warning;
+            return AppTableRowData(
+              onTap: () => _lihatDetailPending(row),
+              cells: [
+                AppTableCell.text(_waktuPending(row['dibuat_pada']), flex: 2),
+                AppTableCell.text('${row['kode_unik'] ?? '-'}', flex: 3),
+                AppTableCell.text(
+                    '${row['akun_kunci'] ?? payload['kasir'] ?? '-'} / ${row['toko_id'] ?? payload['tokoId'] ?? '-'}',
+                    flex: 2),
+                AppTableCell.text(
+                    _formatRupiah
+                        .format((payload['total'] as num?)?.toDouble() ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                AppTableCell.text('${row['percobaan'] ?? 0}',
+                    flex: 1, align: TextAlign.center),
+                AppTableCell(
+                  flex: 1,
+                  align: TextAlign.center,
+                  child: StatusPill(label: label, warna: warna),
+                ),
+                AppTableCell.text('${row['pesan_error'] ?? '-'}',
+                    flex: 4, maxLines: 2),
+                AppTableCell(
+                  width: 64,
+                  align: TextAlign.center,
+                  child: IconButton(
+                    tooltip: 'Lihat rincian dan kendala',
+                    onPressed: () => _lihatDetailPending(row),
+                    icon: const Icon(Icons.visibility_outlined),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+          pagination: AppTablePagination(
+            halaman: _halamanPending,
+            totalHalaman: totalHalaman,
+            totalData: _totalTransaksiPending,
+            labelData: 'transaksi lokal',
+            onSebelumnya: _halamanPending > 1
+                ? () {
+                    setStateIfMounted(() => _halamanPending--);
+                    _muatTransaksiPending();
+                  }
+                : null,
+            onBerikutnya: _halamanPending < totalHalaman
+                ? () {
+                    setStateIfMounted(() => _halamanPending++);
+                    _muatTransaksiPending();
+                  }
+                : null,
+          ),
+        ),
+      ],
+    );
   }
 
   String _formatTanggalIso(DateTime d) =>
@@ -410,6 +730,8 @@ class _PesananScreenState extends State<PesananScreen> {
             .toList();
       case _Filter.semua:
         return _semua;
+      case _Filter.pending:
+        return const [];
     }
   }
 
@@ -973,14 +1295,16 @@ class _PesananScreenState extends State<PesananScreen> {
         semua.where(_sudahTerbayar).length;
     final nilaiMenunggu = (_ringkasan['nilaiMenunggu'] as num?)?.toDouble() ??
         belumTerbayar.fold<double>(0, (s, p) => s + p.totalBiaya);
+    final sedangDiPending = _filter == _Filter.pending;
     final tombolAksi = [
-      HeaderActionButton(
-        icon: _filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined,
-        label: 'Filter',
-        onPressed: () =>
-            setStateIfMounted(() => _filterTerbuka = !_filterTerbuka),
-      ),
-      if (Sesi.instance.bolehKelola)
+      if (!sedangDiPending)
+        HeaderActionButton(
+          icon: _filterTerbuka ? Icons.filter_alt : Icons.filter_alt_outlined,
+          label: 'Filter',
+          onPressed: () =>
+              setStateIfMounted(() => _filterTerbuka = !_filterTerbuka),
+        ),
+      if (!sedangDiPending && Sesi.instance.bolehKelola)
         HeaderActionButton(
           icon: Icons.playlist_add_check,
           label: _sedangMembayarSemuaTertahan
@@ -997,11 +1321,21 @@ class _PesananScreenState extends State<PesananScreen> {
               ? null
               : _bayarkanSemuaYangTertahan,
         ),
+      if (sedangDiPending) ...[
+        HeaderActionButton(
+          icon: Icons.settings_outlined,
+          label: 'Retry $_intervalRetryMenit menit',
+          tooltip: 'Atur interval pengiriman ulang otomatis',
+          onPressed: _aturIntervalRetry,
+        ),
+        HeaderActionButton(
+          icon: Icons.sync,
+          label: _sedangSinkronPending ? 'Mengirim...' : 'Retry Sekarang',
+          onPressed: _sedangSinkronPending ? null : _sinkronkanPendingSekarang,
+        ),
+      ],
       HeaderActionButton(
-        icon: Icons.refresh,
-        label: 'Muat Ulang',
-        onPressed: _muat,
-      ),
+          icon: Icons.refresh, label: 'Muat Ulang', onPressed: _muat),
     ];
 
     return AppShell(
@@ -1031,6 +1365,18 @@ class _PesananScreenState extends State<PesananScreen> {
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muat, child: const Text('Coba Lagi')),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setStateIfMounted(() {
+                              _filter = _Filter.pending;
+                              _halamanPending = 1;
+                            });
+                            _muat();
+                          },
+                          icon: const Icon(Icons.pending_actions),
+                          label: const Text('Buka Transaksi Pending'),
+                        ),
                       ],
                     ),
                   ),
@@ -1056,6 +1402,9 @@ class _PesananScreenState extends State<PesananScreen> {
                             const SizedBox(width: 8),
                             _kartuKpi(Icons.pause_circle_outline, 'Tertahan',
                                 '$jumlahTertahan', const Color(0xFFB8860B)),
+                            const SizedBox(width: 8),
+                            _kartuKpi(Icons.pending_actions, 'Pending Lokal',
+                                '$_jumlahPendingAktif', AppColors.warning),
                             const SizedBox(width: 8),
                             _kartuKpi(Icons.check_circle_outline, 'Terbayar',
                                 '$jumlahTerbayar', AppColors.success),
@@ -1212,138 +1561,154 @@ class _PesananScreenState extends State<PesananScreen> {
                               _muat();
                             },
                           ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('Transaksi Pending'),
+                            selected: _filter == _Filter.pending,
+                            onSelected: (_) {
+                              setStateIfMounted(() {
+                                _filter = _Filter.pending;
+                                _halamanPending = 1;
+                              });
+                              _muat();
+                            },
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      AppDataTable(
-                        minWidth: 1120,
-                        emptyText: 'Tidak ada pesanan.',
-                        columns: const [
-                          AppTableColumn('Kode', flex: 2),
-                          AppTableColumn('Pemesan', flex: 3),
-                          AppTableColumn('Alasan Ditahan', flex: 3),
-                          AppTableColumn('Status',
-                              flex: 2, align: TextAlign.center),
-                          AppTableColumn('Item', flex: 4),
-                          AppTableColumn('Total',
-                              flex: 2, align: TextAlign.right),
-                          AppTableColumn('Aksi',
-                              width: 96, align: TextAlign.center),
-                        ],
-                        rows: pesananHalamanIni.map((p) {
-                          final warnaStatus = _warnaStatus(p);
-                          final ringkasanItem = p.items.isEmpty
-                              ? '-'
-                              : p.items.take(3).map((item) {
-                                  final jumlah = item.jumlah.toStringAsFixed(
-                                      item.jumlah == item.jumlah.roundToDouble()
-                                          ? 0
-                                          : 2);
-                                  return '${item.nama} x$jumlah';
-                                }).join(', ');
-                          final sisaItem = p.items.length > 3
-                              ? ' +${p.items.length - 3} item'
-                              : '';
+                      if (_filter == _Filter.pending)
+                        _tabelTransaksiPending()
+                      else
+                        AppDataTable(
+                          minWidth: 1120,
+                          emptyText: 'Tidak ada pesanan.',
+                          columns: const [
+                            AppTableColumn('Kode', flex: 2),
+                            AppTableColumn('Pemesan', flex: 3),
+                            AppTableColumn('Alasan Ditahan', flex: 3),
+                            AppTableColumn('Status',
+                                flex: 2, align: TextAlign.center),
+                            AppTableColumn('Item', flex: 4),
+                            AppTableColumn('Total',
+                                flex: 2, align: TextAlign.right),
+                            AppTableColumn('Aksi',
+                                width: 96, align: TextAlign.center),
+                          ],
+                          rows: pesananHalamanIni.map((p) {
+                            final warnaStatus = _warnaStatus(p);
+                            final ringkasanItem = p.items.isEmpty
+                                ? '-'
+                                : p.items.take(3).map((item) {
+                                    final jumlah = item.jumlah.toStringAsFixed(
+                                        item.jumlah ==
+                                                item.jumlah.roundToDouble()
+                                            ? 0
+                                            : 2);
+                                    return '${item.nama} x$jumlah';
+                                  }).join(', ');
+                            final sisaItem = p.items.length > 3
+                                ? ' +${p.items.length - 3} item'
+                                : '';
 
-                          return AppTableRowData(
-                            onTap: () => _lihatDetail(p),
-                            cells: [
-                              AppTableCell.text(
-                                p.kode,
-                                flex: 2,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimaryOf(context),
-                                ),
-                              ),
-                              AppTableCell.text(
-                                p.pemesan.isEmpty
-                                    ? '(Tanpa member)'
-                                    : p.pemesan,
-                                flex: 3,
-                              ),
-                              AppTableCell.text(
-                                p.dariPembeliOnline || p.keterangan.isEmpty
-                                    ? '-'
-                                    : p.keterangan,
-                                flex: 3,
-                                maxLines: 2,
-                              ),
-                              AppTableCell(
-                                flex: 2,
-                                align: TextAlign.center,
-                                child: Align(
-                                  alignment: Alignment.center,
-                                  child: StatusPill(
-                                    label: _labelStatus(p),
-                                    warna: warnaStatus,
+                            return AppTableRowData(
+                              onTap: () => _lihatDetail(p),
+                              cells: [
+                                AppTableCell.text(
+                                  p.kode,
+                                  flex: 2,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimaryOf(context),
                                   ),
                                 ),
-                              ),
-                              AppTableCell.text(
-                                '$ringkasanItem$sisaItem',
-                                flex: 4,
-                                maxLines: 2,
-                              ),
-                              AppTableCell.text(
-                                _formatRupiah.format(p.totalBiaya),
-                                flex: 2,
-                                align: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimaryOf(context),
+                                AppTableCell.text(
+                                  p.pemesan.isEmpty
+                                      ? '(Tanpa member)'
+                                      : p.pemesan,
+                                  flex: 3,
                                 ),
-                              ),
-                              AppTableCell(
-                                width: 96,
-                                align: TextAlign.center,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Detail',
-                                      icon: const Icon(
-                                          Icons.visibility_outlined,
-                                          size: 20),
-                                      onPressed: () => _lihatDetail(p),
-                                    ),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Aksi',
-                                      icon: const Icon(Icons.more_horiz,
-                                          size: 20),
-                                      onPressed: () => _tampilkanAksi(p),
-                                    ),
-                                  ],
+                                AppTableCell.text(
+                                  p.dariPembeliOnline || p.keterangan.isEmpty
+                                      ? '-'
+                                      : p.keterangan,
+                                  flex: 3,
+                                  maxLines: 2,
                                 ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                        pagination: AppTablePagination(
-                          halaman: halamanPesanan,
-                          totalHalaman: totalHalamanPesanan,
-                          totalData: pesananTersaring.length,
-                          labelData: 'pesanan',
-                          onSebelumnya: halamanPesanan > 1
-                              ? () {
-                                  setStateIfMounted(() =>
-                                      _halamanPesanan = halamanPesanan - 1);
-                                  _muat();
-                                }
-                              : null,
-                          onBerikutnya: halamanPesanan < totalHalamanPesanan
-                              ? () {
-                                  setStateIfMounted(() =>
-                                      _halamanPesanan = halamanPesanan + 1);
-                                  _muat();
-                                }
-                              : null,
+                                AppTableCell(
+                                  flex: 2,
+                                  align: TextAlign.center,
+                                  child: Align(
+                                    alignment: Alignment.center,
+                                    child: StatusPill(
+                                      label: _labelStatus(p),
+                                      warna: warnaStatus,
+                                    ),
+                                  ),
+                                ),
+                                AppTableCell.text(
+                                  '$ringkasanItem$sisaItem',
+                                  flex: 4,
+                                  maxLines: 2,
+                                ),
+                                AppTableCell.text(
+                                  _formatRupiah.format(p.totalBiaya),
+                                  flex: 2,
+                                  align: TextAlign.right,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimaryOf(context),
+                                  ),
+                                ),
+                                AppTableCell(
+                                  width: 96,
+                                  align: TextAlign.center,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: 'Detail',
+                                        icon: const Icon(
+                                            Icons.visibility_outlined,
+                                            size: 20),
+                                        onPressed: () => _lihatDetail(p),
+                                      ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: 'Aksi',
+                                        icon: const Icon(Icons.more_horiz,
+                                            size: 20),
+                                        onPressed: () => _tampilkanAksi(p),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                          pagination: AppTablePagination(
+                            halaman: halamanPesanan,
+                            totalHalaman: totalHalamanPesanan,
+                            totalData: pesananTersaring.length,
+                            labelData: 'pesanan',
+                            onSebelumnya: halamanPesanan > 1
+                                ? () {
+                                    setStateIfMounted(() =>
+                                        _halamanPesanan = halamanPesanan - 1);
+                                    _muat();
+                                  }
+                                : null,
+                            onBerikutnya: halamanPesanan < totalHalamanPesanan
+                                ? () {
+                                    setStateIfMounted(() =>
+                                        _halamanPesanan = halamanPesanan + 1);
+                                    _muat();
+                                  }
+                                : null,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
