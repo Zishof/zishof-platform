@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
 import 'app_components.dart';
+import 'app_version_label.dart';
 import '../screens/akun_saya_screen.dart';
 import '../screens/bantuan_screen.dart';
 import '../screens/tanya_jawab_screen.dart';
@@ -986,6 +987,13 @@ class _AppSidebar extends StatelessWidget {
                   for (final grup in _grupMenu)
                     _SidebarGroup(grup: grup, menuAktif: menuAktif),
                 ],
+              ),
+            ),
+            const AppVersionLabel(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
+              style: TextStyle(
+                color: AppColors.sidebarText,
+                fontSize: 11,
               ),
             ),
           ],

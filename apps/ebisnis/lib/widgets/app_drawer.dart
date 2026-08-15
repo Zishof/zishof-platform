@@ -39,6 +39,7 @@ import '../screens/inventory_sales/nota_sales_screen.dart';
 import '../screens/inventory_sales/kas_jurnal_screen.dart';
 import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../product_profile.dart';
+import 'app_version_label.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -535,6 +536,13 @@ class AppDrawer extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+            ),
+            AppVersionLabel(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+              style: TextStyle(
+                color: AppColors.textSecondaryOf(context),
+                fontSize: 11,
               ),
             ),
           ],
