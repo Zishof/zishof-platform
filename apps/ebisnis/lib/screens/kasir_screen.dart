@@ -786,6 +786,11 @@ class _KasirScreenState extends State<KasirScreen> {
       _memberAwal = null;
     });
     unawaited(_perbaruiJumlahPending());
+    // Segarkan katalog segera setelah checkout. Server sudah menghitung ulang stok dari jurnal
+    // transaksi; mengambil ulang katalog di sini mencegah kartu/monitor kasir terus menampilkan
+    // saldo cache sebelum transaksi. Bila sedang offline, helper tetap mempertahankan cache dan
+    // sinkron berikutnya akan mencoba lagi tanpa mengganggu kasir.
+    unawaited(_sinkronKatalogDanKonfigurasi());
     _jadwalkanFokusCariItem();
   }
 

@@ -53,6 +53,8 @@ class _PesananScreenState extends State<PesananScreen> {
   final _kodeController = TextEditingController();
   final _pembeliController = TextEditingController();
   final _pedagangController = TextEditingController();
+  String _kasir = '';
+  List<String> _daftarKasir = const [];
   bool _filterTerbuka = false;
   int _halamanPesanan = 1;
   int _totalPesanan = 0;
@@ -103,6 +105,12 @@ class _PesananScreenState extends State<PesananScreen> {
       setStateIfMounted(() {
         _semua = data;
         _totalPesanan = (hasil['total'] as num?)?.toInt() ?? data.length;
+        _daftarKasir = ((hasil['daftarKasir'] as List?) ?? const [])
+            .map((e) => '$e'.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         _ringkasan =
             (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ?? const {};
       });
@@ -453,6 +461,7 @@ class _PesananScreenState extends State<PesananScreen> {
       if (Sesi.instance.isAdmin && _pedagangController.text.trim().isNotEmpty) {
         payload['pedagang'] = _pedagangController.text.trim();
       }
+      if (_kasir.isNotEmpty) payload['kasir'] = _kasir;
     }
     return payload;
   }
@@ -1484,6 +1493,33 @@ class _PesananScreenState extends State<PesananScreen> {
                                               isDense: true,
                                               border: OutlineInputBorder())),
                                     ),
+                                  SizedBox(
+                                    width: 220,
+                                    child: DropdownButtonFormField<String>(
+                                      value: _kasir.isEmpty ? null : _kasir,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Nama Kasir',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      hint: const Text('Semua kasir'),
+                                      items: [
+                                        const DropdownMenuItem(
+                                            value: '',
+                                            child: Text('Semua kasir')),
+                                        ..._daftarKasir.map((nama) =>
+                                            DropdownMenuItem(
+                                                value: nama,
+                                                child: Text(nama,
+                                                    overflow: TextOverflow
+                                                        .ellipsis))),
+                                      ],
+                                      onChanged: (v) => setStateIfMounted(() {
+                                        _kasir = v ?? '';
+                                        _halamanPesanan = 1;
+                                      }),
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 10),
@@ -1508,6 +1544,7 @@ class _PesananScreenState extends State<PesananScreen> {
                                         _kodeController.clear();
                                         _pembeliController.clear();
                                         _pedagangController.clear();
+                                        _kasir = '';
                                       });
                                       _muat();
                                     },
@@ -1580,12 +1617,13 @@ class _PesananScreenState extends State<PesananScreen> {
                         _tabelTransaksiPending()
                       else
                         AppDataTable(
-                          minWidth: 1120,
+                          minWidth: 1240,
                           emptyText: 'Tidak ada pesanan.',
                           columns: const [
                             AppTableColumn('Kode', flex: 2),
                             AppTableColumn('Pemesan', flex: 3),
                             AppTableColumn('Alasan Ditahan', flex: 3),
+                            AppTableColumn('Kasir', flex: 2),
                             AppTableColumn('Status',
                                 flex: 2, align: TextAlign.center),
                             AppTableColumn('Item', flex: 4),
@@ -1633,6 +1671,13 @@ class _PesananScreenState extends State<PesananScreen> {
                                       ? '-'
                                       : p.keterangan,
                                   flex: 3,
+                                  maxLines: 2,
+                                ),
+                                AppTableCell.text(
+                                  p.kasirLoginNama.isEmpty
+                                      ? '-'
+                                      : p.kasirLoginNama,
+                                  flex: 2,
                                   maxLines: 2,
                                 ),
                                 AppTableCell(

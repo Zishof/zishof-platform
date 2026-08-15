@@ -30,3 +30,10 @@
 - Memindahkan seluruh tombol tindakan setelah pembayaran ke atas pratinjau
   struk agar kasir dapat langsung memulai transaksi baru tanpa menggulir
   rincian struk yang panjang.
+- Menyatukan validasi pembayaran dan monitor pada satu rumus stok kanonik,
+  termasuk retur serta mutasi, agar saldo yang terlihat tidak berbeda dari
+  saldo yang diperiksa server saat Bayar.
+- Menghormati pilihan **Selalu Boleh Dijual Walau Stok Minus** sampai validasi
+  dan alokasi batch, serta menyegarkan stok kasir segera setelah checkout.
+- Menampilkan nama kasir pada tabel Pesanan dan menambahkan dropdown filter
+  kasir berdasarkan identitas kasir yang benar-benar tersimpan pada transaksi.
