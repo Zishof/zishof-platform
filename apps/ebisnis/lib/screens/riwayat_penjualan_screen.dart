@@ -545,6 +545,18 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   DateTime? _sampai;
   String _cariPembeli = '';
   bool _hanyaTransaksiTidakValid = false;
+  final _kasirFilter = TextEditingController();
+  final _mesinFilter = TextEditingController();
+  final _produkFilter = TextEditingController();
+  final _pelangganFilter = TextEditingController();
+  final _notaFilter = TextEditingController();
+  final _metodeFilter = TextEditingController();
+  final _waktuMulaiFilter = TextEditingController();
+  final _waktuSampaiFilter = TextEditingController();
+  final _totalMinimalFilter = TextEditingController();
+  final _totalMaksimalFilter = TextEditingController();
+  final _qtyMinimalFilter = TextEditingController();
+  final _qtyMaksimalFilter = TextEditingController();
 
   @override
   void initState() {
@@ -555,6 +567,42 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     _muat();
   }
 
+  @override
+  void dispose() {
+    for (final controller in [
+      _kasirFilter,
+      _mesinFilter,
+      _produkFilter,
+      _pelangganFilter,
+      _notaFilter,
+      _metodeFilter,
+      _waktuMulaiFilter,
+      _waktuSampaiFilter,
+      _totalMinimalFilter,
+      _totalMaksimalFilter,
+      _qtyMinimalFilter,
+      _qtyMaksimalFilter,
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _adaFilterLanjutan => [
+        _kasirFilter,
+        _mesinFilter,
+        _produkFilter,
+        _pelangganFilter,
+        _notaFilter,
+        _metodeFilter,
+        _waktuMulaiFilter,
+        _waktuSampaiFilter,
+        _totalMinimalFilter,
+        _totalMaksimalFilter,
+        _qtyMinimalFilter,
+        _qtyMaksimalFilter,
+      ].any((c) => c.text.trim().isNotEmpty);
+
   bool get _defaultTanpaFilter {
     final hariIni = _formatTanggalServer.format(DateTime.now());
     return _mulai != null &&
@@ -562,6 +610,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         _formatTanggalServer.format(_mulai!) == hariIni &&
         _formatTanggalServer.format(_sampai!) == hariIni &&
         _cariPembeli.isEmpty &&
+        !_adaFilterLanjutan &&
         !_hanyaTransaksiTidakValid &&
         _halaman == 1;
   }
@@ -576,6 +625,30 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
+        if (_kasirFilter.text.trim().isNotEmpty)
+          'kasir': _kasirFilter.text.trim(),
+        if (_mesinFilter.text.trim().isNotEmpty)
+          'mesin': _mesinFilter.text.trim(),
+        if (_produkFilter.text.trim().isNotEmpty)
+          'produk': _produkFilter.text.trim(),
+        if (_pelangganFilter.text.trim().isNotEmpty)
+          'cariPembeli': _pelangganFilter.text.trim(),
+        if (_notaFilter.text.trim().isNotEmpty)
+          'nomorNota': _notaFilter.text.trim(),
+        if (_metodeFilter.text.trim().isNotEmpty)
+          'metodeExact': _metodeFilter.text.trim(),
+        if (_waktuMulaiFilter.text.trim().isNotEmpty)
+          'waktuMulai': _waktuMulaiFilter.text.trim(),
+        if (_waktuSampaiFilter.text.trim().isNotEmpty)
+          'waktuSampai': _waktuSampaiFilter.text.trim(),
+        if ((_angkaFilter(_totalMinimalFilter)) > 0)
+          'totalMinimal': _angkaFilter(_totalMinimalFilter),
+        if ((_angkaFilter(_totalMaksimalFilter)) > 0)
+          'totalMaksimal': _angkaFilter(_totalMaksimalFilter),
+        if ((_angkaFilter(_qtyMinimalFilter)) > 0)
+          'qtyMinimal': _angkaFilter(_qtyMinimalFilter),
+        if ((_angkaFilter(_qtyMaksimalFilter)) > 0)
+          'qtyMaksimal': _angkaFilter(_qtyMaksimalFilter),
         'includePembayaran': true,
         'includeSplitPembayaran': true,
         'sertakanPembayaran': true,
@@ -638,6 +711,50 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   Future<void> _terapkan() async {
     _halaman = 1;
     await _muat();
+  }
+
+  double _angkaFilter(TextEditingController controller) =>
+      double.tryParse(
+          controller.text.replaceAll('.', '').replaceAll(',', '.').trim()) ??
+      0;
+
+  Future<void> _resetFilterLanjutan() async {
+    for (final controller in [
+      _kasirFilter,
+      _mesinFilter,
+      _produkFilter,
+      _pelangganFilter,
+      _notaFilter,
+      _metodeFilter,
+      _waktuMulaiFilter,
+      _waktuSampaiFilter,
+      _totalMinimalFilter,
+      _totalMaksimalFilter,
+      _qtyMinimalFilter,
+      _qtyMaksimalFilter,
+    ]) {
+      controller.clear();
+    }
+    _hanyaTransaksiTidakValid = false;
+    await _terapkan();
+  }
+
+  Widget _fieldFilter(String label, TextEditingController controller,
+      {String? hint, TextInputType? keyboardType}) {
+    return SizedBox(
+      width: 230,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        onSubmitted: (_) => _terapkan(),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
   }
 
   Widget _chipRingkasan(String label, String nilai, Color warna) {
@@ -1014,7 +1131,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final pencarian = AppSearchField(
-                        hintText: 'Cari nama pembeli / nomor nota...',
+                        hintText: 'Pencarian cepat pelanggan / nomor nota...',
                         debounce: const Duration(milliseconds: 450),
                         onChanged: (v) {
                           _cariPembeli = v;
@@ -1056,6 +1173,77 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                         ],
                       );
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: ExpansionTile(
+                      initiallyExpanded: _adaFilterLanjutan,
+                      leading: const Icon(Icons.filter_alt_outlined),
+                      title: const Text('Filter Lengkap'),
+                      subtitle: Text(_adaFilterLanjutan
+                          ? 'Filter tambahan sedang diterapkan'
+                          : 'Kasir, waktu, produk, pelanggan, nota, metode, nilai, dan jumlah barang'),
+                      childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _fieldFilter('Nama kasir', _kasirFilter,
+                                  hint: 'Contoh: Rizal'),
+                              _fieldFilter('Mesin / perangkat', _mesinFilter,
+                                  hint: 'Kasir 1 / ID mesin'),
+                              _fieldFilter(
+                                  'Nama / kode / barcode barang', _produkFilter,
+                                  hint: 'Nama, kode, atau barcode'),
+                              _fieldFilter('Nama pelanggan', _pelangganFilter,
+                                  hint: 'Member atau pelanggan umum'),
+                              _fieldFilter(
+                                  'Nomor nota / kode transaksi', _notaFilter,
+                                  hint: 'AB... / nomor nota'),
+                              _fieldFilter('Metode pembayaran', _metodeFilter,
+                                  hint: 'Tunai, QRIS, transfer, voucher'),
+                              _fieldFilter('Jam mulai', _waktuMulaiFilter,
+                                  hint: 'HH:mm'),
+                              _fieldFilter('Jam sampai', _waktuSampaiFilter,
+                                  hint: 'HH:mm'),
+                              _fieldFilter(
+                                  'Total minimal (Rp)', _totalMinimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Total maksimal (Rp)', _totalMaksimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Jumlah barang minimal', _qtyMinimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Jumlah barang maksimal', _qtyMaksimalFilter,
+                                  keyboardType: TextInputType.number),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _resetFilterLanjutan,
+                              icon: const Icon(Icons.restart_alt),
+                              label: const Text('Reset Filter'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _terapkan,
+                              icon: const Icon(Icons.check),
+                              label: const Text('Terapkan Filter'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
