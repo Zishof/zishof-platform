@@ -12,6 +12,7 @@ import 'app_drawer.dart';
 import 'app_components.dart';
 import '../screens/akun_saya_screen.dart';
 import '../screens/bantuan_screen.dart';
+import '../screens/tanya_jawab_screen.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/pesanan_screen.dart';
@@ -760,6 +761,12 @@ class _AppShellState extends State<AppShell> {
                     tooltip: 'Pindah toko',
                   ),
                 IconButton(
+                  key: const Key('tombol-qa-halaman-mobile'),
+                  onPressed: () => _bukaTanyaJawab(context),
+                  icon: const Icon(Icons.question_answer_outlined),
+                  tooltip: 'Tanya jawab halaman ini',
+                ),
+                IconButton(
                   onPressed: () => _bukaBantuan(context),
                   icon: const Icon(Icons.help_outline),
                   tooltip: 'Bantuan halaman ini',
@@ -822,6 +829,14 @@ class _AppShellState extends State<AppShell> {
                             if (widget.aksiHeader != null)
                               const SizedBox(width: 8),
                             OutlinedButton.icon(
+                              key: const Key('tombol-qa-halaman-desktop'),
+                              onPressed: () => _bukaTanyaJawab(context),
+                              icon: const Icon(Icons.question_answer_outlined,
+                                  size: 18),
+                              label: const Text('Tanya Jawab'),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
                               onPressed: () => _bukaBantuan(context),
                               icon: const Icon(Icons.help_outline, size: 18),
                               label: const Text('Bantuan'),
@@ -844,6 +859,14 @@ class _AppShellState extends State<AppShell> {
                           if (widget.aksiHeader != null) widget.aksiHeader!,
                           if (widget.aksiHeader != null)
                             const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            key: const Key('tombol-qa-halaman-desktop'),
+                            onPressed: () => _bukaTanyaJawab(context),
+                            icon: const Icon(Icons.question_answer_outlined,
+                                size: 18),
+                            label: const Text('Tanya Jawab'),
+                          ),
+                          const SizedBox(width: 8),
                           OutlinedButton.icon(
                             onPressed: () => _bukaBantuan(context),
                             icon: const Icon(Icons.help_outline, size: 18),
@@ -909,6 +932,15 @@ class _AppShellState extends State<AppShell> {
   void _bukaBantuan(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => BantuanScreen(
+        menuId: widget.menuAktif.name,
+        menuJudul: widget.judul,
+      ),
+    ));
+  }
+
+  void _bukaTanyaJawab(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => TanyaJawabScreen(
         menuId: widget.menuAktif.name,
         menuJudul: widget.judul,
       ),

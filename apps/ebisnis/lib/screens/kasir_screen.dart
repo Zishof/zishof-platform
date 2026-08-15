@@ -495,8 +495,11 @@ class _KasirScreenState extends State<KasirScreen> {
     // lagi setiap ganti menu" walau baru saja dibuka.
     await _cobaSinkronBukaKasPending();
     try {
-      final hasil = await ApiClient.instance
-          .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+      final hasil = await ApiClient.instance.aksi('sesi_kas_status', {
+        'id_toko': Sesi.instance.tokoId,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
+      });
       final terbuka = hasil['terbuka'] == true;
       if (terbuka) {
         // disinkronkan:true -- ini status ASLI dari server (sudah terkonfirmasi),
@@ -541,8 +544,11 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_kasTerbuka != true) return;
     await _cobaSinkronBukaKasPending();
     try {
-      final hasil = await ApiClient.instance
-          .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+      final hasil = await ApiClient.instance.aksi('sesi_kas_status', {
+        'id_toko': Sesi.instance.tokoId,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
+      });
       final terbuka = hasil['terbuka'] == true;
       if (mounted) {
         setStateIfMounted(() {
@@ -564,10 +570,48 @@ class _KasirScreenState extends State<KasirScreen> {
   /// gerbang Buka Kas otomatis muncul lagi utk sesi berikutnya, lalu tampilkan
   /// modal "Produk Perlu Direstok" (stokMenipis) langsung tanpa langkah tambahan.
   Future<void> _bukaDialogTutupKas() async {
+    final tokoIdAktif = Sesi.instance.tokoId;
+    if (tokoIdAktif == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pilih toko terlebih dahulu sebelum menutup kas.')));
+      }
+      return;
+    }
+    final pending = await CoreDb.instance.jumlahTransaksiPendingPemilik(
+      akunKunci: Sesi.instance.userId,
+      tokoId: tokoIdAktif,
+      idPerangkat: IdentitasMesin.instance.idMesin,
+    );
+    if (pending > 0) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Kas belum dapat ditutup'),
+          content: Text(
+            'Masih ada $pending transaksi dari akun, toko, dan perangkat ini '
+            'yang belum diterima server. Jalankan Sinkronisasi dan pastikan '
+            'antrean menjadi kosong. Sesi kas dipertahankan agar transaksi '
+            'tersebut tetap masuk ke kasir dan shift yang benar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     Map<String, dynamic>? status;
     try {
-      status = await ApiClient.instance
-          .aksi('sesi_kas_status', {'id_toko': Sesi.instance.tokoId});
+      status = await ApiClient.instance.aksi('sesi_kas_status', {
+        'id_toko': Sesi.instance.tokoId,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -597,6 +641,8 @@ class _KasirScreenState extends State<KasirScreen> {
       final hasil = await ApiClient.instance.aksi('sesi_kas_tutup', {
         'id_toko': Sesi.instance.tokoId,
         'kode': kodeLokal,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+        'nama_perangkat': IdentitasMesin.instance.namaMesin,
         'uang_fisik': hasilTutup['uangFisik'],
         'keterangan': hasilTutup['keterangan'],
       });
@@ -2496,6 +2542,23 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.person_outline, size: 17),
+                    label: Text(
+                        '${widget.status['kasirNama'] ?? Sesi.instance.userId}'),
+                  ),
+                  Chip(
+                    avatar: const Icon(Icons.computer_outlined, size: 17),
+                    label: Text(
+                        '${widget.status['namaPerangkat'] ?? IdentitasMesin.instance.namaMesin}'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
               if (waktuBuka != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),

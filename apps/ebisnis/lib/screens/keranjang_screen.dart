@@ -860,6 +860,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final waktu = DateTime.now();
       final payload =
           _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
+      final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
+      final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
+      if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
 
       // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
       // jaringan di bawah tidak pernah membatalkan penjualan ini.

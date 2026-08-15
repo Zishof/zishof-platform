@@ -591,7 +591,7 @@ class CoreDb {
   }
 
   Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron(
-      {String? akunKunci, int? tokoId}) async {
+      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
     final database = await db;
     final klausa = <String>["status = 'PENDING'"];
     final args = <Object?>[];
@@ -605,12 +605,36 @@ class CoreDb {
       klausa.add('(toko_id = ? OR toko_id IS NULL)');
       args.add(tokoId);
     }
+    if (idPerangkat != null && idPerangkat.isNotEmpty) {
+      klausa.add('(id_perangkat = ? OR id_perangkat IS NULL)');
+      args.add(idPerangkat);
+    }
     return database.query(
       'transaksi_pending',
       where: klausa.join(' AND '),
       whereArgs: args,
       orderBy: 'id ASC',
     );
+  }
+
+  /// Jumlah transaksi lokal yang masih menjadi tanggung jawab akun, toko, dan
+  /// perangkat ini. Dipakai sebagai gerbang Tutup Kas agar transaksi offline
+  /// tidak tertinggal tanpa sesi asal yang masih terbuka.
+  Future<int> jumlahTransaksiPendingPemilik({
+    required String akunKunci,
+    required int tokoId,
+    required String idPerangkat,
+  }) async {
+    final database = await db;
+    final hasil = await database.rawQuery(
+      "SELECT COUNT(*) AS n FROM transaksi_pending "
+      "WHERE status = 'PENDING' "
+      'AND (akun_kunci = ? OR akun_kunci IS NULL) '
+      'AND (toko_id = ? OR toko_id IS NULL) '
+      'AND (id_perangkat = ? OR id_perangkat IS NULL)',
+      [akunKunci, tokoId, idPerangkat],
+    );
+    return (hasil.first['n'] as num?)?.toInt() ?? 0;
   }
 
   Future<int> jumlahTransaksiPending() async {

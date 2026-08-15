@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_device/core_device.dart';
 
 import '../api_client.dart';
 import '../sesi.dart';
@@ -48,6 +49,7 @@ class TransaksiOutboxService {
     final pending = await CoreDb.instance.transaksiPendingBelumSinkron(
       akunKunci: Sesi.instance.userId,
       tokoId: Sesi.instance.tokoId,
+      idPerangkat: IdentitasMesin.instance.idMesin,
     );
     var berhasil = 0;
     for (final row in pending) {
@@ -71,7 +73,10 @@ class TransaksiOutboxService {
           ? tokoPayload.toInt()
           : int.tryParse('$tokoPayload');
       if ((kasirPayload.isNotEmpty && kasirPayload != Sesi.instance.userId) ||
-          (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId)) {
+          (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) ||
+          ('${payload['id_perangkat'] ?? ''}'.trim().isNotEmpty &&
+              '${payload['id_perangkat']}'.trim() !=
+                  IdentitasMesin.instance.idMesin)) {
         continue;
       }
 

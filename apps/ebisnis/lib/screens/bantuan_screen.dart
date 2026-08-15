@@ -6,7 +6,8 @@ import 'bantuan_content.dart';
 import 'bantuan_kontekstual.dart';
 
 /// Pusat bantuan POS yang tetap tersedia offline. Setiap artikel platform
-/// memuat >= 1.000 kata, workflow, ilustrasi layar, checklist, dan diagnosis.
+/// memuat >= 3.500 kata, workflow, arus data, flowchart keputusan, ilustrasi
+/// layar, checklist, dan diagnosis dalam bahasa operasional nonteknis.
 class BantuanScreen extends StatefulWidget {
   final String? menuId;
   final String? menuJudul;
@@ -182,6 +183,10 @@ class _IsiArtikel extends StatelessWidget {
           const SizedBox(height: 20),
           _WorkflowDiagram(langkahKonteks: artikel.workflow),
           const SizedBox(height: 20),
+          const _DiagramArusData(),
+          const SizedBox(height: 20),
+          const _DiagramKeputusan(),
+          const SizedBox(height: 20),
           _IlustrasiLayar(platform: artikel.id, areaKonteks: artikel.ilustrasi),
           const SizedBox(height: 20),
           if (bagian.isEmpty)
@@ -282,6 +287,145 @@ class _WorkflowDiagram extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DiagramArusData extends StatelessWidget {
+  const _DiagramArusData();
+
+  static const tahap = <(String, IconData)>[
+    ('Perangkat pengguna', Icons.devices_outlined),
+    ('Penyimpanan lokal', Icons.storage_outlined),
+    ('Pemeriksaan server', Icons.rule_folder_outlined),
+    ('Database & audit', Icons.verified_outlined),
+    ('Laporan & tindak lanjut', Icons.assessment_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        color: const Color(0xFFEAF2FF),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Diagram arus data',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+                'Data bergerak melalui urutan ini. Respons berhasil dari server menjadi tanda bahwa data pusat sudah menerima transaksi.'),
+            const SizedBox(height: 14),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(
+                  tahap.length,
+                  (index) => Row(children: [
+                    Container(
+                      width: 138,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFB8C9E6)),
+                      ),
+                      child: Column(children: [
+                        Icon(tahap[index].$2,
+                            color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(height: 7),
+                        Text(tahap[index].$1,
+                            textAlign: TextAlign.center,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                    if (index < tahap.length - 1)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 5),
+                        child: Icon(Icons.arrow_forward, size: 19),
+                      ),
+                  ]),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      );
+}
+
+class _DiagramKeputusan extends StatelessWidget {
+  const _DiagramKeputusan();
+
+  Widget _kotak(String teks, Color warna, {IconData? ikon}) => Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: warna,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (ikon != null) ...[Icon(ikon, size: 19), const SizedBox(width: 8)],
+          Flexible(
+              child: Text(teks,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w700))),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Flowchart saat muncul kendala',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+                'Gunakan alur keputusan ini agar transaksi tidak dibuat dua kali dan bukti masalah tetap lengkap.'),
+            const SizedBox(height: 14),
+            Center(
+                child: _kotak('Muncul peringatan atau proses terasa lama',
+                    const Color(0xFFFFF4E0),
+                    ikon: Icons.warning_amber_rounded)),
+            const Center(child: Icon(Icons.arrow_downward, size: 20)),
+            Center(
+                child: _kotak('Apakah server sudah menyatakan berhasil?',
+                    const Color(0xFFEAF2FF),
+                    ikon: Icons.help_outline)),
+            const Center(child: Icon(Icons.arrow_downward, size: 20)),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _kotak(
+                    'YA — buka riwayat, gunakan data yang sama, lalu cetak ulang bila perlu.',
+                    const Color(0xFFE8FFF3),
+                    ikon: Icons.check_circle_outline),
+                _kotak(
+                    'BELUM / TIDAK PASTI — jangan ulangi. Periksa antrean lokal, koneksi, dan Informasi Teknis.',
+                    const Color(0xFFFFECEC),
+                    ikon: Icons.pause_circle_outline),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Center(
+                child: _kotak(
+                    'Perbaiki penyebab → sinkronkan dengan kode yang sama → periksa riwayat → hubungi admin bila tetap gagal',
+                    const Color(0xFFF2F0FF),
+                    ikon: Icons.support_agent_outlined)),
+          ]),
+        ),
+      );
 }
 
 class _IlustrasiLayar extends StatelessWidget {
