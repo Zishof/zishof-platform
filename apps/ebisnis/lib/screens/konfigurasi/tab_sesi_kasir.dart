@@ -175,7 +175,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                 Text('Seluruh nominal harus berupa angka nol atau lebih.')));
         return;
       }
-      await ApiClient.instance.aksi('sesi_kas_koreksi', {
+      final hasilSimpan = await ApiClient.instance.aksi('sesi_kas_koreksi', {
         'id_sesi': row['id'],
         'status_sesi': status,
         'modal_awal': modalNilai,
@@ -183,10 +183,25 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
         'uang_fisik': fisikNilai ?? 0,
         'alasan_koreksi': alasan.text.trim(),
       });
+      if ('${hasilSimpan['statusSesi']}' != status) {
+        throw StateError(
+            'Server belum mengonfirmasi perubahan status sesi menjadi $status.');
+      }
+      await _muat();
       if (!mounted) return;
+      Map<String, dynamic>? sesiTersimpan;
+      for (final item in _data) {
+        if ('${item['id']}' == '${row['id']}') {
+          sesiTersimpan = item;
+          break;
+        }
+      }
+      if (sesiTersimpan == null || '${sesiTersimpan['statusSesi']}' != status) {
+        throw StateError(
+            'Data sesi belum berubah menjadi $status setelah dimuat ulang. Silakan coba kembali.');
+      }
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Koreksi sesi kas berhasil disimpan.')));
-      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
