@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../bantuan_content.dart';
 
 class PosHelpSpec {
   final String keyName;
@@ -70,6 +71,8 @@ Jangan memilih pasien atau item hanya karena berada di urutan pertama. Jangan me
 RINGKASAN CEPAT
 
 Urutan aman selalu sama: siapkan dokumen, pastikan konteks, cari data, verifikasi identitas, isi rincian, tinjau peringatan, simpan satu kali, periksa hasil, dan dokumentasikan pengecualian. Gunakan diagram workflow di atas sebagai pengingat, sedangkan bagian rinci ini sebagai acuan pelaksanaan. Bila kondisi nyata tidak tercakup, hentikan proses pada titik aman dan minta keputusan supervisor atau tenaga klinis berwenang. Kecepatan pelayanan penting, tetapi ketepatan identitas, keselamatan pasien, keutuhan stok, kebenaran kas, perlindungan data, dan jejak audit selalu lebih utama.
+
+$narasiPanduanOperasionalUmum
 ''';
 }
 

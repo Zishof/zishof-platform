@@ -18,6 +18,7 @@ import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/pengaturan_update.dart';
 import 'services/pengaturan_sesi_lokal.dart';
+import 'services/transaksi_outbox_service.dart';
 import 'services/server_config.dart';
 import 'theme/app_theme.dart';
 import 'widgets/safe_state.dart';
@@ -235,6 +236,7 @@ class _GerbangAwalState extends State<_GerbangAwal> {
         await ApiClient.instance.hapusToken();
       } else {
         await PengaturanSesiLokal.instance.catatAktifSekarang();
+        TransaksiOutboxService.instance.mulai();
       }
     }
     await IdentitasMesin.instance.muat();

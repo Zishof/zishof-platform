@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
+import 'inventory_sales/cetak_util.dart';
 import 'struk_screen.dart';
 
 final _formatRupiah =
@@ -22,7 +23,7 @@ String _formatWaktu(dynamic raw) {
 }
 
 /// Layar Laporan Transaksi (padanan laporan-transaksi.html/-renderer.js
-/// Electron) -- dasbor KPI (`transaksi_statistik`) di atas, lalu 3 sub-tab
+/// Electron) -- dasbor KPI (`transaksi_statistik`) di atas, lalu 5 sub-tab
 /// server-side paginated: Report Order (`laporan_order_list`), Report Sesi
 /// (`laporan_sesi_list`), Report Payment (`laporan_payment_list`). Ketiganya
 /// TIDAK dicache offline (laporan historis, selalu online) -- beda dari
@@ -42,7 +43,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
     _muatStatistik();
   }
 
@@ -82,6 +83,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
               Tab(text: 'Report Order'),
               Tab(text: 'Report Sesi'),
               Tab(text: 'Report Payment'),
+              Tab(text: 'Penjualan per Kasir'),
+              Tab(text: 'Penerimaan per Kasir'),
             ],
           ),
           Expanded(
@@ -89,6 +92,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
               _TabOrder(),
               _TabSesi(),
               _TabPayment(),
+              _TabPenjualanKasir(),
+              _TabPenerimaanKasir(),
             ]),
           ),
         ],
@@ -894,5 +899,788 @@ class _TabPaymentState extends State<_TabPayment> {
         ],
       ),
     );
+  }
+}
+
+class _TabPenjualanKasir extends StatefulWidget {
+  const _TabPenjualanKasir();
+
+  @override
+  State<_TabPenjualanKasir> createState() => _TabPenjualanKasirState();
+}
+
+class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
+  static const _pageSize = 15;
+  late DateTime _mulai;
+  late DateTime _sampai;
+  bool _memuat = true;
+  bool _mencetak = false;
+  bool _bolehFilterKasir = false;
+  String? _error;
+  String _kasir = '';
+  List<String> _daftarKasir = [];
+  List<Map<String, dynamic>> _data = [];
+  List<Map<String, dynamic>> _ringkasan = [];
+  int _halaman = 1;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final hariIni = DateTime.now();
+    _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
+    _sampai = _mulai;
+    _muat();
+  }
+
+  Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
+        'tglMulai': _formatTanggalServer.format(_mulai),
+        'tglSampai': _formatTanggalServer.format(_sampai),
+        if (_kasir.isNotEmpty) 'kasir': _kasir,
+        'page': page ?? _halaman,
+        'pageSize': pageSize,
+      };
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('laporan_penjualan_kasir_list', _payload());
+      final daftar = ((hasil['daftarKasir'] as List?) ?? [])
+          .map((e) => '$e')
+          .where((e) => e.trim().isNotEmpty)
+          .toSet()
+          .toList();
+      final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _ringkasan = ((hasil['ringkasanKasir'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
+        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _bolehFilterKasir = hasil['bolehFilterKasir'] == true;
+        _daftarKasir = daftar;
+        if (!_bolehFilterKasir || (_kasir.isEmpty && aktif.isNotEmpty)) {
+          _kasir = aktif;
+        }
+        if (_kasir.isNotEmpty && !_daftarKasir.contains(_kasir)) {
+          _daftarKasir = [_kasir, ..._daftarKasir];
+        }
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = e.toString());
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _terapkan() async {
+    if (_sampai.isBefore(_mulai)) {
+      setStateIfMounted(() => _error =
+          'Tanggal akhir tidak boleh lebih awal daripada tanggal mulai.');
+      return;
+    }
+    setStateIfMounted(() => _halaman = 1);
+    await _muat();
+  }
+
+  Future<void> _pindah(int halaman) async {
+    setStateIfMounted(() => _halaman = halaman);
+    await _muat();
+  }
+
+  Future<void> _cetakPdf() async {
+    setStateIfMounted(() => _mencetak = true);
+    try {
+      final semua = <Map<String, dynamic>>[];
+      var page = 1;
+      var total = 0;
+      do {
+        final hasil = await ApiClient.instance.aksi(
+            'laporan_penjualan_kasir_list',
+            _payload(page: page, pageSize: 100));
+        semua.addAll(
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+        page++;
+      } while (semua.length < total);
+      final totalNilai = semua.fold<double>(
+          0, (jumlah, row) => jumlah + ((row['totalBiaya'] as num?) ?? 0));
+      await CetakUtilIs.cetakPdfTabel(
+        judul: 'Penerimaan Penjualan per Kasir',
+        parameter:
+            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}',
+        headers: const [
+          'Waktu',
+          'Kasir',
+          'Nota',
+          'Pembeli',
+          'Metode',
+          'Penerimaan'
+        ],
+        rows: semua
+            .map((row) => [
+                  _formatWaktu(row['waktu']),
+                  '${row['kasir'] ?? '-'}',
+                  '${row['nomorNota'] ?? '-'}',
+                  '${row['pembeli'] ?? 'Umum'}',
+                  StrukScreen.labelPembayaran(row),
+                  _formatRupiah.format(row['totalBiaya'] ?? 0),
+                ])
+            .toList(),
+        namaFile:
+            'penjualan-per-kasir-${_formatTanggalServer.format(_mulai)}-${_formatTanggalServer.format(_sampai)}.pdf',
+        barisTotal:
+            'Jumlah transaksi: ${semua.length} · Total penerimaan: ${_formatRupiah.format(totalNilai)}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mencetak PDF: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _mencetak = false);
+    }
+  }
+
+  int get _totalHalaman =>
+      _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
+
+  Widget _filter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 170,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_outlined, size: 16),
+              label: Text(_formatTanggalServer.format(_mulai)),
+              onPressed: () async {
+                final d = await showDatePicker(
+                    context: context,
+                    initialDate: _mulai,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now());
+                if (d != null) setStateIfMounted(() => _mulai = d);
+              },
+            ),
+          ),
+          const Text('s.d.'),
+          SizedBox(
+            width: 170,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.event_outlined, size: 16),
+              label: Text(_formatTanggalServer.format(_sampai)),
+              onPressed: () async {
+                final d = await showDatePicker(
+                    context: context,
+                    initialDate: _sampai,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now());
+                if (d != null) setStateIfMounted(() => _sampai = d);
+              },
+            ),
+          ),
+          SizedBox(
+            width: 230,
+            child: DropdownButtonFormField<String>(
+              value: _kasir.isEmpty && !_bolehFilterKasir ? null : _kasir,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Kasir',
+                  prefixIcon: Icon(Icons.person_outline),
+                  isDense: true),
+              items: [
+                if (_bolehFilterKasir)
+                  const DropdownMenuItem(value: '', child: Text('Semua kasir')),
+                ..._daftarKasir
+                    .map((k) => DropdownMenuItem(value: k, child: Text(k))),
+              ],
+              onChanged: _bolehFilterKasir
+                  ? (v) => setStateIfMounted(() => _kasir = v ?? '')
+                  : null,
+            ),
+          ),
+          FilledButton.icon(
+              onPressed: _memuat ? null : _terapkan,
+              icon: const Icon(Icons.filter_alt_outlined, size: 17),
+              label: const Text('Terapkan')),
+          OutlinedButton.icon(
+              onPressed: _memuat || _mencetak ? null : _cetakPdf,
+              icon: _mencetak
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text('Cetak PDF')),
+        ],
+      ),
+    );
+  }
+
+  Widget _ringkasanWidget() {
+    if (_ringkasan.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 82,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        scrollDirection: Axis.horizontal,
+        itemCount: _ringkasan.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final r = _ringkasan[i];
+          return Container(
+            width: 210,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: .07),
+              borderRadius: BorderRadius.circular(10),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: .2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${r['kasir'] ?? '-'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(_formatRupiah.format(r['total'] ?? 0),
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.w800)),
+                Text('${r['jumlahTransaksi'] ?? 0} transaksi',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondaryOf(context))),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _tabel() {
+    return AppDataTable(
+      minWidth: 1040,
+      emptyText: 'Belum ada penjualan pada periode dan kasir ini.',
+      columns: const [
+        AppTableColumn('Waktu', flex: 2),
+        AppTableColumn('Kasir', flex: 2),
+        AppTableColumn('Nota', flex: 4),
+        AppTableColumn('Pembeli', flex: 2),
+        AppTableColumn('Metode', flex: 2),
+        AppTableColumn('Penerimaan', flex: 2, align: TextAlign.right),
+        AppTableColumn('Aksi', width: 70, align: TextAlign.center),
+      ],
+      rows: _data
+          .map((row) => AppTableRowData(
+                onTap: () => _lihatDetailPenjualanKasir(context, row),
+                cells: [
+                  AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
+                  AppTableCell.text('${row['kasir'] ?? '-'}', flex: 2),
+                  AppTableCell.text('${row['nomorNota'] ?? '-'}',
+                      flex: 4,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
+                  AppTableCell.text(StrukScreen.labelPembayaran(row), flex: 2),
+                  AppTableCell.text(
+                      _formatRupiah.format(row['totalBiaya'] ?? 0),
+                      flex: 2,
+                      align: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  AppTableCell(
+                    width: 70,
+                    align: TextAlign.center,
+                    child: IconButton(
+                        tooltip: 'Lihat rincian penjualan',
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        onPressed: () =>
+                            _lihatDetailPenjualanKasir(context, row)),
+                  ),
+                ],
+              ))
+          .toList(),
+      pagination: _total > _pageSize
+          ? AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: _total,
+              labelData: 'penjualan',
+              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+              onBerikutnya:
+                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+            )
+          : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 20),
+        children: [
+          _filter(),
+          if (!_bolehFilterKasir && !_memuat)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                'Akun kasir hanya dapat melihat penjualan miliknya sendiri.',
+                style: TextStyle(fontSize: 12, color: Colors.orange),
+              ),
+            ),
+          _ringkasanWidget(),
+          if (_memuat || _error != null)
+            _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
+          else
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: _tabel()),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _lihatDetailPenjualanKasir(
+    BuildContext context, Map<String, dynamic> row) async {
+  try {
+    final hasil = await ApiClient.instance
+        .aksi('laporan_penjualan_kasir_detail', {'id': row['idTransaksi']});
+    final items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Rincian ${hasil['kode'] ?? row['nomorNota'] ?? ''}'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Kasir: ${row['kasir'] ?? '-'}'),
+                Text('Waktu: ${_formatWaktu(row['waktu'])}'),
+                Text('Pembeli: ${row['pembeli'] ?? 'Umum'}'),
+                Text('Metode: ${StrukScreen.labelPembayaran(row)}'),
+                const Divider(),
+                ...items.map((item) {
+                  final qty = (item['qty'] as num?)?.toDouble() ?? 0;
+                  final harga = (item['harga'] as num?)?.toDouble() ?? 0;
+                  final diskon = (item['diskon'] as num?)?.toDouble() ?? 0;
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('${item['nama'] ?? '-'}'),
+                    subtitle: Text(
+                        '${qty.toStringAsFixed(qty == qty.roundToDouble() ? 0 : 2)} × ${_formatRupiah.format(harga)}${diskon > 0 ? ' · Diskon ${_formatRupiah.format(diskon)}' : ''}'),
+                    trailing:
+                        Text(_formatRupiah.format((qty * harga) - diskon)),
+                  );
+                }),
+                const Divider(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Total ${_formatRupiah.format(hasil['totalBiaya'] ?? row['totalBiaya'] ?? 0)}',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Tutup'))
+        ],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+}
+
+class _TabPenerimaanKasir extends StatefulWidget {
+  const _TabPenerimaanKasir();
+
+  @override
+  State<_TabPenerimaanKasir> createState() => _TabPenerimaanKasirState();
+}
+
+class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
+  static const _pageSize = 15;
+  late DateTime _mulai;
+  late DateTime _sampai;
+  bool _memuat = true;
+  bool _mencetak = false;
+  bool _bolehFilterKasir = false;
+  String? _error;
+  String _kasir = '';
+  List<String> _daftarKasir = [];
+  List<Map<String, dynamic>> _data = [];
+  int _halaman = 1;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final hariIni = DateTime.now();
+    _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
+    _sampai = _mulai;
+    _muat();
+  }
+
+  Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
+        'tglMulai': _formatTanggalServer.format(_mulai),
+        'tglSampai': _formatTanggalServer.format(_sampai),
+        if (_kasir.isNotEmpty) 'kasir': _kasir,
+        'page': page ?? _halaman,
+        'pageSize': pageSize,
+      };
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('laporan_penerimaan_kasir_list', _payload());
+      final daftar = ((hasil['daftarKasir'] as List?) ?? [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _bolehFilterKasir = hasil['bolehFilterKasir'] == true;
+        _daftarKasir = daftar;
+        if (!_bolehFilterKasir || (_kasir.isEmpty && aktif.isNotEmpty)) {
+          _kasir = aktif;
+        }
+        if (_kasir.isNotEmpty && !_daftarKasir.contains(_kasir)) {
+          _daftarKasir = [_kasir, ..._daftarKasir];
+        }
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = e.toString());
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _terapkan() async {
+    if (_sampai.isBefore(_mulai)) {
+      setStateIfMounted(() => _error =
+          'Tanggal akhir tidak boleh lebih awal daripada tanggal mulai.');
+      return;
+    }
+    setStateIfMounted(() => _halaman = 1);
+    await _muat();
+  }
+
+  Future<void> _pindah(int halaman) async {
+    setStateIfMounted(() => _halaman = halaman);
+    await _muat();
+  }
+
+  Future<List<Map<String, dynamic>>> _semuaData() async {
+    final semua = <Map<String, dynamic>>[];
+    var page = 1;
+    var total = 0;
+    do {
+      final hasil = await ApiClient.instance.aksi(
+          'laporan_penerimaan_kasir_list', _payload(page: page, pageSize: 100));
+      semua.addAll(
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+      page++;
+    } while (semua.length < total);
+    return semua;
+  }
+
+  Future<void> _cetakPdf() async {
+    setStateIfMounted(() => _mencetak = true);
+    try {
+      final semua = await _semuaData();
+      final totalTrx = semua.fold<int>(
+          0,
+          (nilai, row) =>
+              nilai + ((row['jumlahTransaksi'] as num?)?.toInt() ?? 0));
+      final totalNilai = semua.fold<double>(
+          0, (nilai, row) => nilai + ((row['total'] as num?)?.toDouble() ?? 0));
+      await CetakUtilIs.cetakPdfTabel(
+        judul: 'Penerimaan Penjualan per Kasir',
+        parameter:
+            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}',
+        headers: const [
+          'Tanggal',
+          'Nama Kasir',
+          'Metode / Bank',
+          'Jumlah Transaksi',
+          'Jumlah Penerimaan'
+        ],
+        rows: semua
+            .map((row) => [
+                  '${row['tanggal'] ?? '-'}',
+                  '${row['kasir'] ?? '-'}',
+                  '${row['metode'] ?? '-'}',
+                  '${row['jumlahTransaksi'] ?? 0}',
+                  _formatRupiah.format(row['total'] ?? 0),
+                ])
+            .toList(),
+        namaFile:
+            'penerimaan-per-kasir-${_formatTanggalServer.format(_mulai)}-${_formatTanggalServer.format(_sampai)}.pdf',
+        barisTotal:
+            'Total transaksi: $totalTrx · Total penerimaan: ${_formatRupiah.format(totalNilai)}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mencetak PDF: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _mencetak = false);
+    }
+  }
+
+  Widget _filter() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 170,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_today_outlined, size: 16),
+                label: Text(_formatTanggalServer.format(_mulai)),
+                onPressed: () async {
+                  final d = await showDatePicker(
+                      context: context,
+                      initialDate: _mulai,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now());
+                  if (d != null) setStateIfMounted(() => _mulai = d);
+                },
+              ),
+            ),
+            const Text('s.d.'),
+            SizedBox(
+              width: 170,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(_formatTanggalServer.format(_sampai)),
+                onPressed: () async {
+                  final d = await showDatePicker(
+                      context: context,
+                      initialDate: _sampai,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now());
+                  if (d != null) setStateIfMounted(() => _sampai = d);
+                },
+              ),
+            ),
+            SizedBox(
+              width: 230,
+              child: DropdownButtonFormField<String>(
+                value: _kasir.isEmpty && !_bolehFilterKasir ? null : _kasir,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Kasir',
+                    prefixIcon: Icon(Icons.person_outline),
+                    isDense: true),
+                items: [
+                  if (_bolehFilterKasir)
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua kasir')),
+                  ..._daftarKasir
+                      .map((k) => DropdownMenuItem(value: k, child: Text(k))),
+                ],
+                onChanged: _bolehFilterKasir
+                    ? (v) => setStateIfMounted(() => _kasir = v ?? '')
+                    : null,
+              ),
+            ),
+            FilledButton.icon(
+                onPressed: _memuat ? null : _terapkan,
+                icon: const Icon(Icons.filter_alt_outlined, size: 17),
+                label: const Text('Terapkan')),
+            OutlinedButton.icon(
+                onPressed: _memuat || _mencetak ? null : _cetakPdf,
+                icon: _mencetak
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('Cetak PDF')),
+          ],
+        ),
+      );
+
+  int get _totalHalaman =>
+      _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
+
+  Widget _tabel() => AppDataTable(
+        minWidth: 940,
+        emptyText: 'Belum ada penerimaan pada periode dan kasir ini.',
+        columns: const [
+          AppTableColumn('Tanggal', flex: 2),
+          AppTableColumn('Kasir', flex: 3),
+          AppTableColumn('Metode / Bank', flex: 3),
+          AppTableColumn('Jumlah Transaksi', flex: 2, align: TextAlign.right),
+          AppTableColumn('Penerimaan', flex: 3, align: TextAlign.right),
+          AppTableColumn('Aksi', width: 70, align: TextAlign.center),
+        ],
+        rows: _data
+            .map((row) => AppTableRowData(
+                  onTap: () => _lihatRincianPenerimaan(context, row),
+                  cells: [
+                    AppTableCell.text('${row['tanggal'] ?? '-'}', flex: 2),
+                    AppTableCell.text('${row['kasir'] ?? '-'}',
+                        flex: 3,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    AppTableCell.text('${row['metode'] ?? '-'}', flex: 3),
+                    AppTableCell.text('${row['jumlahTransaksi'] ?? 0}',
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(_formatRupiah.format(row['total'] ?? 0),
+                        flex: 3,
+                        align: TextAlign.right,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    AppTableCell(
+                      width: 70,
+                      align: TextAlign.center,
+                      child: IconButton(
+                          tooltip: 'Lihat transaksi penyusun',
+                          icon: const Icon(Icons.visibility_outlined, size: 18),
+                          onPressed: () =>
+                              _lihatRincianPenerimaan(context, row)),
+                    ),
+                  ],
+                ))
+            .toList(),
+        pagination: _total > _pageSize
+            ? AppTablePagination(
+                halaman: _halaman,
+                totalHalaman: _totalHalaman,
+                totalData: _total,
+                labelData: 'ringkasan penerimaan',
+                onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+                onBerikutnya: _halaman < _totalHalaman
+                    ? () => _pindah(_halaman + 1)
+                    : null,
+              )
+            : null,
+      );
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: _muat,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 20),
+          children: [
+            _filter(),
+            if (!_bolehFilterKasir && !_memuat)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Text(
+                    'Akun kasir hanya dapat melihat penerimaan miliknya sendiri.',
+                    style: TextStyle(fontSize: 12, color: Colors.orange)),
+              ),
+            if (_memuat || _error != null)
+              _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
+            else
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: _tabel()),
+          ],
+        ),
+      );
+}
+
+Future<void> _lihatRincianPenerimaan(
+    BuildContext context, Map<String, dynamic> ringkasan) async {
+  try {
+    final hasil =
+        await ApiClient.instance.aksi('laporan_penerimaan_kasir_detail', {
+      'tanggal': ringkasan['tanggal'],
+      'kasir': ringkasan['kasir'],
+      'metode': ringkasan['metode'],
+    });
+    final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Rincian penerimaan · ${ringkasan['tanggal'] ?? '-'}'),
+        content: SizedBox(
+          width: 650,
+          height: 430,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Kasir: ${ringkasan['kasir'] ?? '-'}'),
+              Text('Metode / bank: ${ringkasan['metode'] ?? '-'}'),
+              Text(
+                  '${ringkasan['jumlahTransaksi'] ?? data.length} transaksi · ${_formatRupiah.format(ringkasan['total'] ?? 0)}'),
+              const Divider(),
+              Expanded(
+                child: data.isEmpty
+                    ? const Center(child: Text('Tidak ada rincian transaksi.'))
+                    : ListView.separated(
+                        itemCount: data.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final row = data[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text('${row['nomorNota'] ?? '-'}'),
+                            subtitle: Text(
+                                '${_formatWaktu(row['waktu'])} · ${row['pembeli'] ?? 'Umum'}'),
+                            trailing: Text(
+                                _formatRupiah.format(row['totalBiaya'] ?? 0),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800)),
+                            onTap: () =>
+                                _lihatDetailPenjualanKasir(dialogContext, row),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 }

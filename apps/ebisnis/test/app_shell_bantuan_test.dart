@@ -35,4 +35,18 @@ void main() {
     await tester.pump();
     expect(find.byTooltip('Bantuan halaman ini'), findsOneWidget);
   });
+
+  testWidgets('tombol Tanya Jawab membuka QA sesuai halaman', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(aplikasi());
+    await tester.pump();
+    expect(find.byKey(const Key('tombol-qa-halaman-desktop')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tombol-qa-halaman-desktop')));
+    await tester.pumpAndSettle();
+    expect(find.text('Tanya Jawab — Stok Opname'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsWidgets);
+  });
 }
