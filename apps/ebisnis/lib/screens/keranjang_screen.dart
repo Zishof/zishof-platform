@@ -1150,8 +1150,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
       // jaringan di bawah tidak pernah membatalkan penjualan ini.
+      final payloadPending = Map<String, dynamic>.from(payload);
+      payloadPending['pengiriman_pending'] = true;
       await CoreDb.instance.simpanTransaksiPending(
-          kodeUnik, jsonEncode(payload),
+          kodeUnik, jsonEncode(payloadPending),
           akunKunci: Sesi.instance.userId,
           tokoId: Sesi.instance.tokoId,
           idPerangkat: IdentitasMesin.instance.idMesin);
@@ -1159,6 +1161,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       String? pesanTundaMenuju;
       Map<String, dynamic>? hasilBayarSukses;
       try {
+        payload['pengiriman_pending'] = false;
         final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
         hasilBayarSukses = hasilBayar;
         await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);

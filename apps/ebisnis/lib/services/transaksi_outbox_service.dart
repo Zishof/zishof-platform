@@ -122,6 +122,7 @@ class TransaksiOutboxService {
       }
 
       try {
+        payload['pengiriman_pending'] = true;
         final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
         await PelayananTransaksi.tandaiJikaPerlu(
           payload: payload,
