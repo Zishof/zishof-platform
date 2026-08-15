@@ -226,6 +226,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   final _pembeliController = TextEditingController();
   final _kodeTransaksiController = TextEditingController();
   int _halaman = 1;
+  bool _detailTerlihat = false;
   bool _grafikTerlihat = false;
   String? _logApiTerakhir;
 
@@ -1295,7 +1296,21 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               ],
             );
           }),
-          if (metodePembayaran.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              icon: Icon(
+                  _detailTerlihat
+                      ? Icons.expand_less_outlined
+                      : Icons.list_alt_outlined,
+                  size: 18),
+              label: Text(_detailTerlihat ? 'Sembunyikan Detail' : 'Detail'),
+              onPressed: () =>
+                  setStateIfMounted(() => _detailTerlihat = !_detailTerlihat),
+            ),
+          ),
+          if (_detailTerlihat && metodePembayaran.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text('Omzet per Jenis Pembayaran',
                 style: TextStyle(
@@ -1339,22 +1354,24 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
               );
             }),
           ],
-          _kartuAnalitik(
-              judul: 'Omzet per Kasir',
-              data: omzetKasir,
-              ikon: Icons.badge_outlined),
-          _kartuAnalitik(
-              judul: 'Omzet per Jenis Produk',
-              data: omzetKategori,
-              ikon: Icons.category_outlined),
-          _kartuAnalitik(
-              judul: 'Produk Terlaris',
-              data: produkTerlaris,
-              ikon: Icons.local_fire_department_outlined),
-          _kartuAnalitik(
-              judul: 'Omzet per Toko',
-              data: omzetToko,
-              ikon: Icons.storefront_outlined),
+          if (_detailTerlihat) ...[
+            _kartuAnalitik(
+                judul: 'Omzet per Kasir',
+                data: omzetKasir,
+                ikon: Icons.badge_outlined),
+            _kartuAnalitik(
+                judul: 'Omzet per Jenis Produk',
+                data: omzetKategori,
+                ikon: Icons.category_outlined),
+            _kartuAnalitik(
+                judul: 'Produk Terlaris',
+                data: produkTerlaris,
+                ikon: Icons.local_fire_department_outlined),
+            _kartuAnalitik(
+                judul: 'Omzet per Toko',
+                data: omzetToko,
+                ikon: Icons.storefront_outlined),
+          ],
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
