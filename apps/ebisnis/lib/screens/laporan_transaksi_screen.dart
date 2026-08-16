@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -20,6 +22,113 @@ String _formatWaktu(dynamic raw) {
   } catch (_) {
     return s;
   }
+}
+
+Future<void> _tampilkanRincianAngka(
+  BuildContext context, {
+  required String judul,
+  required String nilai,
+  String? keterangan,
+  Map<String, String> rincian = const {},
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(judul),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SelectableText(
+                nilai,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (keterangan != null && keterangan.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(keterangan),
+              ],
+              if (rincian.isNotEmpty) ...[
+                const Divider(height: 24),
+                ...rincian.entries.map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: Text(entry.key)),
+                        const SizedBox(width: 16),
+                        Flexible(
+                          child: SelectableText(
+                            entry.value,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Tutup'),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _angkaLaporan(
+  BuildContext context, {
+  required String label,
+  required String nilai,
+  String? keterangan,
+  Map<String, String> rincian = const {},
+  TextStyle? style,
+  TextAlign textAlign = TextAlign.left,
+  int maxLines = 1,
+}) {
+  return Tooltip(
+    message: 'Klik untuk melihat rincian',
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(5),
+        onTap: () => _tampilkanRincianAngka(
+          context,
+          judul: label,
+          nilai: nilai,
+          keterangan: keterangan,
+          rincian: rincian,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text(
+            nilai,
+            textAlign: textAlign,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: (style ?? const TextStyle(fontSize: 12.5)).copyWith(
+              decoration: TextDecoration.underline,
+              decorationStyle: TextDecorationStyle.dotted,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// Layar Laporan Transaksi (padanan laporan-transaksi.html/-renderer.js
@@ -74,6 +183,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
         children: [
           if (_statistik != null)
             _KartuStatistikTransaksi(statistik: _statistik!),
+          if (_statistik != null)
+            _VisualisasiLaporanTransaksi(statistik: _statistik!),
           TabBar(
             controller: _tab,
             isScrollable: true,
@@ -111,26 +222,30 @@ class _KartuStatistikTransaksi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kartu = <(String, String, Color)>[
+    final kartu = <(String, String, Color, String)>[
       (
         'Transaksi Hari Ini',
         '${statistik['trxHariIni'] ?? 0}',
-        const Color(0xFF1E3A5F)
+        const Color(0xFF1E3A5F),
+        'Jumlah transaksi yang tercatat sejak pukul 00.00 hari ini.'
       ),
       (
         'Omzet Hari Ini',
         _formatRupiah.format(statistik['omzetHariIni'] ?? 0),
-        const Color(0xFF2E7D32)
+        const Color(0xFF2E7D32),
+        'Akumulasi nilai transaksi yang tercatat hari ini.'
       ),
       (
         'Transaksi 30 Hari',
         '${statistik['trx30Hari'] ?? 0}',
-        const Color(0xFF0284C7)
+        const Color(0xFF0284C7),
+        'Jumlah transaksi selama 30 hari terakhir.'
       ),
       (
         'Omzet 30 Hari',
         _formatRupiah.format(statistik['omzet30Hari'] ?? 0),
-        const Color(0xFFC0563D)
+        const Color(0xFFC0563D),
+        'Akumulasi nilai transaksi selama 30 hari terakhir.'
       ),
     ];
     final byKasir =
@@ -149,31 +264,46 @@ class _KartuStatistikTransaksi extends StatelessWidget {
               itemCount: kartu.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
-                final (label, nilai, warna) = kartu[i];
-                return Container(
-                  width: 150,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: warna.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: warna.withValues(alpha: 0.25)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(nilai,
+                final (label, nilai, warna, keterangan) = kartu[i];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _tampilkanRincianAngka(context,
+                      judul: label,
+                      nilai: nilai,
+                      keterangan: keterangan,
+                      rincian: {
+                        'Periode': label.contains('30 Hari')
+                            ? '30 hari terakhir'
+                            : 'Hari ini',
+                        'Sumber': 'Transaksi toko aktif',
+                      }),
+                  child: Container(
+                    width: 150,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: warna.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: warna.withValues(alpha: 0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(nilai,
+                            style: TextStyle(
+                                decoration: TextDecoration.underline,
+                                decorationStyle: TextDecorationStyle.dotted,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: warna)),
+                        Text(
+                          label,
                           style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: warna)),
-                      Text(
-                        label,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondaryOf(context)),
-                      ),
-                    ],
+                              fontSize: 11,
+                              color: AppColors.textSecondaryOf(context)),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -221,22 +351,36 @@ class _KartuStatistikTransaksi extends StatelessWidget {
             const SizedBox(height: 6),
             ...data.take(5).map((e) {
               final nilai = (e['nilai'] as num).toDouble();
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${e['label']}', style: const TextStyle(fontSize: 11)),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: maksNilai > 0 ? nilai / maksNilai : 0,
-                        minHeight: 6,
-                        backgroundColor: AppColors.borderOf(context),
-                        color: const Color(0xFF1E3A5F),
+              final nilaiTampil = _formatRupiah.format(nilai);
+              return InkWell(
+                onTap: () => _tampilkanRincianAngka(context,
+                    judul: '$judul · ${e['label']}',
+                    nilai: nilaiTampil,
+                    keterangan: 'Kontribusi dalam periode 30 hari terakhir.'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text('${e['label']}',
+                                style: const TextStyle(fontSize: 11))),
+                        Text(nilaiTampil,
+                            style: const TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w700)),
+                      ]),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: maksNilai > 0 ? nilai / maksNilai : 0,
+                          minHeight: 6,
+                          backgroundColor: AppColors.borderOf(context),
+                          color: const Color(0xFF1E3A5F),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }),
@@ -245,6 +389,363 @@ class _KartuStatistikTransaksi extends StatelessWidget {
       ),
     );
   }
+}
+
+class _VisualisasiLaporanTransaksi extends StatelessWidget {
+  final Map<String, dynamic> statistik;
+
+  const _VisualisasiLaporanTransaksi({required this.statistik});
+
+  List<Map<String, dynamic>> _daftar(String key) =>
+      ((statistik[key] as List?) ?? []).cast<Map<String, dynamic>>();
+
+  @override
+  Widget build(BuildContext context) {
+    final tren = _daftar('trenHarian');
+    final metode = _daftar('byMetode');
+    final radar = _daftar('radarKasir');
+    if (tren.isEmpty && metode.isEmpty && radar.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 224,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        scrollDirection: Axis.horizontal,
+        children: [
+          if (tren.isNotEmpty)
+            _kartuGrafik(
+              context,
+              judul: 'Tren Omzet & Transaksi',
+              subjudul: '30 hari terakhir',
+              lebar: 360,
+              painter: _TrendLaporanPainter(tren, AppColors.primary),
+              nilaiUtama: _formatRupiah.format(tren.fold<double>(
+                  0, (v, e) => v + ((e['omzet'] as num?)?.toDouble() ?? 0))),
+              rincian: {
+                'Hari dengan transaksi': '${tren.length}',
+                'Total transaksi':
+                    '${tren.fold<int>(0, (v, e) => v + ((e['transaksi'] as num?)?.toInt() ?? 0))}',
+              },
+            ),
+          if (metode.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            _kartuGrafik(
+              context,
+              judul: 'Komposisi Pembayaran',
+              subjudul: 'Nilai per metode',
+              lebar: 300,
+              painter: _DonutLaporanPainter(metode),
+              nilaiUtama: _formatRupiah.format(metode.fold<double>(
+                  0, (v, e) => v + ((e['nilai'] as num?)?.toDouble() ?? 0))),
+              rincian: {
+                for (final e in metode.take(8))
+                  '${e['label'] ?? '-'} · ${e['transaksi'] ?? 0} trx':
+                      _formatRupiah.format(e['nilai'] ?? 0),
+              },
+            ),
+          ],
+          if (radar.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            _kartuGrafik(
+              context,
+              judul: 'Radar Performa Kasir',
+              subjudul: 'Omzet, transaksi, rata-rata, hari aktif',
+              lebar: 330,
+              painter: _RadarLaporanPainter(radar),
+              nilaiUtama: '${radar.length} kasir',
+              rincian: {
+                for (final e in radar.take(8))
+                  '${e['label'] ?? '-'} · ${e['transaksi'] ?? 0} trx':
+                      _formatRupiah.format(e['omzet'] ?? 0),
+              },
+            ),
+          ],
+          if (tren.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            _kartuGrafik(
+              context,
+              judul: 'Candle Nilai Transaksi',
+              subjudul: 'Open, high, low, close harian',
+              lebar: 360,
+              painter: _CandleLaporanPainter(tren),
+              nilaiUtama: '${tren.length} hari',
+              rincian: {
+                'Nilai tertinggi': _formatRupiah.format(tren.fold<double>(
+                    0,
+                    (v, e) => v > ((e['high'] as num?)?.toDouble() ?? 0)
+                        ? v
+                        : ((e['high'] as num?)?.toDouble() ?? 0))),
+                'Keterangan': 'Hijau: close ≥ open; merah: close < open',
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuGrafik(
+    BuildContext context, {
+    required String judul,
+    required String subjudul,
+    required double lebar,
+    required CustomPainter painter,
+    required String nilaiUtama,
+    required Map<String, String> rincian,
+  }) {
+    return SizedBox(
+      width: lebar,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _tampilkanRincianAngka(context,
+              judul: judul,
+              nilai: nilaiUtama,
+              keterangan: subjudul,
+              rincian: rincian),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(judul,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w800)),
+                Text(subjudul,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textSecondaryOf(context))),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: CustomPaint(
+                    painter: painter,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrendLaporanPainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  final Color warna;
+  _TrendLaporanPainter(this.data, this.warna);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final nilai =
+        data.map((e) => (e['omzet'] as num?)?.toDouble() ?? 0).toList();
+    final maks = nilai.fold<double>(0, (a, b) => a > b ? a : b);
+    final grid = Paint()
+      ..color = Colors.grey.withValues(alpha: .18)
+      ..strokeWidth = 1;
+    for (var i = 0; i <= 3; i++) {
+      final y = size.height * i / 3;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+    if (nilai.isEmpty || maks <= 0) return;
+    final path = Path();
+    for (var i = 0; i < nilai.length; i++) {
+      final x = nilai.length == 1
+          ? size.width / 2
+          : size.width * i / (nilai.length - 1);
+      final y = size.height - (nilai[i] / maks * (size.height - 8)) - 4;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 2.4, Paint()..color = warna);
+    }
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = warna
+          ..strokeWidth = 2.2
+          ..style = PaintingStyle.stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrendLaporanPainter oldDelegate) =>
+      oldDelegate.data != data;
+}
+
+class _DonutLaporanPainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  _DonutLaporanPainter(this.data);
+  static const warna = [
+    Color(0xFF1E3A5F),
+    Color(0xFF0284C7),
+    Color(0xFF2E7D32),
+    Color(0xFFC0563D),
+    Color(0xFF7C3AED),
+    Color(0xFFD97706)
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = data.fold<double>(
+        0, (v, e) => v + ((e['nilai'] as num?)?.toDouble() ?? 0));
+    if (total <= 0) return;
+    final radius = size.shortestSide * .36;
+    final rect = Rect.fromCircle(
+        center: Offset(size.width / 2, size.height / 2), radius: radius);
+    var mulai = -1.5708;
+    for (var i = 0; i < data.length; i++) {
+      final sudut =
+          (((data[i]['nilai'] as num?)?.toDouble() ?? 0) / total) * 6.28318;
+      canvas.drawArc(
+          rect,
+          mulai,
+          sudut,
+          false,
+          Paint()
+            ..color = warna[i % warna.length]
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = radius * .42);
+      mulai += sudut;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutLaporanPainter oldDelegate) =>
+      oldDelegate.data != data;
+}
+
+class _RadarLaporanPainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  _RadarLaporanPainter(this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+    final axes = 4;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide * .38;
+    final grid = Paint()
+      ..color = Colors.grey.withValues(alpha: .22)
+      ..style = PaintingStyle.stroke;
+    for (var level = 1; level <= 4; level++) {
+      final p = Path();
+      for (var i = 0; i < axes; i++) {
+        final a = -1.5708 + (6.28318 * i / axes);
+        final point = center +
+            Offset(math.cos(a), math.sin(a)) * radius * level.toDouble() / 4;
+        if (i == 0) {
+          p.moveTo(point.dx, point.dy);
+        } else {
+          p.lineTo(point.dx, point.dy);
+        }
+      }
+      p.close();
+      canvas.drawPath(p, grid);
+    }
+    final maxTrx = data.fold<double>(
+        1,
+        (v, e) => v > ((e['transaksi'] as num?)?.toDouble() ?? 0)
+            ? v
+            : ((e['transaksi'] as num?)?.toDouble() ?? 0));
+    final maxOmzet = data.fold<double>(
+        1,
+        (v, e) => v > ((e['omzet'] as num?)?.toDouble() ?? 0)
+            ? v
+            : ((e['omzet'] as num?)?.toDouble() ?? 0));
+    final maxAvg = data.fold<double>(
+        1,
+        (v, e) => v > ((e['rataRata'] as num?)?.toDouble() ?? 0)
+            ? v
+            : ((e['rataRata'] as num?)?.toDouble() ?? 0));
+    final e = data.first;
+    final values = <double>[
+      ((e['transaksi'] as num?)?.toDouble() ?? 0) / maxTrx,
+      ((e['omzet'] as num?)?.toDouble() ?? 0) / maxOmzet,
+      ((e['rataRata'] as num?)?.toDouble() ?? 0) / maxAvg,
+      (((e['hariAktif'] as num?)?.toDouble() ?? 0) / 30)
+          .clamp(0.0, 1.0)
+          .toDouble()
+    ];
+    final p = Path();
+    for (var i = 0; i < axes; i++) {
+      final a = -1.5708 + (6.28318 * i / axes);
+      final point =
+          center + Offset(math.cos(a), math.sin(a)) * radius * values[i];
+      if (i == 0) {
+        p.moveTo(point.dx, point.dy);
+      } else {
+        p.lineTo(point.dx, point.dy);
+      }
+    }
+    p.close();
+    canvas.drawPath(
+        p,
+        Paint()
+          ..color = const Color(0xFF0284C7).withValues(alpha: .22)
+          ..style = PaintingStyle.fill);
+    canvas.drawPath(
+        p,
+        Paint()
+          ..color = const Color(0xFF0284C7)
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarLaporanPainter oldDelegate) =>
+      oldDelegate.data != data;
+}
+
+class _CandleLaporanPainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  _CandleLaporanPainter(this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final visible = data.length > 16 ? data.sublist(data.length - 16) : data;
+    final maks = visible.fold<double>(
+        1,
+        (v, e) => v > ((e['high'] as num?)?.toDouble() ?? 0)
+            ? v
+            : ((e['high'] as num?)?.toDouble() ?? 0));
+    if (visible.isEmpty) return;
+    final slot = size.width / visible.length;
+    for (var i = 0; i < visible.length; i++) {
+      final e = visible[i];
+      final open = (e['open'] as num?)?.toDouble() ?? 0;
+      final close = (e['close'] as num?)?.toDouble() ?? 0;
+      final high = (e['high'] as num?)?.toDouble() ?? 0;
+      final low = (e['low'] as num?)?.toDouble() ?? 0;
+      final color =
+          close >= open ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+      double y(double value) =>
+          size.height - (value / maks * (size.height - 8)) - 4;
+      final x = slot * i + slot / 2;
+      canvas.drawLine(
+          Offset(x, y(high)),
+          Offset(x, y(low)),
+          Paint()
+            ..color = color
+            ..strokeWidth = 1.3);
+      final top = y(open > close ? open : close);
+      final bottom = y(open > close ? close : open);
+      canvas.drawRect(
+          Rect.fromLTRB(x - slot * .24, top, x + slot * .24,
+              bottom == top ? bottom + 2 : bottom),
+          Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CandleLaporanPainter oldDelegate) =>
+      oldDelegate.data != data;
 }
 
 /// Bar filter tanggal (+opsional kata kunci pembeli) dipakai oleh ke-3 tab.
@@ -550,12 +1051,22 @@ class _TabOrderState extends State<_TabOrder> {
                 ),
               ),
             ),
-            AppTableCell.text(
-              _formatRupiah.format(row['totalBiaya'] ?? 0),
+            AppTableCell(
               flex: 2,
               align: TextAlign.right,
-              style:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              child: _angkaLaporan(context,
+                  label: 'Total transaksi ${row['nomorNota'] ?? '-'}',
+                  nilai: _formatRupiah.format(row['totalBiaya'] ?? 0),
+                  keterangan:
+                      'Klik baris atau ikon mata untuk melihat produk penyusun transaksi.',
+                  rincian: {
+                    'Waktu': _formatWaktu(row['waktu']),
+                    'Kasir': kasirMesin,
+                    'Metode': StrukScreen.labelPembayaran(row),
+                  },
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w800)),
             ),
             AppTableCell(
               width: 74,
@@ -713,12 +1224,24 @@ class _TabSesiState extends State<_TabSesi> {
                 child: StatusPill(label: labelStatus, warna: warnaStatus),
               ),
             ),
-            AppTableCell.text(
-              _formatRupiah.format(row['saldoAkhir'] ?? 0),
+            AppTableCell(
               flex: 2,
               align: TextAlign.right,
-              style:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              child: _angkaLaporan(context,
+                  label: 'Saldo akhir sesi ${row['sesiKode'] ?? '-'}',
+                  nilai: _formatRupiah.format(row['saldoAkhir'] ?? 0),
+                  keterangan: proyeksi
+                      ? 'Nilai masih berupa proyeksi karena sesi belum dikonfirmasi tutup.'
+                      : 'Nilai penutupan sesi yang sudah dikonfirmasi.',
+                  rincian: {
+                    'Kasir': '${row['kasir'] ?? '-'}',
+                    'Status': labelStatus,
+                    'Waktu buka': _formatWaktu(row['waktuBuka']),
+                    'Waktu tutup': _formatWaktu(row['waktuTutup']),
+                  },
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w800)),
             ),
           ],
         );
@@ -885,8 +1408,28 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
             child: Row(
               children: [
                 Expanded(
-                    child: Text(
-                        '$_jumlahTransaksi transaksi · ${_formatRupiah.format(_totalTransaksi)}')),
+                  child: Wrap(
+                    spacing: 14,
+                    runSpacing: 4,
+                    children: [
+                      _angkaLaporan(context,
+                          label: 'Jumlah transaksi per kasir',
+                          nilai: '$_jumlahTransaksi transaksi',
+                          keterangan:
+                              'Jumlah seluruh transaksi pada periode yang dipilih.'),
+                      _angkaLaporan(context,
+                          label: 'Total transaksi per kasir',
+                          nilai: _formatRupiah.format(_totalTransaksi),
+                          keterangan:
+                              'Akumulasi seluruh metode pembayaran pada periode yang dipilih.'),
+                      _angkaLaporan(context,
+                          label: 'Total selisih kasir',
+                          nilai: _formatRupiah.format(_totalSelisih),
+                          keterangan:
+                              'Kas closing dikurangi modal awal dan penerimaan tunai.'),
+                    ],
+                  ),
+                ),
                 OutlinedButton.icon(
                   onPressed: _mencetak || _memuat ? null : _cetakPdf,
                   icon: _mencetak
@@ -919,9 +1462,19 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
                   initiallyExpanded: true,
                   title: Text('${kasir['kasir'] ?? '-'}',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                      '${kasir['jumlahTransaksi'] ?? 0} transaksi · ${_formatRupiah.format(kasir['totalTransaksi'] ?? 0)}'),
-                  trailing: Text(_formatRupiah.format(selisih),
+                  subtitle: Wrap(spacing: 8, children: [
+                    _angkaLaporan(context,
+                        label: 'Jumlah transaksi ${kasir['kasir'] ?? '-'}',
+                        nilai: '${kasir['jumlahTransaksi'] ?? 0} transaksi'),
+                    _angkaLaporan(context,
+                        label: 'Total transaksi ${kasir['kasir'] ?? '-'}',
+                        nilai:
+                            _formatRupiah.format(kasir['totalTransaksi'] ?? 0)),
+                  ]),
+                  trailing: _angkaLaporan(context,
+                      label: 'Selisih kas ${kasir['kasir'] ?? '-'}',
+                      nilai: _formatRupiah.format(selisih),
+                      keterangan: 'Kas closing dikurangi kas yang seharusnya.',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: selisih == 0
@@ -957,7 +1510,11 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [
         Expanded(child: Text(label)),
-        Text(_formatRupiah.format(nilai ?? 0),
+        _angkaLaporan(context,
+            label: label,
+            nilai: _formatRupiah.format(nilai ?? 0),
+            keterangan: 'Komponen rekonsiliasi transaksi per kasir.',
+            textAlign: TextAlign.right,
             style: TextStyle(fontWeight: tebal ? FontWeight.bold : null)),
       ]),
     );
@@ -1054,12 +1611,20 @@ class _TabPaymentState extends State<_TabPayment> {
                 ),
               ),
             ),
-            AppTableCell.text(
-              _formatRupiah.format(row['jumlah'] ?? 0),
+            AppTableCell(
               flex: 2,
               align: TextAlign.right,
-              style:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              child: _angkaLaporan(context,
+                  label: 'Pembayaran ${row['orderKode'] ?? '-'}',
+                  nilai: _formatRupiah.format(row['jumlah'] ?? 0),
+                  rincian: {
+                    'Metode': StrukScreen.labelPembayaran(row),
+                    'Sesi': '${row['sesiKode'] ?? '-'}',
+                    'Waktu': _formatWaktu(row['waktu']),
+                  },
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w800)),
             ),
           ],
         );
@@ -1355,10 +1920,18 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(_formatRupiah.format(r['total'] ?? 0),
+                _angkaLaporan(context,
+                    label: 'Total penjualan ${r['kasir'] ?? '-'}',
+                    nilai: _formatRupiah.format(r['total'] ?? 0),
+                    keterangan:
+                        'Total penerimaan kasir pada periode yang dipilih.',
                     style: TextStyle(
                         color: AppColors.primary, fontWeight: FontWeight.w800)),
-                Text('${r['jumlahTransaksi'] ?? 0} transaksi',
+                _angkaLaporan(context,
+                    label: 'Jumlah transaksi ${r['kasir'] ?? '-'}',
+                    nilai: '${r['jumlahTransaksi'] ?? 0} transaksi',
+                    keterangan:
+                        'Jumlah nota yang dilayani kasir pada periode yang dipilih.',
                     style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondaryOf(context))),
@@ -1394,11 +1967,21 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                   AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
                   AppTableCell.text(StrukScreen.labelPembayaran(row), flex: 2),
-                  AppTableCell.text(
-                      _formatRupiah.format(row['totalBiaya'] ?? 0),
+                  AppTableCell(
                       flex: 2,
                       align: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                      child: _angkaLaporan(context,
+                          label: 'Penerimaan ${row['nomorNota'] ?? '-'}',
+                          nilai: _formatRupiah.format(row['totalBiaya'] ?? 0),
+                          keterangan:
+                              'Klik baris untuk membuka rincian produk transaksi.',
+                          rincian: {
+                            'Kasir': '${row['kasir'] ?? '-'}',
+                            'Pembeli': '${row['pembeli'] ?? 'Umum'}',
+                            'Metode': StrukScreen.labelPembayaran(row),
+                          },
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontWeight: FontWeight.w800))),
                   AppTableCell(
                     width: 70,
                     align: TextAlign.center,
@@ -1764,12 +2347,30 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
                         flex: 3,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     AppTableCell.text('${row['metode'] ?? '-'}', flex: 3),
-                    AppTableCell.text('${row['jumlahTransaksi'] ?? 0}',
-                        flex: 2, align: TextAlign.right),
-                    AppTableCell.text(_formatRupiah.format(row['total'] ?? 0),
+                    AppTableCell(
+                        flex: 2,
+                        align: TextAlign.right,
+                        child: _angkaLaporan(context,
+                            label: 'Jumlah transaksi ${row['kasir'] ?? '-'}',
+                            nilai: '${row['jumlahTransaksi'] ?? 0}',
+                            keterangan:
+                                'Jumlah transaksi penyusun penerimaan ini.',
+                            textAlign: TextAlign.right)),
+                    AppTableCell(
                         flex: 3,
                         align: TextAlign.right,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                        child: _angkaLaporan(context,
+                            label: 'Penerimaan ${row['kasir'] ?? '-'}',
+                            nilai: _formatRupiah.format(row['total'] ?? 0),
+                            keterangan:
+                                'Klik baris untuk melihat seluruh transaksi penyusun.',
+                            rincian: {
+                              'Tanggal': '${row['tanggal'] ?? '-'}',
+                              'Metode / bank': '${row['metode'] ?? '-'}',
+                            },
+                            textAlign: TextAlign.right,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800))),
                     AppTableCell(
                       width: 70,
                       align: TextAlign.center,
