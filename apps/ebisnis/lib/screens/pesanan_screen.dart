@@ -269,6 +269,28 @@ class _PesananScreenState extends State<PesananScreen> {
     return DateTime.now();
   }
 
+  DateTime? _tanggalTransaksiPesanan(String nilai) {
+    final teks = nilai.trim();
+    if (teks.isEmpty) return null;
+    final iso = DateTime.tryParse(teks);
+    if (iso != null) return iso;
+    for (final format in const <String>[
+      'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'dd/MM/yyyy HH:mm:ss',
+      'dd/MM/yyyy HH:mm',
+      'yyyy-MM-dd HH:mm:ss',
+      'yyyy-MM-dd HH:mm',
+    ]) {
+      try {
+        return DateFormat(format).parseStrict(teks);
+      } catch (_) {
+        // Coba pola waktu server berikutnya.
+      }
+    }
+    return null;
+  }
+
   Future<void> _lihatDetailPending(Map<String, dynamic> row) async {
     final payload = _payloadPending(row);
     final items = (payload['transaksi'] as List?) ?? const [];
@@ -899,6 +921,7 @@ class _PesananScreenState extends State<PesananScreen> {
   }
 
   Widget _ringkasanDetailPesanan(Pesanan p) {
+    final waktuTransaksi = _tanggalTransaksiPesanan(p.tanggalPembayaran);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -909,6 +932,23 @@ class _PesananScreenState extends State<PesananScreen> {
           _chipDetail(Icons.devices_outlined, 'Mesin: ${p.namaMesin}'),
         if (p.kasirLoginNama.isNotEmpty)
           _chipDetail(Icons.badge_outlined, 'Kasir: ${p.kasirLoginNama}'),
+        _chipDetail(
+          Icons.calendar_month_outlined,
+          'Tanggal transaksi: ${waktuTransaksi == null ? (p.tanggalPembayaran.isEmpty ? "-" : p.tanggalPembayaran) : DateFormat('dd-MM-yyyy').format(waktuTransaksi)}',
+        ),
+        _chipDetail(
+          Icons.schedule_outlined,
+          'Waktu transaksi: ${waktuTransaksi == null ? "-" : DateFormat('HH:mm:ss').format(waktuTransaksi)}',
+        ),
+        StreamBuilder<DateTime>(
+          stream: Stream<DateTime>.periodic(
+              const Duration(seconds: 1), (_) => DateTime.now()),
+          initialData: DateTime.now(),
+          builder: (_, snapshot) => _chipDetail(
+            Icons.access_time_filled,
+            'Waktu sekarang: ${DateFormat('dd-MM-yyyy HH:mm:ss').format(snapshot.data ?? DateTime.now())}',
+          ),
+        ),
         _chipDetail(
           p.dariPembeliOnline ? Icons.public : Icons.pause_circle_outline,
           p.dariPembeliOnline ? 'Pesanan Online' : 'Keranjang Tertahan',
