@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 
 import '../theme/app_colors.dart';
@@ -284,7 +286,8 @@ class GroupedBarVertikal extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Skala: ${fmt(maks)}',
-          style: TextStyle(fontSize: 10, color: AppColors.textSecondaryOf(context)),
+          style: TextStyle(
+              fontSize: 10, color: AppColors.textSecondaryOf(context)),
         ),
       ],
     );
@@ -441,6 +444,268 @@ class StackProporsional extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Garis tren dengan area transparan. Cocok untuk perubahan omzet dari waktu
+/// ke waktu; berbeda dari batang yang lebih tepat untuk perbandingan kategori.
+class GarisTren extends StatelessWidget {
+  final List<TitikChart> data;
+  final Color warna;
+  const GarisTren(
+      {super.key, required this.data, this.warna = const Color(0xFF1E3A5F)});
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return _kosong(context);
+    return SizedBox(
+      height: 185,
+      child: Column(children: [
+        Expanded(
+            child: CustomPaint(
+                painter: _GarisTrenPainter(data, warna),
+                child: const SizedBox.expand())),
+        const SizedBox(height: 5),
+        Row(
+            children: data
+                .map((e) => Expanded(
+                      child: Text(e.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: AppColors.textSecondaryOf(context))),
+                    ))
+                .toList()),
+      ]),
+    );
+  }
+}
+
+class _GarisTrenPainter extends CustomPainter {
+  final List<TitikChart> data;
+  final Color warna;
+  _GarisTrenPainter(this.data, this.warna);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final maxV = data.map((e) => e.nilai).fold<double>(0, math.max);
+    final minV =
+        data.map((e) => e.nilai).fold<double>(data.first.nilai, math.min);
+    final rentang = math.max(1.0, maxV - minV);
+    final titik = <Offset>[];
+    for (var i = 0; i < data.length; i++) {
+      final x = data.length == 1
+          ? size.width / 2
+          : i * size.width / (data.length - 1);
+      final y = size.height -
+          12 -
+          ((data[i].nilai - minV) / rentang) * (size.height - 28);
+      titik.add(Offset(x, y));
+    }
+    final grid = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..strokeWidth = 1;
+    for (var i = 1; i <= 3; i++) {
+      canvas.drawLine(Offset(0, size.height * i / 4),
+          Offset(size.width, size.height * i / 4), grid);
+    }
+    final area = Path()..moveTo(titik.first.dx, size.height);
+    for (final p in titik) {
+      area.lineTo(p.dx, p.dy);
+    }
+    area
+      ..lineTo(titik.last.dx, size.height)
+      ..close();
+    canvas.drawPath(area, Paint()..color = warna.withValues(alpha: .12));
+    final garis = Path()..moveTo(titik.first.dx, titik.first.dy);
+    for (var i = 1; i < titik.length; i++) {
+      garis.lineTo(titik[i].dx, titik[i].dy);
+    }
+    canvas.drawPath(
+        garis,
+        Paint()
+          ..color = warna
+          ..strokeWidth = 2.5
+          ..style = PaintingStyle.stroke);
+    for (final p in titik) {
+      canvas.drawCircle(p, 3.5, Paint()..color = warna);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GarisTrenPainter old) =>
+      old.data != data || old.warna != warna;
+}
+
+/// Radar/spider untuk membandingkan dimensi kinerja yang skalanya sudah
+/// dinormalisasi ke 0..100.
+class RadarKinerja extends StatelessWidget {
+  final List<TitikChart> data;
+  const RadarKinerja({super.key, required this.data});
+  @override
+  Widget build(BuildContext context) {
+    if (data.length < 3) return _kosong(context);
+    return SizedBox(
+        height: 220,
+        child: CustomPaint(
+            painter: _RadarPainter(data, Theme.of(context).colorScheme.primary),
+            child: const SizedBox.expand()));
+  }
+}
+
+class _RadarPainter extends CustomPainter {
+  final List<TitikChart> data;
+  final Color warna;
+  _RadarPainter(this.data, this.warna);
+  Offset _p(Offset c, double r, int i) {
+    final a = -math.pi / 2 + i * math.pi * 2 / data.length;
+    return Offset(c.dx + math.cos(a) * r, c.dy + math.sin(a) * r);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = math.min(size.width, size.height) * .34;
+    final grid = Paint()
+      ..color = const Color(0xFFCBD5E1)
+      ..style = PaintingStyle.stroke;
+    for (var level = 1; level <= 4; level++) {
+      final path = Path();
+      for (var i = 0; i < data.length; i++) {
+        final p = _p(c, r * level / 4, i);
+        i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      }
+      path.close();
+      canvas.drawPath(path, grid);
+    }
+    final area = Path();
+    for (var i = 0; i < data.length; i++) {
+      final axis = _p(c, r, i);
+      canvas.drawLine(c, axis, grid);
+      final p = _p(c, r * (data[i].nilai.clamp(0, 100) / 100), i);
+      i == 0 ? area.moveTo(p.dx, p.dy) : area.lineTo(p.dx, p.dy);
+      final tp = _p(c, r + 18, i);
+      final t = TextPainter(
+          text: TextSpan(
+              text: data[i].label,
+              style: const TextStyle(fontSize: 9, color: Color(0xFF475569))),
+          textDirection: ui.TextDirection.ltr)
+        ..layout(maxWidth: 80);
+      t.paint(canvas, Offset(tp.dx - t.width / 2, tp.dy - t.height / 2));
+    }
+    area.close();
+    canvas.drawPath(area, Paint()..color = warna.withValues(alpha: .18));
+    canvas.drawPath(
+        area,
+        Paint()
+          ..color = warna
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarPainter old) => old.data != data;
+}
+
+/// Heatmap hari/jam. Input label berupa "Sen 08" dan nilai berupa jumlah
+/// transaksi; warna makin pekat ketika aktivitas makin tinggi.
+class HeatmapAktivitas extends StatelessWidget {
+  final List<TitikChart> data;
+  const HeatmapAktivitas({super.key, required this.data});
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return _kosong(context);
+    final maks = data.map((e) => e.nilai).fold<double>(0, math.max);
+    return Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: data.map((e) {
+          final p = maks <= 0 ? 0.0 : e.nilai / maks;
+          return Tooltip(
+              message:
+                  '${e.label}: ${formatAngkaDasbor.format(e.nilai)} transaksi',
+              child: Container(
+                  width: 58,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: Color.lerp(
+                          const Color(0xFFE8F5E9), const Color(0xFF166534), p),
+                      borderRadius: BorderRadius.circular(5)),
+                  child: Text(e.label,
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: p > .55
+                              ? Colors.white
+                              : const Color(0xFF334155)))));
+        }).toList());
+  }
+}
+
+typedef LilinChart = ({
+  String label,
+  double buka,
+  double tinggi,
+  double rendah,
+  double tutup
+});
+
+/// Candlestick omzet per periode (open/close = transaksi pertama/terakhir,
+/// high/low = transaksi terbesar/terkecil). Ini bukan grafik harga saham.
+class CandlestickOmzet extends StatelessWidget {
+  final List<LilinChart> data;
+  const CandlestickOmzet({super.key, required this.data});
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return _kosong(context);
+    return SizedBox(
+        height: 190,
+        child: CustomPaint(
+            painter: _CandlePainter(data), child: const SizedBox.expand()));
+  }
+}
+
+class _CandlePainter extends CustomPainter {
+  final List<LilinChart> data;
+  _CandlePainter(this.data);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final maxV = data.map((e) => e.tinggi).fold<double>(0, math.max);
+    final minV =
+        data.map((e) => e.rendah).fold<double>(data.first.rendah, math.min);
+    final range = math.max(1.0, maxV - minV);
+    double y(double v) =>
+        size.height - 25 - ((v - minV) / range) * (size.height - 40);
+    final w = size.width / data.length;
+    for (var i = 0; i < data.length; i++) {
+      final e = data[i];
+      final x = w * (i + .5);
+      final naik = e.tutup >= e.buka;
+      final color = naik ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+      canvas.drawLine(
+          Offset(x, y(e.tinggi)),
+          Offset(x, y(e.rendah)),
+          Paint()
+            ..color = color
+            ..strokeWidth = 2);
+      final top = math.min(y(e.buka), y(e.tutup));
+      final h = math.max(3.0, (y(e.buka) - y(e.tutup)).abs());
+      canvas.drawRect(
+          Rect.fromLTWH(
+              x - math.min(10.0, w * .25), top, math.min(20.0, w * .5), h),
+          Paint()..color = color);
+      final t = TextPainter(
+          text: TextSpan(
+              text: e.label,
+              style: const TextStyle(fontSize: 8, color: Color(0xFF64748B))),
+          textDirection: ui.TextDirection.ltr)
+        ..layout(maxWidth: w);
+      t.paint(canvas, Offset(x - t.width / 2, size.height - 13));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CandlePainter old) => old.data != data;
 }
 
 /// Placeholder standar dipakai semua tab dasbor saat memuat/error.

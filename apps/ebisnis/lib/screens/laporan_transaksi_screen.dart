@@ -23,7 +23,7 @@ String _formatWaktu(dynamic raw) {
 }
 
 /// Layar Laporan Transaksi (padanan laporan-transaksi.html/-renderer.js
-/// Electron) -- dasbor KPI (`transaksi_statistik`) di atas, lalu 5 sub-tab
+/// Electron) -- dasbor KPI (`transaksi_statistik`) di atas, lalu 6 sub-tab
 /// server-side paginated: Report Order (`laporan_order_list`), Report Sesi
 /// (`laporan_sesi_list`), Report Payment (`laporan_payment_list`). Ketiganya
 /// TIDAK dicache offline (laporan historis, selalu online) -- beda dari
@@ -43,7 +43,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
     _muatStatistik();
   }
 
@@ -76,12 +76,14 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
             _KartuStatistikTransaksi(statistik: _statistik!),
           TabBar(
             controller: _tab,
+            isScrollable: true,
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondaryOf(context),
             indicatorColor: AppColors.primary,
             tabs: const [
               Tab(text: 'Report Order'),
               Tab(text: 'Report Sesi'),
+              Tab(text: 'Transaksi Per Kasir'),
               Tab(text: 'Report Payment'),
               Tab(text: 'Penjualan per Kasir'),
               Tab(text: 'Penerimaan per Kasir'),
@@ -91,6 +93,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
             child: TabBarView(controller: _tab, children: const [
               _TabOrder(),
               _TabSesi(),
+              _TabTransaksiPerKasir(),
               _TabPayment(),
               _TabPenjualanKasir(),
               _TabPenerimaanKasir(),
@@ -757,6 +760,206 @@ class _TabSesiState extends State<_TabSesi> {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _TabTransaksiPerKasir extends StatefulWidget {
+  const _TabTransaksiPerKasir();
+
+  @override
+  State<_TabTransaksiPerKasir> createState() => _TabTransaksiPerKasirState();
+}
+
+class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
+  late DateTime _mulai;
+  late DateTime _sampai;
+  bool _memuat = true;
+  bool _mencetak = false;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  double _totalTransaksi = 0;
+  double _totalSelisih = 0;
+  int _jumlahTransaksi = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final sekarang = DateTime.now();
+    _mulai = DateTime(sekarang.year, sekarang.month, sekarang.day);
+    _sampai = _mulai;
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'laporan_transaksi_per_kasir',
+        {
+          'tglMulai': _formatTanggalServer.format(_mulai),
+          'tglSampai': _formatTanggalServer.format(_sampai),
+        },
+      );
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _totalTransaksi = (hasil['totalTransaksi'] as num?)?.toDouble() ?? 0;
+        _totalSelisih = (hasil['totalSelisih'] as num?)?.toDouble() ?? 0;
+        _jumlahTransaksi = (hasil['jumlahTransaksi'] as num?)?.toInt() ?? 0;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = e.toString());
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _cetakPdf() async {
+    setStateIfMounted(() => _mencetak = true);
+    try {
+      final rows = <List<String>>[];
+      for (final kasir in _data) {
+        final metode = ((kasir['metodePembayaran'] as List?) ?? [])
+            .cast<Map<String, dynamic>>()
+            .map((e) =>
+                '${e['nama'] ?? '-'}: ${_formatRupiah.format(e['total'] ?? 0)}')
+            .join('; ');
+        rows.add([
+          '${kasir['kasir'] ?? '-'}',
+          '${kasir['jumlahTransaksi'] ?? 0}',
+          _formatRupiah.format(kasir['modalAwal'] ?? 0),
+          metode.isEmpty ? '-' : metode,
+          _formatRupiah.format(kasir['kasSeharusnya'] ?? 0),
+          _formatRupiah.format(kasir['kasClosing'] ?? 0),
+          _formatRupiah.format(kasir['selisih'] ?? 0),
+        ]);
+      }
+      await CetakUtilIs.cetakPdfTabel(
+        judul: 'Laporan Transaksi Per Kasir',
+        parameter:
+            '${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}',
+        headers: const [
+          'Kasir',
+          'Trx',
+          'Modal',
+          'Penerimaan per Metode',
+          'Kas Seharusnya',
+          'Kas Closing',
+          'Selisih'
+        ],
+        rows: rows,
+        namaFile:
+            'transaksi-per-kasir-${_formatTanggalServer.format(_mulai)}-${_formatTanggalServer.format(_sampai)}.pdf',
+        barisTotal:
+            '$_jumlahTransaksi transaksi · ${_formatRupiah.format(_totalTransaksi)} · Total selisih ${_formatRupiah.format(_totalSelisih)}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mencetak PDF: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _mencetak = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 20),
+        children: [
+          _FilterTanggal(
+            mulai: _mulai,
+            sampai: _sampai,
+            onMulaiBerubah: (d) => setStateIfMounted(() => _mulai = d!),
+            onSampaiBerubah: (d) => setStateIfMounted(() => _sampai = d!),
+            onTerapkan: _muat,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                    child: Text(
+                        '$_jumlahTransaksi transaksi · ${_formatRupiah.format(_totalTransaksi)}')),
+                OutlinedButton.icon(
+                  onPressed: _mencetak || _memuat ? null : _cetakPdf,
+                  icon: _mencetak
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('PDF'),
+                ),
+              ],
+            ),
+          ),
+          if (_memuat || _error != null)
+            _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
+          else if (_data.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child:
+                  Center(child: Text('Belum ada transaksi pada periode ini.')),
+            )
+          else
+            ..._data.map((kasir) {
+              final metode = ((kasir['metodePembayaran'] as List?) ?? [])
+                  .cast<Map<String, dynamic>>();
+              final selisih = (kasir['selisih'] as num?)?.toDouble() ?? 0;
+              return Card(
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: ExpansionTile(
+                  initiallyExpanded: true,
+                  title: Text('${kasir['kasir'] ?? '-'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      '${kasir['jumlahTransaksi'] ?? 0} transaksi · ${_formatRupiah.format(kasir['totalTransaksi'] ?? 0)}'),
+                  trailing: Text(_formatRupiah.format(selisih),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: selisih == 0
+                              ? const Color(0xFF2E7D32)
+                              : Colors.red)),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      child: Column(
+                        children: [
+                          _barisNilai('Modal awal', kasir['modalAwal']),
+                          ...metode.map((m) => _barisNilai(
+                              '${m['nama'] ?? '-'} (${m['jumlahTransaksi'] ?? 0} trx)',
+                              m['total'])),
+                          const Divider(),
+                          _barisNilai('Kas seharusnya', kasir['kasSeharusnya']),
+                          _barisNilai('Kas closing', kasir['kasClosing']),
+                          _barisNilai('Selisih', kasir['selisih'], tebal: true),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _barisNilai(String label, dynamic nilai, {bool tebal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Expanded(child: Text(label)),
+        Text(_formatRupiah.format(nilai ?? 0),
+            style: TextStyle(fontWeight: tebal ? FontWeight.bold : null)),
+      ]),
     );
   }
 }

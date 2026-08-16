@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../api_client.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -310,6 +313,160 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         );
       });
     }
+  }
+
+  List<String> _analisisPintar(Map<String, dynamic> d) {
+    final tren = ((d['tren'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final kategori =
+        ((d['omzetKategori'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final jam = ((d['jamSibuk'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final hasil = <String>[];
+    if (tren.length >= 2) {
+      final awal = (tren.first['omzet'] as num?)?.toDouble() ?? 0;
+      final akhir = (tren.last['omzet'] as num?)?.toDouble() ?? 0;
+      final perubahan = awal == 0 ? 0 : (akhir - awal) * 100 / awal;
+      hasil.add(
+          'Tren omzet ${perubahan >= 0 ? "naik" : "turun"} ${perubahan.abs().toStringAsFixed(1)}% dari periode pertama ke periode terakhir.');
+    }
+    if (kategori.isNotEmpty) {
+      hasil.add(
+          'Kategori terkuat adalah ${kategori.first['label'] ?? '-'} dengan omzet ${formatRupiahDasbor.format(kategori.first['nilai'] ?? 0)}.');
+    }
+    if (jam.isNotEmpty) {
+      hasil.add(
+          'Jam tersibuk berada pada ${jam.first['label'] ?? '-'}; siapkan kasir dan stok sebelum rentang ini.');
+    }
+    if (hasil.isEmpty) {
+      hasil.add('Data belum cukup untuk menghasilkan rekomendasi operasional.');
+    }
+    return hasil;
+  }
+
+  Future<void> _cetakDashboardPdf() async {
+    final d = _d;
+    if (d == null) return;
+    final kpi = (d['kpi'] as Map<String, dynamic>?) ?? {};
+    final tren = ((d['tren'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final kategori =
+        ((d['omzetKategori'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final metode =
+        ((d['metodeBayar'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final doc = pw.Document();
+    pw.Widget bar(String judul, List<Map<String, dynamic>> rows,
+        {String nilaiKey = 'nilai'}) {
+      final max = rows.fold<double>(0, (m, e) {
+        final v = (e[nilaiKey] as num?)?.toDouble() ?? 0;
+        return v > m ? v : m;
+      });
+      return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(judul,
+                style:
+                    pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 3),
+            ...rows.take(6).map((e) {
+              final v = (e[nilaiKey] as num?)?.toDouble() ?? 0;
+              return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Row(children: [
+                    pw.SizedBox(
+                        width: 70,
+                        child: pw.Text('${e['label'] ?? '-'}',
+                            maxLines: 1,
+                            style: const pw.TextStyle(fontSize: 6.5))),
+                    pw.Container(
+                        width: max <= 0 ? 1 : 100 * v / max,
+                        height: 6,
+                        color: PdfColors.blue700),
+                    pw.SizedBox(width: 3),
+                    pw.Text(formatRupiahDasbor.format(v),
+                        style: const pw.TextStyle(fontSize: 6.5)),
+                  ]));
+            }),
+          ]);
+    }
+
+    Map<String, dynamic> kk(String key) =>
+        (kpi[key] as Map<String, dynamic>?) ?? {};
+    doc.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(18),
+      build: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Dashboard Bisnis · ${Sesi.instance.tokoNama}',
+                    style: pw.TextStyle(
+                        fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                pw.Text(DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now()),
+                    style: const pw.TextStyle(fontSize: 8)),
+              ]),
+          pw.SizedBox(height: 8),
+          pw.Row(children: [
+            _kpiPdf('Transaksi Hari Ini', '${kk('hariIni')['trx'] ?? 0}'),
+            _kpiPdf('Omzet Hari Ini',
+                formatRupiahDasbor.format(kk('hariIni')['rp'] ?? 0)),
+            _kpiPdf('Omzet Minggu',
+                formatRupiahDasbor.format(kk('mingguIni')['rp'] ?? 0)),
+            _kpiPdf('Omzet Bulan',
+                formatRupiahDasbor.format(kk('bulanIni')['rp'] ?? 0)),
+          ]),
+          pw.SizedBox(height: 10),
+          pw.Expanded(
+              child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                pw.Expanded(child: bar('Tren Omzet', tren, nilaiKey: 'omzet')),
+                pw.SizedBox(width: 14),
+                pw.Expanded(child: bar('Omzet per Kategori', kategori)),
+                pw.SizedBox(width: 14),
+                pw.Expanded(child: bar('Komposisi Pembayaran', metode)),
+              ])),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(7),
+            decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                borderRadius: pw.BorderRadius.circular(4)),
+            child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Analisis Pintar',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  ..._analisisPintar(d).map((e) => pw.Text('• $e',
+                      style: const pw.TextStyle(fontSize: 7.5))),
+                ]),
+          ),
+        ],
+      ),
+    ));
+    await Printing.layoutPdf(
+        onLayout: (_) => doc.save(),
+        name:
+            'dashboard-bisnis-${DateFormat('yyyyMMdd-HHmm').format(DateTime.now())}.pdf');
+  }
+
+  pw.Widget _kpiPdf(String label, String nilai) {
+    return pw.Expanded(
+      child: pw.Container(
+        margin: const pw.EdgeInsets.only(right: 6),
+        padding: const pw.EdgeInsets.all(7),
+        decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: pw.BorderRadius.circular(4)),
+        child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(nilai,
+                  style: pw.TextStyle(
+                      fontSize: 10, fontWeight: pw.FontWeight.bold)),
+              pw.Text(label, style: const pw.TextStyle(fontSize: 7)),
+            ]),
+      ),
+    );
   }
 
   Future<void> _terapkan({bool simpanLog = false}) async {
@@ -1209,6 +1366,33 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
         ((d['produkTerlaris'] as List?) ?? []).cast<Map<String, dynamic>>();
     final omzetToko =
         ((d['omzetToko'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final tren = ((d['tren'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final heatmap =
+        ((d['heatmap'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final maksKategori = omzetKategori.fold<double>(0, (m, e) {
+      final v = (e['nilai'] as num?)?.toDouble() ?? 0;
+      return v > m ? v : m;
+    });
+    final radar = omzetKategori
+        .take(6)
+        .map((e) => (
+              label: '${e['label'] ?? '-'}',
+              nilai: maksKategori <= 0
+                  ? 0.0
+                  : (((e['nilai'] as num?)?.toDouble() ?? 0) *
+                      100 /
+                      maksKategori)
+            ))
+        .toList();
+    final lilin = tren
+        .map((e) => (
+              label: '${e['label'] ?? '-'}',
+              buka: (e['open'] as num?)?.toDouble() ?? 0,
+              tinggi: (e['high'] as num?)?.toDouble() ?? 0,
+              rendah: (e['low'] as num?)?.toDouble() ?? 0,
+              tutup: (e['close'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
 
     Map<String, dynamic> k(String key) =>
         (kpi[key] as Map<String, dynamic>?) ?? {};
@@ -1375,16 +1559,28 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              icon: Icon(
-                  _grafikTerlihat
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 18),
-              label: Text(
-                  _grafikTerlihat ? 'Sembunyikan Grafik' : 'Tampilkan Grafik'),
-              onPressed: () =>
-                  setStateIfMounted(() => _grafikTerlihat = !_grafikTerlihat),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  icon: Icon(
+                      _grafikTerlihat
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18),
+                  label: Text(_grafikTerlihat
+                      ? 'Sembunyikan Grafik'
+                      : 'Tampilkan Grafik'),
+                  onPressed: () => setStateIfMounted(
+                      () => _grafikTerlihat = !_grafikTerlihat),
+                ),
+                FilledButton.icon(
+                  onPressed: _cetakDashboardPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Cetak Analitik 1 Halaman'),
+                ),
+              ],
             ),
           ),
           if (_grafikTerlihat) ...[
@@ -1404,9 +1600,9 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                         ))
                     .toList(),
               ),
-              child: BarVertikal(
+              child: GarisTren(
                   data: titikDariList(d['tren'] as List?,
-                      labelKey: 'label', nilaiKey: 'jumlah')),
+                      labelKey: 'label', nilaiKey: 'omzet')),
             ),
             const SizedBox(height: 16),
             AppSectionCard(
@@ -1426,6 +1622,56 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     data: titikDariList(d['jamSibuk'] as List?),
                     warna: AppColors.warning,
                     tampilkanPeringkat: false)),
+            const SizedBox(height: 16),
+            LayoutBuilder(builder: (context, c) {
+              final duaKolom = c.maxWidth >= 850;
+              final panels = <Widget>[
+                AppSectionCard(
+                    judul: 'Radar Kinerja Kategori',
+                    child: RadarKinerja(data: radar)),
+                AppSectionCard(
+                    judul: 'Candlestick Nilai Transaksi',
+                    child: CandlestickOmzet(data: lilin)),
+              ];
+              return duaKolom
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: panels[0]),
+                        const SizedBox(width: 16),
+                        Expanded(child: panels[1]),
+                      ],
+                    )
+                  : Column(children: [
+                      panels[0],
+                      const SizedBox(height: 16),
+                      panels[1]
+                    ]);
+            }),
+            const SizedBox(height: 16),
+            AppSectionCard(
+                judul: 'Heatmap Aktivitas Hari & Jam',
+                child: HeatmapAktivitas(data: titikDariList(heatmap))),
+            const SizedBox(height: 16),
+            AppSectionCard(
+              judul: 'Analisis Pintar & Rekomendasi',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _analisisPintar(d)
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.auto_awesome,
+                                    size: 16, color: AppColors.warning),
+                                const SizedBox(width: 7),
+                                Expanded(child: Text(e)),
+                              ]),
+                        ))
+                    .toList(),
+              ),
+            ),
           ],
           const SizedBox(height: 16),
           _bangunPanelFilterPembelian(),

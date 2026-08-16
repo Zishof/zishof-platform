@@ -1650,11 +1650,12 @@ class _PesananScreenState extends State<PesananScreen> {
                         _tabelTransaksiPending()
                       else
                         AppDataTable(
-                          minWidth: 1240,
+                          minWidth: 1370,
                           emptyText: 'Tidak ada pesanan.',
                           columns: const [
                             AppTableColumn('Kode', flex: 2),
                             AppTableColumn('Pemesan', flex: 3),
+                            AppTableColumn('Tanggal & Waktu', flex: 2),
                             AppTableColumn('Alasan Ditahan', flex: 3),
                             AppTableColumn('Kasir', flex: 2),
                             AppTableColumn('Status',
@@ -1698,6 +1699,13 @@ class _PesananScreenState extends State<PesananScreen> {
                                       ? '(Tanpa member)'
                                       : p.pemesan,
                                   flex: 3,
+                                ),
+                                AppTableCell.text(
+                                  p.tanggalPembayaran.isEmpty
+                                      ? '-'
+                                      : _waktuPending(p.tanggalPembayaran),
+                                  flex: 2,
+                                  maxLines: 2,
                                 ),
                                 AppTableCell.text(
                                   p.dariPembeliOnline || p.keterangan.isEmpty

@@ -38,6 +38,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _kategori = [];
+  List<Map<String, dynamic>> _pendukung = [];
   final _controllerCari = TextEditingController();
   String _kategoriDipilih = '';
   int _halaman = 1;
@@ -63,9 +64,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
     try {
       final hasil = await ApiClient.instance.aksi(widget.aksiKatalog);
       final arr = (hasil['kategori'] as List?) ?? [];
+      final pendukung = (hasil['pendukung'] as List?) ?? [];
       setStateIfMounted(() {
         _kategori =
             arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _pendukung =
+            pendukung.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         if (_kategoriDipilih.isNotEmpty &&
             !_kategori
                 .any((e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
@@ -95,6 +99,30 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
     await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
+  }
+
+  Widget _dataPendukung() {
+    if (_pendukung.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        children: _pendukung.map((item) {
+          final id = item['id'] as String? ?? '';
+          final ikon = id == 'akun_perkiraan'
+              ? Icons.account_tree_outlined
+              : id == 'posting_hpp'
+                  ? Icons.inventory_2_outlined
+                  : Icons.post_add_outlined;
+          return OutlinedButton.icon(
+            onPressed: () => _bukaItem(item),
+            icon: Icon(ikon, size: 18),
+            label: Text(item['judul'] as String? ?? '-'),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   List<_LaporanKatalogBaris> get _terfilter {
@@ -132,7 +160,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final totalHalaman = _totalHalaman(data.length);
     if (_halaman > totalHalaman) _halaman = totalHalaman;
     final mulai = (_halaman - 1) * _pageSize;
-    final sampai = (mulai + _pageSize).clamp(0, data.length) as int;
+    final sampai = (mulai + _pageSize).clamp(0, data.length);
     if (mulai >= data.length) return const [];
     return data.sublist(mulai, sampai);
   }
@@ -180,6 +208,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        _dataPendukung(),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: LayoutBuilder(
