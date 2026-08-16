@@ -181,10 +181,6 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_statistik != null)
-            _KartuStatistikTransaksi(statistik: _statistik!),
-          if (_statistik != null)
-            _VisualisasiLaporanTransaksi(statistik: _statistik!),
           TabBar(
             controller: _tab,
             isScrollable: true,
@@ -201,17 +197,46 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
             ],
           ),
           Expanded(
-            child: TabBarView(controller: _tab, children: const [
-              _TabOrder(),
-              _TabSesi(),
-              _TabTransaksiPerKasir(),
-              _TabPayment(),
-              _TabPenjualanKasir(),
-              _TabPenerimaanKasir(),
+            child: TabBarView(controller: _tab, children: [
+              _TabOrder(statistik: _statistik),
+              _TabSesi(statistik: _statistik),
+              _TabTransaksiPerKasir(statistik: _statistik),
+              _TabPayment(statistik: _statistik),
+              _TabPenjualanKasir(statistik: _statistik),
+              _TabPenerimaanKasir(statistik: _statistik),
             ]),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AnalitikLaporanFooter extends StatelessWidget {
+  final Map<String, dynamic>? statistik;
+
+  const _AnalitikLaporanFooter({required this.statistik});
+
+  @override
+  Widget build(BuildContext context) {
+    if (statistik == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(12, 24, 12, 4),
+          child: Row(
+            children: [
+              Icon(Icons.analytics_outlined, size: 18),
+              SizedBox(width: 7),
+              Text('Grafik & Ringkasan Analitik',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+            ],
+          ),
+        ),
+        _KartuStatistikTransaksi(statistik: statistik!),
+        _VisualisasiLaporanTransaksi(statistik: statistik!),
+      ],
     );
   }
 }
@@ -851,13 +876,15 @@ Widget _kartuStatusMuat(
 }
 
 class _TabOrder extends StatefulWidget {
-  const _TabOrder();
+  final Map<String, dynamic>? statistik;
+
+  const _TabOrder({required this.statistik});
   @override
   State<_TabOrder> createState() => _TabOrderState();
 }
 
 class _TabOrderState extends State<_TabOrder> {
-  static const _pageSize = 15;
+  static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1123,6 +1150,7 @@ class _TabOrderState extends State<_TabOrder> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _tabelOrder(),
             ),
+          _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
     );
@@ -1130,13 +1158,15 @@ class _TabOrderState extends State<_TabOrder> {
 }
 
 class _TabSesi extends StatefulWidget {
-  const _TabSesi();
+  final Map<String, dynamic>? statistik;
+
+  const _TabSesi({required this.statistik});
   @override
   State<_TabSesi> createState() => _TabSesiState();
 }
 
 class _TabSesiState extends State<_TabSesi> {
-  static const _pageSize = 15;
+  static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1281,6 +1311,7 @@ class _TabSesiState extends State<_TabSesi> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _tabelSesi(),
             ),
+          _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
     );
@@ -1288,13 +1319,16 @@ class _TabSesiState extends State<_TabSesi> {
 }
 
 class _TabTransaksiPerKasir extends StatefulWidget {
-  const _TabTransaksiPerKasir();
+  final Map<String, dynamic>? statistik;
+
+  const _TabTransaksiPerKasir({required this.statistik});
 
   @override
   State<_TabTransaksiPerKasir> createState() => _TabTransaksiPerKasirState();
 }
 
 class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
+  static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -1304,6 +1338,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
   double _totalTransaksi = 0;
   double _totalSelisih = 0;
   int _jumlahTransaksi = 0;
+  int _halaman = 1;
 
   @override
   void initState() {
@@ -1339,6 +1374,17 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
       setStateIfMounted(() => _memuat = false);
     }
   }
+
+  Future<void> _terapkan() async {
+    setStateIfMounted(() => _halaman = 1);
+    await _muat();
+  }
+
+  int get _totalHalaman =>
+      _data.isEmpty ? 1 : ((_data.length + _pageSize - 1) ~/ _pageSize);
+
+  Iterable<Map<String, dynamic>> get _dataHalaman =>
+      _data.skip((_halaman - 1) * _pageSize).take(_pageSize);
 
   Future<void> _cetakPdf() async {
     setStateIfMounted(() => _mencetak = true);
@@ -1401,7 +1447,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
             sampai: _sampai,
             onMulaiBerubah: (d) => setStateIfMounted(() => _mulai = d!),
             onSampaiBerubah: (d) => setStateIfMounted(() => _sampai = d!),
-            onTerapkan: _muat,
+            onTerapkan: _terapkan,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1452,7 +1498,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
                   Center(child: Text('Belum ada transaksi pada periode ini.')),
             )
           else
-            ..._data.map((kasir) {
+            ..._dataHalaman.map((kasir) {
               final metode = ((kasir['metodePembayaran'] as List?) ?? [])
                   .cast<Map<String, dynamic>>();
               final selisih = (kasir['selisih'] as num?)?.toDouble() ?? 0;
@@ -1500,6 +1546,33 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
                 ),
               );
             }),
+          if (_data.length > _pageSize)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text('${_data.length} kasir'),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    tooltip: 'Halaman sebelumnya',
+                    onPressed: _halaman > 1
+                        ? () => setStateIfMounted(() => _halaman--)
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Text('Halaman $_halaman / $_totalHalaman'),
+                  IconButton(
+                    tooltip: 'Halaman berikutnya',
+                    onPressed: _halaman < _totalHalaman
+                        ? () => setStateIfMounted(() => _halaman++)
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+            ),
+          _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
     );
@@ -1522,13 +1595,15 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
 }
 
 class _TabPayment extends StatefulWidget {
-  const _TabPayment();
+  final Map<String, dynamic>? statistik;
+
+  const _TabPayment({required this.statistik});
   @override
   State<_TabPayment> createState() => _TabPaymentState();
 }
 
 class _TabPaymentState extends State<_TabPayment> {
-  static const _pageSize = 15;
+  static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1664,6 +1739,7 @@ class _TabPaymentState extends State<_TabPayment> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _tabelPayment(),
             ),
+          _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
     );
@@ -1671,14 +1747,16 @@ class _TabPaymentState extends State<_TabPayment> {
 }
 
 class _TabPenjualanKasir extends StatefulWidget {
-  const _TabPenjualanKasir();
+  final Map<String, dynamic>? statistik;
+
+  const _TabPenjualanKasir({required this.statistik});
 
   @override
   State<_TabPenjualanKasir> createState() => _TabPenjualanKasirState();
 }
 
 class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
-  static const _pageSize = 15;
+  static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -2024,13 +2102,14 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
                 style: TextStyle(fontSize: 12, color: Colors.orange),
               ),
             ),
-          _ringkasanWidget(),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
           else
             Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: _tabel()),
+          _ringkasanWidget(),
+          _AnalitikLaporanFooter(statistik: widget.statistik),
         ],
       ),
     );
@@ -2103,14 +2182,16 @@ Future<void> _lihatDetailPenjualanKasir(
 }
 
 class _TabPenerimaanKasir extends StatefulWidget {
-  const _TabPenerimaanKasir();
+  final Map<String, dynamic>? statistik;
+
+  const _TabPenerimaanKasir({required this.statistik});
 
   @override
   State<_TabPenerimaanKasir> createState() => _TabPenerimaanKasirState();
 }
 
 class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
-  static const _pageSize = 15;
+  static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
   bool _memuat = true;
@@ -2417,6 +2498,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
               Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: _tabel()),
+            _AnalitikLaporanFooter(statistik: widget.statistik),
           ],
         ),
       );
