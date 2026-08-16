@@ -407,17 +407,30 @@ class StrukScreen extends StatelessWidget {
             : 32;
     final logoSkala = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
 
+    int jumlahBaris(String nilai) {
+      final panjang = nilai.trim().length;
+      if (panjang == 0) return 1;
+      final hasil = (panjang / charsPerLine).ceil();
+      return hasil < 1 ? 1 : hasil;
+    }
+
     // Tinggi roll harus finite. Sebagian driver thermal Windows memotong PDF
     // dengan tinggi tak hingga, jadi tinggi dihitung longgar dari isi struk.
     var tinggi = 118.0 + (logoSkala - 1) * 12;
+
+    tinggi += (jumlahBaris(Sesi.instance.tokoNama) - 1) * 4.5;
+    tinggi += (jumlahBaris(Sesi.instance.tokoAlamat) - 1) * 4.2;
+    tinggi += (jumlahBaris(Sesi.instance.pesanTerimaKasih) - 1) * 4.2;
 
     if (Sesi.instance.tokoTelp.trim().isNotEmpty) tinggi += 4;
     if (statusLabel != null && statusLabel!.trim().isNotEmpty) tinggi += 5;
 
     for (final baris in item) {
       final nama = '${baris['nama'] ?? ''}'.trim();
-      final lines = (nama.length / charsPerLine).ceil().clamp(1, 5);
+      final lines = jumlahBaris(nama);
       tinggi += 8.5 + (lines - 1) * 4.2;
+      if (_diskonBaris(baris) > 0) tinggi += 4.2;
+      if (_cashbackBaris(baris) > 0) tinggi += 4.2;
     }
 
     final daftarPembayaran = _pembayaranEfektif;
@@ -434,27 +447,63 @@ class StrukScreen extends StatelessWidget {
     if (!tersinkron) tinggi += 8;
     if (kode.trim().isNotEmpty) tinggi += 19;
 
-    return tinggi.clamp(130, 4800).toDouble();
+    // Tidak ada batas maksimum transaksi. Untuk struk panjang nilai ini hanya
+    // menentukan kapan MultiPage dipakai; isi sesungguhnya akan terus
+    // dipaginasi sampai seluruh baris selesai.
+    return tinggi < 130 ? 130 : tinggi;
   }
 
   Future<void> _cetakStruk() async {
     await _pastikanProfilToko();
     final logo = await _logoPdf();
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
-    final doc = pw.Document();
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat(
-          lebarKertasMm * PdfPageFormat.mm,
-          _tinggiStrukPdfMm() * PdfPageFormat.mm,
-          marginLeft: 3 * PdfPageFormat.mm,
-          marginRight: 3 * PdfPageFormat.mm,
-          marginTop: 5 * PdfPageFormat.mm,
-          marginBottom: 5 * PdfPageFormat.mm,
-        ),
-        build: (_) => _strukPdf(logo),
+    final tinggiIsiMm = _tinggiStrukPdfMm();
+    final doc = pw.Document(
+      theme: pw.ThemeData(
+        defaultTextStyle: const pw.TextStyle(fontSize: 9),
       ),
     );
+
+    // POS80 Windows menyediakan roll 72 x 3276 mm. Jangan pernah memaksa struk
+    // panjang menjadi halaman 297 mm/A4: driver thermal menganggap tiap page
+    // selesai sebagai akhir job dan dapat melakukan CUT sebelum total/footer.
+    // Seluruh isi dikirim sebagai SATU page roll dinamis sampai batas aman
+    // driver. CUT (milik driver) dengan demikian baru terjadi setelah footer.
+    const tinggiMaksimumDriverMm = 3270.0;
+    final tinggiHalamanMm = tinggiIsiMm + 14;
+    if (tinggiHalamanMm <= tinggiMaksimumDriverMm) {
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(
+            lebarKertasMm * PdfPageFormat.mm,
+            tinggiHalamanMm * PdfPageFormat.mm,
+            marginLeft: 3 * PdfPageFormat.mm,
+            marginRight: 3 * PdfPageFormat.mm,
+            marginTop: 5 * PdfPageFormat.mm,
+            marginBottom: 5 * PdfPageFormat.mm,
+          ),
+          build: (_) => _strukPdf(logo),
+        ),
+      );
+    } else {
+      // Transaksi ekstrem yang melampaui kemampuan fisik form driver harus
+      // dilanjutkan ke page roll berikutnya. Tingginya tetap 3270 mm (bukan A4)
+      // sehingga batas ini tidak mungkin terpicu pada transaksi normal.
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat(
+            lebarKertasMm * PdfPageFormat.mm,
+            tinggiMaksimumDriverMm * PdfPageFormat.mm,
+            marginLeft: 3 * PdfPageFormat.mm,
+            marginRight: 3 * PdfPageFormat.mm,
+            marginTop: 5 * PdfPageFormat.mm,
+            marginBottom: 5 * PdfPageFormat.mm,
+          ),
+          maxPages: (tinggiIsiMm / 3250).ceil() + 3,
+          build: (_) => [_strukPdf(logo)],
+        ),
+      );
+    }
     await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-$kode.pdf');
   }
 
@@ -463,85 +512,84 @@ class StrukScreen extends StatelessWidget {
   Future<void> cetakLangsung() => _cetakStruk();
 
   pw.Widget _strukPdf(pw.ImageProvider? logo) {
-    return pw.DefaultTextStyle(
-      style: const pw.TextStyle(fontSize: 9),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Center(child: _logoPdfWidget(logo)),
-          pw.SizedBox(height: 8),
+    // Column harus menjadi widget langsung milik MultiPage agar dapat dipecah
+    // antarhalaman. Default style dipasang pada Document di _cetakStruk;
+    // membungkus Column dengan DefaultTextStyle akan membuatnya tidak bisa
+    // melakukan spanning dan struk panjang kembali terpotong.
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Center(child: _logoPdfWidget(logo)),
+        pw.SizedBox(height: 8),
+        pw.Text(
+          Sesi.instance.tokoNama.isEmpty ? 'Nama Toko' : Sesi.instance.tokoNama,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          Sesi.instance.tokoAlamat.isEmpty
+              ? 'Alamat toko'
+              : Sesi.instance.tokoAlamat,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+        if (Sesi.instance.tokoTelp.isNotEmpty)
           pw.Text(
-            Sesi.instance.tokoNama.isEmpty
-                ? 'Nama Toko'
-                : Sesi.instance.tokoNama,
-            textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            Sesi.instance.tokoAlamat.isEmpty
-                ? 'Alamat toko'
-                : Sesi.instance.tokoAlamat,
-            textAlign: pw.TextAlign.center,
-            style: const pw.TextStyle(fontSize: 8),
-          ),
-          if (Sesi.instance.tokoTelp.isNotEmpty)
-            pw.Text(
-              Sesi.instance.tokoTelp,
-              textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          _garisPdf(),
-          _infoPdf('No', kode),
-          _infoPdf('Tanggal', waktu),
-          _infoPdf('Kasir', _labelKasir()),
-          _infoPdf('Pelanggan', _labelPelanggan()),
-          if (statusLabel != null && statusLabel!.trim().isNotEmpty)
-            _infoPdf('Status', statusLabel!.trim()),
-          _garisPdf(),
-          ...item.map(_itemPdf),
-          _garisPdf(),
-          pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
-          pw.SizedBox(height: 4),
-          _totalPdf('Subtotal', _formatUang(_subtotal)),
-          if (_totalDiskonItem > 0)
-            _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
-          if (diskonFaktur > 0)
-            _totalPdf('Potongan Faktur', '-${_formatUang(diskonFaktur)}'),
-          if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
-          _totalPdf(
-            'Grand Total',
-            _formatUang(total),
-            besar: true,
-          ),
-          if (_totalCashbackItem > 0)
-            _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
-          if (uangDiterima != null)
-            _totalPdf('Tunai', _formatUang(uangDiterima!)),
-          if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
-          ..._pembayaranPdf(),
-          if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
-          _garisPdf(),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            Sesi.instance.pesanTerimaKasih.isEmpty
-                ? 'Ucapan Terima kasih yang sudah ada'
-                : Sesi.instance.pesanTerimaKasih,
+            Sesi.instance.tokoTelp,
             textAlign: pw.TextAlign.center,
             style: const pw.TextStyle(fontSize: 8),
           ),
-          if (!tersinkron) ...[
-            pw.SizedBox(height: 4),
-            pw.Text(
-              'Transaksi tersimpan offline dan akan disinkronkan otomatis.',
-              textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          ],
-          pw.SizedBox(height: 8),
-          _barcodePdf(),
+        _garisPdf(),
+        _infoPdf('No', kode),
+        _infoPdf('Tanggal', waktu),
+        _infoPdf('Kasir', _labelKasir()),
+        _infoPdf('Pelanggan', _labelPelanggan()),
+        if (statusLabel != null && statusLabel!.trim().isNotEmpty)
+          _infoPdf('Status', statusLabel!.trim()),
+        _garisPdf(),
+        ...item.map(_itemPdf),
+        _garisPdf(),
+        pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
+        pw.SizedBox(height: 4),
+        _totalPdf('Subtotal', _formatUang(_subtotal)),
+        if (_totalDiskonItem > 0)
+          _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
+        if (diskonFaktur > 0)
+          _totalPdf('Potongan Faktur', '-${_formatUang(diskonFaktur)}'),
+        if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
+        _totalPdf(
+          'Grand Total',
+          _formatUang(total),
+          besar: true,
+        ),
+        if (_totalCashbackItem > 0)
+          _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
+        if (uangDiterima != null)
+          _totalPdf('Tunai', _formatUang(uangDiterima!)),
+        if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
+        ..._pembayaranPdf(),
+        if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
+        _garisPdf(),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          Sesi.instance.pesanTerimaKasih.isEmpty
+              ? 'Ucapan Terima kasih yang sudah ada'
+              : Sesi.instance.pesanTerimaKasih,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+        if (!tersinkron) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Transaksi tersimpan offline dan akan disinkronkan otomatis.',
+            textAlign: pw.TextAlign.center,
+            style: const pw.TextStyle(fontSize: 8),
+          ),
         ],
-      ),
+        pw.SizedBox(height: 8),
+        _barcodePdf(),
+      ],
     );
   }
 

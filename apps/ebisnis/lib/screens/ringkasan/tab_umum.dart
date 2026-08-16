@@ -221,6 +221,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   String? _error;
   Map<String, dynamic>? _d;
   String _periodeTren = 'harian';
+  DateTime _tanggalAcuan =
+      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   DateTime? _mulai;
   DateTime? _sampai;
   String _cariPembeli = '';
@@ -264,6 +266,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   Map<String, dynamic> _payloadDashboardUmum() {
     return {
       'periodeTren': _periodeTren,
+      'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan),
       ..._payloadRentangTanggal(),
       if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
       if (_kodeTransaksi.isNotEmpty) ...{
@@ -401,17 +404,18 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                 pw.Text('Dashboard Bisnis · ${Sesi.instance.tokoNama}',
                     style: pw.TextStyle(
                         fontSize: 15, fontWeight: pw.FontWeight.bold)),
-                pw.Text(DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now()),
+                pw.Text(
+                    'Acuan ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)} · Dicetak ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
                     style: const pw.TextStyle(fontSize: 8)),
               ]),
           pw.SizedBox(height: 8),
           pw.Row(children: [
-            _kpiPdf('Transaksi Hari Ini', '${kk('hariIni')['trx'] ?? 0}'),
-            _kpiPdf('Omzet Hari Ini',
+            _kpiPdf('Transaksi Tanggal Acuan', '${kk('hariIni')['trx'] ?? 0}'),
+            _kpiPdf('Omzet Tanggal Acuan',
                 formatRupiahDasbor.format(kk('hariIni')['rp'] ?? 0)),
-            _kpiPdf('Omzet Minggu',
+            _kpiPdf('Omzet Minggu Acuan',
                 formatRupiahDasbor.format(kk('mingguIni')['rp'] ?? 0)),
-            _kpiPdf('Omzet Bulan',
+            _kpiPdf('Omzet Bulan Acuan',
                 formatRupiahDasbor.format(kk('bulanIni')['rp'] ?? 0)),
           ]),
           pw.SizedBox(height: 10),
@@ -521,6 +525,55 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       }
     });
     await _terapkan(simpanLog: true);
+  }
+
+  Future<void> _pilihTanggalAcuan() async {
+    final v = await showDatePicker(
+      context: context,
+      initialDate: _tanggalAcuan,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih tanggal acuan dashboard',
+    );
+    if (v == null || !mounted) return;
+    setStateIfMounted(() {
+      _tanggalAcuan = DateTime(v.year, v.month, v.day);
+      _halaman = 1;
+    });
+    await _muat(simpanLog: true);
+  }
+
+  Widget _inputTanggalAcuan({bool ringkas = false}) {
+    final tombol = OutlinedButton.icon(
+      onPressed: _memuat ? null : _pilihTanggalAcuan,
+      icon: const Icon(Icons.event_available_outlined, size: 18),
+      label: Text(_formatTanggalServer.format(_tanggalAcuan)),
+    );
+    if (ringkas) return tombol;
+    return AppSectionCard(
+      child: Row(
+        children: [
+          Icon(Icons.today_outlined, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Tanggal Acuan',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+                Text(
+                  'Kartu KPI dan rekap tujuh hari dihitung sampai tanggal ini.',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondaryOf(context)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          tombol,
+        ],
+      ),
+    );
   }
 
   String _formatLogApi({
@@ -1369,6 +1422,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     final tren = ((d['tren'] as List?) ?? []).cast<Map<String, dynamic>>();
     final heatmap =
         ((d['heatmap'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final rekap7Hari =
+        ((d['rekap7Hari'] as List?) ?? []).cast<Map<String, dynamic>>();
     final maksKategori = omzetKategori.fold<double>(0, (m, e) {
       final v = (e['nilai'] as num?)?.toDouble() ?? 0;
       return v > m ? v : m;
@@ -1411,6 +1466,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                       color: AppColors.textSecondaryOf(context),
                       fontStyle: FontStyle.italic)),
             ),
+          _inputTanggalAcuan(),
+          const SizedBox(height: 12),
           LayoutBuilder(builder: (context, c) {
             final lebar = c.maxWidth;
             final kolom = lebar >= 1000 ? 5 : (lebar >= 700 ? 3 : 2);
@@ -1427,30 +1484,32 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     icon: Icons.receipt_long,
                     warna: AppColors.primary,
                     nilai: '${k('hariIni')['trx'] ?? 0}',
-                    label: 'Transaksi Hari Ini',
-                    tooltip: 'Klik untuk menampilkan transaksi hari ini',
+                    label:
+                        'Transaksi ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                    tooltip:
+                        'Klik untuk menampilkan transaksi pada tanggal acuan',
                     onTap: () {
-                      final n = DateTime.now();
-                      _terapkanRentangKartu(n, n);
+                      _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
                     }),
                 AppKpiCard(
                     icon: Icons.payments_outlined,
                     warna: AppColors.success,
                     nilai: formatRupiahDasbor.format(k('hariIni')['rp'] ?? 0),
-                    label: 'Omzet Hari Ini',
-                    tooltip: 'Klik untuk menampilkan omzet hari ini',
+                    label:
+                        'Omzet ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}',
+                    tooltip: 'Klik untuk menampilkan omzet pada tanggal acuan',
                     onTap: () {
-                      final n = DateTime.now();
-                      _terapkanRentangKartu(n, n);
+                      _terapkanRentangKartu(_tanggalAcuan, _tanggalAcuan);
                     }),
                 AppKpiCard(
                     icon: Icons.calendar_view_week_outlined,
                     warna: AppColors.info,
                     nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0),
-                    label: 'Omzet Minggu Ini',
-                    tooltip: 'Klik untuk menampilkan transaksi minggu ini',
+                    label: 'Omzet Minggu Acuan',
+                    tooltip:
+                        'Klik untuk menampilkan transaksi dari awal minggu sampai tanggal acuan',
                     onTap: () {
-                      final n = DateTime.now();
+                      final n = _tanggalAcuan;
                       final awal = n.subtract(Duration(days: n.weekday - 1));
                       _terapkanRentangKartu(awal, n);
                     }),
@@ -1458,10 +1517,11 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     icon: Icons.calendar_month_outlined,
                     warna: AppColors.warning,
                     nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0),
-                    label: 'Omzet Bulan Ini',
-                    tooltip: 'Klik untuk menampilkan transaksi bulan ini',
+                    label: 'Omzet Bulan Acuan',
+                    tooltip:
+                        'Klik untuk menampilkan transaksi dari awal bulan sampai tanggal acuan',
                     onTap: () {
-                      final n = DateTime.now();
+                      final n = _tanggalAcuan;
                       _terapkanRentangKartu(DateTime(n.year, n.month, 1), n);
                     }),
                 AppKpiCard(
@@ -1469,11 +1529,11 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     warna: AppColors.teal,
                     nilai:
                         formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0),
-                    label: 'Omzet Semester Ini',
+                    label: 'Omzet 6 Bulan Acuan',
                     tooltip:
-                        'Klik untuk menampilkan transaksi enam bulan terakhir',
+                        'Klik untuk menampilkan transaksi enam bulan sampai tanggal acuan',
                     onTap: () {
-                      final n = DateTime.now();
+                      final n = _tanggalAcuan;
                       _terapkanRentangKartu(
                           DateTime(n.year, n.month - 6, n.day), n);
                     }),
@@ -1537,6 +1597,67 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                 ],
               );
             }),
+          ],
+          if (_detailTerlihat) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Rekap 7 Hari Terakhir',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondaryOf(context))),
+                ),
+                _inputTanggalAcuan(ringkas: true),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (rekap7Hari.isEmpty)
+              const AppInfoBanner(
+                icon: Icons.info_outline,
+                text:
+                    'Rekap tujuh hari belum tersedia. Muat ulang setelah server diperbarui.',
+              )
+            else
+              LayoutBuilder(builder: (context, c) {
+                final kolom = c.maxWidth >= 1100
+                    ? 7
+                    : (c.maxWidth >= 760 ? 4 : (c.maxWidth >= 480 ? 2 : 1));
+                final lebarKolom = (c.maxWidth - (12 * (kolom - 1))) / kolom;
+                return GridView.count(
+                  crossAxisCount: kolom,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: lebarKolom / 104,
+                  children: [
+                    for (final rekap in rekap7Hari)
+                      AppKpiCard(
+                        icon: rekap['tanggalAcuan'] == true
+                            ? Icons.today
+                            : Icons.calendar_today_outlined,
+                        warna: rekap['tanggalAcuan'] == true
+                            ? AppColors.primary
+                            : AppColors.info,
+                        nilai: formatRupiahDasbor.format(rekap['rp'] ?? 0),
+                        label: '${rekap['tanggal'] ?? '-'}'
+                            ' • ${rekap['trx'] ?? 0} trx'
+                            '${rekap['tanggalAcuan'] == true ? ' • Acuan' : ''}',
+                        tooltip:
+                            'Klik untuk menampilkan transaksi tanggal ${rekap['tanggal'] ?? '-'}',
+                        onTap: () {
+                          final tanggal =
+                              DateTime.tryParse('${rekap['tanggal'] ?? ''}');
+                          if (tanggal != null) {
+                            _terapkanRentangKartu(tanggal, tanggal);
+                          }
+                        },
+                      ),
+                  ],
+                );
+              }),
           ],
           if (_detailTerlihat) ...[
             _kartuAnalitik(

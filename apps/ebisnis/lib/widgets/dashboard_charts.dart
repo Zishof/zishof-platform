@@ -75,15 +75,25 @@ class BarisKpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 84,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: kartu.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) => SizedBox(width: 150, child: kartu[i]),
-      ),
-    );
+    return LayoutBuilder(builder: (context, batas) {
+      final kolom = batas.maxWidth >= 960
+          ? 4
+          : batas.maxWidth >= 520
+              ? 2
+              : 1;
+      final lebar = (batas.maxWidth - ((kolom - 1) * 8)) / kolom;
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: kartu
+            .map((item) => SizedBox(
+                  width: lebar,
+                  height: 84,
+                  child: item,
+                ))
+            .toList(),
+      );
+    });
   }
 }
 

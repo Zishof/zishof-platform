@@ -65,6 +65,11 @@ final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(
         ? MenuEBisnis.berandaInventorySales
         : MenuEBisnis.kasir);
 
+/// Status sidebar desktop disimpan di level aplikasi supaya pilihan pengguna
+/// tetap berlaku ketika berpindah halaman. Pada layar kecil AppDrawer tetap
+/// dipakai seperti sebelumnya.
+final _sidebarRingkasNotifier = ValueNotifier<bool>(false);
+
 /// Kunci menu, dipetakan ke label+ikon+builder layar tujuan -- dipakai
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
 /// urutan/daftar menu tetap satu sumber kebenaran.
@@ -793,7 +798,14 @@ class _AppShellState extends State<AppShell> {
         floatingActionButton: widget.floatingActionButton,
         body: Row(
           children: [
-            _AppSidebar(menuAktif: widget.menuAktif),
+            ValueListenableBuilder<bool>(
+              valueListenable: _sidebarRingkasNotifier,
+              builder: (context, ringkas, _) => _AppSidebar(
+                menuAktif: widget.menuAktif,
+                ringkas: ringkas,
+                onToggle: () => _sidebarRingkasNotifier.value = !ringkas,
+              ),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -825,24 +837,32 @@ class _AppShellState extends State<AppShell> {
                               ],
                             ),
                           ),
-                          Row(mainAxisSize: MainAxisSize.min, children: [
-                            if (widget.aksiHeader != null) widget.aksiHeader!,
-                            if (widget.aksiHeader != null)
-                              const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              key: const Key('tombol-qa-halaman-desktop'),
-                              onPressed: () => _bukaTanyaJawab(context),
-                              icon: const Icon(Icons.question_answer_outlined,
-                                  size: 18),
-                              label: const Text('Tanya Jawab'),
+                          Flexible(
+                            child: Wrap(
+                              alignment: WrapAlignment.end,
+                              runAlignment: WrapAlignment.end,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (widget.aksiHeader != null)
+                                  widget.aksiHeader!,
+                                OutlinedButton.icon(
+                                  key: const Key('tombol-qa-halaman-desktop'),
+                                  onPressed: () => _bukaTanyaJawab(context),
+                                  icon: const Icon(
+                                      Icons.question_answer_outlined,
+                                      size: 18),
+                                  label: const Text('Tanya Jawab'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: () => _bukaBantuan(context),
+                                  icon:
+                                      const Icon(Icons.help_outline, size: 18),
+                                  label: const Text('Bantuan'),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: () => _bukaBantuan(context),
-                              icon: const Icon(Icons.help_outline, size: 18),
-                              label: const Text('Bantuan'),
-                            ),
-                          ]),
+                          ),
                         ],
                       ),
                     )
@@ -856,24 +876,26 @@ class _AppShellState extends State<AppShell> {
                       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                       child: Align(
                         alignment: Alignment.centerRight,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          if (widget.aksiHeader != null) widget.aksiHeader!,
-                          if (widget.aksiHeader != null)
-                            const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            key: const Key('tombol-qa-halaman-desktop'),
-                            onPressed: () => _bukaTanyaJawab(context),
-                            icon: const Icon(Icons.question_answer_outlined,
-                                size: 18),
-                            label: const Text('Tanya Jawab'),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => _bukaBantuan(context),
-                            icon: const Icon(Icons.help_outline, size: 18),
-                            label: const Text('Bantuan'),
-                          ),
-                        ]),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (widget.aksiHeader != null) widget.aksiHeader!,
+                            OutlinedButton.icon(
+                              key: const Key('tombol-qa-halaman-desktop'),
+                              onPressed: () => _bukaTanyaJawab(context),
+                              icon: const Icon(Icons.question_answer_outlined,
+                                  size: 18),
+                              label: const Text('Tanya Jawab'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _bukaBantuan(context),
+                              icon: const Icon(Icons.help_outline, size: 18),
+                              label: const Text('Bantuan'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   Expanded(
@@ -951,31 +973,49 @@ class _AppShellState extends State<AppShell> {
 
 class _AppSidebar extends StatelessWidget {
   final MenuEBisnis menuAktif;
-  const _AppSidebar({required this.menuAktif});
+  final bool ringkas;
+  final VoidCallback onToggle;
+  const _AppSidebar({
+    required this.menuAktif,
+    required this.ringkas,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240,
+      width: ringkas ? 72 : 240,
       color: AppColors.sidebarBg,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              padding: EdgeInsets.fromLTRB(
+                  ringkas ? 10 : 20, 16, ringkas ? 10 : 12, 20),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.link, color: Colors.white, size: 22),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(AppVariant.namaSidebar,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16)),
+                  if (!ringkas) ...[
+                    const Icon(Icons.link, color: Colors.white, size: 22),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(AppVariant.namaSidebar,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                    ),
+                  ],
+                  IconButton(
+                    key: const Key('tombol-sidebar-ringkas'),
+                    onPressed: onToggle,
+                    color: Colors.white,
+                    iconSize: 20,
+                    tooltip: ringkas ? 'Buka menu' : 'Tutup menu',
+                    icon: Icon(ringkas ? Icons.menu_open : Icons.menu),
                   ),
                 ],
               ),
@@ -985,17 +1025,19 @@ class _AppSidebar extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
                 children: [
                   for (final grup in _grupMenu)
-                    _SidebarGroup(grup: grup, menuAktif: menuAktif),
+                    _SidebarGroup(
+                        grup: grup, menuAktif: menuAktif, ringkas: ringkas),
                 ],
               ),
             ),
-            const AppVersionLabel(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
-              style: TextStyle(
-                color: AppColors.sidebarText,
-                fontSize: 11,
+            if (!ringkas)
+              const AppVersionLabel(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
+                style: TextStyle(
+                  color: AppColors.sidebarText,
+                  fontSize: 11,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1006,7 +1048,12 @@ class _AppSidebar extends StatelessWidget {
 class _SidebarGroup extends StatelessWidget {
   final _GrupMenuShell grup;
   final MenuEBisnis menuAktif;
-  const _SidebarGroup({required this.grup, required this.menuAktif});
+  final bool ringkas;
+  const _SidebarGroup({
+    required this.grup,
+    required this.menuAktif,
+    required this.ringkas,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1021,21 +1068,28 @@ class _SidebarGroup extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 12, 7),
-            child: Text(
-              grup.label.toUpperCase(),
-              style: const TextStyle(
-                color: AppColors.sidebarText,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+          if (ringkas)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+              child: Divider(color: Color(0x447D96AE), height: 1),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 12, 7),
+              child: Text(
+                grup.label.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.sidebarText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
           ...items.map((item) => _SidebarItem(
                 item: item,
                 aktif: item.kunci == menuAktif,
                 menuAktif: menuAktif,
+                ringkas: ringkas,
               )),
         ],
       ),
@@ -1047,53 +1101,66 @@ class _SidebarItem extends StatelessWidget {
   final _ItemMenuShell item;
   final bool aktif;
   final MenuEBisnis menuAktif;
+  final bool ringkas;
   const _SidebarItem({
     required this.item,
     required this.aktif,
     required this.menuAktif,
+    required this.ringkas,
   });
 
   @override
   Widget build(BuildContext context) {
     final warna = aktif ? AppColors.sidebarTextActive : AppColors.sidebarText;
     final icon = Icon(item.icon, size: 19, color: warna);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: aktif ? AppColors.sidebarBgActive : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
+    return Tooltip(
+      message: ringkas ? item.label : '',
+      child: Padding(
+        padding:
+            EdgeInsets.symmetric(horizontal: ringkas ? 8 : 12, vertical: 2),
+        child: Material(
+          color: aktif ? AppColors.sidebarBgActive : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          onTap: () => _pindahMenu(context, item, menuSaatIni: menuAktif),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                item.kunci == MenuEBisnis.pesanan
-                    ? ValueListenableBuilder<int>(
-                        valueListenable: PesananPoller.instance.jumlahBaru,
-                        builder: (context, jumlah, _) => Badge(
-                          label: Text('$jumlah'),
-                          isLabelVisible: jumlah > 0,
-                          child: icon,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _pindahMenu(context, item, menuSaatIni: menuAktif),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: ringkas ? 8 : 12, vertical: 11),
+              child: Row(
+                mainAxisAlignment: ringkas
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  item.kunci == MenuEBisnis.pesanan
+                      ? ValueListenableBuilder<int>(
+                          valueListenable: PesananPoller.instance.jumlahBaru,
+                          builder: (context, jumlah, _) => Badge(
+                            label: Text('$jumlah'),
+                            isLabelVisible: jumlah > 0,
+                            child: icon,
+                          ),
+                        )
+                      : icon,
+                  if (!ringkas) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        style: TextStyle(
+                          color: warna,
+                          fontSize: 13,
+                          fontWeight:
+                              aktif ? FontWeight.w600 : FontWeight.normal,
                         ),
-                      )
-                    : icon,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    style: TextStyle(
-                      color: warna,
-                      fontSize: 13,
-                      fontWeight: aktif ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     ),
-                  ),
-                ),
-                if (item.builder == null)
-                  const Icon(Icons.lock_clock_outlined,
-                      size: 14, color: AppColors.sidebarText),
-              ],
+                    if (item.builder == null)
+                      const Icon(Icons.lock_clock_outlined,
+                          size: 14, color: AppColors.sidebarText),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
