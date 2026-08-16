@@ -38,6 +38,10 @@ import '../screens/inventory_sales/spj_screen.dart';
 import '../screens/inventory_sales/nota_sales_screen.dart';
 import '../screens/inventory_sales/kas_jurnal_screen.dart';
 import '../screens/inventory_sales/laba_rugi_screen.dart';
+import '../screens/apotik/beranda_apotik_screen.dart';
+import '../screens/apotik/kasir_apotik_screen.dart';
+import '../screens/apotik/persediaan_apotik_screen.dart';
+import '../screens/apotik/laporan_apotik_screen.dart';
 import '../product_profile.dart';
 import 'app_version_label.dart';
 
@@ -111,6 +115,71 @@ class AppDrawer extends StatelessWidget {
                   child: ListView(
                     padding: EdgeInsets.zero,
                     children: [
+                      if (AppProductProfile.aktif.isApotik)
+                        _ItemMenu(
+                          icon: Icons.dashboard_outlined,
+                          label: 'Dashboard Apotik',
+                          aktif: menuAktif == 'Dashboard Apotik',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Dashboard Apotik',
+                            builder: (_) => const BerandaApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_kasir') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_resep')))
+                        _ItemMenu(
+                          icon: Icons.point_of_sale,
+                          label: 'Kasir & Resep',
+                          aktif: menuAktif == 'Kasir & Resep',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kasir & Resep',
+                            builder: (_) => const KasirApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_formularium') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_batch') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_pengadaan') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_stok_opname') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_retur')))
+                        _ItemMenu(
+                          icon: Icons.medication_outlined,
+                          label: 'Obat & Persediaan',
+                          aktif: menuAktif == 'Obat & Persediaan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Obat & Persediaan',
+                            builder: (_) => const PersediaanApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_laporan') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_narkotika')))
+                        _ItemMenu(
+                          icon: Icons.analytics_outlined,
+                          label: 'Laporan Apotik',
+                          aktif: menuAktif == 'Laporan Apotik',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laporan Apotik',
+                            builder: (_) => const LaporanApotikScreen(),
+                          ),
+                        ),
                       if (AppProductProfile.aktif.isInventorySales)
                         _ItemMenu(
                           icon: Icons.storefront_outlined,

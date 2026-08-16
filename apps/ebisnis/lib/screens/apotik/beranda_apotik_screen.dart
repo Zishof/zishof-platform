@@ -5,8 +5,8 @@ import '../../product_profile.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
-import '../login_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
@@ -30,7 +30,11 @@ class BerandaApotikScreen extends StatefulWidget {
 
 class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
   bool _memuat = true;
+  bool _provisionBerjalan = false;
   String? _error;
+  int _obatTerbaca = 0;
+  int _stokTersedia = 0;
+  int _batchKritis = 0;
 
   static const _menuApotik = <(String, String, IconData)>[
     ('apotik_kasir', 'Kasir Apotik', Icons.point_of_sale),
@@ -68,6 +72,24 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     try {
       final konfig = await ApiClient.instance.aksi('konfigurasi');
       Sesi.instance.terapkanKonfig(konfig);
+      try {
+        final obat = await ApiClient.instance
+            .aksi('apotik_item_cari', {'page_size': 100});
+        final data = obat['data'];
+        if (data is List) {
+          _obatTerbaca = data.length;
+          _stokTersedia = data.where((e) {
+            return e is Map && ((e['stok'] as num?)?.toDouble() ?? 0) > 0;
+          }).length;
+        }
+        final batch = await ApiClient.instance.aksi(
+            'apotik_batch_monitor', {'hari_ke_depan': 90, 'page_size': 100});
+        final daftarBatch = batch['data'];
+        _batchKritis = daftarBatch is List ? daftarBatch.length : 0;
+      } catch (_) {
+        // Konfigurasi/akses menu tetap dapat ditampilkan ketika server lama
+        // belum menyediakan endpoint ringkasan farmasi.
+      }
       setStateIfMounted(() => _memuat = false);
     } catch (e) {
       setStateIfMounted(() {
@@ -77,17 +99,41 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     }
   }
 
-  Future<void> _keluar() async {
+  Future<void> _isiDataContoh() async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Isi data contoh Apotik?'),
+        content: const Text(
+            'Server akan menyiapkan katalog obat, racikan, tenaga medis, akun demo, dan stok contoh secara idempoten. Fitur ini hanya berjalan bila konfigurasi data_sample_ebisnis aktif.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal')),
+          FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Mulai di Latar')),
+        ],
+      ),
+    );
+    if (setuju != true) return;
+    setStateIfMounted(() => _provisionBerjalan = true);
     try {
-      await ApiClient.instance.aksi('logout');
-    } catch (_) {
-      // Token sisi server kedaluwarsa sendiri -- logout lokal tetap jalan.
+      await ApiClient.instance.aksi('apotik_provision_demo', {
+        'konfirmasi': 'SEED-DEMO-APOTIK',
+        'background': true,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Data contoh sedang dibuat di latar. Katalog besar dapat memerlukan beberapa menit.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      setStateIfMounted(() => _provisionBerjalan = false);
     }
-    await ApiClient.instance.hapusToken();
-    Sesi.instance.reset();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
   }
 
   @override
@@ -95,23 +141,34 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     final s = Sesi.instance;
     final adaMenuApotik = _menuApotik.any((m) => s.bolehMenuVarianBaru(m.$1)) ||
         _menuEmedik.any((m) => s.bolehMenuVarianBaru(m.$1));
-    return Scaffold(
-      backgroundColor: AppColors.pageBgOf(context),
-      appBar: AppBar(
-        // Judul ikut profil varian: layar SAMA melayani "POS Apotik" dan
-        // "POS eMedik" (satu build eMedik memuat keduanya; beda via Tbmrole).
-        title: Text(AppProductProfile.aktif.namaSidebar),
-        actions: [
-          IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Muat Ulang',
-              onPressed: _muat),
-          IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Keluar',
-              onPressed: _keluar),
-        ],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.berandaApotik,
+      judul: 'Dashboard Apotik',
+      subjudul: 'Kasir, resep, persediaan, batch, dan analitik farmasi',
+      scrollable: false,
+      actionsAppBar: [
+        IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
+      ],
+      aksiHeader: Wrap(spacing: 8, children: [
+        if (s.isAdmin)
+          OutlinedButton.icon(
+            onPressed: _provisionBerjalan ? null : _isiDataContoh,
+            icon: _provisionBerjalan
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome_outlined, size: 18),
+            label: const Text('Isi Data Contoh'),
+          ),
+        IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            onPressed: _muat),
+      ]),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -132,28 +189,10 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
               : RefreshIndicator(
                   onRefresh: _muat,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
                     children: [
-                      AppSectionCard(
-                        judul: 'Konteks Sesi',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _baris(context, 'Pengguna', s.userId),
-                            _baris(context, 'Toko / Apotek',
-                                s.tokoNama.isEmpty ? '-' : s.tokoNama),
-                            _baris(
-                                context,
-                                'Peran',
-                                s.isAdmin
-                                    ? 'Admin (akses penuh)'
-                                    : (s.activeRoleId.isEmpty
-                                        ? '-'
-                                        : s.activeRoleId)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      _kartuRingkasan(context),
+                      const SizedBox(height: 16),
                       if (!adaMenuApotik)
                         AppInfoBanner(
                           icon: Icons.lock_outline,
@@ -163,40 +202,97 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
                               '(Grup Pengguna). Menu apotek fail-closed: kunci yang belum '
                               'diaktifkan tidak pernah terbuka sendiri.',
                         ),
-                      _grupMenu(context, 'Menu Apotik (eFarmasi)', _menuApotik),
-                      const SizedBox(height: 12),
-                      _grupMenu(
-                          context, 'Menu Layanan Medis (eMedik)', _menuEmedik),
-                      const SizedBox(height: 12),
-                      AppInfoBanner(
-                        icon: Icons.construction_outlined,
-                        color: AppColors.info,
-                        text:
-                            'Layar kasir apotik (tebus resep, batch/kedaluwarsa, obat '
-                            'terkendali, LASA) dibangun FASE A -- chip di atas menunjukkan '
-                            'HAK AKSES nyata dari server untuk verifikasi lebih awal.',
-                      ),
+                      _grupMenu(context, 'Operasional Apotik', _menuApotik),
+                      if (AppProductProfile.aktif.isEmedik) ...[
+                        const SizedBox(height: 12),
+                        _grupMenu(context, 'Layanan Medis', _menuEmedik),
+                      ],
                     ],
                   ),
                 ),
     );
   }
 
-  Widget _baris(BuildContext context, String label, String nilai) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [
-          SizedBox(
-              width: 120,
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryOf(context)))),
-          Expanded(
-              child: Text(nilai.isEmpty ? '-' : nilai,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600))),
-        ]),
+  Widget _kartuRingkasan(BuildContext context) {
+    final s = Sesi.instance;
+    return LayoutBuilder(builder: (context, box) {
+      final lebar = box.maxWidth;
+      final kolom = lebar >= 1100
+          ? 4
+          : lebar >= 620
+              ? 2
+              : 1;
+      final cardWidth = (lebar - ((kolom - 1) * 12)) / kolom;
+      final cards = <Widget>[
+        _statCard(context, Icons.medication_outlined, 'Obat terdata',
+            _obatTerbaca == 100 ? '100+' : '$_obatTerbaca', AppColors.info),
+        _statCard(context, Icons.inventory_2_outlined, 'Obat tersedia',
+            '$_stokTersedia', AppColors.success),
+        _statCard(context, Icons.event_busy_outlined, 'Batch ≤ 90 hari',
+            '$_batchKritis', AppColors.warning),
+        _statCard(
+            context,
+            Icons.storefront_outlined,
+            'Apotek aktif',
+            s.tokoNama.isEmpty ? 'Belum dipilih' : s.tokoNama,
+            const Color(0xFF7C3AED)),
+      ];
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final card in cards) SizedBox(width: cardWidth, child: card)
+        ],
       );
+    });
+  }
+
+  Widget _statCard(BuildContext context, IconData icon, String label,
+      String nilai, Color warna) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBgOf(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: warna.withValues(alpha: .18)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: .035),
+              blurRadius: 14,
+              offset: const Offset(0, 5)),
+        ],
+      ),
+      child: Row(children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+              color: AppColors.latarLembut(warna),
+              borderRadius: BorderRadius.circular(13)),
+          child: Icon(icon, color: warna),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nilai,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryOf(context))),
+              ]),
+        ),
+      ]),
+    );
+  }
 
   /// Tujuan navigasi menu yang layarnya SUDAH dibangun -- bertambah per fase.
   /// Menu tanpa tujuan tetap chip status (hak akses tetap terverifikasi UAT).
