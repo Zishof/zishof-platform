@@ -118,10 +118,15 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/ebisnis/icon.png
+    - assets/images/ebisnis/login-background.png
     - assets/images/albahjah/icon.png
+    - assets/images/albahjah/login-background.png
     - assets/images/inventory_sales/icon.png
+    - assets/images/inventory_sales/login-background.png
     - assets/images/apotik/icon.png
+    - assets/images/apotik/login-background.png
     - assets/images/emedik/icon.png
+    - assets/images/emedik/login-background.png
     - assets/images/help/apotik-workflow.png
     - assets/images/help/emedik-workflow.png
 
