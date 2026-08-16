@@ -917,6 +917,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
       if (widget.draftIdSumber != null) ...{
+        // `id` adalah nama kanonis yang dibaca endpoint draft_bayar. Alias
+        // di bawah tetap dikirim untuk kompatibilitas server/klien lama.
+        // Tanpa field kanonis ini, menahan ulang keranjang hasil resume
+        // dianggap sebagai draft baru dan menimbulkan transaksi ganda.
+        'id': widget.draftIdSumber,
         'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
         'draftPembelianAnggotaKoperasiId': widget.draftIdSumber,
         'idDraftPembelianAnggotaKoperasi': widget.draftIdSumber,
@@ -1107,8 +1112,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _tipeDiskonFaktur = 'NOMINAL';
       });
       unawaited(_muatCaraBayarUntukMember(null));
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Transaksi ditahan (kode: $kodeUnik).')));
+      final keteranganSukses = widget.draftIdSumber == null
+          ? 'Transaksi ditahan (kode: $kodeUnik).'
+          : 'Transaksi tertahan diperbarui (kode: $kodeUnik).';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(keteranganSukses)));
       widget.onSelesai?.call();
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
