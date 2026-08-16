@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:barcode/barcode.dart' as bc;
@@ -398,6 +400,249 @@ class StrukScreen extends StatelessWidget {
     }
   }
 
+  Future<Uint8List?> _logoEscPos() async {
+    Uint8List source;
+    final path = PengaturanStruk.instance.logoPath;
+    try {
+      if (path != null) {
+        source = await File(path).readAsBytes();
+      } else {
+        final data = await rootBundle.load(AppVariant.logoAsset);
+        source = data.buffer.asUint8List();
+      }
+    } catch (_) {
+      return null;
+    }
+
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      final paperWidth = PengaturanStruk.instance.lebarKertasMm;
+      final baseWidth = PengaturanStruk.instance.logoLandscape ? 280 : 190;
+      final scale = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
+      final maxWidth = paperWidth <= 58 ? 320 : 512;
+      final targetWidth =
+          (baseWidth * scale).round().clamp(80, maxWidth).toInt();
+      codec = await ui.instantiateImageCodec(source,
+          targetWidth: targetWidth, allowUpscaling: false);
+      final frame = await codec.getNextFrame();
+      image = frame.image;
+      final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (rgba == null) return null;
+      final width = image.width;
+      final height = image.height;
+      final bytesPerRow = (width + 7) ~/ 8;
+      final raster = Uint8List(bytesPerRow * height);
+      for (var y = 0; y < height; y++) {
+        for (var x = 0; x < width; x++) {
+          final offset = (y * width + x) * 4;
+          final r = rgba.getUint8(offset);
+          final g = rgba.getUint8(offset + 1);
+          final b = rgba.getUint8(offset + 2);
+          final a = rgba.getUint8(offset + 3);
+          final luminance = (r * 30 + g * 59 + b * 11) ~/ 100;
+          if (a > 64 && luminance < 178) {
+            raster[y * bytesPerRow + (x ~/ 8)] |= 0x80 >> (x & 7);
+          }
+        }
+      }
+      return Uint8List.fromList([
+        0x1D,
+        0x76,
+        0x30,
+        0x00,
+        bytesPerRow & 0xFF,
+        (bytesPerRow >> 8) & 0xFF,
+        height & 0xFF,
+        (height >> 8) & 0xFF,
+        ...raster,
+      ]);
+    } catch (_) {
+      return null;
+    } finally {
+      image?.dispose();
+      codec?.dispose();
+    }
+  }
+
+  Uint8List _strukEscPos(Uint8List? logo) {
+    final columns = PengaturanStruk.instance.lebarKertasMm <= 58 ? 32 : 42;
+    final out = BytesBuilder(copy: false);
+    const codec = Latin1Codec(allowInvalid: true);
+
+    String clean(String value) => value
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('’', "'")
+        .trim();
+
+    List<String> wrap(String value, [int? width]) {
+      final max = width ?? columns;
+      final words = clean(value).split(' ');
+      final lines = <String>[];
+      var line = '';
+      for (final original in words) {
+        var word = original;
+        while (word.length > max) {
+          if (line.isNotEmpty) {
+            lines.add(line);
+            line = '';
+          }
+          lines.add(word.substring(0, max));
+          word = word.substring(max);
+        }
+        if (word.isEmpty) continue;
+        if (line.isEmpty) {
+          line = word;
+        } else if (line.length + 1 + word.length <= max) {
+          line = '$line $word';
+        } else {
+          lines.add(line);
+          line = word;
+        }
+      }
+      if (line.isNotEmpty) lines.add(line);
+      return lines.isEmpty ? [''] : lines;
+    }
+
+    void command(List<int> bytes) => out.add(bytes);
+    void text(String value) {
+      out.add(codec.encode(value));
+      out.addByte(0x0A);
+    }
+
+    void centered(String value, {bool bold = false}) {
+      command([0x1B, 0x61, 0x01, 0x1B, 0x45, bold ? 0x01 : 0x00]);
+      for (final line in wrap(value)) {
+        text(line);
+      }
+      command([0x1B, 0x45, 0x00, 0x1B, 0x61, 0x00]);
+    }
+
+    void pair(String label, String value, {bool bold = false}) {
+      final left = clean(label);
+      final right = clean(value);
+      command([0x1B, 0x45, bold ? 0x01 : 0x00]);
+      if (left.length + right.length + 1 <= columns) {
+        text(left + (' ' * (columns - left.length - right.length)) + right);
+      } else {
+        for (final line in wrap(left, columns)) {
+          text(line);
+        }
+        text(right.padLeft(columns));
+      }
+      command([0x1B, 0x45, 0x00]);
+    }
+
+    void info(String label, String value) {
+      final prefix = '${clean(label).padRight(9)}: ';
+      final valueWidth = columns - prefix.length;
+      final lines = wrap(value, valueWidth);
+      for (var i = 0; i < lines.length; i++) {
+        text((i == 0 ? prefix : ' ' * prefix.length) + lines[i]);
+      }
+    }
+
+    command([0x1B, 0x40, 0x1B, 0x74, 0x00]); // INIT + CP437.
+    if (logo != null && logo.isNotEmpty) {
+      command([0x1B, 0x61, 0x01]);
+      command(logo);
+      text('');
+    }
+    centered(
+        Sesi.instance.tokoNama.isEmpty ? 'Nama Toko' : Sesi.instance.tokoNama,
+        bold: true);
+    centered(Sesi.instance.tokoAlamat.isEmpty
+        ? 'Alamat toko'
+        : Sesi.instance.tokoAlamat);
+    if (Sesi.instance.tokoTelp.trim().isNotEmpty) {
+      centered(Sesi.instance.tokoTelp);
+    }
+    text('-' * columns);
+    info('No', kode);
+    info('Tanggal', waktu);
+    info('Kasir', _labelKasir());
+    info('Pelanggan', _labelPelanggan());
+    if (statusLabel != null && statusLabel!.trim().isNotEmpty) {
+      info('Status', statusLabel!);
+    }
+    text('-' * columns);
+
+    for (final row in item) {
+      command([0x1B, 0x45, 0x01]);
+      for (final line in wrap('${row['nama'] ?? ''}')) {
+        text(line);
+      }
+      command([0x1B, 0x45, 0x00]);
+      pair('${_formatQty(_qty(row))}x @${_formatAngka.format(_harga(row))}',
+          _formatUang(_subtotalBaris(row)));
+      if (_diskonBaris(row) > 0) {
+        pair('  Diskon', '-${_formatUang(_diskonBaris(row))}');
+      }
+      if (_cashbackBaris(row) > 0) {
+        pair('  Cashback', '+${_formatUang(_cashbackBaris(row))}');
+      }
+    }
+    text('-' * columns);
+    text('$_jumlahItem item');
+    pair('Subtotal', _formatUang(_subtotal));
+    if (_totalDiskonItem > 0) {
+      pair('Diskon', '-${_formatUang(_totalDiskonItem)}');
+    }
+    if (diskonFaktur > 0) {
+      pair('Potongan Faktur', '-${_formatUang(diskonFaktur)}');
+    }
+    if (pajak > 0) pair('Pajak', _formatUang(pajak));
+    pair('GRAND TOTAL', _formatUang(total), bold: true);
+    if (_totalCashbackItem > 0) {
+      pair('Cashback', '+${_formatUang(_totalCashbackItem)}');
+    }
+    if (uangDiterima != null) pair('Tunai', _formatUang(uangDiterima!));
+    if (kembalian != null) pair('Kembali', _formatUang(kembalian!));
+    final payments = _pembayaranEfektif;
+    if (payments.isEmpty) {
+      pair('Metode', metode);
+    } else if (payments.length == 1) {
+      pair('Metode', '${payments.first['nama']}');
+    } else {
+      pair('Metode', 'Split (${payments.length})');
+      for (final payment in payments) {
+        final nominal = payment['nominal'];
+        pair('  ${payment['nama']}',
+            nominal is num ? _formatUang(nominal) : '-');
+      }
+    }
+    if (saldo != null) pair('Saldo', _formatUang(saldo!));
+    text('-' * columns);
+    centered(Sesi.instance.pesanTerimaKasih.isEmpty
+        ? 'Terima kasih'
+        : Sesi.instance.pesanTerimaKasih);
+    if (!tersinkron) {
+      centered('Transaksi tersimpan offline dan akan disinkronkan otomatis.');
+    }
+
+    final barcode = clean(kode);
+    final barcodeBytes = codec.encode('{B$barcode');
+    if (barcode.isNotEmpty && barcodeBytes.length <= 255) {
+      command([0x1B, 0x61, 0x01, 0x1D, 0x48, 0x02, 0x1D, 0x68, 0x38]);
+      command([0x1D, 0x6B, 0x49, barcodeBytes.length]);
+      command(barcodeBytes);
+      text('');
+      command([0x1B, 0x61, 0x00]);
+    }
+
+    // Feed dan CUT WAJIB paling akhir. RAW spooler menerima satu job utuh,
+    // sehingga tidak ada batas halaman A4 yang dapat memotong daftar item.
+    command([0x1B, 0x64, 0x05]);
+    command([0x1D, 0x56, 0x42, 0x00]);
+    return out.takeBytes();
+  }
+
   double _tinggiStrukPdfMm() {
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
     final charsPerLine = lebarKertasMm <= 58
@@ -455,6 +700,17 @@ class StrukScreen extends StatelessWidget {
 
   Future<void> _cetakStruk() async {
     await _pastikanProfilToko();
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await PengaturanLaci.instance.muat();
+      final logo = await _logoEscPos();
+      final bytes = _strukEscPos(logo);
+      await cetakRawKasir(
+        bytes,
+        namaPrinter: PengaturanLaci.instance.namaPrinter,
+        namaDokumen: 'Struk $kode',
+      );
+      return;
+    }
     final logo = await _logoPdf();
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
     final tinggiIsiMm = _tinggiStrukPdfMm();
