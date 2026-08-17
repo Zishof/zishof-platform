@@ -15,6 +15,7 @@ import 'struk_screen.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../services/transaksi_rekonsiliasi_service.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -688,9 +689,8 @@ String _kodeTransaksiStabil(Map<String, dynamic> row) {
       // tetap dapat direkonsiliasi dengan server yang belum dideploy ulang.
       if (kunci == 'nomorNota') {
         final cocok = RegExp(r'\(([^()]+)\)\s*$').firstMatch(nilai);
-        if (cocok != null && '${cocok.group(1) ?? ''}'.trim().isNotEmpty) {
-          return '${cocok.group(1)}'.trim().toLowerCase();
-        }
+        final kodeLama = cocok?.group(1)?.trim() ?? '';
+        if (kodeLama.isNotEmpty) return kodeLama.toLowerCase();
       }
       return nilai.toLowerCase();
     }
@@ -712,6 +712,180 @@ bool _transaksiSudahAdaDiServer(Object error) {
       pesan.contains('duplicate key');
 }
 
+class _DialogPerbandinganTransaksi extends StatefulWidget {
+  const _DialogPerbandinganTransaksi({required this.hasil});
+
+  final HasilPerbandinganTransaksi hasil;
+
+  @override
+  State<_DialogPerbandinganTransaksi> createState() =>
+      _DialogPerbandinganTransaksiState();
+}
+
+class _DialogPerbandinganTransaksiState
+    extends State<_DialogPerbandinganTransaksi> {
+  bool _hanyaSelisih = true;
+
+  String _labelStatus(StatusPerbandinganTransaksi status) {
+    switch (status) {
+      case StatusPerbandinganTransaksi.sama:
+        return 'Sama';
+      case StatusPerbandinganTransaksi.hanyaLokal:
+        return 'Hanya lokal';
+      case StatusPerbandinganTransaksi.hanyaServer:
+        return 'Hanya server';
+      case StatusPerbandinganTransaksi.berbeda:
+        return 'Nominal berbeda';
+      case StatusPerbandinganTransaksi.duplikat:
+        return 'Duplikat';
+    }
+  }
+
+  Color _warnaStatus(StatusPerbandinganTransaksi status) {
+    switch (status) {
+      case StatusPerbandinganTransaksi.sama:
+        return AppColors.success;
+      case StatusPerbandinganTransaksi.hanyaLokal:
+      case StatusPerbandinganTransaksi.hanyaServer:
+        return Colors.orange.shade800;
+      case StatusPerbandinganTransaksi.berbeda:
+      case StatusPerbandinganTransaksi.duplikat:
+        return Colors.red.shade700;
+    }
+  }
+
+  Widget _ringkasan(String label, int nilai, Color warna) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: warna.withValues(alpha: 0.09),
+          border: Border.all(color: warna.withValues(alpha: 0.28)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text('$nilai  $label',
+            style: TextStyle(color: warna, fontWeight: FontWeight.w700)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final baris = widget.hasil.baris
+        .where((item) =>
+            !_hanyaSelisih || item.status != StatusPerbandinganTransaksi.sama)
+        .toList();
+    return AlertDialog(
+      title: const Text('Perbandingan Transaksi Lokal ↔ Server'),
+      content: SizedBox(
+        width: MediaQuery.sizeOf(context).width.clamp(640, 1180).toDouble(),
+        height: MediaQuery.sizeOf(context).height.clamp(420, 720).toDouble(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Pemeriksaan ini hanya membaca data. Tekan Sinkronkan setelah selisih dipastikan benar.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ringkasan(
+                    'Sama',
+                    widget.hasil.jumlah(StatusPerbandinganTransaksi.sama),
+                    AppColors.success),
+                _ringkasan(
+                    'Hanya lokal',
+                    widget.hasil.jumlah(StatusPerbandinganTransaksi.hanyaLokal),
+                    Colors.orange.shade800),
+                _ringkasan(
+                    'Hanya server',
+                    widget.hasil
+                        .jumlah(StatusPerbandinganTransaksi.hanyaServer),
+                    Colors.orange.shade800),
+                _ringkasan(
+                    'Nominal berbeda',
+                    widget.hasil.jumlah(StatusPerbandinganTransaksi.berbeda),
+                    Colors.red.shade700),
+                _ringkasan(
+                    'Duplikat',
+                    widget.hasil.jumlah(StatusPerbandinganTransaksi.duplikat),
+                    Colors.red.shade700),
+              ],
+            ),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tampilkan hanya data yang berbeda'),
+              value: _hanyaSelisih,
+              onChanged: (nilai) => setState(() => _hanyaSelisih = nilai),
+            ),
+            Expanded(
+              child: Card(
+                margin: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                child: baris.isEmpty
+                    ? const Center(child: Text('Tidak ada selisih transaksi.'))
+                    : Scrollbar(
+                        child: SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Kode transaksi')),
+                                DataColumn(label: Text('Status')),
+                                DataColumn(
+                                    label: Text('Baris lokal'), numeric: true),
+                                DataColumn(
+                                    label: Text('Baris server'), numeric: true),
+                                DataColumn(
+                                    label: Text('Total lokal'), numeric: true),
+                                DataColumn(
+                                    label: Text('Total server'), numeric: true),
+                                DataColumn(
+                                    label: Text('Asal lokal (user / mesin)')),
+                                DataColumn(
+                                    label: Text('Asal server (user / mesin)')),
+                              ],
+                              rows: baris.take(5000).map((item) {
+                                final warna = _warnaStatus(item.status);
+                                return DataRow(cells: [
+                                  DataCell(SelectableText(item.kode)),
+                                  DataCell(Text(_labelStatus(item.status),
+                                      style: TextStyle(
+                                          color: warna,
+                                          fontWeight: FontWeight.w700))),
+                                  DataCell(Text('${item.jumlahLokal}')),
+                                  DataCell(Text('${item.jumlahServer}')),
+                                  DataCell(Text(
+                                      _formatRupiah.format(item.totalLokal))),
+                                  DataCell(Text(
+                                      _formatRupiah.format(item.totalServer))),
+                                  DataCell(SelectableText(item.asalLokal)),
+                                  DataCell(SelectableText(item.asalServer)),
+                                ]);
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            if (baris.length > 5000)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                    'Menampilkan 5.000 dari ${baris.length} baris agar layar tetap responsif.'),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Tutup'),
+        ),
+      ],
+    );
+  }
+}
+
 /// Layar Riwayat Penjualan (spec §11) -- SENGAJA terpisah dari Laporan
 /// Transaksi: yang ini alat sempit "cari transaksi lunas lalu cetak ulang
 /// strukn ya", bukan dasbor analitik/agregat. Tidak ada aksi server baru --
@@ -728,6 +902,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   static const _pageSize = 15;
   bool _memuat = true;
   bool _menyinkronkanDuaArah = false;
+  bool _membandingkanDuaArah = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
@@ -1434,28 +1609,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         akunKunci: Sesi.instance.userId,
         tokoId: Sesi.instance.tokoId,
         idPerangkat: IdentitasMesin.instance.idMesin);
-    try {
-      await ApiClient.instance.aksi('bayar', payload);
-      await CoreDb.instance.tandaiTransaksiSinkron(kode);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Transaksi supervisor berhasil disimpan.')));
-    } catch (e) {
-      if (TransaksiOutboxService.instance.dapatDicobaUlang(e)) {
-        await CoreDb.instance.tandaiTransaksiGagal(kode, e.toString());
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Server belum terhubung. Transaksi aman di lokal dan akan dikirim ulang.')));
-        }
-      } else {
-        await CoreDb.instance.tandaiTransaksiDitolak(kode, e.toString());
-        if (mounted) {
-          await tampilkanKesalahan(context, e is ApiException ? e.info : e,
-              aktivitas: 'menambah transaksi supervisor');
-        }
-      }
-    }
+    TransaksiOutboxService.instance.kirimDiBackground();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Transaksi supervisor aman di lokal dan sedang dikirim ke server di background.')));
     await _muat();
   }
 
@@ -1463,7 +1621,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     final semua = <Map<String, dynamic>>[];
     var halaman = 1;
     while (halaman <= 1000) {
-      final hasil = await ApiClient.instance.aksi('laporan_order_list', {
+      final hasil =
+          await ApiClient.instance.aksi('transaksi_backup_toko_list', {
+        'toko_id': Sesi.instance.tokoId,
         'tglMulai': '2000-01-01',
         'tglSampai': _formatTanggalServer.format(DateTime.now()),
         'page': halaman,
@@ -1488,13 +1648,22 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       'clientTrxId': kode,
       'idToko': Sesi.instance.tokoId,
       'tokoId': Sesi.instance.tokoId,
-      'kasir': '${detail['kasirUserId'] ?? row['kasir'] ?? ''}',
+      'kasir':
+          '${detail['kasirUserId'] ?? row['kasirUserId'] ?? row['kasir'] ?? ''}',
+      'kasir_user_id':
+          '${detail['kasirUserId'] ?? row['kasirUserId'] ?? row['kasir'] ?? ''}',
       'waktu': '${detail['waktu'] ?? row['waktu'] ?? ''}',
       'caraBayarNama': '${row['metode'] ?? ''}',
       'total': detail['totalBiaya'] ?? row['totalBiaya'] ?? 0,
       'pajak': row['pajak'] ?? 0,
       'nama_member': detail['pembeli'] ?? row['pembeli'],
       'nama_mesin': row['namaMesin'],
+      'id_perangkat': detail['idPerangkat'] ?? row['idPerangkat'],
+      'sumber_username':
+          '${detail['kasirUserId'] ?? row['kasirUserId'] ?? row['kasir'] ?? ''}',
+      'sumber_mesin':
+          '${row['namaMesin'] ?? detail['idPerangkat'] ?? row['idPerangkat'] ?? ''}',
+      'asal_backup': 'SERVER_TOKO_SAMA',
       'transaksi': items
           .map((item) => <String, dynamic>{
                 'id': item['produkId'] ?? item['id'],
@@ -1554,9 +1723,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         if (kodeAsli.isEmpty) continue;
         if (await CoreDb.instance.simpanTransaksiDariServer(
             kodeAsli, jsonEncode(payload),
-            akunKunci: Sesi.instance.userId,
+            akunKunci:
+                '${payload['sumber_username'] ?? payload['kasir'] ?? ''}',
             tokoId: Sesi.instance.tokoId,
-            idPerangkat: IdentitasMesin.instance.idMesin)) {
+            idPerangkat:
+                '${payload['id_perangkat'] ?? payload['sumber_mesin'] ?? ''}')) {
           dariServer++;
         }
       }
@@ -1603,6 +1774,30 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     }
   }
 
+  Future<void> _bandingkanTransaksiDuaArah() async {
+    if (!Sesi.instance.bolehKelola || _membandingkanDuaArah) return;
+    setState(() => _membandingkanDuaArah = true);
+    try {
+      final hasil = bandingkanTransaksiLokalDanServer(
+        await CoreDb.instance
+            .transaksiArsipLokal(tokoId: Sesi.instance.tokoId, limit: 1000000),
+        await _semuaTransaksiServer(),
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _DialogPerbandinganTransaksi(hasil: hasil),
+      );
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'membandingkan transaksi lokal dan server');
+      }
+    } finally {
+      if (mounted) setState(() => _membandingkanDuaArah = false);
+    }
+  }
+
   Future<void> _cetakUlang(Map<String, dynamic> row,
       Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
     final itemStruk = items
@@ -1632,6 +1827,41 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
 
+  Future<void> _mulaiDataSampleTransaksi() async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Masukkan 200.000 Transaksi Demo?'),
+        content: const Text(
+            'Fitur ini hanya untuk toko demo/UAT. Pembuatan transaksi berjalan di server secara background dan memakai kode idempoten agar tidak ganda.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Mulai')),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    try {
+      final hasil =
+          await ApiClient.instance.aksi('pos_demo_seed_transactions', {
+        'toko_id': Sesi.instance.tokoId,
+        'konfirmasi': 'SEED-DEMO-TRANSAKSI-200000',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${hasil['description'] ?? 'Job transaksi demo dimulai.'}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal memulai data demo: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -1651,6 +1881,27 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                 runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [
+                  if (Sesi.instance.bolehDataSample)
+                    OutlinedButton.icon(
+                      onPressed: _mulaiDataSampleTransaksi,
+                      icon: const Icon(Icons.science_outlined, size: 18),
+                      label: const Text('Data Sample 200K'),
+                    ),
+                  if (Sesi.instance.bolehKelola)
+                    OutlinedButton.icon(
+                      onPressed: _membandingkanDuaArah
+                          ? null
+                          : _bandingkanTransaksiDuaArah,
+                      icon: _membandingkanDuaArah
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.compare_arrows_outlined, size: 18),
+                      label: Text(_membandingkanDuaArah
+                          ? 'Membandingkan...'
+                          : 'Bandingkan Lokal ↔ Server'),
+                    ),
                   if (Sesi.instance.bolehKelola)
                     OutlinedButton.icon(
                       onPressed: _menyinkronkanDuaArah

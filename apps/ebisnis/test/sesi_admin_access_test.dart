@@ -47,4 +47,28 @@ void main() {
     });
     expect(Sesi.instance.bolehKelola, isTrue);
   });
+
+  test('data sample wajib admin, toko demo, dan konfigurasi aktif sekaligus',
+      () {
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': true,
+      'tokoDemo': true,
+      'dataSampleEbisnis': true,
+    });
+    expect(Sesi.instance.bolehDataSample, isTrue);
+
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': true,
+      'tokoDemo': false,
+      'dataSampleEbisnis': true,
+    });
+    expect(Sesi.instance.bolehDataSample, isFalse);
+
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': false,
+      'tokoDemo': true,
+      'dataSampleEbisnis': true,
+    });
+    expect(Sesi.instance.bolehDataSample, isFalse);
+  });
 }

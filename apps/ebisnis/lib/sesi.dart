@@ -18,6 +18,8 @@ class Sesi {
   List<String> alasanTahan = [];
   bool wajibSesiKas = false;
   bool bolehTransaksiStokHabis = false;
+  bool tokoDemo = false;
+  bool dataSampleEbisnis = false;
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
@@ -97,6 +99,7 @@ class Sesi {
   /// dari kasir biasa (server TETAP menegakkan gerbang sungguhan di tiap aksi,
   /// ini hanya UI, lihat JavaDoc bolehSupervisorAtauAdmin di PosApi.java).
   bool get bolehKelola => isAdmin || supervisorPedagang;
+  bool get bolehDataSample => isAdmin && tokoDemo && dataSampleEbisnis;
 
   /// Terapkan balasan aksi `konfigurasi` ke sesi ini -- SATU titik pemetaan
   /// (dulu inline di `KasirScreen._terapkanKonfig`; dipindah ke sini saat
@@ -120,6 +123,8 @@ class Sesi {
         .toList();
     wajibSesiKas = konfig['wajibSesiKas'] == true;
     bolehTransaksiStokHabis = konfig['bolehTransaksiStokHabis'] == true;
+    tokoDemo = konfig['tokoDemo'] == true;
+    dataSampleEbisnis = konfig['dataSampleEbisnis'] == true;
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
@@ -189,6 +194,8 @@ class Sesi {
     alasanTahan = [];
     wajibSesiKas = false;
     bolehTransaksiStokHabis = false;
+    tokoDemo = false;
+    dataSampleEbisnis = false;
     isAdmin = false;
     supervisorPedagang = false;
     bolehHapusPesanan = false;

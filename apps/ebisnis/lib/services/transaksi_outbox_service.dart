@@ -28,6 +28,7 @@ class TransaksiOutboxService {
       'transaksi_pending_interval_retry_menit';
 
   Timer? _timer;
+  Timer? _retryTertunda;
   Future<HasilSinkronisasiTransaksi>? _prosesAktif;
   bool _sedangMemulai = false;
   int _intervalRetryMenit = intervalRetryMenitDefault;
@@ -60,6 +61,14 @@ class TransaksiOutboxService {
         Duration(minutes: _intervalRetryMenit), (_) => unawaited(sinkronkan()));
   }
 
+  void _jadwalkanRetrySetelahJeda() {
+    if (_retryTertunda?.isActive ?? false) return;
+    _retryTertunda = Timer(Duration(minutes: _intervalRetryMenit), () {
+      _retryTertunda = null;
+      unawaited(sinkronkan());
+    });
+  }
+
   Future<void> aturIntervalRetryMenit(int menit) async {
     _intervalRetryMenit = _normalisasiInterval(menit);
     final sp = await SharedPreferences.getInstance();
@@ -80,6 +89,19 @@ class TransaksiOutboxService {
     final proses = _sinkronkanInternal();
     _prosesAktif = proses;
     return proses.whenComplete(() => _prosesAktif = null);
+  }
+
+  /// Dipanggil tepat setelah transaksi committed ke SQLite. Jika proses lama
+  /// sedang berjalan, tunggu proses itu berakhir lalu lakukan satu sapuan baru
+  /// supaya baris yang baru masuk tidak harus menunggu timer periodik.
+  void kirimDiBackground() {
+    unawaited(_kirimSaatSiap());
+  }
+
+  Future<void> _kirimSaatSiap() async {
+    final aktif = _prosesAktif;
+    if (aktif != null) await aktif;
+    await sinkronkan();
   }
 
   Future<HasilSinkronisasiTransaksi> _sinkronkanInternal() async {
@@ -144,6 +166,7 @@ class TransaksiOutboxService {
         }
         await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
         if (dapatDicobaUlang(e)) {
+          _jadwalkanRetrySetelahJeda();
           if (e is ApiException && e.offline) {
             // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
             // menghasilkan error yang sama; timer akan mencoba lagi sesuai
@@ -160,8 +183,128 @@ class TransaksiOutboxService {
         await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, pesan);
       }
     }
+    // Setiap POS menyimpan pula transaksi kasir lain pada toko yang sama.
+    // Endpoint server mengunci toko dari sesi login, sehingga payload toko
+    // palsu tidak dapat mengambil data outlet lain. Rentang tiga hari cukup
+    // untuk menutup pergantian hari/koneksi putus tanpa mengunduh seluruh
+    // histori besar pada setiap siklus 10 menit.
+    try {
+      await _cadangkanTransaksiTokoTerbaru();
+    } catch (_) {
+      // Replikasi cadangan bersifat best-effort dan tidak boleh mengubah hasil
+      // pengiriman transaksi utama. Timer periodik akan mencoba kembali.
+      _jadwalkanRetrySetelahJeda();
+    }
     return HasilSinkronisasiTransaksi(
         total: pending.length, berhasil: berhasil);
+  }
+
+  Future<void> _cadangkanTransaksiTokoTerbaru() async {
+    final tokoId = Sesi.instance.tokoId;
+    if (tokoId == null) return;
+    final lokal = await CoreDb.instance
+        .transaksiArsipLokal(tokoId: tokoId, limit: 1000000);
+    final kodeLokal = lokal
+        .map((row) => '${row['kode_unik'] ?? ''}'.trim().toLowerCase())
+        .where((kode) => kode.isNotEmpty)
+        .toSet();
+    final sekarang = DateTime.now();
+    final mulai = sekarang.subtract(const Duration(days: 2));
+    var page = 1;
+    while (page <= 20) {
+      final hasil =
+          await ApiClient.instance.aksi('transaksi_backup_toko_list', {
+        'toko_id': tokoId,
+        'tglMulai': _tanggal(mulai),
+        'tglSampai': _tanggal(sekarang),
+        'page': page,
+        'pageSize': 100,
+      });
+      final daftar = ((hasil['data'] as List?) ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      for (final row in daftar) {
+        final kode = _kodeServer(row);
+        if (kode.isEmpty || kodeLokal.contains(kode.toLowerCase())) continue;
+        final id = row['idTransaksi'];
+        if (id == null) continue;
+        final detail = await ApiClient.instance.aksi('detail_transaksi', {
+          'id': id,
+          'toko_id': tokoId,
+        });
+        final items = ((detail['item'] as List?) ?? const <dynamic>[])
+            .whereType<Map>()
+            .map((item) => <String, dynamic>{
+                  'id': item['produkId'] ?? item['id'],
+                  'kode': item['kode'],
+                  'nama': item['nama'],
+                  'harga': item['harga'] ?? 0,
+                  'jumlah': item['qty'] ?? item['jumlah'] ?? 0,
+                  'diskon': item['diskon'] ?? 0,
+                  'cashback': item['cashback'] ?? 0,
+                })
+            .toList();
+        final username =
+            '${detail['kasirUserId'] ?? row['kasirUserId'] ?? row['kasir'] ?? ''}'
+                .trim();
+        final idPerangkat =
+            '${detail['idPerangkat'] ?? row['idPerangkat'] ?? ''}'.trim();
+        final namaMesin = '${row['namaMesin'] ?? ''}'.trim();
+        final payload = <String, dynamic>{
+          'kodeUnik': kode,
+          'clientTrxId': kode,
+          'idToko': tokoId,
+          'tokoId': tokoId,
+          'kasir': username,
+          'kasir_user_id': username,
+          'waktu': '${detail['waktu'] ?? row['waktu'] ?? ''}',
+          'caraBayarNama': '${row['metode'] ?? ''}',
+          'total': detail['totalBiaya'] ?? row['totalBiaya'] ?? 0,
+          'pajak': row['pajak'] ?? 0,
+          'nama_member': detail['pembeli'] ?? row['pembeli'],
+          'nama_mesin': namaMesin,
+          'id_perangkat': idPerangkat,
+          'sumber_username': username,
+          'sumber_mesin': namaMesin.isNotEmpty ? namaMesin : idPerangkat,
+          'asal_backup': 'REPLIKASI_OTOMATIS_TOKO_SAMA',
+          'transaksi': items,
+        };
+        final tersimpan = await CoreDb.instance.simpanTransaksiDariServer(
+            kode, jsonEncode(payload),
+            akunKunci: username,
+            tokoId: tokoId,
+            idPerangkat: idPerangkat.isNotEmpty ? idPerangkat : namaMesin);
+        if (tersimpan) kodeLokal.add(kode.toLowerCase());
+      }
+      final total = (hasil['total'] as num?)?.toInt() ?? daftar.length;
+      if (daftar.isEmpty || page * 100 >= total || daftar.length < 100) break;
+      page++;
+    }
+  }
+
+  String _tanggal(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _kodeServer(Map<String, dynamic> row) {
+    for (final key in const <String>[
+      'kodeUnik',
+      'clientTrxId',
+      'kodeTransaksi',
+      'nomorTransaksi',
+      'nomorNota',
+      'kode'
+    ]) {
+      final nilai = '${row[key] ?? ''}'.trim();
+      if (nilai.isEmpty || nilai == '-') continue;
+      if (key == 'nomorNota') {
+        final cocok = RegExp(r'\(([^()]+)\)\s*$').firstMatch(nilai);
+        final kodeLama = cocok?.group(1)?.trim() ?? '';
+        if (kodeLama.isNotEmpty) return kodeLama;
+      }
+      return nilai;
+    }
+    return '';
   }
 
   /// Network, HTTP 5xx, respons server yang tidak valid, dan error internal

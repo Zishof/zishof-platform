@@ -838,10 +838,17 @@ class CoreDb {
   }
 
   Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron(
-      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
+      {String? akunKunci,
+      int? tokoId,
+      String? idPerangkat,
+      Duration jedaRetry = const Duration(minutes: 10)}) async {
     final database = await db;
-    final klausa = <String>["status = 'PENDING'"];
-    final args = <Object?>[];
+    final batasRetry = DateTime.now().subtract(jedaRetry).toIso8601String();
+    final klausa = <String>[
+      "status = 'PENDING'",
+      '(terakhir_dicoba IS NULL OR terakhir_dicoba <= ?)'
+    ];
+    final args = <Object?>[batasRetry];
     if (akunKunci != null && akunKunci.isNotEmpty) {
       // NULL adalah baris versi lama; service memeriksa field `kasir` di
       // payload sebelum mengirim agar migrasi tidak kehilangan transaksi.

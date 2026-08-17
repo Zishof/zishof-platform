@@ -621,6 +621,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   String? _error;
   bool _bolehUbah = false;
   bool _bolehTransaksiStokHabis = false;
+  bool _tokoDemo = false;
+  bool _bolehUbahTokoDemo = false;
   String? _logoStrukPath;
   String? _logoPriceTagPath;
   String _logoStrukMode = 'persegi';
@@ -696,6 +698,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _alasanTahan.text =
           ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
       _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
+      _tokoDemo = d['tokoDemo'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
             ? Sesi.instance.tokoNama
@@ -709,6 +712,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim();
       setStateIfMounted(() {
         _bolehUbah = hasil['bolehUbah'] == true;
+        _bolehUbahTokoDemo = hasil['bolehUbahTokoDemo'] == true;
         _logoStrukPath = PengaturanStruk.instance.logoPath;
         _logoPriceTagPath = PengaturanStruk.instance.priceTagLogoPath;
         _logoStrukMode = PengaturanStruk.instance.logoMode;
@@ -829,6 +833,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
         'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
+        if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
         'alasan_tahan': _alasanTahan.text
             .split(RegExp(r'[\r\n]+'))
             .map((e) => e.trim())
@@ -847,6 +852,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
           ..pesanTerimaKasih = _pesanTerimaKasih.text.trim()
           ..bolehTransaksiStokHabis = _bolehTransaksiStokHabis
+          ..tokoDemo = _tokoDemo
           ..alasanTahan = _alasanTahan.text
               .split(RegExp(r'[\r\n]+'))
               .map((e) => e.trim())
@@ -1222,6 +1228,17 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
                       setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
                   : null,
             ),
+            if (_bolehUbahTokoDemo)
+              AppFormSwitchTile(
+                title: 'Toko Demo / UAT',
+                subtitle: _tokoDemo
+                    ? 'AKTIF — generator data contoh bervolume besar dapat dijalankan oleh administrator pada toko ini.'
+                    : 'NONAKTIF — data contoh massal tidak dapat dibuat. Ini adalah nilai default yang aman.',
+                value: _tokoDemo,
+                onChanged: _bolehUbah && !_menyimpan
+                    ? (nilai) => setStateIfMounted(() => _tokoDemo = nilai)
+                    : null,
+              ),
             if (_bolehUbah)
               Align(
                 alignment: Alignment.centerLeft,

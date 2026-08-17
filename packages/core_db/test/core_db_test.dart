@@ -153,6 +153,41 @@ void main() {
     expect(
         '${satuKode.single['payload_json']}', contains('server-terverifikasi'));
 
+    await CoreDb.instance.simpanTransaksiPending(
+      'UAT-RETRY-004',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-RETRY-004',
+        'kasir': 'uat-kasir',
+        'idToko': 1,
+        'total': 40000,
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    await CoreDb.instance
+        .tandaiTransaksiGagal('UAT-RETRY-004', 'gangguan jaringan UAT');
+    final belumSepuluhMenit =
+        await CoreDb.instance.transaksiPendingBelumSinkron(
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    expect(
+        belumSepuluhMenit.where((row) => row['kode_unik'] == 'UAT-RETRY-004'),
+        isEmpty,
+        reason: 'transaksi gagal tidak boleh langsung dipukul ulang');
+    final tanpaJedaUntukUat =
+        await CoreDb.instance.transaksiPendingBelumSinkron(
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+      jedaRetry: Duration.zero,
+    );
+    expect(tanpaJedaUntukUat.any((row) => row['kode_unik'] == 'UAT-RETRY-004'),
+        isTrue,
+        reason: 'baris tetap pending dan layak dikirim setelah jeda berakhir');
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     try {
