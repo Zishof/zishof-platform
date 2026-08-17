@@ -32,4 +32,19 @@ void main() {
     expect(Sesi.instance.bolehMenu('produk'), isFalse);
     expect(Sesi.instance.bolehMenuVarianBaru('apotik_formularium'), isFalse);
   });
+
+  test('aksi pemulihan transaksi hanya tersedia untuk supervisor atau admin',
+      () {
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': false,
+      'supervisorPedagang': false,
+    });
+    expect(Sesi.instance.bolehKelola, isFalse);
+
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': false,
+      'supervisorPedagang': true,
+    });
+    expect(Sesi.instance.bolehKelola, isTrue);
+  });
 }

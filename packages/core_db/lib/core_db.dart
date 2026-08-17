@@ -89,7 +89,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 8,
+        version: 9,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -357,6 +357,14 @@ class CoreDb {
         // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
       }
     }
+    if (versiLama < 9) {
+      try {
+        await db.execute(
+            'CREATE INDEX idx_transaksi_toko_waktu_status ON transaksi_pending(toko_id, dibuat_pada DESC, status)');
+      } catch (_) {
+        // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
+      }
+    }
   }
 
   static const _ddlOutboxIs = '''
@@ -441,6 +449,8 @@ class CoreDb {
         'CREATE INDEX idx_transaksi_pending_pemilik ON transaksi_pending(status, akun_kunci, toko_id)');
     await db.execute(
         'CREATE INDEX idx_transaksi_arsip_waktu ON transaksi_pending(dibuat_pada DESC)');
+    await db.execute(
+        'CREATE INDEX idx_transaksi_toko_waktu_status ON transaksi_pending(toko_id, dibuat_pada DESC, status)');
 
     await db.execute('''
       CREATE TABLE cache_referensi (
@@ -707,6 +717,50 @@ class CoreDb {
         where: 'kode_unik = ?',
         whereArgs: [kodeUnik]);
     await _cadangkanBarisTransaksi(kodeUnik);
+  }
+
+  /// Menyimpan transaksi yang ditemukan di server sebagai salinan lokal.
+  /// Baris PENDING/GAGAL tidak ditimpa agar payload pemulihan yang belum
+  /// terkirim tetap utuh; kode_unik adalah kunci deduplikasi dua arah.
+  Future<bool> simpanTransaksiDariServer(String kodeUnik, String payloadJson,
+      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
+    final database = await db;
+    final lama = await database.query('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik], limit: 1);
+    if (lama.isNotEmpty && '${lama.first['status']}' != 'SYNCED') {
+      return false;
+    }
+    final sekarang = DateTime.now().toIso8601String();
+    await database.insert(
+      'transaksi_pending',
+      {
+        'kode_unik': kodeUnik,
+        'payload_json': payloadJson,
+        'status': 'SYNCED',
+        'pesan_error': null,
+        'dibuat_pada': lama.isEmpty
+            ? sekarang
+            : '${lama.first['dibuat_pada'] ?? sekarang}',
+        'akun_kunci': akunKunci,
+        'toko_id': tokoId,
+        'id_perangkat': idPerangkat,
+        'percobaan': lama.isEmpty ? 0 : (lama.first['percobaan'] ?? 0),
+        'terakhir_dicoba': lama.isEmpty ? null : lama.first['terakhir_dicoba'],
+        'disinkronkan_pada': sekarang,
+        'diperbarui_pada': sekarang,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await _cadangkanBarisTransaksi(kodeUnik);
+    return true;
+  }
+
+  Future<Map<String, Object?>?> transaksiLokalDenganKode(
+      String kodeUnik) async {
+    final database = await db;
+    final rows = await database.query('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik], limit: 1);
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<void> tandaiTransaksiGagal(String kodeUnik, String pesanError) async {

@@ -113,7 +113,11 @@ class TransaksiOutboxService {
       final tokoPayloadInt = tokoPayload is num
           ? tokoPayload.toInt()
           : int.tryParse('$tokoPayload');
-      if ((kasirPayload.isNotEmpty && kasirPayload != Sesi.instance.userId) ||
+      final pemulihanSupervisor =
+          payload['input_supervisor'] == true && Sesi.instance.bolehKelola;
+      if ((!pemulihanSupervisor &&
+              kasirPayload.isNotEmpty &&
+              kasirPayload != Sesi.instance.userId) ||
           (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) ||
           ('${payload['id_perangkat'] ?? ''}'.trim().isNotEmpty &&
               '${payload['id_perangkat']}'.trim() !=
@@ -133,7 +137,7 @@ class TransaksiOutboxService {
         berhasil++;
       } catch (e) {
         final pesan = e.toString();
-        if (pesan.toLowerCase().contains('sudah tercatat')) {
+        if (_transaksiSudahAdaDiServer(e)) {
           await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
           berhasil++;
           continue;
@@ -167,6 +171,17 @@ class TransaksiOutboxService {
     if (error is! ApiException) return true;
     if (error.offline || (error.statusHttp ?? 0) >= 500) return true;
     return (error.kode ?? '').trim().isEmpty;
+  }
+
+  bool _transaksiSudahAdaDiServer(Object error) {
+    if (error is ApiException &&
+        (error.kode ?? '').trim() == 'DUPLIKAT_KODE_TRANSAKSI') {
+      return true;
+    }
+    final pesan = error.toString().toLowerCase();
+    return pesan.contains('sudah tercatat') ||
+        pesan.contains('kode transaksi yang sama sudah ada') ||
+        pesan.contains('duplicate key');
   }
 }
 

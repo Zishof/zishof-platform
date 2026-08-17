@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -13,6 +14,7 @@ import '../widgets/app_shell.dart';
 import 'struk_screen.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
+import '../services/transaksi_outbox_service.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -72,6 +74,7 @@ class _DialogEditTransaksi extends StatefulWidget {
     required this.waktu,
     required this.kasirUserId,
     required this.kasirNama,
+    this.modeBaru = false,
   });
 
   final String nomor;
@@ -79,6 +82,7 @@ class _DialogEditTransaksi extends StatefulWidget {
   final DateTime waktu;
   final String kasirUserId;
   final String kasirNama;
+  final bool modeBaru;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -97,6 +101,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   late String _kasirNama;
   String? _pesan;
   late DateTime _waktu;
+  int? _caraBayarId;
 
   @override
   void initState() {
@@ -104,6 +109,9 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     _waktu = widget.waktu;
     _kasirUserId = widget.kasirUserId;
     _kasirNama = widget.kasirNama;
+    _caraBayarId = Sesi.instance.caraBayar.isEmpty
+        ? null
+        : Sesi.instance.caraBayar.first.id;
     _baris = widget.items
         .map((i) => _BarisKoreksiTransaksi(
               pembelianId: i['pembelianId'],
@@ -232,6 +240,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           () => _pesan = 'Transaksi harus memiliki sedikitnya satu barang.');
       return;
     }
+    if (widget.modeBaru && _caraBayarId == null) {
+      setState(() => _pesan = 'Metode pembayaran wajib dipilih.');
+      return;
+    }
     final item = <Map<String, dynamic>>[];
     for (var i = 0; i < _baris.length; i++) {
       final qty = double.tryParse(
@@ -246,12 +258,19 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           'pembelian_id': _baris[i].pembelianId,
         'produk_id': _baris[i].produkId,
         'qty': qty,
+        'id': _baris[i].produkId,
+        'nama': _baris[i].nama,
+        'harga': _baris[i].harga,
+        'jumlah': qty,
+        'diskon': 0,
+        'cashback': 0,
       });
     }
     Navigator.of(context).pop({
       'alasan': alasan,
       'item': item,
       'waktu': _waktu.toIso8601String(),
+      if (widget.modeBaru) 'cara_bayar': _caraBayarId,
       if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
   }
@@ -287,7 +306,9 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Edit Transaksi ${widget.nomor}'),
+      title: Text(widget.modeBaru
+          ? 'Tambah Transaksi Baru'
+          : 'Edit Transaksi ${widget.nomor}'),
       content: SizedBox(
         width: 760,
         height: 600,
@@ -301,8 +322,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.orange.shade200),
               ),
-              child: const Text(
-                'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan rincian sebelum/sesudah pada audit JSON. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
+              child: Text(
+                widget.modeBaru
+                    ? 'Khusus Supervisor. Transaksi pemulihan tetap melalui validasi harga, stok, diskon, audit, dan idempotensi server.'
+                    : 'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan rincian sebelum/sesudah pada audit JSON. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
               ),
             ),
             const SizedBox(height: 12),
@@ -367,6 +390,20 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 ),
               ),
             const SizedBox(height: 8),
+            if (widget.modeBaru) ...[
+              DropdownButtonFormField<int>(
+                value: _caraBayarId,
+                decoration: const InputDecoration(
+                    labelText: 'Metode pembayaran *',
+                    prefixIcon: Icon(Icons.payments_outlined)),
+                items: Sesi.instance.caraBayar
+                    .map((cara) => DropdownMenuItem<int>(
+                        value: cara.id, child: Text(cara.nama)))
+                    .toList(),
+                onChanged: (value) => setState(() => _caraBayarId = value),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(children: [
               Expanded(
                 child: TextField(
@@ -413,7 +450,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 ),
               ),
             const SizedBox(height: 10),
-            const Text('Rincian setelah koreksi',
+            Text(
+                widget.modeBaru
+                    ? 'Rincian transaksi'
+                    : 'Rincian setelah koreksi',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Expanded(
@@ -477,9 +517,11 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
             TextField(
               controller: _alasanController,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Alasan koreksi *',
-                hintText: 'Contoh: tiga barang pada struk belum tersimpan',
+              decoration: InputDecoration(
+                labelText: widget.modeBaru
+                    ? 'Alasan input/pemulihan *'
+                    : 'Alasan koreksi *',
+                hintText: 'Contoh: transaksi pada struk belum tersimpan',
               ),
             ),
             if (_pesan != null)
@@ -497,7 +539,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         FilledButton.icon(
           onPressed: _simpan,
           icon: const Icon(Icons.save_outlined),
-          label: const Text('Simpan Koreksi'),
+          label: Text(widget.modeBaru ? 'Simpan Transaksi' : 'Simpan Koreksi'),
         ),
       ],
     );
@@ -630,6 +672,46 @@ DateTime _parseWaktuKoreksi(dynamic raw) {
   return DateTime.now();
 }
 
+String _kodeTransaksiStabil(Map<String, dynamic> row) {
+  for (final kunci in const [
+    'kodeUnik',
+    'clientTrxId',
+    'kodeTransaksi',
+    'nomorTransaksi',
+    'nomorNota',
+    'kode'
+  ]) {
+    final nilai = '${row[kunci] ?? ''}'.trim();
+    if (nilai.isNotEmpty && nilai != '-') {
+      // Server lama hanya menyisipkan kode asli di akhir label nomor nota:
+      // "Order 001 - 0001 - 001 (AB...)". Ekstraksi ini membuat klien baru
+      // tetap dapat direkonsiliasi dengan server yang belum dideploy ulang.
+      if (kunci == 'nomorNota') {
+        final cocok = RegExp(r'\(([^()]+)\)\s*$').firstMatch(nilai);
+        if (cocok != null && '${cocok.group(1) ?? ''}'.trim().isNotEmpty) {
+          return '${cocok.group(1)}'.trim().toLowerCase();
+        }
+      }
+      return nilai.toLowerCase();
+    }
+  }
+  return '';
+}
+
+String _formatWaktuBayar(DateTime waktu) =>
+    DateFormat('dd-MM-yyyy HH:mm:ss').format(waktu);
+
+bool _transaksiSudahAdaDiServer(Object error) {
+  if (error is ApiException &&
+      (error.kode ?? '').trim() == 'DUPLIKAT_KODE_TRANSAKSI') {
+    return true;
+  }
+  final pesan = error.toString().toLowerCase();
+  return pesan.contains('sudah tercatat') ||
+      pesan.contains('kode transaksi yang sama sudah ada') ||
+      pesan.contains('duplicate key');
+}
+
 /// Layar Riwayat Penjualan (spec §11) -- SENGAJA terpisah dari Laporan
 /// Transaksi: yang ini alat sempit "cari transaksi lunas lalu cetak ulang
 /// strukn ya", bukan dasbor analitik/agregat. Tidak ada aksi server baru --
@@ -645,6 +727,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
+  bool _menyinkronkanDuaArah = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
@@ -1300,6 +1383,226 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     }
   }
 
+  Future<void> _tambahTransaksiSupervisor() async {
+    if (!Sesi.instance.bolehKelola) return;
+    final isian = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogEditTransaksi(
+        nomor: '',
+        items: const [],
+        waktu: DateTime.now(),
+        kasirUserId: Sesi.instance.userId,
+        kasirNama: Sesi.instance.userId,
+        modeBaru: true,
+      ),
+    );
+    if (isian == null || !mounted) return;
+    final waktu = DateTime.parse('${isian['waktu']}');
+    final caraBayarId = isian['cara_bayar'] as int;
+    final caraBayar =
+        Sesi.instance.caraBayar.where((cara) => cara.id == caraBayarId).first;
+    final item = (isian['item'] as List).cast<Map<String, dynamic>>();
+    final total = item.fold<double>(
+        0,
+        (jumlah, baris) =>
+            jumlah +
+            ((baris['harga'] as num?)?.toDouble() ?? 0) *
+                ((baris['jumlah'] as num?)?.toDouble() ?? 0));
+    final kode =
+        'SUP-${Sesi.instance.tokoId ?? 0}-${DateTime.now().microsecondsSinceEpoch}';
+    final payload = <String, dynamic>{
+      'kodeUnik': kode,
+      'clientTrxId': kode,
+      'idToko': Sesi.instance.tokoId,
+      'tokoId': Sesi.instance.tokoId,
+      'kasir': '${isian['kasir_user_id'] ?? Sesi.instance.userId}',
+      'kasir_user_id': '${isian['kasir_user_id'] ?? Sesi.instance.userId}',
+      'waktu': _formatWaktuBayar(waktu),
+      'caraBayar': caraBayarId,
+      'caraBayarNama': caraBayar.nama,
+      'total': total,
+      'pajak': 0,
+      'nama_mesin': IdentitasMesin.instance.namaMesin,
+      'id_perangkat': IdentitasMesin.instance.idMesin,
+      'input_supervisor': true,
+      'alasan_supervisor': isian['alasan'],
+      'keterangan': 'INPUT SUPERVISOR: ${isian['alasan']}',
+      'transaksi': item,
+    };
+    await CoreDb.instance.simpanTransaksiPending(kode, jsonEncode(payload),
+        akunKunci: Sesi.instance.userId,
+        tokoId: Sesi.instance.tokoId,
+        idPerangkat: IdentitasMesin.instance.idMesin);
+    try {
+      await ApiClient.instance.aksi('bayar', payload);
+      await CoreDb.instance.tandaiTransaksiSinkron(kode);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Transaksi supervisor berhasil disimpan.')));
+    } catch (e) {
+      if (TransaksiOutboxService.instance.dapatDicobaUlang(e)) {
+        await CoreDb.instance.tandaiTransaksiGagal(kode, e.toString());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Server belum terhubung. Transaksi aman di lokal dan akan dikirim ulang.')));
+        }
+      } else {
+        await CoreDb.instance.tandaiTransaksiDitolak(kode, e.toString());
+        if (mounted) {
+          await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+              aktivitas: 'menambah transaksi supervisor');
+        }
+      }
+    }
+    await _muat();
+  }
+
+  Future<List<Map<String, dynamic>>> _semuaTransaksiServer() async {
+    final semua = <Map<String, dynamic>>[];
+    var halaman = 1;
+    while (halaman <= 1000) {
+      final hasil = await ApiClient.instance.aksi('laporan_order_list', {
+        'tglMulai': '2000-01-01',
+        'tglSampai': _formatTanggalServer.format(DateTime.now()),
+        'page': halaman,
+        'pageSize': 200,
+      });
+      final baris = _normalisasiDaftarTransaksi(hasil);
+      semua.addAll(baris);
+      final total = _normalisasiTotalTransaksi(hasil, baris.length);
+      if (baris.isEmpty || semua.length >= total || baris.length < 200) break;
+      halaman++;
+    }
+    return semua;
+  }
+
+  Map<String, dynamic> _payloadDariServer(Map<String, dynamic> row,
+      Map<String, dynamic> detail, List<Map<String, dynamic>> items) {
+    final kode =
+        '${row['kodeUnik'] ?? detail['kodeUnik'] ?? detail['clientTrxId'] ?? detail['kode'] ?? row['nomorNota']}'
+            .trim();
+    return <String, dynamic>{
+      'kodeUnik': kode,
+      'clientTrxId': kode,
+      'idToko': Sesi.instance.tokoId,
+      'tokoId': Sesi.instance.tokoId,
+      'kasir': '${detail['kasirUserId'] ?? row['kasir'] ?? ''}',
+      'waktu': '${detail['waktu'] ?? row['waktu'] ?? ''}',
+      'caraBayarNama': '${row['metode'] ?? ''}',
+      'total': detail['totalBiaya'] ?? row['totalBiaya'] ?? 0,
+      'pajak': row['pajak'] ?? 0,
+      'nama_member': detail['pembeli'] ?? row['pembeli'],
+      'nama_mesin': row['namaMesin'],
+      'transaksi': items
+          .map((item) => <String, dynamic>{
+                'id': item['produkId'] ?? item['id'],
+                'kode': item['kode'],
+                'nama': item['nama'],
+                'harga': item['harga'] ?? 0,
+                'jumlah': item['qty'] ?? item['jumlah'] ?? 0,
+                'diskon': item['diskon'] ?? 0,
+                'cashback': item['cashback'] ?? 0,
+              })
+          .toList(),
+    };
+  }
+
+  Future<void> _sinkronkanTransaksiDuaArah() async {
+    if (!Sesi.instance.bolehKelola || _menyinkronkanDuaArah) return;
+    setState(() => _menyinkronkanDuaArah = true);
+    var dariServer = 0;
+    var keServer = 0;
+    var sudahSama = 0;
+    try {
+      final server = await _semuaTransaksiServer();
+      final serverByKode = <String, Map<String, dynamic>>{};
+      for (final row in server) {
+        final kode = _kodeTransaksiStabil(row);
+        if (kode.isNotEmpty) serverByKode[kode] = row;
+      }
+      final lokal = await CoreDb.instance
+          .transaksiArsipLokal(tokoId: Sesi.instance.tokoId, limit: 1000000);
+      final lokalByKode = <String, Map<String, Object?>>{};
+      for (final row in lokal) {
+        final kode = '${row['kode_unik'] ?? ''}'.trim().toLowerCase();
+        if (kode.isNotEmpty) lokalByKode[kode] = row;
+      }
+
+      for (final entry in serverByKode.entries) {
+        final lokalAda = lokalByKode[entry.key];
+        if (lokalAda != null) {
+          if ('${lokalAda['status']}' != 'SYNCED') {
+            await CoreDb.instance
+                .tandaiTransaksiSinkron('${lokalAda['kode_unik']}');
+          }
+          sudahSama++;
+          continue;
+        }
+        final row = entry.value;
+        final id = row['idTransaksi'];
+        if (id == null) continue;
+        final detail =
+            await ApiClient.instance.aksi('detail_transaksi', {'id': id});
+        final items = ((detail['item'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        final payload = _payloadDariServer(row, detail, items);
+        final kodeAsli = '${payload['kodeUnik']}'.trim();
+        if (kodeAsli.isEmpty) continue;
+        if (await CoreDb.instance.simpanTransaksiDariServer(
+            kodeAsli, jsonEncode(payload),
+            akunKunci: Sesi.instance.userId,
+            tokoId: Sesi.instance.tokoId,
+            idPerangkat: IdentitasMesin.instance.idMesin)) {
+          dariServer++;
+        }
+      }
+
+      for (final entry in lokalByKode.entries) {
+        if (serverByKode.containsKey(entry.key)) continue;
+        Map<String, dynamic> payload;
+        try {
+          payload = Map<String, dynamic>.from(
+              jsonDecode('${entry.value['payload_json']}') as Map);
+        } catch (_) {
+          continue;
+        }
+        payload['input_supervisor'] = true;
+        payload['alasan_supervisor'] = 'Rekonsiliasi backup lokal ke server';
+        payload['kasir_user_id'] = payload['kasir'];
+        try {
+          await ApiClient.instance.aksi('bayar', payload);
+          await CoreDb.instance
+              .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
+          keServer++;
+        } catch (e) {
+          if (_transaksiSudahAdaDiServer(e)) {
+            await CoreDb.instance
+                .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
+            sudahSama++;
+          } else {
+            rethrow;
+          }
+        }
+      }
+      await _muat();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Sinkronisasi selesai: $dariServer dari server, $keServer ke server, $sudahSama sudah sama.')));
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'sinkronisasi transaksi lokal dan server');
+      }
+    } finally {
+      if (mounted) setState(() => _menyinkronkanDuaArah = false);
+    }
+  }
+
   Future<void> _cetakUlang(Map<String, dynamic> row,
       Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
     final itemStruk = items
@@ -1343,14 +1646,43 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           children: [
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.tonalIcon(
-                icon: const Icon(Icons.insights_outlined, size: 18),
-                label: const Text('Analisis Penjualan'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const RiwayatPenjualanAnalisisScreen(),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (Sesi.instance.bolehKelola)
+                    OutlinedButton.icon(
+                      onPressed: _menyinkronkanDuaArah
+                          ? null
+                          : _sinkronkanTransaksiDuaArah,
+                      icon: _menyinkronkanDuaArah
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.sync_alt_outlined, size: 18),
+                      label: Text(_menyinkronkanDuaArah
+                          ? 'Menyinkronkan...'
+                          : 'Sinkronkan Lokal ↔ Server'),
+                    ),
+                  if (Sesi.instance.bolehKelola)
+                    FilledButton.icon(
+                      onPressed: _tambahTransaksiSupervisor,
+                      icon: const Icon(Icons.add_shopping_cart_outlined,
+                          size: 18),
+                      label: const Text('Tambah Transaksi Baru'),
+                    ),
+                  FilledButton.tonalIcon(
+                    icon: const Icon(Icons.insights_outlined, size: 18),
+                    label: const Text('Analisis Penjualan'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RiwayatPenjualanAnalisisScreen(),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 8),

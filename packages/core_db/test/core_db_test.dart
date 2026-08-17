@@ -102,6 +102,57 @@ void main() {
         reason:
             'backup append-only harus menyimpan snapshot pending dan synced');
 
+    await CoreDb.instance.simpanTransaksiPending(
+      'UAT-DEDUPE-003',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-DEDUPE-003',
+        'total': 30000,
+        'sumber': 'lokal-belum-terkirim'
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    final ditimpaPending = await CoreDb.instance.simpanTransaksiDariServer(
+      'UAT-DEDUPE-003',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-DEDUPE-003',
+        'total': 1,
+        'sumber': 'server'
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    expect(ditimpaPending, isFalse,
+        reason: 'payload pending lokal tidak boleh ditimpa snapshot server');
+    final pendingTerjaga =
+        await CoreDb.instance.transaksiLokalDenganKode('UAT-DEDUPE-003');
+    expect(pendingTerjaga?['status'], 'PENDING');
+    expect(
+        '${pendingTerjaga?['payload_json']}', contains('lokal-belum-terkirim'));
+
+    await CoreDb.instance.tandaiTransaksiSinkron('UAT-DEDUPE-003');
+    final diperbarui = await CoreDb.instance.simpanTransaksiDariServer(
+      'UAT-DEDUPE-003',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-DEDUPE-003',
+        'total': 30000,
+        'sumber': 'server-terverifikasi'
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    expect(diperbarui, isTrue);
+    final satuKode = (await CoreDb.instance.transaksiArsipLokal(tokoId: 1))
+        .where((row) => row['kode_unik'] == 'UAT-DEDUPE-003')
+        .toList();
+    expect(satuKode, hasLength(1),
+        reason: 'kode_unik harus mencegah transaksi ganda');
+    expect(
+        '${satuKode.single['payload_json']}', contains('server-terverifikasi'));
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     try {
