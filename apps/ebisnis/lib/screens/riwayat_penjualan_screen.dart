@@ -47,6 +47,28 @@ List<Map<String, dynamic>> _normalisasiDaftarTransaksi(
       .toList();
 }
 
+/// Filter "transaksi tidak valid" adalah audit konsistensi data di server:
+/// total master dibandingkan dengan agregat rincian yang tersimpan di DB.
+/// Arsip lokal tidak boleh ikut hanya karena tidak mempunyai kolom agregat
+/// tersebut. Tanpa penyaringan ini, respons server yang benar-benar kosong
+/// akan diisi kembali oleh seluruh transaksi lokal dan transaksi valid tampak
+/// seolah-olah tidak valid.
+@visibleForTesting
+List<Map<String, dynamic>> saringArsipLokalUntukFilterIntegritas(
+  List<Map<String, dynamic>> arsipLokal, {
+  required bool hanyaTransaksiTidakValid,
+}) {
+  if (!hanyaTransaksiTidakValid) return arsipLokal;
+  return arsipLokal.where((row) {
+    // Hanya terima hasil audit eksplisit yang mempunyai kedua operand.
+    // Payload kasir biasa tidak mempunyai totalMaster/totalDetail; statusnya
+    // belum dapat dinilai sampai transaksi direkonsiliasi oleh server.
+    return row['transaksiTidakValid'] == true &&
+        row['totalMaster'] is num &&
+        row['totalDetail'] is num;
+  }).toList();
+}
+
 class _BarisKoreksiTransaksi {
   _BarisKoreksiTransaksi({
     this.pembelianId,
@@ -1122,7 +1144,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       _memuat = true;
       _error = null;
     });
-    final lokal = await _arsipLokalSesuaiFilter();
+    final lokal = saringArsipLokalUntukFilterIntegritas(
+      await _arsipLokalSesuaiFilter(),
+      hanyaTransaksiTidakValid: _hanyaTransaksiTidakValid,
+    );
     try {
       final payload = {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
