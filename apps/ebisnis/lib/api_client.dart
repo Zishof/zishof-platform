@@ -108,7 +108,7 @@ class ApiClient {
 
     if (json['status'] != 'success') {
       final gagal = ApiException(
-        (json['message'] ?? 'Permintaan belum berhasil.') as String,
+        '${json['message'] ?? json['description'] ?? 'Permintaan belum berhasil.'}',
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
         kodeReferensi:

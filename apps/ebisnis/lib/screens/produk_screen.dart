@@ -154,9 +154,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
     final setuju = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Masukkan 50.000 Produk Demo?'),
+        title: const Text('Masukkan 1.000 Supplier dan 50.000 Produk Demo?'),
         content: const Text(
-            'Fitur ini hanya untuk toko demo/UAT. Proses berjalan di server secara background dan aman ditekan ulang karena kode produk idempoten.'),
+            'Fitur ini hanya untuk toko demo/UAT. Proses berjalan di server secara background dan aman ditekan ulang karena kode supplier dan produk bersifat idempoten.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -176,8 +176,8 @@ class _ProdukScreenState extends State<ProdukScreen> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('${hasil['description'] ?? 'Job produk demo dimulai.'}')));
+          content: Text(
+              '${hasil['description'] ?? 'Job supplier dan produk demo dimulai.'}')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -477,7 +477,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
       if (Sesi.instance.bolehDataSample)
         HeaderActionButton(
           icon: Icons.science_outlined,
-          label: _memulaiDataSample ? 'Memulai...' : 'Data Sample 50K',
+          label: _memulaiDataSample
+              ? 'Memulai...'
+              : 'Sample 1K Supplier + 50K Produk',
           onPressed: _memulaiDataSample ? null : _mulaiDataSampleProduk,
         ),
       HeaderActionButton(
