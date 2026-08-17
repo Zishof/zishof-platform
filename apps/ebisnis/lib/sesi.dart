@@ -41,7 +41,7 @@ class Sesi {
   /// Electron). Ini murni UX; gerbang SEBENARNYA tetap ditegakkan server-side
   /// di tiap aksi. Kunci hilang = boleh (sama seperti default server `true`).
   Map<String, bool> aksesMenu = {};
-  bool bolehMenu(String kunci) => aksesMenu[kunci] ?? true;
+  bool bolehMenu(String kunci) => isAdmin || (aksesMenu[kunci] ?? true);
 
   /// CRUD granular POS biasa. Kunci/aksi lama yang belum dikirim server
   /// tetap mengikuti kompatibilitas lama (boleh), sementara server selalu

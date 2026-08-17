@@ -1,0 +1,35 @@
+import 'package:ebisnis/sesi.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  tearDown(() {
+    Sesi.instance.reset();
+  });
+
+  test('administrator melewati pembatasan seluruh menu POS dan varian', () {
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': true,
+      'aksesMenu': <String, dynamic>{
+        'produk': false,
+        'apotik_formularium': false,
+      },
+    });
+
+    expect(Sesi.instance.bolehMenu('produk'), isTrue);
+    expect(Sesi.instance.bolehMenuVarianBaru('apotik_formularium'), isTrue);
+    expect(Sesi.instance.bolehAksiPos('produk', 'update'), isTrue);
+  });
+
+  test('pengguna biasa tetap mengikuti matriks hak akses', () {
+    Sesi.instance.terapkanKonfig(<String, dynamic>{
+      'isAdmin': false,
+      'aksesMenu': <String, dynamic>{
+        'produk': false,
+        'apotik_formularium': false,
+      },
+    });
+
+    expect(Sesi.instance.bolehMenu('produk'), isFalse);
+    expect(Sesi.instance.bolehMenuVarianBaru('apotik_formularium'), isFalse);
+  });
+}
