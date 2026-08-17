@@ -1586,12 +1586,22 @@ class _KasirScreenState extends State<KasirScreen> {
   /// krn Kasir & Keranjang adalah 2 layar terpisah di Flutter/Android --
   /// hanya relevan di Windows lewat `PanelKeranjang` yang tertanam).
   /// Desktop-only (fisik keyboard) -- diam di Android via gerbang platform.
+  bool _sedangInputTeksAktif() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    final context = focus.context;
+    if (context == null) return false;
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
   KeyEventResult _tanganiTombolKasir(FocusNode node, KeyEvent event) {
     if (defaultTargetPlatform != TargetPlatform.windows) {
       return KeyEventResult.ignored;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (!_aksiKasirAktif) return KeyEventResult.handled;
+    if (_sedangInputTeksAktif()) return KeyEventResult.ignored;
+    if (!_aksiKasirAktif) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f1) {
       _bukaBantuan();
       return KeyEventResult.handled;

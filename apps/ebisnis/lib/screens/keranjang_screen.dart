@@ -1413,11 +1413,21 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// Pintasan keyboard F2 Bayar/F3 Tahan/F4 Metode/F5 Member -- padanan
   /// pos-renderer.js `PETA_TOMBOL_KASIR` (lihat kasir_screen.dart utk
   /// F7/F8/F9). Desktop-only; diam di Android.
+  bool _sedangInputTeksAktif() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    final context = focus.context;
+    if (context == null) return false;
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
   KeyEventResult _tanganiTombolKeranjang(FocusNode node, KeyEvent event) {
     if (defaultTargetPlatform != TargetPlatform.windows) {
       return KeyEventResult.ignored;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (_sedangInputTeksAktif()) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f2) {
       if (!_memproses) _bayar();
       return KeyEventResult.handled;

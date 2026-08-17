@@ -11,6 +11,7 @@ import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 
 final _bulkRp =
@@ -454,6 +455,14 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
     } finally {
       if (mounted) setStateIfMounted(() => row.mencari = false);
     }
+  }
+
+  Future<void> _pilihProdukDariNama(_BulkRow row, String kode) async {
+    final nilai = kode.trim();
+    if (nilai.isEmpty) return;
+    row.kode.text = nilai;
+    row.nama.clear();
+    await _cariProduk(row);
   }
 
   Future<void> _cekSemuaProduk() async {
@@ -1192,9 +1201,22 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
                         ),
                         const SizedBox(width: 8),
                         SizedBox(
-                            width: 202,
-                            child: _field(row.nama,
-                                hint: 'wajib utk produk baru')),
+                          width: 202,
+                          child: PencarianProdukBanbox(
+                            controller: row.nama,
+                            label: 'Nama Produk',
+                            icon: Icons.search,
+                            onPilih: (kode) => _pilihProdukDariNama(row, kode),
+                            decorationBuilder: (context) =>
+                                const InputDecoration(
+                              hintText: 'cari / ketik nama',
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 9),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         SizedBox(width: 160, child: _kategoriCell(row)),
                         const SizedBox(width: 8),

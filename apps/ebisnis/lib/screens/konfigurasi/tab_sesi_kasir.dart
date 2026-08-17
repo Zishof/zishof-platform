@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -19,22 +21,525 @@ class TabSesiKasir extends StatefulWidget {
 class _TabSesiKasirState extends State<TabSesiKasir> {
   final _rupiah =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  final _formatTanggalServer = DateFormat('yyyy-MM-dd');
+  final _cariController = TextEditingController();
+  final _cariFocus = FocusNode();
+  Timer? _debounceCari;
   bool _memuat = true;
+  bool _menghitungUlang = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
   String _filter = 'SEMUA';
+  String _kataKunci = '';
 
   bool get _bolehKoreksi => Sesi.instance.bolehKelola;
 
   @override
   void initState() {
     super.initState();
+    _cariController.addListener(_jadwalkanFilterCari);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _debounceCari?.cancel();
+    _cariController.removeListener(_jadwalkanFilterCari);
+    _cariController.dispose();
+    _cariFocus.dispose();
+    super.dispose();
+  }
+
+  void _jadwalkanFilterCari() {
+    _debounceCari?.cancel();
+    _debounceCari = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      final value = _cariController.text;
+      if (value == _kataKunci) return;
+      setStateIfMounted(() => _kataKunci = value);
+    });
   }
 
   double _angka(dynamic nilai) => nilai is num
       ? nilai.toDouble()
       : double.tryParse('$nilai'.replaceAll(RegExp(r'[^0-9.-]'), '')) ?? 0;
+
+  dynamic _nilaiPertama(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      if (!row.containsKey(key)) continue;
+      final value = row[key];
+      if (value == null) continue;
+      if (value is String && value.trim().isEmpty) continue;
+      return value;
+    }
+    return null;
+  }
+
+  double _nominalTerbaik(Map<String, dynamic> row, List<String> keys) {
+    dynamic nolPertama;
+    for (final key in keys) {
+      if (!row.containsKey(key)) continue;
+      final value = row[key];
+      if (value == null) continue;
+      if (value is String && value.trim().isEmpty) continue;
+      final angka = _angka(value);
+      if (angka != 0) return angka;
+      nolPertama ??= value;
+    }
+    return _angka(nolPertama);
+  }
+
+  double _modalAwal(Map<String, dynamic> row) => _nominalTerbaik(row, const [
+        'modalAwal',
+        'modal_awal',
+        'modal',
+      ]);
+
+  double _tunai(Map<String, dynamic> row) => _nominalTerbaik(row, const [
+        'totalTunai',
+        'total_tunai',
+        'penjualanTunai',
+        'penjualan_tunai',
+        'tunai',
+      ]);
+
+  double _nonTunai(Map<String, dynamic> row) => _nominalTerbaik(row, const [
+        'totalNonTunai',
+        'total_non_tunai',
+        'penjualanNonTunai',
+        'penjualan_non_tunai',
+        'nonTunai',
+        'non_tunai',
+      ]);
+
+  double _nilaiSesi(Map<String, dynamic> row) {
+    final langsung = _nominalTerbaik(row, const [
+      'totalTransaksi',
+      'total_transaksi',
+      'nilaiTransaksi',
+      'nilai_transaksi',
+      'nilai',
+    ]);
+    if (langsung != 0) return langsung;
+    return _tunai(row) + _nonTunai(row);
+  }
+
+  double _kasSeharusnya(Map<String, dynamic> row) {
+    final langsung = _nominalTerbaik(row, const [
+      'kasSeharusnya',
+      'kas_seharusnya',
+      'kasSistem',
+      'kas_sistem',
+    ]);
+    if (langsung != 0) return langsung;
+    return _modalAwal(row) + _tunai(row);
+  }
+
+  double _kasClosing(Map<String, dynamic> row) => _nominalTerbaik(row, const [
+        'kasClosing',
+        'kas_closing',
+        'uangFisik',
+        'uang_fisik',
+      ]);
+
+  int _jumlahTransaksi(Map<String, dynamic> row) =>
+      _angka(_nilaiPertama(row, const [
+        'jumlahTransaksi',
+        'jumlah_transaksi',
+        'trx',
+        'transaksi',
+      ])).toInt();
+  DateTime? _tanggalDari(dynamic value) {
+    final teks = '$value'.trim();
+    if (teks.isEmpty || teks == 'null') return null;
+    return DateTime.tryParse(teks.replaceFirst(' ', 'T'));
+  }
+
+  Future<Map<int, Map<String, dynamic>>> _ambilRekonsiliasiSesi(
+      List<Map<String, dynamic>> sesi) async {
+    final tanggal = <DateTime>[];
+    for (final row in sesi) {
+      final buka = _tanggalDari(row['waktuBuka']);
+      final tutup = _tanggalDari(row['waktuTutup']);
+      if (buka != null) tanggal.add(DateTime(buka.year, buka.month, buka.day));
+      if (tutup != null) {
+        tanggal.add(DateTime(tutup.year, tutup.month, tutup.day));
+      }
+    }
+    if (tanggal.isEmpty) return const {};
+    tanggal.sort();
+    final hasil = await ApiClient.instance.aksi(
+      'laporan_transaksi_per_kasir_detail',
+      {
+        'tglMulai': _formatTanggalServer.format(tanggal.first),
+        'tglSampai': _formatTanggalServer.format(tanggal.last),
+        'komponen': 'semua',
+      },
+    );
+    final map = <int, Map<String, dynamic>>{};
+    final regex = RegExp(r'Sesi #(\d+)');
+    for (final item in (hasil['data'] as List?) ?? const []) {
+      final row = Map<String, dynamic>.from(item as Map);
+      final match = regex.firstMatch('${row['referensi'] ?? ''}');
+      if (match == null) continue;
+      final id = int.tryParse(match.group(1)!);
+      if (id == null) continue;
+      map[id] = row;
+    }
+    return map;
+  }
+
+  Map<String, dynamic> _gabungDenganRekonsiliasi(
+    Map<String, dynamic> row,
+    Map<int, Map<String, dynamic>> rekonsiliasi,
+  ) {
+    final id = _angka(row['id']).toInt();
+    final laporan = rekonsiliasi[id];
+    if (laporan == null) return row;
+    final nilai = _angka(laporan['totalTransaksi']);
+    final tunai = _angka(laporan['tunai']);
+    final nonTunai = _angka(laporan['nonTunai']);
+    final modal = _angka(laporan['modalAwal']);
+    final kasSeharusnya = _angka(laporan['kasSeharusnya']);
+    final kasClosing = _angka(laporan['kasClosing']);
+    return <String, dynamic>{
+      ...row,
+      if ('${row['kasirNama'] ?? ''}'.trim().isEmpty)
+        'kasirNama': laporan['kasir'],
+      'nilai': nilai,
+      'totalTransaksi': nilai,
+      'nilaiTransaksi': nilai,
+      'totalTunai': tunai,
+      'penjualanTunai': tunai,
+      'totalNonTunai': nonTunai,
+      'penjualanNonTunai': nonTunai,
+      'modalAwal': modal,
+      'kasSeharusnya': kasSeharusnya,
+      'kasClosing': kasClosing,
+      'uangFisik': kasClosing,
+      'selisih': _angka(laporan['selisih']),
+      'jumlahTransaksi': _angka(laporan['jumlahTransaksi']).toInt(),
+      'hasilHitungUlang': true,
+    };
+  }
+
+  void _terapkanSatuRekonsiliasi(
+    Map<String, dynamic> row,
+    Map<String, dynamic> laporan,
+  ) {
+    final idTeks = '${row['id']}';
+    final id = _angka(row['id']).toInt();
+    setStateIfMounted(() {
+      _data = _data.map((sesi) {
+        if ('${sesi['id']}' != idTeks) return sesi;
+        return _gabungDenganRekonsiliasi(sesi, {id: laporan});
+      }).toList(growable: false);
+    });
+  }
+
+  Map<String, dynamic> _payloadRekonsiliasiServer(
+    Map<String, dynamic> row,
+    Map<String, dynamic> laporan,
+  ) {
+    return {
+      'id_sesi': row['id'],
+      'kasir_nama': laporan['kasir'] ?? row['kasirNama'],
+      'total_transaksi': _angka(laporan['totalTransaksi']),
+      'nilai': _angka(laporan['totalTransaksi']),
+      'modal_awal': _angka(laporan['modalAwal']),
+      'penjualan_tunai': _angka(laporan['tunai']),
+      'penjualan_non_tunai': _angka(laporan['nonTunai']),
+      'kas_seharusnya': _angka(laporan['kasSeharusnya']),
+      'kas_closing': _angka(laporan['kasClosing']),
+      'uang_fisik': _angka(laporan['kasClosing']),
+      'jumlah_transaksi': _angka(laporan['jumlahTransaksi']).toInt(),
+      'selisih': _angka(laporan['selisih']),
+      'sumber': 'laporan_transaksi_per_kasir_detail',
+      'alasan_koreksi': 'Hitung ulang dari Laporan Transaksi Per Kasir',
+    };
+  }
+
+  Future<void> _simpanRekonsiliasiKeServer(
+    Map<String, dynamic> row,
+    Map<String, dynamic> laporan,
+  ) async {
+    await ApiClient.instance.aksi(
+      'sesi_kas_rekonsiliasi_simpan',
+      _payloadRekonsiliasiServer(row, laporan),
+    );
+  }
+
+  bool _berbedaDenganRekonsiliasi(
+    Map<String, dynamic> row,
+    Map<String, dynamic> laporan,
+  ) {
+    return _nilaiSesi(row) != _angka(laporan['totalTransaksi']) ||
+        _modalAwal(row) != _angka(laporan['modalAwal']) ||
+        _tunai(row) != _angka(laporan['tunai']) ||
+        _nonTunai(row) != _angka(laporan['nonTunai']) ||
+        _kasSeharusnya(row) != _angka(laporan['kasSeharusnya']) ||
+        _kasClosing(row) != _angka(laporan['kasClosing']) ||
+        _jumlahTransaksi(row) != _angka(laporan['jumlahTransaksi']).toInt();
+  }
+
+  Future<void> _hitungUlangDariLaporan() async {
+    setStateIfMounted(() => _menghitungUlang = true);
+    try {
+      final rekonsiliasi = await _ambilRekonsiliasiSesi(_data);
+      if (rekonsiliasi.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Tidak ada data rekonsiliasi sesi dari laporan.')));
+        return;
+      }
+      final review = <Map<String, dynamic>>[];
+      for (final row in _data) {
+        final id = _angka(row['id']).toInt();
+        final laporan = rekonsiliasi[id];
+        if (laporan == null) continue;
+        if (!_berbedaDenganRekonsiliasi(row, laporan)) continue;
+        review.add({
+          'sesi': row,
+          'laporan': laporan,
+        });
+      }
+      if (review.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Semua sesi yang ditemukan sudah sesuai laporan.')));
+        return;
+      }
+      if (!mounted) return;
+      final terapkan = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            insetPadding: const EdgeInsets.all(16),
+            title: const Text('Review Hasil Hitung Ulang Sesi Kasir'),
+            content: SizedBox(
+              width: MediaQuery.sizeOf(dialogContext).width * .92,
+              height: MediaQuery.sizeOf(dialogContext).height * .70,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppInfoBanner(
+                    icon: Icons.fact_check_outlined,
+                    color: AppColors.info,
+                    text:
+                        'Angka diambil dari Laporan Transaksi - Transaksi Per Kasir. Tekan Terapkan untuk mengisi tabel Sesi Kasir di tampilan ini.',
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: AppDataTable(
+                        minWidth: 1210,
+                        columns: const [
+                          AppTableColumn('Sesi', width: 70),
+                          AppTableColumn('Kasir', flex: 2),
+                          AppTableColumn('Trx',
+                              width: 60, align: TextAlign.right),
+                          AppTableColumn('Nilai',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Modal',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Tunai',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Non Tunai',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Kas Seharusnya',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Kas Closing',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Aksi',
+                              width: 90, align: TextAlign.center),
+                        ],
+                        rows: review.map((item) {
+                          final row = item['sesi'] as Map<String, dynamic>;
+                          final laporan =
+                              item['laporan'] as Map<String, dynamic>;
+                          return AppTableRowData(cells: [
+                            AppTableCell.text('${row['id']}', width: 70),
+                            AppTableCell.text(
+                              '${laporan['kasir'] ?? row['kasirNama'] ?? '-'}',
+                              flex: 2,
+                              maxLines: 2,
+                            ),
+                            AppTableCell.text(
+                              '${laporan['jumlahTransaksi'] ?? 0}',
+                              width: 60,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['totalTransaksi'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['modalAwal'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['tunai'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['nonTunai'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['kasSeharusnya'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell.text(
+                              _rupiah.format(_angka(laporan['kasClosing'])),
+                              flex: 2,
+                              align: TextAlign.right,
+                            ),
+                            AppTableCell(
+                              width: 90,
+                              align: TextAlign.center,
+                              child: IconButton(
+                                tooltip: 'Terapkan baris ini',
+                                icon: const Icon(Icons.check_circle_outline),
+                                onPressed: () async {
+                                  final id = _angka(row['id']).toInt();
+                                  final messenger =
+                                      ScaffoldMessenger.of(this.context);
+                                  try {
+                                    await _simpanRekonsiliasiKeServer(
+                                        row, laporan);
+                                    if (!mounted) return;
+                                    _terapkanSatuRekonsiliasi(row, laporan);
+                                    setDialogState(() => review.remove(item));
+                                    if (review.isEmpty &&
+                                        dialogContext.mounted) {
+                                      Navigator.pop(dialogContext, false);
+                                    }
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Sesi #$id berhasil disimpan ke server.',
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Gagal menyimpan sesi #$id: $e',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          ]);
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.check),
+                label: const Text('Terapkan Hasil Hitung Ulang'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (terapkan != true) return;
+      for (final item in review) {
+        await _simpanRekonsiliasiKeServer(
+          item['sesi'] as Map<String, dynamic>,
+          item['laporan'] as Map<String, dynamic>,
+        );
+      }
+      setStateIfMounted(() {
+        _data = _data
+            .map((row) => _gabungDenganRekonsiliasi(row, rekonsiliasi))
+            .toList();
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${review.length} sesi berhasil disimpan ke server.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal hitung ulang: $e')));
+    } finally {
+      if (mounted) setStateIfMounted(() => _menghitungUlang = false);
+    }
+  }
+
+  bool _cocokKataKunci(Map<String, dynamic> row) {
+    final q = _kataKunci.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final gabungan = [
+      row['id'],
+      row['kasirNama'],
+      row['kasirUserId'],
+      row['statusSesi'],
+      row['waktuBuka'],
+      row['waktuTutup'],
+      row['perangkat'],
+      row['keterangan'],
+      _nilaiSesi(row),
+      _tunai(row),
+      _nonTunai(row),
+      _kasSeharusnya(row),
+      _kasClosing(row),
+    ].map((e) => '$e'.toLowerCase()).join(' ');
+    return gabungan.contains(q);
+  }
+
+  Widget _statusChip(BuildContext context, Map<String, dynamic> row) {
+    final buka = '${row['statusSesi']}' == 'BUKA';
+    final color = buka ? AppColors.success : AppColors.textSecondaryOf(context);
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.latarLembut(color),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              buka ? Icons.lock_open_outlined : Icons.lock_outline,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              buka ? 'BUKA' : 'TUTUP',
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -61,13 +566,11 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
 
   Future<void> _koreksi(Map<String, dynamic> row) async {
     var status = '${row['statusSesi']}' == 'TUTUP' ? 'TUTUP' : 'BUKA';
-    final modal = TextEditingController(
-        text: _angka(row['modalAwal']).toStringAsFixed(0));
-    final tunai = TextEditingController(
-        text: _angka(row['penjualanTunai']).toStringAsFixed(0));
-    final fisik = TextEditingController(
-        text: _angka(row['uangFisik'] ?? row['kasSeharusnya'])
-            .toStringAsFixed(0));
+    final modal =
+        TextEditingController(text: _modalAwal(row).toStringAsFixed(0));
+    final tunai = TextEditingController(text: _tunai(row).toStringAsFixed(0));
+    final fisik =
+        TextEditingController(text: _kasClosing(row).toStringAsFixed(0));
     final alasan = TextEditingController();
     try {
       final simpan = await showDialog<bool>(
@@ -216,12 +719,13 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
 
   @override
   Widget build(BuildContext context) {
-    final tampil = _filter == 'SEMUA'
-        ? _data
-        : _data.where((e) => '${e['statusSesi']}' == _filter).toList();
+    final tampil = _data.where((e) {
+      final cocokStatus = _filter == 'SEMUA' || '${e['statusSesi']}' == _filter;
+      return cocokStatus && _cocokKataKunci(e);
+    }).toList();
     final terbuka = _data.where((e) => '${e['statusSesi']}' == 'BUKA').length;
-    final totalTunai = _data.fold<double>(
-        0, (jumlah, e) => jumlah + _angka(e['penjualanTunai']));
+    final totalTunai =
+        tampil.fold<double>(0, (jumlah, e) => jumlah + _tunai(e));
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -238,7 +742,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Chip(label: Text('$terbuka sesi masih terbuka')),
-                  Chip(label: Text('${_data.length} sesi ditampilkan')),
+                  Chip(label: Text('${tampil.length} sesi ditampilkan')),
                   Chip(label: Text('Tunai ${_rupiah.format(totalTunai)}')),
                   SegmentedButton<String>(
                     segments: const [
@@ -254,7 +758,35 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                       onPressed: _memuat ? null : _muat,
                       icon: const Icon(Icons.refresh),
                       label: const Text('Muat Ulang')),
+                  OutlinedButton.icon(
+                      onPressed: _memuat || _menghitungUlang
+                          ? null
+                          : _hitungUlangDariLaporan,
+                      icon: _menghitungUlang
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.manage_search_outlined),
+                      label: const Text('Hitung Ulang')),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _cariController,
+                focusNode: _cariFocus,
+                enabled: true,
+                readOnly: false,
+                textInputAction: TextInputAction.search,
+                decoration: AppFormStyle.fieldDecoration(
+                  context,
+                  labelText: 'Cari Sesi Kasir',
+                  hintText:
+                      'Cari ID sesi, kasir, user, perangkat, waktu, atau keterangan...',
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                ),
               ),
               if (!_bolehKoreksi) ...[
                 const SizedBox(height: 10),
@@ -273,102 +805,92 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                 icon: Icons.error_outline,
                 color: AppColors.danger,
                 text: _error!)
-          else if (tampil.isEmpty)
-            const Padding(
-                padding: EdgeInsets.all(40),
-                child:
-                    Center(child: Text('Belum ada sesi kas pada filter ini.')))
           else
-            for (final row in tampil)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Icon(
-                            '${row['statusSesi']}' == 'BUKA'
-                                ? Icons.lock_open_outlined
-                                : Icons.lock_outline,
-                            color: '${row['statusSesi']}' == 'BUKA'
-                                ? AppColors.success
-                                : AppColors.textSecondaryOf(context)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: Text(
-                                '${row['kasirNama']} (${row['kasirUserId']})',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16))),
-                        Chip(label: Text('${row['statusSesi']}')),
-                        if (_bolehKoreksi)
-                          IconButton(
-                              onPressed: () => _koreksi(row),
-                              tooltip: 'Koreksi supervisor',
-                              icon: const Icon(Icons.edit_outlined)),
-                      ]),
-                      Text(
-                          '${row['waktuBuka']} — ${row['waktuTutup'] ?? 'masih berjalan'} · ${row['perangkat']}'),
-                      const SizedBox(height: 10),
-                      Wrap(spacing: 22, runSpacing: 8, children: [
-                        _NilaiSesi(
-                            label: 'Modal awal',
-                            nilai: _rupiah.format(_angka(row['modalAwal']))),
-                        _NilaiSesi(
-                            label: 'Penjualan tunai',
-                            nilai:
-                                _rupiah.format(_angka(row['penjualanTunai']))),
-                        _NilaiSesi(
-                            label: 'Non-tunai',
-                            nilai: _rupiah
-                                .format(_angka(row['penjualanNonTunai']))),
-                        _NilaiSesi(
-                            label: 'Kas seharusnya',
-                            nilai:
-                                _rupiah.format(_angka(row['kasSeharusnya']))),
-                        if ('${row['statusSesi']}' == 'TUTUP')
-                          _NilaiSesi(
-                              label: 'Uang fisik',
-                              nilai: _rupiah.format(_angka(row['uangFisik']))),
-                        _NilaiSesi(
-                            label: 'Transaksi',
-                            nilai: '${row['jumlahTransaksi']} trx'),
-                      ]),
-                      if ('${row['keterangan'] ?? ''}'.trim().isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text('${row['keterangan']}',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondaryOf(context))),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+            AppDataTable(
+              minWidth: 1340,
+              emptyText: 'Belum ada sesi kas pada filter ini.',
+              columns: [
+                const AppTableColumn('ID Sesi', flex: 2),
+                const AppTableColumn('Kasir', flex: 2),
+                const AppTableColumn('Waktu', flex: 3),
+                const AppTableColumn('Perangkat', flex: 2),
+                const AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                const AppTableColumn('Modal', flex: 2, align: TextAlign.right),
+                const AppTableColumn('Tunai', flex: 2, align: TextAlign.right),
+                const AppTableColumn('Non Tunai',
+                    flex: 2, align: TextAlign.right),
+                const AppTableColumn('Kas Seharusnya',
+                    flex: 2, align: TextAlign.right),
+                const AppTableColumn('Uang Fisik',
+                    flex: 2, align: TextAlign.right),
+                const AppTableColumn('Trx', flex: 1, align: TextAlign.right),
+                const AppTableColumn('Status',
+                    width: 100, align: TextAlign.center),
+                if (_bolehKoreksi)
+                  const AppTableColumn('Aksi',
+                      width: 70, align: TextAlign.center),
+              ],
+              rows: tampil.map((row) {
+                final waktuTutup = row['waktuTutup'] ?? 'masih berjalan';
+                final keterangan = '${row['keterangan'] ?? ''}'.trim();
+                return AppTableRowData(
+                  cells: [
+                    AppTableCell.text('${row['id']}', flex: 2),
+                    AppTableCell.text(
+                      '${row['kasirNama']} (${row['kasirUserId']})',
+                      flex: 2,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 12.5),
+                    ),
+                    AppTableCell.text(
+                      '${row['waktuBuka']} - $waktuTutup',
+                      flex: 3,
+                      maxLines: 2,
+                    ),
+                    AppTableCell.text('${row['perangkat']}', flex: 2),
+                    AppTableCell.text(_rupiah.format(_nilaiSesi(row)),
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(_rupiah.format(_modalAwal(row)),
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(_rupiah.format(_tunai(row)),
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(_rupiah.format(_nonTunai(row)),
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(_rupiah.format(_kasSeharusnya(row)),
+                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(
+                        '${row['statusSesi']}' == 'TUTUP'
+                            ? _rupiah.format(_kasClosing(row))
+                            : '-',
+                        flex: 2,
+                        align: TextAlign.right),
+                    AppTableCell.text('${_jumlahTransaksi(row)}',
+                        flex: 1, align: TextAlign.right),
+                    AppTableCell(
+                      width: 100,
+                      align: TextAlign.center,
+                      child: _statusChip(context, row),
+                    ),
+                    if (_bolehKoreksi)
+                      AppTableCell(
+                        width: 70,
+                        align: TextAlign.center,
+                        child: IconButton(
+                          onPressed: () => _koreksi(row),
+                          tooltip: 'Koreksi supervisor',
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                        ),
+                      ),
+                  ],
+                  onTap: keterangan.isEmpty
+                      ? null
+                      : () => ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(keterangan))),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
   }
-}
-
-class _NilaiSesi extends StatelessWidget {
-  final String label;
-  final String nilai;
-  const _NilaiSesi({required this.label, required this.nilai});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 150,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 11, color: AppColors.textSecondaryOf(context))),
-            Text(nilai, style: const TextStyle(fontWeight: FontWeight.w700)),
-          ],
-        ),
-      );
 }

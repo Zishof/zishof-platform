@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_hw/core_hw.dart';
@@ -524,7 +524,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                     Text('${_produkDitemukan!['nama'] ?? ''}',
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                     Text(
-                        'Kode: ${_produkDitemukan!['kode'] ?? ''} · Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
+                        'Kode: ${_produkDitemukan!['kode'] ?? ''} Â· Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
                         style: const TextStyle(fontSize: 11.5)),
                     const SizedBox(height: 10),
                     Row(
@@ -623,7 +623,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                     title: Text(it.nama, style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
                         '${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}'
-                        '${it.nomorBatch == null ? '' : ' · Batch ${it.nomorBatch} · Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
+                        '${it.nomorBatch == null ? '' : ' Â· Batch ${it.nomorBatch} Â· Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
                         style: const TextStyle(fontSize: 11.5)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1389,6 +1389,7 @@ class _KulakanFakturEntryPageState extends State<_KulakanFakturEntryPage> {
       menuAktif: MenuEBisnis.kulakan,
       judul: 'Entri Faktur Kulakan',
       subjudul: 'Input faktur pembelian dan barang yang diterima',
+      scrollable: false,
       body: widget.state._buildFormEntriFaktur(),
       aksiHeader: OutlinedButton.icon(
         onPressed: () => Navigator.of(context).pop(false),
