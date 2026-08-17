@@ -47,4 +47,38 @@ void main() {
       expect(ServerConfig.instance.contextPath, 'ebisnis');
     }
   });
+
+  test('konfigurasi Al-Bahjah lama tidak bocor ke build eBisnis', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'server_host': 'ecampus.staialbahjah.ac.id',
+      'server_context_path': 'albahjah',
+      'server_https': true,
+    });
+
+    await ServerConfig.instance.muat();
+
+    if (AppVariant.isAlBahjah) {
+      expect(ServerConfig.instance.host, 'ecampus.staialbahjah.ac.id');
+      expect(ServerConfig.instance.contextPath, 'albahjah');
+    } else {
+      expect(ServerConfig.instance.host, 'ebisnis.id');
+      expect(ServerConfig.instance.contextPath, 'ebisnis');
+    }
+  });
+
+  test('kunci server tersimpan memakai namespace varian', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await ServerConfig.instance.simpan(
+      host: AppSetting.baseUrlHost,
+      contextPath: AppSetting.baseUrlContextPath,
+      https: true,
+    );
+    final sp = await SharedPreferences.getInstance();
+
+    expect(
+      sp.getString('${AppVariant.storageNamespace}_server_host'),
+      AppSetting.baseUrlHost,
+    );
+    expect(sp.getString('server_host'), isNull);
+  });
 }

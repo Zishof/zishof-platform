@@ -1240,10 +1240,14 @@ class _PesananScreenState extends State<PesananScreen> {
       }
       return;
     }
+    // Pulihkan draft yang pernah tersimpan oleh server lama dengan rincian
+    // berulang. Normalisasi hanya membuang salinan yang seluruh atributnya
+    // identik; baris dengan qty, harga, promo, atau ekstra berbeda tetap utuh.
+    final keranjangNormal = normalisasiDuplikatKeranjangTertahan(keranjang);
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => KasirScreen(
-        keranjangAwal: keranjang,
+        keranjangAwal: keranjangNormal,
         draftIdSumber: p.id,
         draftKodeSumber: p.kode,
         memberAwal: member,

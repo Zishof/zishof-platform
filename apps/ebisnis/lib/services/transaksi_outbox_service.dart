@@ -224,9 +224,14 @@ class TransaksiOutboxService {
           .whereType<Map>()
           .map((row) => Map<String, dynamic>.from(row))
           .toList();
+      final kodeDiakui = <String>[];
       for (final row in daftar) {
         final kode = _kodeServer(row);
-        if (kode.isEmpty || kodeLokal.contains(kode.toLowerCase())) continue;
+        if (kode.isEmpty) continue;
+        if (kodeLokal.contains(kode.toLowerCase())) {
+          kodeDiakui.add(kode);
+          continue;
+        }
         final id = row['idTransaksi'];
         if (id == null) continue;
         final detail = await ApiClient.instance.aksi('detail_transaksi', {
@@ -275,7 +280,21 @@ class TransaksiOutboxService {
             akunKunci: username,
             tokoId: tokoId,
             idPerangkat: idPerangkat.isNotEmpty ? idPerangkat : namaMesin);
-        if (tersimpan) kodeLokal.add(kode.toLowerCase());
+        if (tersimpan) {
+          kodeLokal.add(kode.toLowerCase());
+          kodeDiakui.add(kode);
+        }
+      }
+      // ACK baru dikirim setelah baris benar-benar tersedia di SQLite lokal.
+      // Dengan demikian server dapat membedakan transaksi yang baru berada di
+      // server dari transaksi yang sudah mempunyai salinan pada POS lain.
+      if (kodeDiakui.isNotEmpty) {
+        await ApiClient.instance.aksi('transaksi_backup_ack', {
+          'toko_id': tokoId,
+          'kode_transaksi': kodeDiakui,
+          'id_perangkat': IdentitasMesin.instance.idMesin,
+          'nama_mesin': IdentitasMesin.instance.namaMesin,
+        });
       }
       final total = (hasil['total'] as num?)?.toInt() ?? daftar.length;
       if (daftar.isEmpty || page * 100 >= total || daftar.length < 100) break;

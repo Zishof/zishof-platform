@@ -7,7 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// Database offline-first eBisnis -- satu file SQLite per instalasi (`ebisnis.db`),
+/// Database offline-first eBisnis -- satu file SQLite per varian instalasi
+/// (`ebisnis_<namespace>.db`),
 /// skema meniru `local-db.js` versi Electron (lihat memori sesi
 /// `ebisnis-id-pendaftar-brand-toko-mesin-pos-dashboard` utk konteks produk):
 /// - `produk_cache`: katalog lengkap, di-replace penuh tiap sinkron (bukan upsert
@@ -26,6 +27,30 @@ class CoreDb {
   CoreDb._();
   static final CoreDb instance = CoreDb._();
 
+  static String _storageNamespace = 'ebisnis';
+
+  /// Wajib dipanggil saat bootstrap, sebelum akses DB pertama. Meskipun
+  /// path_provider biasanya sudah memisahkan folder per ProductName/package,
+  /// nama file dan backup juga diberi namespace sebagai lapisan pengaman saat
+  /// beberapa varian terpasang pada satu mesin.
+  static void configureStorage(String namespace) {
+    final normalized =
+        namespace.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]+'), '_');
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(namespace, 'namespace', 'Tidak boleh kosong');
+    }
+    if (instance._db != null || instance._openingDb != null) {
+      if (_storageNamespace != normalized) {
+        throw StateError(
+            'Namespace CoreDb tidak boleh diubah setelah DB dibuka.');
+      }
+      return;
+    }
+    _storageNamespace = normalized;
+  }
+
+  static String get storageNamespace => _storageNamespace;
+
   /// Naik setiap status sesi kas lokal berubah. UI seperti topbar memakai ini
   /// untuk refresh chip "Kas Terbuka/Tertutup" tanpa menunggu rebuild layar.
   final ValueNotifier<int> sesiKasVersi = ValueNotifier<int>(0);
@@ -38,7 +63,8 @@ class CoreDb {
 
   static const MethodChannel _backupChannel =
       MethodChannel('id.zishof.ebisnis/persistent_transaction_backup');
-  static const String _namaFileBackup = 'transaksi-pos-backup.jsonl';
+  static String get _namaFileBackup =>
+      'transaksi-pos-${_storageNamespace}-backup.jsonl';
 
   Future<Database> get db async {
     final currentDb = _db;
@@ -62,10 +88,11 @@ class CoreDb {
       sqfliteFfiInit();
       factory = databaseFactoryFfi;
       final dir = await getApplicationSupportDirectory();
-      path = p.join(dir.path, 'ebisnis.db');
+      path = p.join(dir.path, 'ebisnis_${_storageNamespace}.db');
     } else {
       factory = databaseFactory;
-      path = p.join(await getDatabasesPath(), 'ebisnis.db');
+      path =
+          p.join(await getDatabasesPath(), 'ebisnis_${_storageNamespace}.db');
     }
     try {
       return await _bukaDanVerifikasi(factory, path);
@@ -148,7 +175,7 @@ class CoreDb {
   /// Menulis snapshot append-only di lokasi kedua di luar database utama.
   /// Pada Android 10+ native side memakai MediaStore/Downloads/eBisnis,
   /// sehingga file tetap ada setelah aplikasi diperbarui maupun dihapus.
-  /// Pada desktop file berada di Documents/eBisnis/Backup. Snapshot tidak
+  /// Pada desktop file berada di Documents/eBisnis/<varian>/Backup. Snapshot tidak
   /// memuat token/sandi; isinya hanya payload transaksi operasional yang
   /// memang diperlukan untuk membangun ulang arsip lokal.
   Future<void> _cadangkanTransaksiPersisten(
@@ -169,8 +196,8 @@ class CoreDb {
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
         final documents = await getApplicationDocumentsDirectory();
-        final directory =
-            Directory(p.join(documents.path, 'eBisnis', 'Backup'));
+        final directory = Directory(
+            p.join(documents.path, 'eBisnis', _storageNamespace, 'Backup'));
         await directory.create(recursive: true);
         await File(p.join(directory.path, _namaFileBackup))
             .writeAsString('$line\n', mode: FileMode.append, flush: true);
@@ -191,8 +218,8 @@ class CoreDb {
       if (!kIsWeb &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
         final documents = await getApplicationDocumentsDirectory();
-        final file =
-            File(p.join(documents.path, 'eBisnis', 'Backup', _namaFileBackup));
+        final file = File(p.join(documents.path, 'eBisnis', _storageNamespace,
+            'Backup', _namaFileBackup));
         return await file.exists() ? await file.readAsString() : null;
       }
     } catch (e) {

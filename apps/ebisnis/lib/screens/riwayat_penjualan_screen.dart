@@ -16,6 +16,7 @@ import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
+import '../services/pengaturan_koreksi_transaksi.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -953,7 +954,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     final hariIni = DateTime.now();
     _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _sampai = DateTime(hariIni.year, hariIni.month, hariIni.day);
-    _muat();
+    _muatPengaturanDanData();
+  }
+
+  Future<void> _muatPengaturanDanData() async {
+    await PengaturanKoreksiTransaksi.instance.muat();
+    await _muat();
   }
 
   @override
@@ -1435,7 +1441,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             ),
           ),
           actions: [
-            if (hasil['bolehEditTransaksi'] == true)
+            if (PengaturanKoreksiTransaksi.instance.izinkanEdit &&
+                hasil['bolehEditTransaksi'] == true)
               TextButton.icon(
                 icon: const Icon(Icons.edit_note_outlined, size: 19),
                 label: const Text('Edit Transaksi'),

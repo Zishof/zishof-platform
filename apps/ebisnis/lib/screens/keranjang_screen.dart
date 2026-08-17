@@ -3023,8 +3023,15 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
     25000,
     30000,
     50000,
+    75000,
     100000,
     150000,
+    200000,
+    250000,
+    300000,
+    500000,
+    750000,
+    1000000,
   ];
 
   late final TextEditingController _controller;
@@ -3069,7 +3076,7 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
     return AlertDialog(
       title: const Text('Uang Diterima'),
       content: SizedBox(
-        width: 420,
+        width: 520,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3088,17 +3095,31 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
               onSubmitted: (_) => _simpan(),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _nominalCepat
-                  .map(
-                    (nominal) => OutlinedButton(
-                      onPressed: () => _pilihNominal(nominal),
-                      child: Text(_formatRupiah.format(nominal)),
-                    ),
-                  )
-                  .toList(),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final jumlahKolom = constraints.maxWidth >= 480 ? 4 : 3;
+                final lebarTombol =
+                    (constraints.maxWidth - ((jumlahKolom - 1) * 8)) /
+                        jumlahKolom;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _nominalCepat
+                      .map(
+                        (nominal) => SizedBox(
+                          width: lebarTombol,
+                          child: OutlinedButton(
+                            onPressed: () => _pilihNominal(nominal),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(_formatRupiah.format(nominal)),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
             ),
             const SizedBox(height: 14),
             Row(

@@ -28,6 +28,16 @@ class AppVariant {
 
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
+  /// Namespace stabil untuk seluruh data lokal. Nilai ini tidak mengikuti
+  /// nama tampilan sehingga perubahan branding tidak pernah mencampur DB,
+  /// backup transaksi, atau konfigurasi antar aplikasi yang dipasang pada
+  /// komputer/perangkat yang sama.
+  static const storageNamespace = isAlBahjah
+      ? 'albahjah'
+      : (isInventorySales
+          ? 'inventory_sales'
+          : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
+
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales

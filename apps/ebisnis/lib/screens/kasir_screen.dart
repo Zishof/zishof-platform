@@ -1803,6 +1803,13 @@ class _KasirScreenState extends State<KasirScreen> {
   /// navigasi terpisah spt Android) -- lihat JavaDoc `_fokusKeranjang` utk
   /// mode F7 yang menyembunyikan grid & melebarkan panel ini sendirian.
   Widget _bodyDesktop() {
+    // Panel tetap proporsional terhadap layar. Lebar tetap 420 px sebelumnya
+    // terlalu sempit pada monitor Full-HD/2K, sementara nilai terlalu besar
+    // akan mengorbankan katalog pada POS 1366 px. Clamp ini memberi ruang
+    // nyaman bagi nama, harga, qty, dan checkout tanpa memotong grid produk.
+    final lebarLayar = MediaQuery.sizeOf(context).width;
+    final lebarPanelKeranjang =
+        (lebarLayar * 0.34).clamp(460.0, 640.0).toDouble();
     final panel = PanelKeranjang(
       key: ValueKey('panel-keranjang-$_versiTransaksi'),
       keranjang: _keranjang,
@@ -1852,7 +1859,7 @@ class _KasirScreenState extends State<KasirScreen> {
       children: [
         Expanded(child: _kontenKatalog()),
         const VerticalDivider(width: 1),
-        SizedBox(width: 420, child: panel),
+        SizedBox(width: lebarPanelKeranjang, child: panel),
       ],
     );
   }

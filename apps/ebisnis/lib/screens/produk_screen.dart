@@ -479,7 +479,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
           icon: Icons.science_outlined,
           label: _memulaiDataSample
               ? 'Memulai...'
-              : 'Sample 1K Supplier + 50K Produk',
+              : 'Sample 1K Supplier + 600 Jenis + 50K Produk',
           onPressed: _memulaiDataSample ? null : _mulaiDataSampleProduk,
         ),
       HeaderActionButton(

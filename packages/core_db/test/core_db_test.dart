@@ -16,13 +16,14 @@ void main() {
   test(
       'UAT transaksi dipulihkan, disimpan lokal, dan tetap diarsipkan sesudah sinkron',
       () async {
+    CoreDb.configureStorage('uat_ebisnis');
     final root = await Directory.systemTemp.createTemp('ebisnis-core-db-uat-');
     final support = Directory('${root.path}${Platform.pathSeparator}support');
     final documents =
         Directory('${root.path}${Platform.pathSeparator}documents');
     await support.create(recursive: true);
     final backupDirectory = Directory(
-        '${documents.path}${Platform.pathSeparator}eBisnis${Platform.pathSeparator}Backup');
+        '${documents.path}${Platform.pathSeparator}eBisnis${Platform.pathSeparator}uat_ebisnis${Platform.pathSeparator}Backup');
     await backupDirectory.create(recursive: true);
 
     const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
@@ -36,7 +37,7 @@ void main() {
     });
 
     final backup = File(
-        '${backupDirectory.path}${Platform.pathSeparator}transaksi-pos-backup.jsonl');
+        '${backupDirectory.path}${Platform.pathSeparator}transaksi-pos-uat_ebisnis-backup.jsonl');
     final payloadPulih = jsonEncode(<String, Object?>{
       'kodeUnik': 'UAT-PULIH-001',
       'kasir': 'uat-kasir',
