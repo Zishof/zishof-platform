@@ -29,6 +29,7 @@ import 'login_screen.dart';
 import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
 import 'akun_saya_screen.dart';
+import 'laporan_tutup_kas_dialog.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -39,6 +40,7 @@ class KasirScreen extends StatefulWidget {
   final int? draftIdSumber;
   final String? draftKodeSumber;
   final Anggota? memberAwal;
+  final DateTime? waktuTransaksiAwal;
 
   const KasirScreen({
     super.key,
@@ -46,6 +48,7 @@ class KasirScreen extends StatefulWidget {
     this.draftIdSumber,
     this.draftKodeSumber,
     this.memberAwal,
+    this.waktuTransaksiAwal,
   });
 
   @override
@@ -71,6 +74,7 @@ class _KasirScreenState extends State<KasirScreen> {
   int? _draftIdSumber;
   String? _draftKodeSumber;
   Anggota? _memberAwal;
+  DateTime? _waktuTransaksiAwal;
   int _versiTransaksi = 0;
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
@@ -80,6 +84,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// `cashback > 0` saja SENGAJA tidak masuk sini krn harga stiker tidak
   /// berubah. Dibaca [_KartuProduk] lewat `_diskonKatalog[produk.id]`.
   Map<int, double> _diskonKatalog = {};
+  Map<int, double> _cashbackKatalog = {};
   Timer? _debounceHargaCoret;
 
   /// Batas jumlah produk yg dievaluasi sekali panggil -- grid Kasir TIDAK
@@ -93,6 +98,9 @@ class _KasirScreenState extends State<KasirScreen> {
   /// _OverlayBukaKas. Sengaja gerbang KERAS spt versi Electron: kasir TIDAK
   /// BOLEH mulai transaksi apa pun sebelum kas dibuka.
   bool? _kasTerbuka;
+  bool _sesiKasDiPerangkatLain = false;
+  String _namaPerangkatSesiLain = '';
+  String _pesanSesiKas = '';
   double _modalAwalKas = 0;
 
   /// Sinkron latar BERKALA (30 detik, pola PERSIS `mulaiSinkronSesiKasBerkala`
@@ -142,6 +150,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _draftIdSumber = widget.draftIdSumber;
     _draftKodeSumber = widget.draftKodeSumber;
     _memberAwal = widget.memberAwal;
+    _waktuTransaksiAwal = widget.waktuTransaksiAwal;
     _muatPreferensiTampilan();
     _muatAwal();
     if (_keranjang.isNotEmpty) {
@@ -501,6 +510,7 @@ class _KasirScreenState extends State<KasirScreen> {
         'nama_perangkat': IdentitasMesin.instance.namaMesin,
       });
       final terbuka = hasil['terbuka'] == true;
+      final diPerangkatLain = hasil['sesiDiPerangkatLain'] == true;
       if (terbuka) {
         // disinkronkan:true -- ini status ASLI dari server (sudah terkonfirmasi),
         // bukan optimistic-write, jadi tak perlu masuk antrian retry.
@@ -512,7 +522,14 @@ class _KasirScreenState extends State<KasirScreen> {
       } else {
         await CoreDb.instance.tutupSemuaSesiKasLokal();
       }
-      if (mounted) setStateIfMounted(() => _kasTerbuka = terbuka);
+      if (mounted) {
+        setStateIfMounted(() {
+          _kasTerbuka = terbuka;
+          _sesiKasDiPerangkatLain = diPerangkatLain;
+          _namaPerangkatSesiLain = '${hasil['namaPerangkatLain'] ?? ''}';
+          _pesanSesiKas = '${hasil['description'] ?? ''}';
+        });
+      }
       if (mounted) {
         setStateIfMounted(() => _kasSaatIni =
             terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null);
@@ -553,6 +570,9 @@ class _KasirScreenState extends State<KasirScreen> {
       if (mounted) {
         setStateIfMounted(() {
           _kasTerbuka = terbuka;
+          _sesiKasDiPerangkatLain = hasil['sesiDiPerangkatLain'] == true;
+          _namaPerangkatSesiLain = '${hasil['namaPerangkatLain'] ?? ''}';
+          _pesanSesiKas = '${hasil['description'] ?? ''}';
           _kasSaatIni =
               terbuka ? (hasil['kasSaatIni'] as num?)?.toDouble() ?? 0 : null;
         });
@@ -631,71 +651,58 @@ class _KasirScreenState extends State<KasirScreen> {
     final hasilTutup = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _DialogTutupKas(status: status!),
+      builder: (_) => _DialogTutupKas(
+        status: status!,
+        bolehKoreksiNominal: Sesi.instance.bolehKelola,
+      ),
     );
     if (hasilTutup == null) return;
 
     final kodeLokal =
         (await CoreDb.instance.sesiKasAktif())?['kode'] as String?;
     try {
-      final hasil = await ApiClient.instance.aksi('sesi_kas_tutup', {
+      final payloadTutup = <String, dynamic>{
         'id_toko': Sesi.instance.tokoId,
         'kode': kodeLokal,
         'id_perangkat': IdentitasMesin.instance.idMesin,
         'nama_perangkat': IdentitasMesin.instance.namaMesin,
         'uang_fisik': hasilTutup['uangFisik'],
         'keterangan': hasilTutup['keterangan'],
-      });
+      };
+      if (hasilTutup['modalAwalKoreksi'] != null) {
+        payloadTutup['modal_awal_koreksi'] = hasilTutup['modalAwalKoreksi'];
+        payloadTutup['alasan_koreksi'] = hasilTutup['alasanKoreksi'];
+      }
+      if (hasilTutup['penjualanTunaiKoreksi'] != null) {
+        payloadTutup['penjualan_tunai_koreksi'] =
+            hasilTutup['penjualanTunaiKoreksi'];
+        payloadTutup['alasan_koreksi'] = hasilTutup['alasanKoreksi'];
+      }
+      final hasil =
+          await ApiClient.instance.aksi('sesi_kas_tutup', payloadTutup);
       if (kodeLokal != null) await CoreDb.instance.tutupSesiKasLokal(kodeLokal);
       if (mounted) setStateIfMounted(() => _kasTerbuka = false);
       final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
       final stokMenipis =
           ((hasil['stokMenipis'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (!mounted) return;
+      final laporan = hasil['laporanTutupKas'] is Map
+          ? Map<String, dynamic>.from(hasil['laporanTutupKas'] as Map)
+          : <String, dynamic>{
+              'kasSeharusnya': kasSaatIni,
+              'jumlahKasTunai': hasilTutup['uangFisik'],
+              'selisih': selisih,
+            };
       await showDialog(
         context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Kas Ditutup'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Kas Seharusnya: ${_formatRupiah.format(kasSaatIni)}'),
-              Text(
-                  'Uang Fisik: ${_formatRupiah.format(hasilTutup['uangFisik'])}'),
-              const SizedBox(height: 8),
-              Text('Selisih: ${_formatRupiah.format(selisih)}',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: selisih < 0 ? Colors.red : Colors.green.shade700)),
-              if (stokMenipis.isNotEmpty) ...[
-                const Divider(height: 24),
-                Text('${stokMenipis.length} Produk Perlu Direstok:',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: stokMenipis
-                          .map((p) => Text(
-                              '• ${p['nama']} (stok ${p['stok']}, min ${p['stokMinimum']})',
-                              style: const TextStyle(fontSize: 12)))
-                          .toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Tutup'))
-          ],
-        ),
+        builder: (_) => LaporanTutupKasDialog(laporan: laporan),
       );
+      if (stokMenipis.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${stokMenipis.length} produk perlu direstok.'),
+          duration: const Duration(seconds: 6),
+        ));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -711,7 +718,7 @@ class _KasirScreenState extends State<KasirScreen> {
     // akun yang sama tidak membuka kas pada dua perangkat ketika keduanya berbeda
     // database lokal. Operasi penjualan tetap dapat offline setelah lease diperoleh.
     try {
-      await ApiClient.instance.aksi('sesi_kas_buka', {
+      final hasilBuka = await ApiClient.instance.aksi('sesi_kas_buka', {
         'id_toko': Sesi.instance.tokoId,
         'kode': kode,
         'modal_awal': modalAwal,
@@ -722,8 +729,11 @@ class _KasirScreenState extends State<KasirScreen> {
         'id_perangkat': IdentitasMesin.instance.idMesin,
         'nama_perangkat': IdentitasMesin.instance.namaMesin,
       });
+      final kodeAktif = '${hasilBuka['kode'] ?? kode}';
+      final modalAktif =
+          (hasilBuka['modalAwal'] as num?)?.toDouble() ?? modalAwal;
       await CoreDb.instance
-          .bukaSesiKasLokal(kode, modalAwal, disinkronkan: true);
+          .bukaSesiKasLokal(kodeAktif, modalAktif, disinkronkan: true);
       if (mounted) {
         setStateIfMounted(() => _kasTerbuka = true);
         _jadwalkanFokusCariItem();
@@ -747,14 +757,26 @@ class _KasirScreenState extends State<KasirScreen> {
     for (final row in pending) {
       final kode = row['kode'] as String;
       try {
-        await ApiClient.instance.aksi('sesi_kas_buka', {
+        final hasilBuka = await ApiClient.instance.aksi('sesi_kas_buka', {
           'id_toko': Sesi.instance.tokoId,
           'kode': kode,
           'modal_awal': row['modal_awal'],
           'id_perangkat': IdentitasMesin.instance.idMesin,
           'nama_perangkat': IdentitasMesin.instance.namaMesin,
         });
-        await CoreDb.instance.tandaiSesiKasTersinkron(kode);
+        final kodeServer = '${hasilBuka['kode'] ?? kode}';
+        if (kodeServer != kode) {
+          await CoreDb.instance.tutupSesiKasLokal(kode);
+          await CoreDb.instance.bukaSesiKasLokal(
+            kodeServer,
+            (hasilBuka['modalAwal'] as num?)?.toDouble() ??
+                (row['modal_awal'] as num?)?.toDouble() ??
+                0,
+            disinkronkan: true,
+          );
+        } else {
+          await CoreDb.instance.tandaiSesiKasTersinkron(kode);
+        }
       } catch (e) {
         if (e is ApiException && !e.offline) {
           await CoreDb.instance.tutupSesiKasLokal(kode);
@@ -795,8 +817,14 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftIdSumber = null;
       _draftKodeSumber = null;
       _memberAwal = null;
+      _waktuTransaksiAwal = null;
     });
     unawaited(_perbaruiJumlahPending());
+    // Segarkan katalog segera setelah checkout. Server sudah menghitung ulang stok dari jurnal
+    // transaksi; mengambil ulang katalog di sini mencegah kartu/monitor kasir terus menampilkan
+    // saldo cache sebelum transaksi. Bila sedang offline, helper tetap mempertahankan cache dan
+    // sinkron berikutnya akan mencoba lagi tanpa mengganggu kasir.
+    unawaited(_sinkronKatalogDanKonfigurasi());
     _jadwalkanFokusCariItem();
   }
 
@@ -854,8 +882,11 @@ class _KasirScreenState extends State<KasirScreen> {
     if (tokoId == null) return;
     final tampil = _produkTersaring.take(_batasPreviewHargaCoret).toList();
     if (tampil.isEmpty) {
-      if (_diskonKatalog.isNotEmpty) {
-        setStateIfMounted(() => _diskonKatalog = {});
+      if (_diskonKatalog.isNotEmpty || _cashbackKatalog.isNotEmpty) {
+        setStateIfMounted(() {
+          _diskonKatalog = {};
+          _cashbackKatalog = {};
+        });
       }
       return;
     }
@@ -869,12 +900,18 @@ class _KasirScreenState extends State<KasirScreen> {
       final items = (hasil['items'] as List?) ?? [];
       if (!mounted) return;
       final peta = <int, double>{};
+      final petaCashback = <int, double>{};
       for (final it in items) {
         final m = it as Map<String, dynamic>;
         final diskon = (m['diskon'] as num?)?.toDouble() ?? 0;
         if (diskon > 0) peta[m['id'] as int] = diskon;
+        final cashback = (m['cashback'] as num?)?.toDouble() ?? 0;
+        if (cashback > 0) petaCashback[m['id'] as int] = cashback;
       }
-      setStateIfMounted(() => _diskonKatalog = peta);
+      setStateIfMounted(() {
+        _diskonKatalog = peta;
+        _cashbackKatalog = petaCashback;
+      });
     } catch (_) {
       // Offline/gagal -- biarkan katalog tampil harga normal, bukan error.
     }
@@ -894,9 +931,11 @@ class _KasirScreenState extends State<KasirScreen> {
           .where((i) => i.produk.id == p.id && i.ekstra.isEmpty)
           .toList();
       if (existing.isNotEmpty) {
-        existing.first.jumlah++;
+        final item = existing.first;
+        item.jumlah++;
+        tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.add(ItemKeranjang(produk: p));
+        _keranjang.insert(0, ItemKeranjang(produk: p));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -921,9 +960,11 @@ class _KasirScreenState extends State<KasirScreen> {
           .where((i) => i.produk.id == p.id && _ekstraSama(i.ekstra, dipilih))
           .toList();
       if (existing.isNotEmpty) {
-        existing.first.jumlah++;
+        final item = existing.first;
+        item.jumlah++;
+        tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.add(ItemKeranjang(produk: p, ekstra: dipilih));
+        _keranjang.insert(0, ItemKeranjang(produk: p, ekstra: dipilih));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -1086,6 +1127,7 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftIdSumber = null;
       _draftKodeSumber = null;
       _memberAwal = null;
+      _waktuTransaksiAwal = null;
       _versiTransaksi++;
       _kataKunciController.clear();
       _kataKunci = '';
@@ -1108,6 +1150,7 @@ class _KasirScreenState extends State<KasirScreen> {
         draftIdSumber: _draftIdSumber,
         draftKodeSumber: _draftKodeSumber,
         memberAwal: _memberAwal,
+        waktuTransaksiAwal: _waktuTransaksiAwal,
       ),
     ));
     await _perbaruiJumlahPending();
@@ -1116,6 +1159,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _draftIdSumber = null;
         _draftKodeSumber = null;
         _memberAwal = null;
+        _waktuTransaksiAwal = null;
         _versiTransaksi++;
       }
     });
@@ -1267,6 +1311,13 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  /// Semua aksi operasional pada halaman Kasir dikunci sampai sesi kas aktif.
+  /// Navigasi sidebar dikelola AppShell dan Logout sengaja tetap tersedia.
+  bool get _aksiKasirAktif =>
+      !Sesi.instance.wajibSesiKas || _kasTerbuka == true;
+
+  bool get _bolehMembukaKas => _kasTerbuka == false && !_sesiKasDiPerangkatLain;
+
   List<Widget> get _tombolAksiMobile => [
         PopupMenuButton<_AksiKasirMobile>(
           key: const Key('menu-aksi-kasir-mobile'),
@@ -1301,6 +1352,7 @@ class _KasirScreenState extends State<KasirScreen> {
           itemBuilder: (context) => [
             PopupMenuItem(
               value: _AksiKasirMobile.transaksiBaru,
+              enabled: _aksiKasirAktif,
               child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.add_shopping_cart_outlined),
@@ -1310,7 +1362,7 @@ class _KasirScreenState extends State<KasirScreen> {
             const PopupMenuDivider(),
             PopupMenuItem(
               value: _AksiKasirMobile.kas,
-              enabled: _kasTerbuka != null,
+              enabled: _kasTerbuka == true || _bolehMembukaKas,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.point_of_sale_outlined),
@@ -1319,7 +1371,7 @@ class _KasirScreenState extends State<KasirScreen> {
             ),
             PopupMenuItem(
               value: _AksiKasirMobile.sinkron,
-              enabled: !_sinkronBerjalan,
+              enabled: _aksiKasirAktif && !_sinkronBerjalan,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.sync),
@@ -1328,17 +1380,19 @@ class _KasirScreenState extends State<KasirScreen> {
                     : 'Sync'),
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _AksiKasirMobile.muatUlang,
-              child: ListTile(
+              enabled: _aksiKasirAktif,
+              child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.refresh),
                 title: Text('Muat Ulang'),
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _AksiKasirMobile.akun,
-              child: ListTile(
+              enabled: _aksiKasirAktif,
+              child: const ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.account_circle_outlined),
                 title: Text('Akun Saya'),
@@ -1362,12 +1416,12 @@ class _KasirScreenState extends State<KasirScreen> {
           _tombolToolbar(
               icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
               label: 'Transaksi Baru',
-              onPressed: _transaksiBaru,
+              onPressed: _aksiKasirAktif ? _transaksiBaru : null,
               tooltip: 'Mulai transaksi baru'),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: OutlinedButton.icon(
-              onPressed: _toggleFokusKeranjang,
+              onPressed: _aksiKasirAktif ? _toggleFokusKeranjang : null,
               icon: Icon(
                   _fokusKeranjang
                       ? Icons.grid_view_outlined
@@ -1455,17 +1509,17 @@ class _KasirScreenState extends State<KasirScreen> {
             _tombolToolbar(
                 icon: const Icon(Icons.storefront_outlined, size: 18),
                 label: 'Toko',
-                onPressed: _gantiToko,
+                onPressed: _aksiKasirAktif ? _gantiToko : null,
                 tooltip: 'Ganti Toko'),
           _tombolToolbar(
               icon: const Icon(Icons.desktop_windows_outlined, size: 18),
               label: 'Layar',
-              onPressed: _bukaLayarPelanggan,
+              onPressed: _aksiKasirAktif ? _bukaLayarPelanggan : null,
               tooltip: 'Layar Pelanggan (F9)'),
           _tombolToolbar(
               icon: const Icon(Icons.cloud_download_outlined, size: 18),
               label: 'Update',
-              onPressed: _cekUpdateManual,
+              onPressed: _aksiKasirAktif ? _cekUpdateManual : null,
               tooltip: 'Cek Update Sistem'),
           _tombolToolbar(
             icon: _bukaLaciBerjalan
@@ -1475,7 +1529,7 @@ class _KasirScreenState extends State<KasirScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.point_of_sale, size: 18),
             label: 'Laci',
-            onPressed: _bukaLaciBerjalan ? null : _bukaLaci,
+            onPressed: !_aksiKasirAktif || _bukaLaciBerjalan ? null : _bukaLaci,
             tooltip: 'Buka Laci (F6)',
           ),
         ],
@@ -1484,11 +1538,12 @@ class _KasirScreenState extends State<KasirScreen> {
           label: _kasTerbuka == true
               ? 'Kas'
               : (_kasTerbuka == null ? 'Cek Kas' : 'Buka Kas'),
-          onPressed: _kasTerbuka == null
-              ? null
-              : (_kasTerbuka == true
-                  ? _bukaDialogTutupKas
-                  : _bukaDialogBukaKas),
+          onPressed:
+              _kasTerbuka == null || (_kasTerbuka == false && !_bolehMembukaKas)
+                  ? null
+                  : (_kasTerbuka == true
+                      ? _bukaDialogTutupKas
+                      : _bukaDialogBukaKas),
           tooltip: _kasTerbuka == true
               ? 'Sesi Kasir / Tutup Kas'
               : 'Buka sesi kasir',
@@ -1505,18 +1560,19 @@ class _KasirScreenState extends State<KasirScreen> {
                 : const Icon(Icons.sync, size: 18),
           ),
           label: 'Sync',
-          onPressed: _sinkronBerjalan ? null : _sinkronkanSekarang,
+          onPressed:
+              !_aksiKasirAktif || _sinkronBerjalan ? null : _sinkronkanSekarang,
           tooltip: 'Sinkronkan transaksi tertunda (F8)',
         ),
         _tombolToolbar(
             icon: const Icon(Icons.refresh, size: 18),
             label: 'Muat Ulang',
-            onPressed: _muatAwal,
+            onPressed: _aksiKasirAktif ? _muatAwal : null,
             tooltip: 'Muat ulang katalog'),
         _tombolToolbar(
             icon: const Icon(Icons.account_circle_outlined, size: 18),
             label: 'Akun Saya',
-            onPressed: _bukaAkunSaya,
+            onPressed: _aksiKasirAktif ? _bukaAkunSaya : null,
             tooltip: 'Akun Saya'),
         _tombolToolbar(
             icon: const Icon(Icons.logout, size: 18),
@@ -1535,6 +1591,7 @@ class _KasirScreenState extends State<KasirScreen> {
       return KeyEventResult.ignored;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (!_aksiKasirAktif) return KeyEventResult.handled;
     if (event.logicalKey == LogicalKeyboardKey.f1) {
       _bukaBantuan();
       return KeyEventResult.handled;
@@ -1699,10 +1756,15 @@ class _KasirScreenState extends State<KasirScreen> {
                           ? _bodyDesktop()
                           : _kontenKatalog(),
               if (_kasTerbuka == false && Sesi.instance.wajibSesiKas)
-                _OverlayBukaKas(onBuka: (modal, catatan) {
-                  setStateIfMounted(() => _modalAwalKas = modal);
-                  _bukaKas(_modalAwalKas, catatan);
-                }),
+                _OverlayBukaKas(
+                    sesiDiPerangkatLain: _sesiKasDiPerangkatLain,
+                    namaPerangkatLain: _namaPerangkatSesiLain,
+                    pesan: _pesanSesiKas,
+                    onPeriksaUlang: _periksaSesiKas,
+                    onBuka: (modal, catatan) {
+                      setStateIfMounted(() => _modalAwalKas = modal);
+                      _bukaKas(_modalAwalKas, catatan);
+                    }),
             ],
           ),
         ),
@@ -1721,6 +1783,7 @@ class _KasirScreenState extends State<KasirScreen> {
       draftIdSumber: _draftIdSumber,
       draftKodeSumber: _draftKodeSumber,
       memberAwal: _memberAwal,
+      waktuTransaksiAwal: _waktuTransaksiAwal,
       pencarianBarang: _fokusKeranjang ? _kotakPencarian() : null,
       tampilkanJudul: !_fokusKeranjang,
       aksiHeader: _fokusKeranjang
@@ -1896,6 +1959,7 @@ class _KasirScreenState extends State<KasirScreen> {
                   produk: _produkTersaring[i],
                   onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
                   diskon: _diskonKatalog[_produkTersaring[i].id],
+                  cashback: _cashbackKatalog[_produkTersaring[i].id],
                 ),
               );
             },
@@ -1992,7 +2056,16 @@ class _DialogBukaKasState extends State<_DialogBukaKas> {
 
 class _OverlayBukaKas extends StatefulWidget {
   final void Function(double modalAwal, String catatan) onBuka;
-  const _OverlayBukaKas({required this.onBuka});
+  final bool sesiDiPerangkatLain;
+  final String namaPerangkatLain;
+  final String pesan;
+  final Future<void> Function() onPeriksaUlang;
+  const _OverlayBukaKas(
+      {required this.onBuka,
+      required this.sesiDiPerangkatLain,
+      required this.namaPerangkatLain,
+      required this.pesan,
+      required this.onPeriksaUlang});
 
   @override
   State<_OverlayBukaKas> createState() => _OverlayBukaKasState();
@@ -2027,55 +2100,72 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                     Icon(Icons.point_of_sale,
                         size: 32, color: AppColors.primary),
                     const SizedBox(height: 8),
-                    const Text('Buka Kas Terlebih Dahulu',
+                    Text(
+                        widget.sesiDiPerangkatLain
+                            ? 'Kas Aktif di Perangkat Lain'
+                            : 'Buka Kas Terlebih Dahulu',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     // Padanan `.sesikas-status.tutup` versi Electron -- status
                     // berwarna merah SEBELUM deskripsi netral, konsisten dgn
                     // _DialogBukaKas/_DialogTutupKas.
-                    const Text('Kas sedang tertutup',
+                    Text(
+                        widget.sesiDiPerangkatLain
+                            ? 'Transaksi pada perangkat ini dikunci'
+                            : 'Kas sedang tertutup',
                         style: TextStyle(
                             color: AppColors.danger,
                             fontWeight: FontWeight.w600,
                             fontSize: 12.5)),
                     const SizedBox(height: 4),
                     Text(
-                      'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
+                      widget.sesiDiPerangkatLain
+                          ? (widget.pesan.isNotEmpty
+                              ? widget.pesan
+                              : 'Akun ini masih memiliki sesi kas aktif di ${widget.namaPerangkatLain.isEmpty ? 'perangkat lain' : widget.namaPerangkatLain}. Tutup kas di perangkat tersebut, lalu periksa ulang. Pembukaan kas dan transaksi baru tidak diizinkan di perangkat ini.')
+                          : 'Kasir wajib membuka sesi kas sebelum bisa mulai menjual.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 12.5,
                           color: AppColors.textSecondaryOf(context)),
                     ),
                     const SizedBox(height: 14),
-                    TextField(
-                      controller: _controller,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Modal Awal (Rp)',
-                          isDense: true,
-                          border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _catatanController,
-                      decoration: const InputDecoration(
-                          labelText: 'Catatan Pembukaan (opsional)',
-                          isDense: true,
-                          border: OutlineInputBorder()),
-                      maxLines: 2,
-                    ),
+                    if (!widget.sesiDiPerangkatLain)
+                      TextField(
+                        controller: _controller,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Modal Awal (Rp)',
+                            isDense: true,
+                            border: OutlineInputBorder()),
+                      ),
+                    if (!widget.sesiDiPerangkatLain) const SizedBox(height: 10),
+                    if (!widget.sesiDiPerangkatLain)
+                      TextField(
+                        controller: _catatanController,
+                        decoration: const InputDecoration(
+                            labelText: 'Catatan Pembukaan (opsional)',
+                            isDense: true,
+                            border: OutlineInputBorder()),
+                        maxLines: 2,
+                      ),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          final modal = double.tryParse(_controller.text
-                                  .replaceAll(RegExp('[^0-9.]'), '')) ??
-                              0;
-                          widget.onBuka(modal, _catatanController.text.trim());
-                        },
-                        child: const Text('Buka Kas'),
+                        onPressed: widget.sesiDiPerangkatLain
+                            ? widget.onPeriksaUlang
+                            : () {
+                                final modal = double.tryParse(_controller.text
+                                        .replaceAll(RegExp('[^0-9.]'), '')) ??
+                                    0;
+                                widget.onBuka(
+                                    modal, _catatanController.text.trim());
+                              },
+                        child: Text(widget.sesiDiPerangkatLain
+                            ? 'Periksa Ulang Status Kas'
+                            : 'Buka Kas'),
                       ),
                     ),
                   ],
@@ -2192,7 +2282,9 @@ class _KartuProduk extends StatefulWidget {
   /// [_KasirScreenState._evaluasiHargaCoret]) -- kartu ini sendiri tetap jaga
   /// gerbang `> 0` supaya aman dipanggil apa adanya.
   final double? diskon;
-  const _KartuProduk({required this.produk, required this.onTap, this.diskon});
+  final double? cashback;
+  const _KartuProduk(
+      {required this.produk, required this.onTap, this.diskon, this.cashback});
 
   @override
   State<_KartuProduk> createState() => _KartuProdukState();
@@ -2250,6 +2342,7 @@ class _KartuProdukState extends State<_KartuProduk> {
     final produk = widget.produk;
     final onTap = widget.onTap;
     final diskon = widget.diskon;
+    final cashback = widget.cashback;
     final habis = produk.stok <= 0;
     final stokRendah = !habis && produk.stok <= 5;
     final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty
@@ -2357,6 +2450,24 @@ class _KartuProdukState extends State<_KartuProduk> {
                         ),
                       ),
                     ),
+                    if ((cashback ?? 0) > 0)
+                      Positioned(
+                        left: 6,
+                        bottom: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Text(
+                              'Cashback ${_formatRupiah.format(cashback)}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -2443,7 +2554,11 @@ class _KartuProdukState extends State<_KartuProduk> {
 /// yang menghitung dari riwayat transaksi lengkap, lihat _bukaDialogTutupKas).
 class _DialogTutupKas extends StatefulWidget {
   final Map<String, dynamic> status;
-  const _DialogTutupKas({required this.status});
+  final bool bolehKoreksiNominal;
+  const _DialogTutupKas({
+    required this.status,
+    required this.bolehKoreksiNominal,
+  });
 
   @override
   State<_DialogTutupKas> createState() => _DialogTutupKasState();
@@ -2451,38 +2566,91 @@ class _DialogTutupKas extends StatefulWidget {
 
 class _DialogTutupKasState extends State<_DialogTutupKas> {
   late final TextEditingController _uangFisikController;
+  late final TextEditingController _modalAwalController;
+  late final TextEditingController _penjualanTunaiController;
   final _keteranganController = TextEditingController();
+  final _alasanKoreksiController = TextEditingController();
+  bool _modeKoreksi = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final penjualanTunai =
+        (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
     _uangFisikController =
         TextEditingController(text: kasSaatIni.toStringAsFixed(0));
+    _modalAwalController =
+        TextEditingController(text: modalAwal.toStringAsFixed(0));
+    _penjualanTunaiController =
+        TextEditingController(text: penjualanTunai.toStringAsFixed(0));
+    _modalAwalController.addListener(_perbaruiTampilanKoreksi);
+    _penjualanTunaiController.addListener(_perbaruiTampilanKoreksi);
+  }
+
+  void _perbaruiTampilanKoreksi() {
+    if (mounted && _modeKoreksi) setState(() {});
   }
 
   @override
   void dispose() {
     _uangFisikController.dispose();
+    _modalAwalController
+      ..removeListener(_perbaruiTampilanKoreksi)
+      ..dispose();
+    _penjualanTunaiController
+      ..removeListener(_perbaruiTampilanKoreksi)
+      ..dispose();
     _keteranganController.dispose();
+    _alasanKoreksiController.dispose();
     super.dispose();
   }
 
   void _konfirmasi() {
     final uangFisik = double.tryParse(
         _uangFisikController.text.replaceAll(RegExp('[^0-9.]'), ''));
-    if (uangFisik == null) {
-      setStateIfMounted(() => _error = 'Uang fisik wajib diisi angka.');
+    if (uangFisik == null || uangFisik < 0) {
+      setStateIfMounted(
+          () => _error = 'Uang fisik wajib berupa angka nol atau lebih.');
       return;
     }
     if (_keteranganController.text.trim().isEmpty) {
       setStateIfMounted(() => _error = 'Catatan penutupan wajib diisi.');
       return;
     }
-    Navigator.of(context).pop({
+    double? modalAwalKoreksi;
+    double? penjualanTunaiKoreksi;
+    if (_modeKoreksi) {
+      modalAwalKoreksi = double.tryParse(
+          _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
+      if (modalAwalKoreksi == null || modalAwalKoreksi < 0) {
+        setStateIfMounted(
+            () => _error = 'Modal awal hasil koreksi wajib berupa angka.');
+        return;
+      }
+      penjualanTunaiKoreksi = double.tryParse(
+          _penjualanTunaiController.text.replaceAll(RegExp('[^0-9.]'), ''));
+      if (penjualanTunaiKoreksi == null || penjualanTunaiKoreksi < 0) {
+        setStateIfMounted(
+            () => _error = 'Penjualan tunai hasil koreksi wajib berupa angka.');
+        return;
+      }
+      if (_alasanKoreksiController.text.trim().length < 5) {
+        setStateIfMounted(() => _error =
+            'Alasan koreksi supervisor wajib diisi minimal 5 karakter.');
+        return;
+      }
+    }
+    Navigator.of(context).pop(<String, dynamic>{
       'uangFisik': uangFisik,
-      'keterangan': _keteranganController.text.trim()
+      'keterangan': _keteranganController.text.trim(),
+      if (modalAwalKoreksi != null) 'modalAwalKoreksi': modalAwalKoreksi,
+      if (penjualanTunaiKoreksi != null)
+        'penjualanTunaiKoreksi': penjualanTunaiKoreksi,
+      if (modalAwalKoreksi != null)
+        'alasanKoreksi': _alasanKoreksiController.text.trim(),
     });
   }
 
@@ -2527,11 +2695,27 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
 
   @override
   Widget build(BuildContext context) {
-    final modalAwal = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
-    final totalTunai = (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
+    final modalAwalAsli = (widget.status['modalAwal'] as num?)?.toDouble() ?? 0;
+    final modalAwalInput = double.tryParse(
+        _modalAwalController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    final modalAwal =
+        _modeKoreksi && modalAwalInput != null ? modalAwalInput : modalAwalAsli;
+    final totalTunaiAsli =
+        (widget.status['totalTunai'] as num?)?.toDouble() ?? 0;
+    final totalTunaiInput = double.tryParse(
+        _penjualanTunaiController.text.replaceAll(RegExp('[^0-9.]'), ''));
+    final totalTunai = _modeKoreksi && totalTunaiInput != null
+        ? totalTunaiInput
+        : totalTunaiAsli;
     final totalNonTunai =
         (widget.status['totalNonTunai'] as num?)?.toDouble() ?? 0;
-    final kasSaatIni = (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final kasSaatIniAsli =
+        (widget.status['kasSaatIni'] as num?)?.toDouble() ?? 0;
+    final kasSaatIni = kasSaatIniAsli +
+        modalAwal -
+        modalAwalAsli +
+        totalTunai -
+        totalTunaiAsli;
     final waktuBuka = _waktuBukaFormatted;
     return AlertDialog(
       title: const Text('Sesi Kasir'),
@@ -2579,6 +2763,60 @@ class _DialogTutupKasState extends State<_DialogTutupKas> {
                 const SizedBox(width: 10),
                 _kartuStat('Kas Seharusnya', _formatRupiah.format(kasSaatIni))
               ]),
+              if (widget.bolehKoreksiNominal) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() {
+                      _modeKoreksi = !_modeKoreksi;
+                      _error = null;
+                      if (!_modeKoreksi) {
+                        _modalAwalController.text =
+                            modalAwalAsli.toStringAsFixed(0);
+                        _penjualanTunaiController.text =
+                            totalTunaiAsli.toStringAsFixed(0);
+                        _alasanKoreksiController.clear();
+                      }
+                    }),
+                    icon: Icon(_modeKoreksi ? Icons.close : Icons.edit_outlined,
+                        size: 17),
+                    label: Text(
+                        _modeKoreksi ? 'Batalkan Edit' : 'Edit Nominal Sesi'),
+                  ),
+                ),
+              ],
+              if (_modeKoreksi) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _modalAwalController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Modal Awal Hasil Koreksi (Rp) *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _penjualanTunaiController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Penjualan Tunai Hasil Koreksi (Rp) *',
+                    helperText:
+                        'Kas seharusnya dihitung ulang otomatis dari koreksi ini.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _alasanKoreksiController,
+                  decoration: const InputDecoration(
+                    labelText: 'Alasan Koreksi Supervisor *',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
               const SizedBox(height: 16),
               if (_error != null)
                 Padding(

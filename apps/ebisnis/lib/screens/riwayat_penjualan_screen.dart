@@ -11,6 +11,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import 'struk_screen.dart';
+import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -65,10 +66,19 @@ String _formatQtyKoreksi(double value) =>
     value == value.roundToDouble() ? value.toInt().toString() : '$value';
 
 class _DialogEditTransaksi extends StatefulWidget {
-  const _DialogEditTransaksi({required this.nomor, required this.items});
+  const _DialogEditTransaksi({
+    required this.nomor,
+    required this.items,
+    required this.waktu,
+    required this.kasirUserId,
+    required this.kasirNama,
+  });
 
   final String nomor;
   final List<Map<String, dynamic>> items;
+  final DateTime waktu;
+  final String kasirUserId;
+  final String kasirNama;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -77,14 +87,23 @@ class _DialogEditTransaksi extends StatefulWidget {
 class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   final _alasanController = TextEditingController();
   final _cariController = TextEditingController();
+  final _cariKasirController = TextEditingController();
   late final List<_BarisKoreksiTransaksi> _baris;
   List<Map<String, dynamic>> _hasilCari = [];
   bool _mencari = false;
+  List<Map<String, dynamic>> _hasilCariKasir = [];
+  bool _mencariKasir = false;
+  late String _kasirUserId;
+  late String _kasirNama;
   String? _pesan;
+  late DateTime _waktu;
 
   @override
   void initState() {
     super.initState();
+    _waktu = widget.waktu;
+    _kasirUserId = widget.kasirUserId;
+    _kasirNama = widget.kasirNama;
     _baris = widget.items
         .map((i) => _BarisKoreksiTransaksi(
               pembelianId: i['pembelianId'],
@@ -103,7 +122,48 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     }
     _alasanController.dispose();
     _cariController.dispose();
+    _cariKasirController.dispose();
     super.dispose();
+  }
+
+  Future<void> _cariKasir() async {
+    final kata = _cariKasirController.text.trim();
+    if (kata.length < 2) {
+      setState(
+          () => _pesan = 'Ketik sedikitnya 2 karakter ID atau nama kasir.');
+      return;
+    }
+    setState(() {
+      _mencariKasir = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('edit_transaksi_kasir_cari', {'keyword': kata});
+      if (!mounted) return;
+      setState(() => _hasilCariKasir = ((hasil['data'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList());
+    } catch (e) {
+      if (mounted) {
+        setState(() => _pesan =
+            'Akun kasir belum dapat dicari. Periksa koneksi, lalu coba kembali.');
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'mencari akun kasir');
+      }
+    } finally {
+      if (mounted) setState(() => _mencariKasir = false);
+    }
+  }
+
+  void _pilihKasir(Map<String, dynamic> akun) {
+    setState(() {
+      _kasirUserId = '${akun['userId'] ?? ''}'.trim();
+      _kasirNama = '${akun['nama'] ?? akun['userId'] ?? ''}'.trim();
+      _hasilCariKasir = [];
+      _cariKasirController.clear();
+    });
   }
 
   Future<void> _cariProduk() async {
@@ -188,7 +248,40 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
         'qty': qty,
       });
     }
-    Navigator.of(context).pop({'alasan': alasan, 'item': item});
+    Navigator.of(context).pop({
+      'alasan': alasan,
+      'item': item,
+      'waktu': _waktu.toIso8601String(),
+      if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
+    });
+  }
+
+  Future<void> _pilihWaktu() async {
+    final sekarang = DateTime.now();
+    final tanggalAwal = _waktu.isAfter(sekarang) ? sekarang : _waktu;
+    final tanggal = await showDatePicker(
+      context: context,
+      initialDate: tanggalAwal,
+      firstDate: DateTime(2000),
+      lastDate: sekarang,
+    );
+    if (tanggal == null || !mounted) return;
+    final jam = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_waktu),
+    );
+    if (jam == null || !mounted) return;
+    final pilihan = DateTime(
+        tanggal.year, tanggal.month, tanggal.day, jam.hour, jam.minute);
+    if (pilihan.isAfter(DateTime.now())) {
+      setState(() => _pesan =
+          'Tanggal dan jam transaksi tidak boleh berada di masa depan.');
+      return;
+    }
+    setState(() {
+      _waktu = pilihan;
+      _pesan = null;
+    });
   }
 
   @override
@@ -213,6 +306,67 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               ),
             ),
             const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_outlined),
+              title: const Text('Tanggal dan jam transaksi'),
+              subtitle: Text(DateFormat('dd-MM-yyyy HH:mm').format(_waktu)),
+              trailing: OutlinedButton.icon(
+                onPressed: _pilihWaktu,
+                icon: const Icon(Icons.edit_calendar_outlined),
+                label: const Text('Ubah'),
+              ),
+            ),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _cariKasirController,
+                  onSubmitted: (_) => _cariKasir(),
+                  decoration: InputDecoration(
+                    labelText: 'Kasir transaksi',
+                    hintText: 'Cari ID atau nama pada tbmuser',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    helperText: _kasirNama.isEmpty
+                        ? 'Kasir saat ini belum tercatat'
+                        : 'Terpilih: $_kasirNama${_kasirUserId.isEmpty ? '' : ' ($_kasirUserId)'}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _mencariKasir ? null : _cariKasir,
+                icon: _mencariKasir
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search),
+                label: const Text('Cari Kasir'),
+              ),
+            ]),
+            if (_hasilCariKasir.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(8)),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _hasilCariKasir
+                      .map((akun) => ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.person_outline),
+                            title:
+                                Text('${akun['nama'] ?? akun['userId'] ?? ''}'),
+                            subtitle: Text('${akun['userId'] ?? ''}'),
+                            trailing: const Icon(Icons.check_circle_outline),
+                            onTap: () => _pilihKasir(akun),
+                          ))
+                      .toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
             Row(children: [
               Expanded(
                 child: TextField(
@@ -462,6 +616,20 @@ String _formatWaktu(dynamic raw) {
   }
 }
 
+DateTime _parseWaktuKoreksi(dynamic raw) {
+  final nilai = raw?.toString().trim() ?? '';
+  final iso = DateTime.tryParse(nilai);
+  if (iso != null) return iso;
+  for (final pola in ['dd-MM-yyyy HH:mm:ss', 'dd-MM-yyyy HH:mm']) {
+    try {
+      return DateFormat(pola).parseStrict(nilai);
+    } catch (_) {
+      // Coba pola berikutnya.
+    }
+  }
+  return DateTime.now();
+}
+
 /// Layar Riwayat Penjualan (spec §11) -- SENGAJA terpisah dari Laporan
 /// Transaksi: yang ini alat sempit "cari transaksi lunas lalu cetak ulang
 /// strukn ya", bukan dasbor analitik/agregat. Tidak ada aksi server baru --
@@ -481,21 +649,80 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   List<Map<String, dynamic>> _data = [];
   int _halaman = 1;
   int _total = 0;
+  double _omzetTotal = 0;
   DateTime? _mulai;
   DateTime? _sampai;
   String _cariPembeli = '';
+  bool _hanyaTransaksiTidakValid = false;
+  final _kasirFilter = TextEditingController();
+  final _mesinFilter = TextEditingController();
+  final _produkFilter = TextEditingController();
+  final _pelangganFilter = TextEditingController();
+  final _notaFilter = TextEditingController();
+  final _metodeFilter = TextEditingController();
+  final _waktuMulaiFilter = TextEditingController();
+  final _waktuSampaiFilter = TextEditingController();
+  final _totalMinimalFilter = TextEditingController();
+  final _totalMaksimalFilter = TextEditingController();
+  final _qtyMinimalFilter = TextEditingController();
+  final _qtyMaksimalFilter = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    final hariIni = DateTime.now();
+    _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
+    _sampai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _muat();
   }
 
-  bool get _defaultTanpaFilter =>
-      _mulai == null &&
-      _sampai == null &&
-      _cariPembeli.isEmpty &&
-      _halaman == 1;
+  @override
+  void dispose() {
+    for (final controller in [
+      _kasirFilter,
+      _mesinFilter,
+      _produkFilter,
+      _pelangganFilter,
+      _notaFilter,
+      _metodeFilter,
+      _waktuMulaiFilter,
+      _waktuSampaiFilter,
+      _totalMinimalFilter,
+      _totalMaksimalFilter,
+      _qtyMinimalFilter,
+      _qtyMaksimalFilter,
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _adaFilterLanjutan => [
+        _kasirFilter,
+        _mesinFilter,
+        _produkFilter,
+        _pelangganFilter,
+        _notaFilter,
+        _metodeFilter,
+        _waktuMulaiFilter,
+        _waktuSampaiFilter,
+        _totalMinimalFilter,
+        _totalMaksimalFilter,
+        _qtyMinimalFilter,
+        _qtyMaksimalFilter,
+      ].any((c) => c.text.trim().isNotEmpty);
+
+  bool get _defaultTanpaFilter {
+    final hariIni = _formatTanggalServer.format(DateTime.now());
+    return _mulai != null &&
+        _sampai != null &&
+        _formatTanggalServer.format(_mulai!) == hariIni &&
+        _formatTanggalServer.format(_sampai!) == hariIni &&
+        _cariPembeli.isEmpty &&
+        !_adaFilterLanjutan &&
+        !_hanyaTransaksiTidakValid &&
+        _halaman == 1;
+  }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -507,10 +734,35 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
         if (_cariPembeli.isNotEmpty) 'keyword': _cariPembeli,
+        if (_kasirFilter.text.trim().isNotEmpty)
+          'kasir': _kasirFilter.text.trim(),
+        if (_mesinFilter.text.trim().isNotEmpty)
+          'mesin': _mesinFilter.text.trim(),
+        if (_produkFilter.text.trim().isNotEmpty)
+          'produk': _produkFilter.text.trim(),
+        if (_pelangganFilter.text.trim().isNotEmpty)
+          'cariPembeli': _pelangganFilter.text.trim(),
+        if (_notaFilter.text.trim().isNotEmpty)
+          'nomorNota': _notaFilter.text.trim(),
+        if (_metodeFilter.text.trim().isNotEmpty)
+          'metodeExact': _metodeFilter.text.trim(),
+        if (_waktuMulaiFilter.text.trim().isNotEmpty)
+          'waktuMulai': _waktuMulaiFilter.text.trim(),
+        if (_waktuSampaiFilter.text.trim().isNotEmpty)
+          'waktuSampai': _waktuSampaiFilter.text.trim(),
+        if ((_angkaFilter(_totalMinimalFilter)) > 0)
+          'totalMinimal': _angkaFilter(_totalMinimalFilter),
+        if ((_angkaFilter(_totalMaksimalFilter)) > 0)
+          'totalMaksimal': _angkaFilter(_totalMaksimalFilter),
+        if ((_angkaFilter(_qtyMinimalFilter)) > 0)
+          'qtyMinimal': _angkaFilter(_qtyMinimalFilter),
+        if ((_angkaFilter(_qtyMaksimalFilter)) > 0)
+          'qtyMaksimal': _angkaFilter(_qtyMaksimalFilter),
         'includePembayaran': true,
         'includeSplitPembayaran': true,
         'sertakanPembayaran': true,
         'withPayments': true,
+        'transaksiTidakValid': _hanyaTransaksiTidakValid,
         'page': _halaman,
         'pageSize': _pageSize,
       };
@@ -525,6 +777,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       setStateIfMounted(() {
         _data = data;
         _total = _normalisasiTotalTransaksi(hasil, data.length);
+        _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
+            data.fold<double>(
+                0, (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
       });
       if (_defaultTanpaFilter) {
         unawaited(CoreDb.instance
@@ -542,6 +797,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           setStateIfMounted(() {
             _data = data;
             _total = _normalisasiTotalTransaksi(hasil, data.length);
+            _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
+                data.fold<double>(0,
+                    (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
             _error = null;
           });
           if (mounted) setStateIfMounted(() => _memuat = false);
@@ -562,6 +820,50 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   Future<void> _terapkan() async {
     _halaman = 1;
     await _muat();
+  }
+
+  double _angkaFilter(TextEditingController controller) =>
+      double.tryParse(
+          controller.text.replaceAll('.', '').replaceAll(',', '.').trim()) ??
+      0;
+
+  Future<void> _resetFilterLanjutan() async {
+    for (final controller in [
+      _kasirFilter,
+      _mesinFilter,
+      _produkFilter,
+      _pelangganFilter,
+      _notaFilter,
+      _metodeFilter,
+      _waktuMulaiFilter,
+      _waktuSampaiFilter,
+      _totalMinimalFilter,
+      _totalMaksimalFilter,
+      _qtyMinimalFilter,
+      _qtyMaksimalFilter,
+    ]) {
+      controller.clear();
+    }
+    _hanyaTransaksiTidakValid = false;
+    await _terapkan();
+  }
+
+  Widget _fieldFilter(String label, TextEditingController controller,
+      {String? hint, TextInputType? keyboardType}) {
+    return SizedBox(
+      width: 230,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        onSubmitted: (_) => _terapkan(),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
   }
 
   Widget _chipRingkasan(String label, String nilai, Color warna) {
@@ -612,6 +914,24 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                         _formatRupiah.format(hasil['totalBiaya'] ?? 0),
                         AppColors.success),
                   ]),
+                  if (row['transaksiTidakValid'] == true) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(AppColors.danger),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Transaksi tidak valid: total master ${_formatRupiah.format(row['totalMaster'] ?? 0)}, total rincian ${_formatRupiah.format(row['totalDetail'] ?? 0)}, selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}.',
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Divider(),
                   ...List.generate(items.length, (idx) {
                     final i = items[idx];
@@ -761,6 +1081,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       builder: (_) => _DialogEditTransaksi(
         nomor: '${detail['kode'] ?? row['nomorNota'] ?? ''}',
         items: items,
+        waktu: _parseWaktuKoreksi(detail['waktu'] ?? row['waktu']),
+        kasirUserId: '${detail['kasirUserId'] ?? ''}',
+        kasirNama: '${detail['kasirNama'] ?? row['kasir'] ?? ''}',
       ),
     );
     if (hasilEdit == null || !mounted) return;
@@ -769,6 +1092,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         'id': row['idTransaksi'],
         'alasan': hasilEdit['alasan'],
         'item': hasilEdit['item'],
+        'waktu': hasilEdit['waktu'],
+        if (hasilEdit['kasir_user_id'] != null)
+          'kasir_user_id': hasilEdit['kasir_user_id'],
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -786,7 +1112,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   Future<void> _cetakUlang(Map<String, dynamic> row,
       Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
     final itemStruk = items
-        .map((i) => {'nama': i['nama'], 'qty': i['qty'], 'harga': i['harga']})
+        .map((i) => {
+              'nama': i['nama'],
+              'qty': i['qty'],
+              'harga': i['harga'],
+              'diskon': i['diskon'] ?? 0,
+              'cashback': i['cashback'] ?? 0,
+            })
         .toList();
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => StrukScreen(
@@ -818,6 +1150,19 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 20),
           children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                icon: const Icon(Icons.insights_outlined, size: 18),
+                label: const Text('Analisis Penjualan'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const RiwayatPenjualanAnalisisScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               height: 96,
               child: ListView(
@@ -836,9 +1181,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                     child: AppKpiCard(
                       icon: Icons.payments_outlined,
                       warna: AppColors.success,
-                      nilai: _formatRupiah.format(_data.fold<num>(
-                          0, (a, r) => a + ((r['totalBiaya'] as num?) ?? 0))),
-                      label: 'Omzet (hal. ini)',
+                      nilai: _formatRupiah.format(_omzetTotal),
+                      label: _mulai != null &&
+                              _sampai != null &&
+                              _formatTanggalServer.format(_mulai!) ==
+                                  _formatTanggalServer.format(_sampai!)
+                          ? 'Omzet ${_formatTanggalServer.format(_mulai!)}'
+                          : 'Omzet seluruh hasil filter',
                     ),
                   ),
                 ],
@@ -892,13 +1241,122 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  AppSearchField(
-                    hintText: 'Cari nama pembeli / nomor nota...',
-                    debounce: const Duration(milliseconds: 450),
-                    onChanged: (v) {
-                      _cariPembeli = v;
-                      _terapkan();
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final pencarian = AppSearchField(
+                        hintText: 'Pencarian cepat pelanggan / nomor nota...',
+                        debounce: const Duration(milliseconds: 450),
+                        onChanged: (v) {
+                          _cariPembeli = v;
+                          _terapkan();
+                        },
+                      );
+                      final filterTidakValid = SizedBox(
+                        width: 250,
+                        child: CheckboxListTile(
+                          value: _hanyaTransaksiTidakValid,
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 0),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text('Transaksi tidak valid'),
+                          subtitle: const Text('Total master ≠ total rincian'),
+                          onChanged: (value) {
+                            setState(() =>
+                                _hanyaTransaksiTidakValid = value ?? false);
+                            _terapkan();
+                          },
+                        ),
+                      );
+                      if (constraints.maxWidth < 700) {
+                        return Column(
+                          children: [
+                            pencarian,
+                            Align(
+                                alignment: Alignment.centerLeft,
+                                child: filterTidakValid),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: pencarian),
+                          const SizedBox(width: 12),
+                          filterTidakValid,
+                        ],
+                      );
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: ExpansionTile(
+                      initiallyExpanded: _adaFilterLanjutan,
+                      leading: const Icon(Icons.filter_alt_outlined),
+                      title: const Text('Filter Lengkap'),
+                      subtitle: Text(_adaFilterLanjutan
+                          ? 'Filter tambahan sedang diterapkan'
+                          : 'Kasir, waktu, produk, pelanggan, nota, metode, nilai, dan jumlah barang'),
+                      childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _fieldFilter('Nama kasir', _kasirFilter,
+                                  hint: 'Contoh: Rizal'),
+                              _fieldFilter('Mesin / perangkat', _mesinFilter,
+                                  hint: 'Kasir 1 / ID mesin'),
+                              _fieldFilter(
+                                  'Nama / kode / barcode barang', _produkFilter,
+                                  hint: 'Nama, kode, atau barcode'),
+                              _fieldFilter('Nama pelanggan', _pelangganFilter,
+                                  hint: 'Member atau pelanggan umum'),
+                              _fieldFilter(
+                                  'Nomor nota / kode transaksi', _notaFilter,
+                                  hint: 'AB... / nomor nota'),
+                              _fieldFilter('Metode pembayaran', _metodeFilter,
+                                  hint: 'Tunai, QRIS, transfer, voucher'),
+                              _fieldFilter('Jam mulai', _waktuMulaiFilter,
+                                  hint: 'HH:mm'),
+                              _fieldFilter('Jam sampai', _waktuSampaiFilter,
+                                  hint: 'HH:mm'),
+                              _fieldFilter(
+                                  'Total minimal (Rp)', _totalMinimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Total maksimal (Rp)', _totalMaksimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Jumlah barang minimal', _qtyMinimalFilter,
+                                  keyboardType: TextInputType.number),
+                              _fieldFilter(
+                                  'Jumlah barang maksimal', _qtyMaksimalFilter,
+                                  keyboardType: TextInputType.number),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _resetFilterLanjutan,
+                              icon: const Icon(Icons.restart_alt),
+                              label: const Text('Reset Filter'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _terapkan,
+                              icon: const Icon(Icons.check),
+                              label: const Text('Terapkan Filter'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -948,12 +1406,34 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                               warna: AppColors.primary),
                         ),
                       ),
-                      AppTableCell.text(
-                        _formatRupiah.format(row['totalBiaya'] ?? 0),
+                      AppTableCell(
                         flex: 2,
                         align: TextAlign.right,
-                        style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w800),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatRupiah.format(row['totalBiaya'] ?? 0),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: row['transaksiTidakValid'] == true
+                                    ? AppColors.danger
+                                    : null,
+                              ),
+                            ),
+                            if (row['transaksiTidakValid'] == true)
+                              Text(
+                                'Selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                       AppTableCell(
                         width: 74,

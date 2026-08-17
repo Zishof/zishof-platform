@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:barcode/barcode.dart' as bc;
@@ -31,6 +33,7 @@ class StrukScreen extends StatelessWidget {
   final String metode;
   final List<Map<String, dynamic>> pembayaran;
   final double pajak;
+  final double diskonFaktur;
   final bool tersinkron;
   final String? statusLabel;
   final String? pelanggan;
@@ -48,6 +51,7 @@ class StrukScreen extends StatelessWidget {
     required this.metode,
     this.pembayaran = const [],
     this.pajak = 0,
+    this.diskonFaktur = 0,
     this.tersinkron = true,
     this.statusLabel,
     this.pelanggan,
@@ -62,7 +66,7 @@ class StrukScreen extends StatelessWidget {
         (sum, i) => sum + _subtotalBaris(i),
       );
 
-  double get _subtotal => pajak > 0 ? total - pajak : _subtotalItem;
+  double get _subtotal => _subtotalItem;
 
   List<Map<String, dynamic>> get _pembayaranEfektif =>
       _normalisasiDaftarPembayaran(pembayaran);
@@ -320,6 +324,18 @@ class StrukScreen extends StatelessWidget {
 
   double _subtotalBaris(Map<String, dynamic> i) => _harga(i) * _qty(i);
 
+  double _diskonBaris(Map<String, dynamic> i) =>
+      (i['diskon'] as num?)?.toDouble() ?? 0;
+
+  double _cashbackBaris(Map<String, dynamic> i) =>
+      (i['cashback'] as num?)?.toDouble() ?? 0;
+
+  double get _totalDiskonItem =>
+      item.fold<double>(0, (sum, i) => sum + _diskonBaris(i));
+
+  double get _totalCashbackItem =>
+      item.fold<double>(0, (sum, i) => sum + _cashbackBaris(i));
+
   String _formatUang(num nilai) => '${_formatAngka.format(nilai)},-';
 
   String _formatQty(num nilai) {
@@ -384,6 +400,249 @@ class StrukScreen extends StatelessWidget {
     }
   }
 
+  Future<Uint8List?> _logoEscPos() async {
+    Uint8List source;
+    final path = PengaturanStruk.instance.logoPath;
+    try {
+      if (path != null) {
+        source = await File(path).readAsBytes();
+      } else {
+        final data = await rootBundle.load(AppVariant.logoAsset);
+        source = data.buffer.asUint8List();
+      }
+    } catch (_) {
+      return null;
+    }
+
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      final paperWidth = PengaturanStruk.instance.lebarKertasMm;
+      final baseWidth = PengaturanStruk.instance.logoLandscape ? 280 : 190;
+      final scale = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
+      final maxWidth = paperWidth <= 58 ? 320 : 512;
+      final targetWidth =
+          (baseWidth * scale).round().clamp(80, maxWidth).toInt();
+      codec = await ui.instantiateImageCodec(source,
+          targetWidth: targetWidth, allowUpscaling: false);
+      final frame = await codec.getNextFrame();
+      image = frame.image;
+      final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (rgba == null) return null;
+      final width = image.width;
+      final height = image.height;
+      final bytesPerRow = (width + 7) ~/ 8;
+      final raster = Uint8List(bytesPerRow * height);
+      for (var y = 0; y < height; y++) {
+        for (var x = 0; x < width; x++) {
+          final offset = (y * width + x) * 4;
+          final r = rgba.getUint8(offset);
+          final g = rgba.getUint8(offset + 1);
+          final b = rgba.getUint8(offset + 2);
+          final a = rgba.getUint8(offset + 3);
+          final luminance = (r * 30 + g * 59 + b * 11) ~/ 100;
+          if (a > 64 && luminance < 178) {
+            raster[y * bytesPerRow + (x ~/ 8)] |= 0x80 >> (x & 7);
+          }
+        }
+      }
+      return Uint8List.fromList([
+        0x1D,
+        0x76,
+        0x30,
+        0x00,
+        bytesPerRow & 0xFF,
+        (bytesPerRow >> 8) & 0xFF,
+        height & 0xFF,
+        (height >> 8) & 0xFF,
+        ...raster,
+      ]);
+    } catch (_) {
+      return null;
+    } finally {
+      image?.dispose();
+      codec?.dispose();
+    }
+  }
+
+  Uint8List _strukEscPos(Uint8List? logo) {
+    final columns = PengaturanStruk.instance.lebarKertasMm <= 58 ? 32 : 42;
+    final out = BytesBuilder(copy: false);
+    const codec = Latin1Codec(allowInvalid: true);
+
+    String clean(String value) => value
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('’', "'")
+        .trim();
+
+    List<String> wrap(String value, [int? width]) {
+      final max = width ?? columns;
+      final words = clean(value).split(' ');
+      final lines = <String>[];
+      var line = '';
+      for (final original in words) {
+        var word = original;
+        while (word.length > max) {
+          if (line.isNotEmpty) {
+            lines.add(line);
+            line = '';
+          }
+          lines.add(word.substring(0, max));
+          word = word.substring(max);
+        }
+        if (word.isEmpty) continue;
+        if (line.isEmpty) {
+          line = word;
+        } else if (line.length + 1 + word.length <= max) {
+          line = '$line $word';
+        } else {
+          lines.add(line);
+          line = word;
+        }
+      }
+      if (line.isNotEmpty) lines.add(line);
+      return lines.isEmpty ? [''] : lines;
+    }
+
+    void command(List<int> bytes) => out.add(bytes);
+    void text(String value) {
+      out.add(codec.encode(value));
+      out.addByte(0x0A);
+    }
+
+    void centered(String value, {bool bold = false}) {
+      command([0x1B, 0x61, 0x01, 0x1B, 0x45, bold ? 0x01 : 0x00]);
+      for (final line in wrap(value)) {
+        text(line);
+      }
+      command([0x1B, 0x45, 0x00, 0x1B, 0x61, 0x00]);
+    }
+
+    void pair(String label, String value, {bool bold = false}) {
+      final left = clean(label);
+      final right = clean(value);
+      command([0x1B, 0x45, bold ? 0x01 : 0x00]);
+      if (left.length + right.length + 1 <= columns) {
+        text(left + (' ' * (columns - left.length - right.length)) + right);
+      } else {
+        for (final line in wrap(left, columns)) {
+          text(line);
+        }
+        text(right.padLeft(columns));
+      }
+      command([0x1B, 0x45, 0x00]);
+    }
+
+    void info(String label, String value) {
+      final prefix = '${clean(label).padRight(9)}: ';
+      final valueWidth = columns - prefix.length;
+      final lines = wrap(value, valueWidth);
+      for (var i = 0; i < lines.length; i++) {
+        text((i == 0 ? prefix : ' ' * prefix.length) + lines[i]);
+      }
+    }
+
+    command([0x1B, 0x40, 0x1B, 0x74, 0x00]); // INIT + CP437.
+    if (logo != null && logo.isNotEmpty) {
+      command([0x1B, 0x61, 0x01]);
+      command(logo);
+      text('');
+    }
+    centered(
+        Sesi.instance.tokoNama.isEmpty ? 'Nama Toko' : Sesi.instance.tokoNama,
+        bold: true);
+    centered(Sesi.instance.tokoAlamat.isEmpty
+        ? 'Alamat toko'
+        : Sesi.instance.tokoAlamat);
+    if (Sesi.instance.tokoTelp.trim().isNotEmpty) {
+      centered(Sesi.instance.tokoTelp);
+    }
+    text('-' * columns);
+    info('No', kode);
+    info('Tanggal', waktu);
+    info('Kasir', _labelKasir());
+    info('Pelanggan', _labelPelanggan());
+    if (statusLabel != null && statusLabel!.trim().isNotEmpty) {
+      info('Status', statusLabel!);
+    }
+    text('-' * columns);
+
+    for (final row in item) {
+      command([0x1B, 0x45, 0x01]);
+      for (final line in wrap('${row['nama'] ?? ''}')) {
+        text(line);
+      }
+      command([0x1B, 0x45, 0x00]);
+      pair('${_formatQty(_qty(row))}x @${_formatAngka.format(_harga(row))}',
+          _formatUang(_subtotalBaris(row)));
+      if (_diskonBaris(row) > 0) {
+        pair('  Diskon', '-${_formatUang(_diskonBaris(row))}');
+      }
+      if (_cashbackBaris(row) > 0) {
+        pair('  Cashback', '+${_formatUang(_cashbackBaris(row))}');
+      }
+    }
+    text('-' * columns);
+    text('$_jumlahItem item');
+    pair('Subtotal', _formatUang(_subtotal));
+    if (_totalDiskonItem > 0) {
+      pair('Diskon', '-${_formatUang(_totalDiskonItem)}');
+    }
+    if (diskonFaktur > 0) {
+      pair('Potongan Faktur', '-${_formatUang(diskonFaktur)}');
+    }
+    if (pajak > 0) pair('Pajak', _formatUang(pajak));
+    pair('GRAND TOTAL', _formatUang(total), bold: true);
+    if (_totalCashbackItem > 0) {
+      pair('Cashback', '+${_formatUang(_totalCashbackItem)}');
+    }
+    if (uangDiterima != null) pair('Tunai', _formatUang(uangDiterima!));
+    if (kembalian != null) pair('Kembali', _formatUang(kembalian!));
+    final payments = _pembayaranEfektif;
+    if (payments.isEmpty) {
+      pair('Metode', metode);
+    } else if (payments.length == 1) {
+      pair('Metode', '${payments.first['nama']}');
+    } else {
+      pair('Metode', 'Split (${payments.length})');
+      for (final payment in payments) {
+        final nominal = payment['nominal'];
+        pair('  ${payment['nama']}',
+            nominal is num ? _formatUang(nominal) : '-');
+      }
+    }
+    if (saldo != null) pair('Saldo', _formatUang(saldo!));
+    text('-' * columns);
+    centered(Sesi.instance.pesanTerimaKasih.isEmpty
+        ? 'Terima kasih'
+        : Sesi.instance.pesanTerimaKasih);
+    if (!tersinkron) {
+      centered('Transaksi tersimpan offline dan akan disinkronkan otomatis.');
+    }
+
+    final barcode = clean(kode);
+    final barcodeBytes = codec.encode('{B$barcode');
+    if (barcode.isNotEmpty && barcodeBytes.length <= 255) {
+      command([0x1B, 0x61, 0x01, 0x1D, 0x48, 0x02, 0x1D, 0x68, 0x38]);
+      command([0x1D, 0x6B, 0x49, barcodeBytes.length]);
+      command(barcodeBytes);
+      text('');
+      command([0x1B, 0x61, 0x00]);
+    }
+
+    // Feed dan CUT WAJIB paling akhir. RAW spooler menerima satu job utuh,
+    // sehingga tidak ada batas halaman A4 yang dapat memotong daftar item.
+    command([0x1B, 0x64, 0x05]);
+    command([0x1D, 0x56, 0x42, 0x00]);
+    return out.takeBytes();
+  }
+
   double _tinggiStrukPdfMm() {
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
     final charsPerLine = lebarKertasMm <= 58
@@ -393,17 +652,30 @@ class StrukScreen extends StatelessWidget {
             : 32;
     final logoSkala = PengaturanStruk.instance.logoSkala.clamp(0.8, 1.8);
 
+    int jumlahBaris(String nilai) {
+      final panjang = nilai.trim().length;
+      if (panjang == 0) return 1;
+      final hasil = (panjang / charsPerLine).ceil();
+      return hasil < 1 ? 1 : hasil;
+    }
+
     // Tinggi roll harus finite. Sebagian driver thermal Windows memotong PDF
     // dengan tinggi tak hingga, jadi tinggi dihitung longgar dari isi struk.
     var tinggi = 118.0 + (logoSkala - 1) * 12;
+
+    tinggi += (jumlahBaris(Sesi.instance.tokoNama) - 1) * 4.5;
+    tinggi += (jumlahBaris(Sesi.instance.tokoAlamat) - 1) * 4.2;
+    tinggi += (jumlahBaris(Sesi.instance.pesanTerimaKasih) - 1) * 4.2;
 
     if (Sesi.instance.tokoTelp.trim().isNotEmpty) tinggi += 4;
     if (statusLabel != null && statusLabel!.trim().isNotEmpty) tinggi += 5;
 
     for (final baris in item) {
       final nama = '${baris['nama'] ?? ''}'.trim();
-      final lines = (nama.length / charsPerLine).ceil().clamp(1, 5);
+      final lines = jumlahBaris(nama);
       tinggi += 8.5 + (lines - 1) * 4.2;
+      if (_diskonBaris(baris) > 0) tinggi += 4.2;
+      if (_cashbackBaris(baris) > 0) tinggi += 4.2;
     }
 
     final daftarPembayaran = _pembayaranEfektif;
@@ -420,27 +692,74 @@ class StrukScreen extends StatelessWidget {
     if (!tersinkron) tinggi += 8;
     if (kode.trim().isNotEmpty) tinggi += 19;
 
-    return tinggi.clamp(130, 4800).toDouble();
+    // Tidak ada batas maksimum transaksi. Untuk struk panjang nilai ini hanya
+    // menentukan kapan MultiPage dipakai; isi sesungguhnya akan terus
+    // dipaginasi sampai seluruh baris selesai.
+    return tinggi < 130 ? 130 : tinggi;
   }
 
   Future<void> _cetakStruk() async {
     await _pastikanProfilToko();
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await PengaturanLaci.instance.muat();
+      final logo = await _logoEscPos();
+      final bytes = _strukEscPos(logo);
+      await cetakRawKasir(
+        bytes,
+        namaPrinter: PengaturanLaci.instance.namaPrinter,
+        namaDokumen: 'Struk $kode',
+      );
+      return;
+    }
     final logo = await _logoPdf();
     final lebarKertasMm = PengaturanStruk.instance.lebarKertasMm;
-    final doc = pw.Document();
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat(
-          lebarKertasMm * PdfPageFormat.mm,
-          _tinggiStrukPdfMm() * PdfPageFormat.mm,
-          marginLeft: 3 * PdfPageFormat.mm,
-          marginRight: 3 * PdfPageFormat.mm,
-          marginTop: 5 * PdfPageFormat.mm,
-          marginBottom: 5 * PdfPageFormat.mm,
-        ),
-        build: (_) => _strukPdf(logo),
+    final tinggiIsiMm = _tinggiStrukPdfMm();
+    final doc = pw.Document(
+      theme: pw.ThemeData(
+        defaultTextStyle: const pw.TextStyle(fontSize: 9),
       ),
     );
+
+    // POS80 Windows menyediakan roll 72 x 3276 mm. Jangan pernah memaksa struk
+    // panjang menjadi halaman 297 mm/A4: driver thermal menganggap tiap page
+    // selesai sebagai akhir job dan dapat melakukan CUT sebelum total/footer.
+    // Seluruh isi dikirim sebagai SATU page roll dinamis sampai batas aman
+    // driver. CUT (milik driver) dengan demikian baru terjadi setelah footer.
+    const tinggiMaksimumDriverMm = 3270.0;
+    final tinggiHalamanMm = tinggiIsiMm + 14;
+    if (tinggiHalamanMm <= tinggiMaksimumDriverMm) {
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(
+            lebarKertasMm * PdfPageFormat.mm,
+            tinggiHalamanMm * PdfPageFormat.mm,
+            marginLeft: 3 * PdfPageFormat.mm,
+            marginRight: 3 * PdfPageFormat.mm,
+            marginTop: 5 * PdfPageFormat.mm,
+            marginBottom: 5 * PdfPageFormat.mm,
+          ),
+          build: (_) => _strukPdf(logo),
+        ),
+      );
+    } else {
+      // Transaksi ekstrem yang melampaui kemampuan fisik form driver harus
+      // dilanjutkan ke page roll berikutnya. Tingginya tetap 3270 mm (bukan A4)
+      // sehingga batas ini tidak mungkin terpicu pada transaksi normal.
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat(
+            lebarKertasMm * PdfPageFormat.mm,
+            tinggiMaksimumDriverMm * PdfPageFormat.mm,
+            marginLeft: 3 * PdfPageFormat.mm,
+            marginRight: 3 * PdfPageFormat.mm,
+            marginTop: 5 * PdfPageFormat.mm,
+            marginBottom: 5 * PdfPageFormat.mm,
+          ),
+          maxPages: (tinggiIsiMm / 3250).ceil() + 3,
+          build: (_) => [_strukPdf(logo)],
+        ),
+      );
+    }
     await cetakLangsungKePrinterDefault(dokumen: doc, nama: 'struk-$kode.pdf');
   }
 
@@ -449,79 +768,84 @@ class StrukScreen extends StatelessWidget {
   Future<void> cetakLangsung() => _cetakStruk();
 
   pw.Widget _strukPdf(pw.ImageProvider? logo) {
-    return pw.DefaultTextStyle(
-      style: const pw.TextStyle(fontSize: 9),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Center(child: _logoPdfWidget(logo)),
-          pw.SizedBox(height: 8),
+    // Column harus menjadi widget langsung milik MultiPage agar dapat dipecah
+    // antarhalaman. Default style dipasang pada Document di _cetakStruk;
+    // membungkus Column dengan DefaultTextStyle akan membuatnya tidak bisa
+    // melakukan spanning dan struk panjang kembali terpotong.
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Center(child: _logoPdfWidget(logo)),
+        pw.SizedBox(height: 8),
+        pw.Text(
+          Sesi.instance.tokoNama.isEmpty ? 'Nama Toko' : Sesi.instance.tokoNama,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          Sesi.instance.tokoAlamat.isEmpty
+              ? 'Alamat toko'
+              : Sesi.instance.tokoAlamat,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+        if (Sesi.instance.tokoTelp.isNotEmpty)
           pw.Text(
-            Sesi.instance.tokoNama.isEmpty
-                ? 'Nama Toko'
-                : Sesi.instance.tokoNama,
-            textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            Sesi.instance.tokoAlamat.isEmpty
-                ? 'Alamat toko'
-                : Sesi.instance.tokoAlamat,
-            textAlign: pw.TextAlign.center,
-            style: const pw.TextStyle(fontSize: 8),
-          ),
-          if (Sesi.instance.tokoTelp.isNotEmpty)
-            pw.Text(
-              Sesi.instance.tokoTelp,
-              textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          _garisPdf(),
-          _infoPdf('No', kode),
-          _infoPdf('Tanggal', waktu),
-          _infoPdf('Kasir', _labelKasir()),
-          _infoPdf('Pelanggan', _labelPelanggan()),
-          if (statusLabel != null && statusLabel!.trim().isNotEmpty)
-            _infoPdf('Status', statusLabel!.trim()),
-          _garisPdf(),
-          ...item.map(_itemPdf),
-          _garisPdf(),
-          pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
-          pw.SizedBox(height: 4),
-          _totalPdf('Subtotal', _formatUang(_subtotal)),
-          if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
-          _totalPdf(
-            'Grand Total',
-            _formatUang(total),
-            besar: true,
-          ),
-          if (uangDiterima != null)
-            _totalPdf('Tunai', _formatUang(uangDiterima!)),
-          if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
-          ..._pembayaranPdf(),
-          if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
-          _garisPdf(),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            Sesi.instance.pesanTerimaKasih.isEmpty
-                ? 'Ucapan Terima kasih yang sudah ada'
-                : Sesi.instance.pesanTerimaKasih,
+            Sesi.instance.tokoTelp,
             textAlign: pw.TextAlign.center,
             style: const pw.TextStyle(fontSize: 8),
           ),
-          if (!tersinkron) ...[
-            pw.SizedBox(height: 4),
-            pw.Text(
-              'Transaksi tersimpan offline dan akan disinkronkan otomatis.',
-              textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          ],
-          pw.SizedBox(height: 8),
-          _barcodePdf(),
+        _garisPdf(),
+        _infoPdf('No', kode),
+        _infoPdf('Tanggal', waktu),
+        _infoPdf('Kasir', _labelKasir()),
+        _infoPdf('Pelanggan', _labelPelanggan()),
+        if (statusLabel != null && statusLabel!.trim().isNotEmpty)
+          _infoPdf('Status', statusLabel!.trim()),
+        _garisPdf(),
+        ...item.map(_itemPdf),
+        _garisPdf(),
+        pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
+        pw.SizedBox(height: 4),
+        _totalPdf('Subtotal', _formatUang(_subtotal)),
+        if (_totalDiskonItem > 0)
+          _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
+        if (diskonFaktur > 0)
+          _totalPdf('Potongan Faktur', '-${_formatUang(diskonFaktur)}'),
+        if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
+        _totalPdf(
+          'Grand Total',
+          _formatUang(total),
+          besar: true,
+        ),
+        if (_totalCashbackItem > 0)
+          _totalPdf('Cashback', '+${_formatUang(_totalCashbackItem)}'),
+        if (uangDiterima != null)
+          _totalPdf('Tunai', _formatUang(uangDiterima!)),
+        if (kembalian != null) _totalPdf('Kembali', _formatUang(kembalian!)),
+        ..._pembayaranPdf(),
+        if (saldo != null) _totalPdf('Saldo', _formatUang(saldo!)),
+        _garisPdf(),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          Sesi.instance.pesanTerimaKasih.isEmpty
+              ? 'Ucapan Terima kasih yang sudah ada'
+              : Sesi.instance.pesanTerimaKasih,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+        if (!tersinkron) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Transaksi tersimpan offline dan akan disinkronkan otomatis.',
+            textAlign: pw.TextAlign.center,
+            style: const pw.TextStyle(fontSize: 8),
+          ),
         ],
-      ),
+        pw.SizedBox(height: 8),
+        _barcodePdf(),
+      ],
     );
   }
 
@@ -647,6 +971,12 @@ class StrukScreen extends StatelessWidget {
               pw.Text(_formatUang(_subtotalBaris(i))),
             ],
           ),
+          if (_diskonBaris(i) > 0)
+            pw.Text('Diskon -${_formatUang(_diskonBaris(i))}',
+                style: const pw.TextStyle(fontSize: 8)),
+          if (_cashbackBaris(i) > 0)
+            pw.Text('Cashback +${_formatUang(_cashbackBaris(i))}',
+                style: const pw.TextStyle(fontSize: 8)),
         ],
       ),
     );
@@ -688,8 +1018,11 @@ class StrukScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            Text(modeCetakUlang ? 'Preview Cetak Struk' : 'Transaksi Berhasil'),
+        title: Text(modeCetakUlang
+            ? 'Preview Cetak Struk'
+            : tersinkron
+                ? 'Transaksi Berhasil'
+                : 'Transaksi Tersimpan Pending'),
         automaticallyImplyLeading: modeCetakUlang,
       ),
       body: Center(
@@ -705,28 +1038,6 @@ class StrukScreen extends StatelessWidget {
                   children: [
                     _StatusTransaksi(tersinkron: tersinkron),
                     const SizedBox(height: 14),
-                    _StrukPreview(
-                      kode: kode,
-                      waktu: waktu,
-                      item: item,
-                      total: total,
-                      pajak: pajak,
-                      metode: metode,
-                      pembayaran: _pembayaranEfektif,
-                      tersinkron: tersinkron,
-                      subtotal: _subtotal,
-                      jumlahItem: _jumlahItem,
-                      kasir: _labelKasir(),
-                      pelanggan: _labelPelanggan(),
-                      uangDiterima: uangDiterima,
-                      kembalian: kembalian,
-                      saldo: saldo,
-                      statusLabel: statusLabel,
-                      formatUang: _formatUang,
-                      formatAngka: (v) => _formatAngka.format(v),
-                      formatQty: _formatQty,
-                    ),
-                    const SizedBox(height: 16),
                     _TombolStruk(
                       onCetak: _cetakStruk,
                       tampilkanTransaksiBaru: !modeCetakUlang,
@@ -737,9 +1048,33 @@ class StrukScreen extends StatelessWidget {
                       ),
                       // Alur pembayaran dari Pesanan membuka Kasir sebagai
                       // route sementara, lalu menggantinya dengan layar struk.
-                      // Pop dari sini karena itu mengembalikan kasir ke daftar
-                      // Pesanan asal tanpa membuat transaksi kosong baru.
+                      // Pop dari sini mengembalikan kasir ke daftar Pesanan.
                       onKembali: () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(height: 16),
+                    _StrukPreview(
+                      kode: kode,
+                      waktu: waktu,
+                      item: item,
+                      total: total,
+                      pajak: pajak,
+                      metode: metode,
+                      pembayaran: _pembayaranEfektif,
+                      tersinkron: tersinkron,
+                      subtotal: _subtotal,
+                      totalDiskon: _totalDiskonItem,
+                      diskonFaktur: diskonFaktur,
+                      totalCashback: _totalCashbackItem,
+                      jumlahItem: _jumlahItem,
+                      kasir: _labelKasir(),
+                      pelanggan: _labelPelanggan(),
+                      uangDiterima: uangDiterima,
+                      kembalian: kembalian,
+                      saldo: saldo,
+                      statusLabel: statusLabel,
+                      formatUang: _formatUang,
+                      formatAngka: (v) => _formatAngka.format(v),
+                      formatQty: _formatQty,
                     ),
                   ],
                 ),
@@ -800,6 +1135,9 @@ class _StrukPreview extends StatelessWidget {
   final List<Map<String, dynamic>> pembayaran;
   final bool tersinkron;
   final double subtotal;
+  final double totalDiskon;
+  final double diskonFaktur;
+  final double totalCashback;
   final int jumlahItem;
   final String kasir;
   final String pelanggan;
@@ -821,6 +1159,9 @@ class _StrukPreview extends StatelessWidget {
     required this.pembayaran,
     required this.tersinkron,
     required this.subtotal,
+    required this.totalDiskon,
+    required this.diskonFaktur,
+    required this.totalCashback,
     required this.jumlahItem,
     required this.kasir,
     required this.pelanggan,
@@ -914,12 +1255,22 @@ class _StrukPreview extends StatelessWidget {
                   subtotal: formatUang(
                     (i['harga'] as num) * (i['qty'] as num),
                   ),
+                  diskon: (i['diskon'] as num?)?.toDouble() ?? 0,
+                  cashback: (i['cashback'] as num?)?.toDouble() ?? 0,
+                  formatUang: formatUang,
                 ),
               ),
               const _GarisStruk(),
               Text('$jumlahItem item'),
               const SizedBox(height: 8),
               _TotalStruk(label: 'Subtotal', value: formatUang(subtotal)),
+              if (totalDiskon > 0)
+                _TotalStruk(
+                    label: 'Diskon', value: '-${formatUang(totalDiskon)}'),
+              if (diskonFaktur > 0)
+                _TotalStruk(
+                    label: 'Potongan Faktur',
+                    value: '-${formatUang(diskonFaktur)}'),
               if (pajak > 0)
                 _TotalStruk(label: 'Pajak', value: formatUang(pajak)),
               _TotalStruk(
@@ -927,6 +1278,9 @@ class _StrukPreview extends StatelessWidget {
                 value: formatUang(total),
                 emphasized: true,
               ),
+              if (totalCashback > 0)
+                _TotalStruk(
+                    label: 'Cashback', value: '+${formatUang(totalCashback)}'),
               if (uangDiterima != null)
                 _TotalStruk(label: 'Tunai', value: formatUang(uangDiterima!)),
               if (kembalian != null)
@@ -1141,12 +1495,18 @@ class _ItemStruk extends StatelessWidget {
   final String qty;
   final String harga;
   final String subtotal;
+  final double diskon;
+  final double cashback;
+  final String Function(num nilai) formatUang;
 
   const _ItemStruk({
     required this.nama,
     required this.qty,
     required this.harga,
     required this.subtotal,
+    required this.diskon,
+    required this.cashback,
+    required this.formatUang,
   });
 
   @override
@@ -1176,6 +1536,12 @@ class _ItemStruk extends StatelessWidget {
               ),
             ],
           ),
+          if (diskon > 0)
+            Text('Diskon -${formatUang(diskon)}',
+                style: const TextStyle(fontSize: 11)),
+          if (cashback > 0)
+            Text('Cashback +${formatUang(cashback)}',
+                style: const TextStyle(fontSize: 11, color: AppColors.success)),
         ],
       ),
     );

@@ -26,6 +26,7 @@ import 'hak_akses_screen.dart';
 import 'konfigurasi/tab_screensaver.dart';
 import 'konfigurasi/tab_impor_dbf.dart';
 import 'konfigurasi/tab_riwayat_cetak.dart';
+import 'konfigurasi/tab_sesi_kasir.dart';
 import '../product_profile.dart';
 import '../widgets/safe_state.dart';
 
@@ -69,7 +70,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
         (Sesi.instance.isPemilikSalesInventory || Sesi.instance.isAdmin);
     _tab = TabController(
         length:
-            5 + (_tampilkanRiwayatCetak ? 1 : 0) + (_tampilkanImporDbf ? 1 : 0),
+            6 + (_tampilkanRiwayatCetak ? 1 : 0) + (_tampilkanImporDbf ? 1 : 0),
         vsync: this);
   }
 
@@ -115,6 +116,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const Tab(text: 'Akun Pengguna'),
               const Tab(text: 'Screensaver'),
               const Tab(text: 'Alamat Server'),
+              const Tab(text: 'Sesi Kasir'),
               if (_tampilkanRiwayatCetak) const Tab(text: 'Riwayat Cetak'),
               if (_tampilkanImporDbf) const Tab(text: 'Impor DBF'),
             ],
@@ -126,6 +128,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
               const _TabAkunPengguna(),
               const TabScreensaver(),
               _TabAlamatServer(onUbah: _logout),
+              const TabSesiKasir(),
               if (_tampilkanRiwayatCetak) const TabRiwayatCetak(),
               if (_tampilkanImporDbf) const TabImporDbf(),
             ]),
@@ -617,6 +620,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   bool _memilihLogoPriceTag = false;
   String? _error;
   bool _bolehUbah = false;
+  bool _bolehTransaksiStokHabis = false;
   String? _logoStrukPath;
   String? _logoPriceTagPath;
   String _logoStrukMode = 'persegi';
@@ -636,6 +640,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   final _jamOperasional = TextEditingController();
   final _keterangan = TextEditingController();
   final _pesanTerimaKasih = TextEditingController();
+  final _alasanTahan = TextEditingController();
 
   @override
   void initState() {
@@ -658,7 +663,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _npwp,
       _jamOperasional,
       _keterangan,
-      _pesanTerimaKasih
+      _pesanTerimaKasih,
+      _alasanTahan
     ]) {
       c.dispose();
     }
@@ -687,6 +693,9 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _jamOperasional.text = '${d['jamOperasional'] ?? ''}';
       _keterangan.text = '${d['keterangan'] ?? ''}';
       _pesanTerimaKasih.text = '${d['pesanTerimaKasih'] ?? ''}';
+      _alasanTahan.text =
+          ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
+      _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
             ? Sesi.instance.tokoNama
@@ -819,6 +828,12 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'jam_operasional': _jamOperasional.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
+        'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
+        'alasan_tahan': _alasanTahan.text
+            .split(RegExp(r'[\r\n]+'))
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
       });
       if (mounted) {
         Sesi.instance
@@ -830,9 +845,15 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
           ].join(', ')
           ..tokoTelp =
               _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
-          ..pesanTerimaKasih = _pesanTerimaKasih.text.trim();
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profil toko tersimpan.')));
+          ..pesanTerimaKasih = _pesanTerimaKasih.text.trim()
+          ..bolehTransaksiStokHabis = _bolehTransaksiStokHabis
+          ..alasanTahan = _alasanTahan.text
+              .split(RegExp(r'[\r\n]+'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Profil dan kebijakan toko tersimpan.')));
       }
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -1186,6 +1207,34 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             ),
           ),
         AppFormSection(
+          judul: 'Kebijakan Stok Toko Aktif',
+          deskripsi:
+              'Berlaku hanya untuk ${_nama.text.trim().isEmpty ? 'toko yang sedang dipilih' : _nama.text.trim()}. Toko lain tidak ikut berubah.',
+          children: [
+            AppFormSwitchTile(
+              title: 'Paksa semua produk boleh stok minus',
+              subtitle: _bolehTransaksiStokHabis
+                  ? 'AKTIF — seluruh produk di toko ini boleh dijual saat stok nol atau minus, walaupun izin pada produk tidak dicentang.'
+                  : 'NONAKTIF — ikuti izin “Boleh dijual walau stok minus” pada masing-masing produk. Ini adalah pilihan default yang lebih aman.',
+              value: _bolehTransaksiStokHabis,
+              onChanged: _bolehUbah
+                  ? (nilai) =>
+                      setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
+                  : null,
+            ),
+            if (_bolehUbah)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppTombolAksi(
+                  icon: Icons.save_outlined,
+                  label: _menyimpan ? 'Menyimpan...' : 'Simpan Kebijakan Stok',
+                  onPressed: _menyimpan ? null : _simpan,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppFormSection(
           judul: 'Profil Toko',
           deskripsi:
               'Data ini dipakai untuk informasi operasional, laporan, dan teks pada struk.',
@@ -1206,6 +1255,11 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _field('Keterangan', _keterangan, maxLines: 2),
             _field('Pesan Terima Kasih (di struk)', _pesanTerimaKasih,
                 maxLines: 2),
+            _field(
+              'Pilihan Alasan Transaksi Ditahan (satu alasan per baris)',
+              _alasanTahan,
+              maxLines: 12,
+            ),
             _pengaturanLogoStruk(),
             _pengaturanPriceTag(),
             if (_bolehUbah)

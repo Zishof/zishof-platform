@@ -15,7 +15,9 @@ class Sesi {
   double pajakPersen = 0;
   List<CaraBayar> caraBayar = [];
   String pesanTerimaKasih = '';
+  List<String> alasanTahan = [];
   bool wajibSesiKas = false;
+  bool bolehTransaksiStokHabis = false;
   bool isAdmin = false;
   bool supervisorPedagang = false;
 
@@ -112,7 +114,12 @@ class Sesi {
     userId = (konfig['userId'] ?? '') as String;
     pajakPersen = (konfig['pajakPersen'] as num?)?.toDouble() ?? 0;
     pesanTerimaKasih = (konfig['pesanTerimaKasih'] ?? '') as String;
+    alasanTahan = ((konfig['alasanTahan'] as List?) ?? [])
+        .map((e) => '$e'.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
     wajibSesiKas = konfig['wajibSesiKas'] == true;
+    bolehTransaksiStokHabis = konfig['bolehTransaksiStokHabis'] == true;
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
@@ -179,7 +186,9 @@ class Sesi {
     pajakPersen = 0;
     caraBayar = [];
     pesanTerimaKasih = '';
+    alasanTahan = [];
     wajibSesiKas = false;
+    bolehTransaksiStokHabis = false;
     isAdmin = false;
     supervisorPedagang = false;
     bolehHapusPesanan = false;

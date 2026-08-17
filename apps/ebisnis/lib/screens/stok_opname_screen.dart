@@ -17,6 +17,8 @@ import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
+final _formatRupiah =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// Layar Stok Opname (padanan stokopname.html/stokopname-renderer.js Electron)
 /// -- 3 sub-tab: Kartu Mutasi Stok (dasbor), Input Opname (satu produk per
@@ -127,9 +129,9 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   /// paket `pdf`/`printing` (pola sama `tab_mutasi_tabungan.dart`).
   Future<void> _cetakPdf() async {
     try {
-      final hasil =
-          await ApiClient.instance.aksi('so_riwayat', {'limit': 200});
-      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final hasil = await ApiClient.instance.aksi('so_riwayat', {'limit': 200});
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (data.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -150,13 +152,20 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
                 pw.SizedBox(height: 8),
               ]),
           build: (_) => [
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               headers: const [
-                'Waktu Opname', 'Produk', 'Stok Sistem', 'Stok Fisik', 'Selisih', 'Keterangan'
+                'Waktu Opname',
+                'Produk',
+                'Stok Sistem',
+                'Stok Fisik',
+                'Selisih',
+                'Keterangan'
               ],
               data: data.map((r) {
                 final selisih = (r['selisih'] as num?)?.toDouble() ?? 0;
-                final kode = (r['kode'] as String?)?.isNotEmpty == true ? ' [${r['kode']}]' : '';
+                final kode = (r['kode'] as String?)?.isNotEmpty == true
+                    ? ' [${r['kode']}]'
+                    : '';
                 return [
                   '${r['waktu'] ?? ''}',
                   '${r['nama'] ?? ''}$kode',
@@ -210,7 +219,10 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
       subjudul: 'Kartu mutasi stok & input hasil hitung fisik',
       aksiHeader: tombolAksi.isEmpty
           ? null
-          : Wrap(alignment: WrapAlignment.end, runSpacing: 8, children: tombolAksi),
+          : Wrap(
+              alignment: WrapAlignment.end,
+              runSpacing: 8,
+              children: tombolAksi),
       actionsAppBar: tombolAksi.isEmpty ? null : tombolAksi,
       scrollable: false,
       body: Column(
@@ -427,7 +439,6 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
       ),
     );
   }
-
 }
 
 /// "Monitor Keluar/Masuk Barang" (gap-closure, permintaan user 2026-08-12) -- buku besar mutasi
@@ -471,8 +482,8 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance
-          .aksi('stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': 0});
+      final hasil = await ApiClient.instance.aksi(
+          'stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': 0});
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _adaLagi = hasil['adaLagi'] == true;
@@ -487,16 +498,17 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
   Future<void> _muatLebihBanyak() async {
     setStateIfMounted(() => _memuatLagi = true);
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': _data.length});
+      final hasil = await ApiClient.instance.aksi('stok_mutasi_ledger',
+          {'hari': _hari, 'limit': 100, 'offset': _data.length});
       setStateIfMounted(() {
-        _data.addAll(((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        _data.addAll(
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
         _adaLagi = hasil['adaLagi'] == true;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal memuat lebih banyak: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memuat lebih banyak: $e')));
       }
     } finally {
       if (mounted) setStateIfMounted(() => _memuatLagi = false);
@@ -560,19 +572,24 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
                 children: [
                   Text(_pesanError!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
+                  ElevatedButton(
+                      onPressed: _muat, child: const Text('Coba Lagi')),
                 ],
               ),
             )
           else ...[
             AppDataTable(
-              minWidth: 800,
+              minWidth: 1480,
               emptyText: 'Tidak ada mutasi stok dalam periode ini.',
               columns: const [
                 AppTableColumn('Waktu', flex: 2),
                 AppTableColumn('Jenis', flex: 2),
                 AppTableColumn('Produk', flex: 3),
                 AppTableColumn('Qty', flex: 1, align: TextAlign.right),
+                AppTableColumn('Harga Jual', flex: 2, align: TextAlign.right),
+                AppTableColumn('Total Jual', flex: 2, align: TextAlign.right),
+                AppTableColumn('Harga Beli', flex: 2, align: TextAlign.right),
+                AppTableColumn('Total Beli', flex: 2, align: TextAlign.right),
                 AppTableColumn('Keterangan', flex: 3),
               ],
               rows: _tersaring.map((r) {
@@ -583,15 +600,19 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
                   AppTableCell(
                     flex: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                          color: AppColors.latarLembut(masuk ? AppColors.success : AppColors.danger),
+                          color: AppColors.latarLembut(
+                              masuk ? AppColors.success : AppColors.danger),
                           borderRadius: BorderRadius.circular(999)),
                       child: Text('${r['jenis'] ?? ''}',
                           style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w800,
-                              color: masuk ? AppColors.success : AppColors.danger)),
+                              color: masuk
+                                  ? AppColors.success
+                                  : AppColors.danger)),
                     ),
                   ),
                   AppTableCell.text(
@@ -605,9 +626,35 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
                         textAlign: TextAlign.right,
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: masuk ? AppColors.success : AppColors.danger)),
+                            color:
+                                masuk ? AppColors.success : AppColors.danger)),
                   ),
-                  AppTableCell.text('${r['keterangan'] ?? ''}'.isEmpty ? '-' : '${r['keterangan']}',
+                  AppTableCell.text(
+                    _formatRupiah.format(r['hargaJual'] ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                  ),
+                  AppTableCell.text(
+                    _formatRupiah.format(r['totalHargaJual'] ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  AppTableCell.text(
+                    _formatRupiah.format(r['hargaBeli'] ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                  ),
+                  AppTableCell.text(
+                    _formatRupiah.format(r['totalHargaBeli'] ?? 0),
+                    flex: 2,
+                    align: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  AppTableCell.text(
+                      '${r['keterangan'] ?? ''}'.isEmpty
+                          ? '-'
+                          : '${r['keterangan']}',
                       flex: 3),
                 ]);
               }).toList(),
@@ -619,7 +666,9 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
                   onPressed: _memuatLagi ? null : _muatLebihBanyak,
                   child: _memuatLagi
                       ? const SizedBox(
-                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Muat Lebih Banyak'),
                 ),
               ),

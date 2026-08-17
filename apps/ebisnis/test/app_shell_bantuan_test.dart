@@ -49,4 +49,23 @@ void main() {
     expect(find.text('Tanya Jawab — Stok Opname'), findsOneWidget);
     expect(find.byType(ExpansionTile), findsWidgets);
   });
+
+  testWidgets('sidebar desktop dapat diringkas dan dibuka kembali',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(aplikasi());
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Tutup menu'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tombol-sidebar-ringkas')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Buka menu'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('tombol-sidebar-ringkas')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Tutup menu'), findsOneWidget);
+  });
 }

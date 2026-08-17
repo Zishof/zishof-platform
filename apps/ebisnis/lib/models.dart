@@ -231,6 +231,9 @@ class ItemKeranjang {
   final List<ItemEkstra> ekstra;
   bool promoManual;
   int? promoManualAturanId;
+  bool diskonBebas;
+  String diskonBebasTipe;
+  double diskonBebasNilai;
   ItemKeranjang(
       {required this.produk,
       this.jumlah = 1,
@@ -239,7 +242,10 @@ class ItemKeranjang {
       this.aturanDiskonId,
       this.ekstra = const [],
       this.promoManual = false,
-      this.promoManualAturanId});
+      this.promoManualAturanId,
+      this.diskonBebas = false,
+      this.diskonBebasTipe = 'NOMINAL',
+      this.diskonBebasNilai = 0});
 
   /// Harga ekstra dijumlahkan PER UNIT produk induk (padanan cara server
   /// mengalikan `ekstra` dgn qty induk saat checkout, lihat JavaDoc
@@ -248,6 +254,17 @@ class ItemKeranjang {
   double get _hargaEkstraPerUnit => ekstra.fold(0.0, (s, e) => s + e.harga);
   double get subtotal => (produk.hargaJual + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
+}
+
+/// Menempatkan baris yang baru ditambahkan/dipindai di urutan pertama.
+///
+/// Fungsi ini memindahkan objek yang sama (bukan membuat salinan), sehingga
+/// qty, diskon, cashback, ekstra, dan referensi yang dipakai checkout tetap
+/// utuh. Produk yang dipindai ulang juga kembali terlihat paling atas.
+void tempatkanItemKeranjangTerbaruDiDepan(
+    List<ItemKeranjang> keranjang, ItemKeranjang item) {
+  keranjang.remove(item);
+  keranjang.insert(0, item);
 }
 
 /// Anggota/member koperasi -- superset bentuk JSON dari 3 aksi berbeda:

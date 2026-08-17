@@ -1046,35 +1046,40 @@ class AppDataTable extends StatelessWidget {
           children: [
             LayoutBuilder(
               builder: (context, constraints) {
-                final lebarTabel = constraints.hasBoundedWidth &&
-                        constraints.maxWidth > minWidth
-                    ? constraints.maxWidth
-                    : minWidth;
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: lebarTabel,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _AppTableHeader(columns: columns),
-                        if (rows.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 36),
-                            child: Center(
-                              child: Text(
-                                emptyText,
-                                style: TextStyle(
-                                    color: AppColors.textSecondaryOf(context),
-                                    fontSize: 13),
-                              ),
+                final bounded = constraints.hasBoundedWidth;
+                final lebarTabel = bounded ? constraints.maxWidth : minWidth;
+                if (bounded && lebarTabel < 720) {
+                  return _AppCompactTable(
+                    columns: columns,
+                    rows: rows,
+                    emptyText: emptyText,
+                  );
+                }
+                // Pada desktop/tablet semua kolom mengikuti lebar konten.
+                // Jangan memaksa minWidth dan horizontal-scroll: pola lama
+                // membuat kolom paling kanan tampak terpotong oleh viewport.
+                return SizedBox(
+                  width: lebarTabel,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _AppTableHeader(columns: columns),
+                      if (rows.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 36),
+                          child: Center(
+                            child: Text(
+                              emptyText,
+                              style: TextStyle(
+                                  color: AppColors.textSecondaryOf(context),
+                                  fontSize: 13),
                             ),
-                          )
-                        else
-                          ...rows.map((row) => _AppTableRow(row: row)),
-                      ],
-                    ),
+                          ),
+                        )
+                      else
+                        ...rows.map((row) => _AppTableRow(row: row)),
+                    ],
                   ),
                 );
               },
@@ -1083,6 +1088,91 @@ class AppDataTable extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AppCompactTable extends StatelessWidget {
+  final List<AppTableColumn> columns;
+  final List<AppTableRowData> rows;
+  final String emptyText;
+
+  const _AppCompactTable({
+    required this.columns,
+    required this.rows,
+    required this.emptyText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 36),
+        child: Center(
+          child: Text(
+            emptyText,
+            style: TextStyle(
+              color: AppColors.textSecondaryOf(context),
+              fontSize: 13,
+            ),
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: rows.map((row) {
+        final content = LayoutBuilder(
+          builder: (context, constraints) {
+            final twoColumns = constraints.maxWidth >= 480;
+            final cellWidth = twoColumns
+                ? (constraints.maxWidth - 44) / 2
+                : constraints.maxWidth - 32;
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBgOf(context),
+                border:
+                    Border(top: BorderSide(color: AppColors.borderOf(context))),
+              ),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 14,
+                children: List<Widget>.generate(row.cells.length, (index) {
+                  final cell = row.cells[index];
+                  final label = index < columns.length
+                      ? columns[index].label.toUpperCase()
+                      : '';
+                  return SizedBox(
+                    width: cellWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: AppColors.textSecondaryOf(context),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.35,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Align(
+                          alignment: _AppTableRow.alignment(cell.align),
+                          child: cell.child,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            );
+          },
+        );
+        if (row.onTap == null) return content;
+        return InkWell(onTap: row.onTap, child: content);
+      }).toList(),
     );
   }
 }
@@ -1140,7 +1230,7 @@ class _AppTableRow extends StatelessWidget {
                   flex: cell.flex,
                   width: cell.width,
                   child: Align(
-                    alignment: _alignment(cell.align),
+                    alignment: alignment(cell.align),
                     child: cell.child,
                   ),
                 ))
@@ -1151,7 +1241,7 @@ class _AppTableRow extends StatelessWidget {
     return InkWell(onTap: row.onTap, child: content);
   }
 
-  static Alignment _alignment(TextAlign align) {
+  static Alignment alignment(TextAlign align) {
     switch (align) {
       case TextAlign.right:
       case TextAlign.end:

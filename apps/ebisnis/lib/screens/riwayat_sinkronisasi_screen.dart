@@ -105,6 +105,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         try {
+          payload['pengiriman_pending'] = true;
           final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
           await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
           await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
@@ -120,10 +121,11 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
           }
         }
       }
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
                 '$berhasil dari ${pending.length} transaksi berhasil disinkron.')));
+      }
       await _muat();
     } finally {
       if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);

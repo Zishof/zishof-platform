@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import 'pengaturan_server_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/app_error_info.dart';
+import '../widgets/app_version_label.dart';
 import '../services/transaksi_outbox_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -138,6 +139,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 builder: (_) =>
                                     const PengaturanServerScreen())),
                         child: const Text('Ubah Alamat Server'),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    AppVersionLabel(
+                      style: TextStyle(
+                        color: warnaSubjudul,
+                        fontSize: 12,
                       ),
                     ),
                   ],
