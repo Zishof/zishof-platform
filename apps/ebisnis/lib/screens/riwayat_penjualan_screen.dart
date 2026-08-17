@@ -724,11 +724,147 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         _halaman == 1;
   }
 
+  DateTime? _waktuPayloadLokal(dynamic raw) {
+    final teks = '${raw ?? ''}'.trim();
+    if (teks.isEmpty) return null;
+    final iso = DateTime.tryParse(teks);
+    if (iso != null) return iso;
+    for (final pola in const [
+      'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'yyyy-MM-dd HH:mm:ss',
+    ]) {
+      try {
+        return DateFormat(pola).parseStrict(teks);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  String _namaCaraBayarLokal(Map<String, dynamic> payload) {
+    final tersimpan = '${payload['caraBayarNama'] ?? ''}'.trim();
+    if (tersimpan.isNotEmpty) return tersimpan;
+    final id = payload['caraBayar'];
+    for (final cara in Sesi.instance.caraBayar) {
+      if ('${cara.id}' == '$id') return cara.nama;
+    }
+    return id == null ? '-' : '$id';
+  }
+
+  Future<List<Map<String, dynamic>>> _arsipLokalSesuaiFilter() async {
+    final rows = await CoreDb.instance.transaksiArsipLokal(
+      akunKunci: Sesi.instance.userId,
+      tokoId: Sesi.instance.tokoId,
+    );
+    final hasil = <Map<String, dynamic>>[];
+    for (final source in rows) {
+      if ('${source['status']}' == 'GAGAL') continue;
+      Map<String, dynamic> payload;
+      try {
+        payload = Map<String, dynamic>.from(
+            jsonDecode('${source['payload_json']}') as Map);
+      } catch (_) {
+        continue;
+      }
+      final waktu = _waktuPayloadLokal(payload['waktu']) ??
+          DateTime.tryParse('${source['dibuat_pada']}');
+      if (waktu == null) continue;
+      final hari = DateTime(waktu.year, waktu.month, waktu.day);
+      if (_mulai != null &&
+          hari.isBefore(DateTime(_mulai!.year, _mulai!.month, _mulai!.day))) {
+        continue;
+      }
+      if (_sampai != null &&
+          hari.isAfter(DateTime(_sampai!.year, _sampai!.month, _sampai!.day))) {
+        continue;
+      }
+      final transaksi = ((payload['transaksi'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final kode = '${payload['kodeUnik'] ?? source['kode_unik']}';
+      final pembeli = '${payload['nama_member'] ?? 'Umum'}';
+      final kasir = '${payload['kasir'] ?? '-'}';
+      final mesin = '${payload['nama_mesin'] ?? ''}';
+      final metode = _namaCaraBayarLokal(payload);
+      final total = (payload['total'] as num?)?.toDouble() ?? 0;
+      final teksProduk = transaksi
+          .map((e) => '${e['kode'] ?? ''} ${e['nama'] ?? ''}')
+          .join(' ')
+          .toLowerCase();
+      final qty = transaksi.fold<double>(
+          0, (sum, e) => sum + ((e['jumlah'] as num?)?.toDouble() ?? 0));
+      bool cocok(String nilai, String filter) =>
+          filter.trim().isEmpty ||
+          nilai.toLowerCase().contains(filter.trim().toLowerCase());
+      if (!cocok('$kode $pembeli', _cariPembeli) ||
+          !cocok(kasir, _kasirFilter.text) ||
+          !cocok(mesin, _mesinFilter.text) ||
+          !cocok(teksProduk, _produkFilter.text) ||
+          !cocok(pembeli, _pelangganFilter.text) ||
+          !cocok(kode, _notaFilter.text) ||
+          !cocok(metode, _metodeFilter.text)) {
+        continue;
+      }
+      final minTotal = _angkaFilter(_totalMinimalFilter);
+      final maxTotal = _angkaFilter(_totalMaksimalFilter);
+      final minQty = _angkaFilter(_qtyMinimalFilter);
+      final maxQty = _angkaFilter(_qtyMaksimalFilter);
+      if ((minTotal > 0 && total < minTotal) ||
+          (maxTotal > 0 && total > maxTotal) ||
+          (minQty > 0 && qty < minQty) ||
+          (maxQty > 0 && qty > maxQty)) {
+        continue;
+      }
+      hasil.add(_normalisasiTransaksi(<String, dynamic>{
+        'nomorNota': kode,
+        'waktu': waktu.toIso8601String(),
+        'pembeli': pembeli,
+        'totalBiaya': total,
+        'metode': metode,
+        'kasir': kasir,
+        'namaMesin': mesin,
+        'pajak': payload['pajak'] ?? 0,
+        'totalDiskon': payload['diskon_faktur_nilai'] ?? 0,
+        'statusSinkronLokal': source['status'],
+        'payloadLokal': payload,
+        'itemLokal': transaksi,
+      }));
+    }
+    return hasil;
+  }
+
+  List<Map<String, dynamic>> _gabungkanDenganArsipLokal(
+      List<Map<String, dynamic>> server, List<Map<String, dynamic>> lokal) {
+    final kodeServer = server
+        .map((e) => '${e['nomorNota'] ?? ''}'.trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    final belumAda = lokal
+        .where((e) => !kodeServer
+            .contains('${e['nomorNota'] ?? ''}'.trim().toLowerCase()))
+        .toList();
+    belumAda.sort((a, b) {
+      final aPending = a['statusSinkronLokal'] == 'PENDING' ? 0 : 1;
+      final bPending = b['statusSinkronLokal'] == 'PENDING' ? 0 : 1;
+      if (aPending != bPending) return aPending.compareTo(bPending);
+      return '${b['waktu'] ?? ''}'.compareTo('${a['waktu'] ?? ''}');
+    });
+    // Arsip lokal diprioritaskan agar transaksi baru/pending langsung tampak,
+    // tetapi jumlah baris tetap mengikuti paging 15 data. Tanpa batas ini,
+    // perangkat lama dengan ribuan arsip akan membuat halaman pertama sangat
+    // panjang dan lambat walaupun query server sudah memakai paging.
+    return <Map<String, dynamic>>[...belumAda, ...server]
+        .take(_pageSize)
+        .toList();
+  }
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
+    final lokal = await _arsipLokalSesuaiFilter();
     try {
       final payload = {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
@@ -774,11 +910,22 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         hasil = await ApiClient.instance.aksi('laporan_order_list', fallback);
         data = _normalisasiDaftarTransaksi(hasil);
       }
+      final gabungan =
+          _halaman == 1 ? _gabungkanDenganArsipLokal(data, lokal) : data;
+      final kodeServer = data
+          .map((e) => '${e['nomorNota'] ?? ''}'.trim().toLowerCase())
+          .toSet();
+      final tambahanLokal = lokal
+          .where((e) =>
+              e['statusSinkronLokal'] != 'SYNCED' &&
+              !kodeServer
+                  .contains('${e['nomorNota'] ?? ''}'.trim().toLowerCase()))
+          .length;
       setStateIfMounted(() {
-        _data = data;
-        _total = _normalisasiTotalTransaksi(hasil, data.length);
+        _data = gabungan;
+        _total = _normalisasiTotalTransaksi(hasil, data.length) + tambahanLokal;
         _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
-            data.fold<double>(
+            gabungan.fold<double>(
                 0, (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
       });
       if (_defaultTanpaFilter) {
@@ -786,6 +933,16 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
             .simpanCacheReferensi(_kunciCacheRiwayat, jsonEncode(hasil)));
       }
     } catch (e) {
+      if (lokal.isNotEmpty) {
+        setStateIfMounted(() {
+          _data = lokal;
+          _total = lokal.length;
+          _omzetTotal = lokal.fold<double>(
+              0, (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
+          _error = null;
+        });
+        return;
+      }
       // Offline & sedang melihat tampilan default (bukan hasil filter) --
       // pakai snapshot terakhir yg tersimpan drpd layar kosong tak berguna.
       if (_defaultTanpaFilter) {
@@ -880,10 +1037,34 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
 
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
-      final hasil = await ApiClient.instance
-          .aksi('detail_transaksi', {'id': row['idTransaksi']});
-      final items =
-          ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final payloadLokal = row['payloadLokal'];
+      final Map<String, dynamic> hasil;
+      final List<Map<String, dynamic>> items;
+      if (payloadLokal is Map) {
+        final payload = Map<String, dynamic>.from(payloadLokal);
+        hasil = <String, dynamic>{
+          'kode': row['nomorNota'],
+          'waktu': row['waktu'],
+          'totalBiaya': row['totalBiaya'],
+          'kasirNama': row['kasir'],
+          'bolehEditTransaksi': false,
+        };
+        items = ((payload['transaksi'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((raw) {
+          final i = Map<String, dynamic>.from(raw);
+          return <String, dynamic>{
+            ...i,
+            'qty': i['qty'] ?? i['jumlah'] ?? 0,
+            'harga': i['harga'] ?? 0,
+            'diskon': i['diskon'] ?? 0,
+          };
+        }).toList();
+      } else {
+        hasil = await ApiClient.instance
+            .aksi('detail_transaksi', {'id': row['idTransaksi']});
+        items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+      }
       final pajakHeader = (row['pajak'] as num?)?.toDouble() ?? 0;
       final diskonHeader = (row['totalDiskon'] as num?)?.toDouble() ?? 0;
       final subtotalPerBaris = items
@@ -905,6 +1086,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(spacing: 8, runSpacing: 8, children: [
+                    if (row['statusSinkronLokal'] != null)
+                      _chipRingkasan(
+                          'Sinkron',
+                          row['statusSinkronLokal'] == 'SYNCED'
+                              ? 'Tersinkron'
+                              : 'Menunggu',
+                          row['statusSinkronLokal'] == 'SYNCED'
+                              ? AppColors.success
+                              : AppColors.warning),
                     _chipRingkasan('Diskon', _formatRupiah.format(diskonHeader),
                         AppColors.warning),
                     _chipRingkasan('Pajak', _formatRupiah.format(pajakHeader),
@@ -971,8 +1161,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                   _editTransaksi(row, hasil, items);
                 },
               ),
-            if (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
-                Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject'))
+            if (row['idTransaksi'] != null &&
+                (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
+                    Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject')))
               TextButton.icon(
                 icon: const Icon(Icons.cancel_outlined, size: 18),
                 label: const Text('Batalkan Transaksi'),
@@ -1399,11 +1590,29 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                       AppTableCell.text(kasirMesin, flex: 2),
                       AppTableCell(
                         flex: 2,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: StatusPill(
-                              label: StrukScreen.labelPembayaran(row),
-                              warna: AppColors.primary),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            StatusPill(
+                                label: StrukScreen.labelPembayaran(row),
+                                warna: AppColors.primary),
+                            if (row['statusSinkronLokal'] != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                row['statusSinkronLokal'] == 'SYNCED'
+                                    ? 'Cadangan lokal · tersinkron'
+                                    : 'Cadangan lokal · menunggu sinkron',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: row['statusSinkronLokal'] == 'SYNCED'
+                                      ? AppColors.success
+                                      : AppColors.warning,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       AppTableCell(

@@ -886,6 +886,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'kasir': Sesi.instance.userId,
       'waktu': _formatWaktuServer(waktu),
       'caraBayar': _caraBayarTerpilih!.id,
+      'caraBayarNama': _caraBayarTerpilih!.nama,
       if (_splitAktif) ...{
         'caraBayarNominal': pembayaranUtama,
         'nominalCaraBayar': pembayaranUtama,
@@ -914,6 +915,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'diskon_faktur_tipe': _tipeDiskonFaktur,
       'diskon_faktur_nilai': _nilaiDiskonFaktur,
       'id_member': _memberTerpilih?.id,
+      'nama_member': _memberTerpilih?.nama,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
       if (widget.draftIdSumber != null) ...{
