@@ -256,6 +256,43 @@ class ItemKeranjang {
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
 
+/// Menghapus salinan baris keranjang yang benar-benar identik.
+///
+/// Versi server lama pernah menjalankan DELETE rincian draft tanpa commit,
+/// sehingga setiap kali draft dimuat lalu ditahan ulang seluruh rincian lama
+/// dapat tersalin sekali lagi. UI kasir normal menggabungkan produk, promo, dan
+/// ekstra yang identik pada satu baris; karena itu dua baris dengan seluruh
+/// atribut berikut sama adalah salinan korup, bukan dua pilihan kasir terpisah.
+/// Jumlah tidak dijumlahkan karena salinan lama sudah membawa qty yang sama.
+List<ItemKeranjang> normalisasiDuplikatKeranjangTertahan(
+    Iterable<ItemKeranjang> sumber) {
+  final hasil = <ItemKeranjang>[];
+  final terlihat = <String>{};
+  for (final item in sumber) {
+    final ekstra = item.ekstra
+        .map((e) => '${e.id}|${e.kode}|${e.nama}|${e.harga}')
+        .join(';;');
+    final kunci = <Object?>[
+      item.produk.id,
+      item.produk.kode,
+      item.produk.nama,
+      item.produk.hargaJual,
+      item.jumlah,
+      item.diskon,
+      item.cashback,
+      item.aturanDiskonId,
+      item.promoManual,
+      item.promoManualAturanId,
+      item.diskonBebas,
+      item.diskonBebasTipe,
+      item.diskonBebasNilai,
+      ekstra,
+    ].join('\u001f');
+    if (terlihat.add(kunci)) hasil.add(item);
+  }
+  return hasil;
+}
+
 /// Menempatkan baris yang baru ditambahkan/dipindai di urutan pertama.
 ///
 /// Fungsi ini memindahkan objek yang sama (bukan membuat salinan), sehingga

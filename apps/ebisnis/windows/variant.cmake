@@ -11,6 +11,12 @@ function(resolve_ebisnis_variant OUT_VAR)
   endif()
 
   if(EXISTS "${_generated_config}")
+    # DART_DEFINES berubah setiap kali varian dibangun. Tanpa dependency ini,
+    # CMake dapat mempertahankan define/resource ProductName dari build
+    # sebelumnya (mis. Al-Bahjah) walaupun app.so sudah dibangun sebagai
+    # eBisnis. Paksa configure ulang ketika generated_config berubah.
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+      "${_generated_config}")
     file(READ "${_generated_config}" _generated_config_content)
     if(_generated_config_content MATCHES "RUJJU05JU19WQVJJQU5UPWFsYmFoamFo")
       set(_variant "albahjah")

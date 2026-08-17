@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'pos_help.dart';
 
@@ -265,12 +266,13 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     final desktop = lebar >= 900;
     final panelCari = _panelCari(context);
     final panelKeranjang = _panelKeranjang(context);
-    return Scaffold(
-      backgroundColor: AppColors.pageBgOf(context),
-      appBar: AppBar(
-        title: const Text('Kasir Apotik'),
-        actions: [PosHelp.button(context, 'apotik_kasir', compact: true)],
-      ),
+    return AppShell(
+      menuAktif: MenuEBisnis.kasirApotik,
+      judul: 'Kasir Apotik',
+      subjudul: 'Penjualan obat, tebus resep, FEFO, LASA, dan obat terkendali',
+      scrollable: false,
+      actionsAppBar: [PosHelp.button(context, 'apotik_kasir', compact: true)],
+      aksiHeader: PosHelp.button(context, 'apotik_kasir'),
       body: desktop
           ? Row(children: [
               Expanded(flex: 3, child: panelCari),

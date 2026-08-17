@@ -42,6 +42,7 @@ import 'widgets/safe_state.dart';
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    CoreDb.configureStorage(AppVariant.storageNamespace);
     // HARUS paling awal, sebelum kode lain manapun menyentuh
     // SharedPreferences (langsung/tak langsung) -- lihat JavaDoc [PrefsGuard].
     await PrefsGuard.perbaikiJikaKorup();

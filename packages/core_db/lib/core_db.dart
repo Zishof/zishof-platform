@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// Database offline-first eBisnis -- satu file SQLite per instalasi (`ebisnis.db`),
+/// Database offline-first eBisnis -- satu file SQLite per varian instalasi
+/// (`ebisnis_<namespace>.db`),
 /// skema meniru `local-db.js` versi Electron (lihat memori sesi
 /// `ebisnis-id-pendaftar-brand-toko-mesin-pos-dashboard` utk konteks produk):
 /// - `produk_cache`: katalog lengkap, di-replace penuh tiap sinkron (bukan upsert
@@ -24,6 +27,30 @@ class CoreDb {
   CoreDb._();
   static final CoreDb instance = CoreDb._();
 
+  static String _storageNamespace = 'ebisnis';
+
+  /// Wajib dipanggil saat bootstrap, sebelum akses DB pertama. Meskipun
+  /// path_provider biasanya sudah memisahkan folder per ProductName/package,
+  /// nama file dan backup juga diberi namespace sebagai lapisan pengaman saat
+  /// beberapa varian terpasang pada satu mesin.
+  static void configureStorage(String namespace) {
+    final normalized =
+        namespace.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]+'), '_');
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(namespace, 'namespace', 'Tidak boleh kosong');
+    }
+    if (instance._db != null || instance._openingDb != null) {
+      if (_storageNamespace != normalized) {
+        throw StateError(
+            'Namespace CoreDb tidak boleh diubah setelah DB dibuka.');
+      }
+      return;
+    }
+    _storageNamespace = normalized;
+  }
+
+  static String get storageNamespace => _storageNamespace;
+
   /// Naik setiap status sesi kas lokal berubah. UI seperti topbar memakai ini
   /// untuk refresh chip "Kas Terbuka/Tertutup" tanpa menunggu rebuild layar.
   final ValueNotifier<int> sesiKasVersi = ValueNotifier<int>(0);
@@ -33,6 +60,11 @@ class CoreDb {
   Future<void> _errorLogTail = Future.value();
   String? _lastErrorLogKey;
   DateTime? _lastErrorLogAt;
+
+  static const MethodChannel _backupChannel =
+      MethodChannel('id.zishof.ebisnis/persistent_transaction_backup');
+  static String get _namaFileBackup =>
+      'transaksi-pos-${_storageNamespace}-backup.jsonl';
 
   Future<Database> get db async {
     final currentDb = _db;
@@ -56,10 +88,11 @@ class CoreDb {
       sqfliteFfiInit();
       factory = databaseFactoryFfi;
       final dir = await getApplicationSupportDirectory();
-      path = p.join(dir.path, 'ebisnis.db');
+      path = p.join(dir.path, 'ebisnis_${_storageNamespace}.db');
     } else {
       factory = databaseFactory;
-      path = p.join(await getDatabasesPath(), 'ebisnis.db');
+      path =
+          p.join(await getDatabasesPath(), 'ebisnis_${_storageNamespace}.db');
     }
     try {
       return await _bukaDanVerifikasi(factory, path);
@@ -83,7 +116,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 7,
+        version: 9,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -102,6 +135,7 @@ class CoreDb {
       await database.close();
       throw StateError('PRAGMA quick_check gagal: $status');
     }
+    await _pulihkanArsipTransaksiPersisten(database);
     return database;
   }
 
@@ -136,6 +170,114 @@ class CoreDb {
     // bekerja konsisten di Android maupun desktop.
     await db.rawQuery('PRAGMA busy_timeout = 5000');
     await db.rawQuery('PRAGMA journal_mode = WAL');
+  }
+
+  /// Menulis snapshot append-only di lokasi kedua di luar database utama.
+  /// Pada Android 10+ native side memakai MediaStore/Downloads/eBisnis,
+  /// sehingga file tetap ada setelah aplikasi diperbarui maupun dihapus.
+  /// Pada desktop file berada di Documents/eBisnis/<varian>/Backup. Snapshot tidak
+  /// memuat token/sandi; isinya hanya payload transaksi operasional yang
+  /// memang diperlukan untuk membangun ulang arsip lokal.
+  Future<void> _cadangkanTransaksiPersisten(
+      Map<String, Object?> snapshot) async {
+    try {
+      final line = jsonEncode(<String, Object?>{
+        'versi': 1,
+        'dicatat_pada': DateTime.now().toIso8601String(),
+        ...snapshot,
+      });
+      if (!kIsWeb && Platform.isAndroid) {
+        await _backupChannel.invokeMethod<void>('append', <String, Object?>{
+          'fileName': _namaFileBackup,
+          'line': line,
+        });
+        return;
+      }
+      if (!kIsWeb &&
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        final documents = await getApplicationDocumentsDirectory();
+        final directory = Directory(
+            p.join(documents.path, 'eBisnis', _storageNamespace, 'Backup'));
+        await directory.create(recursive: true);
+        await File(p.join(directory.path, _namaFileBackup))
+            .writeAsString('$line\n', mode: FileMode.append, flush: true);
+      }
+    } catch (e) {
+      // Salinan utama SQLite sudah committed sebelum metode ini dipanggil.
+      // Gangguan media sekunder tidak boleh membatalkan penjualan kasir.
+      if (kDebugMode) debugPrint('Backup transaksi sekunder gagal: $e');
+    }
+  }
+
+  Future<String?> _bacaBackupTransaksiPersisten() async {
+    try {
+      if (!kIsWeb && Platform.isAndroid) {
+        return await _backupChannel.invokeMethod<String>(
+            'read', <String, Object?>{'fileName': _namaFileBackup});
+      }
+      if (!kIsWeb &&
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        final documents = await getApplicationDocumentsDirectory();
+        final file = File(p.join(documents.path, 'eBisnis', _storageNamespace,
+            'Backup', _namaFileBackup));
+        return await file.exists() ? await file.readAsString() : null;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Backup transaksi sekunder gagal dibaca: $e');
+    }
+    return null;
+  }
+
+  /// Mengembalikan snapshot terakhir setiap kode ke SQLite. INSERT OR IGNORE
+  /// sengaja dipakai agar data yang masih ada di DB utama selalu menang.
+  Future<void> _pulihkanArsipTransaksiPersisten(Database database) async {
+    final isi = await _bacaBackupTransaksiPersisten();
+    if (isi == null || isi.trim().isEmpty) return;
+    final terbaru = <String, Map<String, Object?>>{};
+    for (final line in const LineSplitter().convert(isi)) {
+      try {
+        final parsed = jsonDecode(line);
+        if (parsed is! Map) continue;
+        final row = Map<String, Object?>.from(parsed);
+        final kode = '${row['kode_unik'] ?? ''}'.trim();
+        if (kode.isNotEmpty && row['payload_json'] != null) terbaru[kode] = row;
+      } catch (_) {
+        // Satu baris terputus (mis. perangkat mati saat append) tidak merusak
+        // snapshot-snapshot lengkap lain di file append-only.
+      }
+    }
+    if (terbaru.isEmpty) return;
+    final batch = database.batch();
+    for (final row in terbaru.values) {
+      batch.insert(
+        'transaksi_pending',
+        <String, Object?>{
+          'kode_unik': row['kode_unik'],
+          'payload_json': row['payload_json'],
+          'status': row['status'] ?? 'PENDING',
+          'pesan_error': row['pesan_error'],
+          'dibuat_pada': row['dibuat_pada'] ?? DateTime.now().toIso8601String(),
+          'akun_kunci': row['akun_kunci'],
+          'toko_id': row['toko_id'],
+          'id_perangkat': row['id_perangkat'],
+          'percobaan': row['percobaan'] ?? 0,
+          'terakhir_dicoba': row['terakhir_dicoba'],
+          'disinkronkan_pada': row['disinkronkan_pada'],
+          'diperbarui_pada': row['diperbarui_pada'],
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _cadangkanBarisTransaksi(String kodeUnik) async {
+    final database = await db;
+    final rows = await database.query('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: <Object?>[kodeUnik], limit: 1);
+    if (rows.isNotEmpty) {
+      await _cadangkanTransaksiPersisten(rows.first);
+    }
   }
 
   /// Migrasi skema -- PERTAMA KALI sejak versi 1 dirilis (semua instalasi
@@ -223,6 +365,33 @@ class CoreDb {
         // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
       }
     }
+    if (versiLama < 8) {
+      for (final definisi in const [
+        'disinkronkan_pada TEXT',
+        'diperbarui_pada TEXT',
+      ]) {
+        try {
+          await db
+              .execute('ALTER TABLE transaksi_pending ADD COLUMN $definisi');
+        } catch (_) {
+          // Upgrade parsial: kolom yang sudah ada aman dilewati.
+        }
+      }
+      try {
+        await db.execute(
+            'CREATE INDEX idx_transaksi_arsip_waktu ON transaksi_pending(dibuat_pada DESC)');
+      } catch (_) {
+        // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
+      }
+    }
+    if (versiLama < 9) {
+      try {
+        await db.execute(
+            'CREATE INDEX idx_transaksi_toko_waktu_status ON transaksi_pending(toko_id, dibuat_pada DESC, status)');
+      } catch (_) {
+        // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
+      }
+    }
   }
 
   static const _ddlOutboxIs = '''
@@ -298,11 +467,17 @@ class CoreDb {
         toko_id INTEGER,
         id_perangkat TEXT,
         percobaan INTEGER NOT NULL DEFAULT 0,
-        terakhir_dicoba TEXT
+        terakhir_dicoba TEXT,
+        disinkronkan_pada TEXT,
+        diperbarui_pada TEXT
       )
     ''');
     await db.execute(
         'CREATE INDEX idx_transaksi_pending_pemilik ON transaksi_pending(status, akun_kunci, toko_id)');
+    await db.execute(
+        'CREATE INDEX idx_transaksi_arsip_waktu ON transaksi_pending(dibuat_pada DESC)');
+    await db.execute(
+        'CREATE INDEX idx_transaksi_toko_waktu_status ON transaksi_pending(toko_id, dibuat_pada DESC, status)');
 
     await db.execute('''
       CREATE TABLE cache_referensi (
@@ -531,39 +706,105 @@ class CoreDb {
     // perangkat ini dan membuat tombol Bayar tampak tidak bereaksi sebelum
     // request sempat dikirim. REPLACE aman di sini karena satu kode hanya boleh
     // mempunyai satu payload/status outbox terbaru.
-    return database.insert(
+    final sekarang = DateTime.now().toIso8601String();
+    final id = await database.insert(
       'transaksi_pending',
       {
         'kode_unik': kodeUnik,
         'payload_json': payloadJson,
         'status': 'PENDING',
         'pesan_error': null,
-        'dibuat_pada': DateTime.now().toIso8601String(),
+        'dibuat_pada': sekarang,
         'akun_kunci': akunKunci,
         'toko_id': tokoId,
         'id_perangkat': idPerangkat,
         'percobaan': 0,
         'terakhir_dicoba': null,
+        'disinkronkan_pada': null,
+        'diperbarui_pada': sekarang,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    // DB utama sudah committed. Buat salinan kedua sebelum request server.
+    await _cadangkanBarisTransaksi(kodeUnik);
+    return id;
   }
 
   Future<void> tandaiTransaksiSinkron(String kodeUnik) async {
     final database = await db;
+    final sekarang = DateTime.now().toIso8601String();
     await database.update(
-        'transaksi_pending', {'status': 'SYNCED', 'pesan_error': null},
-        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+        'transaksi_pending',
+        {
+          'status': 'SYNCED',
+          'pesan_error': null,
+          'disinkronkan_pada': sekarang,
+          'diperbarui_pada': sekarang,
+        },
+        where: 'kode_unik = ?',
+        whereArgs: [kodeUnik]);
+    await _cadangkanBarisTransaksi(kodeUnik);
+  }
+
+  /// Menyimpan transaksi yang ditemukan di server sebagai salinan lokal.
+  /// Baris PENDING/GAGAL tidak ditimpa agar payload pemulihan yang belum
+  /// terkirim tetap utuh; kode_unik adalah kunci deduplikasi dua arah.
+  Future<bool> simpanTransaksiDariServer(String kodeUnik, String payloadJson,
+      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
+    final database = await db;
+    final lama = await database.query('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik], limit: 1);
+    if (lama.isNotEmpty && '${lama.first['status']}' != 'SYNCED') {
+      return false;
+    }
+    final sekarang = DateTime.now().toIso8601String();
+    await database.insert(
+      'transaksi_pending',
+      {
+        'kode_unik': kodeUnik,
+        'payload_json': payloadJson,
+        'status': 'SYNCED',
+        'pesan_error': null,
+        'dibuat_pada': lama.isEmpty
+            ? sekarang
+            : '${lama.first['dibuat_pada'] ?? sekarang}',
+        'akun_kunci': akunKunci,
+        'toko_id': tokoId,
+        'id_perangkat': idPerangkat,
+        'percobaan': lama.isEmpty ? 0 : (lama.first['percobaan'] ?? 0),
+        'terakhir_dicoba': lama.isEmpty ? null : lama.first['terakhir_dicoba'],
+        'disinkronkan_pada': sekarang,
+        'diperbarui_pada': sekarang,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await _cadangkanBarisTransaksi(kodeUnik);
+    return true;
+  }
+
+  Future<Map<String, Object?>?> transaksiLokalDenganKode(
+      String kodeUnik) async {
+    final database = await db;
+    final rows = await database.query('transaksi_pending',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik], limit: 1);
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<void> tandaiTransaksiGagal(String kodeUnik, String pesanError) async {
     final database = await db;
     await database.rawUpdate(
       'UPDATE transaksi_pending SET pesan_error = ?, '
-      'percobaan = COALESCE(percobaan, 0) + 1, terakhir_dicoba = ? '
+      'percobaan = COALESCE(percobaan, 0) + 1, terakhir_dicoba = ?, '
+      'diperbarui_pada = ? '
       'WHERE kode_unik = ?',
-      [pesanError, DateTime.now().toIso8601String(), kodeUnik],
+      [
+        pesanError,
+        DateTime.now().toIso8601String(),
+        DateTime.now().toIso8601String(),
+        kodeUnik
+      ],
     );
+    await _cadangkanBarisTransaksi(kodeUnik);
   }
 
   /// Penolakan permanen dari server atau payload lokal rusak. Dipisahkan dari
@@ -574,9 +815,42 @@ class CoreDb {
     final database = await db;
     await database.update(
       'transaksi_pending',
-      {'status': 'GAGAL', 'pesan_error': pesanError},
+      {
+        'status': 'GAGAL',
+        'pesan_error': pesanError,
+        'diperbarui_pada': DateTime.now().toIso8601String(),
+      },
       where: 'kode_unik = ?',
       whereArgs: [kodeUnik],
+    );
+    await _cadangkanBarisTransaksi(kodeUnik);
+  }
+
+  /// Arsip transaksi milik akun/toko aktif, termasuk yang sudah tersinkron.
+  /// Halaman Riwayat Penjualan memakai sumber ini untuk langsung menampilkan
+  /// struk yang baru tercetak tanpa menunggu round-trip laporan server.
+  Future<List<Map<String, Object?>>> transaksiArsipLokal({
+    String? akunKunci,
+    int? tokoId,
+    int limit = 500,
+  }) async {
+    final database = await db;
+    final klausa = <String>[];
+    final args = <Object?>[];
+    if (akunKunci != null && akunKunci.isNotEmpty) {
+      klausa.add('(akun_kunci = ? OR akun_kunci IS NULL)');
+      args.add(akunKunci);
+    }
+    if (tokoId != null) {
+      klausa.add('(toko_id = ? OR toko_id IS NULL)');
+      args.add(tokoId);
+    }
+    return database.query(
+      'transaksi_pending',
+      where: klausa.isEmpty ? null : klausa.join(' AND '),
+      whereArgs: klausa.isEmpty ? null : args,
+      orderBy: 'dibuat_pada DESC',
+      limit: limit,
     );
   }
 
@@ -591,10 +865,17 @@ class CoreDb {
   }
 
   Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron(
-      {String? akunKunci, int? tokoId, String? idPerangkat}) async {
+      {String? akunKunci,
+      int? tokoId,
+      String? idPerangkat,
+      Duration jedaRetry = const Duration(minutes: 10)}) async {
     final database = await db;
-    final klausa = <String>["status = 'PENDING'"];
-    final args = <Object?>[];
+    final batasRetry = DateTime.now().subtract(jedaRetry).toIso8601String();
+    final klausa = <String>[
+      "status = 'PENDING'",
+      '(terakhir_dicoba IS NULL OR terakhir_dicoba <= ?)'
+    ];
+    final args = <Object?>[batasRetry];
     if (akunKunci != null && akunKunci.isNotEmpty) {
       // NULL adalah baris versi lama; service memeriksa field `kasir` di
       // payload sebelum mengirim agar migrasi tidak kehilangan transaksi.

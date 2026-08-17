@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:barcode/barcode.dart' as bc;
+import 'package:core_db/core_db.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +18,7 @@ import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_struk.dart';
 import '../services/print_util.dart';
+import '../services/transaksi_outbox_service.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import 'kasir_screen.dart';
@@ -1016,70 +1019,80 @@ class StrukScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(modeCetakUlang
-            ? 'Preview Cetak Struk'
-            : tersinkron
-                ? 'Transaksi Berhasil'
-                : 'Transaksi Tersimpan Pending'),
-        automaticallyImplyLeading: modeCetakUlang,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: FutureBuilder<void>(
-            future: _pastikanProfilToko(),
-            builder: (context, _) {
-              final lebarPreview = PengaturanStruk.instance.lebarPreviewPx;
-              return ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: lebarPreview),
-                child: Column(
-                  children: [
-                    _StatusTransaksi(tersinkron: tersinkron),
-                    const SizedBox(height: 14),
-                    _TombolStruk(
-                      onCetak: _cetakStruk,
-                      tampilkanTransaksiBaru: !modeCetakUlang,
-                      tampilkanBukaLaci: !modeCetakUlang,
-                      onTransaksiBaru: () =>
-                          Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const KasirScreen()),
+    return _StatusSinkronisasiLive(
+      kode: kode,
+      tersinkronAwal: tersinkron,
+      builder: (context, statusSinkron, pesanError) => Scaffold(
+        appBar: AppBar(
+          title: Text(modeCetakUlang
+              ? 'Preview Cetak Struk'
+              : statusSinkron == 'SYNCED'
+                  ? 'Transaksi Berhasil'
+                  : statusSinkron == 'GAGAL'
+                      ? 'Transaksi Perlu Ditinjau'
+                      : 'Transaksi Tersimpan Pending'),
+          automaticallyImplyLeading: modeCetakUlang,
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: FutureBuilder<void>(
+              future: _pastikanProfilToko(),
+              builder: (context, _) {
+                final lebarPreview = PengaturanStruk.instance.lebarPreviewPx;
+                return ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: lebarPreview),
+                  child: Column(
+                    children: [
+                      _StatusTransaksi(
+                        status: statusSinkron,
+                        pesanError: pesanError,
                       ),
-                      // Alur pembayaran dari Pesanan membuka Kasir sebagai
-                      // route sementara, lalu menggantinya dengan layar struk.
-                      // Pop dari sini mengembalikan kasir ke daftar Pesanan.
-                      onKembali: () => Navigator.of(context).maybePop(),
-                    ),
-                    const SizedBox(height: 16),
-                    _StrukPreview(
-                      kode: kode,
-                      waktu: waktu,
-                      item: item,
-                      total: total,
-                      pajak: pajak,
-                      metode: metode,
-                      pembayaran: _pembayaranEfektif,
-                      tersinkron: tersinkron,
-                      subtotal: _subtotal,
-                      totalDiskon: _totalDiskonItem,
-                      diskonFaktur: diskonFaktur,
-                      totalCashback: _totalCashbackItem,
-                      jumlahItem: _jumlahItem,
-                      kasir: _labelKasir(),
-                      pelanggan: _labelPelanggan(),
-                      uangDiterima: uangDiterima,
-                      kembalian: kembalian,
-                      saldo: saldo,
-                      statusLabel: statusLabel,
-                      formatUang: _formatUang,
-                      formatAngka: (v) => _formatAngka.format(v),
-                      formatQty: _formatQty,
-                    ),
-                  ],
-                ),
-              );
-            },
+                      const SizedBox(height: 14),
+                      _TombolStruk(
+                        onCetak: _cetakStruk,
+                        tampilkanTransaksiBaru: !modeCetakUlang,
+                        tampilkanBukaLaci: !modeCetakUlang,
+                        onTransaksiBaru: () =>
+                            Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                              builder: (_) => const KasirScreen()),
+                        ),
+                        // Alur pembayaran dari Pesanan membuka Kasir sebagai
+                        // route sementara, lalu menggantinya dengan layar struk.
+                        // Pop dari sini mengembalikan kasir ke daftar Pesanan.
+                        onKembali: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(height: 16),
+                      _StrukPreview(
+                        kode: kode,
+                        waktu: waktu,
+                        item: item,
+                        total: total,
+                        pajak: pajak,
+                        metode: metode,
+                        pembayaran: _pembayaranEfektif,
+                        tersinkron: statusSinkron == 'SYNCED',
+                        subtotal: _subtotal,
+                        totalDiskon: _totalDiskonItem,
+                        diskonFaktur: diskonFaktur,
+                        totalCashback: _totalCashbackItem,
+                        jumlahItem: _jumlahItem,
+                        kasir: _labelKasir(),
+                        pelanggan: _labelPelanggan(),
+                        uangDiterima: uangDiterima,
+                        kembalian: kembalian,
+                        saldo: saldo,
+                        statusLabel: statusLabel,
+                        formatUang: _formatUang,
+                        formatAngka: (v) => _formatAngka.format(v),
+                        formatQty: _formatQty,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -1087,39 +1100,155 @@ class StrukScreen extends StatelessWidget {
   }
 }
 
-class _StatusTransaksi extends StatelessWidget {
-  final bool tersinkron;
+typedef _StatusSinkronBuilder = Widget Function(
+    BuildContext context, String status, String? pesanError);
 
-  const _StatusTransaksi({required this.tersinkron});
+/// Memantau baris outbox transaksi yang sedang ditampilkan. Poll ringan hanya
+/// hidup selama layar struk terbuka dan berhenti segera setelah server memberi
+/// pengakuan. Dengan demikian kasir melihat perubahan status tanpa muat ulang,
+/// sedangkan proses pengiriman tetap dimiliki service background 10-menitan.
+class _StatusSinkronisasiLive extends StatefulWidget {
+  final String kode;
+  final bool tersinkronAwal;
+  final _StatusSinkronBuilder builder;
+
+  const _StatusSinkronisasiLive({
+    required this.kode,
+    required this.tersinkronAwal,
+    required this.builder,
+  });
+
+  @override
+  State<_StatusSinkronisasiLive> createState() =>
+      _StatusSinkronisasiLiveState();
+}
+
+class _StatusSinkronisasiLiveState extends State<_StatusSinkronisasiLive> {
+  Timer? _timer;
+  late String _status;
+  String? _pesanError;
+  bool _memeriksa = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = widget.tersinkronAwal ? 'SYNCED' : 'PENDING';
+    if (_status != 'SYNCED') {
+      TransaksiOutboxService.instance.kirimDiBackground();
+      _periksa();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _periksa());
+    }
+  }
+
+  Future<void> _periksa() async {
+    if (_memeriksa || !mounted) return;
+    _memeriksa = true;
+    try {
+      final row = await CoreDb.instance.transaksiLokalDenganKode(widget.kode);
+      if (!mounted || row == null) return;
+      final statusBaru = '${row['status'] ?? 'PENDING'}'.toUpperCase();
+      final errorBaru = '${row['pesan_error'] ?? ''}'.trim();
+      if (statusBaru != _status || errorBaru != (_pesanError ?? '')) {
+        setState(() {
+          _status = statusBaru;
+          _pesanError = errorBaru.isEmpty ? null : errorBaru;
+        });
+      }
+      if (statusBaru == 'SYNCED') {
+        _timer?.cancel();
+        _timer = null;
+      }
+    } finally {
+      _memeriksa = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _status, _pesanError);
+}
+
+class _StatusTransaksi extends StatelessWidget {
+  final String status;
+  final String? pesanError;
+
+  const _StatusTransaksi({required this.status, this.pesanError});
 
   @override
   Widget build(BuildContext context) {
-    final warna = tersinkron ? AppColors.success : AppColors.warning;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.latarLembut(warna),
-        border: Border.all(color: warna.withValues(alpha: 0.24)),
-        borderRadius: BorderRadius.circular(8),
+    final tersinkron = status == 'SYNCED';
+    final gagal = status == 'GAGAL';
+    final warna = tersinkron
+        ? AppColors.success
+        : gagal
+            ? AppColors.danger
+            : AppColors.warning;
+    final judul = tersinkron
+        ? 'Tersimpan di Server & Cadangan Lokal Aktif'
+        : gagal
+            ? 'Perlu Ditinjau Sebelum Dikirim Ulang'
+            : 'Tersimpan Lokal · Menunggu Sinkronisasi';
+    final keterangan = tersinkron
+        ? 'Server telah mengakui transaksi. POS kasir lain di toko yang sama akan mengambil salinan lokal secara otomatis.'
+        : gagal
+            ? (pesanError == null
+                ? 'Transaksi tetap aman di lokal, tetapi server menolak pengiriman.'
+                : 'Transaksi tetap aman di lokal. $pesanError')
+            : 'Pengiriman berjalan otomatis saat online. Jika belum berhasil, sistem mencoba kembali sesuai jadwal.';
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 550),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(scale: animation, child: child),
       ),
-      child: Row(
-        children: [
-          Icon(tersinkron ? Icons.check_circle : Icons.cloud_off, color: warna),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              tersinkron
-                  ? 'Berhasil & Tersinkron'
-                  : 'Tersimpan Offline, akan disinkron otomatis saat online.',
-              style: TextStyle(
-                color: warna,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
+      child: Container(
+        key: ValueKey(status),
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.latarLembut(warna),
+          border: Border.all(color: warna.withValues(alpha: 0.24)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+                tersinkron
+                    ? Icons.cloud_done_rounded
+                    : gagal
+                        ? Icons.error_outline_rounded
+                        : Icons.cloud_sync_rounded,
+                color: warna),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(judul,
+                      style: TextStyle(
+                        color: warna,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(keterangan,
+                      style: TextStyle(
+                        color: warna.withValues(alpha: 0.88),
+                        fontSize: 11,
+                      )),
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

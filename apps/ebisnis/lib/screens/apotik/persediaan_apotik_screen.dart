@@ -7,6 +7,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/app_shell.dart';
 import 'pos_help.dart';
 
 final _rp =
@@ -52,42 +53,50 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.pageBgOf(context),
-      appBar: AppBar(
-        title: const Text('Persediaan Apotik'),
-        actions: [
-          PosHelp.button(
-              context,
-              const [
-                'apotik_formularium',
-                'apotik_batch',
-                'apotik_pengadaan',
-                'apotik_stok_opname',
-                'apotik_retur'
-              ][_tab.index],
-              compact: true)
-        ],
-        bottom: TabBar(
-          controller: _tab,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'Formularium'),
-            Tab(text: 'Batch & Kedaluwarsa'),
-            Tab(text: 'Penerimaan PBF'),
-            Tab(text: 'Stok Opname'),
-            Tab(text: 'Retur Obat'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _TabFormularium(),
-          _TabBatchMonitor(),
-          _TabPenerimaanPbf(),
-          _TabOpname(),
-          _TabRetur(),
+    final bantuan = const [
+      'apotik_formularium',
+      'apotik_batch',
+      'apotik_pengadaan',
+      'apotik_stok_opname',
+      'apotik_retur'
+    ][_tab.index];
+    return AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Obat & Persediaan',
+      subjudul: 'Formularium, batch, PBF, stok opname, dan retur obat',
+      scrollable: false,
+      actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],
+      aksiHeader: PosHelp.button(context, bantuan),
+      body: Column(
+        children: [
+          Material(
+            color: AppColors.cardBgOf(context),
+            borderRadius: BorderRadius.circular(10),
+            child: TabBar(
+              controller: _tab,
+              isScrollable: true,
+              tabs: const [
+                Tab(text: 'Formularium'),
+                Tab(text: 'Batch & Kedaluwarsa'),
+                Tab(text: 'Penerimaan PBF'),
+                Tab(text: 'Stok Opname'),
+                Tab(text: 'Retur Obat'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: TabBarView(
+              controller: _tab,
+              children: const [
+                _TabFormularium(),
+                _TabBatchMonitor(),
+                _TabPenerimaanPbf(),
+                _TabOpname(),
+                _TabRetur(),
+              ],
+            ),
+          ),
         ],
       ),
     );

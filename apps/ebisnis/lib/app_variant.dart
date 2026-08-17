@@ -28,6 +28,16 @@ class AppVariant {
 
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
+  /// Namespace stabil untuk seluruh data lokal. Nilai ini tidak mengikuti
+  /// nama tampilan sehingga perubahan branding tidak pernah mencampur DB,
+  /// backup transaksi, atau konfigurasi antar aplikasi yang dipasang pada
+  /// komputer/perangkat yang sama.
+  static const storageNamespace = isAlBahjah
+      ? 'albahjah'
+      : (isInventorySales
+          ? 'inventory_sales'
+          : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
+
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales
@@ -68,6 +78,19 @@ class AppVariant {
                   ? 'assets/images/emedik/icon.png'
                   : 'assets/images/ebisnis/icon.png')));
 
+  /// Latar layar masuk mengikuti unit usaha. Aset sengaja dipisah per varian
+  /// agar identitas eBisnis umum, Inventory, Apotik, eMedik, dan Al-Bahjah
+  /// tetap konsisten pada build Desktop maupun Android.
+  static const loginBackgroundAsset = isAlBahjah
+      ? 'assets/images/albahjah/login-background.png'
+      : (isInventorySales
+          ? 'assets/images/inventory_sales/login-background.png'
+          : (isApotik
+              ? 'assets/images/apotik/login-background.png'
+              : (isEmedik
+                  ? 'assets/images/emedik/login-background.png'
+                  : 'assets/images/ebisnis/login-background.png')));
+
   /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
   /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
   /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
@@ -79,6 +102,10 @@ class AppVariant {
   static const subJudulLogin = isAlBahjah
       ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
       : (isInventorySales
-          ? 'Masuk ke Inventory & Sales'
-          : 'Masuk sebagai Kasir');
+          ? 'Kelola persediaan, penjualan, dan operasional usaha'
+          : (isApotik
+              ? 'Masuk sesuai peran Anda di layanan Apotik'
+              : (isEmedik
+                  ? 'Masuk sesuai peran Anda di layanan eMedik'
+                  : 'Masuk ke sistem operasional eBisnis')));
 }

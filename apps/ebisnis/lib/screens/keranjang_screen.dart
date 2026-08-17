@@ -11,11 +11,9 @@ import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
-import '../services/pelayanan_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
-import '../widgets/panduan_stok_kosong.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -443,15 +441,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       ),
     );
     if (nilai != null) _aturUangDiterima(nilai);
-  }
-
-  Future<void> _tandaiTerlayaniJikaPerlu(
-      Map<String, dynamic> payload, Map<String, dynamic> hasil) async {
-    await PelayananTransaksi.tandaiJikaPerlu(
-      payload: payload,
-      hasilBayar: hasil,
-      percobaanCari: 1,
-    );
   }
 
   /// "Uang Diterima" default = total (spec §3.4) SELAMA kasir belum mengetik
@@ -886,6 +875,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'kasir': Sesi.instance.userId,
       'waktu': _formatWaktuServer(waktu),
       'caraBayar': _caraBayarTerpilih!.id,
+      'caraBayarNama': _caraBayarTerpilih!.nama,
       if (_splitAktif) ...{
         'caraBayarNominal': pembayaranUtama,
         'nominalCaraBayar': pembayaranUtama,
@@ -914,6 +904,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'diskon_faktur_tipe': _tipeDiskonFaktur,
       'diskon_faktur_nilai': _nilaiDiskonFaktur,
       'id_member': _memberTerpilih?.id,
+      'nama_member': _memberTerpilih?.nama,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
       if (widget.draftIdSumber != null) ...{
@@ -1166,45 +1157,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           tokoId: Sesi.instance.tokoId,
           idPerangkat: IdentitasMesin.instance.idMesin);
 
-      String? pesanTundaMenuju;
-      Map<String, dynamic>? hasilBayarSukses;
-      try {
-        payload['pengiriman_pending'] = false;
-        final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
-        hasilBayarSukses = hasilBayar;
-        await _tandaiTerlayaniJikaPerlu(payload, hasilBayar);
-        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-      } catch (e) {
-        if (TransaksiOutboxService.instance.dapatDicobaUlang(e)) {
-          await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, e.toString());
-          pesanTundaMenuju =
-              'Transaksi tersimpan sebagai Pending. Kasir dapat melayani transaksi lain; aplikasi akan mencoba mengirimkannya kembali secara otomatis.';
-        } else {
-          // Penolakan bisnis bukan antrean retry, namun rekamannya tetap
-          // disimpan sebagai GAGAL untuk audit dan tidak pernah dihapus.
-          await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, e.toString());
-          if (mounted) {
-            if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(e.pesan),
-                backgroundColor: Colors.orange.shade800,
-                duration: const Duration(seconds: 8),
-              ));
-              await tampilkanPanduanStokKosong(context, detail: e.pesan);
-            } else {
-              await tampilkanKesalahan(context, e is ApiException ? e.info : e,
-                  aktivitas: 'pembayaran');
-            }
-          }
-          return;
-        }
-      }
+      // Local-first sungguhan: setelah commit SQLite berhasil, checkout tidak
+      // lagi menunggu round-trip HTTP. Outbox mencoba segera di background;
+      // kegagalan teknis dicatat dan baru layak dicoba lagi setelah 10 menit.
+      // Kode unik yang sama dipakai pada semua percobaan sehingga server tetap
+      // idempoten walaupun respons sebelumnya hilang di tengah jaringan.
+      TransaksiOutboxService.instance.kirimDiBackground();
+      const pesanTundaMenuju =
+          'Transaksi aman tersimpan di lokal. Pengiriman ke server berjalan di background; jika gagal akan dicoba lagi dalam 10 menit.';
 
       if (!mounted) return;
-      if (pesanTundaMenuju != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(pesanTundaMenuju)));
-      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text(pesanTundaMenuju)));
 
       // Ekstra diratakan (flatten) jadi baris tersendiri TEPAT setelah induknya
       // -- StrukScreen tak kenal struktur bersarang, cuma daftar {nama,qty,
@@ -1237,7 +1201,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
       final double? kembalianStruk =
           _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
-      final saldoStruk = _saldoDepositSetelahBayar(hasilBayarSukses);
+      final saldoStruk = _saldoDepositSetelahBayar(null);
       widget.keranjang.clear();
       // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
       // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
@@ -1262,7 +1226,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           pembayaran: pembayaranStruk,
           pajak: pajakStruk,
           diskonFaktur: diskonFakturStruk,
-          tersinkron: pesanTundaMenuju == null,
+          tersinkron: false,
           pelanggan: pelangganStruk,
           uangDiterima: uangDiterimaStruk,
           kembalian: kembalianStruk,
@@ -3059,8 +3023,15 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
     25000,
     30000,
     50000,
+    75000,
     100000,
     150000,
+    200000,
+    250000,
+    300000,
+    500000,
+    750000,
+    1000000,
   ];
 
   late final TextEditingController _controller;
@@ -3105,7 +3076,7 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
     return AlertDialog(
       title: const Text('Uang Diterima'),
       content: SizedBox(
-        width: 420,
+        width: 520,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3124,17 +3095,31 @@ class _DialogUangDiterimaState extends State<_DialogUangDiterima> {
               onSubmitted: (_) => _simpan(),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _nominalCepat
-                  .map(
-                    (nominal) => OutlinedButton(
-                      onPressed: () => _pilihNominal(nominal),
-                      child: Text(_formatRupiah.format(nominal)),
-                    ),
-                  )
-                  .toList(),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final jumlahKolom = constraints.maxWidth >= 480 ? 4 : 3;
+                final lebarTombol =
+                    (constraints.maxWidth - ((jumlahKolom - 1) * 8)) /
+                        jumlahKolom;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _nominalCepat
+                      .map(
+                        (nominal) => SizedBox(
+                          width: lebarTombol,
+                          child: OutlinedButton(
+                            onPressed: () => _pilihNominal(nominal),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(_formatRupiah.format(nominal)),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
             ),
             const SizedBox(height: 14),
             Row(

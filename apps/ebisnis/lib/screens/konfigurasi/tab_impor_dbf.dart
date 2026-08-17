@@ -18,12 +18,12 @@ import 'dbf_parser.dart';
 ///
 /// Sumber: file ZIP arsip legacy ATAU folder (desktop) berisi berkas FoxPro
 /// (mis. `C:\Users\...\Documents\5-Inventory--\5-Inventory`). HANYA berkas
-/// `.DBF` yang dibaca -- CDX/EXE/BAT/dll diabaikan; DBF yang tidak dikenal
-/// (transaksi BELI/JUAL/journal dst.) tampil sebagai "dilewati" (impor
-/// transaksi legacy = fase migrasi terpisah, bukan tab ini).
+/// `.DBF` yang dibaca -- CDX/EXE/BAT/dll diabaikan. Master serta transaksi
+/// BELI/JUAL dikenali; DBF lain tetap ditampilkan sebagai "dilewati".
 ///
 /// Urutan impor otomatis: Supplier -> Customer -> Sales -> Barang ->
-/// Harga Beli -> Harga Jual (harga me-resolve kode yang harus sudah ada).
+/// Harga Beli -> Harga Jual -> Pembelian -> Penjualan (transaksi me-resolve
+/// master supplier/customer/produk yang sudah diimpor lebih dahulu).
 /// Idempoten: menjalankan ulang tidak menggandakan data (upsert by kode legacy);
 /// record existing tidak ditimpa (hanya field kosong diisi).
 class TabImporDbf extends StatefulWidget {
@@ -53,6 +53,28 @@ class _TabImporDbfState extends State<TabImporDbf> {
   double _progres = 0;
   String _statusProgres = '';
   final List<String> _exceptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pindaiFolderBawaan());
+  }
+
+  Future<void> _pindaiFolderBawaan() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) return;
+    final home = Platform.environment['USERPROFILE'];
+    if (home == null || home.trim().isEmpty) return;
+    final kandidat = <String>[
+      '$home\\Downloads\\5-Inventory--\\5-Inventory',
+      '$home\\Downloads\\5-Inventory--',
+    ];
+    for (final lokasi in kandidat) {
+      if (await Directory(lokasi).exists()) {
+        await _bacaFolder(lokasi, otomatis: true);
+        return;
+      }
+    }
+  }
 
   Future<void> _pilihZip() async {
     final pilih = await FilePicker.platform.pickFiles(
@@ -93,9 +115,14 @@ class _TabImporDbfState extends State<TabImporDbf> {
     final dir = await FilePicker.platform
         .getDirectoryPath(dialogTitle: 'Pilih folder berisi berkas DBF legacy');
     if (dir == null) return;
+    await _bacaFolder(dir);
+  }
+
+  Future<void> _bacaFolder(String dir, {bool otomatis = false}) async {
     setStateIfMounted(() {
       _memindai = true;
-      _sumber = 'Folder: $dir';
+      _sumber =
+          '${otomatis ? 'Folder bawaan terdeteksi otomatis' : 'Folder'}: $dir';
       _berkas = [];
       _exceptions.clear();
     });
@@ -130,12 +157,10 @@ class _TabImporDbfState extends State<TabImporDbf> {
 
   List<_BerkasDbf> _urutkan(List<_BerkasDbf> daftar) {
     daftar.sort((a, b) {
-      final ia = a.jenis == null
-          ? 999
-          : PetaDbfLegacy.urutanImpor.indexOf(a.jenis!);
-      final ib = b.jenis == null
-          ? 999
-          : PetaDbfLegacy.urutanImpor.indexOf(b.jenis!);
+      final ia =
+          a.jenis == null ? 999 : PetaDbfLegacy.urutanImpor.indexOf(a.jenis!);
+      final ib =
+          b.jenis == null ? 999 : PetaDbfLegacy.urutanImpor.indexOf(b.jenis!);
       return ia != ib ? ia.compareTo(ib) : a.nama.compareTo(b.nama);
     });
     return daftar;
@@ -218,7 +243,9 @@ class _TabImporDbfState extends State<TabImporDbf> {
                 'Migrasi master dari aplikasi lama INVENTORY CONTROL (FoxPro) ke toko ini. '
                 'Pilih arsip ZIP atau folder legacy (mis. folder "5-Inventory") -- HANYA berkas '
                 '.DBF yang dibaca; berkas lain diabaikan. Berkas dikenal: SUPPLIER, CUSTOMER, '
-                'SALES, STOK, masterbl, masterjl. Aman dijalankan ulang (tidak menggandakan '
+                'SALES, STOK, masterbl, masterjl, BELI, dan JUAL. Folder bawaan '
+                'Downloads\\5-Inventory-- dipindai otomatis pada Desktop. Aman dijalankan '
+                'ulang (tidak menggandakan '
                 'data; data yang sudah ada tidak ditimpa).',
                 style: TextStyle(
                     fontSize: 12,
@@ -239,9 +266,8 @@ class _TabImporDbfState extends State<TabImporDbf> {
                 onPressed:
                     (!desktop || _memindai || _mengimpor) ? null : _pilihFolder,
                 icon: const Icon(Icons.folder_open_outlined, size: 18),
-                label: Text(desktop
-                    ? 'Pilih Folder'
-                    : 'Pilih Folder (khusus Desktop)'),
+                label: Text(
+                    desktop ? 'Pilih Folder' : 'Pilih Folder (khusus Desktop)'),
               ),
             ]),
             if (_sumber.isNotEmpty) ...[
@@ -273,7 +299,9 @@ class _TabImporDbfState extends State<TabImporDbf> {
                   child: Row(children: [
                     Checkbox(
                       value: b.dipilih,
-                      onChanged: b.jenis == null || b.tabel == null || _mengimpor
+                      onChanged: b.jenis == null ||
+                              b.tabel == null ||
+                              _mengimpor
                           ? null
                           : (v) =>
                               setStateIfMounted(() => b.dipilih = v == true),
@@ -347,8 +375,7 @@ class _TabImporDbfState extends State<TabImporDbf> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Text(e,
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.danger)),
+                      style: TextStyle(fontSize: 11, color: AppColors.danger)),
                 ),
               if (_exceptions.length > 50)
                 Text('... dan ${_exceptions.length - 50} lainnya',

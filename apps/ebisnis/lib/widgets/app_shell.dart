@@ -50,6 +50,10 @@ import '../screens/inventory_sales/spj_screen.dart';
 import '../screens/inventory_sales/nota_sales_screen.dart';
 import '../screens/inventory_sales/kas_jurnal_screen.dart';
 import '../screens/inventory_sales/laba_rugi_screen.dart';
+import '../screens/apotik/beranda_apotik_screen.dart';
+import '../screens/apotik/kasir_apotik_screen.dart';
+import '../screens/apotik/persediaan_apotik_screen.dart';
+import '../screens/apotik/laporan_apotik_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -60,10 +64,12 @@ import 'safe_state.dart';
 /// landscape kecil.
 const kAmbangLebarDesktop = 900.0;
 
-final _menuAktifNotifier = ValueNotifier<MenuEBisnis>(
-    AppProductProfile.aktif.isInventorySales
+final _menuAktifNotifier =
+    ValueNotifier<MenuEBisnis>(AppProductProfile.aktif.isInventorySales
         ? MenuEBisnis.berandaInventorySales
-        : MenuEBisnis.kasir);
+        : AppProductProfile.aktif.isApotik
+            ? MenuEBisnis.berandaApotik
+            : MenuEBisnis.kasir);
 
 /// Status sidebar desktop disimpan di level aplikasi supaya pilihan pengguna
 /// tetap berlaku ketika berpindah halaman. Pada layar kecil AppDrawer tetap
@@ -109,8 +115,19 @@ enum MenuEBisnis {
   suratPerintahSales,
   notaSales,
   kasJurnal,
-  labaRugi
+  labaRugi,
+  berandaApotik,
+  kasirApotik,
+  persediaanApotik,
+  laporanApotik
 }
+
+const _menuKhususApotik = <MenuEBisnis>{
+  MenuEBisnis.berandaApotik,
+  MenuEBisnis.kasirApotik,
+  MenuEBisnis.persediaanApotik,
+  MenuEBisnis.laporanApotik,
+};
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
 /// dipakai [bolehTampilMenu] lewat `Sesi.bolehMenuIs`, kunci hilang = sembunyi).
@@ -195,6 +212,29 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.berandaInventorySales) {
     return AppProductProfile.aktif.isInventorySales;
   }
+  if (_menuKhususApotik.contains(kunci)) {
+    if (!AppProductProfile.aktif.isApotik) return false;
+    // Admin tetap dapat membuka beranda untuk provisioning/diagnostik. Layar
+    // operasional selain beranda mengikuti hak menu farmasi secara fail-closed.
+    if (kunci == MenuEBisnis.berandaApotik || Sesi.instance.isAdmin) {
+      return true;
+    }
+    if (kunci == MenuEBisnis.kasirApotik) {
+      return Sesi.instance.bolehMenuVarianBaru('apotik_kasir') ||
+          Sesi.instance.bolehMenuVarianBaru('apotik_resep');
+    }
+    if (kunci == MenuEBisnis.persediaanApotik) {
+      return const [
+        'apotik_formularium',
+        'apotik_batch',
+        'apotik_pengadaan',
+        'apotik_stok_opname',
+        'apotik_retur'
+      ].any(Sesi.instance.bolehMenuVarianBaru);
+    }
+    return Sesi.instance.bolehMenuVarianBaru('apotik_laporan') ||
+        Sesi.instance.bolehMenuVarianBaru('apotik_narkotika');
+  }
   final kunciIs = _kunciMenuIs[kunci];
   if (kunciIs != null) {
     if (!AppProductProfile.aktif.isInventorySales ||
@@ -212,6 +252,17 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
 }
 
 const _daftarMenu = <_ItemMenuShell>[
+  _ItemMenuShell(
+      MenuEBisnis.berandaApotik, Icons.dashboard_outlined, 'Dashboard Apotik',
+      builder: _bangunBerandaApotik),
+  _ItemMenuShell(MenuEBisnis.kasirApotik, Icons.point_of_sale, 'Kasir & Resep',
+      builder: _bangunKasirApotik),
+  _ItemMenuShell(MenuEBisnis.persediaanApotik, Icons.medication_outlined,
+      'Obat & Persediaan',
+      builder: _bangunPersediaanApotik),
+  _ItemMenuShell(
+      MenuEBisnis.laporanApotik, Icons.analytics_outlined, 'Laporan Apotik',
+      builder: _bangunLaporanApotik),
   _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
       'Beranda Inventory & Sales',
       builder: _bangunBerandaIS),
@@ -311,6 +362,12 @@ const _daftarMenu = <_ItemMenuShell>[
 ];
 
 const _grupMenu = <_GrupMenuShell>[
+  _GrupMenuShell('Apotik & Farmasi', [
+    MenuEBisnis.berandaApotik,
+    MenuEBisnis.kasirApotik,
+    MenuEBisnis.persediaanApotik,
+    MenuEBisnis.laporanApotik,
+  ]),
   _GrupMenuShell('Inventory & Sales', [
     MenuEBisnis.berandaInventorySales,
     MenuEBisnis.masterSupplier,
@@ -406,6 +463,11 @@ Widget _bangunSpj(BuildContext c) => const SpjScreen();
 Widget _bangunNotaSales(BuildContext c) => const NotaSalesScreen();
 Widget _bangunKasJurnal(BuildContext c) => const KasJurnalScreen();
 Widget _bangunLabaRugi(BuildContext c) => const LabaRugiScreen();
+Widget _bangunBerandaApotik(BuildContext c) => const BerandaApotikScreen();
+Widget _bangunKasirApotik(BuildContext c) => const KasirApotikScreen();
+Widget _bangunPersediaanApotik(BuildContext c) =>
+    const PersediaanApotikScreen();
+Widget _bangunLaporanApotik(BuildContext c) => const LaporanApotikScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -579,6 +641,14 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Kas & Jurnal';
     case MenuEBisnis.labaRugi:
       return 'Laba Rugi';
+    case MenuEBisnis.berandaApotik:
+      return 'Dashboard Apotik';
+    case MenuEBisnis.kasirApotik:
+      return 'Kasir & Resep';
+    case MenuEBisnis.persediaanApotik:
+      return 'Obat & Persediaan';
+    case MenuEBisnis.laporanApotik:
+      return 'Laporan Apotik';
   }
 }
 
@@ -654,6 +724,14 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.kasJurnal;
     case 'Laba Rugi':
       return MenuEBisnis.labaRugi;
+    case 'Dashboard Apotik':
+      return MenuEBisnis.berandaApotik;
+    case 'Kasir & Resep':
+      return MenuEBisnis.kasirApotik;
+    case 'Obat & Persediaan':
+      return MenuEBisnis.persediaanApotik;
+    case 'Laporan Apotik':
+      return MenuEBisnis.laporanApotik;
   }
   return null;
 }

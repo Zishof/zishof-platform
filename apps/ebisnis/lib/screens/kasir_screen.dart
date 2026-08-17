@@ -35,6 +35,22 @@ import '../widgets/safe_state.dart';
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+@visibleForTesting
+bool konteksFokusAdalahInputTeks(BuildContext? konteks) {
+  return konteks != null &&
+      (konteks.widget is EditableText ||
+          konteks.findAncestorWidgetOfExactType<EditableText>() != null);
+}
+
+@visibleForTesting
+bool produkCocokKataKunci(Produk produk, String kataKunci) {
+  final kata = kataKunci.trim().toLowerCase();
+  return kata.isEmpty ||
+      produk.nama.toLowerCase().contains(kata) ||
+      produk.kode.toLowerCase().contains(kata) ||
+      produk.barcode.toLowerCase().contains(kata);
+}
+
 class KasirScreen extends StatefulWidget {
   final List<ItemKeranjang> keranjangAwal;
   final int? draftIdSumber;
@@ -850,10 +866,7 @@ class _KasirScreenState extends State<KasirScreen> {
     return _semuaProduk.where((p) {
       final cocokKategori =
           _kategoriTerpilih == null || p.kategoriId == _kategoriTerpilih;
-      final cocokKeyword = _kataKunci.isEmpty ||
-          p.nama.toLowerCase().contains(_kataKunci.toLowerCase()) ||
-          p.kode.toLowerCase().contains(_kataKunci.toLowerCase()) ||
-          p.barcode.toLowerCase().contains(_kataKunci.toLowerCase());
+      final cocokKeyword = produkCocokKataKunci(p, _kataKunci);
       return cocokKategori && cocokKeyword;
     }).toList();
   }
@@ -1591,6 +1604,19 @@ class _KasirScreenState extends State<KasirScreen> {
       return KeyEventResult.ignored;
     }
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    // Shortcut global ini berada di atas seluruh layar, termasuk overlay
+    // "Buka Kas". Saat kas belum aktif, versi lama langsung mengembalikan
+    // `handled` sehingga setiap tombol yang sudah diterima TextField Modal
+    // Awal tetap ditelan ketika event menggelembung ke Focus induk. Akibatnya
+    // kolom terlihat fokus tetapi angka (mis. 300000) tidak pernah masuk.
+    // Input yang sedang fokus harus selalu menjadi pemilik event keyboard;
+    // gerbang sesi kas hanya memblokir shortcut/aksi di belakang overlay.
+    final fokusAktif = FocusManager.instance.primaryFocus;
+    final konteksFokus = fokusAktif?.context;
+    if (konteksFokusAdalahInputTeks(konteksFokus)) {
+      return KeyEventResult.ignored;
+    }
     if (!_aksiKasirAktif) return KeyEventResult.handled;
     if (event.logicalKey == LogicalKeyboardKey.f1) {
       _bukaBantuan();
@@ -1777,6 +1803,13 @@ class _KasirScreenState extends State<KasirScreen> {
   /// navigasi terpisah spt Android) -- lihat JavaDoc `_fokusKeranjang` utk
   /// mode F7 yang menyembunyikan grid & melebarkan panel ini sendirian.
   Widget _bodyDesktop() {
+    // Panel tetap proporsional terhadap layar. Lebar tetap 420 px sebelumnya
+    // terlalu sempit pada monitor Full-HD/2K, sementara nilai terlalu besar
+    // akan mengorbankan katalog pada POS 1366 px. Clamp ini memberi ruang
+    // nyaman bagi nama, harga, qty, dan checkout tanpa memotong grid produk.
+    final lebarLayar = MediaQuery.sizeOf(context).width;
+    final lebarPanelKeranjang =
+        (lebarLayar * 0.34).clamp(460.0, 640.0).toDouble();
     final panel = PanelKeranjang(
       key: ValueKey('panel-keranjang-$_versiTransaksi'),
       keranjang: _keranjang,
@@ -1826,7 +1859,7 @@ class _KasirScreenState extends State<KasirScreen> {
       children: [
         Expanded(child: _kontenKatalog()),
         const VerticalDivider(width: 1),
-        SizedBox(width: 420, child: panel),
+        SizedBox(width: lebarPanelKeranjang, child: panel),
       ],
     );
   }
@@ -1940,6 +1973,44 @@ class _KasirScreenState extends State<KasirScreen> {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final produkTampil = _produkTersaring;
+              if (produkTampil.isEmpty) {
+                final katalogKosong = _semuaProduk.isEmpty;
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          katalogKosong
+                              ? Icons.inventory_2_outlined
+                              : Icons.search_off,
+                          size: 48,
+                          color: AppColors.textSecondaryOf(context),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          katalogKosong
+                              ? 'Katalog produk untuk akun dan toko ini belum tersedia.'
+                              : 'Produk tidak ditemukan.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          katalogKosong
+                              ? 'Pastikan akun ${Sesi.instance.userId.isEmpty ? 'kasir' : Sesi.instance.userId} sudah diberi akses ke toko POS, lalu tekan Muat Ulang.'
+                              : 'Periksa nama, kode, atau barcode; atau pilih kategori Semua.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: AppColors.textSecondaryOf(context)),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               // Kolom RESPONSIF thd lebar layar -- SEBELUMNYA crossAxisCount
               // tetap 2 apa pun lebar jendela, jadi di Desktop lebar kartu
               // jadi ratusan piksel dan (krn childAspectRatio tetap)
@@ -1954,12 +2025,12 @@ class _KasirScreenState extends State<KasirScreen> {
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
-                itemCount: _produkTersaring.length,
+                itemCount: produkTampil.length,
                 itemBuilder: (context, i) => _KartuProduk(
-                  produk: _produkTersaring[i],
-                  onTap: () => _tambahKeKeranjang(_produkTersaring[i]),
-                  diskon: _diskonKatalog[_produkTersaring[i].id],
-                  cashback: _cashbackKatalog[_produkTersaring[i].id],
+                  produk: produkTampil[i],
+                  onTap: () => _tambahKeKeranjang(produkTampil[i]),
+                  diskon: _diskonKatalog[produkTampil[i].id],
+                  cashback: _cashbackKatalog[produkTampil[i].id],
                 ),
               );
             },
@@ -2029,9 +2100,18 @@ class _DialogBukaKasState extends State<_DialogBukaKas> {
             TextField(
               controller: _controller,
               keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
                   labelText: 'Modal Awal (Rp)', border: OutlineInputBorder()),
               autofocus: true,
+              textInputAction: TextInputAction.done,
+              onTap: () {
+                if (_controller.text == '0') {
+                  _controller.selection = TextSelection(
+                      baseOffset: 0, extentOffset: _controller.text.length);
+                }
+              },
+              onSubmitted: (_) => _konfirmasi(),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -2135,10 +2215,26 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                       TextField(
                         controller: _controller,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        autofocus: true,
+                        textInputAction: TextInputAction.done,
                         decoration: const InputDecoration(
                             labelText: 'Modal Awal (Rp)',
                             isDense: true,
                             border: OutlineInputBorder()),
+                        onTap: () {
+                          if (_controller.text == '0') {
+                            _controller.selection = TextSelection(
+                                baseOffset: 0,
+                                extentOffset: _controller.text.length);
+                          }
+                        },
+                        onSubmitted: (_) {
+                          final modal = double.tryParse(_controller.text) ?? 0;
+                          widget.onBuka(modal, _catatanController.text.trim());
+                        },
                       ),
                     if (!widget.sesiDiPerangkatLain) const SizedBox(height: 10),
                     if (!widget.sesiDiPerangkatLain)
