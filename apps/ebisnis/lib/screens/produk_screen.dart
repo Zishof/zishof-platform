@@ -1546,7 +1546,9 @@ class _FormProdukState extends State<_FormProduk> {
     }
     setStateIfMounted(() => baris.mengunggah = true);
     try {
-      await ApiClient.instance.aksi('produk_foto_hapus', {'id': baris.id});
+      await MasterOffline.simpanAtauAntre(
+          'produk_foto_hapus', {'id': baris.id},
+          kunci: 'produk_foto:${baris.id}');
       setStateIfMounted(() => _foto.remove(baris));
     } catch (e) {
       setStateIfMounted(() => baris.mengunggah = false);
