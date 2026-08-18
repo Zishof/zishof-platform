@@ -66,3 +66,45 @@ Uji negatif tambahan (pass sebelumnya, sesi yang sama): panggilan **anonim** ke
 - Grup uji dihapus; harga kedua produk uji dipulihkan ke nilai awal;
   `grup_produk` FK kedua produk dikembalikan NULL. Tidak ada residu data uji
   selain baris audit (memang append-only by design).
+
+---
+
+## ADDENDUM (18 Agu 2026, malam) — Klik-Through UI JSP LULUS; ZK terblokir harness
+
+### Klik-through JSP e-Kantin (browser sungguhan, bukan curl) — LULUS
+
+Login `login.jsp` → `baru?p=kantin&s=barang` → tab **"Grup Produk (Harga
+Terpusat)"** tampil (gate admin lolos; tab memang hanya muncul utk pemanggil
+berhak):
+
+1. **Tambah Grup** → modal terbuka → isi KLIK-UAT / "Grup Klik-Through UAT" /
+   HPP 15.000 / jual 25.000 → **Simpan & Terapkan** → modal menutup, baris
+   muncul di tabel: `KLIK-UAT | Grup Klik-Through UAT | 15.000 | 25.000 | 0 |
+   Aktif`. ✓
+2. **Ubah** → modal terisi ulang PERSIS nilai tersimpan (round-trip data ✓)
+   → harga jual diubah 26.000 → simpan → baris ter-refresh `15.000 | 26.000`. ✓
+3. **Hapus** (konfirmasi di-accept) → baris hilang, empty-state "Belum ada
+   grup produk." tampil benar. ✓
+
+Perbaikan lingkungan yang diperlukan sebelum uji (drift harness, bukan bug
+fitur): `nav.jsp` terbaru butuh class `ais.common.CommonMenu` yang belum ada
+di `.uat-classes` (harness dibangun 13 Agu; source sudah maju) — seluruh
+`.uat-classes` di-refresh dari kompilasi source r77580 (18.290 class,
+resource UAT spt hibernate.cfg.xml tidak disentuh), lalu Tomcat di-restart.
+
+### Klik-through ZK — TERBLOKIR HARNESS (bukan bug fitur)
+
+SEMUA halaman ZK di harness UAT ini mengembalikan HTTP 200 dgn body 0 byte —
+termasuk halaman lama yang sudah bertahun-tahun ada (`pages/main/index.zul`,
+`toko.zul`, bahkan `google.zul` milik layar login). `zkLoader` tidak pernah
+tercatat start di catalina log, dan log 13 Agu (saat harness dibangun) sudah
+menunjukkan `SEVERE ... One or more listeners failed to start` — ZK memang
+tidak pernah berfungsi di harness ini (dibangun utk UAT modul JSP inventory).
+Halaman ZK Grup Produk (`grup_produk.zul` + `GrupProdukAction`) terverifikasi
+lewat: kompilasi bersih, pola identik AgamaAction/agama.zul yang berjalan di
+produksi, dan logika propagasinya (`GrupProdukUtil`) SUDAH terbukti runtime
+lewat UAT API + klik-through JSP di atas. Klik-through ZK dituntaskan di
+lingkungan yang ZK-nya hidup (server dev/produksi) pasca-deploy.
+
+Kebersihan: grup uji KLIK-UAT dihapus lewat UI; `koperasi.grup_produk` kosong
+(diverifikasi SQL); user `uat_grup_admin` dinonaktifkan kembali.
