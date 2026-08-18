@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -394,16 +396,44 @@ class _TabFormulariumState extends State<_TabFormularium> {
   final _cari = TextEditingController();
   bool _memuat = false;
   List<Map<String, dynamic>> _data = [];
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan petugas lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
     try {
-      final hasil = await ApiClient.instance.aksi('apotik_item_cari', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('apotik_item_cari', {
         if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
         'page_size': 30,
+      }, 'master:apotik_item', onData: (hasil) {
+        if (!mounted) return;
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
-      setStateIfMounted(() => _data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -472,13 +502,17 @@ class _TabFormulariumState extends State<_TabFormularium> {
         ),
       ),
     );
-    if (simpan != true) return;
+    if (simpan != true || !mounted) return;
     try {
-      await MasterOffline.simpanAtauAntre('apotik_item_profil_simpan', {
-        'item_id': it['id'],
-        'golongan_obat': golongan,
-        'lasa': lasa,
-      }, kunci: 'apotik_item:${it['id']}');
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context, aksi: 'apotik_item_profil_simpan',
+          body: {
+            'item_id': it['id'],
+            'golongan_obat': golongan,
+            'lasa': lasa,
+          },
+          kunci: 'apotik_item:${it['id']}');
       await _muat();
     } catch (e) {
       if (mounted) {
@@ -503,6 +537,12 @@ class _TabFormulariumState extends State<_TabFormularium> {
           onSubmitted: (_) => _muat(),
         ),
         const SizedBox(height: 8),
+        BannerPerubahanServer(
+          key: ValueKey('perubahan:$_versiPerubahan'),
+          baru: _idBaru.length,
+          berubah: _idBerubah.length,
+          dihapus: _jumlahHapus,
+        ),
         Expanded(
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
@@ -512,23 +552,30 @@ class _TabFormulariumState extends State<_TabFormularium> {
                   itemBuilder: (_, i) {
                     final it = _data[i];
                     final terkendali = it['terkendali'] == true;
-                    return ListTile(
-                      dense: true,
-                      title: Text('${it['nama']}',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                          '${it['kode']} • stok ${it['stok']} • ${_rp.format((it['hargaJual'] as num?) ?? 0)}',
-                          style: const TextStyle(fontSize: 11.5)),
-                      trailing: Wrap(spacing: 4, children: [
-                        if (it['lasa'] == true)
-                          const StatusPill(
-                              label: 'LASA', warna: Color(0xFFB8860B)),
-                        StatusPill(
-                            label: '${it['golonganObat']}',
-                            warna:
-                                terkendali ? AppColors.danger : AppColors.teal),
-                      ]),
-                      onTap: () => _ubahProfil(it),
+                    return KilauBaris(
+                      kunci: '${it['id'] ?? it['_kunci'] ?? ''}',
+                      idBaru: _idBaru,
+                      idBerubah: _idBerubah,
+                      child: ListTile(
+                        dense: true,
+                        title: Text('${it['nama']}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(
+                            '${it['kode']} • stok ${it['stok']} • ${_rp.format((it['hargaJual'] as num?) ?? 0)}',
+                            style: const TextStyle(fontSize: 11.5)),
+                        trailing: Wrap(spacing: 4, children: [
+                          if (it['lasa'] == true)
+                            const StatusPill(
+                                label: 'LASA', warna: Color(0xFFB8860B)),
+                          StatusPill(
+                              label: '${it['golonganObat']}',
+                              warna: terkendali
+                                  ? AppColors.danger
+                                  : AppColors.teal),
+                        ]),
+                        onTap: () => _ubahProfil(it),
+                      ),
                     );
                   },
                 ),

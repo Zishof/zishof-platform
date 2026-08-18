@@ -5,6 +5,9 @@ import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../widgets/indikator_sinkron_master.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -30,6 +33,12 @@ class _SupplierScreenState extends State<SupplierScreen> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -43,22 +52,40 @@ class _SupplierScreenState extends State<SupplierScreen> {
       _error = null;
     });
     try {
-      final hasil =
-          await MasterOffline.daftarDenganCache('penyedia_list_admin', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('penyedia_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      }, 'master:penyedia');
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) {
+      }, 'master:penyedia', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
         setStateIfMounted(() {
           _daftar = data;
-          _total = hasil['offline'] == true
-              ? data.length
-              : (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -106,21 +133,19 @@ class _SupplierScreenState extends State<SupplierScreen> {
         ],
       ),
     );
-    if (konfirmasi != true) return;
+    if (konfirmasi != true || !mounted) return;
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'penyedia_hapus',
-        {'id': supplier['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'penyedia_hapus',
+        body: {'id': supplier['id']},
         kunci: 'penyedia:${supplier['id']}',
         cacheKey: 'master:penyedia',
         rowLokal: {'id': supplier['id']},
         hapusLokal: true,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
-      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -195,6 +220,12 @@ class _SupplierScreenState extends State<SupplierScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
                         minWidth: 860,
                         emptyText: 'Belum ada supplier.',
@@ -205,7 +236,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           const AppTableColumn('Telp', flex: 1),
                           const AppTableColumn('Email', flex: 2),
                           AppTableColumn('Aksi',
-                              width: Sesi.instance.bolehKelola ? 88 : 56,
+                              width: Sesi.instance.bolehKelola ? 124 : 92,
                               align: TextAlign.center),
                         ],
                         rows: _daftar.map((s) {
@@ -221,41 +252,63 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                   teks: '${s['kode'] ?? '-'}',
                                 ),
                               ),
-                              AppTableCell.text('${s['nama'] ?? ''}', flex: 2),
+                              AppTableCell(
+                                flex: 2,
+                                child: KilauBaris(
+                                  kunci: '${s['id'] ?? s['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: Text('${s['nama'] ?? ''}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          const TextStyle(fontSize: 12.5)),
+                                ),
+                              ),
                               AppTableCell.text('${s['kontak'] ?? '-'}',
                                   flex: 2),
                               AppTableCell.text('${s['telp'] ?? '-'}', flex: 1),
                               AppTableCell.text('${s['email'] ?? '-'}',
                                   flex: 2),
                               AppTableCell(
-                                width: Sesi.instance.bolehKelola ? 88 : 56,
+                                width: Sesi.instance.bolehKelola ? 124 : 92,
                                 align: TextAlign.center,
-                                child: Sesi.instance.bolehKelola
-                                    ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            icon: const Icon(
-                                                Icons.edit_outlined,
-                                                size: 18),
-                                            onPressed: () =>
-                                                _bukaForm(supplier: s),
-                                          ),
-                                          IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            icon: const Icon(
-                                                Icons.delete_outline,
-                                                size: 18,
-                                                color: AppColors.danger),
-                                            onPressed: () => _hapus(s),
-                                          ),
-                                        ],
-                                      )
-                                    : const Icon(Icons.visibility_outlined,
-                                        size: 18),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (s['id'] != null)
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip:
+                                            'Riwayat data ini (AuditTrails)',
+                                        icon: const Icon(Icons.history,
+                                            size: 18),
+                                        onPressed: () => tampilkanRiwayatData(
+                                            context,
+                                            entitas: 'penyedia',
+                                            id: s['id'],
+                                            judul: '${s['nama'] ?? ''}'),
+                                      ),
+                                    if (Sesi.instance.bolehKelola) ...[
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.edit_outlined,
+                                            size: 18),
+                                        onPressed: () =>
+                                            _bukaForm(supplier: s),
+                                      ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 18,
+                                            color: AppColors.danger),
+                                        onPressed: () => _hapus(s),
+                                      ),
+                                    ] else
+                                      const Icon(Icons.visibility_outlined,
+                                          size: 18),
+                                  ],
+                                ),
                               ),
                             ],
                           );
@@ -350,20 +403,17 @@ class _FormSupplierState extends State<_FormSupplier> {
         'kode_pos': _kodePos.text.trim(),
         'keterangan': _keterangan.text.trim(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'penyedia_simpan',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'penyedia_simpan',
+        body: body,
         kunci: widget.supplier != null
             ? 'penyedia:${widget.supplier!['id']}'
             : 'penyedia:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:penyedia',
         rowLokal: body,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

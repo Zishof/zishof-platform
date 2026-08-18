@@ -4,6 +4,9 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../widgets/indikator_sinkron_master.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 /// Kelola Toko/Outlet (admin-only) -- padanan layar ZK TokoAction & JSP toko.jsp.
@@ -27,6 +30,12 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
   List<Map<String, dynamic>> _daftar = [];
   List<Map<String, dynamic>> _katalogUnit = [];
   final _cari = TextEditingController();
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -59,18 +68,43 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       _galat = null;
     });
     try {
-      final res = await MasterOffline.daftarDenganCache(
-          'toko_kelola_list', {'cari': _cari.text.trim()}, 'master:toko_kelola');
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      if (!sukses) {
-        throw Exception(res['description'] ?? 'Gagal memuat daftar toko.');
-      }
-      final data = (res['data'] as List? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-      setStateIfMounted(() {
-        _daftar = data;
-        _memuat = false;
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('toko_kelola_list',
+          {'cari': _cari.text.trim()}, 'master:toko_kelola',
+          // Tanpa kata kunci respons = SELURUH toko (boleh deteksi hapus);
+          // saat mencari respons parsial -> merge saja, lokal dipertahankan.
+          responsLengkap: _cari.text.trim().isEmpty, onData: (res) {
+        if (!mounted) return;
+        final sukses = res['status'] == '00' || res['status'] == 'success';
+        if (!sukses) {
+          setStateIfMounted(() {
+            _galat = '${res['description'] ?? 'Gagal memuat daftar toko.'}';
+            _memuat = false;
+          });
+          return;
+        }
+        final data = (res['data'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        final dariServer = res['dariServer'] == true;
+        setStateIfMounted(() {
+          _daftar = data;
+          _idBaru = dariServer
+              ? Set<String>.from(res['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(res['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -100,26 +134,21 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       context: context,
       builder: (_) => _FormTokoDialog(awal: awal, katalogUnit: katalog),
     );
-    if (hasil == null) return;
+    if (hasil == null || !mounted) return;
     try {
-      final res = await MasterOffline.simpanAtauAntre(
-        'toko_kelola_simpan',
-        hasil,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'toko_kelola_simpan',
+        body: hasil,
         kunci: hasil['id'] != null
             ? 'toko:${hasil['id']}'
             : 'toko:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:toko_kelola',
         rowLokal: hasil,
       );
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      _snack(
-          res['offline'] == true
-              ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-              : sukses
-                  ? 'Toko tersimpan.'
-                  : 'Gagal: ${res['description'] ?? res['status']}',
-          galat: !sukses);
-      if (sukses) _muat();
+      await _muat();
     } catch (e) {
       _snack('Gagal menyimpan: $e', galat: true);
     }
@@ -142,25 +171,19 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      final res = await MasterOffline.simpanAtauAntre(
-        'toko_kelola_hapus',
-        {'id': t['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'toko_kelola_hapus',
+        body: {'id': t['id']},
         kunci: 'toko:${t['id']}',
         cacheKey: 'master:toko_kelola',
         rowLokal: {'id': t['id']},
         hapusLokal: true,
       );
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      _snack(
-          res['offline'] == true
-              ? 'Dihapus lokal — akan dikirim otomatis saat online.'
-              : sukses
-                  ? 'Toko dihapus.'
-                  : 'Gagal: ${res['description'] ?? res['status']}',
-          galat: !sukses);
-      if (sukses) _muat();
+      await _muat();
     } catch (e) {
       _snack('Gagal menghapus: $e', galat: true);
     }
@@ -256,6 +279,15 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
               onSubmitted: (_) => _muat(),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: BannerPerubahanServer(
+              key: ValueKey('perubahan:$_versiPerubahan'),
+              baru: _idBaru.length,
+              berubah: _idBerubah.length,
+              dihapus: _jumlahHapus,
+            ),
+          ),
           Expanded(
             child: _memuat
                 ? const Center(child: CircularProgressIndicator())
@@ -300,14 +332,19 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
         .toList();
     return Card(
       child: ListTile(
-        title: Row(children: [
-          IndikatorBarisSinkron(kunci: kunciBarisMaster('toko', t)),
-          Expanded(
-            child: Text(
-                '${(t['kode'] ?? '').toString().isEmpty ? '' : '${t['kode']} - '}${t['nama']}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ]),
+        title: KilauBaris(
+          kunci: '${t['id'] ?? t['_kunci'] ?? ''}',
+          idBaru: _idBaru,
+          idBerubah: _idBerubah,
+          child: Row(children: [
+            IndikatorBarisSinkron(kunci: kunciBarisMaster('toko', t)),
+            Expanded(
+              child: Text(
+                  '${(t['kode'] ?? '').toString().isEmpty ? '' : '${t['kode']} - '}${t['nama']}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -328,6 +365,12 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (t['id'] != null)
+              IconButton(
+                  tooltip: 'Riwayat data ini (AuditTrails)',
+                  onPressed: () => tampilkanRiwayatData(context,
+                      entitas: 'toko', id: t['id'], judul: '${t['nama'] ?? ''}'),
+                  icon: const Icon(Icons.history)),
             if (demo)
               IconButton(
                   tooltip: 'Generate produk contoh sesuai unit usaha',

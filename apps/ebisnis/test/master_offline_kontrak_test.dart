@@ -11,7 +11,7 @@ void main() {
   const layarMaster = <String, List<String>>{
     // file : penanda wajib ada di source-nya
     'lib/screens/jenis_produk_screen.dart': [
-      "daftarDenganCache('jenis_produk_list'",
+      "daftarCacheDulu('jenis_produk_list'",
       "'jenis_produk_hapus'",
       "'master:jenis_produk'",
       'IndikatorSinkronMaster(',
@@ -27,7 +27,7 @@ void main() {
       'IndikatorSinkronMaster(',
     ],
     'lib/screens/cara_bayar_screen.dart': [
-      "daftarDenganCache('cara_bayar_list_admin'",
+      "daftarCacheDulu('cara_bayar_list_admin'",
       "'master:cara_bayar'",
       'IndikatorSinkronMaster(',
     ],
@@ -106,9 +106,9 @@ void main() {
     'lib/screens/mitrainap/resepsionis_hotel_screen.dart': [
       "'hotel_tamu_simpan'"
     ],
-    'lib/screens/mitrainap/reservasi_hotel_screen.dart': [
-      "'hotel_tamu_simpan'"
-    ],
+    // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
+    // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
+    // real-time) -- entri lamanya dipindah dari daftar online-only ini.
   };
 
   // Layar induk yang hanya menjadi tuan-rumah indikator (tanpa mutasi CRUD).
@@ -126,8 +126,13 @@ void main() {
       }
       // Mutasi master tidak boleh lagi memanggil ApiClient.aksi utk
       // *_simpan/*_hapus entitas layar ybs (transaksi/aksi lain boleh).
-      expect(source, contains('MasterOffline.simpanAtauAntre'),
-          reason: '${entri.key} belum memakai simpanAtauAntre');
+      // Dua jalur sah: simpanAtauAntre (programatik) atau prosesSimpanMaster
+      // (dialog "lokal dulu" ber-indikator animasi -- standar form CRUD).
+      expect(
+          source.contains('MasterOffline.simpanAtauAntre') ||
+              source.contains('prosesSimpanMaster('),
+          isTrue,
+          reason: '${entri.key} belum memakai jalur simpan offline-first');
     }
     for (final file in tuanRumahIndikator) {
       expect(File(file).readAsStringSync(), contains('IndikatorSinkronMaster('),
@@ -163,6 +168,82 @@ void main() {
     }
   });
 
+  test('dialog simpan "lokal dulu" bertahap + retry 5 menit berhenti sendiri',
+      () {
+    final dialog =
+        File('lib/widgets/proses_simpan_master.dart').readAsStringSync();
+    // Tahapan yang dijanjikan ke user: lokal dulu -> kirim animasi ->
+    // terkirim/offline -> jendela menutup (offline pun langsung lanjut).
+    expect(dialog, contains('Tersimpan di perangkat'));
+    expect(dialog, contains('Terkirim ke server'));
+    expect(dialog, contains('akan dikirim otomatis'));
+    expect(dialog, contains('Curves.elasticOut'));
+    expect(dialog, contains('canPop: false'),
+        reason: 'proses tidak boleh dibatalkan di tengah');
+    expect(dialog, contains('antreLokal'),
+        reason: 'wajib menulis lokal SEBELUM menyentuh jaringan');
+
+    final layanan =
+        File('lib/services/master_offline.dart').readAsStringSync();
+    expect(layanan, contains('Duration(minutes: 5)'),
+        reason: 'retry latar 5 menit sekali (permintaan bisnis)');
+    expect(layanan, contains('_timer?.cancel()'),
+        reason: 'pengecekan berhenti otomatis saat antrean kosong');
+  });
+
+  test('baca lokal-dulu + animasi perubahan server + riwayat AuditTrails', () {
+    final layanan =
+        File('lib/services/master_offline.dart').readAsStringSync();
+    // Emisi ganda: cache instan lalu server + diff utk animasi.
+    expect(layanan, contains('daftarCacheDulu'));
+    expect(layanan, contains("'idBaru'"));
+    expect(layanan, contains("'idBerubah'"));
+    expect(layanan, contains("'jumlahHapus'"));
+
+    final kilau = File('lib/widgets/kilau_perubahan.dart').readAsStringSync();
+    expect(kilau, contains('class KilauBaris'));
+    expect(kilau, contains('class BannerPerubahanServer'));
+
+    // Dialog riwayat per baris: baca utk semua user, pulihkan admin-only
+    // sesuai jawaban server (Common.apakahAdminLain di RevisiApiHelper).
+    final riwayat =
+        File('lib/widgets/riwayat_data_dialog.dart').readAsStringSync();
+    expect(riwayat, contains("'revisi_daftar'"));
+    expect(riwayat, contains("'revisi_detail'"));
+    expect(riwayat, contains("'revisi_pulihkan'"));
+    expect(riwayat, contains("bolehPulihkan"));
+
+    // Layar referensi memakai ketiganya.
+    final referensi =
+        File('lib/screens/jenis_produk_screen.dart').readAsStringSync();
+    expect(referensi, contains('daftarCacheDulu'));
+    expect(referensi, contains('KilauBaris('));
+    expect(referensi, contains('tampilkanRiwayatData('));
+  });
+
+  test('sinkron awal ber-progress saat cache lokal kosong (generik)', () {
+    final layanan =
+        File('lib/services/master_offline.dart').readAsStringSync();
+    // API generik utk SEMUA modul CRUD (permintaan bisnis: reuse, bukan
+    // helper khusus satu layar).
+    expect(layanan, contains('perluSinkronAwal'));
+    expect(layanan, contains('jumlahCacheLokal'));
+    expect(layanan, contains('hidrasiAwal'));
+
+    final dialog =
+        File('lib/widgets/progress_sinkron_awal.dart').readAsStringSync();
+    expect(dialog, contains('jalankanDenganProgressSinkron'));
+    expect(dialog, contains('LinearProgressIndicator'));
+    expect(dialog, contains('canPop: false'));
+
+    // Layar member: sinkron awal otomatis saat cache kosong + tombol Sinkron
+    // manual memakai dialog progress yang sama.
+    final member =
+        File('lib/screens/anggota/tab_data_member.dart').readAsStringSync();
+    expect(member, contains('jumlahAnggotaCache'));
+    expect(member, contains('jalankanDenganProgressSinkron'));
+  });
+
   test('layanan MasterOffline terikat ke outbox_master core_db', () {
     final source =
         File('lib/services/master_offline.dart').readAsStringSync();
@@ -173,6 +254,11 @@ void main() {
     // Penolakan bisnis TIDAK diantre -- kontrak inti supaya pesan server
     // selalu sampai ke user, bukan lenyap di antrean.
     expect(source, contains('if (!e.offline) rethrow'));
+    // Pagar baca lokal-dulu (insiden "41 dihapus" 2026-08-19): penghapusan
+    // hanya dari respons yang benar-benar lengkap, dan baris lokal yang masih
+    // antre/gagal tidak boleh ditimpa/dihapus salinan server.
+    expect(source, contains('benarLengkap'));
+    expect(source, contains('kunciDilindungi'));
     // Coalesce lewat kunci; create diberi kunci unik per draf oleh layar.
     expect(source, contains('kunci'));
   });

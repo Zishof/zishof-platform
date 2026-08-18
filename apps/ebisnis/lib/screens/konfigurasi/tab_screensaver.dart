@@ -5,10 +5,10 @@ import 'package:core_device/core_device.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
-import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 
 const _opsiMode = [
@@ -103,21 +103,19 @@ class _TabScreensaverState extends State<TabScreensaver> {
   Future<void> _simpanPengaturan() async {
     setStateIfMounted(() => _menyimpanPengaturan = true);
     try {
-      final hasil = await MasterOffline
-          .simpanAtauAntre('layar_pelanggan_screensaver_config_simpan', {
-        'toko_id': Sesi.instance.tokoId,
-        'aktif': _aktif,
-        'mode_tampilan': _mode,
-        'animasi': _animasi,
-        'durasi_detik': int.tryParse(_durasiController.text.trim()) ?? 6,
-        'idle_detik': int.tryParse(_idleController.text.trim()) ?? 30,
-      }, kunci: 'screensaver:${Sesi.instance.tokoId}');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(hasil['offline'] == true
-                ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-                : 'Pengaturan screensaver tersimpan.')));
-      }
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context,
+          aksi: 'layar_pelanggan_screensaver_config_simpan',
+          body: {
+            'toko_id': Sesi.instance.tokoId,
+            'aktif': _aktif,
+            'mode_tampilan': _mode,
+            'animasi': _animasi,
+            'durasi_detik': int.tryParse(_durasiController.text.trim()) ?? 6,
+            'idle_detik': int.tryParse(_idleController.text.trim()) ?? 30,
+          },
+          kunci: 'screensaver:${Sesi.instance.tokoId}');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -142,10 +140,11 @@ class _TabScreensaverState extends State<TabScreensaver> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      await MasterOffline.simpanAtauAntre(
-          'layar_pelanggan_slide_hapus', {'id': s['id']},
+      await prosesSimpanMaster(context,
+          aksi: 'layar_pelanggan_slide_hapus',
+          body: {'id': s['id']},
           kunci: 'screensaver_slide:${s['id']}');
       setStateIfMounted(() => _slide.removeWhere((x) => x['id'] == s['id']));
       if (mounted) {
@@ -165,8 +164,9 @@ class _TabScreensaverState extends State<TabScreensaver> {
   Future<void> _toggleAktifSlide(Map<String, dynamic> s, bool aktif) async {
     setStateIfMounted(() => s['aktif'] = aktif);
     try {
-      await MasterOffline.simpanAtauAntre(
-          'layar_pelanggan_slide_ubah', {'id': s['id'], 'aktif': aktif},
+      await prosesSimpanMaster(context,
+          aksi: 'layar_pelanggan_slide_ubah',
+          body: {'id': s['id'], 'aktif': aktif},
           kunci: 'screensaver_slide:${s['id']}');
     } catch (e) {
       setStateIfMounted(() => s['aktif'] = !aktif);

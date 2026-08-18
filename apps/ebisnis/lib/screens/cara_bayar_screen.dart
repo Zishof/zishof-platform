@@ -5,6 +5,9 @@ import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../widgets/indikator_sinkron_master.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -29,6 +32,12 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -42,22 +51,40 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
       _error = null;
     });
     try {
-      final hasil =
-          await MasterOffline.daftarDenganCache('cara_bayar_list_admin', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('cara_bayar_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      }, 'master:cara_bayar');
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) {
+      }, 'master:cara_bayar', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
         setStateIfMounted(() {
           _daftar = data;
-          _total = hasil['offline'] == true
-              ? data.length
-              : (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -105,21 +132,19 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
         ],
       ),
     );
-    if (konfirmasi != true) return;
+    if (konfirmasi != true || !mounted) return;
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'cara_bayar_hapus',
-        {'id': cara['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'cara_bayar_hapus',
+        body: {'id': cara['id']},
         kunci: 'cara_bayar:${cara['id']}',
         cacheKey: 'master:cara_bayar',
         rowLokal: {'id': cara['id']},
         hapusLokal: true,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
-      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -194,6 +219,12 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
                         minWidth: 860,
                         emptyText: 'Belum ada metode pembayaran.',
@@ -209,7 +240,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                           const AppTableColumn('Status',
                               flex: 1, align: TextAlign.center),
                           AppTableColumn('Aksi',
-                              width: Sesi.instance.bolehKelola ? 88 : 56,
+                              width: Sesi.instance.bolehKelola ? 124 : 92,
                               align: TextAlign.center),
                         ],
                         rows: _daftar.map((c) {
@@ -229,7 +260,19 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                                   teks: '${c['kode'] ?? '-'}',
                                 ),
                               ),
-                              AppTableCell.text('${c['nama'] ?? ''}', flex: 2),
+                              AppTableCell(
+                                flex: 2,
+                                child: KilauBaris(
+                                  kunci: '${c['id'] ?? c['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: Text('${c['nama'] ?? ''}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          const TextStyle(fontSize: 12.5)),
+                                ),
+                              ),
                               AppTableCell(
                                 flex: 1,
                                 align: TextAlign.center,
@@ -271,33 +314,43 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                                 ),
                               ),
                               AppTableCell(
-                                width: Sesi.instance.bolehKelola ? 88 : 56,
+                                width: Sesi.instance.bolehKelola ? 124 : 92,
                                 align: TextAlign.center,
-                                child: Sesi.instance.bolehKelola
-                                    ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            icon: const Icon(
-                                                Icons.edit_outlined,
-                                                size: 18),
-                                            onPressed: () => _bukaForm(cara: c),
-                                          ),
-                                          IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            icon: const Icon(
-                                                Icons.delete_outline,
-                                                size: 18,
-                                                color: AppColors.danger),
-                                            onPressed: () => _hapus(c),
-                                          ),
-                                        ],
-                                      )
-                                    : const Icon(Icons.visibility_outlined,
-                                        size: 18),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (c['id'] != null)
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip:
+                                            'Riwayat data ini (AuditTrails)',
+                                        icon: const Icon(Icons.history,
+                                            size: 18),
+                                        onPressed: () => tampilkanRiwayatData(
+                                            context,
+                                            entitas: 'cara_bayar',
+                                            id: c['id'],
+                                            judul: '${c['nama'] ?? ''}'),
+                                      ),
+                                    if (Sesi.instance.bolehKelola) ...[
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.edit_outlined,
+                                            size: 18),
+                                        onPressed: () => _bukaForm(cara: c),
+                                      ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 18,
+                                            color: AppColors.danger),
+                                        onPressed: () => _hapus(c),
+                                      ),
+                                    ] else
+                                      const Icon(Icons.visibility_outlined,
+                                          size: 18),
+                                  ],
+                                ),
                               ),
                             ],
                           );
@@ -406,20 +459,17 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'cara_bayar_simpan',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'cara_bayar_simpan',
+        body: body,
         kunci: widget.cara != null
             ? 'cara_bayar:${widget.cara!['id']}'
             : 'cara_bayar:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:cara_bayar',
         rowLokal: body,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

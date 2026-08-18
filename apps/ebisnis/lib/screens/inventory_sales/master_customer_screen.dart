@@ -3,7 +3,10 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -41,6 +44,12 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
   String? _filterAktif;
   String _sort = 'kode';
   bool _hanyaProfil = false;
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -54,24 +63,53 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_customer_list', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('si_customer_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         if (_filterAktif != null) 'aktif': _filterAktif,
         'sort': _sort,
         'hanya_profil': _hanyaProfil,
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _memuat = false;
+      }, 'master:si_customer', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = data;
+          // Emisi daftarCacheDulu tidak meneruskan 'total' server -- selama
+          // halaman penuh, asumsikan masih ada halaman berikutnya supaya
+          // kontrol paginasi tetap bisa dipakai.
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ??
+                  (data.length >= _pageSize
+                      ? _halaman * _pageSize + 1
+                      : (_halaman - 1) * _pageSize + data.length)
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
-      setStateIfMounted(() {
-        _memuat = false;
-        _error = e.toString();
-      });
+      setStateIfMounted(() => _error = e.toString());
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -143,9 +181,11 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      await MasterOffline.simpanAtauAntre('si_customer_deactivate', {
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context, aksi: 'si_customer_deactivate', body: {
         'anggota_id': data['anggotaId'],
         'aktif': aktifkan,
         if (!aktifkan) 'alasan': alasanCtrl.text.trim(),
@@ -289,6 +329,12 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
                         minWidth: 900,
                         emptyText: 'Belum ada customer.',
@@ -309,13 +355,34 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                             cells: [
                               AppTableCell(
                                 flex: 1,
-                                child: SelTeksDenganSinkron(
-                                  kunci: 'si_customer:${c['anggotaId']}',
-                                  teks: '${c['kode']}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'monospace',
-                                      fontSize: 12.5),
+                                child: KilauBaris(
+                                  kunci: '${c['id'] ?? c['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: Row(children: [
+                                    IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip:
+                                            'Riwayat data ini (AuditTrails)',
+                                        icon: const Icon(Icons.history,
+                                            size: 16),
+                                        onPressed: () => tampilkanRiwayatData(
+                                            context,
+                                            entitas: 'si_customer',
+                                            id: c['anggotaId'],
+                                            judul: '${c['nama'] ?? ''}')),
+                                    Expanded(
+                                      child: SelTeksDenganSinkron(
+                                        kunci:
+                                            'si_customer:${c['anggotaId']}',
+                                        teks: '${c['kode']}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontFamily: 'monospace',
+                                            fontSize: 12.5),
+                                      ),
+                                    ),
+                                  ]),
                                 ),
                               ),
                               AppTableCell.text('${c['nama']}',
@@ -599,8 +666,9 @@ class _FormCustomerState extends State<_FormCustomer> {
       _error = null;
     });
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-          _ubah ? 'si_customer_update' : 'si_customer_create', {
+      await prosesSimpanMaster(context,
+          aksi: _ubah ? 'si_customer_update' : 'si_customer_create',
+          body: {
         if (_ubah) 'anggota_id': widget.data!['anggotaId'],
         if (!_ubah) 'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -622,11 +690,6 @@ class _FormCustomerState extends State<_FormCustomer> {
           kunci: _ubah
               ? 'si_customer:${widget.data!['anggotaId']}'
               : 'si_customer:baru:${DateTime.now().microsecondsSinceEpoch}');
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

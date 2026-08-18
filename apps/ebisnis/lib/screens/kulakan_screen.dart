@@ -677,6 +677,53 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     );
   }
 
+  /// Batalkan faktur (aksi `kulakan_faktur_batal`): stok & batch yang diterima
+  /// faktur ini DIBALIKKAN server lalu baris + header dihapus ber-audit Envers
+  /// (jejak tetap ada di Riwayat Data sbg revisi HAPUS). SENGAJA online-only --
+  /// pembatalan mengubah stok, terlalu berisiko diantre diam-diam saat offline.
+  Future<void> _batalkanFaktur(
+      Map<String, dynamic> f, Map<String, dynamic> header) async {
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Batalkan Faktur?'),
+        content: Text(
+            'Faktur ${header['nomorFaktur'] ?? ''} akan dibatalkan: stok barang '
+            'yang diterima dari faktur ini dikurangi kembali dan datanya dihapus '
+            '(riwayat tetap tercatat di audit). Batch yang stoknya sudah '
+            'terpakai transaksi lain akan membuat pembatalan DITOLAK server.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Kembali')),
+          FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+              child: const Text('Ya, Batalkan')),
+        ],
+      ),
+    );
+    if (yakin != true || !mounted) return;
+    try {
+      final res = await ApiClient.instance
+          .aksi('kulakan_faktur_batal', {'faktur_id': f['fakturId']});
+      final sukses = res['status'] == '00' || res['status'] == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(sukses
+              ? '${res['description'] ?? 'Faktur dibatalkan.'}'
+              : 'Gagal: ${res['description'] ?? res['status']}')));
+      if (sukses) {
+        Navigator.of(context).pop(); // tutup dialog detail faktur.
+        await _muatRiwayat();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal membatalkan: $e')));
+    }
+  }
+
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
     Map<String, dynamic>? detail;
     try {
@@ -698,6 +745,18 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       builder: (_) => AppDetailDialogShell(
         title: 'Detail Faktur ${header['nomorFaktur'] ?? ''}',
         actions: [
+          // Pembatalan faktur: supervisor / pemegang hak akses HAPUS kulakan
+          // (server menegakkan lagi lewat bolehAksiCrud -- gating di sini
+          // hanya menyembunyikan tombol dari yang jelas tidak berhak).
+          if (Sesi.instance.bolehKelola ||
+              Sesi.instance.bolehAksiPos('kulakan', 'delete'))
+            OutlinedButton.icon(
+              onPressed: () => _batalkanFaktur(f, header),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.danger),
+              icon: const Icon(Icons.block_outlined, size: 18),
+              label: const Text('Batalkan'),
+            ),
           OutlinedButton.icon(
             onPressed: () => _unduhFakturPdf(header, items),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),

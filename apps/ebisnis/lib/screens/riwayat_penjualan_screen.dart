@@ -11,6 +11,8 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import 'struk_screen.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
 import '../widgets/safe_state.dart';
@@ -22,12 +24,19 @@ final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
-/// Cache-first (spec: "Riwayat Penjualan online-only, tanpa cache lokal") --
-/// hanya utk tampilan DEFAULT tanpa filter halaman 1 (yg paling sering
+/// BACA LOKAL-DULU (pola daftarCacheDulu, dihitung manual di layar ini krn
+/// jalur bacanya kompleks -- lihat catatan di [_RiwayatPenjualanScreenState._muat])
+/// -- hanya utk tampilan DEFAULT tanpa filter halaman 1 (yg paling sering
 /// dibuka), disimpan lewat `cache_referensi` generik (kunci->JSON) yg SUDAH
-/// ADA di core_db, bukan tabel baru -- cukup utk "masih bisa lihat transaksi
-/// terakhir walau offline sesaat", bukan pengganti data real-time.
-const _kunciCacheRiwayat = 'riwayat_penjualan_default';
+/// ADA di core_db, bukan tabel baru: snapshot terakhir tampil seketika, hasil
+/// server menyusul dgn kilau baris + banner perubahan (termasuk transaksi
+/// baru dari kasir lain), bukan pengganti data real-time.
+const _kunciCacheRiwayat = 'riwayat:penjualan';
+
+/// Kunci diff satu baris transaksi utk kilau/banner -- id header nota bila
+/// ada (server), fallback nomor nota (arsip lokal/server lama).
+String _kunciDiffTransaksi(Map<String, dynamic> row) =>
+    '${row['idTransaksi'] ?? row['nomorNota'] ?? ''}';
 
 List<Map<String, dynamic>> _normalisasiDaftarTransaksi(
     Map<String, dynamic> hasil) {
@@ -948,6 +957,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   DateTime? _sampai;
   String _cariPembeli = '';
   bool _hanyaTransaksiTidakValid = false;
+  // Diff hasil server vs snapshot cache yang barusan tampil -- menggerakkan
+  // kilau baris + banner "pembaruan dari server" (transaksi kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
   final _kasirFilter = TextEditingController();
   final _mesinFilter = TextEditingController();
   final _produkFilter = TextEditingController();
@@ -1176,6 +1191,38 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       await _arsipLokalSesuaiFilter(),
       hanyaTransaksiTidakValid: _hanyaTransaksiTidakValid,
     );
+    // BACA LOKAL-DULU (pola daftarCacheDulu, dihitung manual krn jalur baca
+    // layar ini kompleks: gabungan arsip lokal + bentuk respons bervariasi +
+    // fallback keyword): utk tampilan DEFAULT, snapshot terakhir langsung
+    // tampil tanpa menunggu jaringan; hasil server menyusul dan diff-nya
+    // menggerakkan kilau baris + banner (transaksi baru dari kasir lain).
+    // Tampilan berfilter/halaman >1 tetap online-first spt semula.
+    List<Map<String, dynamic>>? dataCache;
+    if (_defaultTanpaFilter) {
+      try {
+        final tersimpan =
+            await CoreDb.instance.ambilCacheReferensi(_kunciCacheRiwayat);
+        if (tersimpan != null) {
+          final hasilCache = jsonDecode(tersimpan) as Map<String, dynamic>;
+          final data = _normalisasiDaftarTransaksi(hasilCache);
+          dataCache = data;
+          final gabungan = _gabungkanDenganArsipLokal(data, lokal);
+          setStateIfMounted(() {
+            _data = gabungan;
+            _total = _normalisasiTotalTransaksi(hasilCache, data.length);
+            _omzetTotal = (hasilCache['totalNilai'] as num?)?.toDouble() ??
+                gabungan.fold<double>(0,
+                    (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
+            _idBaru = {};
+            _idBerubah = {};
+            _jumlahHapus = 0;
+            _memuat = false;
+          });
+        }
+      } catch (_) {
+        dataCache = null; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     try {
       final payload = {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
@@ -1232,18 +1279,59 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
               !kodeServer
                   .contains('${e['nomorNota'] ?? ''}'.trim().toLowerCase()))
           .length;
+      // Diff vs snapshot cache yang barusan tampil (kunci id header nota) --
+      // baris server yang baru muncul/berubah isi dikilaukan + banner.
+      final idBaru = <String>{};
+      final idBerubah = <String>{};
+      var jumlahHapus = 0;
+      if (dataCache != null) {
+        final petaLama = <String, String>{
+          for (final r in dataCache)
+            if (_kunciDiffTransaksi(r).isNotEmpty)
+              _kunciDiffTransaksi(r): jsonEncode(r),
+        };
+        final kunciBaruSemua = <String>{};
+        for (final r in data) {
+          final k = _kunciDiffTransaksi(r);
+          if (k.isEmpty) continue;
+          kunciBaruSemua.add(k);
+          final lama = petaLama[k];
+          if (lama == null) {
+            idBaru.add(k);
+          } else if (lama != jsonEncode(r)) {
+            idBerubah.add(k);
+          }
+        }
+        // Baris lama yg hilang hanya dihitung "dihapus" bila halaman server
+        // TIDAK penuh -- kalau penuh, baris lama mungkin sekadar tergeser ke
+        // halaman 2 oleh transaksi yang lebih baru (bukan dibatalkan).
+        if (data.length < _pageSize) {
+          jumlahHapus =
+              petaLama.keys.where((k) => !kunciBaruSemua.contains(k)).length;
+        }
+      }
       setStateIfMounted(() {
         _data = gabungan;
         _total = _normalisasiTotalTransaksi(hasil, data.length) + tambahanLokal;
         _omzetTotal = (hasil['totalNilai'] as num?)?.toDouble() ??
             gabungan.fold<double>(
                 0, (a, r) => a + ((r['totalBiaya'] as num?)?.toDouble() ?? 0));
+        _idBaru = idBaru;
+        _idBerubah = idBerubah;
+        _jumlahHapus = jumlahHapus;
+        if (idBaru.isNotEmpty || idBerubah.isNotEmpty || jumlahHapus > 0) {
+          _versiPerubahan++;
+        }
       });
       if (_defaultTanpaFilter) {
         unawaited(CoreDb.instance
             .simpanCacheReferensi(_kunciCacheRiwayat, jsonEncode(hasil)));
       }
     } catch (e) {
+      // Snapshot cache sudah tampil (baca lokal-dulu) -- saat OFFLINE cukup
+      // diam (indikator offline global sudah menceritakan kondisinya);
+      // penolakan bisnis server tetap diperlihatkan lewat jalur di bawah.
+      if (dataCache != null && e is ApiException && e.offline) return;
       if (lokal.isNotEmpty) {
         setStateIfMounted(() {
           _data = lokal;
@@ -2208,6 +2296,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                 ],
               ),
             ),
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:$_versiPerubahan'),
+              baru: _idBaru.length,
+              berubah: _idBerubah.length,
+              dihapus: _jumlahHapus,
+            ),
             if (_memuat)
               const Padding(
                   padding: EdgeInsets.symmetric(vertical: 60),
@@ -2228,7 +2322,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                   AppTableColumn('Kasir / Mesin', flex: 2),
                   AppTableColumn('Metode', flex: 2),
                   AppTableColumn('Total', flex: 2, align: TextAlign.right),
-                  AppTableColumn('Aksi', width: 74, align: TextAlign.center),
+                  AppTableColumn('Aksi', width: 110, align: TextAlign.center),
                 ],
                 rows: _data.map((row) {
                   final kasir = '${row['kasir'] ?? '-'}';
@@ -2237,10 +2331,19 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                   return AppTableRowData(
                     onTap: () => _lihatDetail(row),
                     cells: [
-                      AppTableCell.text('${row['nomorNota'] ?? '-'}',
-                          flex: 4,
-                          style: const TextStyle(
-                              fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      AppTableCell(
+                        flex: 4,
+                        child: KilauBaris(
+                          kunci: _kunciDiffTransaksi(row),
+                          idBaru: _idBaru,
+                          idBerubah: _idBerubah,
+                          child: Text('${row['nomorNota'] ?? '-'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                       AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
                       AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
                       AppTableCell.text(kasirMesin, flex: 2),
@@ -2301,16 +2404,33 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
                         ),
                       ),
                       AppTableCell(
-                        width: 74,
+                        width: 110,
                         align: TextAlign.center,
-                        child: Tooltip(
-                          message: 'Detail transaksi',
-                          child: IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon:
-                                const Icon(Icons.visibility_outlined, size: 18),
-                            onPressed: () => _lihatDetail(row),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Riwayat revisi header nota (AuditTrails/Envers)
+                            // -- hanya baris server yg punya id transaksi.
+                            if (row['idTransaksi'] != null)
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Riwayat data ini (AuditTrails)',
+                                icon: const Icon(Icons.history, size: 18),
+                                onPressed: () => tampilkanRiwayatData(context,
+                                    entitas: 'transaksi',
+                                    id: row['idTransaksi'] as Object,
+                                    judul: '${row['nomorNota'] ?? ''}'),
+                              ),
+                            Tooltip(
+                              message: 'Detail transaksi',
+                              child: IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.visibility_outlined,
+                                    size: 18),
+                                onPressed: () => _lihatDetail(row),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

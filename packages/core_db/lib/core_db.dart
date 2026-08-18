@@ -637,15 +637,17 @@ class CoreDb {
 
   /// Antre satu mutasi master. Bila [kunci] terisi, baris PENDING lama dengan
   /// kunci sama DIGANTI (coalesce) -- edit terakhir yang menang saat replay.
-  Future<void> outboxMasterTambah(String aksi, String? kunci,
+  /// Return id baris antrean yang baru dibuat -- dipakai alur "simpan lokal
+  /// dulu" utk mencoba mengirim baris ITU saja segera setelah antre.
+  Future<int> outboxMasterTambah(String aksi, String? kunci,
       String payloadJson) async {
     final database = await db;
-    await database.transaction((txn) async {
+    return database.transaction<int>((txn) async {
       if (kunci != null && kunci.isNotEmpty) {
         await txn.delete('outbox_master',
             where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
       }
-      await txn.insert('outbox_master', {
+      return txn.insert('outbox_master', {
         'aksi': aksi,
         'kunci': kunci,
         'payload_json': payloadJson,
@@ -653,6 +655,13 @@ class CoreDb {
         'dibuat_pada': DateTime.now().toIso8601String(),
       });
     });
+  }
+
+  /// Hapus satu baris antrean -- dipakai saat server MENOLAK scr bisnis di
+  /// jendela simpan (user melihat pesannya langsung, baris tak perlu tersisa).
+  Future<void> outboxMasterHapus(int id) async {
+    final database = await db;
+    await database.delete('outbox_master', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<Map<String, Object?>>> outboxMasterPending() async {
@@ -806,11 +815,32 @@ class CoreDb {
     await batch.commit(noResult: true);
   }
 
-  Future<List<Map<String, Object?>>> cariAnggotaCache(String kataKunci,
-      {int limit = 30}) async {
+  /// Jumlah member di cache offline (opsional berfilter kata kunci, filter
+  /// SAMA dgn [cariAnggotaCache]) -- 0 tanpa filter berarti belum pernah
+  /// sinkron awal (pemicu progress bar hidrasi pertama di layar Pelanggan);
+  /// dgn filter dipakai sbg total paginasi lokal daftar member.
+  Future<int> jumlahAnggotaCache({String kataKunci = ''}) async {
     final database = await db;
     if (kataKunci.trim().isEmpty) {
-      return database.query('anggota_cache', orderBy: 'nama ASC', limit: limit);
+      final hasil =
+          await database.rawQuery('SELECT COUNT(*) AS n FROM anggota_cache');
+      return (hasil.first['n'] as int?) ?? 0;
+    }
+    final kw = '%$kataKunci%';
+    final hasil = await database.rawQuery(
+        'SELECT COUNT(*) AS n FROM anggota_cache '
+        'WHERE nama LIKE ? OR kode LIKE ? OR kode_identitas LIKE ? '
+        'OR hp LIKE ? OR telp LIKE ? OR email LIKE ?',
+        [kw, kw, kw, kw, kw, kw]);
+    return (hasil.first['n'] as int?) ?? 0;
+  }
+
+  Future<List<Map<String, Object?>>> cariAnggotaCache(String kataKunci,
+      {int limit = 30, int offset = 0}) async {
+    final database = await db;
+    if (kataKunci.trim().isEmpty) {
+      return database.query('anggota_cache',
+          orderBy: 'nama ASC', limit: limit, offset: offset);
     }
     final kw = '%$kataKunci%';
     return database.query(
@@ -820,6 +850,7 @@ class CoreDb {
       whereArgs: [kw, kw, kw, kw, kw, kw],
       orderBy: 'nama ASC',
       limit: limit,
+      offset: offset,
     );
   }
 
@@ -1100,6 +1131,28 @@ class CoreDb {
         .query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
     if (hasil.isEmpty) return null;
     return hasil.first['nilai_json'] as String?;
+  }
+
+  /// GENERIK utk semua modul CRUD: true bila cache daftar [kunci] sudah ada
+  /// dan tidak kosong -- pemeriksaan murah (tanpa parse JSON penuh) sebagai
+  /// pemicu "perlu sinkron awal ber-progress" saat cache lokal masih kosong.
+  Future<bool> adaCacheReferensiList(String kunci) async {
+    final nilai = await ambilCacheReferensi(kunci);
+    if (nilai == null) return false;
+    final ringkas = nilai.trim();
+    return ringkas.length > 2 && ringkas != '[]';
+  }
+
+  /// GENERIK: jumlah baris pada cache daftar [kunci] (0 bila belum ada/rusak).
+  Future<int> jumlahCacheReferensiList(String kunci) async {
+    final nilai = await ambilCacheReferensi(kunci);
+    if (nilai == null) return 0;
+    try {
+      final data = jsonDecode(nilai);
+      return data is List ? data.length : 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   // ============================== ERROR LOG ==============================

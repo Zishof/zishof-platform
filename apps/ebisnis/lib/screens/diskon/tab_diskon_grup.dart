@@ -7,7 +7,10 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -32,6 +35,12 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
   String? _error;
   int _page = 1, _total = 0;
   String _keyword = '';
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -45,16 +54,36 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
       _error = null;
     });
     try {
-      final r = await MasterOffline.daftarDenganCache('diskon_grup_list', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('diskon_grup_list', {
         'page': _page,
         'page_size': _pageSize,
         if (_keyword.isNotEmpty) 'keyword': _keyword,
-      }, 'master:diskon_grup');
-      setStateIfMounted(() {
-        _data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = r['offline'] == true
-            ? _data.length
-            : (r['total'] as num?)?.toInt() ?? 0;
+      }, 'master:diskon_grup', onData: (r) {
+        if (!mounted) return;
+        final data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = r['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = data;
+          _total = dariServer
+              ? (r['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(r['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(r['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus = dariServer ? (r['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _loading = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -131,6 +160,12 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
               },
             ),
             const SizedBox(height: 12),
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:$_versiPerubahan'),
+              baru: _idBaru.length,
+              berubah: _idBerubah.length,
+              dihapus: _jumlahHapus,
+            ),
             Card(
               clipBehavior: Clip.antiAlias,
               child: SingleChildScrollView(
@@ -158,14 +193,28 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
                       cells: [
                         DataCell(SizedBox(
                             width: 240,
-                            child: Row(children: [
-                              IndikatorBarisSinkron(
-                                  kunci:
-                                      kunciBarisMaster('diskon_grup', e)),
-                              Expanded(
-                                  child: Text('${e['namaGrup']}',
-                                      overflow: TextOverflow.ellipsis)),
-                            ]))),
+                            child: KilauBaris(
+                              kunci: '${e['id'] ?? e['_kunci'] ?? ''}',
+                              idBaru: _idBaru,
+                              idBerubah: _idBerubah,
+                              child: Row(children: [
+                                IndikatorBarisSinkron(
+                                    kunci:
+                                        kunciBarisMaster('diskon_grup', e)),
+                                Expanded(
+                                    child: Text('${e['namaGrup']}',
+                                        overflow: TextOverflow.ellipsis)),
+                                IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: 'Riwayat data ini (AuditTrails)',
+                                    icon: const Icon(Icons.history, size: 16),
+                                    onPressed: () => tampilkanRiwayatData(
+                                        context,
+                                        entitas: 'diskon_grup',
+                                        id: e['id'],
+                                        judul: '${e['namaGrup'] ?? ''}')),
+                              ]),
+                            ))),
                         DataCell(Text(periode)),
                         DataCell(Text('${e['jumlahProduk'] ?? 0}')),
                         DataCell(Text(nilai,
@@ -499,20 +548,18 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
         'aktif': _aktif,
         'produk': _produk.map((p) => {'id': p['id']}).toList(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'diskon_grup_simpan',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'diskon_grup_simpan',
+        body: body,
         kunci: widget.item != null
             ? 'diskon_grup:${widget.item!['id']}'
             : 'diskon_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:diskon_grup',
         rowLokal: body,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

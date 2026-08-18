@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
-import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 
 /// Tab "Notifikasi" (padanan `notifikasi.jsp`) -- log/riwayat notifikasi yg
@@ -89,9 +89,13 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
         ],
       ),
     );
-    if (konfirmasi != true) return;
+    if (konfirmasi != true || !mounted) return;
     try {
-      await MasterOffline.simpanAtauAntre('notifikasi_hapus', {'id': n['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context,
+          aksi: 'notifikasi_hapus',
+          body: {'id': n['id']},
           kunci: 'notifikasi:${n['id']}');
       await _muatDaftar();
     } catch (e) {

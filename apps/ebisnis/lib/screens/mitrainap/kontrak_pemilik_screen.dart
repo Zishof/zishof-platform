@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../services/master_offline.dart';
 import '../../widgets/indikator_sinkron_master.dart';
+import '../../widgets/proses_simpan_master.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -207,32 +208,29 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
 
     final persen = double.tryParse(persenC.text.trim()) ?? -1;
     try {
-      final res = await MasterOffline.simpanAtauAntre('hotel_kontrak_pemilik_simpan', {
-        if (awal != null) 'id': awal['id'],
-        'properti_id': pid,
-        'kamar_id': kamarId,
-        'nama_pemilik': namaC.text.trim(),
-        'referensi_pemilik': refC.text.trim(),
-        'persen_komisi': persen,
-        'berlaku_dari': dari == null ? null : formatTanggalHotel.format(dari!),
-        if (sampai != null) 'berlaku_sampai': formatTanggalHotel.format(sampai!),
-        'aktif': aktif,
-      },
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      // Saat offline daftar TIDAK dimuat ulang (muatDaftarHotel online-only).
+      final res = await prosesSimpanMaster(context,
+          aksi: 'hotel_kontrak_pemilik_simpan',
+          body: {
+            if (awal != null) 'id': awal['id'],
+            'properti_id': pid,
+            'kamar_id': kamarId,
+            'nama_pemilik': namaC.text.trim(),
+            'referensi_pemilik': refC.text.trim(),
+            'persen_komisi': persen,
+            'berlaku_dari':
+                dari == null ? null : formatTanggalHotel.format(dari!),
+            if (sampai != null)
+              'berlaku_sampai': formatTanggalHotel.format(sampai!),
+            'aktif': aktif,
+          },
           kunci: awal != null
               ? 'hotel_kontrak:${awal['id']}'
               : 'hotel_kontrak:baru:${DateTime.now().microsecondsSinceEpoch}');
       if (!mounted) return;
-      if (apiSukses(res)) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(res['offline'] == true
-                ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-                : 'Kontrak tersimpan.')));
-        if (res['offline'] != true) _muatKontrak();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal: ${apiPesan(res, 'validasi server')}'),
-            backgroundColor: Theme.of(context).colorScheme.error));
-      }
+      if (res['offline'] != true) _muatKontrak();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -289,8 +287,23 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
                               child: ListTile(
                                 leading: Icon(Icons.meeting_room,
                                     color: aktif ? Colors.teal : Colors.grey),
-                                title: Text(
-                                    'Kamar ${k['kamar_nomor'] ?? '-'} — ${k['nama_pemilik'] ?? '-'}'),
+                                title: Row(children: [
+                                  Expanded(
+                                      child: Text(
+                                          'Kamar ${k['kamar_nomor'] ?? '-'} — ${k['nama_pemilik'] ?? '-'}')),
+                                  IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip:
+                                          'Riwayat data ini (AuditTrails)',
+                                      icon: const Icon(Icons.history,
+                                          size: 16),
+                                      onPressed: () => tampilkanRiwayatData(
+                                          context,
+                                          entitas: 'hotel_kontrak',
+                                          id: k['id'],
+                                          judul:
+                                              'Kamar ${k['kamar_nomor'] ?? '-'}')),
+                                ]),
                                 subtitle: Text(
                                     'Komisi ${angka(k['persen_komisi']).toStringAsFixed(2)}% · '
                                     '${k['berlaku_dari'] ?? '-'} s/d ${k['berlaku_sampai'] ?? 'tanpa batas'}'

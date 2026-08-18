@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -47,6 +49,12 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
   String _kataKunci = '';
   String? _filterAktif = 'aktif';
   String _sort = 'kode';
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -60,23 +68,52 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_supplier_list', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('si_supplier_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         if (_filterAktif != null) 'aktif': _filterAktif,
         'sort': _sort,
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _memuat = false;
+      }, 'master:si_supplier', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = data;
+          // Emisi daftarCacheDulu tidak meneruskan 'total' server -- selama
+          // halaman penuh, asumsikan masih ada halaman berikutnya supaya
+          // kontrol paginasi tetap bisa dipakai.
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ??
+                  (data.length >= _pageSize
+                      ? _halaman * _pageSize + 1
+                      : (_halaman - 1) * _pageSize + data.length)
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
-      setStateIfMounted(() {
-        _memuat = false;
-        _error = e.toString();
-      });
+      setStateIfMounted(() => _error = e.toString());
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
     }
   }
 
@@ -151,9 +188,11 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      await MasterOffline.simpanAtauAntre('si_supplier_deactivate', {
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context, aksi: 'si_supplier_deactivate', body: {
         'id': data['id'],
         'aktif': aktifkan,
         if (!aktifkan) 'alasan': alasanCtrl.text.trim(),
@@ -286,6 +325,12 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
                         minWidth: 860,
                         emptyText: 'Belum ada supplier.',
@@ -306,13 +351,18 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                             cells: [
                               AppTableCell(
                                 flex: 1,
-                                child: SelTeksDenganSinkron(
-                                  kunci: 'si_supplier:${s['id']}',
-                                  teks: '${s['kode']}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'monospace',
-                                      fontSize: 12.5),
+                                child: KilauBaris(
+                                  kunci: '${s['id'] ?? s['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: SelTeksDenganSinkron(
+                                    kunci: 'si_supplier:${s['id']}',
+                                    teks: '${s['kode']}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'monospace',
+                                        fontSize: 12.5),
+                                  ),
                                 ),
                               ),
                               AppTableCell.text('${s['nama']}',
@@ -587,8 +637,9 @@ class _FormSupplierState extends State<_FormSupplier> {
       _error = null;
     });
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-          _ubah ? 'si_supplier_update' : 'si_supplier_create', {
+      await prosesSimpanMaster(context,
+          aksi: _ubah ? 'si_supplier_update' : 'si_supplier_create',
+          body: {
         if (_ubah) 'id': widget.data!['id'],
         if (!_ubah) 'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -607,11 +658,6 @@ class _FormSupplierState extends State<_FormSupplier> {
           kunci: _ubah
               ? 'si_supplier:${widget.data!['id']}'
               : 'si_supplier:baru:${DateTime.now().microsecondsSinceEpoch}');
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

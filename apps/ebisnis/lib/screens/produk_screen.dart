@@ -18,6 +18,9 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/indikator_sinkron_master.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
 import 'produk_mutasi_barang_tab.dart';
@@ -58,9 +61,12 @@ const _labelJenisDuplikat = {
 /// `produk_simpan` utk simpan.
 ///
 /// Offline-first utk daftar + CRUD master (pola sama dgn cara_bayar_screen):
-/// daftar produk/kategori/kebijakan retur lewat [MasterOffline.daftarDenganCache]
+/// daftar produk & kebijakan retur BACA LOKAL-DULU lewat
+/// [MasterOffline.daftarCacheDulu] (snapshot cache tampil seketika, hasil
+/// server menyusul dgn kilau baris + banner perubahan -- termasuk perubahan
+/// kasir lain), daftar kategori lewat [MasterOffline.daftarDenganCache]
 /// (snapshot terakhir tampil saat offline), simpan/hapus master lewat
-/// [MasterOffline.simpanAtauAntre] (diantre + dikirim otomatis saat online).
+/// [prosesSimpanMaster] (lokal dulu + dialog animasi kirim; offline diantre).
 /// Aksi berkas/bulk (foto, ekspor/impor Excel, bersih duplikat, data sample)
 /// tetap online-only -- tidak aman diantre offline.
 ///
@@ -88,6 +94,12 @@ class _ProdukScreenState extends State<ProdukScreen> {
   int _totalProduk = 0;
   Map<String, dynamic>? _statistik;
   bool _memulaiDataSample = false;
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
   /// sudah dimuat penuh (JUAL+BAHAN+EKSTRA, tanpa filter server `jenisItem`,
@@ -113,9 +125,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
       _pesanError = null;
     });
     try {
-      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
-      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
-      final katalog = await MasterOffline.daftarDenganCache(
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu(
           'katalog',
           {
             'page': _halaman + 1,
@@ -124,12 +136,48 @@ class _ProdukScreenState extends State<ProdukScreen> {
             if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
             if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
           },
-          'master:produk_list',
-          fieldData: 'produk');
-      final produkJson = (katalog['produk'] as List?) ?? [];
-      final produk = produkJson
-          .map((e) => Produk.fromJson(e as Map<String, dynamic>))
-          .toList();
+          'master:produk_list', onData: (katalog) {
+        if (!mounted) return;
+        final produk = ((katalog['produk'] as List?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            // Draf create offline belum punya id -- Produk.fromJson
+            // mewajibkannya, jadi baris draf dilewati sampai tersinkron.
+            .where((e) => e['id'] is int)
+            .map(Produk.fromJson)
+            .toList();
+        final dariServer = katalog['dariServer'] == true;
+        setStateIfMounted(() {
+          _semuaProduk = produk;
+          // Emisi daftarCacheDulu tidak meneruskan 'total' server -- selama
+          // halaman penuh, asumsikan masih ada halaman berikutnya supaya
+          // kontrol paginasi tetap bisa dipakai menjelajah katalog besar.
+          _totalProduk = dariServer
+              ? (katalog['total'] as num?)?.toInt() ??
+                  (produk.length >= _itemPerHalaman
+                      ? (_halaman + 1) * _itemPerHalaman + 1
+                      : _halaman * _itemPerHalaman + produk.length)
+              : produk.length;
+          _idBaru = dariServer
+              ? Set<String>.from(katalog['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  katalog['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (katalog['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          // _memuat sengaja TIDAK dimatikan di sini: begitu snapshot cache
+          // terisi, spinner penuh otomatis berganti daftar (kondisi build
+          // `_memuat && _semuaProduk.isEmpty`), sementara progress tipis tetap
+          // tampil sampai seluruh muatan (server/kategori/statistik) selesai.
+        });
+      }, fieldData: 'produk');
       final hasilKategori = await MasterOffline.daftarDenganCache(
           'jenis_produk_list',
           {'page': 1, 'page_size': 100},
@@ -137,13 +185,21 @@ class _ProdukScreenState extends State<ProdukScreen> {
       final kategori = ((hasilKategori['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
-      final hasilKebijakan = await MasterOffline.daftarDenganCache(
+      // Kebijakan retur ikut baca-lokal-dulu (tanpa kilau/banner sendiri --
+      // daftarnya kecil; animasi perubahan cukup di daftar produk di atas).
+      await MasterOffline.daftarCacheDulu(
           'kebijakan_retur_list',
           {'termasuk_nonaktif': true},
-          'master:kebijakan_retur');
-      final kebijakanRetur = ((hasilKebijakan['data'] as List?) ?? [])
-          .map((e) => KebijakanRetur.fromJson(e as Map<String, dynamic>))
-          .toList();
+          'master:kebijakan_retur', onData: (hasilKebijakan) {
+        if (!mounted) return;
+        final kebijakanRetur = ((hasilKebijakan['data'] as List?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            // KebijakanRetur.fromJson mewajibkan id -- draf offline dilewati.
+            .where((e) => e['id'] != null)
+            .map(KebijakanRetur.fromJson)
+            .toList();
+        setStateIfMounted(() => _kebijakanRetur = kebijakanRetur);
+      });
 
       Map<String, dynamic>? statistik;
       try {
@@ -153,10 +209,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
       }
 
       setStateIfMounted(() {
-        _semuaProduk = produk;
-        _totalProduk = (katalog['total'] as num?)?.toInt() ?? produk.length;
         _kategori = kategori;
-        _kebijakanRetur = kebijakanRetur;
         _statistik = statistik;
       });
     } catch (e) {
@@ -249,6 +302,11 @@ class _ProdukScreenState extends State<ProdukScreen> {
     }
   }
 
+  /// Dialog "Riwayat Data" per baris produk (AuditTrails/Envers, entitas
+  /// 'produk') -- tombol ikon jam di tiap baris daftar.
+  void _riwayatProduk(Produk p) =>
+      tampilkanRiwayatData(context, entitas: 'produk', id: p.id, judul: p.nama);
+
   Future<void> _bukaFormKebijakan({KebijakanRetur? kebijakan}) async {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
@@ -275,21 +333,19 @@ class _ProdukScreenState extends State<ProdukScreen> {
         ],
       ),
     );
-    if (ya != true) return;
+    if (ya != true || !mounted) return;
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'kebijakan_retur_hapus',
-        {'id': k.id},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'kebijakan_retur_hapus',
+        body: {'id': k.id},
         kunci: 'kebijakan_retur:${k.id}',
         cacheKey: 'master:kebijakan_retur',
         rowLokal: {'id': k.id},
         hapusLokal: true,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
-      }
       await _muatSemua();
     } catch (e) {
       if (mounted) {
@@ -733,6 +789,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               ),
                                             ),
                                             const SizedBox(height: 12),
+                                            BannerPerubahanServer(
+                                              key: ValueKey(
+                                                  'perubahan:$_versiPerubahan'),
+                                              baru: _idBaru.length,
+                                              berubah: _idBerubah.length,
+                                              dihapus: _jumlahHapus,
+                                            ),
                                             if (_memuat) ...[
                                               const LinearProgressIndicator(
                                                   minHeight: 2),
@@ -754,17 +817,27 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                     ? _TabelProduk(
                                                         produkList:
                                                             _produkHalamanIni,
+                                                        idBaru: _idBaru,
+                                                        idBerubah: _idBerubah,
                                                         onTap: (p) =>
                                                             _bukaFormProduk(
-                                                                produk: p))
+                                                                produk: p),
+                                                        onRiwayat:
+                                                            _riwayatProduk)
                                                     : Column(
                                                         children: _produkHalamanIni
                                                             .map((p) => _BarisProduk(
                                                                 produk: p,
+                                                                idBaru: _idBaru,
+                                                                idBerubah:
+                                                                    _idBerubah,
                                                                 onTap: () =>
                                                                     _bukaFormProduk(
                                                                         produk:
-                                                                            p)))
+                                                                            p),
+                                                                onRiwayat: () =>
+                                                                    _riwayatProduk(
+                                                                        p)))
                                                             .toList()),
                                               ),
                                             if (_totalProduk > _itemPerHalaman)
@@ -881,8 +954,16 @@ class _KartuStatistik extends StatelessWidget {
 
 class _BarisProduk extends StatelessWidget {
   final Produk produk;
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
   final VoidCallback onTap;
-  const _BarisProduk({required this.produk, required this.onTap});
+  final VoidCallback onRiwayat;
+  const _BarisProduk(
+      {required this.produk,
+      required this.idBaru,
+      required this.idBerubah,
+      required this.onTap,
+      required this.onRiwayat});
 
   @override
   Widget build(BuildContext context) {
@@ -899,22 +980,38 @@ class _BarisProduk extends StatelessWidget {
                 produk.nama.isNotEmpty ? produk.nama[0].toUpperCase() : '?',
                 style: const TextStyle(color: Colors.white)),
           ),
-          title: Text(produk.nama,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          title: KilauBaris(
+            kunci: '${produk.id}',
+            idBaru: idBaru,
+            idBerubah: idBerubah,
+            child: Text(produk.nama,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
           subtitle: Text(
               '${produk.kode} · ${produk.kategoriNama.isEmpty ? "Tanpa Kategori" : produk.kategoriNama}'),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_formatRupiah.format(produk.hargaJual),
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              StatusPill(
-                  label: habis ? 'Habis' : 'Stok ${produk.stok}',
-                  warna: habis
-                      ? AppColors.danger
-                      : (rendah ? AppColors.warning : AppColors.success)),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(_formatRupiah.format(produk.hargaJual),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  StatusPill(
+                      label: habis ? 'Habis' : 'Stok ${produk.stok}',
+                      warna: habis
+                          ? AppColors.danger
+                          : (rendah ? AppColors.warning : AppColors.success)),
+                ],
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Riwayat data ini (AuditTrails)',
+                icon: const Icon(Icons.history, size: 18),
+                onPressed: onRiwayat,
+              ),
             ],
           ),
           onTap: onTap,
@@ -931,8 +1028,16 @@ class _BarisProduk extends StatelessWidget {
 /// diminta menyamakan tampilan dgn mockup multi-outlet.
 class _TabelProduk extends StatelessWidget {
   final List<Produk> produkList;
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
   final void Function(Produk) onTap;
-  const _TabelProduk({required this.produkList, required this.onTap});
+  final void Function(Produk) onRiwayat;
+  const _TabelProduk(
+      {required this.produkList,
+      required this.idBaru,
+      required this.idBerubah,
+      required this.onTap,
+      required this.onRiwayat});
 
   @override
   Widget build(BuildContext context) {
@@ -969,11 +1074,18 @@ class _TabelProduk extends StatelessWidget {
                     flex: 2,
                     child: Text('STATUS',
                         textAlign: TextAlign.center, style: gayaHeaderTabel)),
+                // Kolom tombol "Riwayat Data" per baris (ikon jam).
+                const SizedBox(width: 36),
               ],
             ),
           ),
           for (final p in produkList)
-            _BarisTabelProduk(produk: p, onTap: () => onTap(p)),
+            _BarisTabelProduk(
+                produk: p,
+                idBaru: idBaru,
+                idBerubah: idBerubah,
+                onTap: () => onTap(p),
+                onRiwayat: () => onRiwayat(p)),
         ],
       ),
     );
@@ -988,8 +1100,16 @@ TextStyle _gayaHeaderTabel(BuildContext context) => TextStyle(
 
 class _BarisTabelProduk extends StatelessWidget {
   final Produk produk;
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
   final VoidCallback onTap;
-  const _BarisTabelProduk({required this.produk, required this.onTap});
+  final VoidCallback onRiwayat;
+  const _BarisTabelProduk(
+      {required this.produk,
+      required this.idBaru,
+      required this.idBerubah,
+      required this.onTap,
+      required this.onRiwayat});
 
   @override
   Widget build(BuildContext context) {
@@ -1009,28 +1129,33 @@ class _BarisTabelProduk extends StatelessWidget {
           children: [
             Expanded(
               flex: 4,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppColors.latarLembut(warnaAvatar),
-                    child: Text(
-                        produk.nama.isNotEmpty
-                            ? produk.nama[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                            color: warnaAvatar,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: Text(produk.nama,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13))),
-                ],
+              child: KilauBaris(
+                kunci: '${produk.id}',
+                idBaru: idBaru,
+                idBerubah: idBerubah,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: AppColors.latarLembut(warnaAvatar),
+                      child: Text(
+                          produk.nama.isNotEmpty
+                              ? produk.nama[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                              color: warnaAvatar,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: Text(produk.nama,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13))),
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -1074,6 +1199,16 @@ class _BarisTabelProduk extends StatelessWidget {
                     warna: produk.aktif
                         ? AppColors.success
                         : AppColors.textSecondaryOf(context)),
+              ),
+            ),
+            SizedBox(
+              width: 36,
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                tooltip: 'Riwayat data ini (AuditTrails)',
+                icon: const Icon(Icons.history, size: 18),
+                onPressed: onRiwayat,
               ),
             ),
           ],
@@ -1128,9 +1263,10 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
         'keterangan': _keterangan.text.trim(),
         'aktif': _aktif,
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'kebijakan_retur_simpan',
-        body,
+      await prosesSimpanMaster(
+        context,
+        aksi: 'kebijakan_retur_simpan',
+        body: body,
         kunci: ubah
             ? 'kebijakan_retur:${widget.kebijakan!.id}'
             : 'kebijakan_retur:baru:${DateTime.now().microsecondsSinceEpoch}',
@@ -1140,11 +1276,6 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
         cacheKey: ubah ? 'master:kebijakan_retur' : null,
         rowLokal: ubah ? body : null,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -1591,9 +1722,10 @@ class _FormProdukState extends State<_FormProduk> {
     });
     try {
       final ubah = widget.produk != null;
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'produk_simpan',
-        {
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'produk_simpan',
+        body: {
           if (ubah) 'id': widget.produk!.id,
           'kode': _kode.text.trim(),
           'nama': _nama.text.trim(),
@@ -1649,11 +1781,6 @@ class _FormProdukState extends State<_FormProduk> {
               }
             : null,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       // Produk baru: baris foto yg ditahan di memori (id==null, blm pernah
       // diunggah krn belum ada produk_id) diunggah SEKARANG pakai id baru
       // dari respons ini -- lihat JavaDoc _foto/_pilihFoto.

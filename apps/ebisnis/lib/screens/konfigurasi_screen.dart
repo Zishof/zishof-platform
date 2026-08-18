@@ -9,7 +9,6 @@ import 'package:printing/printing.dart';
 import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
-import '../services/master_offline.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_koreksi_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
@@ -22,6 +21,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/proses_simpan_master.dart';
 import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
 import 'hak_akses_screen.dart';
@@ -858,8 +858,9 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _error = null;
     });
     try {
-      final hasilSimpan =
-          await MasterOffline.simpanAtauAntre('toko_profil_simpan', {
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(context, aksi: 'toko_profil_simpan', body: {
         'nama': _nama.text.trim(),
         'alamat': _alamat.text.trim(),
         'kota': _kota.text.trim(),
@@ -898,10 +899,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toList();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(hasilSimpan['offline'] == true
-                ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-                : 'Profil dan kebijakan toko tersimpan.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Profil dan kebijakan toko tersimpan.')));
       }
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -1561,26 +1560,23 @@ class _FormAkunState extends State<_FormAkun> {
             'password_baru': _password.text,
           });
         } else {
-          final hasilUbah = await MasterOffline.simpanAtauAntre('pedagang_ubah', {
+          // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
+          await prosesSimpanMaster(context, aksi: 'pedagang_ubah', body: {
             'id': widget.akun!['id'],
             'nama': _nama.text.trim(),
             'keterangan': _keterangan.text.trim(),
             'aktif': _aktif,
             'supervisor': _supervisor,
           }, kunci: 'pedagang:${widget.akun!['id']}');
-          if (hasilUbah['offline'] == true && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text(
-                    'Tersimpan lokal — akan dikirim otomatis saat online.')));
-          }
         }
       } else {
         // Offline-first (pola master, lihat MasterOffline): akun baru diantre
         // saat offline lalu dikirim otomatis. TANPA cacheKey -- daftar akun
         // (pedagang_list) & dropdown akun layar lain punya cache terpisah.
-        final hasil = await MasterOffline.simpanAtauAntre(
-          'akun_tambah',
-          {
+        await prosesSimpanMaster(
+          context,
+          aksi: 'akun_tambah',
+          body: {
             'userid': _userid.text.trim(),
             'password': _password.text,
             'nama': _nama.text.trim(),
@@ -1590,11 +1586,6 @@ class _FormAkunState extends State<_FormAkun> {
           },
           kunci: 'akun:baru:${DateTime.now().microsecondsSinceEpoch}',
         );
-        if (hasil['offline'] == true && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Tersimpan lokal — akan dikirim otomatis saat online.')));
-        }
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {

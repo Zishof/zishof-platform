@@ -4,6 +4,9 @@ import '../../api_client.dart';
 import '../../models.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
@@ -52,6 +55,12 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
   String _kataKunci = '';
   List<Kategori> _jenisAnggota = [];
   List<Kategori> _tipeAnggota = [];
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -73,16 +82,39 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
 
   Future<void> _muatDaftar() async {
     try {
-      final hasil = await MasterOffline.daftarDenganCache('diskon_list', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('diskon_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      }, 'master:diskon');
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = hasil['offline'] == true
-            ? _data.length
-            : (hasil['total'] as num?)?.toInt() ?? 0;
+      }, 'master:diskon', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = data;
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -216,8 +248,14 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                         onSubmitted: _cariUlang,
                       ),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
-                        minWidth: 1080,
+                        minWidth: 1128,
                         emptyText: 'Belum ada aturan diskon.',
                         columns: const [
                           AppTableColumn('Aturan', flex: 3),
@@ -229,6 +267,8 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                               flex: 2, align: TextAlign.center),
                           AppTableColumn('Status',
                               flex: 2, align: TextAlign.center),
+                          AppTableColumn('Aksi',
+                              width: 48, align: TextAlign.center),
                         ],
                         rows: _data.map((a) {
                           final persen = ((a['persentase'] as num?) ?? 0);
@@ -252,26 +292,31 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                             cells: [
                               AppTableCell(
                                 flex: 3,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IndikatorBarisSinkron(
-                                        kunci:
-                                            kunciBarisMaster('diskon', a)),
-                                    Flexible(
-                                      child: Text('${a['namaAturan']}',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis),
-                                    ),
-                                    if (manual) ...[
-                                      const SizedBox(width: 6),
-                                      const Icon(Icons.touch_app_outlined,
-                                          size: 14, color: AppColors.info),
+                                child: KilauBaris(
+                                  kunci: '${a['id'] ?? a['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IndikatorBarisSinkron(
+                                          kunci:
+                                              kunciBarisMaster('diskon', a)),
+                                      Flexible(
+                                        child: Text('${a['namaAturan']}',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                      ),
+                                      if (manual) ...[
+                                        const SizedBox(width: 6),
+                                        const Icon(Icons.touch_app_outlined,
+                                            size: 14, color: AppColors.info),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
                               AppTableCell.text('$produk - $toko',
@@ -299,6 +344,24 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                                     warna: aktif
                                         ? AppColors.success
                                         : AppColors.danger),
+                              ),
+                              AppTableCell(
+                                width: 48,
+                                align: TextAlign.center,
+                                child: a['id'] != null
+                                    ? IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip:
+                                            'Riwayat data ini (AuditTrails)',
+                                        icon: const Icon(Icons.history,
+                                            size: 18),
+                                        onPressed: () => tampilkanRiwayatData(
+                                            context,
+                                            entitas: 'diskon',
+                                            id: a['id'],
+                                            judul: '${a['namaAturan'] ?? ''}'),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
                             ],
                           );
@@ -498,20 +561,18 @@ class _FormDiskonState extends State<_FormDiskon> {
         if (Sesi.instance.isAdmin)
           'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'diskon_simpan',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'diskon_simpan',
+        body: body,
         kunci: widget.aturan != null
             ? 'diskon:${widget.aturan!['id']}'
             : 'diskon:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:diskon',
         rowLokal: body,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
@@ -17,10 +18,37 @@ class RingkasanTabProduk extends StatefulWidget {
 }
 
 class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
+  static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
   String _periode = 'bulanan';
+  DateTime _tanggalAcuan =
+      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+  bool get _acuanBukanHariIni {
+    final n = DateTime.now();
+    return _tanggalAcuan.year != n.year ||
+        _tanggalAcuan.month != n.month ||
+        _tanggalAcuan.day != n.day;
+  }
+
+  String get _sufiksAcuan => _acuanBukanHariIni
+      ? ' • s.d. ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}'
+      : '';
+
+  Future<void> _pilihTanggalAcuan() async {
+    final v = await showDatePicker(
+      context: context,
+      initialDate: _tanggalAcuan,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih tanggal acuan dashboard',
+    );
+    if (v == null || !mounted) return;
+    setStateIfMounted(() => _tanggalAcuan = DateTime(v.year, v.month, v.day));
+    await _muat();
+  }
 
   /// Produk terpilih di dropdown "Jam Sibuk per Produk" -- null berarti
   /// belum dipilih manual, jatuh ke entri PERTAMA (`jamSibukPerProduk` sudah
@@ -40,8 +68,10 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance
-          .aksi('dashboard_produk', {'periode': _periode});
+      final hasil = await ApiClient.instance.aksi('dashboard_produk', {
+        'periode': _periode,
+        'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan),
+      });
       if (!mounted) return;
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
@@ -110,6 +140,20 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Tanggal Acuan',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              OutlinedButton.icon(
+                onPressed: _memuat ? null : _pilihTanggalAcuan,
+                icon: const Icon(Icons.event_available_outlined, size: 18),
+                label: Text(_formatTanggalServer.format(_tanggalAcuan)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           if (stok.isNotEmpty)
             Card(
               child: Padding(
@@ -157,7 +201,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
           const SizedBox(height: 12),
           BarisKpi(kartu: [
             KartuKpi(
-              label: 'Kepuasan Pelanggan (30 hari)',
+              label: 'Kepuasan Pelanggan (30 hari)$_sufiksAcuan',
               nilai:
                   '★ ${((kepuasanPelanggan['rataRating'] as num?) ?? 0).toStringAsFixed(1)} · ${kepuasanPelanggan['jumlahResponden'] ?? 0} responden',
               warna: const Color(0xFFB8860B),
@@ -165,7 +209,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
           ]),
           const SizedBox(height: 12),
           PanelChart(
-              judul: 'Produk Terlaris (30 hari)',
+              judul: 'Produk Terlaris (30 hari)$_sufiksAcuan',
               child: BarHorizontal(data: terlaris)),
           const SizedBox(height: 12),
           PanelChart(

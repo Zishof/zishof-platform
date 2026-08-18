@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
@@ -44,6 +46,12 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
   int _total = 0;
   String _kataKunci = '';
   String? _statusFilter;
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -57,18 +65,40 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
       _error = null;
     });
     try {
-      final hasil =
-          await MasterOffline.daftarDenganCache('pencairan_diskon_list', {
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu('pencairan_diskon_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         if (_statusFilter != null) 'status': _statusFilter,
         'page': _halaman,
         'page_size': _pageSize,
-      }, 'master:pencairan_diskon');
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = hasil['offline'] == true
-            ? _data.length
-            : (hasil['total'] as num?)?.toInt() ?? 0;
+      }, 'master:pencairan_diskon', onData: (hasil) {
+        if (!mounted) return;
+        final data =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _data = data;
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -114,21 +144,19 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'pencairan_diskon_hapus',
-        {'id': data['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'pencairan_diskon_hapus',
+        body: {'id': data['id']},
         kunci: 'pencairan_diskon:${data['id']}',
         cacheKey: 'master:pencairan_diskon',
         rowLokal: {'id': data['id']},
         hapusLokal: true,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -216,6 +244,12 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                         ],
                       ),
                       const SizedBox(height: 12),
+                      BannerPerubahanServer(
+                        key: ValueKey('perubahan:$_versiPerubahan'),
+                        baru: _idBaru.length,
+                        berubah: _idBerubah.length,
+                        dihapus: _jumlahHapus,
+                      ),
                       AppDataTable(
                         minWidth: 820,
                         emptyText: 'Belum ada data pencairan.',
@@ -237,26 +271,32 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                             cells: [
                               AppTableCell(
                                 flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Row(children: [
-                                      IndikatorBarisSinkron(
-                                          kunci: kunciBarisMaster(
-                                              'pencairan_diskon', p)),
-                                      Flexible(
-                                          child: Text('${p['kodePencairan']}',
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 12.5))),
-                                    ]),
-                                    Text('${p['waktuPencairan'] ?? '-'}',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textSecondaryOf(
-                                                context))),
-                                  ],
+                                child: KilauBaris(
+                                  kunci: '${p['id'] ?? p['_kunci'] ?? ''}',
+                                  idBaru: _idBaru,
+                                  idBerubah: _idBerubah,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(children: [
+                                        IndikatorBarisSinkron(
+                                            kunci: kunciBarisMaster(
+                                                'pencairan_diskon', p)),
+                                        Flexible(
+                                            child: Text('${p['kodePencairan']}',
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 12.5))),
+                                      ]),
+                                      Text('${p['waktuPencairan'] ?? '-'}',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondaryOf(
+                                                  context))),
+                                    ],
+                                  ),
                                 ),
                               ),
                               AppTableCell.text(
@@ -524,20 +564,18 @@ class _FormPencairanState extends State<_FormPencairan> {
         if (Sesi.instance.isAdmin)
           'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'pencairan_diskon_simpan',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'pencairan_diskon_simpan',
+        body: body,
         kunci: _ubah
             ? 'pencairan_diskon:${widget.data!['id']}'
             : 'pencairan_diskon:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:pencairan_diskon',
         rowLokal: body,
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

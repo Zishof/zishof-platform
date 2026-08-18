@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
-import '../services/master_offline.dart';
 import '../parse_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 final _formatAngkaKedaluwarsa = NumberFormat.decimalPattern('id_ID');
@@ -228,22 +229,27 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
                       }
                       setDialogState(() => menyimpan = true);
                       try {
-                        await MasterOffline.simpanAtauAntre('produk_batch_simpan', {
-                          if (Sesi.instance.tokoId != null)
-                            'toko_id': Sesi.instance.tokoId,
-                          if (row?['batchId'] != null)
-                            'batch_id': row!['batchId'],
-                          'produk_id': produkId,
-                          'nomor_batch': batch.text.trim(),
-                          if (produksi != null)
-                            'tanggal_produksi':
-                                DateFormat('yyyy-MM-dd').format(produksi!),
-                          'tanggal_expired':
-                              DateFormat('yyyy-MM-dd').format(expired!),
-                          'stok_fisik': jumlah,
-                          'status': status,
-                          'keterangan': catatan.text.trim(),
-                        },
+                        // Alur "lokal dulu" ber-indikator animasi
+                        // (prosesSimpanMaster): antre -> coba kirim -> tutup
+                        // dialog (offline pun langsung lanjut).
+                        await prosesSimpanMaster(dialogContext,
+                            aksi: 'produk_batch_simpan',
+                            body: {
+                              if (Sesi.instance.tokoId != null)
+                                'toko_id': Sesi.instance.tokoId,
+                              if (row?['batchId'] != null)
+                                'batch_id': row!['batchId'],
+                              'produk_id': produkId,
+                              'nomor_batch': batch.text.trim(),
+                              if (produksi != null)
+                                'tanggal_produksi':
+                                    DateFormat('yyyy-MM-dd').format(produksi!),
+                              'tanggal_expired':
+                                  DateFormat('yyyy-MM-dd').format(expired!),
+                              'stok_fisik': jumlah,
+                              'status': status,
+                              'keterangan': catatan.text.trim(),
+                            },
                             kunci: row?['batchId'] != null
                                 ? 'produk_batch:${row!['batchId']}'
                                 : 'produk_batch:baru:${DateTime.now().microsecondsSinceEpoch}');
@@ -438,11 +444,27 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
                     ? 'Belum per batch'
                     : '${r['status'] ?? ''}';
                 return AppTableRowData(onTap: () => _kelolaBatch(r), cells: [
-                  AppTableCell.text('${r['nama']}\n${r['kode'] ?? ''}',
-                      flex: 3,
-                      maxLines: 2,
-                      style: const TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  AppTableCell(
+                    flex: 3,
+                    child: Row(children: [
+                      Expanded(
+                        child: Text('${r['nama']}\n${r['kode'] ?? ''}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ),
+                      if (r['batchId'] != null)
+                        IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Riwayat batch ini (AuditTrails)',
+                            icon: const Icon(Icons.history, size: 16),
+                            onPressed: () => tampilkanRiwayatData(context,
+                                entitas: 'produk_batch',
+                                id: r['batchId'],
+                                judul: '${r['nama']}')),
+                    ]),
+                  ),
                   AppTableCell.text('${r['nomorBatch'] ?? '-'}', flex: 2),
                   AppTableCell.text(
                       exp == null ? '-' : _formatTanggalKedaluwarsa.format(exp),

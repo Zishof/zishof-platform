@@ -12,7 +12,6 @@ import '../models.dart';
 import '../product_profile.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
-import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
@@ -21,6 +20,7 @@ import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
+import '../widgets/proses_simpan_master.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -3070,9 +3070,12 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
         'nama': _nama.text.trim(),
         'hp': _hp.text.trim(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'anggota_simpan_cepat',
-        body,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster) -- dialog
+      // proses tampil di atas dialog tambah-member kasir (memang diinginkan).
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'anggota_simpan_cepat',
+        body: body,
         kunci: 'anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:anggota',
         rowLokal: body,
@@ -3081,9 +3084,6 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
         // Belum ada id dari server -- member tersimpan lokal tapi belum bisa
         // dipilih utk transaksi ini; tutup dialog tanpa memilih member.
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
         Navigator.of(context).pop();
         return;
       }

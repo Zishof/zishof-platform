@@ -153,9 +153,20 @@ class KebijakanRetur {
 class Kategori {
   final int id;
   final String nama;
-  Kategori({required this.id, required this.nama});
-  factory Kategori.fromJson(Map<String, dynamic> j) =>
-      Kategori(id: j['id'] as int, nama: (j['nama'] ?? '') as String);
+
+  /// Kebijakan kontak per Tipe Member (null = server lama belum mengirim --
+  /// pemakai jatuh ke default per nama, lihat kebijakan_tipe_member.dart).
+  final bool? wajibHp;
+  final bool? wajibEmail;
+
+  Kategori(
+      {required this.id, required this.nama, this.wajibHp, this.wajibEmail});
+  factory Kategori.fromJson(Map<String, dynamic> j) => Kategori(
+        id: j['id'] as int,
+        nama: (j['nama'] ?? '') as String,
+        wajibHp: j['wajibHp'] is bool ? j['wajibHp'] as bool : null,
+        wajibEmail: j['wajibEmail'] is bool ? j['wajibEmail'] as bool : null,
+      );
 }
 
 class CaraBayar {

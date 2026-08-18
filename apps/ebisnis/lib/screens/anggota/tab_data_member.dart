@@ -5,10 +5,15 @@ import '../../api_client.dart';
 import '../../models.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
+import 'kebijakan_tipe_member.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/progress_sinkron_awal.dart';
+import '../../widgets/proses_simpan_master.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 
 final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
@@ -41,8 +46,16 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
   int _total = 0;
   String _kataKunci = '';
   Map<String, dynamic>? _statistik;
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   static const _pageSize = 15;
+
+  bool _sinkronAwalSudahDicoba = false;
 
   @override
   void initState() {
@@ -61,32 +74,80 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
+    // SINKRON AWAL otomatis ber-progress-bar (permintaan bisnis): cache
+    // offline member masih kosong padahal server punya ribuan baris ->
+    // hidrasi penuh sekali dgn progress terlihat. Hanya dicoba sekali per
+    // buka layar; saat offline dilewati diam-diam (dicoba lagi lain kali).
+    if (!_sinkronAwalSudahDicoba && mounted) {
+      _sinkronAwalSudahDicoba = true;
+      final kosong = (await CoreDb.instance.jumlahAnggotaCache()) == 0;
+      if (kosong && _total > 0 && mounted) {
+        await _sinkronkanCacheOffline();
+      }
+    }
   }
 
   Future<void> _muatDaftar() async {
     try {
-      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
-      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
-      final hasil = await MasterOffline.daftarDenganCache('anggota_list', {
+      // LOKAL PENUH dulu: bila cache hasil sinkron member (anggota_cache,
+      // ribuan baris) sudah terisi, halaman dibangun dari sana -- BUKAN dari
+      // snapshot 15-baris terakhir. Paginasi + pencarian bekerja penuh
+      // offline; hasil server tetap menyusul sbg pembaruan terotoritatif.
+      final jumlahLokal =
+          await CoreDb.instance.jumlahAnggotaCache(kataKunci: _kataKunci);
+      final pakaiCachePenuh = jumlahLokal > 0;
+      if (pakaiCachePenuh && mounted) {
+        final barisLokal = await CoreDb.instance.cariAnggotaCache(_kataKunci,
+            limit: _pageSize, offset: (_halaman - 1) * _pageSize);
+        setStateIfMounted(() {
+          _daftar = barisLokal.map(Anggota.fromCache).toList();
+          _total = jumlahLokal;
+          _idBaru = {};
+          _idBerubah = {};
+          _jumlahHapus = 0;
+          _memuat = false;
+        });
+      }
+      // Lalu server: emisi snapshot dilewati bila cache penuh sudah tampil
+      // (snapshot hanya 1 halaman dan akan menutupi tampilan penuh).
+      await MasterOffline.daftarCacheDulu('anggota_list', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize
-      }, 'master:anggota');
-      final data = ((hasil['data'] as List?) ?? [])
-          .whereType<Map<String, dynamic>>()
-          // Draf create offline belum punya id -- model Anggota mensyaratkan
-          // id int, jadi baris draf dilewati sampai tersinkron ke server.
-          .where((e) => e['id'] is int)
-          .map(Anggota.fromJson)
-          .toList();
-      if (mounted) {
+      }, 'master:anggota', onData: (hasil) {
+        if (!mounted) return;
+        final dariServer = hasil['dariServer'] == true;
+        if (!dariServer && pakaiCachePenuh) return;
+        final data = ((hasil['data'] as List?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            // Draf create offline belum punya id -- model Anggota mensyaratkan
+            // id int, jadi baris draf dilewati sampai tersinkron ke server.
+            .where((e) => e['id'] is int)
+            .map(Anggota.fromJson)
+            .toList();
         setStateIfMounted(() {
           _daftar = data;
-          _total = hasil['offline'] == true
-              ? data.length
-              : (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = dariServer
+              ? (hasil['total'] as num?)?.toInt() ?? data.length
+              : data.length;
+          _idBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(
+                  hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus =
+              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _pesanError = e.toString());
     }
@@ -106,7 +167,11 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
 
   Future<void> _muatTipe() async {
     try {
-      final hasil = await ApiClient.instance.aksi('tipe_anggota_list');
+      // Ber-cache dgn kunci SENDIRI (bukan 'master:tipe_anggota' milik tab
+      // admin -- bentuk responsnya beda) supaya dropdown + kebijakan wajib
+      // HP/email per tipe tetap tersedia saat offline.
+      final hasil = await MasterOffline.daftarDenganCache(
+          'tipe_anggota_list', {}, 'master:tipe_anggota_pilihan');
       final data = ((hasil['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -138,34 +203,44 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
     await _muatDaftar();
   }
 
+  /// Loop unduh inkremental anggota_sync_list -> anggota_cache. [lapor]
+  /// menggerakkan progress bar (total dari anggota_list, mis. 2.697 member).
+  Future<int> _loopSinkronAnggota(
+      void Function(int tersinkron, int? total) lapor) async {
+    var sejakId = 0;
+    var totalTersinkron = 0;
+    while (true) {
+      final hasil = await ApiClient.instance
+          .aksi('anggota_sync_list', {'sejak_id': sejakId, 'page_size': 500});
+      final data = (hasil['data'] as List?) ?? [];
+      if (data.isNotEmpty) {
+        await CoreDb.instance.upsertAnggotaCache(data
+            .map((e) => Anggota.keCacheRow(e as Map<String, dynamic>))
+            .toList());
+        totalTersinkron += data.length;
+      }
+      lapor(totalTersinkron, _total > 0 ? _total : null);
+      sejakId = (hasil['maksId'] as num?)?.toInt() ?? sejakId;
+      if (hasil['adaLagi'] != true) break;
+    }
+    return totalTersinkron;
+  }
+
   Future<void> _sinkronkanCacheOffline() async {
-    if (_sinkronBerjalan) return;
+    if (_sinkronBerjalan || !mounted) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      var sejakId = 0;
-      var totalTersinkron = 0;
-      while (true) {
-        final hasil = await ApiClient.instance
-            .aksi('anggota_sync_list', {'sejak_id': sejakId, 'page_size': 500});
-        final data = (hasil['data'] as List?) ?? [];
-        if (data.isNotEmpty) {
-          await CoreDb.instance.upsertAnggotaCache(data
-              .map((e) => Anggota.keCacheRow(e as Map<String, dynamic>))
-              .toList());
-          totalTersinkron += data.length;
-        }
-        sejakId = (hasil['maksId'] as num?)?.toInt() ?? sejakId;
-        if (hasil['adaLagi'] != true) break;
-      }
-      if (mounted) {
+      // Dialog progress generik (jalankanDenganProgressSinkron) -- sama
+      // dgn yang dipakai modul lain utk hidrasi awal cache.
+      final total = await jalankanDenganProgressSinkron<int>(
+        context,
+        judul: 'Sinkron member ke cache offline',
+        satuan: 'member',
+        tugas: _loopSinkronAnggota,
+      );
+      if (total != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text('$totalTersinkron member tersinkron ke cache offline.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+            content: Text('$total member tersinkron ke cache offline.')));
       }
     } finally {
       if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);
@@ -242,22 +317,19 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
         ],
       ),
     );
-    if (konfirmasi != true) return;
+    if (konfirmasi != true || !mounted) return;
     try {
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'anggota_hapus',
-        {'id': a.id},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'anggota_hapus',
+        body: {'id': a.id},
         kunci: 'anggota:${a.id}',
         cacheKey: 'master:anggota',
         rowLokal: {'id': a.id},
         hapusLokal: true,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(hasil['offline'] == true
-                ? 'Dihapus lokal — akan dikirim otomatis saat online.'
-                : '${hasil['description'] ?? 'Member dihapus.'}')));
-      }
       await _muatSemua();
     } catch (e) {
       if (mounted) {
@@ -349,6 +421,12 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
             ],
           ),
           const SizedBox(height: 12),
+          BannerPerubahanServer(
+            key: ValueKey('perubahan:$_versiPerubahan'),
+            baru: _idBaru.length,
+            berubah: _idBerubah.length,
+            dihapus: _jumlahHapus,
+          ),
           _tabelAnggota(),
         ],
       ),
@@ -367,7 +445,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
         const AppTableColumn('Kontak', flex: 3),
         const AppTableColumn('Status', flex: 2, align: TextAlign.center),
         AppTableColumn('Aksi',
-            width: Sesi.instance.bolehKelola ? 96 : 56,
+            width: Sesi.instance.bolehKelola ? 132 : 92,
             align: TextAlign.center),
       ],
       rows: _daftar.map((a) {
@@ -390,35 +468,40 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
           cells: [
             AppTableCell(
               flex: 3,
-              child: Row(
-                children: [
-                  IndikatorBarisSinkron(kunci: 'anggota:${a.id}'),
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: const Color(0xFF1E3A5F),
-                    child: Text(
-                      a.nama.isNotEmpty ? a.nama[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+              child: KilauBaris(
+                kunci: '${a.id}',
+                idBaru: _idBaru,
+                idBerubah: _idBerubah,
+                child: Row(
+                  children: [
+                    IndikatorBarisSinkron(kunci: 'anggota:${a.id}'),
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: const Color(0xFF1E3A5F),
+                      child: Text(
+                        a.nama.isNotEmpty ? a.nama[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      a.nama,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimaryOf(context),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        a.nama,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimaryOf(context),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             AppTableCell.text(a.kode.isEmpty ? '-' : a.kode, flex: 2),
@@ -457,33 +540,41 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
               ),
             ),
             AppTableCell(
-              width: Sesi.instance.bolehKelola ? 96 : 56,
+              width: Sesi.instance.bolehKelola ? 132 : 92,
               align: TextAlign.center,
-              child: Sesi.instance.bolehKelola
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Ubah member',
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          onPressed: () => _bukaFormAnggota(anggota: a),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Hapus member',
-                          icon: const Icon(Icons.delete_outline,
-                              size: 18, color: AppColors.danger),
-                          onPressed: () => _hapusAnggota(a),
-                        ),
-                      ],
-                    )
-                  : IconButton(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Riwayat data ini (AuditTrails)',
+                    icon: const Icon(Icons.history, size: 18),
+                    onPressed: () => tampilkanRiwayatData(context,
+                        entitas: 'anggota', id: a.id, judul: a.nama),
+                  ),
+                  if (Sesi.instance.bolehKelola) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Ubah member',
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      onPressed: () => _bukaFormAnggota(anggota: a),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Hapus member',
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: AppColors.danger),
+                      onPressed: () => _hapusAnggota(a),
+                    ),
+                  ] else
+                    IconButton(
                       visualDensity: VisualDensity.compact,
                       tooltip: 'Detail member',
                       icon: const Icon(Icons.visibility_outlined, size: 18),
                       onPressed: null,
                     ),
+                ],
+              ),
             ),
           ],
         );
@@ -597,6 +688,23 @@ class _FormAnggotaState extends State<_FormAnggota> {
   bool _menyimpan = false;
   String? _pesanError;
 
+  Kategori? get _tipeTerpilih {
+    for (final k in widget.tipeAnggota) {
+      if (k.id == _tipeId) return k;
+    }
+    return null;
+  }
+
+  /// Kebijakan kontak mengikuti tipe terpilih: nilai eksplisit server bila
+  /// ada, selain itu default per nama tipe. Tanpa tipe = tidak wajib.
+  bool get _wajibHpTipe {
+    final t = _tipeTerpilih;
+    if (t == null) return false;
+    return t.wajibHp ?? defaultWajibHpTipe(t.nama);
+  }
+
+  bool get _wajibEmailTipe => _tipeTerpilih?.wajibEmail ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -670,9 +778,10 @@ class _FormAnggotaState extends State<_FormAnggota> {
         if (_userid.text.trim().isNotEmpty) 'userid': _userid.text.trim(),
         if (_pass.text.trim().isNotEmpty) 'pass': _pass.text.trim(),
       };
-      final hasil = await MasterOffline.simpanAtauAntre(
-        'anggota_simpan',
-        body,
+      await prosesSimpanMaster(
+        context,
+        aksi: 'anggota_simpan',
+        body: body,
         kunci: ubah
             ? 'anggota:${widget.anggota!.id}'
             : 'anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
@@ -681,11 +790,6 @@ class _FormAnggotaState extends State<_FormAnggota> {
         // ke snapshot tampilan daftar.
         rowLokal: Map<String, dynamic>.from(body)..remove('pass'),
       );
-      if (hasil['offline'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
-      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -796,13 +900,21 @@ class _FormAnggotaState extends State<_FormAnggota> {
               AppFormSection(
                 judul: 'Kontak & Status',
                 children: [
+                  // Wajib/tidaknya No. HP & Email mengikuti kebijakan TIPE
+                  // member terpilih (kolom Wajib Memasukkan No. HP/Email di
+                  // tab Tipe Member; default per nama: Pegawai/Dosen/Guru/
+                  // Umum wajib HP, Mahasiswa/Siswa tidak; email bebas semua).
                   AppFormTextField(
-                    label: 'No. HP *',
+                    label: 'No. HP${_wajibHpTipe ? ' *' : ''}',
                     controller: _hp,
                     keyboardType: TextInputType.phone,
                     validator: (v) {
                       final digit = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-                      if (digit.isEmpty) return 'Nomor HP wajib diisi';
+                      if (digit.isEmpty) {
+                        return _wajibHpTipe
+                            ? 'Nomor HP wajib diisi untuk tipe member ini'
+                            : null;
+                      }
                       if (digit.length < 9 || digit.length > 16) {
                         return 'Nomor HP belum valid';
                       }
@@ -815,9 +927,13 @@ class _FormAnggotaState extends State<_FormAnggota> {
                     keyboardType: TextInputType.phone,
                   ),
                   AppFormTextField(
-                    label: 'Email',
+                    label: 'Email${_wajibEmailTipe ? ' *' : ''}',
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
+                    validator: (v) => _wajibEmailTipe &&
+                            (v == null || v.trim().isEmpty)
+                        ? 'Email wajib diisi untuk tipe member ini'
+                        : null,
                   ),
                   AppFormTextField(
                     label: 'Keterangan',

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../services/master_offline.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../widgets/indikator_sinkron_master.dart';
+import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
+import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 /// Grup Produk (harga terpusat lintas toko) -- padanan layar ZK GrupProdukAction.
@@ -25,6 +28,12 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
   bool _memuat = true;
   String? _galat;
   List<Map<String, dynamic>> _daftar = [];
+  // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
+  // banner "pembaruan dari server" (termasuk perubahan kasir lain).
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+  int _versiPerubahan = 0;
 
   @override
   void initState() {
@@ -40,19 +49,43 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
     try {
       // Nama aksi mengikuti kontrak server r77580 (GrupProdukApiHelper):
       // grup_produk_daftar dengan parameter hanya_aktif (default true).
-      // Offline-first: snapshot daftar tersimpan lokal (MasterOffline).
-      final res = await MasterOffline.daftarDenganCache(
-          'grup_produk_daftar', {'hanya_aktif': false}, 'master:grup_produk');
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      if (!sukses) {
-        throw Exception(res['description'] ?? 'Gagal memuat Grup Produk.');
-      }
-      final data = (res['data'] as List? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-      setStateIfMounted(() {
-        _daftar = data;
-        _memuat = false;
+      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
+      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      await MasterOffline.daftarCacheDulu(
+          'grup_produk_daftar', {'hanya_aktif': false}, 'master:grup_produk',
+          // Aksi ini mengembalikan SELURUH grup (tanpa paginasi) -- baris
+          // lokal yang hilang dari respons memang terhapus di server.
+          responsLengkap: true, onData: (res) {
+        if (!mounted) return;
+        final sukses = res['status'] == '00' || res['status'] == 'success';
+        if (!sukses) {
+          setStateIfMounted(() {
+            _galat = '${res['description'] ?? 'Gagal memuat Grup Produk.'}';
+            _memuat = false;
+          });
+          return;
+        }
+        final data = (res['data'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        final dariServer = res['dariServer'] == true;
+        setStateIfMounted(() {
+          _daftar = data;
+          _idBaru = dariServer
+              ? Set<String>.from(res['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _idBerubah = dariServer
+              ? Set<String>.from(res['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_idBaru.isNotEmpty ||
+                  _idBerubah.isNotEmpty ||
+                  _jumlahHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -67,28 +100,21 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
       context: context,
       builder: (_) => _FormGrupDialog(awal: awal),
     );
-    if (hasil == null) return;
+    if (hasil == null || !mounted) return;
     try {
-      final res = await MasterOffline.simpanAtauAntre(
-        'grup_produk_simpan',
-        hasil,
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
+      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'grup_produk_simpan',
+        body: hasil,
         kunci: hasil['id'] != null
             ? 'grup_produk:${hasil['id']}'
             : 'grup_produk:baru:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:grup_produk',
         rowLokal: hasil,
       );
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(res['offline'] == true
-            ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-            : sukses
-                ? (res['description'] ?? 'Grup tersimpan.').toString()
-                : 'Gagal: ${res['description'] ?? res['status']}'),
-        backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
-      ));
-      if (sukses) _muat();
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -114,27 +140,19 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
-      final res = await MasterOffline.simpanAtauAntre(
-        'grup_produk_hapus',
-        {'id': g['id']},
+      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'grup_produk_hapus',
+        body: {'id': g['id']},
         kunci: 'grup_produk:${g['id']}',
         cacheKey: 'master:grup_produk',
         rowLokal: {'id': g['id']},
         hapusLokal: true,
       );
-      final sukses = res['status'] == '00' || res['status'] == 'success';
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(res['offline'] == true
-            ? 'Dihapus lokal — akan dikirim otomatis saat online.'
-            : sukses
-                ? 'Grup dihapus.'
-                : 'Gagal: ${res['description'] ?? res['status']}'),
-        backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
-      ));
-      if (sukses) _muat();
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -187,50 +205,87 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                           'sama di banyak outlet,\nlalu pilih grup itu pada form '
                           'Produk di tiap outlet.',
                           textAlign: TextAlign.center))
-                  : RefreshIndicator(
-                      onRefresh: _muat,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _daftar.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (c, i) {
-                          final g = _daftar[i];
-                          final aktif = g['aktif'] == true;
-                          return Card(
-                            child: ListTile(
-                              title: Row(children: [
-                                IndikatorBarisSinkron(
-                                    kunci:
-                                        kunciBarisMaster('grup_produk', g)),
-                                Expanded(
-                                  child: Text(
-                                      '${(g['kode'] ?? '').toString().isEmpty ? '' : '${g['kode']} - '}${g['nama']}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600)),
-                                ),
-                              ]),
-                              subtitle: Text(
-                                  'HPP ${_harga(g['harga_beli'])}  ·  Jual ${_harga(g['harga_jual'])}\n'
-                                  '${g['jumlah_anggota']} produk anggota'
-                                  '${aktif ? '' : '  ·  NONAKTIF'}'),
-                              isThreeLine: true,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                      tooltip: 'Ubah & terapkan harga',
-                                      onPressed: () => _simpan(g),
-                                      icon: const Icon(Icons.edit_outlined)),
-                                  IconButton(
-                                      tooltip: 'Hapus',
-                                      onPressed: () => _hapus(g),
-                                      icon: const Icon(Icons.delete_outline)),
-                                ],
-                              ),
+                  : Column(
+                      children: [
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          child: BannerPerubahanServer(
+                            key: ValueKey('perubahan:$_versiPerubahan'),
+                            baru: _idBaru.length,
+                            berubah: _idBerubah.length,
+                            dihapus: _jumlahHapus,
+                          ),
+                        ),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: _muat,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: _daftar.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (c, i) {
+                                final g = _daftar[i];
+                                final aktif = g['aktif'] == true;
+                                return Card(
+                                  child: ListTile(
+                                    title: KilauBaris(
+                                      kunci: '${g['id'] ?? g['_kunci'] ?? ''}',
+                                      idBaru: _idBaru,
+                                      idBerubah: _idBerubah,
+                                      child: Row(children: [
+                                        IndikatorBarisSinkron(
+                                            kunci: kunciBarisMaster(
+                                                'grup_produk', g)),
+                                        Expanded(
+                                          child: Text(
+                                              '${(g['kode'] ?? '').toString().isEmpty ? '' : '${g['kode']} - '}${g['nama']}',
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w600)),
+                                        ),
+                                      ]),
+                                    ),
+                                    subtitle: Text(
+                                        'HPP ${_harga(g['harga_beli'])}  ·  Jual ${_harga(g['harga_jual'])}\n'
+                                        '${g['jumlah_anggota']} produk anggota'
+                                        '${aktif ? '' : '  ·  NONAKTIF'}'),
+                                    isThreeLine: true,
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (g['id'] != null)
+                                          IconButton(
+                                              tooltip:
+                                                  'Riwayat data ini (AuditTrails)',
+                                              onPressed: () =>
+                                                  tampilkanRiwayatData(context,
+                                                      entitas: 'grup_produk',
+                                                      id: g['id'],
+                                                      judul:
+                                                          '${g['nama'] ?? ''}'),
+                                              icon:
+                                                  const Icon(Icons.history)),
+                                        IconButton(
+                                            tooltip: 'Ubah & terapkan harga',
+                                            onPressed: () => _simpan(g),
+                                            icon: const Icon(
+                                                Icons.edit_outlined)),
+                                        IconButton(
+                                            tooltip: 'Hapus',
+                                            onPressed: () => _hapus(g),
+                                            icon: const Icon(
+                                                Icons.delete_outline)),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
     );
   }
