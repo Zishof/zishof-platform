@@ -213,7 +213,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
               child: BarHorizontal(data: terlaris)),
           const SizedBox(height: 12),
           PanelChart(
-              judul: 'Komposisi Metode Bayar (30 hari)',
+              judul: 'Komposisi Metode Bayar (30 hari)$_sufiksAcuan',
               child: StackProporsional(data: metodeBayar)),
           const SizedBox(height: 12),
           if (jamSibukPerProduk.isNotEmpty)
@@ -227,8 +227,8 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Jam Sibuk per Produk (30 hari)',
-                            style: TextStyle(
+                        Text('Jam Sibuk per Produk (30 hari)$_sufiksAcuan',
+                            style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 13)),
                         DropdownButton<int>(
                           value: (entriJamSibuk?['produkId'] as num?)?.toInt(),
@@ -342,8 +342,8 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Rekap Produk Terlaris',
-                            style: TextStyle(
+                        Text('Rekap Produk Terlaris$_sufiksAcuan',
+                            style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 13)),
                         DropdownButton<String>(
                           value: _periode,
@@ -388,7 +388,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
             ),
           if (perputaranStok.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text('Perputaran Stok (Turnover)',
+            Text('Perputaran Stok (Turnover)$_sufiksAcuan',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Card(
@@ -443,7 +443,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
           ],
           const SizedBox(height: 12),
           PanelChart(
-            judul: 'Produk Kurang Laku (≤5 terjual/30 hari)',
+            judul: 'Produk Kurang Laku (≤5 terjual/30 hari)$_sufiksAcuan',
             child: BarHorizontal(
               data: kurangLaku,
               warna: AppColors.textSecondaryOf(context),

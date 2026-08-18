@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
@@ -17,15 +18,42 @@ class RingkasanTabPelanggan extends StatefulWidget {
 }
 
 class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
+  static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
   String _periode = 'bulanan';
+  DateTime _tanggalAcuan =
+      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+  bool get _acuanBukanHariIni {
+    final n = DateTime.now();
+    return _tanggalAcuan.year != n.year ||
+        _tanggalAcuan.month != n.month ||
+        _tanggalAcuan.day != n.day;
+  }
+
+  String get _sufiksAcuan => _acuanBukanHariIni
+      ? ' • s.d. ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}'
+      : '';
 
   @override
   void initState() {
     super.initState();
     _muat();
+  }
+
+  Future<void> _pilihTanggalAcuan() async {
+    final v = await showDatePicker(
+      context: context,
+      initialDate: _tanggalAcuan,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih tanggal acuan dashboard',
+    );
+    if (v == null || !mounted) return;
+    setStateIfMounted(() => _tanggalAcuan = DateTime(v.year, v.month, v.day));
+    await _muat();
   }
 
   Future<void> _muat() async {
@@ -35,8 +63,10 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance
-          .aksi('dashboard_pelanggan', {'periode': _periode});
+      final hasil = await ApiClient.instance.aksi('dashboard_pelanggan', {
+        'periode': _periode,
+        'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan),
+      });
       if (!mounted) return;
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
@@ -70,13 +100,27 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Tanggal Acuan',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              OutlinedButton.icon(
+                onPressed: _memuat ? null : _pilihTanggalAcuan,
+                icon: const Icon(Icons.event_available_outlined, size: 18),
+                label: Text(_formatTanggalServer.format(_tanggalAcuan)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           PanelChart(
-              judul: 'Jam Sibuk (30 hari)',
+              judul: 'Jam Sibuk (30 hari)$_sufiksAcuan',
               child:
                   BarVertikal(data: jamSibuk, warna: const Color(0xFFB8860B))),
           const SizedBox(height: 12),
           PanelChart(
-              judul: '10 Pembeli Terloyal (30 hari)',
+              judul: '10 Pembeli Terloyal (30 hari)$_sufiksAcuan',
               child: BarHorizontal(
                   data: terloyal, formatNilai: formatRupiahDasbor.format)),
           const SizedBox(height: 12),
@@ -89,8 +133,8 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Rekap Pelanggan Terloyal',
-                          style: TextStyle(
+                      Text('Rekap Pelanggan Terloyal$_sufiksAcuan',
+                          style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 13)),
                       DropdownButton<String>(
                         value: _periode,
