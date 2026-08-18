@@ -8,6 +8,85 @@ enum StatusPerbandinganTransaksi {
   duplikat,
 }
 
+enum StatusKelayakanSinkronisasi {
+  siapKirim,
+  arsipDariServer,
+  tidakLengkap,
+}
+
+class HasilKelayakanSinkronisasi {
+  const HasilKelayakanSinkronisasi(this.status, this.alasan);
+
+  final StatusKelayakanSinkronisasi status;
+  final String alasan;
+
+  bool get siapDikirim => status == StatusKelayakanSinkronisasi.siapKirim;
+}
+
+/// Memastikan hanya perintah checkout lokal yang lengkap yang dikirim ke
+/// endpoint `bayar`. Arsip hasil salinan server sengaja hanya berfungsi sebagai
+/// cadangan/audit lokal dan tidak boleh diputar kembali menjadi transaksi baru.
+HasilKelayakanSinkronisasi periksaKelayakanPayloadSinkronisasi(
+    Map<String, dynamic> payload) {
+  final asal = '${payload['asal_backup'] ?? ''}'.trim().toUpperCase();
+  if (asal == 'SERVER_TOKO_SAMA' || asal == 'REPLIKASI_OTOMATIS_TOKO_SAMA') {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.arsipDariServer,
+        'Arsip ini berasal dari server dan tidak perlu dikirim kembali.');
+  }
+
+  final kode = '${payload['kodeUnik'] ?? payload['clientTrxId'] ?? ''}'.trim();
+  if (kode.isEmpty) {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.tidakLengkap,
+        'Kode transaksi lokal kosong.');
+  }
+  if (!_idValid(payload['idToko'] ?? payload['tokoId'])) {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.tidakLengkap,
+        'Toko transaksi lokal belum tersedia.');
+  }
+  if ('${payload['kasir'] ?? payload['kasir_user_id'] ?? ''}'.trim().isEmpty) {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.tidakLengkap,
+        'Kasir transaksi lokal belum tersedia.');
+  }
+  if (!_idValid(payload['caraBayar'] ?? payload['caraBayarId'])) {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.tidakLengkap,
+        'Metode pembayaran transaksi lokal belum tersedia.');
+  }
+
+  final transaksi = payload['transaksi'];
+  if (transaksi is! List || transaksi.isEmpty) {
+    return const HasilKelayakanSinkronisasi(
+        StatusKelayakanSinkronisasi.tidakLengkap,
+        'Rincian transaksi lokal kosong.');
+  }
+  for (final item in transaksi) {
+    if (item is! Map || !_idValid(item['id'] ?? item['produkId'])) {
+      return const HasilKelayakanSinkronisasi(
+          StatusKelayakanSinkronisasi.tidakLengkap,
+          'Produk pada rincian transaksi lokal belum lengkap.');
+    }
+    if (_angka(item['jumlah'] ?? item['qty']) <= 0) {
+      return const HasilKelayakanSinkronisasi(
+          StatusKelayakanSinkronisasi.tidakLengkap,
+          'Jumlah produk pada transaksi lokal tidak valid.');
+    }
+  }
+  return const HasilKelayakanSinkronisasi(
+      StatusKelayakanSinkronisasi.siapKirim, 'Payload checkout lokal lengkap.');
+}
+
+bool _idValid(dynamic nilai) {
+  if (nilai is num) return nilai.toInt() > 0;
+  final teks = '${nilai ?? ''}'.trim();
+  if (teks.isEmpty || teks == '-' || teks == '0') return false;
+  final angka = num.tryParse(teks);
+  return angka == null || angka > 0;
+}
+
 class BarisPerbandinganTransaksi {
   const BarisPerbandinganTransaksi({
     required this.kode,

@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
@@ -31,6 +34,10 @@ class PersediaanApotikScreen extends StatefulWidget {
 class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  final GlobalKey<_TabFormulariumState> _formulariumKey =
+      GlobalKey<_TabFormulariumState>();
+  bool _provisionBerjalan = false;
+  String _statusProvision = '';
 
   @override
   void initState() {
@@ -38,10 +45,164 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     _tab = TabController(
         length: 5, vsync: this, initialIndex: widget.tabAwal.clamp(0, 4));
     _tab.addListener(_ubahTab);
+    unawaited(_pulihkanPemantauanProvision());
   }
 
   void _ubahTab() {
     if (!_tab.indexIsChanging && mounted) setState(() {});
+  }
+
+  Future<void> _isiDataContoh() async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Isi data contoh Apotik?'),
+        content: const Text(
+            'Server akan menyiapkan 10.000 obat, 5.000 racikan, batch, stok, '
+            'tenaga medis, dan akun demo secara idempoten. Data lama tidak '
+            'digandakan. Fitur ini hanya dapat berjalan pada toko demo.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal')),
+          FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Mulai di Latar')),
+        ],
+      ),
+    );
+    if (setuju != true) return;
+    setStateIfMounted(() => _provisionBerjalan = true);
+    setStateIfMounted(() => _statusProvision = 'Memulai...');
+    try {
+      final hasil = await ApiClient.instance.aksi('apotik_provision_demo', {
+        'konfirmasi': 'SEED-DEMO-APOTIK',
+        'background': true,
+      });
+      if (!mounted) return;
+      setStateIfMounted(() => _statusProvision = 'Sedang diproses...');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('${hasil['description'] ?? 'Data contoh sedang dibuat.'}')));
+      await _pantauProvisionSampaiSelesai();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memulai data contoh: $e')));
+      setStateIfMounted(() => _provisionBerjalan = false);
+      setStateIfMounted(() => _statusProvision = 'Gagal');
+    }
+  }
+
+  Future<void> _pulihkanPemantauanProvision() async {
+    try {
+      final hasil = await _statusProvisionServer();
+      if (!mounted || hasil['berjalan'] != true) return;
+      setStateIfMounted(() {
+        _provisionBerjalan = true;
+        _statusProvision = _statusTahapProvision(hasil);
+      });
+      await _pantauProvisionSampaiSelesai();
+    } catch (_) {
+      // Status latar bukan blocker saat layar pertama kali dibuka.
+    }
+  }
+
+  Future<Map<String, dynamic>> _statusProvisionServer() {
+    return ApiClient.instance.aksi('apotik_provision_demo', {
+      'konfirmasi': 'SEED-DEMO-APOTIK',
+      'status_only': true,
+    });
+  }
+
+  String _ringkasProvision(dynamic value) {
+    final teks = '$value'.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (teks.isEmpty) return 'Tanpa rincian dari server.';
+    return teks.length > 500 ? '${teks.substring(0, 500)}...' : teks;
+  }
+
+  String _statusTahapProvision(Map<String, dynamic> hasil) {
+    final tahap = '${hasil['tahap'] ?? ''}'.trim();
+    return tahap.isEmpty ? 'Sedang diproses...' : tahap;
+  }
+
+  Future<void> _pantauProvisionSampaiSelesai() async {
+    var gagalStatusBeruntun = 0;
+    while (mounted) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      Map<String, dynamic> hasil;
+      try {
+        hasil = await _statusProvisionServer();
+        gagalStatusBeruntun = 0;
+      } catch (e) {
+        gagalStatusBeruntun++;
+        if (gagalStatusBeruntun < 5) continue;
+        rethrow;
+      }
+      if (hasil['berjalan'] == true) {
+        final tahap = _statusTahapProvision(hasil);
+        if (_statusProvision != tahap) {
+          setStateIfMounted(() => _statusProvision = tahap);
+        }
+        continue;
+      }
+
+      final berhasil = await _provisionBerhasilKompatibel(hasil);
+      setStateIfMounted(() {
+        _provisionBerjalan = false;
+        _statusProvision = berhasil ? 'Selesai' : 'Gagal';
+      });
+      if (!mounted) return;
+      if (berhasil) {
+        _tab.animateTo(0);
+        await _formulariumKey.currentState?.muatUlang();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Data contoh selesai dan daftar obat sudah dimuat ulang.'),
+          backgroundColor: Colors.green,
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Pembuatan data contoh gagal: ${_ringkasProvision(hasil['ringkasan'])}'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 12),
+        ));
+      }
+      return;
+    }
+  }
+
+  /// Server lama belum mengirim field `selesai` dan `berhasil`. Tetap baca
+  /// ringkasan hasil worker dan, sebagai verifikasi terakhir, cek satu item
+  /// formularium. Ini mencegah UI melaporkan gagal padahal commit sudah sukses.
+  Future<bool> _provisionBerhasilKompatibel(Map<String, dynamic> hasil) async {
+    if (hasil.containsKey('selesai') || hasil.containsKey('berhasil')) {
+      return hasil['selesai'] == true && hasil['berhasil'] == true;
+    }
+    final ringkasan = '${hasil['ringkasan'] ?? ''}'.trim();
+    if (ringkasan.toUpperCase().startsWith('GAGAL')) return false;
+    if (ringkasan.startsWith('{')) {
+      try {
+        final parsed = jsonDecode(ringkasan);
+        if (parsed is Map && '${parsed['status']}' == '00') return true;
+      } catch (_) {
+        // Ringkasan bukan JSON; lanjutkan ke pemeriksaan data aktual.
+      }
+    }
+    try {
+      final daftar = await ApiClient.instance.aksi('apotik_item_cari', {
+        'keyword': '',
+        'page_size': 1,
+      });
+      final data = daftar['data'];
+      return data is List && data.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -60,13 +221,36 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
       'apotik_stok_opname',
       'apotik_retur'
     ][_tab.index];
+    final bolehDataContoh = Sesi.instance.bolehDataSample;
     return AppShell(
       menuAktif: MenuEBisnis.persediaanApotik,
       judul: 'Obat & Persediaan',
       subjudul: 'Formularium, batch, PBF, stok opname, dan retur obat',
       scrollable: false,
       actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],
-      aksiHeader: PosHelp.button(context, bantuan),
+      aksiHeader: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (bolehDataContoh)
+            OutlinedButton.icon(
+              onPressed: _provisionBerjalan ? null : _isiDataContoh,
+              icon: _provisionBerjalan
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome_outlined, size: 18),
+              label: Text(_provisionBerjalan
+                  ? (_statusProvision.isEmpty
+                      ? 'Memproses Data Contoh...'
+                      : _statusProvision)
+                  : 'Data Contoh'),
+            ),
+          PosHelp.button(context, bantuan),
+        ],
+      ),
       body: Column(
         children: [
           Material(
@@ -88,12 +272,12 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
           Expanded(
             child: TabBarView(
               controller: _tab,
-              children: const [
-                _TabFormularium(),
-                _TabBatchMonitor(),
-                _TabPenerimaanPbf(),
-                _TabOpname(),
-                _TabRetur(),
+              children: [
+                _TabFormularium(key: _formulariumKey),
+                const _TabBatchMonitor(),
+                const _TabPenerimaanPbf(),
+                const _TabOpname(),
+                const _TabRetur(),
               ],
             ),
           ),
@@ -200,7 +384,7 @@ class _SheetCariItemState extends State<_SheetCariItem> {
 // =============================================================================
 
 class _TabFormularium extends StatefulWidget {
-  const _TabFormularium();
+  const _TabFormularium({super.key});
 
   @override
   State<_TabFormularium> createState() => _TabFormulariumState();
@@ -229,6 +413,8 @@ class _TabFormulariumState extends State<_TabFormularium> {
       setStateIfMounted(() => _memuat = false);
     }
   }
+
+  Future<void> muatUlang() => _muat();
 
   @override
   void initState() {
@@ -288,11 +474,11 @@ class _TabFormulariumState extends State<_TabFormularium> {
     );
     if (simpan != true) return;
     try {
-      await ApiClient.instance.aksi('apotik_item_profil_simpan', {
+      await MasterOffline.simpanAtauAntre('apotik_item_profil_simpan', {
         'item_id': it['id'],
         'golongan_obat': golongan,
         'lasa': lasa,
-      });
+      }, kunci: 'apotik_item:${it['id']}');
       await _muat();
     } catch (e) {
       if (mounted) {

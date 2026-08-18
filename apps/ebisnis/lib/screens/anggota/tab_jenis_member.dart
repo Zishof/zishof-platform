@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -48,17 +50,22 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
 
   Future<void> _muatDaftar() async {
     try {
-      final hasil = await ApiClient.instance.aksi('jenis_anggota_list_admin', {
+      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
+      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
+      final hasil =
+          await MasterOffline.daftarDenganCache('jenis_anggota_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:jenis_anggota');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -119,7 +126,19 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('jenis_anggota_hapus', {'id': jenis['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'jenis_anggota_hapus',
+        {'id': jenis['id']},
+        kunci: 'jenis_anggota:${jenis['id']}',
+        cacheKey: 'master:jenis_anggota',
+        rowLokal: {'id': jenis['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -200,7 +219,13 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
                     ? () => _bukaForm(jenis: j)
                     : null,
                 cells: [
-                  AppTableCell.text('${j['kode'] ?? '-'}', flex: 1),
+                  AppTableCell(
+                    flex: 1,
+                    child: SelTeksDenganSinkron(
+                      kunci: kunciBarisMaster('jenis_anggota', j),
+                      teks: '${j['kode'] ?? '-'}',
+                    ),
+                  ),
                   AppTableCell(
                     flex: 3,
                     child: Column(
@@ -370,7 +395,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('jenis_anggota_simpan', {
+      final body = {
         if (widget.jenis != null) 'id': widget.jenis!['id'],
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -391,7 +416,21 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
         'wajib_belanja_rutin': _wajibBelanjaRutin,
         'daftar_cara_pembayaran_yang_boleh_di_pilih':
             _caraBayarDipilih.join(','),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'jenis_anggota_simpan',
+        body,
+        kunci: widget.jenis != null
+            ? 'jenis_anggota:${widget.jenis!['id']}'
+            : 'jenis_anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:jenis_anggota',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

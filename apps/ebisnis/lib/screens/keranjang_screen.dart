@@ -12,6 +12,7 @@ import '../models.dart';
 import '../product_profile.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
@@ -3065,10 +3066,27 @@ class _DialogTambahMemberCepatState extends State<_DialogTambahMemberCepat> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _menyimpan = true);
     try {
-      final hasil = await ApiClient.instance.aksi('anggota_simpan_cepat', {
+      final body = {
         'nama': _nama.text.trim(),
         'hp': _hp.text.trim(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'anggota_simpan_cepat',
+        body,
+        kunci: 'anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:anggota',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true) {
+        // Belum ada id dari server -- member tersimpan lokal tapi belum bisa
+        // dipilih utk transaksi ini; tutup dialog tanpa memilih member.
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+        Navigator.of(context).pop();
+        return;
+      }
       final raw = hasil['member'];
       if (raw is! Map) {
         throw const FormatException('Data member tidak tersedia pada balasan.');

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import '../services/master_offline.dart';
+import '../widgets/indikator_baris_sinkron.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/safe_state.dart';
 
 /// Kelola Toko/Outlet (admin-only) -- padanan layar ZK TokoAction & JSP toko.jsp.
@@ -39,7 +42,8 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
 
   Future<List<Map<String, dynamic>>> _pastikanKatalog() async {
     if (_katalogUnit.isNotEmpty) return _katalogUnit;
-    final res = await ApiClient.instance.aksi('unit_usaha_katalog');
+    final res = await MasterOffline.daftarDenganCache(
+        'unit_usaha_katalog', {}, 'master:unit_usaha_katalog');
     if (res['status'] != '00' && res['status'] != 'success') {
       throw Exception(res['description'] ?? 'Gagal memuat katalog unit usaha.');
     }
@@ -55,8 +59,8 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       _galat = null;
     });
     try {
-      final res = await ApiClient.instance
-          .aksi('toko_kelola_list', {'cari': _cari.text.trim()});
+      final res = await MasterOffline.daftarDenganCache(
+          'toko_kelola_list', {'cari': _cari.text.trim()}, 'master:toko_kelola');
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!sukses) {
         throw Exception(res['description'] ?? 'Gagal memuat daftar toko.');
@@ -98,12 +102,22 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
     );
     if (hasil == null) return;
     try {
-      final res = await ApiClient.instance.aksi('toko_kelola_simpan', hasil);
+      final res = await MasterOffline.simpanAtauAntre(
+        'toko_kelola_simpan',
+        hasil,
+        kunci: hasil['id'] != null
+            ? 'toko:${hasil['id']}'
+            : 'toko:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:toko_kelola',
+        rowLokal: hasil,
+      );
       final sukses = res['status'] == '00' || res['status'] == 'success';
       _snack(
-          sukses
-              ? 'Toko tersimpan.'
-              : 'Gagal: ${res['description'] ?? res['status']}',
+          res['offline'] == true
+              ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+              : sukses
+                  ? 'Toko tersimpan.'
+                  : 'Gagal: ${res['description'] ?? res['status']}',
           galat: !sukses);
       if (sukses) _muat();
     } catch (e) {
@@ -130,13 +144,21 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
     );
     if (yakin != true) return;
     try {
-      final res =
-          await ApiClient.instance.aksi('toko_kelola_hapus', {'id': t['id']});
+      final res = await MasterOffline.simpanAtauAntre(
+        'toko_kelola_hapus',
+        {'id': t['id']},
+        kunci: 'toko:${t['id']}',
+        cacheKey: 'master:toko_kelola',
+        rowLokal: {'id': t['id']},
+        hapusLokal: true,
+      );
       final sukses = res['status'] == '00' || res['status'] == 'success';
       _snack(
-          sukses
-              ? 'Toko dihapus.'
-              : 'Gagal: ${res['description'] ?? res['status']}',
+          res['offline'] == true
+              ? 'Dihapus lokal — akan dikirim otomatis saat online.'
+              : sukses
+                  ? 'Toko dihapus.'
+                  : 'Gagal: ${res['description'] ?? res['status']}',
           galat: !sukses);
       if (sukses) _muat();
     } catch (e) {
@@ -201,6 +223,7 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       appBar: AppBar(
         title: const Text('Kelola Toko / Outlet'),
         actions: [
+          const IndikatorSinkronMaster(),
           IconButton(
               onPressed: _muat,
               tooltip: 'Muat ulang',
@@ -277,9 +300,14 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
         .toList();
     return Card(
       child: ListTile(
-        title: Text(
-            '${(t['kode'] ?? '').toString().isEmpty ? '' : '${t['kode']} - '}${t['nama']}',
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Row(children: [
+          IndikatorBarisSinkron(kunci: kunciBarisMaster('toko', t)),
+          Expanded(
+            child: Text(
+                '${(t['kode'] ?? '').toString().isEmpty ? '' : '${t['kode']} - '}${t['nama']}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ]),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

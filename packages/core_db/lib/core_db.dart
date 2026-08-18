@@ -116,7 +116,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 9,
+        version: 10,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -392,6 +392,15 @@ class CoreDb {
         // Index kemungkinan sudah dibuat pada percobaan upgrade sebelumnya.
       }
     }
+    if (versiLama < 10) {
+      // Offline-first CRUD MASTER (anggota/produk/jenis produk/dst) -- lihat
+      // komentar _ddlOutboxMaster utk alasan tabel terpisah & semantik kunci.
+      try {
+        await db.execute(_ddlOutboxMaster);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
+      }
+    }
   }
 
   static const _ddlOutboxIs = '''
@@ -399,6 +408,25 @@ class CoreDb {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         aksi TEXT NOT NULL,
         kode_unik TEXT UNIQUE,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        pesan_error TEXT,
+        percobaan INTEGER DEFAULT 0,
+        dibuat_pada TEXT NOT NULL
+      )
+    ''';
+
+  /// Outbox CRUD MASTER offline-first (anggota/produk/jenis produk/dst).
+  /// TERPISAH dari `outbox_is` (khusus perintah idempoten ber-kode_unik) dan
+  /// `transaksi_pending` (flush-nya mengirim semua baris ke aksi 'bayar').
+  /// `kunci` = identitas baris master ("produk:123", "jenis_produk:baru:xyz")
+  /// dipakai COALESCE: edit berulang pada baris yang sama saat offline hanya
+  /// menyisakan payload TERAKHIR, sehingga replay tidak mengirim draf usang.
+  static const _ddlOutboxMaster = '''
+      CREATE TABLE outbox_master (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        aksi TEXT NOT NULL,
+        kunci TEXT,
         payload_json TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'PENDING',
         pesan_error TEXT,
@@ -512,6 +540,7 @@ class CoreDb {
 
     await db.execute(_ddlOutboxIs);
     await db.execute(_ddlTokoAktifAkun);
+    await db.execute(_ddlOutboxMaster);
   }
 
   /// Pilihan toko terakhir per kombinasi server+akun. Penyimpanan ini sengaja
@@ -601,6 +630,75 @@ class CoreDb {
     return (hasil.first['n'] as int?) ?? 0;
   }
 
+  // ============================ OUTBOX MASTER ============================
+  // CRUD master offline-first (lihat _ddlOutboxMaster). Dipakai
+  // services/master_offline.dart di app; helper di sini sengaja bodoh
+  // (tanpa kebijakan retry) supaya kebijakan tetap satu tempat di service.
+
+  /// Antre satu mutasi master. Bila [kunci] terisi, baris PENDING lama dengan
+  /// kunci sama DIGANTI (coalesce) -- edit terakhir yang menang saat replay.
+  Future<void> outboxMasterTambah(String aksi, String? kunci,
+      String payloadJson) async {
+    final database = await db;
+    await database.transaction((txn) async {
+      if (kunci != null && kunci.isNotEmpty) {
+        await txn.delete('outbox_master',
+            where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
+      }
+      await txn.insert('outbox_master', {
+        'aksi': aksi,
+        'kunci': kunci,
+        'payload_json': payloadJson,
+        'status': 'PENDING',
+        'dibuat_pada': DateTime.now().toIso8601String(),
+      });
+    });
+  }
+
+  Future<List<Map<String, Object?>>> outboxMasterPending() async {
+    final database = await db;
+    return database.query('outbox_master',
+        where: "status = 'PENDING'", orderBy: 'id ASC');
+  }
+
+  Future<void> outboxMasterTandaiSukses(int id) async {
+    final database = await db;
+    await database.update(
+        'outbox_master', {'status': 'SYNCED', 'pesan_error': null},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Penolakan bisnis server (bukan offline): GAGAL permanen + pesan --
+  /// tidak ikut retry berikutnya, tetap terlihat utk ditindak manual.
+  Future<void> outboxMasterTandaiGagal(int id, String pesan) async {
+    final database = await db;
+    await database.update(
+        'outbox_master', {'status': 'GAGAL', 'pesan_error': pesan},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> outboxMasterCatatPercobaan(int id, String pesan) async {
+    final database = await db;
+    await database.rawUpdate(
+        'UPDATE outbox_master SET percobaan = COALESCE(percobaan,0) + 1,'
+        ' pesan_error = ? WHERE id = ?',
+        [pesan, id]);
+  }
+
+  Future<int> jumlahOutboxMasterPending() async {
+    final database = await db;
+    final hasil = await database.rawQuery(
+        "SELECT COUNT(*) AS n FROM outbox_master WHERE status = 'PENDING'");
+    return (hasil.first['n'] as int?) ?? 0;
+  }
+
+  /// Baris GAGAL permanen terakhir -- bahan tampilan "perlu perhatian" di UI.
+  Future<List<Map<String, Object?>>> outboxMasterGagal({int batas = 20}) async {
+    final database = await db;
+    return database.query('outbox_master',
+        where: "status = 'GAGAL'", orderBy: 'id DESC', limit: batas);
+  }
+
   // ============================== PRODUK CACHE ==============================
 
   Future<void> replaceProdukCache(List<Map<String, Object?>> baris) async {
@@ -616,6 +714,19 @@ class CoreDb {
     });
   }
 
+  /// Menambahkan/memperbarui sebagian katalog tanpa menghapus halaman lain.
+  /// Jalur ini dipakai POS yang memuat katalog per halaman/kata kunci.
+  Future<void> upsertProdukCache(List<Map<String, Object?>> baris) async {
+    if (baris.isEmpty) return;
+    final database = await db;
+    final batch = database.batch();
+    for (final b in baris) {
+      batch.insert('produk_cache', b,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
   /// Dipakai semua konteks JUAL/penjualan (Kasir, Pesanan, picker pencarian
   /// produk) -- gap-closure "Jenis Item" mengecualikan baris `jenis_item IN
   /// ('BAHAN','EKSTRA')` (bahan baku hanya via resep, ekstra hanya via picker
@@ -626,13 +737,32 @@ class CoreDb {
   /// bukan `(jenis_item IS NULL OR jenis_item NOT IN (...))`. Baris EKSTRA
   /// tetap ADA di tabel ini (lihat [produkCacheResolveByIds]) -- yang
   /// di-exclude cuma query ini, bukan sinkronisasinya.
-  Future<List<Map<String, Object?>>> produkCache() async {
+  Future<List<Map<String, Object?>>> produkCache({
+    String keyword = '',
+    int? limit,
+    int offset = 0,
+  }) async {
     final database = await db;
+    final kata = keyword.trim().toLowerCase();
+    var where =
+        "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))";
+    final whereArgs = <Object?>[];
+    if (kata.isNotEmpty) {
+      where +=
+          " AND (LOWER(COALESCE(nama,'')) LIKE ? OR LOWER(COALESCE(kode,'')) LIKE ? OR LOWER(COALESCE(barcode,'')) LIKE ?)";
+      final pola = '%$kata%';
+      whereArgs.addAll([pola, pola, pola]);
+    }
     return database.query(
       'produk_cache',
-      where:
-          "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))",
-      orderBy: 'nama ASC',
+      where: where,
+      whereArgs: whereArgs,
+      // Pembukaan POS tanpa kata kunci memakai primary key sehingga SQLite
+      // dapat berhenti segera sesudah [limit] baris, tanpa menyortir seluruh
+      // cache katalog yang dapat berisi puluhan ribu produk.
+      orderBy: kata.isEmpty ? 'id ASC' : 'nama ASC',
+      limit: limit,
+      offset: offset,
     );
   }
 

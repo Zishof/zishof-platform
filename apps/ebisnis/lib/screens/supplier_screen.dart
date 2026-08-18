@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../api_client.dart';
+import '../services/master_offline.dart';
+import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -41,17 +43,20 @@ class _SupplierScreenState extends State<SupplierScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('penyedia_list_admin', {
+      final hasil =
+          await MasterOffline.daftarDenganCache('penyedia_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:penyedia');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -103,7 +108,19 @@ class _SupplierScreenState extends State<SupplierScreen> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('penyedia_hapus', {'id': supplier['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'penyedia_hapus',
+        {'id': supplier['id']},
+        kunci: 'penyedia:${supplier['id']}',
+        cacheKey: 'master:penyedia',
+        rowLokal: {'id': supplier['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -123,6 +140,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
       subjudul: 'Kelola data pemasok/vendor untuk Kulakan',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)
       ],
       aksiHeader:
@@ -196,7 +214,13 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                 ? () => _bukaForm(supplier: s)
                                 : null,
                             cells: [
-                              AppTableCell.text('${s['kode'] ?? '-'}', flex: 1),
+                              AppTableCell(
+                                flex: 1,
+                                child: SelTeksDenganSinkron(
+                                  kunci: kunciBarisMaster('penyedia', s),
+                                  teks: '${s['kode'] ?? '-'}',
+                                ),
+                              ),
                               AppTableCell.text('${s['nama'] ?? ''}', flex: 2),
                               AppTableCell.text('${s['kontak'] ?? '-'}',
                                   flex: 2),
@@ -314,7 +338,7 @@ class _FormSupplierState extends State<_FormSupplier> {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('penyedia_simpan', {
+      final body = {
         if (widget.supplier != null) 'id': widget.supplier!['id'],
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -325,7 +349,21 @@ class _FormSupplierState extends State<_FormSupplier> {
         'alamat': _alamat.text.trim(),
         'kode_pos': _kodePos.text.trim(),
         'keterangan': _keterangan.text.trim(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'penyedia_simpan',
+        body,
+        kunci: widget.supplier != null
+            ? 'penyedia:${widget.supplier!['id']}'
+            : 'penyedia:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:penyedia',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

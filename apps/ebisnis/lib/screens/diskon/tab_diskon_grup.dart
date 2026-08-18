@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -43,14 +45,16 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
       _error = null;
     });
     try {
-      final r = await ApiClient.instance.aksi('diskon_grup_list', {
+      final r = await MasterOffline.daftarDenganCache('diskon_grup_list', {
         'page': _page,
         'page_size': _pageSize,
         if (_keyword.isNotEmpty) 'keyword': _keyword,
-      });
+      }, 'master:diskon_grup');
       setStateIfMounted(() {
         _data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (r['total'] as num?)?.toInt() ?? 0;
+        _total = r['offline'] == true
+            ? _data.length
+            : (r['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -154,8 +158,14 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
                       cells: [
                         DataCell(SizedBox(
                             width: 240,
-                            child: Text('${e['namaGrup']}',
-                                overflow: TextOverflow.ellipsis))),
+                            child: Row(children: [
+                              IndikatorBarisSinkron(
+                                  kunci:
+                                      kunciBarisMaster('diskon_grup', e)),
+                              Expanded(
+                                  child: Text('${e['namaGrup']}',
+                                      overflow: TextOverflow.ellipsis)),
+                            ]))),
                         DataCell(Text(periode)),
                         DataCell(Text('${e['jumlahProduk'] ?? 0}')),
                         DataCell(Text(nilai,
@@ -466,7 +476,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('diskon_grup_simpan', {
+      final body = {
         if (widget.item != null) 'id': widget.item!['id'],
         'nama_grup': _nama.text.trim(),
         'keterangan': _ket.text.trim(),
@@ -488,7 +498,21 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
         'tipe_member_ids': _tipeTerpilih.toList(),
         'aktif': _aktif,
         'produk': _produk.map((p) => {'id': p['id']}).toList(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'diskon_grup_simpan',
+        body,
+        kunci: widget.item != null
+            ? 'diskon_grup:${widget.item!['id']}'
+            : 'diskon_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:diskon_grup',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

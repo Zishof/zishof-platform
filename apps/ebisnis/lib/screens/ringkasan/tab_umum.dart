@@ -263,6 +263,39 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     };
   }
 
+  bool get _acuanBukanHariIni {
+    final n = DateTime.now();
+    return _tanggalAcuan.year != n.year ||
+        _tanggalAcuan.month != n.month ||
+        _tanggalAcuan.day != n.day;
+  }
+
+  /// Sufiks tanggal utk kartu ber-jendela "sampai acuan" -- tampil HANYA saat
+  /// tanggal acuan bukan hari ini (permintaan bisnis: setiap kartu mencantumkan
+  /// tanggalnya ketika tidak sama dengan tanggal sekarang).
+  String get _sufiksAcuan => _acuanBukanHariIni
+      ? ' • s.d. ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}'
+      : '';
+
+  /// Sufiks utk kartu detail (per pembayaran/kasir/jenis produk/toko): rentang
+  /// eksplisit bila dipilih; selain itu jendela default server = 30 hari
+  /// sampai tanggal acuan (hanya ditampilkan saat acuan bukan hari ini).
+  String get _sufiksDetail {
+    if (_mulai != null || _sampai != null) {
+      final a = _mulai ?? _sampai!;
+      final b = _sampai ?? _mulai!;
+      final awal = a.isAfter(b) ? b : a;
+      final akhir = a.isAfter(b) ? a : b;
+      final f = DateFormat('dd-MM-yyyy');
+      return awal == akhir
+          ? ' • ${f.format(awal)}'
+          : ' • ${f.format(awal)}–${f.format(akhir)}';
+    }
+    return _acuanBukanHariIni
+        ? ' • 30 hari s.d. ${DateFormat('dd-MM-yyyy').format(_tanggalAcuan)}'
+        : '';
+  }
+
   Map<String, dynamic> _payloadDashboardUmum() {
     return {
       'periodeTren': _periodeTren,
@@ -1347,6 +1380,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     required String judul,
     required List<Map<String, dynamic>> data,
     required IconData ikon,
+    String sufiks = '',
   }) {
     if (data.isEmpty) return const SizedBox.shrink();
     final warna = [
@@ -1385,7 +1419,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     nilai: formatRupiahDasbor.format(data[i]['nilai'] ?? 0),
                     label: '${data[i]['label'] ?? 'Tidak diketahui'}'
                         '${data[i]['trx'] != null ? ' • ${data[i]['trx']} trx' : ''}'
-                        '${data[i]['qty'] != null ? ' • ${(data[i]['qty'] as num).toStringAsFixed(0)} item' : ''}',
+                        '${data[i]['qty'] != null ? ' • ${(data[i]['qty'] as num).toStringAsFixed(0)} item' : ''}'
+                        '$sufiks',
                     tooltip: 'Klik untuk melihat ringkasan $judul',
                     onTap: () => _lihatRingkasanKartu(judul, data[i]),
                   ),
@@ -1505,7 +1540,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     icon: Icons.calendar_view_week_outlined,
                     warna: AppColors.info,
                     nilai: formatRupiahDasbor.format(k('mingguIni')['rp'] ?? 0),
-                    label: 'Omzet Minggu Acuan',
+                    label: 'Omzet Minggu Acuan$_sufiksAcuan',
                     tooltip:
                         'Klik untuk menampilkan transaksi dari awal minggu sampai tanggal acuan',
                     onTap: () {
@@ -1517,7 +1552,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     icon: Icons.calendar_month_outlined,
                     warna: AppColors.warning,
                     nilai: formatRupiahDasbor.format(k('bulanIni')['rp'] ?? 0),
-                    label: 'Omzet Bulan Acuan',
+                    label: 'Omzet Bulan Acuan$_sufiksAcuan',
                     tooltip:
                         'Klik untuk menampilkan transaksi dari awal bulan sampai tanggal acuan',
                     onTap: () {
@@ -1529,7 +1564,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                     warna: AppColors.teal,
                     nilai:
                         formatRupiahDasbor.format(k('semesterIni')['rp'] ?? 0),
-                    label: 'Omzet 6 Bulan Acuan',
+                    label: 'Omzet 6 Bulan Acuan$_sufiksAcuan',
                     tooltip:
                         'Klik untuk menampilkan transaksi enam bulan sampai tanggal acuan',
                     onTap: () {
@@ -1588,7 +1623,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
                       nilai: formatRupiahDasbor
                           .format(metodePembayaran[i]['nilai'] ?? 0),
                       label: '${metodePembayaran[i]['label'] ?? 'Lainnya'}'
-                          '${_metodeBayar == '${metodePembayaran[i]['label'] ?? 'Lainnya'}' ? ' • Aktif' : ''}',
+                          '${_metodeBayar == '${metodePembayaran[i]['label'] ?? 'Lainnya'}' ? ' • Aktif' : ''}'
+                          '$_sufiksDetail',
                       tooltip:
                           'Klik untuk menyaring transaksi dengan jenis pembayaran ${metodePembayaran[i]['label'] ?? 'Lainnya'}',
                       onTap: () => _pilihMetodeBayar(
@@ -1663,19 +1699,23 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             _kartuAnalitik(
                 judul: 'Omzet per Kasir',
                 data: omzetKasir,
-                ikon: Icons.badge_outlined),
+                ikon: Icons.badge_outlined,
+                sufiks: _sufiksDetail),
             _kartuAnalitik(
                 judul: 'Omzet per Jenis Produk',
                 data: omzetKategori,
-                ikon: Icons.category_outlined),
+                ikon: Icons.category_outlined,
+                sufiks: _sufiksDetail),
             _kartuAnalitik(
                 judul: 'Produk Terlaris',
                 data: produkTerlaris,
-                ikon: Icons.local_fire_department_outlined),
+                ikon: Icons.local_fire_department_outlined,
+                sufiks: _sufiksDetail),
             _kartuAnalitik(
                 judul: 'Omzet per Toko',
                 data: omzetToko,
-                ikon: Icons.storefront_outlined),
+                ikon: Icons.storefront_outlined,
+                sufiks: _sufiksDetail),
           ],
           const SizedBox(height: 16),
           Align(

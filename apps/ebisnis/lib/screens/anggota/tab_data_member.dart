@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../models.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -63,18 +65,26 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
 
   Future<void> _muatDaftar() async {
     try {
-      final hasil = await ApiClient.instance.aksi('anggota_list', {
+      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
+      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
+      final hasil = await MasterOffline.daftarDenganCache('anggota_list', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize
-      });
+      }, 'master:anggota');
       final data = ((hasil['data'] as List?) ?? [])
-          .map((e) => Anggota.fromJson(e as Map<String, dynamic>))
+          .whereType<Map<String, dynamic>>()
+          // Draf create offline belum punya id -- model Anggota mensyaratkan
+          // id int, jadi baris draf dilewati sampai tersinkron ke server.
+          .where((e) => e['id'] is int)
+          .map(Anggota.fromJson)
           .toList();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -234,11 +244,19 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
     );
     if (konfirmasi != true) return;
     try {
-      final hasil =
-          await ApiClient.instance.aksi('anggota_hapus', {'id': a.id});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'anggota_hapus',
+        {'id': a.id},
+        kunci: 'anggota:${a.id}',
+        cacheKey: 'master:anggota',
+        rowLokal: {'id': a.id},
+        hapusLokal: true,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${hasil['description'] ?? 'Member dihapus.'}')));
+            content: Text(hasil['offline'] == true
+                ? 'Dihapus lokal — akan dikirim otomatis saat online.'
+                : '${hasil['description'] ?? 'Member dihapus.'}')));
       }
       await _muatSemua();
     } catch (e) {
@@ -374,6 +392,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
               flex: 3,
               child: Row(
                 children: [
+                  IndikatorBarisSinkron(kunci: 'anggota:${a.id}'),
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: const Color(0xFF1E3A5F),
@@ -633,7 +652,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
     });
     try {
       final ubah = widget.anggota != null;
-      await ApiClient.instance.aksi('anggota_simpan', {
+      final body = {
         if (ubah) 'id': widget.anggota!.id,
         'nama': _nama.text.trim(),
         if (ubah) 'kode': _kode.text.trim(),
@@ -650,7 +669,23 @@ class _FormAnggotaState extends State<_FormAnggota> {
             : DateFormat('yyyy-MM-dd').format(_tanggalKadaluarsa!),
         if (_userid.text.trim().isNotEmpty) 'userid': _userid.text.trim(),
         if (_pass.text.trim().isNotEmpty) 'pass': _pass.text.trim(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'anggota_simpan',
+        body,
+        kunci: ubah
+            ? 'anggota:${widget.anggota!.id}'
+            : 'anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:anggota',
+        // Kata sandi cukup tersimpan di outbox utk replay -- jangan ikut
+        // ke snapshot tampilan daftar.
+        rowLokal: Map<String, dynamic>.from(body)..remove('pass'),
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

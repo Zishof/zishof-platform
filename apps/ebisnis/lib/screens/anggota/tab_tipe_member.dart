@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -43,17 +44,22 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('tipe_anggota_list_admin', {
+      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
+      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
+      final hasil =
+          await MasterOffline.daftarDenganCache('tipe_anggota_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:tipe_anggota');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -105,7 +111,19 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('tipe_anggota_hapus', {'id': tipe['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'tipe_anggota_hapus',
+        {'id': tipe['id']},
+        kunci: 'tipe_anggota:${tipe['id']}',
+        cacheKey: 'master:tipe_anggota',
+        rowLokal: {'id': tipe['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -187,7 +205,13 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> {
                 onTap:
                     Sesi.instance.bolehKelola ? () => _bukaForm(tipe: t) : null,
                 cells: [
-                  AppTableCell.text('${t['kode'] ?? '-'}', flex: 1),
+                  AppTableCell(
+                    flex: 1,
+                    child: SelTeksDenganSinkron(
+                      kunci: kunciBarisMaster('tipe_anggota', t),
+                      teks: '${t['kode'] ?? '-'}',
+                    ),
+                  ),
                   AppTableCell.text('${t['nama'] ?? ''}', flex: 2),
                   AppTableCell.text('${t['keterangan'] ?? '-'}',
                       flex: 3, maxLines: 2),
@@ -304,7 +328,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('tipe_anggota_simpan', {
+      final body = {
         if (widget.tipe != null) 'id': widget.tipe!['id'],
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -313,7 +337,21 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
         'maksimalBolehUtang': double.tryParse(
                 _maksimalBolehUtang.text.trim().replaceAll(',', '.')) ??
             0,
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'tipe_anggota_simpan',
+        body,
+        kunci: widget.tipe != null
+            ? 'tipe_anggota:${widget.tipe!['id']}'
+            : 'tipe_anggota:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:tipe_anggota',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

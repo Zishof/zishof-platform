@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -114,11 +115,11 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
     );
     if (yakin != true) return;
     try {
-      await ApiClient.instance.aksi('si_sales_deactivate', {
+      await MasterOffline.simpanAtauAntre('si_sales_deactivate', {
         'id': data['id'],
         'aktif': aktifkan,
         if (!aktifkan) 'alasan': alasanCtrl.text.trim(),
-      });
+      }, kunci: 'si_sales:${data['id']}');
       if (mounted) await _muat();
     } catch (e) {
       if (mounted) {
@@ -417,8 +418,8 @@ class _FormSalesState extends State<_FormSales> {
       _error = null;
     });
     try {
-      await ApiClient.instance
-          .aksi(_ubah ? 'si_sales_update' : 'si_sales_create', {
+      final hasil = await MasterOffline.simpanAtauAntre(
+          _ubah ? 'si_sales_update' : 'si_sales_create', {
         if (_ubah) 'id': widget.data!['id'],
         if (!_ubah) 'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -431,7 +432,15 @@ class _FormSalesState extends State<_FormSales> {
         'limit_penagihan':
             double.tryParse(_limit.text.replaceAll(',', '.')) ?? 0,
         'tbmuser_id': _akun.text.trim(),
-      });
+      },
+          kunci: _ubah
+              ? 'si_sales:${widget.data!['id']}'
+              : 'si_sales:baru:${DateTime.now().microsecondsSinceEpoch}');
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

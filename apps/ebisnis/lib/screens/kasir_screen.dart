@@ -102,6 +102,10 @@ class _KasirScreenState extends State<KasirScreen> {
   Map<int, double> _diskonKatalog = {};
   Map<int, double> _cashbackKatalog = {};
   Timer? _debounceHargaCoret;
+  Timer? _debounceCariProduk;
+
+  static const _batasProdukAwal = 80;
+  static const _batasHasilPencarian = 100;
 
   /// Batas jumlah produk yg dievaluasi sekali panggil -- grid Kasir TIDAK
   /// paginasi sungguhan (GridView.builder lazy-build semua `_produkTersaring`),
@@ -198,6 +202,7 @@ class _KasirScreenState extends State<KasirScreen> {
   @override
   void dispose() {
     _debounceHargaCoret?.cancel();
+    _debounceCariProduk?.cancel();
     _timerSinkronSesiKas?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
@@ -210,11 +215,10 @@ class _KasirScreenState extends State<KasirScreen> {
       _pesanError = null;
     });
 
-    // 1) Baca cache lokal DULU (offline-first) -- kasir bisa langsung mulai
-    //    kerja walau server sedang lambat/offline, produk_cache jadi satu-
-    //    satunya sumber yang dibaca layar Kasir (sama seperti pos-renderer.js).
+    // Baca hanya halaman kecil dari cache lokal. Katalog besar (50 ribu+
+    // produk) tidak boleh menahan pembukaan layar Kasir.
     try {
-      final cache = await CoreDb.instance.produkCache();
+      final cache = await CoreDb.instance.produkCache(limit: _batasProdukAwal);
       if (cache.isNotEmpty) {
         setStateIfMounted(
             () => _semuaProduk = cache.map(_produkDariCache).toList());
@@ -226,24 +230,29 @@ class _KasirScreenState extends State<KasirScreen> {
 
     try {
       await _perbaruiJumlahPending();
+    } catch (_) {}
+
+    if (mounted) {
+      setStateIfMounted(() => _memuat = false);
+      _jadwalkanFokusCariItem();
+    }
+
+    // Konfigurasi, status sesi, dan halaman pertama katalog server berjalan
+    // setelah UI siap. Riwayat transaksi/outbox tetap ditangani service latar
+    // dan tidak pernah dibaca seluruhnya oleh pembukaan layar ini.
+    unawaited(_lanjutkanMuatAwalJaringan());
+  }
+
+  Future<void> _lanjutkanMuatAwalJaringan() async {
+    try {
       await _sinkronKatalogDanKonfigurasi(
           tampilkanErrorJikaKosong: _semuaProduk.isEmpty);
       await _periksaSesiKas();
       PesananPoller.instance.mulai();
     } catch (e) {
-      // Gap-closure "app tidak bisa dibuka lagi stlh mati listrik": kegagalan
-      // tak terduga di sini (sebelumnya) bikin _memuat tak pernah balik ke
-      // false -- spinner macet SELAMANYA tanpa pesan apa pun. Sekarang
-      // ditangkap di sini spy user minimal lihat pesan error + tombol coba
-      // lagi (sama spt jalur _sinkronKatalogDanKonfigurasi di atas).
-      if (_semuaProduk.isEmpty) {
-        setStateIfMounted(() => _pesanError = 'Gagal memuat data lokal: $e');
+      if (_semuaProduk.isEmpty && mounted) {
+        setStateIfMounted(() => _pesanError = 'Gagal memuat data POS: $e');
       }
-    }
-
-    if (mounted) {
-      setStateIfMounted(() => _memuat = false);
-      _jadwalkanFokusCariItem();
     }
   }
 
@@ -470,32 +479,7 @@ class _KasirScreenState extends State<KasirScreen> {
       konfig = await _pastikanTokoDipilih(konfig);
       await _terapkanKonfigDenganGuardToko(konfig);
 
-      final katalog = await ApiClient.instance.aksi('katalog');
-      final produkJson = (katalog['produk'] as List?) ?? [];
-      // Cache ditulis dari SELURUH baris (termasuk Bahan Baku & Ekstra, lihat
-      // CoreDb.produkCache) -- tapi grid Kasir (_semuaProduk) mengecualikan
-      // keduanya, sama seperti klausa WHERE cache lokal, supaya perilaku
-      // online & offline konsisten (bahan baku/ekstra tidak pernah terjual
-      // langsung sbg baris mandiri -- ekstra hanya via picker "Pilih Ekstra").
-      final produk = produkJson
-          .map((e) => Produk.fromJson(e as Map<String, dynamic>))
-          .where((p) => p.jenisItem != 'BAHAN' && p.jenisItem != 'EKSTRA')
-          .toList();
-      final kategori = ((katalog['kategori'] as List?) ?? [])
-          .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
-          .toList();
-
-      await CoreDb.instance.replaceProdukCache(produkJson
-          .map((e) => Produk.baseKeCacheRow(e as Map<String, dynamic>))
-          .toList());
-
-      if (mounted) {
-        setStateIfMounted(() {
-          _semuaProduk = produk;
-          _kategori = kategori;
-        });
-        _jadwalkanEvaluasiHargaCoret();
-      }
+      await _muatKatalogLazy();
     } catch (e) {
       final off = e is ApiException && e.offline;
       if (tampilkanErrorJikaKosong && _semuaProduk.isEmpty) {
@@ -503,9 +487,69 @@ class _KasirScreenState extends State<KasirScreen> {
             ? 'Belum ada data katalog tersimpan & server tidak terjangkau. Sambungkan internet lalu coba lagi.'
             : e.toString());
       }
-      // Jika cache lokal SUDAH ada isinya, kegagalan sinkron di sini SENGAJA
-      // diabaikan (Kasir tetap bisa jualan pakai data cache terakhir).
     }
+  }
+
+  Future<void> _muatKatalogLazy({String keyword = ''}) async {
+    final kataPermintaan = keyword.trim();
+    final katalog = await ApiClient.instance.aksi('katalog', {
+      'page': 1,
+      'page_size':
+          kataPermintaan.isEmpty ? _batasProdukAwal : _batasHasilPencarian,
+      if (kataPermintaan.isNotEmpty) 'keyword': kataPermintaan,
+    });
+    final produkJson = (katalog['produk'] as List?) ?? [];
+    final produk = produkJson
+        .map((e) => Produk.fromJson(e as Map<String, dynamic>))
+        .where((p) => p.jenisItem != 'BAHAN' && p.jenisItem != 'EKSTRA')
+        .toList();
+    final kategori = ((katalog['kategori'] as List?) ?? [])
+        .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    await CoreDb.instance.upsertProdukCache(produkJson
+        .map((e) => Produk.baseKeCacheRow(e as Map<String, dynamic>))
+        .toList());
+
+    // Respons HTTP dapat datang tidak berurutan. Jangan biarkan hasil kata
+    // lama menimpa hasil kata yang sedang terlihat di kotak pencarian.
+    if (mounted && _kataKunciController.text.trim() == kataPermintaan) {
+      setStateIfMounted(() {
+        _semuaProduk = produk;
+        _kategori = kategori;
+      });
+      _jadwalkanEvaluasiHargaCoret();
+    }
+  }
+
+  Future<void> _muatKatalogPencarianAman(String keyword) async {
+    try {
+      await _muatKatalogLazy(keyword: keyword);
+    } catch (_) {
+      // Hasil cache lokal tetap dapat dipakai ketika jaringan putus. Error
+      // jaringan pencarian tidak boleh menutup dropdown atau mengunci POS.
+    }
+  }
+
+  void _cariProdukLazy(String nilai) {
+    setStateIfMounted(() => _kataKunci = nilai);
+    _debounceCariProduk?.cancel();
+    _debounceCariProduk = Timer(const Duration(milliseconds: 250), () async {
+      final kata = nilai.trim();
+      try {
+        final cache = await CoreDb.instance.produkCache(
+          keyword: kata,
+          limit: kata.isEmpty ? _batasProdukAwal : _batasHasilPencarian,
+        );
+        if (!mounted || _kataKunciController.text.trim() != kata) return;
+        setStateIfMounted(
+            () => _semuaProduk = cache.map(_produkDariCache).toList());
+        _jadwalkanEvaluasiHargaCoret();
+        // Cari ke server di belakang agar produk baru yang belum ada di cache
+        // tetap ditemukan; hasil dibatasi, bukan seluruh katalog.
+        unawaited(_muatKatalogPencarianAman(kata));
+      } catch (_) {}
+    });
   }
 
   Future<void> _periksaSesiKas() async {
@@ -1037,6 +1081,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _tambahKeKeranjang(p);
     _kataKunciController.clear();
     setStateIfMounted(() => _kataKunci = '');
+    _cariProdukLazy('');
     _jadwalkanFokusCariItem();
   }
 
@@ -1045,11 +1090,19 @@ class _KasirScreenState extends State<KasirScreen> {
   /// kalau kode/barcode COCOK PERSIS satu produk, langsung tambah ke
   /// keranjang & bersihkan kotak (siap utk scan berikutnya tanpa kasir perlu
   /// mengetuk apa pun).
-  void _submitPencarian(String nilai) {
+  Future<void> _submitPencarian(String nilai) async {
     final v = nilai.trim();
     if (v.isEmpty) return;
-    final cocok =
+    var cocok =
         _semuaProduk.where((p) => p.kode == v || p.barcode == v).toList();
+    if (cocok.isEmpty) {
+      final cache = await CoreDb.instance.produkCache(keyword: v, limit: 10);
+      cocok = cache
+          .map(_produkDariCache)
+          .where((p) => p.kode == v || p.barcode == v)
+          .toList();
+    }
+    if (!mounted) return;
     if (cocok.isNotEmpty) {
       _tambahKeKeranjang(cocok.first);
       // Produk dgn ekstra BELUM tentu jadi masuk keranjang di sini -- masih
@@ -1067,6 +1120,7 @@ class _KasirScreenState extends State<KasirScreen> {
       }
       _kataKunciController.clear();
       setStateIfMounted(() => _kataKunci = '');
+      _cariProdukLazy('');
       _jadwalkanFokusCariItem();
       return;
     }
@@ -1899,10 +1953,7 @@ class _KasirScreenState extends State<KasirScreen> {
             borderRadius: BorderRadius.all(Radius.circular(10))),
         isDense: true,
       ),
-      onChanged: (v) {
-        setStateIfMounted(() => _kataKunci = v);
-        _jadwalkanEvaluasiHargaCoret();
-      },
+      onChanged: _cariProdukLazy,
       onSubmitted: _submitPencarian,
     );
   }

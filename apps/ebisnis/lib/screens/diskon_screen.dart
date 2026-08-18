@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import 'diskon/tab_aturan_diskon.dart';
 import 'diskon/tab_diskon_grup.dart';
 import 'diskon/tab_pencairan_diskon.dart';
@@ -43,6 +44,7 @@ class _DiskonScreenState extends State<DiskonScreen>
       subjudul: 'Aturan diskon, pencairan cashback, dan monitor performa promo',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(
             icon: const Icon(Icons.refresh), onPressed: () => setState(() {}))
       ],

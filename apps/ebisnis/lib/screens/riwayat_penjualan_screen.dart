@@ -1743,6 +1743,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
     var dariServer = 0;
     var keServer = 0;
     var sudahSama = 0;
+    var arsipServerDilewati = 0;
+    var payloadTidakLengkap = 0;
     try {
       final server = await _semuaTransaksiServer();
       final serverByKode = <String, Map<String, dynamic>>{};
@@ -1798,6 +1800,16 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           payload = Map<String, dynamic>.from(
               jsonDecode('${entry.value['payload_json']}') as Map);
         } catch (_) {
+          payloadTidakLengkap++;
+          continue;
+        }
+        final kelayakan = periksaKelayakanPayloadSinkronisasi(payload);
+        if (kelayakan.status == StatusKelayakanSinkronisasi.arsipDariServer) {
+          arsipServerDilewati++;
+          continue;
+        }
+        if (!kelayakan.siapDikirim) {
+          payloadTidakLengkap++;
           continue;
         }
         payload['input_supervisor'] = true;
@@ -1822,7 +1834,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Sinkronisasi selesai: $dariServer dari server, $keServer ke server, $sudahSama sudah sama.')));
+              'Sinkronisasi selesai: $dariServer dari server, $keServer ke server, '
+              '$sudahSama sudah sama, $arsipServerDilewati arsip server tidak dikirim ulang, '
+              '$payloadTidakLengkap payload lokal perlu diperiksa.')));
     } catch (e) {
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,

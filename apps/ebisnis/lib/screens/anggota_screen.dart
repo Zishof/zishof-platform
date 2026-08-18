@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import 'anggota/tab_data_member.dart';
 import 'anggota/tab_jenis_member.dart';
 import 'anggota/tab_notifikasi.dart';
@@ -52,6 +53,9 @@ class _AnggotaScreenState extends State<AnggotaScreen>
       judul: 'Pelanggan',
       subjudul: 'Kelola data member/pelanggan toko Anda',
       scrollable: false,
+      actionsAppBar: const [
+        IndikatorSinkronMaster(),
+      ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

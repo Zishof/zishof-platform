@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/indikator_baris_sinkron.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -38,18 +40,22 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('jenis_produk_list', {
+      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
+      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
+      final hasil = await MasterOffline.daftarDenganCache('jenis_produk_list', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
         'termasuk_nonaktif': true,
-      });
+      }, 'master:jenis_produk');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -101,7 +107,19 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('jenis_produk_hapus', {'id': jenis['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'jenis_produk_hapus',
+        {'id': jenis['id']},
+        kunci: 'jenis_produk:${jenis['id']}',
+        cacheKey: 'master:jenis_produk',
+        rowLokal: {'id': jenis['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -121,6 +139,7 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
       subjudul: 'Kelola kategori produk & akun akuntansinya',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)
       ],
       aksiHeader:
@@ -201,7 +220,13 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> {
                                 ? () => _bukaForm(jenis: j)
                                 : null,
                             cells: [
-                              AppTableCell.text('${j['nama'] ?? ''}', flex: 2),
+                              AppTableCell(
+                                flex: 2,
+                                child: SelTeksDenganSinkron(
+                                  kunci: kunciBarisMaster('jenis_produk', j),
+                                  teks: '${j['nama'] ?? ''}',
+                                ),
+                              ),
                               AppTableCell.text(
                                   '${j['akunPendapatanNama'] ?? '-'}',
                                   flex: 2),
@@ -326,7 +351,8 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
 
   Future<void> _muatAkun() async {
     try {
-      final hasil = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 2000}, 'master:akun_list');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) setStateIfMounted(() => _akun = data);
@@ -366,7 +392,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
     try {
       final maks =
           double.tryParse(_maksHarian.text.trim().replaceAll(',', '.'));
-      await ApiClient.instance.aksi('jenis_produk_simpan', {
+      final body = {
         if (widget.jenis != null) 'id': widget.jenis!['id'],
         'nama': _nama.text.trim(),
         'keterangan': _keterangan.text.trim(),
@@ -376,7 +402,21 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
         'akunPendapatanId': _akunPendapatanId,
         'akunPpnKeluaranId': _akunPpnKeluaranId,
         'akunHppId': _akunHppId,
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'jenis_produk_simpan',
+        body,
+        kunci: widget.jenis != null
+            ? 'jenis_produk:${widget.jenis!['id']}'
+            : 'jenis_produk:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:jenis_produk',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

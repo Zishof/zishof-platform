@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -90,7 +91,8 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('notifikasi_hapus', {'id': n['id']});
+      await MasterOffline.simpanAtauAntre('notifikasi_hapus', {'id': n['id']},
+          kunci: 'notifikasi:${n['id']}');
       await _muatDaftar();
     } catch (e) {
       if (mounted) {

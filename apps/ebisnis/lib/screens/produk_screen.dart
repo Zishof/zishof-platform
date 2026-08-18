@@ -11,10 +11,13 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../services/kompresi_gambar.dart';
+import '../services/master_offline.dart';
+import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
 import 'produk_mutasi_barang_tab.dart';
@@ -54,9 +57,12 @@ const _labelJenisDuplikat = {
 /// `Produk.baseKeCacheRow`) + `produk_statistik` utk kartu KPI +
 /// `produk_simpan` utk simpan.
 ///
-/// SENGAJA online-only (beda dari Kasir yg offline-first) -- ini layar
-/// admin/back-office, wajar diakses saat ada koneksi (kantor/wifi toko),
-/// jadi tidak menambah kompleksitas cache lokal khusus utk layar ini.
+/// Offline-first utk daftar + CRUD master (pola sama dgn cara_bayar_screen):
+/// daftar produk/kategori/kebijakan retur lewat [MasterOffline.daftarDenganCache]
+/// (snapshot terakhir tampil saat offline), simpan/hapus master lewat
+/// [MasterOffline.simpanAtauAntre] (diantre + dikirim otomatis saat online).
+/// Aksi berkas/bulk (foto, ekspor/impor Excel, bersih duplikat, data sample)
+/// tetap online-only -- tidak aman diantre offline.
 ///
 /// Perkakas admin lanjutan yang sudah ada: resep/Bahan Baku & HPP otomatis
 /// (lihat `_FormProdukState._bahanBaku`), impor/ekspor Excel, pembersihan
@@ -107,24 +113,34 @@ class _ProdukScreenState extends State<ProdukScreen> {
       _pesanError = null;
     });
     try {
-      final katalog = await ApiClient.instance.aksi('katalog', {
-        'page': _halaman + 1,
-        'page_size': _itemPerHalaman,
-        if (_kataKunci.trim().isNotEmpty) 'keyword': _kataKunci.trim(),
-        if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
-        if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
-      });
+      // Offline-first: fetch sukses menyimpan snapshot ke cache lokal;
+      // saat offline snapshot terakhir yang tampil (lihat MasterOffline).
+      final katalog = await MasterOffline.daftarDenganCache(
+          'katalog',
+          {
+            'page': _halaman + 1,
+            'page_size': _itemPerHalaman,
+            if (_kataKunci.trim().isNotEmpty) 'keyword': _kataKunci.trim(),
+            if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
+            if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
+          },
+          'master:produk_list',
+          fieldData: 'produk');
       final produkJson = (katalog['produk'] as List?) ?? [];
       final produk = produkJson
           .map((e) => Produk.fromJson(e as Map<String, dynamic>))
           .toList();
-      final hasilKategori = await ApiClient.instance
-          .aksi('jenis_produk_list', {'page': 1, 'page_size': 100});
+      final hasilKategori = await MasterOffline.daftarDenganCache(
+          'jenis_produk_list',
+          {'page': 1, 'page_size': 100},
+          'master:jenis_produk');
       final kategori = ((hasilKategori['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
-      final hasilKebijakan = await ApiClient.instance
-          .aksi('kebijakan_retur_list', {'termasuk_nonaktif': true});
+      final hasilKebijakan = await MasterOffline.daftarDenganCache(
+          'kebijakan_retur_list',
+          {'termasuk_nonaktif': true},
+          'master:kebijakan_retur');
       final kebijakanRetur = ((hasilKebijakan['data'] as List?) ?? [])
           .map((e) => KebijakanRetur.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -261,7 +277,19 @@ class _ProdukScreenState extends State<ProdukScreen> {
     );
     if (ya != true) return;
     try {
-      await ApiClient.instance.aksi('kebijakan_retur_hapus', {'id': k.id});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'kebijakan_retur_hapus',
+        {'id': k.id},
+        kunci: 'kebijakan_retur:${k.id}',
+        cacheKey: 'master:kebijakan_retur',
+        rowLokal: {'id': k.id},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatSemua();
     } catch (e) {
       if (mounted) {
@@ -529,7 +557,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
             runSpacing: 8,
             children: tombolAksi,
           ),
-          actionsAppBar: tombolAksi,
+          actionsAppBar: [const IndikatorSinkronMaster(), ...tombolAksi],
           scrollable: false,
           floatingActionButton: _tabAktif == 1 || _tabAktif == 2
               ? null
@@ -1093,12 +1121,30 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('kebijakan_retur_simpan', {
-        if (widget.kebijakan != null) 'id': widget.kebijakan!.id,
+      final ubah = widget.kebijakan != null;
+      final body = {
+        if (ubah) 'id': widget.kebijakan!.id,
         'nama': _nama.text.trim(),
         'keterangan': _keterangan.text.trim(),
         'aktif': _aktif,
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'kebijakan_retur_simpan',
+        body,
+        kunci: ubah
+            ? 'kebijakan_retur:${widget.kebijakan!.id}'
+            : 'kebijakan_retur:baru:${DateTime.now().microsecondsSinceEpoch}',
+        // Optimistis HANYA utk edit -- baris create offline belum punya id,
+        // sedangkan KebijakanRetur.fromJson mewajibkannya (baris tanpa id di
+        // snapshot akan membuat parsing daftar gagal saat offline).
+        cacheKey: ubah ? 'master:kebijakan_retur' : null,
+        rowLokal: ubah ? body : null,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -1542,33 +1588,70 @@ class _FormProdukState extends State<_FormProduk> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('produk_simpan', {
-        if (widget.produk != null) 'id': widget.produk!.id,
-        'kode': _kode.text.trim(),
-        'nama': _nama.text.trim(),
-        'barcode': _barcode.text.trim(),
-        'harga_beli':
-            _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
-        'harga_jual': _angka(_hargaJual.text),
-        'stok': _angka(_stok.text),
-        'keterangan': _keterangan.text.trim(),
-        'kategori_id': _kategoriId,
-        'kebijakan_retur_id': _kebijakanReturId,
-        'izinkan_jual_minus_stok': _izinkanJualMinusStok,
-        if (_grupProdukPilihan != -1)
-          'grup_produk_id': _grupProdukPilihan == 0 ? null : _grupProdukPilihan,
-        'aktif': _aktif,
-        'jenis_item': _jenisItem,
-        'bahan_baku': _bahanBaku
-            .map((b) => {
-                  'produk_id': b.produkId,
-                  'nama': b.nama,
-                  'qty': _angka(b.qty.text),
-                  'harga': _angka(b.harga.text)
-                })
-            .toList(),
-        'ekstra_pilihan': _ekstraPilihan,
-      });
+      final ubah = widget.produk != null;
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'produk_simpan',
+        {
+          if (ubah) 'id': widget.produk!.id,
+          'kode': _kode.text.trim(),
+          'nama': _nama.text.trim(),
+          'barcode': _barcode.text.trim(),
+          'harga_beli':
+              _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+          'harga_jual': _angka(_hargaJual.text),
+          'stok': _angka(_stok.text),
+          'keterangan': _keterangan.text.trim(),
+          'kategori_id': _kategoriId,
+          'kebijakan_retur_id': _kebijakanReturId,
+          'izinkan_jual_minus_stok': _izinkanJualMinusStok,
+          if (_grupProdukPilihan != -1)
+            'grup_produk_id':
+                _grupProdukPilihan == 0 ? null : _grupProdukPilihan,
+          'aktif': _aktif,
+          'jenis_item': _jenisItem,
+          'bahan_baku': _bahanBaku
+              .map((b) => {
+                    'produk_id': b.produkId,
+                    'nama': b.nama,
+                    'qty': _angka(b.qty.text),
+                    'harga': _angka(b.harga.text)
+                  })
+              .toList(),
+          'ekstra_pilihan': _ekstraPilihan,
+        },
+        kunci: ubah
+            ? 'produk:${widget.produk!.id}'
+            : 'produk:baru:${DateTime.now().microsecondsSinceEpoch}',
+        // Optimistis HANYA utk edit -- baris create offline belum punya id,
+        // sedangkan Produk.fromJson mewajibkannya (baris tanpa id di snapshot
+        // akan membuat parsing daftar gagal saat offline). rowLokal memakai
+        // nama field camelCase respons `katalog` (bukan snake_case payload)
+        // supaya perubahan langsung terlihat di snapshot daftar.
+        cacheKey: ubah ? 'master:produk_list' : null,
+        rowLokal: ubah
+            ? {
+                'id': widget.produk!.id,
+                'kode': _kode.text.trim(),
+                'nama': _nama.text.trim(),
+                'barcode': _barcode.text.trim(),
+                'hargaBeli':
+                    _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+                'hargaJual': _angka(_hargaJual.text),
+                'stok': _angka(_stok.text),
+                'keterangan': _keterangan.text.trim(),
+                'kategoriId': _kategoriId,
+                'kebijakanReturId': _kebijakanReturId,
+                'izinkanJualMinusStok': _izinkanJualMinusStok,
+                'aktif': _aktif,
+                'jenisItem': _jenisItem,
+              }
+            : null,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       // Produk baru: baris foto yg ditahan di memori (id==null, blm pernah
       // diunggah krn belum ada produk_id) diunggah SEKARANG pakai id baru
       // dari respons ini -- lihat JavaDoc _foto/_pilihFoto.
@@ -2092,7 +2175,11 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
                   rows: tersaring.map((p) {
                     return AppTableRowData(
                       cells: [
-                        AppTableCell.text(p.nama, flex: 3),
+                        AppTableCell(
+                          flex: 3,
+                          child: SelTeksDenganSinkron(
+                              kunci: 'produk:${p.id}', teks: p.nama),
+                        ),
                         AppTableCell.text(p.kode, flex: 2),
                         AppTableCell.text(
                           _formatRupiah.format(widget.tampilkanHargaJual

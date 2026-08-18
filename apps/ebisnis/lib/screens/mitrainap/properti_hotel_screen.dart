@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -52,17 +52,22 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
     );
     if (hasil == null) return;
     try {
-      final res =
-          await ApiClient.instance.aksi('hotel_properti_simpan', hasil);
+      final res = await MasterOffline.simpanAtauAntre(
+          'hotel_properti_simpan', hasil,
+          kunci: hasil['id'] != null
+              ? 'hotel_properti:${hasil['id']}'
+              : 'hotel_properti:baru:${DateTime.now().microsecondsSinceEpoch}');
       final sukses = apiSukses(res);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(sukses
-            ? apiPesan(res, 'Properti tersimpan.')
-            : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
+        content: Text(res['offline'] == true
+            ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+            : sukses
+                ? apiPesan(res, 'Properti tersimpan.')
+                : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
         backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
       ));
-      if (sukses) _muat();
+      if (sukses && res['offline'] != true) _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

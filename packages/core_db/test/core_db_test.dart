@@ -189,6 +189,30 @@ void main() {
         isTrue,
         reason: 'baris tetap pending dan layak dikirim setelah jeda berakhir');
 
+    // UAT katalog besar: layar Kasir tidak boleh membaca semua cache saat
+    // dibuka. Query awal dan hasil pencarian harus menghormati batas baris.
+    final produkUat = <Map<String, Object?>>[];
+    for (var i = 1; i <= 150; i++) {
+      produkUat.add(<String, Object?>{
+        'id': i,
+        'kode': 'UAT-PRODUK-$i',
+        'barcode': '899000${i.toString().padLeft(6, '0')}',
+        'nama': i == 149 ? 'Produk Khusus Lazy' : 'Produk UAT $i',
+        'harga_jual': 1000 + i,
+        'stok': i,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      });
+    }
+    await CoreDb.instance.upsertProdukCache(produkUat);
+    final halamanAwal = await CoreDb.instance.produkCache(limit: 80);
+    expect(halamanAwal, hasLength(80),
+        reason: 'pembukaan Kasir hanya membaca halaman kecil cache lokal');
+    final hasilLazy =
+        await CoreDb.instance.produkCache(keyword: 'khusus lazy', limit: 100);
+    expect(hasilLazy, hasLength(1));
+    expect(hasilLazy.single['kode'], 'UAT-PRODUK-149');
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     try {

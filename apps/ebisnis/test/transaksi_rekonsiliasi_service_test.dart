@@ -62,4 +62,61 @@ void main() {
     expect(hasil.baris.single.asalLokal, 'kasir-asal / pos-depan');
     expect(hasil.baris.single.asalServer, 'kasir-server / pos-belakang');
   });
+
+  test('hanya mengizinkan payload checkout lokal yang lengkap', () {
+    final hasil = periksaKelayakanPayloadSinkronisasi(<String, dynamic>{
+      'kodeUnik': 'TRX-LOKAL-1',
+      'idToko': 1,
+      'kasir': 'kasir1',
+      'caraBayar': 2,
+      'transaksi': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 10, 'jumlah': 2, 'harga': 5000}
+      ],
+    });
+    expect(hasil.status, StatusKelayakanSinkronisasi.siapKirim);
+    expect(hasil.siapDikirim, isTrue);
+  });
+
+  test('arsip hasil salinan server tidak dikirim kembali ke endpoint bayar',
+      () {
+    for (final asal in <String>[
+      'SERVER_TOKO_SAMA',
+      'REPLIKASI_OTOMATIS_TOKO_SAMA'
+    ]) {
+      final hasil = periksaKelayakanPayloadSinkronisasi(<String, dynamic>{
+        'kodeUnik': 'TRX-SERVER-1',
+        'idToko': 1,
+        'kasir': 'kasir1',
+        'asal_backup': asal,
+        'transaksi': <Map<String, dynamic>>[
+          <String, dynamic>{'id': 10, 'jumlah': 1}
+        ],
+      });
+      expect(hasil.status, StatusKelayakanSinkronisasi.arsipDariServer);
+      expect(hasil.siapDikirim, isFalse);
+    }
+  });
+
+  test('payload lokal tanpa metode atau rincian lengkap ditahan untuk audit',
+      () {
+    final tanpaMetode = periksaKelayakanPayloadSinkronisasi(<String, dynamic>{
+      'kodeUnik': 'TRX-RUSAK-1',
+      'idToko': 1,
+      'kasir': 'kasir1',
+      'transaksi': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 10, 'jumlah': 1}
+      ],
+    });
+    final tanpaProduk = periksaKelayakanPayloadSinkronisasi(<String, dynamic>{
+      'kodeUnik': 'TRX-RUSAK-2',
+      'idToko': 1,
+      'kasir': 'kasir1',
+      'caraBayar': 2,
+      'transaksi': <Map<String, dynamic>>[
+        <String, dynamic>{'jumlah': 1}
+      ],
+    });
+    expect(tanpaMetode.status, StatusKelayakanSinkronisasi.tidakLengkap);
+    expect(tanpaProduk.status, StatusKelayakanSinkronisasi.tidakLengkap);
+  });
 }

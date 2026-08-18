@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../api_client.dart';
+import '../services/master_offline.dart';
+import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 
@@ -40,17 +42,20 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('cara_bayar_list_admin', {
+      final hasil =
+          await MasterOffline.daftarDenganCache('cara_bayar_list_admin', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:cara_bayar');
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) {
         setStateIfMounted(() {
           _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _total = hasil['offline'] == true
+              ? data.length
+              : (hasil['total'] as num?)?.toInt() ?? 0;
         });
       }
     } catch (e) {
@@ -102,7 +107,19 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('cara_bayar_hapus', {'id': cara['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'cara_bayar_hapus',
+        {'id': cara['id']},
+        kunci: 'cara_bayar:${cara['id']}',
+        cacheKey: 'master:cara_bayar',
+        rowLokal: {'id': cara['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -122,6 +139,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
       subjudul: 'Kelola metode pembayaran koperasi/kantin',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar)
       ],
       aksiHeader:
@@ -204,7 +222,13 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                                 ? () => _bukaForm(cara: c)
                                 : null,
                             cells: [
-                              AppTableCell.text('${c['kode'] ?? '-'}', flex: 1),
+                              AppTableCell(
+                                flex: 1,
+                                child: SelTeksDenganSinkron(
+                                  kunci: kunciBarisMaster('cara_bayar', c),
+                                  teks: '${c['kode'] ?? '-'}',
+                                ),
+                              ),
                               AppTableCell.text('${c['nama'] ?? ''}', flex: 2),
                               AppTableCell(
                                 flex: 1,
@@ -370,7 +394,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('cara_bayar_simpan', {
+      final body = {
         if (widget.cara != null) 'id': widget.cara!['id'],
         'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -381,7 +405,21 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
         'masukSebagaiHutang': _masukSebagaiHutang,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'cara_bayar_simpan',
+        body,
+        kunci: widget.cara != null
+            ? 'cara_bayar:${widget.cara!['id']}'
+            : 'cara_bayar:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:cara_bayar',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());

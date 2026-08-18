@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../models.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
@@ -71,14 +73,16 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
 
   Future<void> _muatDaftar() async {
     try {
-      final hasil = await ApiClient.instance.aksi('diskon_list', {
+      final hasil = await MasterOffline.daftarDenganCache('diskon_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:diskon');
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _total = hasil['offline'] == true
+            ? _data.length
+            : (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -251,6 +255,9 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    IndikatorBarisSinkron(
+                                        kunci:
+                                            kunciBarisMaster('diskon', a)),
                                     Flexible(
                                       child: Text('${a['namaAturan']}',
                                           style: const TextStyle(
@@ -461,7 +468,7 @@ class _FormDiskonState extends State<_FormDiskon> {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('diskon_simpan', {
+      final body = {
         if (widget.aturan != null) 'id': widget.aturan!['id'],
         'nama_aturan': _nama.text.trim(),
         'keterangan': _keterangan.text.trim(),
@@ -490,7 +497,21 @@ class _FormDiskonState extends State<_FormDiskon> {
             _hariAktif.isEmpty ? '' : (_hariAktif.toList()..sort()).join(','),
         if (Sesi.instance.isAdmin)
           'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'diskon_simpan',
+        body,
+        kunci: widget.aturan != null
+            ? 'diskon:${widget.aturan!['id']}'
+            : 'diskon:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:diskon',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

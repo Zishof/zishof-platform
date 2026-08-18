@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../api_client.dart';
+import '../services/master_offline.dart';
+import '../widgets/indikator_baris_sinkron.dart';
+import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/safe_state.dart';
 
 /// Grup Produk (harga terpusat lintas toko) -- padanan layar ZK GrupProdukAction.
@@ -38,8 +40,9 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
     try {
       // Nama aksi mengikuti kontrak server r77580 (GrupProdukApiHelper):
       // grup_produk_daftar dengan parameter hanya_aktif (default true).
-      final res = await ApiClient.instance
-          .aksi('grup_produk_daftar', {'hanya_aktif': false});
+      // Offline-first: snapshot daftar tersimpan lokal (MasterOffline).
+      final res = await MasterOffline.daftarDenganCache(
+          'grup_produk_daftar', {'hanya_aktif': false}, 'master:grup_produk');
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!sukses) {
         throw Exception(res['description'] ?? 'Gagal memuat Grup Produk.');
@@ -66,13 +69,23 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
     );
     if (hasil == null) return;
     try {
-      final res = await ApiClient.instance.aksi('grup_produk_simpan', hasil);
+      final res = await MasterOffline.simpanAtauAntre(
+        'grup_produk_simpan',
+        hasil,
+        kunci: hasil['id'] != null
+            ? 'grup_produk:${hasil['id']}'
+            : 'grup_produk:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:grup_produk',
+        rowLokal: hasil,
+      );
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(sukses
-            ? (res['description'] ?? 'Grup tersimpan.').toString()
-            : 'Gagal: ${res['description'] ?? res['status']}'),
+        content: Text(res['offline'] == true
+            ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+            : sukses
+                ? (res['description'] ?? 'Grup tersimpan.').toString()
+                : 'Gagal: ${res['description'] ?? res['status']}'),
         backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
       ));
       if (sukses) _muat();
@@ -103,14 +116,22 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
     );
     if (yakin != true) return;
     try {
-      final res =
-          await ApiClient.instance.aksi('grup_produk_hapus', {'id': g['id']});
+      final res = await MasterOffline.simpanAtauAntre(
+        'grup_produk_hapus',
+        {'id': g['id']},
+        kunci: 'grup_produk:${g['id']}',
+        cacheKey: 'master:grup_produk',
+        rowLokal: {'id': g['id']},
+        hapusLokal: true,
+      );
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(sukses
-            ? 'Grup dihapus.'
-            : 'Gagal: ${res['description'] ?? res['status']}'),
+        content: Text(res['offline'] == true
+            ? 'Dihapus lokal — akan dikirim otomatis saat online.'
+            : sukses
+                ? 'Grup dihapus.'
+                : 'Gagal: ${res['description'] ?? res['status']}'),
         backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
       ));
       if (sukses) _muat();
@@ -131,6 +152,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
       appBar: AppBar(
         title: const Text('Grup Produk (Harga Terpusat)'),
         actions: [
+          const IndikatorSinkronMaster(),
           IconButton(
               onPressed: _muat,
               tooltip: 'Muat ulang',
@@ -176,10 +198,17 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                           final aktif = g['aktif'] == true;
                           return Card(
                             child: ListTile(
-                              title: Text(
-                                  '${(g['kode'] ?? '').toString().isEmpty ? '' : '${g['kode']} - '}${g['nama']}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
+                              title: Row(children: [
+                                IndikatorBarisSinkron(
+                                    kunci:
+                                        kunciBarisMaster('grup_produk', g)),
+                                Expanded(
+                                  child: Text(
+                                      '${(g['kode'] ?? '').toString().isEmpty ? '' : '${g['kode']} - '}${g['nama']}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                              ]),
                               subtitle: Text(
                                   'HPP ${_harga(g['harga_beli'])}  ·  Jual ${_harga(g['harga_jual'])}\n'
                                   '${g['jumlah_anggota']} produk anggota'

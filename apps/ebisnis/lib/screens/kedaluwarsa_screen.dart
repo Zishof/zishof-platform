@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../parse_util.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -74,7 +75,9 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
     if (row == null) {
       try {
         final hasil =
-            await ApiClient.instance.aksi('produk_batch_produk_list', const {});
+            await ApiClient.instance.aksi('produk_batch_produk_list', {
+          if (Sesi.instance.tokoId != null) 'toko_id': Sesi.instance.tokoId,
+        });
         daftarProduk =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       } catch (e) {
@@ -225,7 +228,9 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
                       }
                       setDialogState(() => menyimpan = true);
                       try {
-                        await ApiClient.instance.aksi('produk_batch_simpan', {
+                        await MasterOffline.simpanAtauAntre('produk_batch_simpan', {
+                          if (Sesi.instance.tokoId != null)
+                            'toko_id': Sesi.instance.tokoId,
                           if (row?['batchId'] != null)
                             'batch_id': row!['batchId'],
                           'produk_id': produkId,
@@ -238,13 +243,18 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
                           'stok_fisik': jumlah,
                           'status': status,
                           'keterangan': catatan.text.trim(),
-                        });
-                        if (dialogContext.mounted)
+                        },
+                            kunci: row?['batchId'] != null
+                                ? 'produk_batch:${row!['batchId']}'
+                                : 'produk_batch:baru:${DateTime.now().microsecondsSinceEpoch}');
+                        if (dialogContext.mounted) {
                           Navigator.pop(dialogContext, true);
+                        }
                       } catch (e) {
-                        if (context.mounted)
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context)
                               .showSnackBar(SnackBar(content: Text('$e')));
+                        }
                         setDialogState(() => menyimpan = false);
                       }
                     },

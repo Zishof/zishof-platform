@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
 import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
@@ -55,15 +57,18 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('pencairan_diskon_list', {
+      final hasil =
+          await MasterOffline.daftarDenganCache('pencairan_diskon_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         if (_statusFilter != null) 'status': _statusFilter,
         'page': _halaman,
         'page_size': _pageSize,
-      });
+      }, 'master:pencairan_diskon');
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _total = hasil['offline'] == true
+            ? _data.length
+            : (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -111,8 +116,19 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
     );
     if (yakin != true) return;
     try {
-      await ApiClient.instance
-          .aksi('pencairan_diskon_hapus', {'id': data['id']});
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'pencairan_diskon_hapus',
+        {'id': data['id']},
+        kunci: 'pencairan_diskon:${data['id']}',
+        cacheKey: 'master:pencairan_diskon',
+        rowLokal: {'id': data['id']},
+        hapusLokal: true,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Dihapus lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) await _muatDaftar();
     } catch (e) {
       if (mounted) {
@@ -225,10 +241,16 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('${p['kodePencairan']}',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12.5)),
+                                    Row(children: [
+                                      IndikatorBarisSinkron(
+                                          kunci: kunciBarisMaster(
+                                              'pencairan_diskon', p)),
+                                      Flexible(
+                                          child: Text('${p['kodePencairan']}',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12.5))),
+                                    ]),
                                     Text('${p['waktuPencairan'] ?? '-'}',
                                         style: TextStyle(
                                             fontSize: 11,
@@ -487,7 +509,7 @@ class _FormPencairanState extends State<_FormPencairan> {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('pencairan_diskon_simpan', {
+      final body = {
         if (_ubah) 'id': widget.data!['id'],
         'kode_pencairan': _kodePencairan.text.trim(),
         'anggota_koperasi_id': _anggotaId,
@@ -501,7 +523,21 @@ class _FormPencairanState extends State<_FormPencairan> {
         'keterangan': _keterangan.text.trim(),
         if (Sesi.instance.isAdmin)
           'toko_id': _tokoId.text.trim().isEmpty ? null : _tokoId.text.trim(),
-      });
+      };
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'pencairan_diskon_simpan',
+        body,
+        kunci: _ubah
+            ? 'pencairan_diskon:${widget.data!['id']}'
+            : 'pencairan_diskon:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:pencairan_diskon',
+        rowLokal: body,
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

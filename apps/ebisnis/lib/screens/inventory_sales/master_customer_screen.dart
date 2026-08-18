@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -142,11 +143,11 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
     );
     if (yakin != true) return;
     try {
-      await ApiClient.instance.aksi('si_customer_deactivate', {
+      await MasterOffline.simpanAtauAntre('si_customer_deactivate', {
         'anggota_id': data['anggotaId'],
         'aktif': aktifkan,
         if (!aktifkan) 'alasan': alasanCtrl.text.trim(),
-      });
+      }, kunci: 'si_customer:${data['anggotaId']}');
       if (mounted) await _muat();
     } catch (e) {
       if (mounted) {
@@ -590,8 +591,8 @@ class _FormCustomerState extends State<_FormCustomer> {
       _error = null;
     });
     try {
-      await ApiClient.instance
-          .aksi(_ubah ? 'si_customer_update' : 'si_customer_create', {
+      final hasil = await MasterOffline.simpanAtauAntre(
+          _ubah ? 'si_customer_update' : 'si_customer_create', {
         if (_ubah) 'anggota_id': widget.data!['anggotaId'],
         if (!_ubah) 'kode': _kode.text.trim(),
         'nama': _nama.text.trim(),
@@ -609,7 +610,15 @@ class _FormCustomerState extends State<_FormCustomer> {
         'atas_nama': _atasNama.text.trim(),
         'bank': _bank.text.trim(),
         'sales_owner_id': _salesOwnerId,
-      });
+      },
+          kunci: _ubah
+              ? 'si_customer:${widget.data!['anggotaId']}'
+              : 'si_customer:baru:${DateTime.now().microsecondsSinceEpoch}');
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tersimpan lokal — akan dikirim otomatis saat online.')));
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

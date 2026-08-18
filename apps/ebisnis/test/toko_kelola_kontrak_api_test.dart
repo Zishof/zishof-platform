@@ -13,17 +13,17 @@ void main() {
         File('lib/screens/toko_kelola_screen.dart').readAsStringSync();
 
     // CRUD: daftar (param cari), simpan (kunci snake_case), hapus.
-    expect(source, contains("aksi('toko_kelola_list'"));
+    expect(source, contains("'toko_kelola_list'"));
     expect(source, contains("'cari'"));
-    expect(source, contains("aksi('toko_kelola_simpan'"));
+    expect(source, contains("'toko_kelola_simpan'"));
     expect(source, contains("'boleh_melihat_toko_lain'"));
     expect(source, contains("'boleh_transaksi_stok_habis'"));
     expect(source, contains("'toko_demo'"));
     expect(source, contains("'unit_usaha'"));
-    expect(source, contains("aksi('toko_kelola_hapus'"));
+    expect(source, contains("'toko_kelola_hapus'"));
 
     // Katalog unit usaha utk checkbox ber-grup (form toko + popup generate).
-    expect(source, contains("aksi('unit_usaha_katalog'"));
+    expect(source, contains("'unit_usaha_katalog'"));
 
     // Generator per unit usaha: aksi + token konfirmasi + clamp klien =
     // clamp server (250..100000) + penanganan sinyal popup dari server.

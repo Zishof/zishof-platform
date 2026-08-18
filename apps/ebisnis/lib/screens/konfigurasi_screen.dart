@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_koreksi_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
@@ -857,7 +858,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('toko_profil_simpan', {
+      final hasilSimpan =
+          await MasterOffline.simpanAtauAntre('toko_profil_simpan', {
         'nama': _nama.text.trim(),
         'alamat': _alamat.text.trim(),
         'kota': _kota.text.trim(),
@@ -877,7 +879,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
             .toList(),
-      });
+      }, kunci: 'toko_profil:${Sesi.instance.tokoId}');
       if (mounted) {
         Sesi.instance
           ..tokoNama = _nama.text.trim()
@@ -896,8 +898,10 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toList();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Profil dan kebijakan toko tersimpan.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(hasilSimpan['offline'] == true
+                ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+                : 'Profil dan kebijakan toko tersimpan.')));
       }
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -1546,23 +1550,51 @@ class _FormAkunState extends State<_FormAkun> {
     try {
       final ubah = widget.akun != null;
       if (ubah) {
-        await ApiClient.instance.aksi('pedagang_ubah', {
-          'id': widget.akun!['id'],
-          'nama': _nama.text.trim(),
-          'keterangan': _keterangan.text.trim(),
-          'aktif': _aktif,
-          'supervisor': _supervisor,
-          if (_password.text.isNotEmpty) 'password_baru': _password.text,
-        });
+        if (_password.text.isNotEmpty) {
+          // Ganti password = kredensial: online-only, tidak pernah diantre.
+          await ApiClient.instance.aksi('pedagang_ubah', {
+            'id': widget.akun!['id'],
+            'nama': _nama.text.trim(),
+            'keterangan': _keterangan.text.trim(),
+            'aktif': _aktif,
+            'supervisor': _supervisor,
+            'password_baru': _password.text,
+          });
+        } else {
+          final hasilUbah = await MasterOffline.simpanAtauAntre('pedagang_ubah', {
+            'id': widget.akun!['id'],
+            'nama': _nama.text.trim(),
+            'keterangan': _keterangan.text.trim(),
+            'aktif': _aktif,
+            'supervisor': _supervisor,
+          }, kunci: 'pedagang:${widget.akun!['id']}');
+          if (hasilUbah['offline'] == true && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Tersimpan lokal — akan dikirim otomatis saat online.')));
+          }
+        }
       } else {
-        await ApiClient.instance.aksi('akun_tambah', {
-          'userid': _userid.text.trim(),
-          'password': _password.text,
-          'nama': _nama.text.trim(),
-          'toko_id': Sesi.instance.tokoId,
-          'keterangan': _keterangan.text.trim(),
-          'supervisor': _supervisor,
-        });
+        // Offline-first (pola master, lihat MasterOffline): akun baru diantre
+        // saat offline lalu dikirim otomatis. TANPA cacheKey -- daftar akun
+        // (pedagang_list) & dropdown akun layar lain punya cache terpisah.
+        final hasil = await MasterOffline.simpanAtauAntre(
+          'akun_tambah',
+          {
+            'userid': _userid.text.trim(),
+            'password': _password.text,
+            'nama': _nama.text.trim(),
+            'toko_id': Sesi.instance.tokoId,
+            'keterangan': _keterangan.text.trim(),
+            'supervisor': _supervisor,
+          },
+          kunci: 'akun:baru:${DateTime.now().microsecondsSinceEpoch}',
+        );
+        if (hasil['offline'] == true && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Tersimpan lokal — akan dikirim otomatis saat online.')));
+        }
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {

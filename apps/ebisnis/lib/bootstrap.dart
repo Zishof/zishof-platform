@@ -16,6 +16,7 @@ import 'product_profile.dart';
 import 'screens/layar_pelanggan_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
+import 'services/master_offline.dart';
 import 'services/pengaturan_update.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/transaksi_outbox_service.dart';
@@ -96,6 +97,10 @@ Future<void> bootstrap(AppProductProfile profil) async {
     }
 
     await AppThemeController.instance.muat();
+    // Offline-first master: antrean mutasi yang tersisa dari sesi sebelumnya
+    // langsung ikut jadwal kirim ulang begitu app dibuka -- tidak menunggu
+    // user membuka salah satu layar master dulu.
+    MasterOffline.pastikanTimer();
     runApp(const EBisnisApp());
   }, (error, stack) {
     unawaited(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -206,7 +206,7 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
 
     final persen = double.tryParse(persenC.text.trim()) ?? -1;
     try {
-      final res = await ApiClient.instance.aksi('hotel_kontrak_pemilik_simpan', {
+      final res = await MasterOffline.simpanAtauAntre('hotel_kontrak_pemilik_simpan', {
         if (awal != null) 'id': awal['id'],
         'properti_id': pid,
         'kamar_id': kamarId,
@@ -216,12 +216,17 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
         'berlaku_dari': dari == null ? null : formatTanggalHotel.format(dari!),
         if (sampai != null) 'berlaku_sampai': formatTanggalHotel.format(sampai!),
         'aktif': aktif,
-      });
+      },
+          kunci: awal != null
+              ? 'hotel_kontrak:${awal['id']}'
+              : 'hotel_kontrak:baru:${DateTime.now().microsecondsSinceEpoch}');
       if (!mounted) return;
       if (apiSukses(res)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kontrak tersimpan.')));
-        _muatKontrak();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(res['offline'] == true
+                ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+                : 'Kontrak tersimpan.')));
+        if (res['offline'] != true) _muatKontrak();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Gagal: ${apiPesan(res, 'validasi server')}'),
