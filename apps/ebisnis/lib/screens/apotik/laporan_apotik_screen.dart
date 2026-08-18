@@ -5,6 +5,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/app_shell.dart';
 import 'pos_help.dart';
 
 final _rp =
@@ -50,36 +51,44 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.pageBgOf(context),
-      appBar: AppBar(
-        title: const Text('Laporan Apotik'),
-        actions: [
-          PosHelp.button(
-              context,
-              const [
-                'apotik_laporan',
-                'apotik_narkotika',
-                'apotik_laporan'
-              ][_tab.index],
-              compact: true)
-        ],
-        bottom: TabBar(
-          controller: _tab,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'Penjualan'),
-            Tab(text: 'Obat Terkendali'),
-            Tab(text: 'Kedaluwarsa'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _TabPenjualan(),
-          _TabTerkendali(),
-          _TabKedaluwarsa(),
+    final bantuan = const [
+      'apotik_laporan',
+      'apotik_narkotika',
+      'apotik_laporan'
+    ][_tab.index];
+    return AppShell(
+      menuAktif: MenuEBisnis.laporanApotik,
+      judul: 'Laporan Apotik',
+      subjudul: 'Penjualan, register obat terkendali, dan risiko kedaluwarsa',
+      scrollable: false,
+      actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],
+      aksiHeader: PosHelp.button(context, bantuan),
+      body: Column(
+        children: [
+          Material(
+            color: AppColors.cardBgOf(context),
+            borderRadius: BorderRadius.circular(10),
+            child: TabBar(
+              controller: _tab,
+              isScrollable: true,
+              tabs: const [
+                Tab(text: 'Penjualan'),
+                Tab(text: 'Obat Terkendali'),
+                Tab(text: 'Kedaluwarsa'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: TabBarView(
+              controller: _tab,
+              children: const [
+                _TabPenjualan(),
+                _TabTerkendali(),
+                _TabKedaluwarsa(),
+              ],
+            ),
+          ),
         ],
       ),
     );

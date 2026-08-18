@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
@@ -101,6 +102,29 @@ class _LaporanScreenState extends State<LaporanScreen> {
         MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
   }
 
+  Future<void> _bukaPendukungInline(Map<String, dynamic> item) async {
+    final id = item['id'] as String? ?? '';
+    if (id == 'akun_perkiraan') {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => const _DaftarAkunDialog(),
+      );
+      return;
+    }
+    if (id == 'posting_hpp' || id == 'posting_penjualan') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _PostingKeuanganDialog(
+          jenis: id == 'posting_hpp' ? 'hpp' : 'penjualan',
+          judul: item['judul'] as String? ?? 'Posting',
+        ),
+      );
+      return;
+    }
+    await _bukaItem(item);
+  }
+
   Widget _dataPendukung() {
     if (_pendukung.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -116,7 +140,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   ? Icons.inventory_2_outlined
                   : Icons.post_add_outlined;
           return OutlinedButton.icon(
-            onPressed: () => _bukaItem(item),
+            onPressed: () => _bukaPendukungInline(item),
             icon: Icon(ikon, size: 18),
             label: Text(item['judul'] as String? ?? '-'),
           );
@@ -382,4 +406,329 @@ class _LaporanKatalogBaris {
     required this.kategori,
     required this.item,
   });
+}
+
+final _formatRupiahLaporan =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _formatTanggalLaporan = DateFormat('yyyy-MM-dd');
+
+class _DaftarAkunDialog extends StatefulWidget {
+  const _DaftarAkunDialog();
+
+  @override
+  State<_DaftarAkunDialog> createState() => _DaftarAkunDialogState();
+}
+
+class _DaftarAkunDialogState extends State<_DaftarAkunDialog> {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _akun = [];
+  final TextEditingController _cari = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    _cari.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('akun_list', {'limit': 5000});
+      final sumber = (hasil['data'] as List?) ?? (hasil['akun'] as List?) ?? [];
+      if (!mounted) return;
+      setState(() {
+        _akun = sumber
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        _memuat = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _memuat = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kata = _cari.text.trim().toLowerCase();
+    final akun = _akun.where((e) {
+      final teks =
+          '${e['kode'] ?? ''} ${e['nama'] ?? e['label'] ?? ''}'.toLowerCase();
+      return kata.isEmpty || teks.contains(kata);
+    }).toList();
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Expanded(
+                    child: Text('Akun / Perkiraan',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w700))),
+                IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close)),
+              ]),
+              const Text(
+                  'Bagan akun ditampilkan langsung tanpa berpindah halaman.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _cari,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Cari kode atau nama akun...',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _memuat
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(child: Text('Gagal memuat akun: $_error'))
+                        : ListView.separated(
+                            itemCount: akun.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) {
+                              final row = akun[i];
+                              return ListTile(
+                                leading:
+                                    const Icon(Icons.account_tree_outlined),
+                                title: Text(row['nama'] as String? ??
+                                    row['label'] as String? ??
+                                    '-'),
+                                subtitle: Text(row['kode']?.toString() ?? '-'),
+                              );
+                            },
+                          ),
+              ),
+              Text('${akun.length} akun', textAlign: TextAlign.right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostingKeuanganDialog extends StatefulWidget {
+  final String jenis;
+  final String judul;
+  const _PostingKeuanganDialog({required this.jenis, required this.judul});
+
+  @override
+  State<_PostingKeuanganDialog> createState() => _PostingKeuanganDialogState();
+}
+
+class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
+  late DateTime _mulai;
+  DateTime _sampai = DateTime.now();
+  bool _memuat = false;
+  String? _error;
+  Map<String, dynamic>? _data;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _mulai = DateTime(now.year, now.month, 1);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _proses(false));
+  }
+
+  Future<void> _pilihTanggal(bool awal) async {
+    final nilai = awal ? _mulai : _sampai;
+    final hasil = await showDatePicker(
+      context: context,
+      initialDate: nilai,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (hasil == null || !mounted) return;
+    setState(() {
+      if (awal) {
+        _mulai = hasil;
+      } else {
+        _sampai = hasil;
+      }
+      _data = null;
+    });
+  }
+
+  Future<void> _proses(bool posting) async {
+    if (_mulai.isAfter(_sampai)) {
+      setState(
+          () => _error = 'Tanggal mulai tidak boleh melewati tanggal akhir.');
+      return;
+    }
+    if (posting) {
+      final setuju = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Posting ${widget.judul}?'),
+          content: const Text(
+              'Jurnal akan disimpan permanen menggunakan hasil pratinjau periode ini.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Posting')),
+          ],
+        ),
+      );
+      if (setuju != true) return;
+    }
+    setState(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'laporan_keuangan_pendukung',
+        {
+          'jenis': widget.jenis,
+          'mulai': _formatTanggalLaporan.format(_mulai),
+          'sampai': _formatTanggalLaporan.format(_sampai),
+          'posting': posting,
+        },
+      );
+      final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
+      if (!mounted) return;
+      setState(() => _data = data);
+      if (posting) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${widget.judul} berhasil diposting.')));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final jurnal = ((_data?['jurnal'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final belum = ((_data?['belumDipetakan'] as List?) ?? []);
+    final siap = _data?['siap'] == true && _data?['diposting'] != true;
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 780),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Expanded(
+                    child: Text(widget.judul,
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w700))),
+                IconButton(
+                    onPressed: _memuat ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close)),
+              ]),
+              const Text(
+                  'Pratinjau dan posting dilakukan langsung di halaman ini.'),
+              const SizedBox(height: 12),
+              Wrap(spacing: 10, runSpacing: 8, children: [
+                OutlinedButton.icon(
+                    onPressed: _memuat ? null : () => _pilihTanggal(true),
+                    icon: const Icon(Icons.date_range),
+                    label:
+                        Text('Mulai ${_formatTanggalLaporan.format(_mulai)}')),
+                OutlinedButton.icon(
+                    onPressed: _memuat ? null : () => _pilihTanggal(false),
+                    icon: const Icon(Icons.event_available),
+                    label: Text(
+                        'Sampai ${_formatTanggalLaporan.format(_sampai)}')),
+                FilledButton.icon(
+                    onPressed: _memuat ? null : () => _proses(false),
+                    icon: const Icon(Icons.preview_outlined),
+                    label: const Text('Pratinjau')),
+              ]),
+              if (_memuat) const LinearProgressIndicator(),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child:
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                ),
+              if (_data != null) ...[
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  Chip(
+                      label: Text(
+                          'Total ${_formatRupiahLaporan.format(_data!['total'] ?? 0)}')),
+                  if (_data!.containsKey('jumlahTransaksi'))
+                    Chip(label: Text('${_data!['jumlahTransaksi']} transaksi')),
+                  Chip(
+                      label: Text(_data!['siap'] == true
+                          ? 'Siap diposting'
+                          : 'Belum siap')),
+                  if (_data!['terakhir'] != null)
+                    Chip(label: Text('Posting terakhir ${_data!['terakhir']}')),
+                ]),
+                if (belum.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text('${belum.length} pemetaan akun belum lengkap.',
+                        style: const TextStyle(color: Colors.orange)),
+                  ),
+              ],
+              const SizedBox(height: 8),
+              Expanded(
+                child: jurnal.isEmpty
+                    ? const Center(
+                        child: Text('Jalankan pratinjau untuk melihat jurnal.'))
+                    : ListView.separated(
+                        itemCount: jurnal.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final row = jurnal[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(row['akun']?.toString() ?? '-'),
+                            subtitle: Text(row['posisi']?.toString() ?? '-'),
+                            trailing: Text(_formatRupiahLaporan
+                                .format(row['nominal'] ?? 0)),
+                          );
+                        },
+                      ),
+              ),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                TextButton(
+                    onPressed: _memuat ? null : () => Navigator.pop(context),
+                    child: const Text('Tutup')),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                    onPressed: siap && !_memuat ? () => _proses(true) : null,
+                    icon: const Icon(Icons.post_add),
+                    label: const Text('Posting')),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

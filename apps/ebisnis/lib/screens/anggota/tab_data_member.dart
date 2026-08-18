@@ -30,6 +30,7 @@ class AnggotaTabDataMember extends StatefulWidget {
 class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
   bool _memuat = true;
   bool _sinkronBerjalan = false;
+  bool _memulaiDataSample = false;
   String? _pesanError;
   List<Anggota> _daftar = [];
   List<Kategori> _jenisAnggota = [];
@@ -161,6 +162,45 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
     }
   }
 
+  Future<void> _mulaiDataSamplePelanggan() async {
+    final lanjut = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Buat 100.000 pelanggan contoh?'),
+        content: const Text(
+            'Fitur ini hanya untuk toko demo/UAT. Nama pelanggan memakai nama Indonesia yang umum. Proses berjalan di server secara background dan aman ditekan ulang karena kode pelanggan bersifat idempoten.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Mulai')),
+        ],
+      ),
+    );
+    if (lanjut != true || !mounted) return;
+    setStateIfMounted(() => _memulaiDataSample = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('pos_demo_seed_customers', {
+        'toko_id': Sesi.instance.tokoId,
+        'konfirmasi': 'SEED-DEMO-PELANGGAN-100000',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '${hasil['description'] ?? 'Job 100.000 pelanggan contoh dimulai.'}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memulai data pelanggan: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memulaiDataSample = false);
+    }
+  }
+
   Future<void> _bukaFormAnggota({Anggota? anggota}) async {
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
@@ -250,6 +290,22 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
                 ),
               ),
               const SizedBox(width: 8),
+              if (Sesi.instance.bolehDataSample) ...[
+                OutlinedButton.icon(
+                  onPressed:
+                      _memulaiDataSample ? null : _mulaiDataSamplePelanggan,
+                  icon: _memulaiDataSample
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.science_outlined, size: 18),
+                  label: Text(_memulaiDataSample
+                      ? 'Memulai...'
+                      : 'Sample 100K Pelanggan'),
+                ),
+                const SizedBox(width: 8),
+              ],
               OutlinedButton.icon(
                 onPressed: _sinkronBerjalan ? null : _sinkronkanCacheOffline,
                 icon: _sinkronBerjalan

@@ -33,29 +33,22 @@ extension AppThemeWarnaX on AppThemeWarna {
 class AppSetting {
   AppSetting._();
 
-  /// Alamat server BAWAAN varian ini. Kalau [baseUrlHost] terisi, layar
+  /// Alamat server BAWAAN varian ini. Karena [baseUrlHost] selalu terisi, layar
   /// "Pengaturan Alamat Server" DILEWATI sepenuhnya saat pertama kali
   /// instal -- server sudah dikenal sejak awal (lihat `ServerConfig.muat`
   /// di services/server_config.dart), pengguna langsung ke layar Login.
   ///
-  /// Kosongkan (null) utk varian yang dipakai multi-institusi dgn server
-  /// berbeda-beda per pelanggan (spt eBisnis pada umumnya, satu APK/EXE
-  /// dipakai banyak toko independen) -- isi HANYA utk varian ber-server
-  /// bawaan. Al-Bahjah: https://ecampus.staialbahjah.ac.id/albahjah (2026-08-12,
-  /// menggantikan siraj.albahjah.or.id lama).
-  /// Inventory & Sales/eMedik: default https://dev.ecampus.id/ecampus
-  /// (permintaan pemilik utk fase dev/pilot) -- pengguna TETAP bisa
-  /// menggantinya kapan saja lewat "Ubah Alamat Server" di layar Masuk.
-  static const String? baseUrlHost = AppVariant.isAlBahjah
-      ? 'ecampus.staialbahjah.ac.id'
-      : (AppVariant.isInventorySales || AppVariant.isEmedik
-          ? 'dev.ecampus.id'
-          : null);
-  static const String baseUrlContextPath = AppVariant.isAlBahjah
-      ? 'albahjah'
-      : (AppVariant.isInventorySales || AppVariant.isEmedik
-          ? 'ecampus'
-          : 'ebisnis');
+  /// Semua varian selain Al-Bahjah memakai server produksi bersama
+  /// https://ebisnis.id/ebisnis. Ini mencakup eBisnis umum, Inventory & Sales,
+  /// Apotik, dan eMedik. Pengguna TETAP dapat menggantinya melalui
+  /// "Ubah Alamat Server" pada layar Masuk.
+  ///
+  /// Al-Bahjah tetap memakai server khusus
+  /// https://ecampus.staialbahjah.ac.id/albahjah.
+  static const String baseUrlHost =
+      AppVariant.isAlBahjah ? 'ecampus.staialbahjah.ac.id' : 'ebisnis.id';
+  static const String baseUrlContextPath =
+      AppVariant.isAlBahjah ? 'albahjah' : 'ebisnis';
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya

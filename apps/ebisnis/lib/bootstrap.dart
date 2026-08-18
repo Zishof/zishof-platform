@@ -44,6 +44,7 @@ Future<void> bootstrap(AppProductProfile profil) async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     AppProductProfile.aktif = profil;
+    CoreDb.configureStorage(AppVariant.storageNamespace);
     if (!profil.cocokDenganDartDefine()) {
       // Build salah kombinasi (entrypoint vs --dart-define) -- jangan diam:
       // branding compile-time (judul jendela/ikon/exe Windows) akan berbeda

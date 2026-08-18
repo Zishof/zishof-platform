@@ -81,6 +81,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
   int _halaman = 0;
   int _totalProduk = 0;
   Map<String, dynamic>? _statistik;
+  bool _memulaiDataSample = false;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
   /// sudah dimuat penuh (JUAL+BAHAN+EKSTRA, tanpa filter server `jenisItem`,
@@ -146,6 +147,43 @@ class _ProdukScreenState extends State<ProdukScreen> {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _mulaiDataSampleProduk() async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Masukkan 1.000 Supplier dan 50.000 Produk Demo?'),
+        content: const Text(
+            'Fitur ini hanya untuk toko demo/UAT. Proses berjalan di server secara background dan aman ditekan ulang karena kode supplier dan produk bersifat idempoten.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Mulai')),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setStateIfMounted(() => _memulaiDataSample = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('pos_demo_seed_products', {
+        'toko_id': Sesi.instance.tokoId,
+        'konfirmasi': 'SEED-DEMO-PRODUK-50000',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${hasil['description'] ?? 'Job supplier dan produk demo dimulai.'}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal memulai data demo: $e')));
+    } finally {
+      if (mounted) setStateIfMounted(() => _memulaiDataSample = false);
     }
   }
 
@@ -436,6 +474,14 @@ class _ProdukScreenState extends State<ProdukScreen> {
   @override
   Widget build(BuildContext context) {
     final tombolAksi = [
+      if (Sesi.instance.bolehDataSample)
+        HeaderActionButton(
+          icon: Icons.science_outlined,
+          label: _memulaiDataSample
+              ? 'Memulai...'
+              : 'Sample 1K Supplier + 600 Jenis + 50K Produk',
+          onPressed: _memulaiDataSample ? null : _mulaiDataSampleProduk,
+        ),
       HeaderActionButton(
         icon: Icons.sell_outlined,
         label: 'Price Tag',

@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_setting.dart';
+import '../app_variant.dart';
 
 /// Konfigurasi alamat server (padanan `setup.html`/`main.js` desktop-pos-electron
 /// -- host/contextPath/https diisi sekali di awal lewat layar Pengaturan Alamat
@@ -17,9 +18,10 @@ class ServerConfig {
   ServerConfig._();
   static final ServerConfig instance = ServerConfig._();
 
-  static const _kHost = 'server_host';
-  static const _kContextPath = 'server_context_path';
-  static const _kHttps = 'server_https';
+  static String get _kHost => '${AppVariant.storageNamespace}_server_host';
+  static String get _kContextPath =>
+      '${AppVariant.storageNamespace}_server_context_path';
+  static String get _kHttps => '${AppVariant.storageNamespace}_server_https';
 
   String host = '';
   String contextPath = '';
@@ -32,28 +34,77 @@ class ServerConfig {
     host = sp.getString(_kHost) ?? '';
     contextPath = sp.getString(_kContextPath) ?? '';
     https = sp.getBool(_kHttps) ?? true;
+
+    // Versi lama memakai kunci generik. Migrasikan hanya bila isinya masuk
+    // akal untuk varian aktif. Khusus build non-Al-Bahjah, konfigurasi bawaan
+    // Al-Bahjah ditolak karena itu bukti data pernah tercampur oleh artefak
+    // build lama. Dengan begitu eBisnis selalu kembali ke ebisnis.id/ebisnis,
+    // bukan membawa ecampus.../albahjah dari instalasi lain.
+    if (host.trim().isEmpty) {
+      final legacyHost = sp.getString('server_host') ?? '';
+      final legacyContext = sp.getString('server_context_path') ?? '';
+      final legacyHttps = sp.getBool('server_https') ?? true;
+      final legacyAlBahjah = sanitizeHost(legacyHost).toLowerCase() ==
+              'ecampus.staialbahjah.ac.id' &&
+          sanitizeContextPath(legacyContext).toLowerCase() == 'albahjah';
+      final legacyPilot =
+          sanitizeHost(legacyHost).toLowerCase() == 'dev.ecampus.id' &&
+              sanitizeContextPath(legacyContext).toLowerCase() == 'ecampus';
+      if (legacyHost.trim().isNotEmpty &&
+          (AppVariant.isAlBahjah || (!legacyAlBahjah && !legacyPilot))) {
+        await simpan(
+          host: legacyHost,
+          contextPath: legacyContext,
+          https: legacyHttps,
+        );
+        return;
+      }
+    }
+
+    // Migrasikan HANYA alamat bawaan fase pilot yang pernah ditanam pada
+    // varian Inventory & Sales/eMedik. Alamat custom pengguna tidak disentuh.
+    // AppSetting.baseUrlHost == ebisnis.id menjadi penanda compile-time bahwa
+    // build ini bukan varian Al-Bahjah.
+    if (AppSetting.baseUrlHost == 'ebisnis.id' &&
+        sanitizeHost(host).toLowerCase() == 'dev.ecampus.id' &&
+        sanitizeContextPath(contextPath).toLowerCase() == 'ecampus') {
+      await simpan(
+        host: 'ebisnis.id',
+        contextPath: 'ebisnis',
+        https: true,
+      );
+      return;
+    }
+
     // Migrasi versi <1.5.0 (baseUrl dulu hardcode ebisnis.id/ebisnis) --
     // perangkat yang SUDAH pernah login (ada token tersimpan) berarti sudah
     // dipakai lewat server itu; jangan tiba-tiba disuruh Pengaturan Server
-    // stlh update. Instalasi benar-benar baru (tak ada token) TETAP diminta
-    // mengisi sendiri -- tak ada cara tahu institusi mana yang dituju.
+    // stlh update. Instalasi baru tanpa token memakai default varian di bawah.
     if (host.trim().isEmpty && sp.getString('token') != null) {
-      await simpan(host: 'ebisnis.id', contextPath: 'ebisnis', https: true);
+      await simpan(
+        host: AppSetting.baseUrlHost,
+        contextPath: AppSetting.baseUrlContextPath,
+        https: AppSetting.baseUrlHttps,
+      );
       return;
     }
     // Varian ber-institusi tunggal dgn base URL bawaan (lihat
     // AppSetting.baseUrlHost) -- lewati layar Pengaturan Alamat Server
     // sepenuhnya sejak instalasi pertama, server sudah dikenal dari build.
-    if (host.trim().isEmpty && AppSetting.baseUrlHost != null) {
+    if (host.trim().isEmpty) {
       await simpan(
-        host: AppSetting.baseUrlHost!,
+        host: AppSetting.baseUrlHost,
         contextPath: AppSetting.baseUrlContextPath,
         https: AppSetting.baseUrlHttps,
       );
     }
   }
 
-  Future<void> simpan({required String host, required String contextPath, required bool https}) async {
+  Future<void> simpan({
+    required String host,
+    required String contextPath,
+    required bool https,
+  }) async {
     final sp = await SharedPreferences.getInstance();
     await sp.setString(_kHost, host);
     await sp.setString(_kContextPath, contextPath);
@@ -63,9 +114,13 @@ class ServerConfig {
     this.https = https;
   }
 
-  static String sanitizeHost(String raw) => raw.trim().replaceAll(RegExp(r'^https?://', caseSensitive: false), '').replaceAll(RegExp(r'/+$'), '');
+  static String sanitizeHost(String raw) => raw
+      .trim()
+      .replaceAll(RegExp(r'^https?://', caseSensitive: false), '')
+      .replaceAll(RegExp(r'/+$'), '');
 
-  static String sanitizeContextPath(String raw) => raw.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+  static String sanitizeContextPath(String raw) =>
+      raw.trim().replaceAll(RegExp(r'^/+|/+$'), '');
 
   /// Host tanpa validasi ketat format domain (sengaja, sama seperti
   /// `isHostValid` Electron) -- cukup terisi dan tanpa spasi.

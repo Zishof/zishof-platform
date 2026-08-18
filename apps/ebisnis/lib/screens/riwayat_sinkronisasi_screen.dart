@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:core_db/core_db.dart';
+import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../services/pelayanan_transaksi.dart';
+import '../services/transaksi_outbox_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -45,6 +47,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
   bool _sinkronBerjalan = false;
   List<Map<String, dynamic>> _cache = [];
   List<Map<String, dynamic>> _transaksi = [];
+  Map<String, Map<String, dynamic>> _statusCadangan = {};
   int _halaman = 1;
   int _total = 0;
   int _totalPending = 0;
@@ -64,15 +67,66 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
         offset: (_halaman - 1) * _pageSize,
         status: _statusFilter);
     final totalPending = await CoreDb.instance.jumlahTransaksiPending();
+    final statusCadangan =
+        await _muatStatusCadangan(hasil.data.cast<Map<String, dynamic>>());
     if (mounted) {
       setStateIfMounted(() {
         _cache = cache.cast<Map<String, dynamic>>();
         _transaksi = hasil.data.cast<Map<String, dynamic>>();
         _total = hasil.total;
         _totalPending = totalPending;
+        _statusCadangan = statusCadangan;
         _memuat = false;
       });
     }
+  }
+
+  String get _kunciCacheStatus =>
+      'transaksi_backup_status_toko_${Sesi.instance.tokoId ?? 0}';
+
+  Future<Map<String, Map<String, dynamic>>> _muatStatusCadangan(
+      List<Map<String, dynamic>> transaksi) async {
+    final status = <String, Map<String, dynamic>>{};
+    try {
+      final cache =
+          await CoreDb.instance.ambilCacheReferensi(_kunciCacheStatus);
+      if (cache != null && cache.isNotEmpty) {
+        final decoded = jsonDecode(cache) as Map<String, dynamic>;
+        decoded.forEach((kode, nilai) {
+          if (nilai is Map) {
+            status[kode.toLowerCase()] = Map<String, dynamic>.from(nilai);
+          }
+        });
+      }
+    } catch (_) {
+      // Cache lama/korup tidak boleh menggagalkan halaman sinkronisasi.
+    }
+    if (!ApiClient.instance.sudahLogin || transaksi.isEmpty) return status;
+    final kode = <String>[];
+    for (final row in transaksi) {
+      final nilai = '${row['kode_unik'] ?? ''}'.trim();
+      if (nilai.isNotEmpty) kode.add(nilai);
+    }
+    if (kode.isEmpty) return status;
+    try {
+      final hasil = await ApiClient.instance.aksi('transaksi_backup_status', {
+        'toko_id': Sesi.instance.tokoId,
+        'kode_transaksi': kode,
+        'id_perangkat': IdentitasMesin.instance.idMesin,
+      });
+      final data = (hasil['data'] as List?) ?? const <dynamic>[];
+      for (final nilai in data) {
+        if (nilai is! Map) continue;
+        final row = Map<String, dynamic>.from(nilai);
+        final kodeTransaksi = '${row['kodeTransaksi'] ?? ''}'.toLowerCase();
+        if (kodeTransaksi.isNotEmpty) status[kodeTransaksi] = row;
+      }
+      await CoreDb.instance
+          .simpanCacheReferensi(_kunciCacheStatus, jsonEncode(status));
+    } catch (_) {
+      // Saat offline tetap tampilkan acknowledgement terakhir dari cache.
+    }
+    return status;
   }
 
   Future<void> _terapkanFilter() async {
@@ -121,6 +175,9 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
           }
         }
       }
+      // Sapuan resmi outbox sekaligus menarik transaksi toko terbaru dan
+      // mengirim acknowledgement perangkat ini.
+      await TransaksiOutboxService.instance.sinkronkan();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
@@ -279,12 +336,13 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                   ),
                   const SizedBox(height: 8),
                   AppDataTable(
-                    minWidth: 940,
+                    minWidth: 1240,
                     emptyText: 'Tidak ada riwayat transaksi.',
                     columns: const [
                       AppTableColumn('Kode', flex: 3),
                       AppTableColumn('Waktu', flex: 2),
                       AppTableColumn('Kasir', flex: 2),
+                      AppTableColumn('Cadangan Kasir Lain', flex: 4),
                       AppTableColumn('Metode', flex: 2),
                       AppTableColumn('Total', flex: 2, align: TextAlign.right),
                       AppTableColumn('Status',
@@ -300,6 +358,15 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                           cocok.isEmpty ? '-' : cocok.first.nama;
                       final synced = t['status'] == 'SYNCED';
                       final pesanError = (t['pesan_error'] as String?) ?? '';
+                      final kodeTransaksi =
+                          '${payload['kodeUnik'] ?? t['kode_unik']}'
+                              .toLowerCase();
+                      final cadangan = _statusCadangan[kodeTransaksi];
+                      final jumlahKasir =
+                          (cadangan?['jumlahKasir'] as num?)?.toInt() ?? 0;
+                      final jumlahMesin =
+                          (cadangan?['jumlahMesin'] as num?)?.toInt() ?? 0;
+                      final penerima = '${cadangan?['penerima'] ?? ''}'.trim();
                       return AppTableRowData(cells: [
                         AppTableCell.text(
                             '${payload['kodeUnik'] ?? t['kode_unik']}',
@@ -308,6 +375,39 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                             flex: 2),
                         AppTableCell.text('${payload['kasir'] ?? '-'}',
                             flex: 2),
+                        AppTableCell(
+                          flex: 4,
+                          child: Tooltip(
+                            message: penerima.isEmpty
+                                ? 'Belum ada acknowledgement dari kasir/perangkat lain.'
+                                : penerima,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '$jumlahKasir kasir · $jumlahMesin mesin',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                    color: jumlahMesin > 0
+                                        ? AppColors.success
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  penerima.isEmpty
+                                      ? 'Belum tersalin ke POS lain'
+                                      : penerima,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         AppTableCell.text(
                             pesanError.isEmpty
                                 ? namaCaraBayar

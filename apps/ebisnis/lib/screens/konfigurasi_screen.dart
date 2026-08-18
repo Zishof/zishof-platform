@@ -10,6 +10,7 @@ import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
+import '../services/pengaturan_koreksi_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/pengaturan_struk.dart';
@@ -196,6 +197,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   FormatNomorStruk _formatNomorStruk = FormatNomorStruk.defaultPos;
   bool _menyimpanPembayaran = false;
   bool _updateOtomatis = true;
+  bool _izinkanEditTransaksi = true;
 
   @override
   void initState() {
@@ -219,6 +221,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     await PengaturanNomorStruk.instance.muat();
     await PengaturanSesiLokal.instance.muat();
     await PengaturanUpdate.instance.muat();
+    await PengaturanKoreksiTransaksi.instance.muat();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -241,6 +244,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         _timeoutSesiController.text =
             PengaturanSesiLokal.instance.timeoutMenit.toString();
         _updateOtomatis = PengaturanUpdate.instance.otomatis;
+        _izinkanEditTransaksi = PengaturanKoreksiTransaksi.instance.izinkanEdit;
         _memuat = false;
       });
     }
@@ -464,6 +468,40 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        AppFormSection(
+          judul: 'Keamanan & Koreksi Transaksi',
+          deskripsi:
+              'Atur apakah koreksi transaksi lunas ditawarkan pada perangkat ini. Otorisasi admin/supervisor dari server tetap wajib.',
+          children: [
+            AppFormSwitchTile(
+              title: 'Izinkan Edit Transaksi dari Riwayat Penjualan',
+              subtitle: Sesi.instance.bolehKelola
+                  ? 'Jika dimatikan, tombol Edit Transaksi disembunyikan. Perubahan hanya berlaku pada varian aplikasi dan perangkat ini.'
+                  : 'Hanya admin atau supervisor yang dapat mengubah pengaturan ini. Hak akses server tetap menjadi pengaman utama.',
+              value: _izinkanEditTransaksi,
+              onChanged: Sesi.instance.bolehKelola
+                  ? (nilai) async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await PengaturanKoreksiTransaksi.instance.simpan(nilai);
+                      if (!mounted) return;
+                      setStateIfMounted(() => _izinkanEditTransaksi = nilai);
+                      messenger.showSnackBar(SnackBar(
+                        content: Text(nilai
+                            ? 'Edit transaksi diizinkan pada perangkat ini.'
+                            : 'Edit transaksi dinonaktifkan pada perangkat ini.'),
+                      ));
+                    }
+                  : null,
+            ),
+            const AppInfoBanner(
+              icon: Icons.verified_user_outlined,
+              color: AppColors.info,
+              text:
+                  'Sakelar ini tidak memberikan hak baru. Kasir biasa tetap tidak dapat mengedit meskipun pengaturan aktif, dan server memvalidasi kewenangan pada saat simpan.',
+            ),
+          ],
+        ),
         if (defaultTargetPlatform == TargetPlatform.windows) ...[
           const SizedBox(height: 16),
           AppFormSection(
@@ -621,6 +659,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   String? _error;
   bool _bolehUbah = false;
   bool _bolehTransaksiStokHabis = false;
+  bool _tokoDemo = false;
+  bool _bolehUbahTokoDemo = false;
   String? _logoStrukPath;
   String? _logoPriceTagPath;
   String _logoStrukMode = 'persegi';
@@ -696,6 +736,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _alasanTahan.text =
           ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
       _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
+      _tokoDemo = d['tokoDemo'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
             ? Sesi.instance.tokoNama
@@ -709,6 +750,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim();
       setStateIfMounted(() {
         _bolehUbah = hasil['bolehUbah'] == true;
+        _bolehUbahTokoDemo = hasil['bolehUbahTokoDemo'] == true;
         _logoStrukPath = PengaturanStruk.instance.logoPath;
         _logoPriceTagPath = PengaturanStruk.instance.priceTagLogoPath;
         _logoStrukMode = PengaturanStruk.instance.logoMode;
@@ -829,6 +871,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
         'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
+        if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
         'alasan_tahan': _alasanTahan.text
             .split(RegExp(r'[\r\n]+'))
             .map((e) => e.trim())
@@ -847,6 +890,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               _telp.text.trim().isEmpty ? _picHp.text.trim() : _telp.text.trim()
           ..pesanTerimaKasih = _pesanTerimaKasih.text.trim()
           ..bolehTransaksiStokHabis = _bolehTransaksiStokHabis
+          ..tokoDemo = _tokoDemo
           ..alasanTahan = _alasanTahan.text
               .split(RegExp(r'[\r\n]+'))
               .map((e) => e.trim())
@@ -1222,6 +1266,17 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
                       setStateIfMounted(() => _bolehTransaksiStokHabis = nilai)
                   : null,
             ),
+            if (_bolehUbahTokoDemo)
+              AppFormSwitchTile(
+                title: 'Toko Demo / UAT',
+                subtitle: _tokoDemo
+                    ? 'AKTIF — generator data contoh bervolume besar dapat dijalankan oleh administrator pada toko ini.'
+                    : 'NONAKTIF — data contoh massal tidak dapat dibuat. Ini adalah nilai default yang aman.',
+                value: _tokoDemo,
+                onChanged: _bolehUbah && !_menyimpan
+                    ? (nilai) => setStateIfMounted(() => _tokoDemo = nilai)
+                    : null,
+              ),
             if (_bolehUbah)
               Align(
                 alignment: Alignment.centerLeft,

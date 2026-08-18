@@ -111,7 +111,14 @@ class PetaDbfLegacy {
   PetaDbfLegacy._();
 
   static const urutanImpor = [
-    'supplier', 'customer', 'sales', 'produk', 'harga_beli', 'harga_jual'
+    'supplier',
+    'customer',
+    'sales',
+    'produk',
+    'harga_beli',
+    'harga_jual',
+    'pembelian_legacy',
+    'penjualan_legacy'
   ];
 
   static const labelJenis = {
@@ -121,6 +128,8 @@ class PetaDbfLegacy {
     'produk': 'Master Barang + saldo (STOK.DBF)',
     'harga_beli': 'Harga Beli per Supplier (masterbl.DBF)',
     'harga_jual': 'Harga Jual per Customer (masterjl.DBF)',
+    'pembelian_legacy': 'Riwayat Pembelian/Pengadaan (BELI.DBF)',
+    'penjualan_legacy': 'Riwayat Penjualan (JUAL.DBF)',
   };
 
   static String? jenisDariNamaFile(String namaFile) {
@@ -138,6 +147,10 @@ class PetaDbfLegacy {
         return 'harga_beli';
       case 'masterjl.dbf':
         return 'harga_jual';
+      case 'beli.dbf':
+        return 'pembelian_legacy';
+      case 'jual.dbf':
+        return 'penjualan_legacy';
       default:
         return null;
     }
@@ -151,7 +164,8 @@ class PetaDbfLegacy {
 
   /// Normalisasi satu baris DBF ke kontrak `si_import_legacy.rows` per jenis.
   /// Baris tanpa kode dikembalikan null (dilewati klien, tercatat di ringkasan).
-  static Map<String, dynamic>? normalisasi(String jenis, Map<String, dynamic> r) {
+  static Map<String, dynamic>? normalisasi(
+      String jenis, Map<String, dynamic> r) {
     switch (jenis) {
       case 'supplier':
         if (_s(r, 'KODESUPPL').isEmpty) return null;
@@ -217,6 +231,41 @@ class PetaDbfLegacy {
           'kode_produk': _s(r, 'KODEBRG'),
           'tanggal': _s(r, 'TANGGAL'),
           'harga': _n(r, 'HARGAJUAL'),
+        };
+      case 'pembelian_legacy':
+        if (_s(r, 'NOFAKTUR').isEmpty || _s(r, 'KODEBRG').isEmpty) {
+          return null;
+        }
+        return {
+          'nomor_faktur': _s(r, 'NOFAKTUR'),
+          'kode_supplier': _s(r, 'KODESUPPL'),
+          'kode_produk': _s(r, 'KODEBRG'),
+          'nama_produk': _s(r, 'NAMABRG'),
+          'tanggal': _s(r, 'TANGGAL'),
+          'qty': _n(r, 'JUMLAH'),
+          'harga_beli': _n(r, 'HARGABELI'),
+          'harga_asli': _n(r, 'HARGAASLI'),
+          'diskon': _n(r, 'DISCOUNT'),
+          'diskon2': _n(r, 'DISCOUNT2'),
+          'nomor_batch': _s(r, 'NOBATCH'),
+          'tanggal_expired': _s(r, 'TGLEXP'),
+        };
+      case 'penjualan_legacy':
+        if (_s(r, 'NOFAKTUR').isEmpty || _s(r, 'KODEBRG').isEmpty) {
+          return null;
+        }
+        return {
+          'nomor_faktur': _s(r, 'NOFAKTUR'),
+          'kode_customer': _s(r, 'KODECUST'),
+          'kode_sales': _s(r, 'KODESALES'),
+          'kode_produk': _s(r, 'KODEBRG'),
+          'nama_produk': _s(r, 'NAMABRG'),
+          'tanggal': _s(r, 'TANGGAL'),
+          'qty': _n(r, 'JUMLAH'),
+          'harga_beli': _n(r, 'HARGABELI'),
+          'harga_jual': _n(r, 'HARGAJUAL'),
+          'nomor_batch': _s(r, 'NOBATCH'),
+          'tanggal_expired': _s(r, 'TGLEXP'),
         };
     }
     return null;
