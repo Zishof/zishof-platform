@@ -12,6 +12,7 @@ import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/jenis_produk_screen.dart';
+import '../screens/grup_produk_screen.dart';
 import '../screens/cara_bayar_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/ringkasan_screen.dart';
@@ -408,6 +409,17 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Jenis Produk',
                             builder: (_) => const JenisProdukScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.bolehMenuVarianBaru('grup_produk'))
+                        _ItemMenu(
+                          icon: Icons.workspaces_outline,
+                          label: 'Grup Produk',
+                          aktif: menuAktif == 'Grup Produk',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Grup Produk',
+                            builder: (_) => const GrupProdukScreen(),
                           ),
                         ),
                       if (Sesi.instance.bolehMenu('stokopname'))

@@ -1241,6 +1241,11 @@ class _FormProdukState extends State<_FormProduk> {
   int? _kategoriId;
   int? _kebijakanReturId;
   bool _izinkanJualMinusStok = false;
+  // Grup harga terpusat: -1 = tidak diubah (payload TIDAK dikirim -- data produk
+  // dari server belum membawa grup, jadi simpan biasa tidak boleh melepas grup
+  // tanpa sengaja), 0 = lepaskan dari grup, >0 = id grup pilihan.
+  int _grupProdukPilihan = -1;
+  Future<Map<String, dynamic>>? _grupProdukFuture;
   bool _aktif = true;
   String _jenisItem = 'JUAL';
   bool _menyimpan = false;
@@ -1282,6 +1287,7 @@ class _FormProdukState extends State<_FormProduk> {
                 ? null
                 : widget.kebijakanRetur.first.id));
     _izinkanJualMinusStok = p?.izinkanJualMinusStok ?? false;
+    _grupProdukPilihan = -1;
     _aktif = p?.aktif ?? true;
     _jenisItem = p?.jenisItem ?? 'JUAL';
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
@@ -1549,6 +1555,8 @@ class _FormProdukState extends State<_FormProduk> {
         'kategori_id': _kategoriId,
         'kebijakan_retur_id': _kebijakanReturId,
         'izinkan_jual_minus_stok': _izinkanJualMinusStok,
+        if (_grupProdukPilihan != -1)
+          'grup_produk_id': _grupProdukPilihan == 0 ? null : _grupProdukPilihan,
         'aktif': _aktif,
         'jenis_item': _jenisItem,
         'bahan_baku': _bahanBaku
@@ -1927,6 +1935,38 @@ class _FormProdukState extends State<_FormProduk> {
               AppFormSection(
                 judul: 'Pengaturan',
                 children: [
+                  if (Sesi.instance.bolehMenuVarianBaru('grup_produk'))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: FutureBuilder<Map<String, dynamic>>(
+                        future: _grupProdukFuture ??=
+                            ApiClient.instance.aksi('grup_produk_list', {}),
+                        builder: (c, snap) {
+                          final data = ((snap.data?['data'] as List?) ?? [])
+                              .map((e) => Map<String, dynamic>.from(e as Map))
+                              .toList();
+                          return DropdownButtonFormField<int>(
+                            value: _grupProdukPilihan,
+                            decoration: const InputDecoration(
+                                labelText: 'Grup Produk (Harga Terpusat)',
+                                helperText:
+                                    'Bila dipilih, HPP/harga jual produk ini ditimpa setiap grup disimpan'),
+                            items: [
+                              const DropdownMenuItem<int>(
+                                  value: -1, child: Text('(Tidak diubah)')),
+                              const DropdownMenuItem<int>(
+                                  value: 0,
+                                  child: Text('Tanpa Grup (lepaskan)')),
+                              ...data.map((g) => DropdownMenuItem<int>(
+                                  value: (g['id'] as num).toInt(),
+                                  child: Text('${g['nama']}'))),
+                            ],
+                            onChanged: (v) => setStateIfMounted(
+                                () => _grupProdukPilihan = v ?? -1),
+                          );
+                        },
+                      ),
+                    ),
                   AppFormSwitchTile(
                     title: 'Boleh dijual walau stok minus',
                     value: _izinkanJualMinusStok,

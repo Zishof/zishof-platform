@@ -27,6 +27,7 @@ import '../screens/diskon_screen.dart';
 import '../screens/cara_bayar_screen.dart';
 import '../screens/supplier_screen.dart';
 import '../screens/jenis_produk_screen.dart';
+import '../screens/grup_produk_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -86,6 +87,7 @@ enum MenuEBisnis {
   anggota,
   produk,
   jenisProduk,
+  grupProduk,
   stokOpname,
   kedaluwarsa,
   mutasiAntarOutlet,
@@ -170,6 +172,8 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.anggota: 'anggota',
   MenuEBisnis.produk: 'produk',
   MenuEBisnis.jenisProduk: 'produk',
+  // Fail-closed di server (KUNCI_DEFAULT_NONAKTIF): perubahan harga massal lintas outlet.
+  MenuEBisnis.grupProduk: 'grup_produk',
   MenuEBisnis.stokOpname: 'stokopname',
   // Hak kelola mengikuti Stok Opname agar role lama langsung mendapat akses
   // tanpa menunggu migrasi matriks RBAC di server.
@@ -313,6 +317,9 @@ const _daftarMenu = <_ItemMenuShell>[
       MenuEBisnis.jenisProduk, Icons.category_outlined, 'Jenis Produk',
       builder: _bangunJenisProduk),
   _ItemMenuShell(
+      MenuEBisnis.grupProduk, Icons.workspaces_outline, 'Grup Produk',
+      builder: _bangunGrupProduk),
+  _ItemMenuShell(
       MenuEBisnis.stokOpname, Icons.fact_check_outlined, 'Stok Opname',
       builder: _bangunStok),
   _ItemMenuShell(
@@ -395,6 +402,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.anggota,
     MenuEBisnis.produk,
     MenuEBisnis.jenisProduk,
+    MenuEBisnis.grupProduk,
     MenuEBisnis.stokOpname,
     MenuEBisnis.kedaluwarsa,
     MenuEBisnis.mutasiAntarOutlet,
@@ -424,6 +432,7 @@ Widget _bangunPesanan(BuildContext c) => const PesananScreen();
 Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
 Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
+Widget _bangunGrupProduk(BuildContext c) => const GrupProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKedaluwarsa(BuildContext c) => const KedaluwarsaScreen();
 Widget _bangunMutasiAntarOutlet(BuildContext c) =>
@@ -581,6 +590,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Produk';
     case MenuEBisnis.jenisProduk:
       return 'Jenis Produk';
+    case MenuEBisnis.grupProduk:
+      return 'Grup Produk';
     case MenuEBisnis.stokOpname:
       return 'Stok Opname';
     case MenuEBisnis.kedaluwarsa:
