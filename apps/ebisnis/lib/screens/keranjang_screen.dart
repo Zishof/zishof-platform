@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../product_profile.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pengaturan_nomor_struk.dart';
@@ -161,6 +162,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   ItemKeranjang? _itemTeratasTerakhir;
   bool _langsungTerlayani = true;
   late DateTime _waktuTransaksi;
+
+  /// MitraInap LANGKAH 4: transaksi outlet ini ditagihkan ke folio kamar.
+  /// Berisi baris dari aksi `hotel_room_charge_lookup`
+  /// ({id, tamu_nama, kamar_nomor, properti_id, properti_nama}); null =
+  /// pembayaran biasa. Server memvalidasi ulang (in-house + folio OPEN)
+  /// SEBELUM penjualan disimpan, lalu mem-posting POS_CHARGE idempoten
+  /// per bill -- di sini murni pemilihan.
+  Map<String, dynamic>? _roomChargeStay;
 
   @override
   void initState() {
@@ -858,6 +867,129 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return '${pad(d.day)}-${pad(d.month)}-${d.year} ${pad(d.hour)}:${pad(d.minute)}:${pad(d.second)}';
   }
 
+  /// Kontrol "Tagihkan ke Kamar" -- hanya dirakit pada varian MitraInap
+  /// (lihat pemakaian di build). Memilih tamu butuh koneksi (lookup server);
+  /// transaksi offline tetap sah asal tamu sudah dipilih saat online, karena
+  /// payload dibawa outbox apa adanya.
+  Widget _pemilihRoomCharge() {
+    final stay = _roomChargeStay;
+    return InkWell(
+      onTap: _memproses ? null : _pilihRoomCharge,
+      borderRadius: BorderRadius.circular(10),
+      child: InputDecorator(
+        decoration: const InputDecoration(
+            labelText: 'Tagihkan ke Kamar (folio tamu)',
+            border: _radiusInput,
+            isDense: true),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                  stay == null
+                      ? 'Tidak (bayar langsung)'
+                      : '${stay['tamu_nama'] ?? '-'} — Kamar ${stay['kamar_nomor'] ?? '-'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (stay != null)
+              InkWell(
+                onTap: () => setStateIfMounted(() => _roomChargeStay = null),
+                child: const Icon(Icons.clear, size: 18),
+              )
+            else
+              const Icon(Icons.chevron_right, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pilihRoomCharge() async {
+    List<Map<String, dynamic>> daftarStay;
+    try {
+      final res =
+          await ApiClient.instance.aksi('hotel_room_charge_lookup', {});
+      if (res['status'] != '00' && res['status'] != 'success') {
+        throw Exception(res['description'] ?? 'Gagal memuat tamu in-house.');
+      }
+      daftarStay = ((res['stay'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('Butuh koneksi server untuk memuat tamu in-house: $e')));
+      return;
+    }
+    if (!mounted) return;
+    if (daftarStay.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Tidak ada tamu in-house. Check-in dilakukan dari menu Check-in / Check-out.')));
+      return;
+    }
+    final pilihan = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (c) {
+        var filter = '';
+        return StatefulBuilder(builder: (c2, setD) {
+          final tersaring = daftarStay.where((s) {
+            if (filter.isEmpty) return true;
+            final teks =
+                '${s['tamu_nama'] ?? ''} ${s['kamar_nomor'] ?? ''} ${s['properti_nama'] ?? ''}'
+                    .toLowerCase();
+            return teks.contains(filter);
+          }).toList();
+          return AlertDialog(
+            title: const Text('Tagihkan ke Kamar'),
+            content: SizedBox(
+              width: 420,
+              height: 380,
+              child: Column(children: [
+                TextField(
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Cari nama tamu / nomor kamar',
+                      isDense: true),
+                  onChanged: (v) =>
+                      setD(() => filter = v.trim().toLowerCase()),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: tersaring.isEmpty
+                      ? const Center(child: Text('Tidak ada yang cocok.'))
+                      : ListView.builder(
+                          itemCount: tersaring.length,
+                          itemBuilder: (context, i) {
+                            final s = tersaring[i];
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.hotel_outlined),
+                              title: Text(
+                                  '${s['tamu_nama'] ?? '-'} — Kamar ${s['kamar_nomor'] ?? '-'}'),
+                              subtitle: Text('${s['properti_nama'] ?? ''}'),
+                              onTap: () => Navigator.of(c2).pop(s),
+                            );
+                          },
+                        ),
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(c2).pop(),
+                  child: const Text('Batal')),
+            ],
+          );
+        });
+      },
+    );
+    if (pilihan == null) return;
+    setStateIfMounted(() => _roomChargeStay = pilihan);
+  }
+
   Map<String, dynamic> _buatPayload(
     String kodeUnik,
     DateTime waktu, {
@@ -907,6 +1039,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       'nama_member': _memberTerpilih?.nama,
       'nama_mesin': IdentitasMesin.instance.namaMesin,
       'id_perangkat': IdentitasMesin.instance.idMesin,
+      if (_roomChargeStay != null) ...{
+        'hotel_menginap_id': _roomChargeStay!['id'],
+        'hotel_properti_id': _roomChargeStay!['properti_id'],
+      },
       if (widget.draftIdSumber != null) ...{
         // `id` adalah nama kanonis yang dibaca endpoint draft_bayar. Alias
         // di bawah tetap dikirim untuk kompatibilitas server/klien lama.
@@ -1213,6 +1349,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _splitBayar = [];
         _nilaiDiskonFaktur = 0;
         _tipeDiskonFaktur = 'NOMINAL';
+        _roomChargeStay = null;
       });
       widget.onSelesai?.call();
       if (!mounted) return;
@@ -1992,6 +2129,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ),
               ),
             ),
+            if (AppProductProfile.aktif.isMitraInap) ...[
+              const SizedBox(height: 8),
+              _pemilihRoomCharge(),
+            ],
             const SizedBox(height: 12),
             Divider(height: 1, color: AppColors.borderOf(context)),
             const SizedBox(height: 12),
