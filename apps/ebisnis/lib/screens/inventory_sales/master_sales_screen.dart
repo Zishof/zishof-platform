@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -140,6 +142,7 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
           'Penjual keliling: kode, perkiraan, wilayah, target, akun login (layar legacy 07)',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -245,12 +248,17 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                           return AppTableRowData(
                             onTap: bolehUbah ? () => _bukaForm(data: s) : null,
                             cells: [
-                              AppTableCell.text('${s['kode']}',
-                                  flex: 1,
+                              AppTableCell(
+                                flex: 1,
+                                child: SelTeksDenganSinkron(
+                                  kunci: 'si_sales:${s['id']}',
+                                  teks: '${s['kode']}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
-                                      fontSize: 12.5)),
+                                      fontSize: 12.5),
+                                ),
+                              ),
                               AppTableCell(
                                 flex: 3,
                                 child: Column(

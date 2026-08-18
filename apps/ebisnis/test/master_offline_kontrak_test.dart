@@ -92,6 +92,9 @@ void main() {
     'lib/screens/diskon/tab_aturan_diskon.dart',
     'lib/screens/diskon/tab_diskon_grup.dart',
     'lib/screens/diskon/tab_pencairan_diskon.dart',
+    'lib/screens/inventory_sales/master_customer_screen.dart',
+    'lib/screens/inventory_sales/master_supplier_screen.dart',
+    'lib/screens/inventory_sales/master_sales_screen.dart',
   ];
 
   // Mutasi yang SENGAJA tetap online-only (jangan diam-diam diantre):

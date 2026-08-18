@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -175,6 +177,7 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
           'Identitas pemasok, termin, wilayah, dan rekening (layar legacy 01-03)',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -301,12 +304,17 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> {
                           return AppTableRowData(
                             onTap: () => _bukaDetail(s),
                             cells: [
-                              AppTableCell.text('${s['kode']}',
-                                  flex: 1,
+                              AppTableCell(
+                                flex: 1,
+                                child: SelTeksDenganSinkron(
+                                  kunci: 'si_supplier:${s['id']}',
+                                  teks: '${s['kode']}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
-                                      fontSize: 12.5)),
+                                      fontSize: 12.5),
+                                ),
+                              ),
                               AppTableCell.text('${s['nama']}',
                                   flex: 3, maxLines: 2),
                               AppTableCell.text('${s['wilayah'] ?? ''}',

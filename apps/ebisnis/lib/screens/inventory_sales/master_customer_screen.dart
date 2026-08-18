@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/indikator_baris_sinkron.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -167,6 +169,7 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
           'Customer distribusi: termin, diskon, wilayah, sales pembina, piutang (layar legacy 04-06)',
       scrollable: false,
       actionsAppBar: [
+        const IndikatorSinkronMaster(),
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muat)
       ],
       aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -304,12 +307,17 @@ class _MasterCustomerScreenState extends State<MasterCustomerScreen> {
                           return AppTableRowData(
                             onTap: () => _bukaDetail(c),
                             cells: [
-                              AppTableCell.text('${c['kode']}',
-                                  flex: 1,
+                              AppTableCell(
+                                flex: 1,
+                                child: SelTeksDenganSinkron(
+                                  kunci: 'si_customer:${c['anggotaId']}',
+                                  teks: '${c['kode']}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
-                                      fontSize: 12.5)),
+                                      fontSize: 12.5),
+                                ),
+                              ),
                               AppTableCell.text('${c['nama']}',
                                   flex: 3, maxLines: 2),
                               AppTableCell.text('${c['wilayah'] ?? ''}',
