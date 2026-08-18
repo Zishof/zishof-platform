@@ -4,6 +4,7 @@ import 'app_variant.dart';
 import 'screens/kasir_screen.dart';
 import 'screens/inventory_sales/beranda_is_screen.dart';
 import 'screens/apotik/beranda_apotik_screen.dart';
+import 'screens/mitrainap/beranda_mitrainap_screen.dart';
 import 'sesi.dart';
 
 /// Grup fitur yang bisa diaktifkan per produk -- gerbang level VARIAN (bukan
@@ -17,6 +18,7 @@ class FiturGrup {
   static const inventorySales = 'inventory_sales';
   static const apotik = 'apotik';
   static const emedik = 'emedik';
+  static const mitrainap = 'mitrainap';
 }
 
 /// <h3>Profil produk -- SATU deskriptor per varian build (PERINTAH_MASTER §4.1).</h3>
@@ -106,6 +108,22 @@ class AppProductProfile {
           fiturGrup: const {FiturGrup.pos, FiturGrup.apotik, FiturGrup.emedik},
         );
 
+  /// Varian "MitraInap" -- admin hotel/penginapan (MVP LANGKAH 3; backend
+  /// aksi hotel_* / HotelApiHelper). FiturGrup.pos ikut dirakit mengikuti
+  /// preseden apotik: cangkang POS tetap tersedia utk Admin, sedangkan role
+  /// hotel hasil seed mematikan menu POS lama lewat aksesMenu (fail-closed).
+  /// Ikon masih menumpang aset ebisnis -- aset khusus menyusul; JANGAN
+  /// menunjuk path aset yang belum ada (crash load gambar).
+  const AppProductProfile.mitrainap()
+      : this._(
+          kode: 'mitrainap',
+          namaAplikasi: 'MitraInap',
+          namaSidebar: 'MitraInap',
+          updateAssetKeyword: 'mitrainap',
+          logoAsset: 'assets/images/ebisnis/icon.png',
+          fiturGrup: const {FiturGrup.pos, FiturGrup.mitrainap},
+        );
+
   /// Profil yang cocok dgn `--dart-define=EBISNIS_VARIANT` build ini -- dipakai
   /// `main.dart` (entrypoint default melayani ebisnis & albahjah sekaligus).
   factory AppProductProfile.dariDartDefine() {
@@ -115,6 +133,7 @@ class AppProductProfile {
     }
     if (AppVariant.isApotik) return const AppProductProfile.apotik();
     if (AppVariant.isEmedik) return const AppProductProfile.emedik();
+    if (AppVariant.isMitraInap) return const AppProductProfile.mitrainap();
     return const AppProductProfile.ebisnis();
   }
 
@@ -129,6 +148,8 @@ class AppProductProfile {
 
   bool get isEmedik => fiturGrup.contains(FiturGrup.emedik);
 
+  bool get isMitraInap => fiturGrup.contains(FiturGrup.mitrainap);
+
   /// Prefix tag rilis GitHub utk update-checker VARIAN yg punya rilis bertag
   /// khusus (emedik/apotik -> `emedik-v*`/`apotik-v*`). null utk varian yg
   /// asetnya menumpang rilis `v*` utama & dibedakan lewat updateAssetKeyword
@@ -137,6 +158,9 @@ class AppProductProfile {
   String? get tagRilisPrefix {
     if (kode == 'emedik') return 'emedik-';
     if (kode == 'apotik') return 'apotik-';
+    // Belum ada rilis bertag mitrainap-* -- prefix khusus justru PENGAMAN:
+    // updater tidak akan menarik rilis `v*` ebisnis ke instalasi MitraInap.
+    if (kode == 'mitrainap') return 'mitrainap-';
     return null;
   }
 
@@ -155,6 +179,9 @@ class AppProductProfile {
       // tampilan -- bukan binary (judul ikut namaSidebar profil).
       return const BerandaApotikScreen();
     }
+    if (isMitraInap) {
+      return const BerandaMitraInapScreen();
+    }
     return const KasirScreen();
   }
 
@@ -163,7 +190,8 @@ class AppProductProfile {
   bool bolehMenuVarian(String kunciMenuVarian) {
     if (kunciMenuVarian == FiturGrup.inventorySales
         || kunciMenuVarian == FiturGrup.apotik
-        || kunciMenuVarian == FiturGrup.emedik) {
+        || kunciMenuVarian == FiturGrup.emedik
+        || kunciMenuVarian == FiturGrup.mitrainap) {
       return fiturGrup.contains(kunciMenuVarian);
     }
     return true;

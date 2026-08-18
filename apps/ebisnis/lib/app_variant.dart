@@ -26,6 +26,14 @@ class AppVariant {
   /// Build: `-t lib/main_emedik.dart --dart-define=EBISNIS_VARIANT=emedik`.
   static const isEmedik = kode == 'emedik';
 
+  /// Varian "MitraInap" -- admin hotel/penginapan (backend Java AIS, aksi
+  /// hotel_* / HotelApiHelper). Aset ikon & latar login masih menumpang
+  /// ebisnis (belum ada aset khusus -- menunjuk aset yang tidak ada = crash
+  /// load gambar), tapi storage/update keyword WAJIB terpisah supaya data
+  /// lokal tidak tercampur dan updater tidak menarik APK/installer ebisnis.
+  /// Build: `-t lib/main_mitrainap.dart --dart-define=EBISNIS_VARIANT=mitrainap`.
+  static const isMitraInap = kode == 'mitrainap';
+
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   /// Namespace stabil untuk seluruh data lokal. Nilai ini tidak mengikuti
@@ -36,7 +44,9 @@ class AppVariant {
       ? 'albahjah'
       : (isInventorySales
           ? 'inventory_sales'
-          : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
+          : (isApotik
+              ? 'apotik'
+              : (isEmedik ? 'emedik' : (isMitraInap ? 'mitrainap' : 'ebisnis'))));
 
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
@@ -44,21 +54,30 @@ class AppVariant {
           ? 'eBisnis Inventory & Sales'
           : (isApotik
               ? 'eBisnis POS Apotik'
-              : (isEmedik ? 'eBisnis POS eMedik' : 'eBisnis')));
+              : (isEmedik
+                  ? 'eBisnis POS eMedik'
+                  : (isMitraInap ? 'MitraInap' : 'eBisnis'))));
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales
           ? 'Inventory & Sales'
           : (isApotik
               ? 'POS Apotik'
-              : (isEmedik ? 'POS eMedik' : 'eBisnis POS')));
+              : (isEmedik
+                  ? 'POS eMedik'
+                  : (isMitraInap ? 'MitraInap' : 'eBisnis POS'))));
   static const updateAssetKeyword = isAlBahjah
       ? 'albahjah'
       : (isInventorySales
           ? 'inventorysales'
-          : (isApotik ? 'apotik' : (isEmedik ? 'emedik' : 'ebisnis')));
-  static const String? updateTagPrefix =
-      isApotik ? 'apotik-' : (isEmedik ? 'emedik-' : null);
+          : (isApotik
+              ? 'apotik'
+              : (isEmedik
+                  ? 'emedik'
+                  : (isMitraInap ? 'mitrainap' : 'ebisnis'))));
+  static const String? updateTagPrefix = isApotik
+      ? 'apotik-'
+      : (isEmedik ? 'emedik-' : (isMitraInap ? 'mitrainap-' : null));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isInventorySales
@@ -67,7 +86,9 @@ class AppVariant {
               ? 'eBisnis POS Apotik Flutter'
               : (isEmedik
                   ? 'eBisnis POS eMedik Flutter'
-                  : 'eBisnis Flutter Pilot')));
+                  : (isMitraInap
+                      ? 'MitraInap Flutter'
+                      : 'eBisnis Flutter Pilot'))));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isInventorySales

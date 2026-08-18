@@ -43,6 +43,11 @@ import '../screens/apotik/beranda_apotik_screen.dart';
 import '../screens/apotik/kasir_apotik_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
+import '../screens/mitrainap/beranda_mitrainap_screen.dart';
+import '../screens/mitrainap/properti_hotel_screen.dart';
+import '../screens/mitrainap/kamar_hotel_screen.dart';
+import '../screens/mitrainap/reservasi_hotel_screen.dart';
+import '../screens/mitrainap/resepsionis_hotel_screen.dart';
 import '../product_profile.dart';
 import 'app_version_label.dart';
 
@@ -179,6 +184,75 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Laporan Apotik',
                             builder: (_) => const LaporanApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap)
+                        _ItemMenu(
+                          icon: Icons.night_shelter_outlined,
+                          label: 'Dashboard MitraInap',
+                          aktif: menuAktif == 'Dashboard MitraInap',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Dashboard MitraInap',
+                            builder: (_) => const BerandaMitraInapScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_properti')))
+                        _ItemMenu(
+                          icon: Icons.apartment_outlined,
+                          label: 'Properti Hotel',
+                          aktif: menuAktif == 'Properti Hotel',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Properti Hotel',
+                            builder: (_) => const PropertiHotelScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_kamar')))
+                        _ItemMenu(
+                          icon: Icons.meeting_room_outlined,
+                          label: 'Kamar & Tipe Kamar',
+                          aktif: menuAktif == 'Kamar & Tipe Kamar',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kamar & Tipe Kamar',
+                            builder: (_) => const KamarHotelScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_reservasi')))
+                        _ItemMenu(
+                          icon: Icons.event_available_outlined,
+                          label: 'Tamu & Reservasi',
+                          aktif: menuAktif == 'Tamu & Reservasi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Tamu & Reservasi',
+                            builder: (_) => const ReservasiHotelScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_checkin') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_folio')))
+                        _ItemMenu(
+                          icon: Icons.luggage_outlined,
+                          label: 'Check-in / Check-out',
+                          aktif: menuAktif == 'Check-in / Check-out',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Check-in / Check-out',
+                            builder: (_) => const ResepsionisHotelScreen(),
                           ),
                         ),
                       if (AppProductProfile.aktif.isInventorySales)

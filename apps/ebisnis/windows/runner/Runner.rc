@@ -120,6 +120,13 @@ BEGIN
             VALUE "InternalName", "ebisnis_emedik" "\0"
             VALUE "OriginalFilename", "ebisnis_emedik.exe" "\0"
             VALUE "ProductName", "eBisnis POS eMedik" "\0"
+// Ikon TIDAK ikut bercabang utk mitrainap: resources\icon_mitrainap.ico belum
+// ada (menumpang app_icon.ico ebisnis), hanya identitas version-info yang beda.
+#elif defined(EBISNIS_VARIANT_MITRAINAP)
+            VALUE "FileDescription", "MitraInap" "\0"
+            VALUE "InternalName", "ebisnis_mitrainap" "\0"
+            VALUE "OriginalFilename", "ebisnis_mitrainap.exe" "\0"
+            VALUE "ProductName", "MitraInap" "\0"
 #else
             VALUE "FileDescription", "ebisnis" "\0"
             VALUE "InternalName", "ebisnis" "\0"

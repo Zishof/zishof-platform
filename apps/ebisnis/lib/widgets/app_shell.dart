@@ -55,6 +55,11 @@ import '../screens/apotik/beranda_apotik_screen.dart';
 import '../screens/apotik/kasir_apotik_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
+import '../screens/mitrainap/beranda_mitrainap_screen.dart';
+import '../screens/mitrainap/properti_hotel_screen.dart';
+import '../screens/mitrainap/kamar_hotel_screen.dart';
+import '../screens/mitrainap/reservasi_hotel_screen.dart';
+import '../screens/mitrainap/resepsionis_hotel_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -70,7 +75,9 @@ final _menuAktifNotifier =
         ? MenuEBisnis.berandaInventorySales
         : AppProductProfile.aktif.isApotik
             ? MenuEBisnis.berandaApotik
-            : MenuEBisnis.kasir);
+            : AppProductProfile.aktif.isMitraInap
+                ? MenuEBisnis.berandaMitraInap
+                : MenuEBisnis.kasir);
 
 /// Status sidebar desktop disimpan di level aplikasi supaya pilihan pengguna
 /// tetap berlaku ketika berpindah halaman. Pada layar kecil AppDrawer tetap
@@ -121,7 +128,12 @@ enum MenuEBisnis {
   berandaApotik,
   kasirApotik,
   persediaanApotik,
-  laporanApotik
+  laporanApotik,
+  berandaMitraInap,
+  propertiHotel,
+  kamarHotel,
+  reservasiHotel,
+  resepsionisHotel
 }
 
 const _menuKhususApotik = <MenuEBisnis>{
@@ -129,6 +141,16 @@ const _menuKhususApotik = <MenuEBisnis>{
   MenuEBisnis.kasirApotik,
   MenuEBisnis.persediaanApotik,
   MenuEBisnis.laporanApotik,
+};
+
+/// Menu khusus varian MitraInap -- kunci server hotel_* (EbisnisMenuKatalog
+/// MODUL_MITRAINAP, semuanya KUNCI_DEFAULT_NONAKTIF alias fail-closed).
+const _menuKhususMitraInap = <MenuEBisnis>{
+  MenuEBisnis.berandaMitraInap,
+  MenuEBisnis.propertiHotel,
+  MenuEBisnis.kamarHotel,
+  MenuEBisnis.reservasiHotel,
+  MenuEBisnis.resepsionisHotel,
 };
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -239,6 +261,25 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
     return Sesi.instance.bolehMenuVarianBaru('apotik_laporan') ||
         Sesi.instance.bolehMenuVarianBaru('apotik_narkotika');
   }
+  if (_menuKhususMitraInap.contains(kunci)) {
+    if (!AppProductProfile.aktif.isMitraInap) return false;
+    // Beranda selalu boleh (menampilkan status kunci); admin global boleh
+    // semua utk provisioning. Sisanya fail-closed per kunci hotel_*.
+    if (kunci == MenuEBisnis.berandaMitraInap || Sesi.instance.isAdmin) {
+      return true;
+    }
+    if (kunci == MenuEBisnis.propertiHotel) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_properti');
+    }
+    if (kunci == MenuEBisnis.kamarHotel) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_kamar');
+    }
+    if (kunci == MenuEBisnis.reservasiHotel) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_reservasi');
+    }
+    return Sesi.instance.bolehMenuVarianBaru('hotel_checkin') ||
+        Sesi.instance.bolehMenuVarianBaru('hotel_folio');
+  }
   final kunciIs = _kunciMenuIs[kunci];
   if (kunciIs != null) {
     if (!AppProductProfile.aktif.isInventorySales ||
@@ -267,6 +308,21 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.laporanApotik, Icons.analytics_outlined, 'Laporan Apotik',
       builder: _bangunLaporanApotik),
+  _ItemMenuShell(MenuEBisnis.berandaMitraInap, Icons.night_shelter_outlined,
+      'Dashboard MitraInap',
+      builder: _bangunBerandaMitraInap),
+  _ItemMenuShell(
+      MenuEBisnis.propertiHotel, Icons.apartment_outlined, 'Properti Hotel',
+      builder: _bangunPropertiHotel),
+  _ItemMenuShell(MenuEBisnis.kamarHotel, Icons.meeting_room_outlined,
+      'Kamar & Tipe Kamar',
+      builder: _bangunKamarHotel),
+  _ItemMenuShell(MenuEBisnis.reservasiHotel, Icons.event_available_outlined,
+      'Tamu & Reservasi',
+      builder: _bangunReservasiHotel),
+  _ItemMenuShell(MenuEBisnis.resepsionisHotel, Icons.luggage_outlined,
+      'Check-in / Check-out',
+      builder: _bangunResepsionisHotel),
   _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
       'Beranda Inventory & Sales',
       builder: _bangunBerandaIS),
@@ -375,6 +431,13 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.persediaanApotik,
     MenuEBisnis.laporanApotik,
   ]),
+  _GrupMenuShell('MitraInap', [
+    MenuEBisnis.berandaMitraInap,
+    MenuEBisnis.propertiHotel,
+    MenuEBisnis.kamarHotel,
+    MenuEBisnis.reservasiHotel,
+    MenuEBisnis.resepsionisHotel,
+  ]),
   _GrupMenuShell('Inventory & Sales', [
     MenuEBisnis.berandaInventorySales,
     MenuEBisnis.masterSupplier,
@@ -477,6 +540,13 @@ Widget _bangunKasirApotik(BuildContext c) => const KasirApotikScreen();
 Widget _bangunPersediaanApotik(BuildContext c) =>
     const PersediaanApotikScreen();
 Widget _bangunLaporanApotik(BuildContext c) => const LaporanApotikScreen();
+Widget _bangunBerandaMitraInap(BuildContext c) =>
+    const BerandaMitraInapScreen();
+Widget _bangunPropertiHotel(BuildContext c) => const PropertiHotelScreen();
+Widget _bangunKamarHotel(BuildContext c) => const KamarHotelScreen();
+Widget _bangunReservasiHotel(BuildContext c) => const ReservasiHotelScreen();
+Widget _bangunResepsionisHotel(BuildContext c) =>
+    const ResepsionisHotelScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -660,6 +730,16 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Obat & Persediaan';
     case MenuEBisnis.laporanApotik:
       return 'Laporan Apotik';
+    case MenuEBisnis.berandaMitraInap:
+      return 'Dashboard MitraInap';
+    case MenuEBisnis.propertiHotel:
+      return 'Properti Hotel';
+    case MenuEBisnis.kamarHotel:
+      return 'Kamar & Tipe Kamar';
+    case MenuEBisnis.reservasiHotel:
+      return 'Tamu & Reservasi';
+    case MenuEBisnis.resepsionisHotel:
+      return 'Check-in / Check-out';
   }
 }
 
@@ -743,6 +823,16 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.persediaanApotik;
     case 'Laporan Apotik':
       return MenuEBisnis.laporanApotik;
+    case 'Dashboard MitraInap':
+      return MenuEBisnis.berandaMitraInap;
+    case 'Properti Hotel':
+      return MenuEBisnis.propertiHotel;
+    case 'Kamar & Tipe Kamar':
+      return MenuEBisnis.kamarHotel;
+    case 'Tamu & Reservasi':
+      return MenuEBisnis.reservasiHotel;
+    case 'Check-in / Check-out':
+      return MenuEBisnis.resepsionisHotel;
   }
   return null;
 }
