@@ -1126,6 +1126,23 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
                   'Tuliskan nama dan penjelasan aturan retur yang mudah dipahami petugas.',
               icon: Icons.assignment_return_outlined,
               errorText: _error,
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: _menyimpan ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Batal'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _menyimpan ? null : _simpan,
+                  icon: _menyimpan
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Simpan'),
+                ),
+              ],
               children: [
                 AppFormSection(judul: 'Kebijakan', children: [
                   AppFormTextField(
@@ -1151,23 +1168,6 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
                         : (v) => setState(() => _aktif = v),
                   ),
                 ]),
-              ],
-              actions: [
-                OutlinedButton.icon(
-                  onPressed: _menyimpan ? null : () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 18),
-                  label: const Text('Batal'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _menyimpan ? null : _simpan,
-                  icon: _menyimpan
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Simpan'),
-                ),
               ],
             ),
           ),
@@ -1611,6 +1611,32 @@ class _FormProdukState extends State<_FormProduk> {
                 'Atur identitas, harga, stok, dan resep bahan baku produk.',
             icon: ubah ? Icons.edit_note_outlined : Icons.add_box_outlined,
             errorText: _pesanError,
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+            ],
             children: [
               AppFormSection(
                 judul: 'Identitas Produk',
@@ -1981,32 +2007,6 @@ class _FormProdukState extends State<_FormProduk> {
                 ],
               ),
             ],
-            actions: [
-              OutlinedButton.icon(
-                onPressed:
-                    _menyimpan ? null : () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Batal'),
-              ),
-              ElevatedButton.icon(
-                onPressed: _menyimpan ? null : _simpan,
-                icon: _menyimpan
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Simpan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -2051,6 +2051,11 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
         .toList();
     return AppDetailDialogShell(
       title: widget.title,
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal'))
+      ],
       children: [
         TextField(
           autofocus: true,
@@ -2102,11 +2107,6 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
                   }).toList(),
                 ),
         ),
-      ],
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal'))
       ],
     );
   }

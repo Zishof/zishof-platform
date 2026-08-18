@@ -36,8 +36,10 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
       _galat = null;
     });
     try {
+      // Nama aksi mengikuti kontrak server r77580 (GrupProdukApiHelper):
+      // grup_produk_daftar dengan parameter hanya_aktif (default true).
       final res = await ApiClient.instance
-          .aksi('grup_produk_list', {'termasuk_nonaktif': true});
+          .aksi('grup_produk_daftar', {'hanya_aktif': false});
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!sukses) {
         throw Exception(res['description'] ?? 'Gagal memuat Grup Produk.');
@@ -193,8 +195,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                                   IconButton(
                                       tooltip: 'Hapus',
                                       onPressed: () => _hapus(g),
-                                      icon:
-                                          const Icon(Icons.delete_outline)),
+                                      icon: const Icon(Icons.delete_outline)),
                                 ],
                               ),
                             ),
@@ -276,8 +277,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               TextField(
                   controller: _keterangan,
                   maxLines: 2,
-                  decoration:
-                      const InputDecoration(labelText: 'Keterangan')),
+                  decoration: const InputDecoration(labelText: 'Keterangan')),
               const SizedBox(height: 8),
               TextField(
                   controller: _hargaBeli,
@@ -314,8 +314,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
         FilledButton(
           onPressed: () {
             if (_nama.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Nama grup wajib diisi.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Nama grup wajib diisi.')));
               return;
             }
             Navigator.pop(context, <String, dynamic>{
