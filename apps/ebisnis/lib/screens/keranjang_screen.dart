@@ -171,6 +171,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// per bill -- di sini murni pemilihan.
   Map<String, dynamic>? _roomChargeStay;
 
+  /// MitraInap LANGKAH 5: kirim nota ini ke dapur (server membuat TiketDapur
+  /// QUEUED, idempoten per nota). SENGAJA sticky -- outlet restoran memakai
+  /// ini utk hampir semua nota, jadi tidak di-reset setelah bayar.
+  bool _buatTiketDapur = false;
+
   @override
   void initState() {
     super.initState();
@@ -1043,6 +1048,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         'hotel_menginap_id': _roomChargeStay!['id'],
         'hotel_properti_id': _roomChargeStay!['properti_id'],
       },
+      if (_buatTiketDapur) 'hotel_tiket_dapur': true,
       if (widget.draftIdSumber != null) ...{
         // `id` adalah nama kanonis yang dibaca endpoint draft_bayar. Alias
         // di bawah tetap dikirim untuk kompatibilitas server/klien lama.
@@ -2132,6 +2138,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             if (AppProductProfile.aktif.isMitraInap) ...[
               const SizedBox(height: 8),
               _pemilihRoomCharge(),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Buat tiket dapur untuk nota ini'),
+                value: _buatTiketDapur,
+                onChanged: _memproses
+                    ? null
+                    : (v) =>
+                        setStateIfMounted(() => _buatTiketDapur = v == true),
+              ),
             ],
             const SizedBox(height: 12),
             Divider(height: 1, color: AppColors.borderOf(context)),

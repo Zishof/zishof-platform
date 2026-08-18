@@ -28,6 +28,7 @@ import '../screens/cara_bayar_screen.dart';
 import '../screens/supplier_screen.dart';
 import '../screens/jenis_produk_screen.dart';
 import '../screens/grup_produk_screen.dart';
+import '../screens/toko_kelola_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
@@ -60,6 +61,9 @@ import '../screens/mitrainap/properti_hotel_screen.dart';
 import '../screens/mitrainap/kamar_hotel_screen.dart';
 import '../screens/mitrainap/reservasi_hotel_screen.dart';
 import '../screens/mitrainap/resepsionis_hotel_screen.dart';
+import '../screens/mitrainap/tiket_dapur_screen.dart';
+import '../screens/mitrainap/kontrak_pemilik_screen.dart';
+import '../screens/mitrainap/laporan_pemilik_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 
@@ -112,6 +116,7 @@ enum MenuEBisnis {
   konfigurasi,
   layarPelanggan,
   hakAkses,
+  tokoKelola,
   berandaInventorySales,
   masterSupplier,
   masterCustomer,
@@ -133,7 +138,10 @@ enum MenuEBisnis {
   propertiHotel,
   kamarHotel,
   reservasiHotel,
-  resepsionisHotel
+  resepsionisHotel,
+  tiketDapur,
+  kontrakPemilik,
+  laporanPemilikHotel
 }
 
 const _menuKhususApotik = <MenuEBisnis>{
@@ -151,6 +159,9 @@ const _menuKhususMitraInap = <MenuEBisnis>{
   MenuEBisnis.kamarHotel,
   MenuEBisnis.reservasiHotel,
   MenuEBisnis.resepsionisHotel,
+  MenuEBisnis.tiketDapur,
+  MenuEBisnis.kontrakPemilik,
+  MenuEBisnis.laporanPemilikHotel,
 };
 
 /// Kunci menu server varian Inventory & Sales per MenuEBisnis (fail-closed --
@@ -233,6 +244,8 @@ const _menuSalesSaja = <MenuEBisnis>{
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
+  // Kelola Toko: admin-only, padanan gate isAdmin JSP / TokoApiHelper server.
+  if (kunci == MenuEBisnis.tokoKelola) return Sesi.instance.isAdmin;
   // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
   // (bukan role): tidak pernah dirakit ke sidebar varian POS lama.
   if (kunci == MenuEBisnis.berandaInventorySales) {
@@ -276,6 +289,15 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
     }
     if (kunci == MenuEBisnis.reservasiHotel) {
       return Sesi.instance.bolehMenuVarianBaru('hotel_reservasi');
+    }
+    if (kunci == MenuEBisnis.tiketDapur) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_tiket_dapur');
+    }
+    if (kunci == MenuEBisnis.kontrakPemilik) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_kontrak_pemilik');
+    }
+    if (kunci == MenuEBisnis.laporanPemilikHotel) {
+      return Sesi.instance.bolehMenuVarianBaru('hotel_laporan_pemilik');
     }
     return Sesi.instance.bolehMenuVarianBaru('hotel_checkin') ||
         Sesi.instance.bolehMenuVarianBaru('hotel_folio');
@@ -323,6 +345,15 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.resepsionisHotel, Icons.luggage_outlined,
       'Check-in / Check-out',
       builder: _bangunResepsionisHotel),
+  _ItemMenuShell(MenuEBisnis.tiketDapur, Icons.restaurant_outlined,
+      'Tiket Dapur',
+      builder: _bangunTiketDapur),
+  _ItemMenuShell(MenuEBisnis.kontrakPemilik, Icons.handshake_outlined,
+      'Kontrak Pemilik',
+      builder: _bangunKontrakPemilik),
+  _ItemMenuShell(MenuEBisnis.laporanPemilikHotel, Icons.receipt_long_outlined,
+      'Laporan Pemilik',
+      builder: _bangunLaporanPemilikHotel),
   _ItemMenuShell(MenuEBisnis.berandaInventorySales, Icons.storefront_outlined,
       'Beranda Inventory & Sales',
       builder: _bangunBerandaIS),
@@ -422,6 +453,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.hakAkses, Icons.admin_panel_settings_outlined, 'Hak Akses',
       builder: _bangunHakAkses),
+  _ItemMenuShell(
+      MenuEBisnis.tokoKelola, Icons.storefront_outlined, 'Kelola Toko',
+      builder: _bangunTokoKelola),
 ];
 
 const _grupMenu = <_GrupMenuShell>[
@@ -437,6 +471,9 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.kamarHotel,
     MenuEBisnis.reservasiHotel,
     MenuEBisnis.resepsionisHotel,
+    MenuEBisnis.tiketDapur,
+    MenuEBisnis.kontrakPemilik,
+    MenuEBisnis.laporanPemilikHotel,
   ]),
   _GrupMenuShell('Inventory & Sales', [
     MenuEBisnis.berandaInventorySales,
@@ -486,6 +523,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.logError,
     MenuEBisnis.konfigurasi,
     MenuEBisnis.hakAkses,
+    MenuEBisnis.tokoKelola,
   ]),
 ];
 
@@ -522,6 +560,7 @@ Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
+Widget _bangunTokoKelola(BuildContext c) => const TokoKelolaScreen();
 Widget _bangunBerandaIS(BuildContext c) => const BerandaInventorySalesScreen();
 Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
 Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
@@ -547,6 +586,10 @@ Widget _bangunKamarHotel(BuildContext c) => const KamarHotelScreen();
 Widget _bangunReservasiHotel(BuildContext c) => const ReservasiHotelScreen();
 Widget _bangunResepsionisHotel(BuildContext c) =>
     const ResepsionisHotelScreen();
+Widget _bangunTiketDapur(BuildContext c) => const TiketDapurScreen();
+Widget _bangunKontrakPemilik(BuildContext c) => const KontrakPemilikScreen();
+Widget _bangunLaporanPemilikHotel(BuildContext c) =>
+    const LaporanPemilikScreen();
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -696,6 +739,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Layar Pelanggan';
     case MenuEBisnis.hakAkses:
       return 'Hak Akses';
+    case MenuEBisnis.tokoKelola:
+      return 'Kelola Toko';
     case MenuEBisnis.berandaInventorySales:
       return 'Beranda Inventory & Sales';
     case MenuEBisnis.masterSupplier:
@@ -740,6 +785,12 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Tamu & Reservasi';
     case MenuEBisnis.resepsionisHotel:
       return 'Check-in / Check-out';
+    case MenuEBisnis.tiketDapur:
+      return 'Tiket Dapur';
+    case MenuEBisnis.kontrakPemilik:
+      return 'Kontrak Pemilik';
+    case MenuEBisnis.laporanPemilikHotel:
+      return 'Laporan Pemilik';
   }
 }
 
@@ -789,6 +840,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.layarPelanggan;
     case 'Hak Akses':
       return MenuEBisnis.hakAkses;
+    case 'Kelola Toko':
+      return MenuEBisnis.tokoKelola;
     case 'Beranda Inventory & Sales':
       return MenuEBisnis.berandaInventorySales;
     case 'Master Supplier':
@@ -833,6 +886,12 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.reservasiHotel;
     case 'Check-in / Check-out':
       return MenuEBisnis.resepsionisHotel;
+    case 'Tiket Dapur':
+      return MenuEBisnis.tiketDapur;
+    case 'Kontrak Pemilik':
+      return MenuEBisnis.kontrakPemilik;
+    case 'Laporan Pemilik':
+      return MenuEBisnis.laporanPemilikHotel;
   }
   return null;
 }

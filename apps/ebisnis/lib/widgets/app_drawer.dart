@@ -13,6 +13,7 @@ import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/jenis_produk_screen.dart';
 import '../screens/grup_produk_screen.dart';
+import '../screens/toko_kelola_screen.dart';
 import '../screens/cara_bayar_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
 import '../screens/ringkasan_screen.dart';
@@ -48,6 +49,9 @@ import '../screens/mitrainap/properti_hotel_screen.dart';
 import '../screens/mitrainap/kamar_hotel_screen.dart';
 import '../screens/mitrainap/reservasi_hotel_screen.dart';
 import '../screens/mitrainap/resepsionis_hotel_screen.dart';
+import '../screens/mitrainap/tiket_dapur_screen.dart';
+import '../screens/mitrainap/kontrak_pemilik_screen.dart';
+import '../screens/mitrainap/laporan_pemilik_screen.dart';
 import '../product_profile.dart';
 import 'app_version_label.dart';
 
@@ -253,6 +257,48 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Check-in / Check-out',
                             builder: (_) => const ResepsionisHotelScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('hotel_tiket_dapur')))
+                        _ItemMenu(
+                          icon: Icons.restaurant_outlined,
+                          label: 'Tiket Dapur',
+                          aktif: menuAktif == 'Tiket Dapur',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Tiket Dapur',
+                            builder: (_) => const TiketDapurScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance.bolehMenuVarianBaru(
+                                  'hotel_kontrak_pemilik')))
+                        _ItemMenu(
+                          icon: Icons.handshake_outlined,
+                          label: 'Kontrak Pemilik',
+                          aktif: menuAktif == 'Kontrak Pemilik',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kontrak Pemilik',
+                            builder: (_) => const KontrakPemilikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isMitraInap &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance.bolehMenuVarianBaru(
+                                  'hotel_laporan_pemilik')))
+                        _ItemMenu(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Laporan Pemilik',
+                          aktif: menuAktif == 'Laporan Pemilik',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Laporan Pemilik',
+                            builder: (_) => const LaporanPemilikScreen(),
                           ),
                         ),
                       if (AppProductProfile.aktif.isInventorySales)
@@ -686,6 +732,17 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Hak Akses',
                             builder: (_) => const HakAksesScreen(),
+                          ),
+                        ),
+                      if (Sesi.instance.isAdmin)
+                        _ItemMenu(
+                          icon: Icons.storefront_outlined,
+                          label: 'Kelola Toko',
+                          aktif: menuAktif == 'Kelola Toko',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Kelola Toko',
+                            builder: (_) => const TokoKelolaScreen(),
                           ),
                         ),
                     ],
