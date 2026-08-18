@@ -189,54 +189,6 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
     return map;
   }
 
-  Map<String, dynamic> _gabungDenganRekonsiliasi(
-    Map<String, dynamic> row,
-    Map<int, Map<String, dynamic>> rekonsiliasi,
-  ) {
-    final id = _angka(row['id']).toInt();
-    final laporan = rekonsiliasi[id];
-    if (laporan == null) return row;
-    final nilai = _angka(laporan['totalTransaksi']);
-    final tunai = _angka(laporan['tunai']);
-    final nonTunai = _angka(laporan['nonTunai']);
-    final modal = _angka(laporan['modalAwal']);
-    final kasSeharusnya = _angka(laporan['kasSeharusnya']);
-    final kasClosing = _angka(laporan['kasClosing']);
-    return <String, dynamic>{
-      ...row,
-      if ('${row['kasirNama'] ?? ''}'.trim().isEmpty)
-        'kasirNama': laporan['kasir'],
-      'nilai': nilai,
-      'totalTransaksi': nilai,
-      'nilaiTransaksi': nilai,
-      'totalTunai': tunai,
-      'penjualanTunai': tunai,
-      'totalNonTunai': nonTunai,
-      'penjualanNonTunai': nonTunai,
-      'modalAwal': modal,
-      'kasSeharusnya': kasSeharusnya,
-      'kasClosing': kasClosing,
-      'uangFisik': kasClosing,
-      'selisih': _angka(laporan['selisih']),
-      'jumlahTransaksi': _angka(laporan['jumlahTransaksi']).toInt(),
-      'hasilHitungUlang': true,
-    };
-  }
-
-  void _terapkanSatuRekonsiliasi(
-    Map<String, dynamic> row,
-    Map<String, dynamic> laporan,
-  ) {
-    final idTeks = '${row['id']}';
-    final id = _angka(row['id']).toInt();
-    setStateIfMounted(() {
-      _data = _data.map((sesi) {
-        if ('${sesi['id']}' != idTeks) return sesi;
-        return _gabungDenganRekonsiliasi(sesi, {id: laporan});
-      }).toList(growable: false);
-    });
-  }
-
   Map<String, dynamic> _payloadRekonsiliasiServer(
     Map<String, dynamic> row,
     Map<String, dynamic> laporan,
@@ -269,6 +221,16 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
     );
   }
 
+  String _pesanError(Object error) {
+    if (error is ApiException) {
+      final detail = error.kodeReferensi == null || error.kodeReferensi!.isEmpty
+          ? ''
+          : ' Referensi: ${error.kodeReferensi}.';
+      return '${error.pesan}$detail';
+    }
+    return error.toString();
+  }
+
   bool _berbedaDenganRekonsiliasi(
     Map<String, dynamic> row,
     Map<String, dynamic> laporan,
@@ -292,24 +254,49 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
             content: Text('Tidak ada data rekonsiliasi sesi dari laporan.')));
         return;
       }
+
       final review = <Map<String, dynamic>>[];
       for (final row in _data) {
         final id = _angka(row['id']).toInt();
         final laporan = rekonsiliasi[id];
         if (laporan == null) continue;
         if (!_berbedaDenganRekonsiliasi(row, laporan)) continue;
-        review.add({
-          'sesi': row,
-          'laporan': laporan,
-        });
+        review.add({'sesi': row, 'laporan': laporan});
       }
+
       if (review.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Semua sesi yang ditemukan sudah sesuai laporan.')));
         return;
       }
+
+      Future<void> simpanDanVerifikasi(
+        Map<String, dynamic> row,
+        Map<String, dynamic> laporan,
+      ) async {
+        final id = _angka(row['id']).toInt();
+        await _simpanRekonsiliasiKeServer(row, laporan);
+        if (!mounted) return;
+        await _muat();
+        if (!mounted) return;
+        Map<String, dynamic>? sesiTersimpan;
+        for (final itemData in _data) {
+          if ('${itemData['id']}' == '${row['id']}') {
+            sesiTersimpan = itemData;
+            break;
+          }
+        }
+        if (sesiTersimpan == null ||
+            _berbedaDenganRekonsiliasi(sesiTersimpan, laporan)) {
+          throw StateError(
+              'Server menerima request, tetapi data sesi #$id belum berubah saat dimuat ulang. Pastikan API baru sudah ter-deploy pada endpoint yang dipakai aplikasi.');
+        }
+      }
+
       if (!mounted) return;
+      String? pesanDialog;
+      int? idSedangDiproses;
       final terapkan = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
@@ -326,8 +313,16 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                     icon: Icons.fact_check_outlined,
                     color: AppColors.info,
                     text:
-                        'Angka diambil dari Laporan Transaksi - Transaksi Per Kasir. Tekan Terapkan untuk mengisi tabel Sesi Kasir di tampilan ini.',
+                        'Angka diambil dari Laporan Transaksi - Transaksi Per Kasir. Tekan Terapkan untuk menyimpan hasil hitung ulang ke server.',
                   ),
+                  if (pesanDialog != null) ...[
+                    const SizedBox(height: 10),
+                    AppInfoBanner(
+                      icon: Icons.error_outline,
+                      color: AppColors.danger,
+                      text: pesanDialog!,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Expanded(
                     child: SingleChildScrollView(
@@ -357,6 +352,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                           final row = item['sesi'] as Map<String, dynamic>;
                           final laporan =
                               item['laporan'] as Map<String, dynamic>;
+                          final id = _angka(row['id']).toInt();
                           return AppTableRowData(cells: [
                             AppTableCell.text('${row['id']}', width: 70),
                             AppTableCell.text(
@@ -404,39 +400,46 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
                               align: TextAlign.center,
                               child: IconButton(
                                 tooltip: 'Terapkan baris ini',
-                                icon: const Icon(Icons.check_circle_outline),
-                                onPressed: () async {
-                                  final id = _angka(row['id']).toInt();
-                                  final messenger =
-                                      ScaffoldMessenger.of(this.context);
-                                  try {
-                                    await _simpanRekonsiliasiKeServer(
-                                        row, laporan);
-                                    if (!mounted) return;
-                                    _terapkanSatuRekonsiliasi(row, laporan);
-                                    setDialogState(() => review.remove(item));
-                                    if (review.isEmpty &&
-                                        dialogContext.mounted) {
-                                      Navigator.pop(dialogContext, false);
-                                    }
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Sesi #$id berhasil disimpan ke server.',
+                                icon: idSedangDiproses == id
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
                                         ),
-                                      ),
-                                    );
-                                  } catch (e) {
-                                    if (!mounted) return;
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Gagal menyimpan sesi #$id: $e',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
+                                      )
+                                    : const Icon(Icons.check_circle_outline),
+                                onPressed: idSedangDiproses != null
+                                    ? null
+                                    : () async {
+                                        setDialogState(() {
+                                          idSedangDiproses = id;
+                                          pesanDialog = null;
+                                        });
+                                        try {
+                                          await simpanDanVerifikasi(
+                                              row, laporan);
+                                          if (!mounted) return;
+                                          setDialogState(
+                                              () => review.remove(item));
+                                          if (review.isEmpty &&
+                                              dialogContext.mounted) {
+                                            Navigator.pop(dialogContext, false);
+                                          }
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          setDialogState(() {
+                                            pesanDialog =
+                                                'Gagal menyimpan sesi #$id. ${_pesanError(e)}';
+                                          });
+                                        } finally {
+                                          if (mounted) {
+                                            setDialogState(() {
+                                              idSedangDiproses = null;
+                                            });
+                                          }
+                                        }
+                                      },
                               ),
                             ),
                           ]);
@@ -449,11 +452,15 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
+                onPressed: idSedangDiproses == null
+                    ? () => Navigator.pop(dialogContext, false)
+                    : null,
                 child: const Text('Batal'),
               ),
               FilledButton.icon(
-                onPressed: () => Navigator.pop(dialogContext, true),
+                onPressed: idSedangDiproses == null
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
                 icon: const Icon(Icons.check),
                 label: const Text('Terapkan Hasil Hitung Ulang'),
               ),
@@ -463,23 +470,18 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
       );
       if (terapkan != true) return;
       for (final item in review) {
-        await _simpanRekonsiliasiKeServer(
+        await simpanDanVerifikasi(
           item['sesi'] as Map<String, dynamic>,
           item['laporan'] as Map<String, dynamic>,
         );
       }
-      setStateIfMounted(() {
-        _data = _data
-            .map((row) => _gabungDenganRekonsiliasi(row, rekonsiliasi))
-            .toList();
-      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${review.length} sesi berhasil disimpan ke server.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal hitung ulang: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal hitung ulang: ${_pesanError(e)}')));
     } finally {
       if (mounted) setStateIfMounted(() => _menghitungUlang = false);
     }

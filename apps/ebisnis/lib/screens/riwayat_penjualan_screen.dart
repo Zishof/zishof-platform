@@ -99,6 +99,8 @@ class _DialogEditTransaksi extends StatefulWidget {
     required this.kasirUserId,
     required this.kasirNama,
     this.modeBaru = false,
+    this.caraBayarId,
+    this.caraBayarNama = '',
   });
 
   final String nomor;
@@ -107,6 +109,8 @@ class _DialogEditTransaksi extends StatefulWidget {
   final String kasirUserId;
   final String kasirNama;
   final bool modeBaru;
+  final int? caraBayarId;
+  final String caraBayarNama;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -133,7 +137,9 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
     _waktu = widget.waktu;
     _kasirUserId = widget.kasirUserId;
     _kasirNama = widget.kasirNama;
-    _caraBayarId = Sesi.instance.caraBayar.isEmpty
+    _caraBayarId =
+        widget.caraBayarId ?? _idCaraBayarDariNama(widget.caraBayarNama);
+    _caraBayarId ??= Sesi.instance.caraBayar.isEmpty
         ? null
         : Sesi.instance.caraBayar.first.id;
     _baris = widget.items
@@ -145,6 +151,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               qty: (i['qty'] as num?)?.toDouble() ?? 0,
             ))
         .toList();
+  }
+
+  int? _idCaraBayarDariNama(String nama) {
+    final teks = nama.trim().toLowerCase();
+    if (teks.isEmpty) return null;
+    for (final cara in Sesi.instance.caraBayar) {
+      if (cara.nama.trim().toLowerCase() == teks) return cara.id;
+    }
+    return null;
   }
 
   @override
@@ -264,7 +279,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           () => _pesan = 'Transaksi harus memiliki sedikitnya satu barang.');
       return;
     }
-    if (widget.modeBaru && _caraBayarId == null) {
+    if (_caraBayarId == null) {
       setState(() => _pesan = 'Metode pembayaran wajib dipilih.');
       return;
     }
@@ -294,7 +309,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       'alasan': alasan,
       'item': item,
       'waktu': _waktu.toIso8601String(),
-      if (widget.modeBaru) 'cara_bayar': _caraBayarId,
+      'cara_bayar': _caraBayarId,
       if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
   }
@@ -414,20 +429,18 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 ),
               ),
             const SizedBox(height: 8),
-            if (widget.modeBaru) ...[
-              DropdownButtonFormField<int>(
-                value: _caraBayarId,
-                decoration: const InputDecoration(
-                    labelText: 'Metode pembayaran *',
-                    prefixIcon: Icon(Icons.payments_outlined)),
-                items: Sesi.instance.caraBayar
-                    .map((cara) => DropdownMenuItem<int>(
-                        value: cara.id, child: Text(cara.nama)))
-                    .toList(),
-                onChanged: (value) => setState(() => _caraBayarId = value),
-              ),
-              const SizedBox(height: 8),
-            ],
+            DropdownButtonFormField<int>(
+              value: _caraBayarId,
+              decoration: const InputDecoration(
+                  labelText: 'Metode pembayaran *',
+                  prefixIcon: Icon(Icons.payments_outlined)),
+              items: Sesi.instance.caraBayar
+                  .map((cara) => DropdownMenuItem<int>(
+                      value: cara.id, child: Text(cara.nama)))
+                  .toList(),
+              onChanged: (value) => setState(() => _caraBayarId = value),
+            ),
+            const SizedBox(height: 8),
             Row(children: [
               Expanded(
                 child: TextField(
@@ -960,6 +973,15 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
   Future<void> _muatPengaturanDanData() async {
     await PengaturanKoreksiTransaksi.instance.muat();
     await _muat();
+  }
+
+  int? _idCaraBayarDariNama(String nama) {
+    final teks = nama.trim().toLowerCase();
+    if (teks.isEmpty) return null;
+    for (final cara in Sesi.instance.caraBayar) {
+      if (cara.nama.trim().toLowerCase() == teks) return cara.id;
+    }
+    return null;
   }
 
   @override
@@ -1565,6 +1587,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         waktu: _parseWaktuKoreksi(detail['waktu'] ?? row['waktu']),
         kasirUserId: '${detail['kasirUserId'] ?? ''}',
         kasirNama: '${detail['kasirNama'] ?? row['kasir'] ?? ''}',
+        caraBayarId: (detail['caraBayarId'] as num?)?.toInt() ??
+            _idCaraBayarDariNama(
+                '${detail['caraBayarNama'] ?? row['metode'] ?? ''}'),
+        caraBayarNama: '${detail['caraBayarNama'] ?? row['metode'] ?? ''}',
       ),
     );
     if (hasilEdit == null || !mounted) return;
@@ -1574,6 +1600,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
         'alasan': hasilEdit['alasan'],
         'item': hasilEdit['item'],
         'waktu': hasilEdit['waktu'],
+        'cara_bayar': hasilEdit['cara_bayar'],
         if (hasilEdit['kasir_user_id'] != null)
           'kasir_user_id': hasilEdit['kasir_user_id'],
       });
