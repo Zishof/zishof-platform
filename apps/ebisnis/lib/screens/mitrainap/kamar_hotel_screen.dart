@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_sinkron_master.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -24,6 +26,13 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
   List<Map<String, dynamic>> _tipe = [];
   List<Map<String, dynamic>> _kamar = [];
 
+  // Diff emisi server daftarCacheDulu per tab -- kilau baris + banner perubahan
+  // (termasuk perubahan yang dibuat kasir/perangkat LAIN).
+  Set<String> _tipeBaru = {}, _tipeBerubah = {};
+  Set<String> _kamarBaru = {}, _kamarBerubah = {};
+  int _tipeHapus = 0, _kamarHapus = 0;
+  int _versiPerubahan = 0;
+
   @override
   void initState() {
     super.initState();
@@ -37,8 +46,8 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     });
     try {
       final data = await muatDaftarHotel('hotel_properti_list', {});
-      final id = _propertiId ??
-          (data.isNotEmpty ? idInt(data.first['id']) : null);
+      final id =
+          _propertiId ?? (data.isNotEmpty ? idInt(data.first['id']) : null);
       setStateIfMounted(() {
         _properti = data;
         _propertiId = id;
@@ -52,6 +61,10 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     }
   }
 
+  /// Baca LOKAL DULU per tab (daftarCacheDulu): snapshot cache tampil seketika,
+  /// hasil server menyusul dgn diff baru/berubah/terhapus utk animasi kilau.
+  /// responsLengkap true: kedua aksi list memuat SELURUH baris properti tsb
+  /// (tanpa paginasi/filter), jadi penghapusan di server sah disimpulkan.
   Future<void> _muatIsi() async {
     final pid = _propertiId;
     if (pid == null) {
@@ -67,15 +80,56 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
       _galat = null;
     });
     try {
-      final tipe =
-          await muatDaftarHotel('hotel_tipe_kamar_list', {'properti_id': pid});
-      final kamar =
-          await muatDaftarHotel('hotel_kamar_list', {'properti_id': pid});
-      setStateIfMounted(() {
-        _tipe = tipe;
-        _kamar = kamar;
-        _memuat = false;
+      await MasterOffline.daftarCacheDulu('hotel_tipe_kamar_list',
+          {'properti_id': pid}, 'master:hotel_tipe_kamar:$pid',
+          responsLengkap: true, onData: (hasil) {
+        if (!mounted || hasil['data'] is! List) return;
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _tipe = ((hasil['data'] as List?) ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _tipeBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _tipeBerubah = dariServer
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _tipeHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_tipeBaru.isNotEmpty ||
+                  _tipeBerubah.isNotEmpty ||
+                  _tipeHapus > 0)) {
+            _versiPerubahan++;
+          }
+        });
       });
+      await MasterOffline.daftarCacheDulu(
+          'hotel_kamar_list', {'properti_id': pid}, 'master:hotel_kamar:$pid',
+          responsLengkap: true, onData: (hasil) {
+        if (!mounted || hasil['data'] is! List) return;
+        final dariServer = hasil['dariServer'] == true;
+        setStateIfMounted(() {
+          _kamar = ((hasil['data'] as List?) ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _kamarBaru = dariServer
+              ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+              : {};
+          _kamarBerubah = dariServer
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
+              : {};
+          _kamarHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          if (dariServer &&
+              (_kamarBaru.isNotEmpty ||
+                  _kamarBerubah.isNotEmpty ||
+                  _kamarHapus > 0)) {
+            _versiPerubahan++;
+          }
+          _memuat = false;
+        });
+      });
+      if (mounted) setStateIfMounted(() => _memuat = false);
     } catch (e) {
       setStateIfMounted(() {
         _galat = '$e';
@@ -87,8 +141,9 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
   /// Offline-first (pola MasterOffline seragam semua master): server dulu,
   /// putus jaringan -> antre outbox_master + snackbar "tersimpan lokal";
   /// pengiriman latar + indikator animasi ditangani IndikatorSinkronMaster.
-  Future<void> _kirim(String aksi, Map<String, dynamic> body,
-      String pesanSukses, {required String kunci}) async {
+  Future<void> _kirim(
+      String aksi, Map<String, dynamic> body, String pesanSukses,
+      {required String kunci}) async {
     try {
       final res = await MasterOffline.simpanAtauAntre(aksi, body, kunci: kunci);
       final sukses = apiSukses(res);
@@ -152,24 +207,51 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-      itemCount: _tipe.length,
+      itemCount: _tipe.length + 1,
       itemBuilder: (context, i) {
-        final t = _tipe[i];
+        if (i == 0) {
+          return BannerPerubahanServer(
+            key: ValueKey('perubahan-tipe:$_versiPerubahan'),
+            baru: _tipeBaru.length,
+            berubah: _tipeBerubah.length,
+            dihapus: _tipeHapus,
+          );
+        }
+        final t = _tipe[i - 1];
         final aktif = t['aktif'] != false;
-        return Card(
-          child: ListTile(
-            leading: Icon(Icons.king_bed_outlined,
-                color: aktif
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).disabledColor),
-            title: Text('${t['nama'] ?? '-'}${aktif ? '' : '  (nonaktif)'}'),
-            subtitle: Text([
-              if ((t['kode'] ?? '').toString().isNotEmpty) 'Kode: ${t['kode']}',
-              formatRupiahHotel.format(angka(t['harga_dasar'])),
-              'Kapasitas: ${t['kapasitas'] ?? '-'}',
-            ].join(' • ')),
-            trailing: const Icon(Icons.edit_outlined),
-            onTap: () => _simpanTipe(t),
+        return KilauBaris(
+          kunci: '${t['id'] ?? t['_kunci'] ?? ''}',
+          idBaru: _tipeBaru,
+          idBerubah: _tipeBerubah,
+          child: Card(
+            child: ListTile(
+              leading: Icon(Icons.king_bed_outlined,
+                  color: aktif
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).disabledColor),
+              title: Row(children: [
+                Expanded(
+                    child: Text(
+                        '${t['nama'] ?? '-'}${aktif ? '' : '  (nonaktif)'}')),
+                if (t['id'] != null)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Riwayat data ini (AuditTrails)',
+                      icon: const Icon(Icons.history, size: 16),
+                      onPressed: () => tampilkanRiwayatData(context,
+                          entitas: 'hotel_tipe_kamar',
+                          id: t['id'],
+                          judul: '${t['nama'] ?? ''}')),
+              ]),
+              subtitle: Text([
+                if ((t['kode'] ?? '').toString().isNotEmpty)
+                  'Kode: ${t['kode']}',
+                formatRupiahHotel.format(angka(t['harga_dasar'])),
+                'Kapasitas: ${t['kapasitas'] ?? '-'}',
+              ].join(' • ')),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: () => _simpanTipe(t),
+            ),
           ),
         );
       },
@@ -182,32 +264,59 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-      itemCount: _kamar.length,
+      itemCount: _kamar.length + 1,
       itemBuilder: (context, i) {
-        final k = _kamar[i];
+        if (i == 0) {
+          return BannerPerubahanServer(
+            key: ValueKey('perubahan-kamar:$_versiPerubahan'),
+            baru: _kamarBaru.length,
+            berubah: _kamarBerubah.length,
+            dihapus: _kamarHapus,
+          );
+        }
+        final k = _kamar[i - 1];
         final aktif = k['aktif'] != false;
         final status = '${k['status_hunian'] ?? 'VACANT'}';
-        return Card(
-          child: ListTile(
-            leading: Icon(Icons.meeting_room_outlined,
-                color: aktif
-                    ? _warnaStatus(context, status)
-                    : Theme.of(context).disabledColor),
-            title: Text('Kamar ${k['nomor'] ?? '-'}'
-                '${aktif ? '' : '  (nonaktif)'}'),
-            subtitle: Text([
-              '${k['tipe_kamar_nama'] ?? '-'}',
-              if (k['lantai'] != null) 'Lantai ${k['lantai']}',
-            ].join(' • ')),
-            trailing: Wrap(spacing: 8, crossAxisAlignment:
-                WrapCrossAlignment.center, children: [
-              Chip(
-                label: Text(status, style: const TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-              ),
-              const Icon(Icons.edit_outlined),
-            ]),
-            onTap: () => _simpanKamar(k),
+        return KilauBaris(
+          kunci: '${k['id'] ?? k['_kunci'] ?? ''}',
+          idBaru: _kamarBaru,
+          idBerubah: _kamarBerubah,
+          child: Card(
+            child: ListTile(
+              leading: Icon(Icons.meeting_room_outlined,
+                  color: aktif
+                      ? _warnaStatus(context, status)
+                      : Theme.of(context).disabledColor),
+              title: Row(children: [
+                Expanded(
+                    child: Text('Kamar ${k['nomor'] ?? '-'}'
+                        '${aktif ? '' : '  (nonaktif)'}')),
+                if (k['id'] != null)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Riwayat data ini (AuditTrails)',
+                      icon: const Icon(Icons.history, size: 16),
+                      onPressed: () => tampilkanRiwayatData(context,
+                          entitas: 'hotel_kamar',
+                          id: k['id'],
+                          judul: 'Kamar ${k['nomor'] ?? ''}')),
+              ]),
+              subtitle: Text([
+                '${k['tipe_kamar_nama'] ?? '-'}',
+                if (k['lantai'] != null) 'Lantai ${k['lantai']}',
+              ].join(' • ')),
+              trailing: Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Chip(
+                      label: Text(status, style: const TextStyle(fontSize: 11)),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Icon(Icons.edit_outlined),
+                  ]),
+              onTap: () => _simpanKamar(k),
+            ),
           ),
         );
       },
