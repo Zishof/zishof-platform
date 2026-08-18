@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/master_offline.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -82,6 +83,7 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
       appBar: AppBar(
         title: const Text('Properti Hotel'),
         actions: [
+          const IndikatorSinkronMaster(),
           IconButton(
               onPressed: _muat,
               tooltip: 'Muat ulang',

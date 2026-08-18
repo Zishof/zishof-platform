@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../api_client.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -83,19 +84,24 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     }
   }
 
+  /// Offline-first (pola MasterOffline seragam semua master): server dulu,
+  /// putus jaringan -> antre outbox_master + snackbar "tersimpan lokal";
+  /// pengiriman latar + indikator animasi ditangani IndikatorSinkronMaster.
   Future<void> _kirim(String aksi, Map<String, dynamic> body,
-      String pesanSukses) async {
+      String pesanSukses, {required String kunci}) async {
     try {
-      final res = await ApiClient.instance.aksi(aksi, body);
+      final res = await MasterOffline.simpanAtauAntre(aksi, body, kunci: kunci);
       final sukses = apiSukses(res);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(sukses
-            ? apiPesan(res, pesanSukses)
-            : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
+        content: Text(res['offline'] == true
+            ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+            : sukses
+                ? apiPesan(res, pesanSukses)
+                : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
         backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
       ));
-      if (sukses) _muatIsi();
+      if (sukses && res['offline'] != true) _muatIsi();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -113,7 +119,10 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     );
     if (hasil == null) return;
     hasil['properti_id'] = pid;
-    await _kirim('hotel_tipe_kamar_simpan', hasil, 'Tipe kamar tersimpan.');
+    await _kirim('hotel_tipe_kamar_simpan', hasil, 'Tipe kamar tersimpan.',
+        kunci: hasil['id'] != null
+            ? 'hotel_tipe_kamar:${hasil['id']}'
+            : 'hotel_tipe_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
   }
 
   Future<void> _simpanKamar(Map<String, dynamic>? awal) async {
@@ -130,7 +139,10 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     );
     if (hasil == null) return;
     hasil['properti_id'] = pid;
-    await _kirim('hotel_kamar_simpan', hasil, 'Kamar tersimpan.');
+    await _kirim('hotel_kamar_simpan', hasil, 'Kamar tersimpan.',
+        kunci: hasil['id'] != null
+            ? 'hotel_kamar:${hasil['id']}'
+            : 'hotel_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
   }
 
   Widget _daftarTipe() {
@@ -224,6 +236,7 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
           appBar: AppBar(
             title: const Text('Kamar & Tipe Kamar'),
             actions: [
+              const IndikatorSinkronMaster(),
               IconButton(
                   onPressed: _muatProperti,
                   tooltip: 'Muat ulang',

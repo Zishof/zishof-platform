@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/master_offline.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -243,7 +244,10 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Kontrak Pemilik')),
+      appBar: AppBar(
+        title: const Text('Kontrak Pemilik'),
+        actions: const [IndikatorSinkronMaster()],
+      ),
       floatingActionButton: _propertiId == null
           ? null
           : FloatingActionButton(

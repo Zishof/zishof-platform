@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -487,13 +488,25 @@ class _FormReservasiDialogState extends State<_FormReservasiDialog> {
     );
     if (ok != true || nama.text.trim().isEmpty) return;
     try {
-      final res = await ApiClient.instance.aksi('hotel_tamu_simpan', {
+      // Master TAMU offline-first (pola MasterOffline). Alur reservasi/check-in
+      // tetap online-only (butuh validasi state kamar real-time server), jadi
+      // saat offline tamu diantre tapi reservasi TIDAK bisa dilanjutkan dulu.
+      final res = await MasterOffline.simpanAtauAntre('hotel_tamu_simpan', {
         'properti_id': widget.propertiId,
         'nama': nama.text.trim(),
         'jenis_identitas': 'KTP',
         'no_identitas': noIdentitas.text.trim(),
         'telp': telp.text.trim(),
-      });
+      },
+          kunci:
+              'hotel_tamu:baru:${DateTime.now().microsecondsSinceEpoch}');
+      if (res['offline'] == true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Tamu tersimpan lokal dan akan dikirim saat online. Reservasi butuh koneksi — lanjutkan setelah tersinkron.')));
+        return;
+      }
       if (!apiSukses(res)) {
         throw Exception(apiPesan(res, 'Gagal menyimpan tamu.'));
       }
