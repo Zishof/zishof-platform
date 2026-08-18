@@ -84,6 +84,11 @@ android {
             applicationId "id.zishof.ebisnis.albahjah"
             resValue "string", "app_name", "Al-Bahjah POS"
         }
+        mitrainap {
+            dimension "product"
+            applicationId "id.zishof.mitrainap"
+            resValue "string", "app_name", "MitraInap"
+        }
     }
 
     signingConfigs {
