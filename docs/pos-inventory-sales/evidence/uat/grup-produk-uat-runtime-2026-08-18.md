@@ -108,3 +108,50 @@ lingkungan yang ZK-nya hidup (server dev/produksi) pasca-deploy.
 
 Kebersihan: grup uji KLIK-UAT dihapus lewat UI; `koperasi.grup_produk` kosong
 (diverifikasi SQL); user `uat_grup_admin` dinonaktifkan kembali.
+
+---
+
+## ADDENDUM 2 (18 Agu 2026, malam) — UAT POS Desktop LULUS via Integration Test; Android tinggal jalankan di perangkat
+
+### POS Desktop (Windows) — LULUS
+
+UAT dijalankan sebagai **Flutter integration test** (`integration_test/
+grup_produk_crud_test.dart`) pada device `windows`: aplikasi Windows sungguhan
+(`ebisnis.exe`) dibangun lalu layar `GrupProdukScreen` ASLI dijalankan dengan
+`ApiClient` ASLI (login token Bearer sungguhan) menunjuk UAT Tomcat lokal —
+end-to-end Dart widget → HTTP → PosApi → Hibernate → PostgreSQL, tanpa mock.
+
+Siklus yang lulus (6 detik, `All tests passed!`): muat daftar → **Tambah**
+(FLT-UAT / "Grup UAT Flutter" / 17.000 / 28.000, dialog menutup, baris muncul)
+→ **Ubah** (round-trip nilai terverifikasi: nama terisi ulang persis; harga
+jual diganti 29.000 dan tampil di daftar) → **Hapus** (dialog konfirmasi →
+baris hilang) → verifikasi akhir langsung ke server (`grup_produk_daftar`)
+bahwa grup uji benar-benar tiada.
+
+Cara menjalankan ulang (kredensial via dart-define, pola sama
+android_startup_login_test.dart):
+
+    flutter test integration_test/grup_produk_crud_test.dart -d windows \
+      --dart-define=POS_TEST_USERNAME=... --dart-define=POS_TEST_PASSWORD=... \
+      --dart-define=POS_TEST_HOST=localhost:18080 \
+      --dart-define=POS_TEST_CONTEXT=ais --dart-define=POS_TEST_HTTPS=false
+
+### POS Android — test SIAP, eksekusi menunggu perangkat
+
+Test yang SAMA berjalan tanpa perubahan di Android. Emulator di mesin dev
+TERBLOKIR kemampuan mesin: image `android-35;google_apis;x86_64` terpasang dan
+AVD `uat_grup_pixel` sudah dibuat, tetapi emulator menolak start — "Android
+Emulator hypervisor driver is not installed" (pemasangan driver hypervisor =
+perubahan sistem, keputusan pemilik mesin). Dua jalur penyelesaian:
+
+1. **Perangkat fisik via USB** (disarankan): `flutter test integration_test/
+   grup_produk_crud_test.dart -d <device-id>` dengan dart-define sama, tetapi
+   `POS_TEST_HOST` = IP LAN PC dev (perangkat tidak mengenal `localhost` PC).
+2. Pasang driver hypervisor (AEHD/WHPX) lalu jalankan AVD yang sudah tersedia
+   (`POS_TEST_HOST=10.0.2.2:18080` dari dalam emulator).
+
+Catatan keyakinan: kode Dart yang barusan lulus di Desktop byte-identik untuk
+Android (satu codebase, nol kode platform-specific di layar ini); risiko
+khusus-Android (minSdk 23, ABI 32/64-bit) sudah diverifikasi terpisah pada
+konfigurasi build. Kebersihan: user UAT dinonaktifkan; `koperasi.grup_produk`
+kosong.
