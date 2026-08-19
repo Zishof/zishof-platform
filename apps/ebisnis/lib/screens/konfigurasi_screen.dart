@@ -660,6 +660,37 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   String? _error;
   bool _bolehUbah = false;
   bool _bolehTransaksiStokHabis = false;
+
+  /// Kebijakan UBAH HARGA per toko. Default AKTIF = semua pengguna boleh
+  /// mengubah harga (perilaku lama). Bila dimatikan, hanya akun pada
+  /// [_userBolehUbahHarga] yang boleh -- ditegakkan di server.
+  bool _semuaBolehUbahHarga = true;
+  final Set<String> _userBolehUbahHarga = <String>{};
+  List<Map<String, dynamic>> _daftarPenggunaToko = [];
+  bool _memuatPenggunaToko = false;
+
+  /// Daftar akun pengguna toko utk pemilih "boleh mengubah harga"
+  /// (aksi server: pengguna_toko_list).
+  Future<void> _muatPenggunaToko() async {
+    if (_memuatPenggunaToko) return;
+    setStateIfMounted(() => _memuatPenggunaToko = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('pengguna_toko_list', {});
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _daftarPenggunaToko =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memuat daftar pengguna: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _memuatPenggunaToko = false);
+    }
+  }
+
   bool _tokoDemo = false;
   bool _bolehUbahTokoDemo = false;
   String? _logoStrukPath;
@@ -737,6 +768,12 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
       _alasanTahan.text =
           ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
       _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
+      _semuaBolehUbahHarga = d['semuaBolehUbahHarga'] != false;
+      _userBolehUbahHarga
+        ..clear()
+        ..addAll(((d['userBolehUbahHarga'] as List?) ?? const [])
+            .map((e) => '$e'.trim().toLowerCase())
+            .where((e) => e.isNotEmpty));
       _tokoDemo = d['tokoDemo'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
@@ -874,6 +911,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'keterangan': _keterangan.text.trim(),
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
         'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
+        'semua_boleh_ubah_harga': _semuaBolehUbahHarga,
+        'user_boleh_ubah_harga': _userBolehUbahHarga.toList(),
         if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
         'alasan_tahan': _alasanTahan.text
             .split(RegExp(r'[\r\n]+'))
@@ -1253,6 +1292,85 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
                   'Hanya admin atau supervisor toko yang dapat mengubah profil ini.',
             ),
           ),
+        AppFormSection(
+          judul: 'Kebijakan Ubah Harga',
+          deskripsi:
+              'Berlaku hanya untuk ${_nama.text.trim().isEmpty ? 'toko yang sedang dipilih' : _nama.text.trim()}. '
+              'Aturan ini ditegakkan di server, sehingga berlaku sama di Desktop, Android, JSP, maupun ZKoss.',
+          children: [
+            AppFormSwitchTile(
+              title: 'Semua pengguna boleh mengubah harga',
+              subtitle: _semuaBolehUbahHarga
+                  ? 'AKTIF — seluruh pengguna toko ini boleh mengubah harga jual dan harga beli (produk, kulakan, dan grup produk).'
+                  : 'NONAKTIF — hanya pengguna terpilih di bawah yang boleh mengubah harga. Pengguna lain tetap dapat menyunting data non-harga.',
+              value: _semuaBolehUbahHarga,
+              onChanged: _bolehUbah
+                  ? (nilai) {
+                      setStateIfMounted(() => _semuaBolehUbahHarga = nilai);
+                      if (!nilai) _muatPenggunaToko();
+                    }
+                  : null,
+            ),
+            if (!_semuaBolehUbahHarga) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                const Expanded(
+                  child: Text('Pengguna yang boleh mengubah harga',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                TextButton.icon(
+                    onPressed: _memuatPenggunaToko ? null : _muatPenggunaToko,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Muat ulang')),
+              ]),
+              if (_memuatPenggunaToko)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(minHeight: 2),
+                )
+              else if (_daftarPenggunaToko.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                      'Belum ada pengguna terdaftar pada toko ini. Tambahkan pengguna lewat menu Akun Pengguna, lalu muat ulang.',
+                      style: TextStyle(fontSize: 12)),
+                )
+              else
+                Column(
+                  children: _daftarPenggunaToko.map((u) {
+                    final id = '${u['userId'] ?? ''}'.trim().toLowerCase();
+                    final terpilih = _userBolehUbahHarga.contains(id);
+                    return CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: terpilih,
+                      title: Text('${u['nama'] ?? id}'),
+                      subtitle: Text(
+                          '$id${u['supervisor'] == true ? '  ·  supervisor' : ''}',
+                          style: const TextStyle(fontSize: 11)),
+                      onChanged: _bolehUbah
+                          ? (v) => setStateIfMounted(() {
+                                if (v == true) {
+                                  _userBolehUbahHarga.add(id);
+                                } else {
+                                  _userBolehUbahHarga.remove(id);
+                                }
+                              })
+                          : null,
+                    );
+                  }).toList(),
+                ),
+              if (!_semuaBolehUbahHarga && _userBolehUbahHarga.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                      'Belum ada pengguna dipilih — untuk sementara tidak ada yang dapat mengubah harga selain admin.',
+                      style: TextStyle(fontSize: 12, color: Colors.orange)),
+                ),
+            ],
+          ],
+        ),
         AppFormSection(
           judul: 'Kebijakan Stok Toko Aktif',
           deskripsi:
