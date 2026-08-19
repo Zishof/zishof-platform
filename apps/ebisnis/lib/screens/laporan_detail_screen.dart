@@ -291,7 +291,11 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
             // laporan, supaya angkanya tidak terbaca sebagai data terkini.
             PenandaDataTersimpan(
                 tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
-            if (_hasil != null) _TabelLaporan(hasil: _hasil!),
+            if (_hasil != null)
+              _TabelLaporan(
+                  hasil: _hasil!,
+                  idLaporan: '${widget.item['id']}',
+                  payloadFilter: _buatPayload()),
           ],
         ),
       ),
@@ -318,7 +322,15 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
 /// perubahan nilai; `grandTotal` menambah baris total keseluruhan di akhir.
 class _TabelLaporan extends StatefulWidget {
   final Map<String, dynamic> hasil;
-  const _TabelLaporan({required this.hasil});
+
+  /// Id laporan + filter aktif -- agar popup rincian memanggil laporan penyusun
+  /// di server dengan FILTER YANG SAMA (lihat _bukaRincianBaris).
+  final String idLaporan;
+  final Map<String, dynamic> payloadFilter;
+  const _TabelLaporan(
+      {required this.hasil,
+      required this.idLaporan,
+      required this.payloadFilter});
 
   @override
   State<_TabelLaporan> createState() => _TabelLaporanState();
@@ -334,6 +346,155 @@ class _TabelLaporanState extends State<_TabelLaporan> {
   void didUpdateWidget(covariant _TabelLaporan oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.hasil, widget.hasil)) _halaman = 1;
+  }
+
+  /// Popup "data penghitungan" saat angka laporan diklik. Bila baris ini terdaftar
+  /// punya laporan RINCIAN di server (mis. HPP Laba Rugi), rincian itu diambil dgn
+  /// filter yang sama; selain itu ditampilkan asal-usul baris (seluruh kolomnya).
+  Future<void> _bukaRincianBaris(BuildContext context,
+      List<Map<String, dynamic>> kolom, List<dynamic> baris, int kolomKe) async {
+    final labelBaris =
+        (baris.isNotEmpty ? '${baris[0] ?? ''}' : '').trim().toLowerCase();
+    String? idRincian;
+    for (final e in (_petaRincianLaporan[widget.idLaporan] ?? const [])) {
+      if (labelBaris.contains(e[0])) {
+        idRincian = e[1];
+        break;
+      }
+    }
+    final judul = baris.isNotEmpty && '${baris[0] ?? ''}'.trim().isNotEmpty
+        ? '${baris[0]}'.trim()
+        : (kolom.length > kolomKe ? '${kolom[kolomKe]['l'] ?? ''}' : 'Rincian');
+
+    if (idRincian == null) {
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('Asal Angka: $judul'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                for (var i = 0; i < kolom.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(children: [
+                      SizedBox(
+                          width: 170,
+                          child: Text('${kolom[i]['l'] ?? ''}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 12))),
+                      Expanded(
+                          child: Text(
+                              i < baris.length
+                                  ? _fmtSel(baris[i], '${kolom[i]['t'] ?? 'text'}',
+                                      '${kolom[i]['l'] ?? ''}')
+                                  : '',
+                              style: const TextStyle(fontSize: 12))),
+                    ]),
+                  ),
+                if ('${widget.hasil['catatan'] ?? ''}'.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text('${widget.hasil['catatan']}',
+                        style: const TextStyle(
+                            fontSize: 11, fontStyle: FontStyle.italic)),
+                  ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+          ],
+        ),
+      );
+      return;
+    }
+
+    final payload = Map<String, dynamic>.from(widget.payloadFilter);
+    payload['r'] = idRincian;
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Rincian: $judul'),
+        content: SizedBox(
+          width: 720,
+          height: 420,
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: ApiClient.instance.aksi('laporan_jalankan', payload),
+            builder: (ctx, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(child: Text('Gagal memuat rincian: ${snap.error}'));
+              }
+              final d = snap.data ?? const <String, dynamic>{};
+              final kol = ((d['kolom'] as List?) ?? [])
+                  .map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList();
+              final rows = ((d['baris'] as List?) ?? [])
+                  .map((e) => List<dynamic>.from(e as List))
+                  .toList();
+              if (rows.isEmpty) {
+                return const Center(child: Text('Tidak ada data penyusun.'));
+              }
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if ('${d['catatan'] ?? ''}'.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('${d['catatan']}',
+                        style: const TextStyle(
+                            fontSize: 11, fontStyle: FontStyle.italic)),
+                  ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        columnSpacing: 18,
+                        columns: [
+                          for (final k in kol)
+                            DataColumn(
+                                label: Text('${k['l'] ?? ''}',
+                                    style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700)))
+                        ],
+                        rows: [
+                          for (final r in rows)
+                            DataRow(cells: [
+                              for (var i = 0; i < kol.length; i++)
+                                DataCell(Text(
+                                    i < r.length
+                                        ? _fmtSel(r[i], '${kol[i]['t'] ?? 'text'}',
+                                            '${kol[i]['l'] ?? ''}')
+                                        : '',
+                                    style: const TextStyle(fontSize: 11.5)))
+                            ])
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('${rows.length} baris penyusun.',
+                      style: const TextStyle(fontSize: 11)),
+                ),
+              ]);
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+        ],
+      ),
+    );
   }
 
   int _totalHalaman(int total) {
@@ -414,15 +575,29 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           final tipe = kolom[i]['t'] as String? ?? 'text';
           final label = kolom[i]['l'] as String? ?? '';
           final isNum = tipe == 'num';
-          return AppTableCell.text(
-            i < r.length ? _fmtSel(r[i], tipe, label) : '',
+          final teksSel = i < r.length ? _fmtSel(r[i], tipe, label) : '';
+          final gaya = TextStyle(
+            fontSize: 12.5,
+            color: AppColors.textPrimaryOf(context),
+            fontFamily: isNum ? 'monospace' : null,
+          );
+          // SETIAP ANGKA BISA DIKLIK: popup memperlihatkan data penghitungannya --
+          // seluruh kolom baris tsb + catatan rumus laporan, dan untuk laporan yang
+          // punya rincian server (mis. HPP Laba Rugi) dibuka rincian penyusunnya.
+          if (!isNum || teksSel.isEmpty) {
+            return AppTableCell.text(teksSel,
+                width: _lebarKolom,
+                align: isNum ? TextAlign.right : TextAlign.left,
+                maxLines: 2,
+                style: gaya);
+          }
+          return AppTableCell(
             width: _lebarKolom,
-            align: isNum ? TextAlign.right : TextAlign.left,
-            maxLines: 2,
-            style: TextStyle(
-              fontSize: 12.5,
-              color: AppColors.textPrimaryOf(context),
-              fontFamily: isNum ? 'monospace' : null,
+            align: TextAlign.right,
+            child: _SelAngkaRincian(
+              teks: teksSel,
+              gaya: gaya,
+              onTap: () => _bukaRincianBaris(context, kolom, r, i),
             ),
           );
         }),
@@ -715,3 +890,51 @@ Uint8List _bangunXlsx(
 
   return ZipEncoder().encodeBytes(archive);
 }
+
+/// Sel angka laporan yang dapat diklik (bergaris putus-putus + kursor tangan),
+/// seragam dgn gaya angka clickable di Laporan Transaksi.
+class _SelAngkaRincian extends StatelessWidget {
+  final String teks;
+  final TextStyle gaya;
+  final VoidCallback onTap;
+  const _SelAngkaRincian(
+      {required this.teks, required this.gaya, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Klik untuk melihat data penghitungannya',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(5),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            child: Text(
+              teks,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: gaya.copyWith(
+                decoration: TextDecoration.underline,
+                decorationStyle: TextDecorationStyle.dotted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Peta baris laporan ringkasan -> id laporan RINCIAN di server. Menambah
+/// drill-down baru cukup mendaftarkannya di sini (padanan PETA_RINCIAN di
+/// laporan_laporan.jsp) + membuat cabangnya di LaporanKantinUtil.
+const Map<String, List<List<String>>> _petaRincianLaporan = {
+  'fin_laba_rugi': [
+    ['hpp', 'fin_laba_rugi_rincian_hpp'],
+    ['penjualan', 'fin_laba_rugi_rincian_penjualan'],
+    ['pendapatan bersih', 'fin_laba_rugi_rincian_penjualan'],
+  ],
+};
