@@ -8,6 +8,8 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
@@ -44,22 +46,30 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
     super.dispose();
   }
 
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('kedaluwarsa_list', {
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot
+      // cache tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu('kedaluwarsa_list', {
         'filter': _filter,
         'keyword': _cari.text.trim(),
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _summary = ((hasil['summary'] as Map?) ?? {}).cast<String, dynamic>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+      }, 'master:kedaluwarsa:$_filter', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          if (_diff.dariServer) {
+            _summary = ((hasil['summary'] as Map?) ?? {}).cast<String, dynamic>();
+          }
+          _total = _diff.total ?? _data.length;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());

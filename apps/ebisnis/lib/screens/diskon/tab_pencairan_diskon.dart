@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
@@ -289,6 +290,19 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                                                 style: const TextStyle(
                                                     fontWeight: FontWeight.w700,
                                                     fontSize: 12.5))),
+                                        IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            tooltip:
+                                                'Riwayat data ini (AuditTrails)',
+                                            icon: const Icon(Icons.history,
+                                                size: 15),
+                                            onPressed: () =>
+                                                tampilkanRiwayatData(context,
+                                                    entitas: 'pencairan_diskon',
+                                                    id: p['id'],
+                                                    judul:
+                                                        '${p['kodePencairan'] ?? ''}')),
                                       ]),
                                       Text('${p['waktuPencairan'] ?? '-'}',
                                           style: TextStyle(

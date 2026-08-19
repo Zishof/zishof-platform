@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../api_client.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../widgets/safe_state.dart';
 
 /// Tab "Notifikasi" (padanan `notifikasi.jsp`) -- log/riwayat notifikasi yg
@@ -33,25 +34,27 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
     if (Sesi.instance.isAdmin) _muatDaftar();
   }
 
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muatDaftar() async {
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('notifikasi_list', {
+      // Baca LOKAL DULU: snapshot cache tampil seketika, hasil server
+      // menyusul dgn diff (baru/berubah/hapus) utk animasi kilau baris.
+      await MasterOffline.daftarCacheDulu('notifikasi_list', {
         'keyword': _kataKunci.isEmpty ? null : _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) {
+      }, 'master:notifikasi', onData: (hasil) {
+        if (!mounted) return;
         setStateIfMounted(() {
-          _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _daftar = _diff.terapkan(hasil);
+          _total = _diff.total ?? _daftar.length;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _pesanError = e.toString());
     } finally {

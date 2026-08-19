@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../sesi.dart';
@@ -564,16 +565,27 @@ class _TabFormulariumState extends State<_TabFormularium> {
                         subtitle: Text(
                             '${it['kode']} • stok ${it['stok']} • ${_rp.format((it['hargaJual'] as num?) ?? 0)}',
                             style: const TextStyle(fontSize: 11.5)),
-                        trailing: Wrap(spacing: 4, children: [
-                          if (it['lasa'] == true)
-                            const StatusPill(
-                                label: 'LASA', warna: Color(0xFFB8860B)),
-                          StatusPill(
-                              label: '${it['golonganObat']}',
-                              warna: terkendali
-                                  ? AppColors.danger
-                                  : AppColors.teal),
-                        ]),
+                        trailing: Wrap(
+                            spacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (it['lasa'] == true)
+                                const StatusPill(
+                                    label: 'LASA', warna: Color(0xFFB8860B)),
+                              StatusPill(
+                                  label: '${it['golonganObat']}',
+                                  warna: terkendali
+                                      ? AppColors.danger
+                                      : AppColors.teal),
+                              IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Riwayat data ini (AuditTrails)',
+                                  icon: const Icon(Icons.history, size: 16),
+                                  onPressed: () => tampilkanRiwayatData(context,
+                                      entitas: 'apotik_item',
+                                      id: it['id'],
+                                      judul: '${it['nama'] ?? ''}')),
+                            ]),
                         onTap: () => _ubahProfil(it),
                       ),
                     );

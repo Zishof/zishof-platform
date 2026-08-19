@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/master_offline.dart';
+import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
@@ -298,14 +299,29 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                                   kunci: '${s['id'] ?? s['_kunci'] ?? ''}',
                                   idBaru: _idBaru,
                                   idBerubah: _idBerubah,
-                                  child: SelTeksDenganSinkron(
-                                    kunci: 'si_sales:${s['id']}',
-                                    teks: '${s['kode']}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontFamily: 'monospace',
-                                        fontSize: 12.5),
-                                  ),
+                                  child: Row(children: [
+                                    IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip:
+                                            'Riwayat data ini (AuditTrails)',
+                                        icon: const Icon(Icons.history,
+                                            size: 16),
+                                        onPressed: () => tampilkanRiwayatData(
+                                            context,
+                                            entitas: 'si_sales',
+                                            id: s['id'],
+                                            judul: '${s['nama'] ?? ''}')),
+                                    Expanded(
+                                      child: SelTeksDenganSinkron(
+                                        kunci: 'si_sales:${s['id']}',
+                                        teks: '${s['kode']}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontFamily: 'monospace',
+                                            fontSize: 12.5),
+                                      ),
+                                    ),
+                                  ]),
                                 ),
                               ),
                               AppTableCell(
