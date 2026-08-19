@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../sesi.dart';
 import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/app_shell.dart';
@@ -692,11 +693,32 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                   controller: _keterangan,
                   maxLines: 2,
                   decoration: const InputDecoration(labelText: 'Keterangan')),
+              if (!Sesi.instance.bolehUbahHarga)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(Sesi.instance.pesanTidakBolehUbahHarga,
+                          style: const TextStyle(fontSize: 12)),
+                    ),
+                  ]),
+                ),
               _judulBagian('Harga & Kebijakan Terpusat'),
               Row(children: [
                 Expanded(
                   child: TextField(
                       controller: _hargaBeli,
+                      enabled: Sesi.instance.bolehUbahHarga,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                           labelText: 'HPP / Harga Beli')),
@@ -705,6 +727,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                 Expanded(
                   child: TextField(
                       controller: _hargaJual,
+                      enabled: Sesi.instance.bolehUbahHarga,
                       keyboardType: TextInputType.number,
                       decoration:
                           const InputDecoration(labelText: 'Harga Jual')),

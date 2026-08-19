@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../sesi.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
@@ -1578,6 +1579,25 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
               ]),
             ],
           ),
+          if (!Sesi.instance.bolehUbahHarga)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(Sesi.instance.pesanTidakBolehUbahHarga,
+                      style: const TextStyle(fontSize: 12)),
+                ),
+              ]),
+            ),
           const SizedBox(height: 16),
           _bulkTable(),
           const SizedBox(height: 16),

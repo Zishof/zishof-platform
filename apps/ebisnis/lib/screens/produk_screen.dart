@@ -1929,17 +1929,44 @@ class _FormProdukState extends State<_FormProduk> {
               AppFormSection(
                 judul: 'Harga & Stok',
                 children: [
+                  // Kebijakan ubah harga per toko: bila akun ini tidak diberi akses,
+                  // kolom harga dikunci dan alasannya ditampilkan -- bukan dibiarkan
+                  // diketik lalu ditolak server setelah tombol Simpan ditekan.
+                  if (!Sesi.instance.bolehUbahHarga)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.45)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.lock_outline,
+                            size: 18, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(Sesi.instance.pesanTidakBolehUbahHarga,
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                      ]),
+                    ),
                   Row(
                     children: [
                       Expanded(
                         child: AppFormTextField(
                           label: 'Harga Beli',
                           controller: _hargaBeli,
-                          enabled: _bahanBaku.isEmpty,
+                          enabled: _bahanBaku.isEmpty &&
+                              Sesi.instance.bolehUbahHarga,
                           keyboardType: TextInputType.number,
-                          helperText: _bahanBaku.isNotEmpty
-                              ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
-                              : null,
+                          helperText: !Sesi.instance.bolehUbahHarga
+                              ? 'Terkunci — tidak diberikan akses ubah harga'
+                              : (_bahanBaku.isNotEmpty
+                                  ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
+                                  : null),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1947,7 +1974,11 @@ class _FormProdukState extends State<_FormProduk> {
                         child: AppFormTextField(
                           label: 'Harga Jual *',
                           controller: _hargaJual,
+                          enabled: Sesi.instance.bolehUbahHarga,
                           keyboardType: TextInputType.number,
+                          helperText: !Sesi.instance.bolehUbahHarga
+                              ? 'Terkunci — tidak diberikan akses ubah harga'
+                              : null,
                           validator: (v) =>
                               _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
                         ),

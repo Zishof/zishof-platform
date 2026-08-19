@@ -18,6 +18,13 @@ class Sesi {
   List<String> alasanTahan = [];
   bool wajibSesiKas = false;
   bool bolehTransaksiStokHabis = false;
+
+  /// Hak mengubah harga pada toko aktif (kebijakan per toko di Konfigurasi >
+  /// Profil Toko). Default true supaya toko yang belum mengatur -- dan server
+  /// versi lama yang belum mengirim field ini -- berperilaku seperti sebelumnya.
+  bool bolehUbahHarga = true;
+  String pesanTidakBolehUbahHarga =
+      'Anda tidak boleh mengubah harga karena tidak diberikan akses.';
   bool tokoDemo = false;
   bool dataSampleEbisnis = false;
   bool isAdmin = false;
@@ -123,6 +130,9 @@ class Sesi {
         .toList();
     wajibSesiKas = konfig['wajibSesiKas'] == true;
     bolehTransaksiStokHabis = konfig['bolehTransaksiStokHabis'] == true;
+    bolehUbahHarga = konfig['bolehUbahHarga'] != false;
+    final pesanHarga = '${konfig['pesanTidakBolehUbahHarga'] ?? ''}'.trim();
+    if (pesanHarga.isNotEmpty) pesanTidakBolehUbahHarga = pesanHarga;
     tokoDemo = konfig['tokoDemo'] == true;
     dataSampleEbisnis = konfig['dataSampleEbisnis'] == true;
     isAdmin = konfig['isAdmin'] == true;
@@ -194,6 +204,7 @@ class Sesi {
     alasanTahan = [];
     wajibSesiKas = false;
     bolehTransaksiStokHabis = false;
+    bolehUbahHarga = true;
     tokoDemo = false;
     dataSampleEbisnis = false;
     isAdmin = false;
