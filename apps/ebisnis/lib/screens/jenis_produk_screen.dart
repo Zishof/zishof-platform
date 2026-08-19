@@ -6,6 +6,7 @@ import '../widgets/app_components.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
+import '../widgets/pemilih_akun.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
@@ -413,18 +414,6 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
     super.dispose();
   }
 
-  List<DropdownMenuItem<int?>> _itemsAkun() {
-    return [
-      const DropdownMenuItem<int?>(
-          value: null, child: Text('-- Tidak dipilih --')),
-      ..._akun.map((a) => DropdownMenuItem<int?>(
-            value: (a['id'] as num).toInt(),
-            child: Text('${a['label'] ?? a['nama'] ?? ''}',
-                overflow: TextOverflow.ellipsis),
-          )),
-    ];
-  }
-
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
@@ -515,32 +504,29 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
                       ]),
                     )
                   else ...[
-                    DropdownButtonFormField<int?>(
-                      value: _akunPendapatanId,
-                      isExpanded: true,
-                      decoration: AppFormStyle.fieldDecoration(context,
-                          labelText: 'Akun Pendapatan Penjualan'),
-                      items: _itemsAkun(),
+                    // Dropdown diganti pemilih bercari: bagan akun bisa ratusan
+                    // baris, jadi pencarian kode/nama jauh lebih cepat.
+                    PemilihAkunField(
+                      label: 'Akun Pendapatan Penjualan',
+                      daftar: _akun,
+                      nilai: _akunPendapatanId,
+                      helperText: 'Ketik kode atau nama akun untuk mencari.',
                       onChanged: (v) =>
                           setStateIfMounted(() => _akunPendapatanId = v),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int?>(
-                      value: _akunPpnKeluaranId,
-                      isExpanded: true,
-                      decoration: AppFormStyle.fieldDecoration(context,
-                          labelText: 'Akun PPN Keluaran'),
-                      items: _itemsAkun(),
+                    PemilihAkunField(
+                      label: 'Akun PPN Keluaran',
+                      daftar: _akun,
+                      nilai: _akunPpnKeluaranId,
                       onChanged: (v) =>
                           setStateIfMounted(() => _akunPpnKeluaranId = v),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int?>(
-                      value: _akunHppId,
-                      isExpanded: true,
-                      decoration: AppFormStyle.fieldDecoration(context,
-                          labelText: 'Akun HPP (Beban Pokok Penjualan)'),
-                      items: _itemsAkun(),
+                    PemilihAkunField(
+                      label: 'Akun HPP (Beban Pokok Penjualan)',
+                      daftar: _akun,
+                      nilai: _akunHppId,
                       onChanged: (v) => setStateIfMounted(() => _akunHppId = v),
                     ),
                   ],

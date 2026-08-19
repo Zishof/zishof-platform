@@ -104,7 +104,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   List<String> get _defKolom {
     if (_tab.index == 2) {
-      return const ['Nama Bank', 'Keterangan', 'Kode Akun', 'Aktif'];
+      return const ['Kode', 'Nama Bank', 'Keterangan', 'Kode Akun', 'Aktif'];
     }
     if (_tab.index == 3) {
       return const ['Kode', 'Nama', 'Keterangan', 'Kode Akun', 'Aktif'];
@@ -116,6 +116,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     if (_tab.index == 2) {
       return _bank
           .map((b) => [
+                '${b['kode'] ?? ''}',
                 '${b['nama'] ?? ''}',
                 '${b['keterangan'] ?? ''}',
                 '${b['akunKode'] ?? ''}',
@@ -150,7 +151,13 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   Map<String, dynamic> _defKeBaris(List<String> r) {
     String k(int i) => r.length > i ? r[i] : '';
     if (_tab.index == 2) {
-      return {'nama': k(0), 'keterangan': k(1), 'kodeAkun': k(2), 'aktif': k(3)};
+      return {
+        'kode': k(0),
+        'nama': k(1),
+        'keterangan': k(2),
+        'kodeAkun': k(3),
+        'aktif': k(4)
+      };
     }
     if (_tab.index == 3) {
       return {
@@ -401,6 +408,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                       minWidth: 720,
                       emptyText: 'Belum ada data bank.',
                       columns: const [
+                        AppTableColumn('Kode', flex: 2),
                         AppTableColumn('Bank', flex: 3),
                         AppTableColumn('Akun Kas', flex: 4),
                         AppTableColumn('Keterangan', flex: 3),
@@ -408,6 +416,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                       ],
                       rows: _bank
                           .map((b) => AppTableRowData(cells: [
+                                AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
                                 AppTableCell.text('${b['nama'] ?? ''}', flex: 3),
                                 AppTableCell.text(
                                     '${b['akunKode'] ?? ''} ${b['akunNama'] ?? ''}'.trim(),
