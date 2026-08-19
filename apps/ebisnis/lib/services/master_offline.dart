@@ -331,7 +331,10 @@ class MasterOffline {
         });
         final data = (hasil[fieldData] as List?) ?? const [];
         semua.addAll(data);
-        total = total ?? (hasil['total'] as num?)?.toInt();
+        // 'total' bisa berupa objek agregat pd sebagian aksi -- jangan
+        // di-cast paksa (lihat catatan di daftarCacheDulu).
+        final totalMentah = hasil['total'];
+        total = total ?? (totalMentah is num ? totalMentah.toInt() : null);
         if (lapor != null) lapor(semua.length, total);
         final habis = data.length < pageSize ||
             (total != null && semua.length >= total);

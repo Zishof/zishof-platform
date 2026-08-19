@@ -259,6 +259,17 @@ void main() {
     // antre/gagal tidak boleh ditimpa/dihapus salinan server.
     expect(source, contains('benarLengkap'));
     expect(source, contains('kunciDilindungi'));
+    // Field top-level LAIN dari respons server (summary/ringkasan/
+    // totalOutstanding/daftarKasir) wajib diteruskan ke layar -- pernah
+    // dibuang sehingga KPI hutang/piutang diam-diam nol (2026-08-19).
+    expect(source, contains('responsAsli'));
+    expect(source, contains('...?responsAsli'));
+    // 'total' tidak boleh di-cast paksa: sebagian aksi memakainya utk objek
+    // agregat (pembantu_piutang_list) -> TypeError tiap muat.
+    expect(source, isNot(contains("total'] as num?)?.toInt()")));
+    // Kunci baris versi publik supaya KilauBaris memakai kunci yang PERSIS
+    // sama dgn diff internal (kalau beda, animasi tidak pernah menyala).
+    expect(source, contains('static String kunciBaris('));
     // Coalesce lewat kunci; create diberi kunci unik per draf oleh layar.
     expect(source, contains('kunci'));
   });
