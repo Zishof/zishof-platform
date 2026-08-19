@@ -294,6 +294,126 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     }
   }
 
+  /// Pemetaan akun -> Kelompok Laporan. Akun yang belum dipetakan tidak ikut
+  /// terhitung pada Laba Rugi/Neraca berbasis jurnal, jadi tombol ini menutup
+  /// celah itu. Server menurunkan kelompoknya dari BAGAN AKUN (induk akun),
+  /// bukan menebak dari kata kunci; sifatnya hanya menambah, tidak menghapus.
+  Future<void> _petakanAkun() async {
+    setStateIfMounted(() => _sibuk = true);
+    Map<String, dynamic> usul;
+    try {
+      usul = await ApiClient.instance
+          .aksi('pemetaan_akun_usulan', {'batasContoh': 30});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menyiapkan pemetaan: $e')));
+      }
+      setStateIfMounted(() => _sibuk = false);
+      return;
+    }
+    setStateIfMounted(() => _sibuk = false);
+    if (!mounted) return;
+    final jumlah = (usul['jumlahBelumDipetakan'] as num?)?.toInt() ?? 0;
+    if (jumlah == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Semua akun sudah dipetakan ke Kelompok Laporan.')));
+      return;
+    }
+    final ringkas =
+        ((usul['ringkasan'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Petakan Akun ke Kelompok Laporan'),
+        content: SizedBox(
+          width: 620,
+          height: 420,
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$jumlah akun belum dipetakan dan akan dimasukkan ke '
+                    '${usul['jumlahKelompok'] ?? 0} kelompok berikut. Kelompok diambil '
+                    'dari nama akun induk pada bagan akun Anda. Akun yang sudah '
+                    'dipetakan tidak diubah dan tidak ada data yang dihapus.'),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: ringkas.length,
+                    itemBuilder: (_, i) {
+                      final r = ringkas[i];
+                      final baru = r['kelompokBaru'] == true;
+                      return ListTile(
+                        dense: true,
+                        title: Text('${r['kelompok'] ?? ''}'),
+                        subtitle: Text('${r['jenis'] ?? ''}'
+                            '${baru ? ' • kelompok baru' : ' • kelompok yang sudah ada'}'),
+                        trailing: Text('${r['jumlahAkun'] ?? 0} akun'),
+                      );
+                    },
+                  ),
+                ),
+              ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: const Text('Terapkan')),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('pemetaan_akun_terapkan', {});
+      if (!mounted) return;
+      final masalah =
+          ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Hasil Pemetaan Akun'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Akun dipetakan: ${hasil['dipetakan'] ?? 0}'),
+                    Text('Kelompok baru dibuat: ${hasil['kelompokBaru'] ?? 0}'),
+                    if (masalah.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('Baris yang gagal:',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      for (final m in masalah)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child:
+                              Text('• $m', style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ]),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+          ],
+        ),
+      );
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memetakan akun: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
   /// Pohon akun: baris anak diberi indentasi sesuai kedalaman induknya,
   /// meniru tampilan hierarki pada layar ZK.
   List<Map<String, dynamic>> get _akunPohon {
@@ -377,6 +497,11 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
               onPressed: _sibuk ? null : _unggahAkun,
               icon: const Icon(Icons.upload_file, size: 18),
               label: Text('Upload $_defJudul')),
+          if (_tab.index < 2)
+            OutlinedButton.icon(
+                onPressed: _sibuk ? null : _petakanAkun,
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+                label: const Text('Petakan Akun')),
           if (_sibuk)
             const SizedBox(
                 width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
