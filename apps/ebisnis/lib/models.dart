@@ -174,11 +174,18 @@ class CaraBayar {
   final String nama;
   final bool manual;
   final bool memotongDeposit;
+
+  /// Metode ini membentuk PIUTANG toko ke pelanggan (kolom
+  /// `cara_pembayaran_koperasi.masuk_sebagai_hutang`). Bila true, kasir WAJIB
+  /// memilih nama pelanggan -- server menolak piutang tanpa pemilik karena
+  /// tagihannya tidak dapat ditelusuri tim keuangan.
+  final bool masukSebagaiHutang;
   CaraBayar({
     required this.id,
     required this.nama,
     required this.manual,
     this.memotongDeposit = false,
+    this.masukSebagaiHutang = false,
   });
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
@@ -187,6 +194,8 @@ class CaraBayar {
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
+      masukSebagaiHutang: j['masukSebagaiHutang'] == true ||
+          j['masuk_sebagai_hutang'] == true,
       memotongDeposit: j['memotongDeposit'] == true ||
           j['memotong_deposit'] == true ||
           j['potongSaldo'] == true ||

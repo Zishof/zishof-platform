@@ -1263,6 +1263,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
+  /// True bila metode bayar terpilih (slot 1 atau slot split mana pun) berjenis
+  /// piutang SEDANGKAN pelanggan belum dipilih.
+  bool get _perluPelangganUntukPiutang {
+    if (_memberTerpilih != null) return false;
+    if (_caraBayarTerpilih?.masukSebagaiHutang == true) return true;
+    for (final s in _splitBayar) {
+      if (s.caraBayar.masukSebagaiHutang && s.nominal > 0) return true;
+    }
+    return false;
+  }
+
   Future<void> _bayar() async {
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
@@ -1275,6 +1286,33 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           content: Text(
               'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.')));
       return;
+    }
+    // PIUTANG WAJIB BERPEMILIK: metode ber-flag masukSebagaiHutang membentuk
+    // tagihan toko ke pelanggan. Tanpa nama pelanggan, tim keuangan tidak dapat
+    // menagih -- server pun menolaknya. Kasir langsung diarahkan memilih
+    // pelanggan di sini, bukan dibiarkan gagal setelah menekan Bayar.
+    if (_perluPelangganUntukPiutang) {
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Pilih Nama Pelanggan'),
+          content: Text(
+              'Metode "${_caraBayarTerpilih!.nama}" dicatat sebagai piutang. '
+              'Pilih nama pelanggan dahulu agar tagihan ini dapat ditagih oleh tim keuangan.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Pilih Pelanggan')),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (lanjut == true) await _pilihMember();
+      if (!mounted) return;
+      if (_memberTerpilih == null) return; // tetap belum dipilih -> batalkan
     }
 
     setStateIfMounted(() => _memproses = true);
