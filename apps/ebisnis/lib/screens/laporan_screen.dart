@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'kode_akun_screen.dart';
+import 'posting_toko_dialog.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
@@ -28,12 +29,18 @@ class LaporanScreen extends StatefulWidget {
   final MenuEBisnis menuAktif;
   final String judul;
   final String subjudul;
+
+  /// Bila diisi ('posting_hpp' / 'posting_penjualan'), dialog posting terkait langsung
+  /// dibuka begitu layar tampil -- dipakai submenu Akuntansi > Posting HPP / Posting
+  /// Penjualan supaya tidak perlu menduplikasi dialognya jadi layar tersendiri.
+  final String? bukaPosting;
   const LaporanScreen({
     super.key,
     this.aksiKatalog = 'laporan_katalog',
     this.menuAktif = MenuEBisnis.laporanLaporan,
     this.judul = 'Laporan-Laporan',
     this.subjudul = 'Katalog laporan siap pakai',
+    this.bukaPosting,
   });
 
   @override
@@ -57,6 +64,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
   void initState() {
     super.initState();
     _muat();
+    final posting = widget.bukaPosting;
+    if (posting != null && posting.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _bukaPendukungInline({
+          'id': posting,
+          'judul': posting == 'posting_hpp' ? 'Posting HPP' : 'Posting Penjualan',
+        });
+      });
+    }
   }
 
   @override
@@ -141,6 +158,25 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
       return;
     }
+    // Empat posting penutup rantai pengadaan->pembayaran toko. Dialognya terpisah
+    // karena kontrak drafnya berbeda (per dokumen, dengan alasan bila belum siap).
+    const petaPostingToko = {
+      'posting_kulakan': 'kulakan',
+      'posting_bayar_hutang': 'bayar_hutang',
+      'posting_terima_piutang': 'terima_piutang',
+      'posting_penyesuaian': 'penyesuaian',
+    };
+    if (petaPostingToko.containsKey(id)) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PostingTokoDialog(
+          jenis: petaPostingToko[id]!,
+          judul: item['judul'] as String? ?? 'Posting',
+        ),
+      );
+      return;
+    }
     if (id == 'posting_hpp' || id == 'posting_penjualan') {
       await showDialog<void>(
         context: context,
@@ -168,7 +204,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
               ? Icons.account_tree_outlined
               : id == 'posting_hpp'
                   ? Icons.inventory_2_outlined
-                  : Icons.post_add_outlined;
+                  : id == 'posting_kulakan'
+                      ? Icons.local_shipping_outlined
+                      : id == 'posting_bayar_hutang'
+                          ? Icons.payments_outlined
+                          : id == 'posting_terima_piutang'
+                              ? Icons.savings_outlined
+                              : id == 'posting_penyesuaian'
+                                  ? Icons.tune_outlined
+                                  : Icons.post_add_outlined;
           return OutlinedButton.icon(
             onPressed: () => _bukaPendukungInline(item),
             icon: Icon(ikon, size: 18),

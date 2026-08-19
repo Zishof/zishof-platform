@@ -10,6 +10,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/pemilih_akun.dart';
 
 /// Layar "Supplier (Penyedia)" -- CRUD penuh master data pemasok, dipakai
 /// sbg picker di Kulakan per-Faktur (`ais.database.model.library.Penyedia`).
@@ -346,6 +347,9 @@ class _FormSupplierState extends State<_FormSupplier> {
   late final TextEditingController _kode;
   late final TextEditingController _nama;
   late final TextEditingController _kontak;
+  // Akun utang dagang supplier: dipakai jurnal kulakan kredit & pembayaran hutang.
+  int? _akunUtangId;
+  List<Map<String, dynamic>> _akun = [];
   late final TextEditingController _telp;
   late final TextEditingController _fax;
   late final TextEditingController _email;
@@ -362,6 +366,8 @@ class _FormSupplierState extends State<_FormSupplier> {
     _kode = TextEditingController(text: '${s?['kode'] ?? ''}');
     _nama = TextEditingController(text: '${s?['nama'] ?? ''}');
     _kontak = TextEditingController(text: '${s?['kontak'] ?? ''}');
+    _akunUtangId = (s?['akunUtangId'] as num?)?.toInt();
+    _muatAkun();
     _telp = TextEditingController(text: '${s?['telp'] ?? ''}');
     _fax = TextEditingController(text: '${s?['fax'] ?? ''}');
     _email = TextEditingController(text: '${s?['email'] ?? ''}');
@@ -384,6 +390,18 @@ class _FormSupplierState extends State<_FormSupplier> {
     super.dispose();
   }
 
+  Future<void> _muatAkun() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 2000}, 'master:akun_list');
+      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      setStateIfMounted(() => _akun = data);
+    } catch (e) {
+      // Daftar akun opsional -- kegagalan memuat tidak boleh memblokir simpan supplier.
+      setStateIfMounted(() => _akun = const []);
+    }
+  }
+
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
@@ -402,6 +420,7 @@ class _FormSupplierState extends State<_FormSupplier> {
         'alamat': _alamat.text.trim(),
         'kode_pos': _kodePos.text.trim(),
         'keterangan': _keterangan.text.trim(),
+        'akunUtangId': _akunUtangId ?? 0,
       };
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
       await prosesSimpanMaster(
@@ -476,6 +495,19 @@ class _FormSupplierState extends State<_FormSupplier> {
                   AppFormTextField(
                       label: 'Alamat', controller: _alamat, maxLines: 2),
                   AppFormTextField(label: 'Kode Pos', controller: _kodePos),
+                ],
+              ),
+              AppFormSection(
+                judul: 'Akuntansi',
+                children: [
+                  PemilihAkunField(
+                    label: 'Akun Utang Dagang',
+                    daftar: _akun,
+                    nilai: _akunUtangId,
+                    helperText: 'Dipakai jurnal kulakan kredit & pembayaran hutang. '
+                        'Kosongkan untuk memakai akun utang bawaan.',
+                    onChanged: (v) => setStateIfMounted(() => _akunUtangId = v),
+                  ),
                 ],
               ),
               AppFormSection(
