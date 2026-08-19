@@ -23,6 +23,7 @@ import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/kulakan_screen.dart';
+import '../screens/pengadaan_po_screen.dart';
 import '../screens/pengadaan_pr_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/cara_bayar_screen.dart';
@@ -105,6 +106,7 @@ enum MenuEBisnis {
   mutasiAntarOutlet,
   kulakan,
   pengadaanPr,
+  pengadaanPo,
   penyedia,
   diskon,
   caraBayar,
@@ -216,6 +218,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.mutasiAntarOutlet: 'mutasistokantaroutlet',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.pengadaanPr: 'pengadaan_pr',
+  MenuEBisnis.pengadaanPo: 'pengadaan_po',
   // Kunci server "penyedia" (aksesMenu, lihat PosApi.java:1012-1013) sudah
   // ada dari sebelumnya (dialiaskan ke "vendor" juga) -- baru dipakai di
   // sini pertama kali sejak layar CRUD Supplier ditambahkan.
@@ -423,6 +426,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.pengadaanPr, Icons.assignment_outlined,
       'Permintaan Pembelian (PR)',
       builder: _bangunPengadaanPr),
+  _ItemMenuShell(MenuEBisnis.pengadaanPo, Icons.receipt_long_outlined,
+      'Pemesanan Pembelian (PO)',
+      builder: _bangunPengadaanPo),
   _ItemMenuShell(MenuEBisnis.penyedia, Icons.local_shipping_outlined,
       'Supplier (Penyedia)',
       builder: _bangunPenyedia),
@@ -519,6 +525,7 @@ const _grupMenu = <_GrupMenuShell>[
   ]),
   _GrupMenuShell('Pengadaan', [
     MenuEBisnis.pengadaanPr,
+    MenuEBisnis.pengadaanPo,
   ]),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
@@ -549,6 +556,7 @@ Widget _bangunMutasiAntarOutlet(BuildContext c) =>
     const MutasiAntarOutletScreen();
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunPengadaanPr(BuildContext c) => const PengadaanPrScreen();
+Widget _bangunPengadaanPo(BuildContext c) => const PengadaanPoScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
 Widget _bangunCaraBayar(BuildContext c) => const CaraBayarScreen();
 Widget _bangunPenyedia(BuildContext c) => const SupplierScreen();
@@ -725,6 +733,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Kulakan';
     case MenuEBisnis.pengadaanPr:
       return 'Permintaan Pembelian (PR)';
+    case MenuEBisnis.pengadaanPo:
+      return 'Pemesanan Pembelian (PO)';
     case MenuEBisnis.penyedia:
       return 'Supplier (Penyedia)';
     case MenuEBisnis.diskon:
