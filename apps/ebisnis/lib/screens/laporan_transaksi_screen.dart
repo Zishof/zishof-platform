@@ -2445,15 +2445,43 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
     _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _sampai = _mulai;
     _muat();
+    _muatOpsiMetode();
   }
+
+  /// Filter metode bayar (permintaan rekonsiliasi tim keuangan). Kosong = semua metode.
+  String _metode = '';
+  List<String> _daftarMetode = [];
 
   Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
         'tglMulai': _formatTanggalServer.format(_mulai),
         'tglSampai': _formatTanggalServer.format(_sampai),
         if (_kasir.isNotEmpty) 'kasir': _kasir,
+        if (_metode.isNotEmpty) 'metode': _metode,
         'page': page ?? _halaman,
         'pageSize': pageSize,
       };
+
+  /// Isi dropdown metode diambil dari metode yang benar-benar dipakai pada rentang
+  /// tanggal terpilih (aksi laporan_metode_bayar_opsi), bukan daftar master penuh.
+  Future<void> _muatOpsiMetode() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('laporan_metode_bayar_opsi', {
+        'tglMulai': _formatTanggalServer.format(_mulai),
+        'tglSampai': _formatTanggalServer.format(_sampai),
+      });
+      if (!mounted) return;
+      final opsi = ((hasil['data'] as List?) ?? [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      setStateIfMounted(() {
+        _daftarMetode = opsi;
+        if (_metode.isNotEmpty && !opsi.contains(_metode)) _metode = '';
+      });
+    } catch (_) {
+      // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.
+    }
+  }
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -2525,7 +2553,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
       await CetakUtilIs.cetakPdfTabel(
         judul: 'Penerimaan Penjualan per Kasir',
         parameter:
-            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}',
+            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}; Metode: ${_metode.isEmpty ? "Semua metode" : _metode}',
         headers: const [
           'Waktu',
           'Kasir',
@@ -2647,6 +2675,24 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
               onChanged: _bolehFilterKasir
                   ? (v) => setStateIfMounted(() => _kasir = v ?? '')
                   : null,
+            ),
+          ),
+          // Filter METODE BAYAR -- rekonsiliasi per kanal pembayaran.
+          SizedBox(
+            width: 210,
+            child: DropdownButtonFormField<String>(
+              value: _metode.isEmpty ? '' : _metode,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Metode Bayar',
+                  prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  isDense: true),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('Semua metode')),
+                ..._daftarMetode
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+              ],
+              onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
             ),
           ),
           FilledButton.icon(
@@ -2907,12 +2953,40 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
     _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _sampai = _mulai;
     _muat();
+    _muatOpsiMetode();
+  }
+
+  /// Filter metode bayar (permintaan rekonsiliasi tim keuangan). Kosong = semua metode.
+  String _metode = '';
+  List<String> _daftarMetode = [];
+
+  /// Isi dropdown metode diambil dari metode yang benar-benar dipakai pada rentang
+  /// tanggal terpilih (aksi laporan_metode_bayar_opsi), bukan daftar master penuh.
+  Future<void> _muatOpsiMetode() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('laporan_metode_bayar_opsi', {
+        'tglMulai': _formatTanggalServer.format(_mulai),
+        'tglSampai': _formatTanggalServer.format(_sampai),
+      });
+      if (!mounted) return;
+      final opsi = ((hasil['data'] as List?) ?? [])
+          .map((e) => '$e'.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      setStateIfMounted(() {
+        _daftarMetode = opsi;
+        if (_metode.isNotEmpty && !opsi.contains(_metode)) _metode = '';
+      });
+    } catch (_) {
+      // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.
+    }
   }
 
   Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
         'tglMulai': _formatTanggalServer.format(_mulai),
         'tglSampai': _formatTanggalServer.format(_sampai),
         if (_kasir.isNotEmpty) 'kasir': _kasir,
+        if (_metode.isNotEmpty) 'metode': _metode,
         'page': page ?? _halaman,
         'pageSize': pageSize,
       };
@@ -3082,6 +3156,27 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
                 onChanged: _bolehFilterKasir
                     ? (v) => setStateIfMounted(() => _kasir = v ?? '')
                     : null,
+              ),
+            ),
+            // Filter METODE BAYAR -- mempermudah rekonsiliasi harian per kanal
+            // pembayaran (Tunai, Transfer, QRIS, dst). Isinya mengikuti metode yang
+            // benar-benar dipakai pada rentang tanggal terpilih.
+            SizedBox(
+              width: 210,
+              child: DropdownButtonFormField<String>(
+                value: _metode.isEmpty ? '' : _metode,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Metode Bayar',
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                    isDense: true),
+                items: [
+                  const DropdownMenuItem(
+                      value: '', child: Text('Semua metode')),
+                  ..._daftarMetode
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+                ],
+                onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
               ),
             ),
             FilledButton.icon(
