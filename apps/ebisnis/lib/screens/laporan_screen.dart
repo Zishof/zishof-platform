@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'kode_akun_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
@@ -128,10 +130,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
   Future<void> _bukaPendukungInline(Map<String, dynamic> item) async {
     final id = item['id'] as String? ?? '';
     if (id == 'akun_perkiraan') {
-      await showDialog<void>(
-        context: context,
-        builder: (_) => const _DaftarAkunDialog(),
-      );
+      // Konfigurasi Kode Akun kini dibuka NATIF di Desktop/Android (4 tab: Akun,
+      // Daftar Akun, Bank, Jenis Transaksi + unduh/unggah Excel), bukan lagi
+      // sekadar daftar akun ringkas. Layar ZK tetap jadi rujukan bentuk datanya.
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Konfigurasi Kode Akun')),
+          body: const KodeAkunScreen(),
+        ),
+      ));
       return;
     }
     if (id == 'posting_hpp' || id == 'posting_penjualan') {
