@@ -658,6 +658,62 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
     }
   }
 
+  /// Posting SATU transaksi (pola Posting Cicilan Mahasiswa). Server menerima
+  /// `posting_ids` dan menulis satu entri jurnal khusus transaksi itu, sehingga
+  /// transaksi lain yang pemetaannya belum lengkap tidak ikut terhalang.
+  Future<void> _postingSatu(dynamic id) async {
+    if (id == null) return;
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Posting Transaksi Ini?'),
+        content: const Text(
+            'Transaksi ini akan dijurnal tersendiri. Tindakan ini tidak dapat '
+            'dibatalkan dari halaman ini.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Posting')),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setState(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'laporan_keuangan_pendukung',
+        {
+          'jenis': widget.jenis,
+          'mulai': _formatTanggalLaporan.format(_mulai),
+          'sampai': _formatTanggalLaporan.format(_sampai),
+          'posting_ids': [id],
+        },
+      );
+      final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
+      if (!mounted) return;
+      setState(() => _data = data);
+      final ringkas = (data['hasilPosting'] as Map?) ?? const {};
+      final diposting = ringkas['diposting'] ?? 0;
+      final gagal = ringkas['gagal'] ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(gagal == 0
+              ? '$diposting transaksi diposting.'
+              : '$diposting diposting, $gagal gagal. ${ringkas['pesan'] ?? ''}')));
+      // Muat ulang draft agar transaksi yang sudah diposting hilang dari daftar.
+      await _proses(false);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final jurnal = ((_data?['jurnal'] as List?) ?? [])
@@ -665,6 +721,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     final belum = ((_data?['belumDipetakan'] as List?) ?? []);
+    // Draft jurnal per transaksi dari server (field 'rincian').
+    final rincian = ((_data?['rincian'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
     return Dialog(
       child: ConstrainedBox(
@@ -733,20 +793,91 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
               ],
               const SizedBox(height: 8),
               Expanded(
-                child: jurnal.isEmpty
-                    ? const Center(
-                        child: Text('Jalankan pratinjau untuk melihat jurnal.'))
+                child: rincian.isEmpty
+                    ? (jurnal.isEmpty
+                        ? const Center(
+                            child: Text('Jalankan pratinjau untuk melihat draft jurnal.'))
+                        : ListView.separated(
+                            itemCount: jurnal.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (_, i) {
+                              final row = jurnal[i];
+                              return ListTile(
+                                dense: true,
+                                title: Text(row['akun']?.toString() ?? '-'),
+                                subtitle: Text(row['posisi']?.toString() ?? '-'),
+                                trailing: Text(_formatRupiahLaporan
+                                    .format(row['nominal'] ?? 0)),
+                              );
+                            },
+                          ))
+                    // DRAFT JURNAL PER TRANSAKSI (pola Posting Cicilan Mahasiswa):
+                    // tiap transaksi tampil beserta baris akun debit/kreditnya sehingga
+                    // dapat dianalisis dulu, lalu diposting satu per satu.
                     : ListView.separated(
-                        itemCount: jurnal.length,
+                        itemCount: rincian.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, i) {
-                          final row = jurnal[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text(row['akun']?.toString() ?? '-'),
-                            subtitle: Text(row['posisi']?.toString() ?? '-'),
-                            trailing: Text(_formatRupiahLaporan
-                                .format(row['nominal'] ?? 0)),
+                          final t = rincian[i];
+                          final siapBaris = t['siap'] == true;
+                          final barisJurnal =
+                              ((t['jurnal'] as List?) ?? []).cast<Map<String, dynamic>>();
+                          return Container(
+                            color: siapBaris ? null : const Color(0xFFFFF7ED),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('${t['ref'] ?? '-'}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700)),
+                                      Text(
+                                          _formatRupiahLaporan
+                                              .format(t['nilai'] ?? 0),
+                                          style: const TextStyle(fontSize: 12)),
+                                      const SizedBox(height: 4),
+                                      for (final j in barisJurnal)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 8, top: 1),
+                                          child: Text(
+                                            '${j['akun'] ?? '-'}   '
+                                            '${(j['debit'] ?? 0) > 0 ? 'D ${_formatRupiahLaporan.format(j['debit'])}' : 'K ${_formatRupiahLaporan.format(j['kredit'])}'}',
+                                            style: const TextStyle(
+                                                fontSize: 11.5,
+                                                fontFamily: 'monospace'),
+                                          ),
+                                        ),
+                                      if (!siapBaris &&
+                                          '${t['alasan'] ?? ''}'.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 3),
+                                          child: Text('${t['alasan']}',
+                                              style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  color: Color(0xFFB45309))),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                siapBaris
+                                    ? OutlinedButton.icon(
+                                        onPressed: _memuat
+                                            ? null
+                                            : () => _postingSatu(t['id']),
+                                        icon: const Icon(Icons.check_circle_outline,
+                                            size: 16),
+                                        label: const Text('Posting'))
+                                    : const Chip(
+                                        label: Text('Belum siap',
+                                            style: TextStyle(fontSize: 11))),
+                              ],
+                            ),
                           );
                         },
                       ),
