@@ -22,7 +22,7 @@ final _formatRpMutasiTabungan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTglMutasiTabungan = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
 
-/// Tab "Mutasi Tabungan" (padanan `_mutasi_tabungan.jsp`) -- buku besar
+/// Tab "Mutasi Voucher" (padanan `_mutasi_tabungan.jsp`) -- buku besar
 /// UNION topup+belanja+cashback dgn saldo berjalan, dihitung server (aksi
 /// `mutasi_tabungan_list`, versi Java dari query raw-SQL client-side JSP,
 /// krn Flutter tidak punya jalur SQL langsung -- lihat JavaDoc
@@ -178,7 +178,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
       return;
     }
     final bytes = buildSimpleXlsx(
-      sheetName: 'Mutasi Tabungan',
+      sheetName: 'Mutasi Voucher',
       headers: const [
         'NAMA_ANGGOTA',
         'TANGGAL',
@@ -205,7 +205,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
     final nama =
         'Mutasi_Tabungan_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
     final path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Simpan Mutasi Tabungan (Excel)',
+      dialogTitle: 'Simpan Mutasi Voucher (Excel)',
       fileName: nama,
       bytes: bytes,
       type: FileType.custom,
@@ -227,7 +227,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
         header: (_) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Mutasi Tabungan (Buku Besar)',
+              pw.Text('Mutasi Voucher (Buku Besar)',
                   style: pw.TextStyle(
                       fontSize: 16, fontWeight: pw.FontWeight.bold)),
               pw.Text(

@@ -8,6 +8,7 @@ import 'anggota/tab_notifikasi.dart';
 import 'anggota/tab_sinkronisasi.dart';
 import 'anggota/tab_tipe_member.dart';
 import 'anggota/tab_topup.dart';
+import 'anggota/tab_saldo_voucher.dart';
 import 'anggota/tab_mutasi_tabungan.dart';
 import 'anggota/tab_mutasi_hutang.dart';
 import 'anggota/tab_pembantu_piutang.dart';
@@ -71,7 +72,8 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               Tab(text: 'Jenis Member'),
               Tab(text: 'Tipe Member'),
               Tab(text: 'Topup'),
-              Tab(text: 'Mutasi Tabungan'),
+              Tab(text: 'Saldo Voucher'),
+              Tab(text: 'Mutasi Voucher'),
               Tab(text: 'Mutasi Hutang'),
               Tab(text: 'Pembantu Piutang'),
               Tab(text: 'Notifikasi'),
@@ -84,6 +86,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               AnggotaTabJenisMember(),
               AnggotaTabTipeMember(),
               AnggotaTabTopup(),
+              AnggotaTabSaldoVoucher(),
               AnggotaTabMutasiTabungan(),
               AnggotaTabMutasiHutang(),
               AnggotaTabPembantuPiutang(),
