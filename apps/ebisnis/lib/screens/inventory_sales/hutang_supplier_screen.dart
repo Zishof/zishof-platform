@@ -9,6 +9,9 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -110,24 +113,33 @@ class _TabHutangState extends State<_TabHutang> {
     _muat();
   }
 
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_payable_list', {
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu) + diff utk kilau.
+      // Baris faktur hutang tidak ber-'id' -> identitasnya 'fakturId'.
+      await MasterOffline.daftarCacheDulu('si_payable_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         'tampilkan_lunas': _tampilkanLunas,
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _totalOutstanding =
-            (hasil['totalOutstanding'] as num?)?.toDouble() ?? 0;
-        _memuat = false;
+      }, 'master:si_hutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
+          kolomKunci: 'fakturId', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          _total = _diff.total ?? _data.length;
+          if (_diff.dariServer) {
+            _totalOutstanding =
+                (hasil['totalOutstanding'] as num?)?.toDouble() ?? 0;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -205,10 +217,18 @@ class _TabHutangState extends State<_TabHutang> {
               final dibayar = ((h['dibayarAwal'] as num?)?.toDouble() ?? 0) +
                   ((h['dibayarAlokasi'] as num?)?.toDouble() ?? 0);
               return AppTableRowData(cells: [
-                AppTableCell.text(
-                    '${h['supplierKode']} ${h['supplierNama']}'.trim(),
-                    flex: 2,
-                    maxLines: 2),
+                AppTableCell(
+                  flex: 2,
+                  child: KilauBaris(
+                    kunci: '${h['fakturId'] ?? ''}',
+                    idBaru: _diff.idBaru,
+                    idBerubah: _diff.idBerubah,
+                    child: Text(
+                        '${h['supplierKode']} ${h['supplierNama']}'.trim(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ),
                 AppTableCell.text('${h['nomorFaktur']}', flex: 2),
                 AppTableCell.text('${h['tanggalFaktur']}'.split(' ').first,
                     flex: 2),

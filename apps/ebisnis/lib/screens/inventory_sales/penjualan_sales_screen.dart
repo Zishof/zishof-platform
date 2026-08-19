@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -56,6 +59,8 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
   String _filterStatus = 'SEMUA';
   String _kataKunci = '';
   int _halaman = 1;
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -69,16 +74,19 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_sales_order_list', {
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu('si_sales_order_list', {
         if (_filterStatus != 'SEMUA') 'status': _filterStatus,
         if (_kataKunci.isNotEmpty) 'q': _kataKunci,
         'page': _halaman,
         'page_size': 30,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+      }, 'master:si_sales_order:$_filterStatus', fieldData: 'rows',
+          onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil, fieldData: 'rows');
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -164,6 +172,15 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
           ),
         ),
         const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
+        ),
         Expanded(
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
@@ -185,7 +202,11 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
                             itemBuilder: (_, i) {
                               final r = _data[i];
                               final status = '${r['status']}';
-                              return _KartuOrder(
+                              return KilauBaris(
+                                kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                                idBaru: _diff.idBaru,
+                                idBerubah: _diff.idBerubah,
+                                child: _KartuOrder(
                                 onTap: () => _bukaDetail(r),
                                 child: Row(children: [
                                   Expanded(
@@ -237,6 +258,7 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
                                     ],
                                   ),
                                 ]),
+                                ),
                               );
                             },
                           ),

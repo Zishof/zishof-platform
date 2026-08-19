@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'cetak_util.dart';
 
@@ -399,6 +402,8 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
   int _halaman = 1;
   int _total = 0;
   bool _hanyaUmum = false;
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   bool get _beli => widget.jenis == 'beli';
 
@@ -414,16 +419,23 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance
-          .aksi(_beli ? 'si_supplier_price_list' : 'si_customer_price_list', {
-        if (!_beli && _hanyaUmum) 'hanya_umum': true,
-        'page': _halaman,
-        'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _memuat = false;
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu(
+          _beli ? 'si_supplier_price_list' : 'si_customer_price_list',
+          {
+            if (!_beli && _hanyaUmum) 'hanya_umum': true,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:si_harga_versi:${widget.jenis}'
+              '${!_beli && _hanyaUmum ? ':umum' : ''}', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          _total = _diff.total ?? _data.length;
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -513,6 +525,12 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
                 ),
             ]),
             const SizedBox(height: 12),
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:${_diff.versi}'),
+              baru: _diff.idBaru.length,
+              berubah: _diff.idBerubah.length,
+              dihapus: _diff.jumlahHapus,
+            ),
             AppDataTable(
               minWidth: 960,
               emptyText: 'Belum ada versi harga.',
@@ -528,12 +546,22 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
               rows: _data.map((v) {
                 final aktif = v['aktif'] == true;
                 return AppTableRowData(cells: [
-                  AppTableCell.text(
-                      _beli
-                          ? '${v['supplierKode']} ${v['supplierNama']}'
-                          : '${v['customerKode']} ${v['customerNama']}'.trim(),
-                      flex: 2,
-                      maxLines: 2),
+                  AppTableCell(
+                    flex: 2,
+                    child: KilauBaris(
+                      kunci: '${v['id'] ?? v['_kunci'] ?? ''}',
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text(
+                          _beli
+                              ? '${v['supplierKode']} ${v['supplierNama']}'
+                              : '${v['customerKode']} ${v['customerNama']}'
+                                  .trim(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                  ),
                   AppTableCell.text('${v['produkKode']} — ${v['produkNama']}',
                       flex: 3, maxLines: 2),
                   AppTableCell.text(_fmtRp.format((v['harga'] as num?) ?? 0),

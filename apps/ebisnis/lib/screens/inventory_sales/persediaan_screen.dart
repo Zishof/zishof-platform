@@ -6,6 +6,9 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import 'cetak_util.dart';
 
 final _fmtRp =
@@ -46,13 +49,19 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
     _muat();
   }
 
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_inventory_balance', {
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): saldo terakhir yang
+      // pernah diterima tampil seketika, hasil server menyusul + diff utk
+      // kilau baris. Baris saldo TIDAK punya kolom 'id' -> identitasnya
+      // 'produkId' (lihat parameter kolomKunci).
+      await MasterOffline.daftarCacheDulu('si_inventory_balance', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         'dari': _fmtTgl.format(_dari),
         'sampai': _fmtTgl.format(_sampai),
@@ -61,11 +70,14 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
         'hanya_tersedia': _filter == 'tersedia',
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _memuat = false;
+      }, 'master:si_persediaan:$_filter',
+          kolomKunci: 'produkId', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          _total = _diff.total ?? _data.length;
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -358,10 +370,18 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                           return AppTableRowData(
                             onTap: () => _bukaKartuStok(p),
                             cells: [
-                              AppTableCell.text('${p['kode']}',
-                                  flex: 1,
-                                  style: const TextStyle(
-                                      fontFamily: 'monospace', fontSize: 12)),
+                              AppTableCell(
+                                flex: 1,
+                                child: KilauBaris(
+                                  kunci: '${p['produkId'] ?? ''}',
+                                  idBaru: _diff.idBaru,
+                                  idBerubah: _diff.idBerubah,
+                                  child: Text('${p['kode']}',
+                                      style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 12)),
+                                ),
+                              ),
                               AppTableCell.text('${p['nama']}',
                                   flex: 3, maxLines: 2),
                               AppTableCell.text('${p['satuan'] ?? ''}',

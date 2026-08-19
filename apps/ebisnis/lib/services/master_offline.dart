@@ -373,8 +373,16 @@ class MasterOffline {
     };
   }
 
-  static String? _kunciDiff(dynamic e) {
+  /// Kunci identitas satu baris daftar. Urutan: [kolomKunci] bila diberikan
+  /// layar (mis. 'produkId'/'fakturId' utk daftar yang server-nya tidak
+  /// mengirim kolom 'id'), lalu 'id', lalu '_kunci' (draf create offline).
+  /// Baris tanpa ketiganya TIDAK bisa di-diff maupun di-merge dengan aman.
+  static String? _kunciDiff(dynamic e, [String? kolomKunci]) {
     if (e is! Map) return null;
+    if (kolomKunci != null) {
+      final alt = e[kolomKunci];
+      if (alt != null) return '$kolomKunci=$alt';
+    }
     final id = e['id'];
     if (id != null) return '$id';
     final k = e['_kunci'];
@@ -407,6 +415,7 @@ class MasterOffline {
     required void Function(Map<String, dynamic> hasil) onData,
     String fieldData = 'data',
     bool responsLengkap = false,
+    String? kolomKunci,
   }) async {
     pastikanTimer();
     List? lokal;
@@ -429,7 +438,7 @@ class MasterOffline {
         final petaLama = <String, String>{};
         final barisLama = <String, dynamic>{};
         for (final e in (lokal ?? const [])) {
-          final k = _kunciDiff(e);
+          final k = _kunciDiff(e, kolomKunci);
           if (k != null) {
             petaLama[k] = jsonEncode(e);
             barisLama[k] = e;
@@ -450,7 +459,7 @@ class MasterOffline {
         final idBerubah = <String>{};
         final kunciServer = <String>{};
         for (final e in data) {
-          final k = _kunciDiff(e);
+          final k = _kunciDiff(e, kolomKunci);
           if (k == null) continue;
           kunciServer.add(k);
           final lama = petaLama[k];
@@ -483,8 +492,8 @@ class MasterOffline {
           gabungan = [
             ...tertahan,
             for (final e in data)
-              kunciDilindungi.contains(_kunciDiff(e) ?? '')
-                  ? barisLama[_kunciDiff(e)]
+              kunciDilindungi.contains(_kunciDiff(e, kolomKunci) ?? '')
+                  ? barisLama[_kunciDiff(e, kolomKunci)]
                   : e,
           ];
           if (lokal != null) {
@@ -498,32 +507,46 @@ class MasterOffline {
           // baris lokal di luar cakupan respons (halaman/filter lain)
           // DIPERTAHANKAN.
           final petaGabung = <String, dynamic>{};
-          var tanpaKunci = 0;
+          // Baris TANPA kunci tidak bisa dicocokkan antar-muat. Menyimpannya
+          // dgn nomor urut membuat cache menggandakan diri tiap refresh
+          // (ditemukan saat konversi daftar Inventory & Sales yang server-nya
+          // tidak mengirim kolom 'id'). Aturan: bila respons server memuat
+          // baris tanpa kunci, baris tanpa kunci versi LOKAL dibuang dan
+          // digantikan versi server; layar yang barisnya memang tak ber-id
+          // sebaiknya menyetel [kolomKunci].
+          final adaServerTanpaKunci =
+              data.any((e) => _kunciDiff(e, kolomKunci) == null);
+          final tanpaKunciServer = <dynamic>[];
+          final tanpaKunciLokal = <dynamic>[];
           for (final e in (lokal ?? const [])) {
-            final k = _kunciDiff(e);
+            final k = _kunciDiff(e, kolomKunci);
             if (k != null) {
               petaGabung[k] = e;
-            } else {
-              petaGabung['~tanpa-kunci-${tanpaKunci++}'] = e;
+            } else if (!adaServerTanpaKunci) {
+              tanpaKunciLokal.add(e);
             }
           }
           for (final e in data) {
-            final k = _kunciDiff(e);
+            final k = _kunciDiff(e, kolomKunci);
             if (k != null) {
               if (!kunciDilindungi.contains(k)) petaGabung[k] = e;
             } else {
-              petaGabung['~tanpa-kunci-${tanpaKunci++}'] = e;
+              tanpaKunciServer.add(e);
             }
           }
-          gabungan = petaGabung.values.toList();
+          gabungan = [
+            ...tanpaKunciLokal,
+            ...petaGabung.values,
+            ...tanpaKunciServer,
+          ];
         }
         await CoreDb.instance
             .simpanCacheReferensi(cacheKey, jsonEncode(gabungan));
         // Yang ditampilkan pun memakai versi lokal utk baris terlindungi.
         final tampil = [
           for (final e in data)
-            kunciDilindungi.contains(_kunciDiff(e) ?? '')
-                ? barisLama[_kunciDiff(e)]
+            kunciDilindungi.contains(_kunciDiff(e, kolomKunci) ?? '')
+                ? barisLama[_kunciDiff(e, kolomKunci)]
                 : e,
         ];
         onData(_hasilDaftar(tampil,

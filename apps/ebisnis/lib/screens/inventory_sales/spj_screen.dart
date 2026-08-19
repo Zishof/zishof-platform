@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'nota_sales_screen.dart';
 
@@ -57,6 +60,8 @@ class _SpjScreenState extends State<SpjScreen> {
   String? _error;
   List<Map<String, dynamic>> _data = [];
   String _filterStatus = 'SEMUA';
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -70,13 +75,15 @@ class _SpjScreenState extends State<SpjScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_spj_list', {
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu('si_spj_list', {
         if (_filterStatus != 'SEMUA') 'status': _filterStatus,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+      }, 'master:si_spj:$_filterStatus', fieldData: 'rows', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil, fieldData: 'rows');
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -138,6 +145,15 @@ class _SpjScreenState extends State<SpjScreen> {
           ),
         ),
         const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
+        ),
         Expanded(
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
@@ -158,7 +174,11 @@ class _SpjScreenState extends State<SpjScreen> {
                             itemBuilder: (_, i) {
                               final r = _data[i];
                               final status = '${r['status']}';
-                              return Card(
+                              return KilauBaris(
+                                kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                                idBaru: _diff.idBaru,
+                                idBerubah: _diff.idBerubah,
+                                child: Card(
                                 margin: EdgeInsets.zero,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -217,6 +237,7 @@ class _SpjScreenState extends State<SpjScreen> {
                                       ),
                                     ]),
                                   ),
+                                ),
                                 ),
                               );
                             },

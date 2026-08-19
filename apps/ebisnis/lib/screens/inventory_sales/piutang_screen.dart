@@ -4,11 +4,14 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../services/outbox_is.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -108,6 +111,8 @@ class _TabPiutangState extends State<_TabPiutang> {
   double _totalOutstanding = 0;
   String _kataKunci = '';
   bool _tampilkanLunas = false;
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -121,18 +126,25 @@ class _TabPiutangState extends State<_TabPiutang> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_receivable_list', {
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu('si_receivable_list', {
         if (_kataKunci.isNotEmpty) 'q': _kataKunci,
         'tampilkan_lunas': _tampilkanLunas,
         'page': 1,
         'page_size': 200,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _totalOutstanding = (hasil['totalOutstanding'] as num?)?.toDouble() ?? 0;
-        _memuat = false;
+      }, 'master:si_piutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
+          fieldData: 'rows', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil, fieldData: 'rows');
+          // Ringkasan hanya dikirim server -- jangan dinolkan oleh emisi lokal.
+          if (_diff.dariServer) {
+            _totalOutstanding =
+                (hasil['totalOutstanding'] as num?)?.toDouble() ?? 0;
+          }
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -182,6 +194,12 @@ class _TabPiutangState extends State<_TabPiutang> {
                 label: 'Total Piutang Berjalan'),
           ),
           const SizedBox(height: 10),
+          BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
           AppDataTable(
             minWidth: 1050,
             emptyText: _tampilkanLunas
@@ -200,7 +218,18 @@ class _TabPiutangState extends State<_TabPiutang> {
             rows: [
               for (final r in _data)
                 AppTableRowData(cells: [
-                  AppTableCell.text('${r['customerNama']}', flex: 3),
+                  AppTableCell(
+                    flex: 3,
+                    child: KilauBaris(
+                      kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${r['customerNama']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                  ),
                   AppTableCell.text('${r['nomor']}', flex: 2),
                   AppTableCell.text('${r['orderNomor'] ?? ''}', flex: 2),
                   AppTableCell.text('${r['salesNama'] ?? ''}', flex: 2),

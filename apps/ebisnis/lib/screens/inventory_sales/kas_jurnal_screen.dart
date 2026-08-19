@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -213,6 +216,8 @@ class _TabCoaState extends State<_TabCoa> {
   String? _error;
   List<Map<String, dynamic>> _data = [];
   String _q = '';
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -226,13 +231,16 @@ class _TabCoaState extends State<_TabCoa> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance
-          .aksi('si_coa_list', {if (_q.isNotEmpty) 'q': _q});
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _memuat = false;
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu(
+          'si_coa_list', {if (_q.isNotEmpty) 'q': _q}, 'master:si_coa',
+          fieldData: 'rows', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil, fieldData: 'rows');
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -319,6 +327,12 @@ class _TabCoaState extends State<_TabCoa> {
               },
             ),
             const SizedBox(height: 10),
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:${_diff.versi}'),
+              baru: _diff.idBaru.length,
+              berubah: _diff.idBerubah.length,
+              dihapus: _diff.jumlahHapus,
+            ),
             AppDataTable(
               minWidth: 860,
               emptyText: 'Tidak ada akun.',
@@ -332,7 +346,18 @@ class _TabCoaState extends State<_TabCoa> {
               rows: [
                 for (final r in _data)
                   AppTableRowData(cells: [
-                    AppTableCell.text('${r['kode']}', flex: 2),
+                    AppTableCell(
+                      flex: 2,
+                      child: KilauBaris(
+                        kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                        idBaru: _diff.idBaru,
+                        idBerubah: _diff.idBerubah,
+                        child: Text('${r['kode']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12.5)),
+                      ),
+                    ),
                     AppTableCell.text('${r['nama']}', flex: 4),
                     AppTableCell.text(
                         '${r['parentKode']} ${r['parentNama']}'.trim(),

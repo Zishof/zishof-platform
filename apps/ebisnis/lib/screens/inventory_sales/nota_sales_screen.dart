@@ -4,11 +4,14 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../services/outbox_is.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp =
@@ -32,6 +35,8 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -45,11 +50,15 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('si_trip_list', {});
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+      // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
+      // tampil seketika, hasil server menyusul + diff utk kilau baris.
+      await MasterOffline.daftarCacheDulu(
+          'si_trip_list', {}, 'master:si_nota_sales', fieldData: 'rows',
+          onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil, fieldData: 'rows');
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -79,44 +88,66 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> {
                               color: AppColors.textSecondaryOf(context))))
                   : RefreshIndicator(
                       onRefresh: _muat,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
-                        itemCount: _data.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 6),
-                        itemBuilder: (_, i) {
-                          final r = _data[i];
-                          return Card(
-                            margin: EdgeInsets.zero,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                side: BorderSide(
-                                    color: Theme.of(context).dividerColor)),
-                            child: ListTile(
-                              title: Text('${r['nomor']} · ${r['salesNama']}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13.5)),
-                              subtitle: Text(
-                                  'SPJ ${r['spjNomor']} · mulai ${'${r['waktuMulai']}'.split('.').first}\nSaldo kas: ${_fmtRp.format(r['saldoKas'] ?? 0)}',
-                                  style: const TextStyle(fontSize: 11.5)),
-                              isThreeLine: true,
-                              trailing: Text('${r['status']}',
-                                  style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700)),
-                              onTap: () async {
-                                await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                        builder: (_) => DetailSesiNotaSales(
-                                            sessionId:
-                                                (r['id'] as num).toInt())));
-                                _muat();
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                      child: Column(children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                          child: BannerPerubahanServer(
+                            key: ValueKey('perubahan:${_diff.versi}'),
+                            baru: _diff.idBaru.length,
+                            berubah: _diff.idBerubah.length,
+                            dihapus: _diff.jumlahHapus,
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+                            itemCount: _data.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 6),
+                            itemBuilder: (_, i) {
+                              final r = _data[i];
+                              return KilauBaris(
+                                kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                                idBaru: _diff.idBaru,
+                                idBerubah: _diff.idBerubah,
+                                child: Card(
+                                  margin: EdgeInsets.zero,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(
+                                          color:
+                                              Theme.of(context).dividerColor)),
+                                  child: ListTile(
+                                    title: Text(
+                                        '${r['nomor']} · ${r['salesNama']}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13.5)),
+                                    subtitle: Text(
+                                        'SPJ ${r['spjNomor']} · mulai ${'${r['waktuMulai']}'.split('.').first}\nSaldo kas: ${_fmtRp.format(r['saldoKas'] ?? 0)}',
+                                        style: const TextStyle(fontSize: 11.5)),
+                                    isThreeLine: true,
+                                    trailing: Text('${r['status']}',
+                                        style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700)),
+                                    onTap: () async {
+                                      await Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  DetailSesiNotaSales(
+                                                      sessionId: (r['id'] as num)
+                                                          .toInt())));
+                                      _muat();
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ]),
                     ),
     );
   }
