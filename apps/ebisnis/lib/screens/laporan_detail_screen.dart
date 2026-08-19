@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
@@ -38,6 +40,11 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
   bool _memprosesPdf = false;
   String? _pesanError;
   Map<String, dynamic>? _hasil;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab, atau
+  /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
 
   bool get _adaFilterProduk => widget.item['produk'] == true;
   bool get _adaFilterPelanggan => widget.item['pelanggan'] == true;
@@ -69,14 +76,72 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     };
   }
 
+  /// Kunci cache "baca lokal dulu" utk SATU laporan + SATU kombinasi filter.
+  /// WAJIB memuat seluruh parameter yang mengubah isi laporan (id laporan,
+  /// periode, cari produk/pelanggan, per toko) -- salah kunci berarti hasil
+  /// periode A menimpa periode B.
+  String _kunciCache(Map<String, dynamic> payload) =>
+      'laporan:jalankan:${payload['r']}'
+      ':${payload['tglMulai'] ?? '-'}_${payload['tglSampai'] ?? '-'}'
+      ':${payload['qProduk'] ?? '-'}:${payload['qPelanggan'] ?? '-'}'
+      ':${payload['perToko'] ?? '-'}';
+
   Future<void> _tampilkan() async {
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
+    final payload = _buatPayload();
+    final kunci = _kunciCache(payload);
+    // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
+    // sini): `laporan_jalankan` mengembalikan satu AMPLOP utuh
+    // (kolom+baris+grup+grandTotal+catatan) yang hanya bermakna bersama-sama,
+    // sedangkan daftarCacheDulu menyimpan SATU daftar saja -- emisi lokalnya
+    // akan kehilangan definisi `kolom` sehingga tabel tidak bisa dirender.
+    // Preseden manual yang sama dipakai riwayat_penjualan_screen.dart dan
+    // riwayat_sinkronisasi_screen.dart. TANPA kilau baris: `baris` di sini
+    // berupa LIST posisional (bukan map ber-id), jadi tidak ada identitas baris
+    // yang stabil untuk dianimasikan -- cukup cache-nya saja.
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final hasilLokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        final stempel =
+            DateTime.tryParse('${hasilLokal['_disimpanPada'] ?? ''}');
+        setStateIfMounted(() {
+          _hasil = hasilLokal;
+          _dariCache = true;
+          _cacheDisimpanPada = stempel;
+        });
+      } catch (_) {
+        adaCacheLokal = false; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_jalankan', _buatPayload());
-      setStateIfMounted(() => _hasil = hasil);
+      final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+      setStateIfMounted(() {
+        _hasil = hasil;
+        // Angka server sudah terpasang -> penanda salinan tersimpan padam.
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+      });
+      // Stempel waktu ikut disimpan DI DALAM amplop supaya pemuatan berikutnya
+      // bisa memberi tahu KAPAN salinan ini dibuat. Kunci berawalan garis bawah
+      // tidak pernah dibaca _TabelLaporan/ekspor (semua baca kunci spesifik).
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...hasil,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
+    } on ApiException catch (e) {
+      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
+      // global sudah menceritakan kondisinya).
+      if (!e.offline || !adaCacheLokal) {
+        setStateIfMounted(() => _pesanError = e.toString());
+      }
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -222,6 +287,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
                 decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.danger), borderRadius: BorderRadius.circular(8)),
                 child: Text(_pesanError!, style: const TextStyle(color: AppColors.danger)),
               ),
+            // Penanda salinan tersimpan -- di kolom utama, tepat DI ATAS tabel
+            // laporan, supaya angkanya tidak terbaca sebagai data terkini.
+            PenandaDataTersimpan(
+                tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
             if (_hasil != null) _TabelLaporan(hasil: _hasil!),
           ],
         ),

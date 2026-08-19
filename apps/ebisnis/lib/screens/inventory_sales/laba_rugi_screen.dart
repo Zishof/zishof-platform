@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -7,6 +10,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -42,6 +46,11 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
   String _filterDetail = 'semua'; // semua | jual_rugi
   String _statusLunas = ''; // '' | lunas | belum
 
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab, atau
+  /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
+
   @override
   void initState() {
     super.initState();
@@ -59,17 +68,69 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
     } catch (_) {}
   }
 
+  /// Sebar satu amplop gabungan (pl/gp/dt) ke state layar. Dipanggil DI DALAM
+  /// setState -- baik utk snapshot lokal maupun hasil server.
+  void _terapkanHasil(Map<String, dynamic> hasil) {
+    final pl = Map<String, dynamic>.from((hasil['pl'] as Map?) ?? const {});
+    final gp = Map<String, dynamic>.from((hasil['gp'] as Map?) ?? const {});
+    final dt = Map<String, dynamic>.from((hasil['dt'] as Map?) ?? const {});
+    _labaRugi = Map<String, dynamic>.from((pl['data'] as Map?) ?? const {});
+    _labaKotor = ((gp['rows'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    _ringkasKotor =
+        Map<String, dynamic>.from((gp['ringkasan'] as Map?) ?? const {});
+    _detail = ((dt['rows'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
+    final body = {
+      'dari': _fmtTgl.format(_dari),
+      'sampai': _fmtTgl.format(_sampai),
+      if (_salesId != null) 'sales_id': _salesId,
+    };
+    // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
+    // sini): satu layar = TIGA aksi yang saling melengkapi (laba/rugi
+    // operasional berupa objek `data`, laba kotor berupa rows+ringkasan, dan
+    // grid rincian per baris faktur). Ketiganya disimpan sbg SATU amplop --
+    // dengan daftarCacheDulu (satu daftar saja) kegagalan aksi pertama tetap
+    // menggagalkan seluruh layar, dan emisi lokalnya menampilkan KPI/ringkasan
+    // nol yang menyesatkan di atas tabel yang terisi.
+    //
+    // Kunci cache memuat SELURUH parameter yang mengubah isi laporan: periode,
+    // sales, group by, HPP tambah, dan kedua filter grid rincian.
+    //
+    // TANPA kilau baris: baris "Laba Kotor per X" murni rekap agregat, dan
+    // baris grid rincian tidak punya identitas stabil dari server (tidak ada
+    // id baris faktur) -- cukup cache-nya saja.
+    final kunci = 'laporan:si_laba_rugi:'
+        '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}'
+        ':${_salesId ?? 'semua'}:$_groupBy:${_hppTambah.text.trim()}'
+        ':$_filterDetail:${_statusLunas.isEmpty ? 'semua' : _statusLunas}';
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        setStateIfMounted(() {
+          _terapkanHasil(lokal);
+          _dariCache = true;
+          _cacheDisimpanPada = stempel;
+          _memuat = false;
+        });
+      } catch (_) {
+        adaCacheLokal = false; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     try {
-      final body = {
-        'dari': _fmtTgl.format(_dari),
-        'sampai': _fmtTgl.format(_sampai),
-        if (_salesId != null) 'sales_id': _salesId,
-      };
       final pl = await ApiClient.instance.aksi('si_profit_loss_report', body);
       final gp = await ApiClient.instance.aksi('si_gross_profit_report', {
         ...body,
@@ -82,19 +143,30 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
         if (_filterDetail == 'jual_rugi') 'filter': 'jual_rugi',
         if (_statusLunas.isNotEmpty) 'status_lunas': _statusLunas,
       });
+      final gabungan = <String, dynamic>{'pl': pl, 'gp': gp, 'dt': dt};
       setStateIfMounted(() {
-        _labaRugi = Map<String, dynamic>.from((pl['data'] as Map?) ?? {});
-        _labaKotor = ((gp['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _ringkasKotor =
-            Map<String, dynamic>.from((gp['ringkasan'] as Map?) ?? {});
-        _detail = ((dt['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+        _terapkanHasil(gabungan);
+        // Angka server sudah terpasang -> penanda salinan tersimpan padam.
+        _dariCache = false;
+        _cacheDisimpanPada = null;
         _memuat = false;
       });
+      // Stempel waktu ikut disimpan DI DALAM amplop supaya pemuatan berikutnya
+      // bisa memberi tahu KAPAN salinan ini dibuat -- _terapkanHasil hanya
+      // membaca kunci pl/gp/dt, jadi kunci tambahan ini tak mengganggu.
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...gabungan,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
+      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
+      // global sudah menceritakan kondisinya).
+      if (e is ApiException && e.offline && adaCacheLokal) {
+        setStateIfMounted(() => _memuat = false);
+        return;
+      }
       setStateIfMounted(() {
         _memuat = false;
         _error = e.toString();
@@ -251,6 +323,12 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
                         ),
                       ]),
                       const SizedBox(height: 10),
+                      // Penanda salinan tersimpan -- di kolom utama laporan,
+                      // tepat DI ATAS kartu KPI dan rincian, supaya angka
+                      // rupiah tidak terbaca sebagai data terkini.
+                      PenandaDataTersimpan(
+                          tampil: _dariCache,
+                          diperbaruiPada: _cacheDisimpanPada),
                       Wrap(spacing: 10, runSpacing: 10, children: [
                         SizedBox(
                           width: 230,

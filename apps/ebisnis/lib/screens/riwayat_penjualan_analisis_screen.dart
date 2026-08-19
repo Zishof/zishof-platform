@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 
 final _rpAnalisis =
@@ -37,6 +40,11 @@ class _RiwayatPenjualanAnalisisScreenState
   String? _error;
   Map<String, dynamic>? _hasil;
   int _bagian = 0;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab, atau
+  /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
 
   Map<String, dynamic> get _kpi =>
       Map<String, dynamic>.from((_hasil?['kpi'] as Map?) ?? const {});
@@ -74,14 +82,58 @@ class _RiwayatPenjualanAnalisisScreenState
       _memuat = true;
       _error = null;
     });
+    // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
+    // sini): respons aksi ini satu AMPLOP analitik (kpi, pembanding, retur,
+    // tren, produk, kasir, labaKotor, ...) yang hanya bermakna bersama-sama --
+    // daftarCacheDulu menyimpan SATU daftar saja sehingga emisi lokalnya akan
+    // mengosongkan seluruh KPI (angka nol yang menyesatkan). Kunci cache memuat
+    // SELURUH parameter yang mengubah isi laporan, yaitu periodenya.
+    // TANPA kilau baris: seluruh isi layar ini agregat periode (KPI, tren,
+    // rekap per produk/jam/kasir), tidak ada baris ber-identitas stabil.
+    final kunci = 'laporan:analisis_penjualan:'
+        '${_tanggalAnalisis.format(_mulai)}_${_tanggalAnalisis.format(_sampai)}';
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        setStateIfMounted(() {
+          _hasil = lokal;
+          _dariCache = true;
+          _cacheDisimpanPada = stempel;
+          _memuat = false;
+        });
+      } catch (_) {
+        adaCacheLokal = false; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     try {
       final hasil =
           await ApiClient.instance.aksi('laporan_riwayat_penjualan_analitik', {
         'tglMulai': _tanggalAnalisis.format(_mulai),
         'tglSampai': _tanggalAnalisis.format(_sampai),
       });
-      setStateIfMounted(() => _hasil = hasil);
+      setStateIfMounted(() {
+        _hasil = hasil;
+        // Angka server sudah terpasang -> penanda salinan tersimpan padam.
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+      });
+      // Stempel waktu ikut disimpan DI DALAM amplop supaya pemuatan berikutnya
+      // bisa memberi tahu KAPAN salinan ini dibuat. Kunci berawalan garis bawah
+      // tidak pernah dibaca perender di bawah (semua baca kunci spesifik).
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...hasil,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
+      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
+      // global sudah menceritakan kondisinya), jangan menutupinya dgn dialog.
+      if (e is ApiException && e.offline && adaCacheLokal) return;
       setStateIfMounted(() => _error = e.toString());
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,
@@ -1243,6 +1295,11 @@ class _RiwayatPenjualanAnalisisScreenState
               label: const Text('Riwayat Transaksi')),
         ),
         const SizedBox(height: 8),
+        // Penanda salinan tersimpan -- di kolom utama layar, DI ATAS seluruh
+        // konten analitik (KPI, tren, tabel), supaya angka rupiah tidak
+        // terbaca sebagai data terkini.
+        PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _muat,

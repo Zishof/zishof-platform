@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,8 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
+import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 import '../struk_screen.dart';
 
@@ -25,17 +28,39 @@ String _formatWaktu(dynamic raw) {
   }
 }
 
+/// Baris transaksi bersarang di dalam amplop `dashboard_umum`
+/// (`transaksi.data`) -- dipakai baik oleh snapshot lokal maupun hasil server.
+List<Map<String, dynamic>> _barisTransaksiUmum(Map<String, dynamic> hasil) {
+  final transaksi = (hasil['transaksi'] as Map?) ?? const {};
+  return ((transaksi['data'] as List?) ?? const [])
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList();
+}
+
+/// Kunci diff satu baris transaksi utk kilau -- id header nota bila ada
+/// (server), fallback nomor nota.
+String _kunciDiffTransaksiUmum(Map<String, dynamic> row) =>
+    '${row['idTransaksi'] ?? row['nomorNota'] ?? ''}';
+
 class _TabelTransaksiUmum extends StatelessWidget {
   final List<Map<String, dynamic>> data;
   final void Function(Map<String, dynamic>) onTap;
   final void Function(Map<String, dynamic>) onLongPress;
   final void Function(Map<String, dynamic>) onLayani;
 
+  /// Kunci baris yang baru muncul / berubah di server pada emisi terakhir --
+  /// menggerakkan animasi kilau (termasuk transaksi dari kasir lain).
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
+
   const _TabelTransaksiUmum({
     required this.data,
     required this.onTap,
     required this.onLongPress,
     required this.onLayani,
+    required this.idBaru,
+    required this.idBerubah,
   });
 
   @override
@@ -79,6 +104,8 @@ class _TabelTransaksiUmum extends StatelessWidget {
           for (final row in data)
             _BarisTabelTransaksiUmum(
               row: row,
+              idBaru: idBaru,
+              idBerubah: idBerubah,
               onTap: () => onTap(row),
               onLongPress: () => onLongPress(row),
               onLayani: () => onLayani(row),
@@ -101,12 +128,16 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onLayani;
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
 
   const _BarisTabelTransaksiUmum({
     required this.row,
     required this.onTap,
     required this.onLongPress,
     required this.onLayani,
+    required this.idBaru,
+    required this.idBerubah,
   });
 
   @override
@@ -134,25 +165,33 @@ class _BarisTabelTransaksiUmum extends StatelessWidget {
             ),
             Expanded(
               flex: 4,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${row['pembeli'] ?? '-'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  Text(
-                    '${row['barang'] ?? '-'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondaryOf(context)),
-                  ),
-                ],
+              // Kilau baris: transaksi punya identitas stabil (idTransaksi /
+              // nomor nota), jadi baris yang baru tiba atau berubah di server
+              // -- termasuk dari kasir lain -- berpendar sesaat.
+              child: KilauBaris(
+                kunci: _kunciDiffTransaksiUmum(row),
+                idBaru: idBaru,
+                idBerubah: idBerubah,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${row['pembeli'] ?? '-'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    Text(
+                      '${row['barang'] ?? '-'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondaryOf(context)),
+                    ),
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -234,6 +273,16 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
   bool _detailTerlihat = false;
   bool _grafikTerlihat = false;
   String? _logApiTerakhir;
+
+  /// Diff hasil server vs snapshot cache yang barusan tampil -- menggerakkan
+  /// kilau baris transaksi.
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab, atau
+  /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
 
   @override
   void initState() {
@@ -317,6 +366,17 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     };
   }
 
+  /// Kunci cache "baca lokal dulu" utk SATU kombinasi filter dashboard. WAJIB
+  /// memuat SELURUH parameter yang mengubah isinya (periode tren, tanggal
+  /// acuan, rentang tanggal, pencarian, metode bayar, nomor halaman) -- salah
+  /// kunci berarti hasil filter A menimpa filter B.
+  String _kunciCache(Map<String, dynamic> payload) =>
+      'laporan:dashboard_umum:$_periodeTren'
+      ':${payload['tanggalAcuan']}'
+      ':${payload['tglMulai'] ?? '-'}_${payload['tglSampai'] ?? '-'}'
+      ':${payload['cariPembeli'] ?? '-'}:${payload['kodeTransaksi'] ?? '-'}'
+      ':${payload['metodeBayar'] ?? '-'}:hal$_halaman';
+
   Future<void> _muat({bool simpanLog = false}) async {
     if (!mounted) return;
     setStateIfMounted(() {
@@ -325,17 +385,85 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
     });
     final namaApi = 'dashboard_umum';
     final payload = _payloadDashboardUmum();
+    final kunci = _kunciCache(payload);
+    // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
+    // sini): `dashboard_umum` mengembalikan satu AMPLOP (kpi + tren + rekap +
+    // objek `transaksi{data,total}`). daftarCacheDulu hanya bisa menyimpan satu
+    // daftar TOP-LEVEL, sedangkan baris transaksi di sini BERSARANG di dalam
+    // amplop -- emisi lokalnya akan menampilkan seluruh KPI nol di atas tabel
+    // yang terisi. Preseden manual yang sama dipakai
+    // riwayat_penjualan_screen.dart / riwayat_sinkronisasi_screen.dart.
+    List<Map<String, dynamic>>? barisCache;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        barisCache = _barisTransaksiUmum(lokal);
+        final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        setStateIfMounted(() {
+          _d = lokal;
+          _dariCache = true;
+          _cacheDisimpanPada = stempel;
+          // Snapshot lokal belum punya pembanding server -> tanpa kilau.
+          _idBaru = {};
+          _idBerubah = {};
+          _memuat = false;
+        });
+      } catch (_) {
+        barisCache = null; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     Map<String, dynamic>? response;
     Object? error;
     try {
       final hasil = await ApiClient.instance.aksi(namaApi, payload);
       response = hasil;
       if (!mounted) return;
-      setStateIfMounted(() => _d = hasil);
+      // Diff vs snapshot yang barusan tampil -> kilau baris transaksi.
+      final baru = <String>{};
+      final berubah = <String>{};
+      if (barisCache != null) {
+        final petaLama = <String, String>{
+          for (final r in barisCache)
+            if (_kunciDiffTransaksiUmum(r).isNotEmpty)
+              _kunciDiffTransaksiUmum(r): jsonEncode(r),
+        };
+        for (final r in _barisTransaksiUmum(hasil)) {
+          final k = _kunciDiffTransaksiUmum(r);
+          if (k.isEmpty) continue;
+          final lama = petaLama[k];
+          if (lama == null) {
+            baru.add(k);
+          } else if (lama != jsonEncode(r)) {
+            berubah.add(k);
+          }
+        }
+      }
+      setStateIfMounted(() {
+        _d = hasil;
+        // Angka server sudah terpasang -> penanda salinan tersimpan padam.
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+        _idBaru = baru;
+        _idBerubah = berubah;
+      });
+      // Stempel waktu ikut disimpan DI DALAM amplop supaya pemuatan berikutnya
+      // bisa memberi tahu KAPAN salinan ini dibuat. Kunci berawalan garis bawah
+      // tidak pernah dibaca perender di bawah (semua baca kunci spesifik).
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...hasil,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
       error = e;
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
+      // global sudah menceritakan kondisinya).
+      if (!(e is ApiException && e.offline && barisCache != null)) {
+        setStateIfMounted(() => _error = e.toString());
+      }
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1503,6 +1631,11 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
             ),
           _inputTanggalAcuan(),
           const SizedBox(height: 12),
+          // Penanda salinan tersimpan -- di kolom utama tab, tepat DI ATAS
+          // grid KPI dan tabel transaksi, supaya angka rupiah tidak terbaca
+          // sebagai data terkini.
+          PenandaDataTersimpan(
+              tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
           LayoutBuilder(builder: (context, c) {
             final lebar = c.maxWidth;
             final kolom = lebar >= 1000 ? 5 : (lebar >= 700 ? 3 : 2);
@@ -1844,6 +1977,8 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
           else
             _TabelTransaksiUmum(
               data: data,
+              idBaru: _idBaru,
+              idBerubah: _idBerubah,
               onTap: _lihatDetail,
               onLongPress: _tampilkanAksi,
               onLayani: (row) => _layani(row['idTransaksi']),

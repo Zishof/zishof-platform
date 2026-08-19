@@ -1,9 +1,13 @@
+import 'dart:convert';
+
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/app_shell.dart';
 import 'pos_help.dart';
@@ -165,13 +169,62 @@ class _TabPenjualanState extends State<_TabPenjualan> {
   bool _memuat = false;
   Map<String, dynamic>? _data;
 
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab, atau
+  /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
+
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
+    // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
+    // sini): `apotik_laporan_penjualan` mengembalikan satu AMPLOP
+    // (totalNilai/totalQty + perGolongan + perItem) yang hanya bermakna
+    // bersama-sama -- daftarCacheDulu menyimpan SATU daftar saja sehingga emisi
+    // lokalnya menyisakan tabel per-item dengan KPI nol yang menyesatkan.
+    // Kunci cache memuat SELURUH parameter yang mengubah isi laporan (periode).
+    // TANPA kilau baris: baris perItem/perGolongan murni rekap agregat periode,
+    // bukan dokumen ber-identitas -- cukup cache-nya saja.
+    final kunci = 'laporan:apotik_penjualan:'
+        '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}';
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        setStateIfMounted(() {
+          _data = lokal;
+          _dariCache = true;
+          _cacheDisimpanPada = stempel;
+          _memuat = false;
+        });
+      } catch (_) {
+        adaCacheLokal = false; // cache rusak -- lanjut jalur server biasa.
+      }
+    }
     try {
       final r = await ApiClient.instance.aksi('apotik_laporan_penjualan',
           {'dari': _fmtTgl.format(_dari), 'sampai': _fmtTgl.format(_sampai)});
-      setStateIfMounted(() => _data = r);
+      setStateIfMounted(() {
+        _data = r;
+        // Angka server sudah terpasang -> penanda salinan tersimpan padam.
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+      });
+      // Stempel waktu ikut disimpan DI DALAM amplop supaya pemuatan berikutnya
+      // bisa memberi tahu KAPAN salinan ini dibuat. Kunci berawalan garis bawah
+      // tidak pernah dibaca perender di bawah (semua baca kunci spesifik).
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...r,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
+      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
+      // global sudah menceritakan kondisinya).
+      if (e is ApiException && e.offline && adaCacheLokal) return;
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal: $e')));
@@ -201,6 +254,13 @@ class _TabPenjualanState extends State<_TabPenjualan> {
           onDari: (v) => setStateIfMounted(() => _dari = v),
           onSampai: (v) => setStateIfMounted(() => _sampai = v),
           onMuat: _muat),
+      // Penanda salinan tersimpan -- di kolom utama tab, DI ATAS kartu KPI dan
+      // tabel, supaya angka rupiah tidak terbaca sebagai data terkini.
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+      ),
       Expanded(
         child: _memuat
             ? const Center(child: CircularProgressIndicator())

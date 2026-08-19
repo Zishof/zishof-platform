@@ -244,6 +244,26 @@ void main() {
     expect(member, contains('jalankanDenganProgressSinkron'));
   });
 
+  // Layar LAPORAN yang menyajikan angka uang dari cache lokal WAJIB
+  // menandainya: diam-diam menampilkan angka basi itu menyesatkan (beda dgn
+  // daftar master, yang keterlambatannya tidak berbahaya).
+  test('laporan ber-cache menandai data tersimpan', () {
+    const layarLaporanBerCache = <String>[
+      'lib/screens/riwayat_penjualan_analisis_screen.dart',
+      'lib/screens/laporan_detail_screen.dart',
+      'lib/screens/apotik/laporan_apotik_screen.dart',
+      'lib/screens/inventory_sales/laba_rugi_screen.dart',
+      'lib/screens/ringkasan/tab_umum.dart',
+    ];
+    for (final file in layarLaporanBerCache) {
+      final source = File(file).readAsStringSync();
+      expect(source, contains('ambilCacheReferensi'),
+          reason: '$file kehilangan jalur baca cache lokal');
+      expect(source, contains('PenandaDataTersimpan('),
+          reason: '$file menampilkan angka dari cache TANPA penanda');
+    }
+  });
+
   test('layanan MasterOffline terikat ke outbox_master core_db', () {
     final source =
         File('lib/services/master_offline.dart').readAsStringSync();
