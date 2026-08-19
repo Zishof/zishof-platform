@@ -183,6 +183,24 @@ class _IsiArtikel extends StatelessWidget {
           const SizedBox(height: 20),
           _WorkflowDiagram(langkahKonteks: artikel.workflow),
           const SizedBox(height: 20),
+          // Dua diagram khusus akuntansi: siklus dari transaksi sampai laporan, dan
+          // aturan debet/kredit. Hanya tampil di menu akuntansi supaya halaman bantuan
+          // menu lain tidak jadi panjang tanpa alasan.
+          if (const [
+            'jurnalUmum',
+            'postingHpp',
+            'postingPenjualan',
+            'kodeAkun',
+            'grupAkun',
+            'jenisTransaksi',
+            'bankAkun',
+            'laporanKeuangan',
+          ].contains(artikel.id)) ...[
+            const _DiagramSiklusAkuntansi(),
+            const SizedBox(height: 20),
+            const _DiagramDebetKredit(),
+            const SizedBox(height: 20),
+          ],
           const _DiagramArusData(),
           const SizedBox(height: 20),
           const _DiagramKeputusan(),
@@ -287,6 +305,149 @@ class _WorkflowDiagram extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Siklus akuntansi dari kejadian di toko sampai laporan keuangan.
+///
+/// Dibuat karena pertanyaan paling sering dari pengguna toko adalah "kenapa angka di
+/// laporan belum berubah padahal transaksinya sudah ada": jawabannya hampir selalu ada
+/// pada tahap POSTING yang belum dijalankan. Diagram ini menegaskan posisi tahap itu.
+class _DiagramSiklusAkuntansi extends StatelessWidget {
+  const _DiagramSiklusAkuntansi();
+
+  static const tahap = <(String, String, IconData)>[
+    ('1. Kejadian di toko', 'Penjualan kasir, kulakan, retur, opname, bayar utang',
+        Icons.storefront_outlined),
+    ('2. Jurnal', 'Kejadian diterjemahkan jadi debet & kredit — otomatis lewat Posting, atau manual lewat Jurnal Umum',
+        Icons.edit_note),
+    ('3. Posting', 'Jurnal draf resmi masuk buku besar. Sebelum tahap ini, laporan BELUM berubah',
+        Icons.check_circle_outline),
+    ('4. Buku Besar', 'Tiap akun terkumpul mutasi dan saldonya',
+        Icons.menu_book_outlined),
+    ('5. Neraca Saldo', 'Total debet harus sama dengan total kredit',
+        Icons.balance),
+    ('6. Laporan', 'Laba Rugi, Neraca, dan Arus Kas terbentuk dari saldo tiap akun',
+        Icons.assessment_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        color: const Color(0xFFEFF7EE),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Diagram siklus akuntansi: dari transaksi sampai laporan',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+                'Angka pada laporan keuangan tidak muncul begitu saja dari transaksi kasir. '
+                'Ia melewati enam tahap berikut. Bila laporan terasa belum berubah, periksa '
+                'tahap 3: jurnalnya kemungkinan masih berstatus draf dan belum diposting.'),
+            const SizedBox(height: 14),
+            ...tahap.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBFD8BD))),
+                      child: Icon(t.$3, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t.$1,
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text(t.$2,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ]),
+                    ),
+                  ]),
+                )),
+            const Divider(height: 20),
+            const Text(
+                'Catatan: menghapus transaksi bukan cara mengoreksi. Koreksi dilakukan dengan '
+                'membatalkan posting lalu memperbaiki, atau dengan membuat jurnal koreksi, '
+                'supaya jejak pemeriksaan tetap utuh.',
+                style: TextStyle(fontStyle: FontStyle.italic)),
+          ]),
+        ),
+      );
+}
+
+/// Aturan debet/kredit dalam bentuk tabel ringkas — bagian yang paling sering
+/// ditanyakan petugas non-akuntansi saat mengisi Jurnal Umum.
+class _DiagramDebetKredit extends StatelessWidget {
+  const _DiagramDebetKredit();
+
+  static const baris = <(String, String, String)>[
+    ('Harta / Aset (kas, bank, persediaan, piutang)', 'Bertambah', 'Berkurang'),
+    ('Utang / Kewajiban (utang supplier, utang pajak)', 'Berkurang', 'Bertambah'),
+    ('Modal / Ekuitas', 'Berkurang', 'Bertambah'),
+    ('Pendapatan (penjualan, jasa, bunga)', 'Berkurang', 'Bertambah'),
+    ('Beban / Biaya (HPP, listrik, gaji)', 'Bertambah', 'Berkurang'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        color: const Color(0xFFFFF6E6),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Diagram aturan debet dan kredit',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+                'Setiap jurnal selalu punya dua sisi yang nilainya sama. Tabel ini menjawab '
+                'pertanyaan "yang ini masuk debet atau kredit?".'),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 24,
+                headingRowHeight: 38,
+                dataRowMinHeight: 34,
+                dataRowMaxHeight: 46,
+                columns: const [
+                  DataColumn(label: Text('Jenis akun')),
+                  DataColumn(label: Text('Bila di DEBET')),
+                  DataColumn(label: Text('Bila di KREDIT')),
+                ],
+                rows: baris
+                    .map((b) => DataRow(cells: [
+                          DataCell(Text(b.$1)),
+                          DataCell(Text(b.$2)),
+                          DataCell(Text(b.$3)),
+                        ]))
+                    .toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+                'Contoh 1 — menerima uang sewa tunai Rp250.000: Kas (harta, bertambah) di '
+                'DEBET 250.000; Pendapatan Sewa (pendapatan, bertambah) di KREDIT 250.000.\n'
+                'Contoh 2 — membayar listrik tunai Rp300.000: Beban Listrik (beban, bertambah) '
+                'di DEBET 300.000; Kas (harta, berkurang) di KREDIT 300.000.\n'
+                'Contoh 3 — membayar utang supplier Rp1.000.000 lewat bank: Utang Supplier '
+                '(kewajiban, berkurang) di DEBET 1.000.000; Bank (harta, berkurang) di '
+                'KREDIT 1.000.000.'),
+          ]),
+        ),
+      );
 }
 
 class _DiagramArusData extends StatelessWidget {

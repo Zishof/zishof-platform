@@ -63,7 +63,8 @@ void main() {
       'Kedaluwarsa',
       'Mutasi Antar Outlet',
       'Cara Pembayaran',
-      'Laporan Keuangan',
+      // Menu keuangan kini berupa grup 'Akuntansi' yang bawaannya tertutup.
+      'Akuntansi',
       'Konfigurasi',
     ]) {
       await tester.scrollUntilVisible(

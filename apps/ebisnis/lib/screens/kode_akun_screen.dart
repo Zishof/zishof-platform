@@ -17,7 +17,11 @@ import '../widgets/safe_state.dart';
 /// Tab Akun menyediakan unduh Excel (seluruh kolom + kode induk) dan unggah
 /// Excel untuk membuat/memperbarui akun secara massal.
 class KodeAkunScreen extends StatefulWidget {
-  const KodeAkunScreen({super.key});
+  /// Tab yang dibuka pertama kali: 0 Akun, 1 Daftar Akun, 2 Bank, 3 Jenis Transaksi,
+  /// 4 Grup Akun. Dipakai submenu "Akuntansi" agar tiap menu langsung mendarat di
+  /// tab yang tepat tanpa menduplikasi layarnya.
+  final int tabAwal;
+  const KodeAkunScreen({super.key, this.tabAwal = 0});
 
   @override
   State<KodeAkunScreen> createState() => _KodeAkunScreenState();
@@ -33,12 +37,16 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   List<Map<String, dynamic>> _akun = [];
   List<Map<String, dynamic>> _bank = [];
+  List<Map<String, dynamic>> _grupAkun = [];
   List<Map<String, dynamic>> _jenisTransaksi = [];
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(
+        length: 5,
+        vsync: this,
+        initialIndex: widget.tabAwal >= 0 && widget.tabAwal <= 4 ? widget.tabAwal : 0);
     // Label & sasaran tombol unduh/unggah mengikuti tab aktif, jadi tampilan
     // harus dibangun ulang setiap tab berpindah.
     _tab.addListener(() {
@@ -62,11 +70,13 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       final body = _cari.trim().isEmpty ? <String, dynamic>{} : {'cari': _cari.trim()};
       final akun = await ApiClient.instance.aksi('kode_akun_daftar', body);
       final bank = await ApiClient.instance.aksi('kode_akun_bank', body);
+      final grup = await ApiClient.instance.aksi('kode_akun_grup', {});
       final jt = await ApiClient.instance.aksi('kode_akun_jenis_transaksi', body);
       if (!mounted) return;
       setStateIfMounted(() {
         _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _bank = ((bank['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _grupAkun = ((grup['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _jenisTransaksi = ((jt['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _memuat = false;
       });
@@ -512,6 +522,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         Tab(text: 'Daftar Akun'),
         Tab(text: 'Bank'),
         Tab(text: 'Jenis Transaksi'),
+        Tab(text: 'Grup Akun'),
       ]),
       Expanded(
         child: _memuat
@@ -572,6 +583,27 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                                 AppTableCell.text('${t['keterangan'] ?? ''}', flex: 3),
                                 AppTableCell.text(
                                     t['aktif'] == true ? 'Ya' : 'Tidak', flex: 1),
+                              ]))
+                          .toList(),
+                    ),
+                    // Grup Akun: pengelompokan bebas milik bagan akun (mis. Kas & Bank,
+                    // Piutang) -- berbeda dari Kelompok Laporan yang menentukan posisi
+                    // akun di Neraca/Laba Rugi.
+                    AppDataTable(
+                      minWidth: 620,
+                      emptyText: 'Belum ada grup akun.',
+                      columns: const [
+                        AppTableColumn('Nama Grup', flex: 3),
+                        AppTableColumn('Keterangan', flex: 5),
+                        AppTableColumn('Jumlah Akun', flex: 2, align: TextAlign.right),
+                      ],
+                      rows: _grupAkun
+                          .map((g) => AppTableRowData(cells: [
+                                AppTableCell.text('${g['nama'] ?? ''}', flex: 3),
+                                AppTableCell.text('${g['keterangan'] ?? ''}', flex: 5),
+                                AppTableCell.text(
+                                    '${_akun.where((a) => '${a['grupAkun'] ?? ''}' == '${g['nama'] ?? ''}').length}',
+                                    flex: 2, align: TextAlign.right),
                               ]))
                           .toList(),
                     ),

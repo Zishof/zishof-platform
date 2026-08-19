@@ -23,7 +23,13 @@ List<PertanyaanJawaban> tanyaJawabUntukMenu(
   final alur = spesifikasi?.workflow.join(' → ') ??
       'Pilih konteks → Cari data → Verifikasi → Isi → Tinjau → Simpan';
 
+  final tambahan = (spesifikasi?.tanyaJawabTambahan ?? const <List<String>>[])
+      .where((e) => e.length >= 2)
+      .map((e) => PertanyaanJawaban(e[0], e[1]))
+      .toList();
+
   return <PertanyaanJawaban>[
+    ...tambahan,
     PertanyaanJawaban(
       'Apa tujuan halaman $judul dan kapan saya menggunakannya?',
       'Halaman $judul digunakan untuk $tujuan. Objek utama yang dikelola adalah '

@@ -115,6 +115,15 @@ enum MenuEBisnis {
   laporanTransaksi,
   laporanLaporan,
   laporanKeuangan,
+  // Submenu grup "Akuntansi" (2026-08-20). laporanKeuangan dipertahankan sebagai
+  // layar "Laporan-Laporan" di dalam grup itu supaya tautan lama tetap sah.
+  jurnalUmum,
+  postingHpp,
+  postingPenjualan,
+  kodeAkun,
+  grupAkun,
+  jenisTransaksi,
+  bankAkun,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -750,7 +759,23 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.laporanLaporan:
       return 'Laporan-Laporan';
     case MenuEBisnis.laporanKeuangan:
-      return 'Laporan Keuangan';
+      // Layar "Laporan-Laporan" di dalam grup Akuntansi. Labelnya dibedakan dari
+      // "Laporan-Laporan" umum supaya penanda menu aktif tidak saling tertukar.
+      return 'Laporan-Laporan Keuangan';
+    case MenuEBisnis.jurnalUmum:
+      return 'Jurnal Umum';
+    case MenuEBisnis.postingHpp:
+      return 'Posting HPP';
+    case MenuEBisnis.postingPenjualan:
+      return 'Posting Penjualan';
+    case MenuEBisnis.kodeAkun:
+      return 'Kode Akun';
+    case MenuEBisnis.grupAkun:
+      return 'Grup Akun';
+    case MenuEBisnis.jenisTransaksi:
+      return 'Jenis Transaksi';
+    case MenuEBisnis.bankAkun:
+      return 'Bank';
     case MenuEBisnis.riwayatSinkron:
       return 'Riwayat Sinkronisasi';
     case MenuEBisnis.logError:

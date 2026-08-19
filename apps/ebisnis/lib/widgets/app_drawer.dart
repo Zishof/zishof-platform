@@ -26,6 +26,8 @@ import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/jurnal_umum_screen.dart';
+import '../screens/kode_akun_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
@@ -663,21 +665,120 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const LaporanScreen(),
                           ),
                         ),
+                      // "Akuntansi" adalah GRUP yang bisa dibuka-tutup (bawaan: tertutup).
+                      // Kunci induknya tetap 'laporankeuangan' supaya hak akses peran yang
+                      // sudah ada tidak berubah arti; tiap submenu punya kuncinya sendiri
+                      // sehingga admin bisa membatasi per layar lewat grid CRUD peran.
                       if (Sesi.instance.bolehMenu('laporankeuangan'))
-                        _ItemMenu(
+                        _GrupMenu(
                           icon: Icons.account_balance_outlined,
-                          label: 'Laporan Keuangan',
-                          aktif: menuAktif == 'Laporan Keuangan',
-                          onTap: () => _pindahMenu(
-                            context,
-                            label: 'Laporan Keuangan',
-                            builder: (_) => const LaporanScreen(
-                              aksiKatalog: 'laporan_keuangan_katalog',
-                              judul: 'Laporan Keuangan',
-                              subjudul:
-                                  'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
+                          label: 'Akuntansi',
+                          adaYangAktif: const [
+                            'Jurnal Umum',
+                            'Posting HPP',
+                            'Posting Penjualan',
+                            'Kode Akun',
+                            'Grup Akun',
+                            'Jenis Transaksi',
+                            'Bank',
+                            'Laporan-Laporan Keuangan',
+                          ].contains(menuAktif),
+                          anak: [
+                            if (Sesi.instance.bolehMenu('jurnal_umum'))
+                              _ItemMenu(
+                                icon: Icons.edit_note,
+                                label: 'Jurnal Umum',
+                                aktif: menuAktif == 'Jurnal Umum',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Jurnal Umum',
+                                    builder: (_) => const JurnalUmumScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenu('posting_hpp'))
+                              _ItemMenu(
+                                icon: Icons.inventory_2_outlined,
+                                label: 'Posting HPP',
+                                aktif: menuAktif == 'Posting HPP',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Posting HPP',
+                                  builder: (_) => const LaporanScreen(
+                                    aksiKatalog: 'laporan_keuangan_katalog',
+                                    judul: 'Posting HPP',
+                                    subjudul:
+                                        'Membukukan harga pokok penjualan ke buku besar',
+                                    bukaPosting: 'posting_hpp',
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance.bolehMenu('posting_penjualan'))
+                              _ItemMenu(
+                                icon: Icons.point_of_sale_outlined,
+                                label: 'Posting Penjualan',
+                                aktif: menuAktif == 'Posting Penjualan',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Posting Penjualan',
+                                  builder: (_) => const LaporanScreen(
+                                    aksiKatalog: 'laporan_keuangan_katalog',
+                                    judul: 'Posting Penjualan',
+                                    subjudul:
+                                        'Membukukan penjualan kasir ke buku besar',
+                                    bukaPosting: 'posting_penjualan',
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance.bolehMenu('kode_akun'))
+                              _ItemMenu(
+                                icon: Icons.account_tree_outlined,
+                                label: 'Kode Akun',
+                                aktif: menuAktif == 'Kode Akun',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Kode Akun',
+                                    builder: (_) => const KodeAkunScreen(tabAwal: 0)),
+                              ),
+                            if (Sesi.instance.bolehMenu('grup_akun'))
+                              _ItemMenu(
+                                icon: Icons.workspaces_outline,
+                                label: 'Grup Akun',
+                                aktif: menuAktif == 'Grup Akun',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Grup Akun',
+                                    builder: (_) => const KodeAkunScreen(tabAwal: 4)),
+                              ),
+                            if (Sesi.instance.bolehMenu('jenis_transaksi'))
+                              _ItemMenu(
+                                icon: Icons.swap_horiz,
+                                label: 'Jenis Transaksi',
+                                aktif: menuAktif == 'Jenis Transaksi',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Jenis Transaksi',
+                                    builder: (_) => const KodeAkunScreen(tabAwal: 3)),
+                              ),
+                            if (Sesi.instance.bolehMenu('bank_akun'))
+                              _ItemMenu(
+                                icon: Icons.account_balance,
+                                label: 'Bank',
+                                aktif: menuAktif == 'Bank',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Bank',
+                                    builder: (_) => const KodeAkunScreen(tabAwal: 2)),
+                              ),
+                            _ItemMenu(
+                              icon: Icons.folder_open_outlined,
+                              label: 'Laporan-Laporan',
+                              aktif: menuAktif == 'Laporan-Laporan Keuangan',
+                              onTap: () => _pindahMenu(
+                                context,
+                                label: 'Laporan-Laporan Keuangan',
+                                builder: (_) => const LaporanScreen(
+                                  aksiKatalog: 'laporan_keuangan_katalog',
+                                  judul: 'Laporan Keuangan',
+                                  subjudul:
+                                      'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       if (Sesi.instance.bolehMenu('riwayatsinkronisasi'))
                         _ItemMenu(
@@ -761,6 +862,65 @@ class AppDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Grup menu yang bisa dibuka-tutup (mis. "Akuntansi").
+///
+/// Bawaannya TERTUTUP supaya daftar menu utama tetap ringkas; terbuka sendiri bila salah
+/// satu submenunya sedang aktif agar pengguna tidak kehilangan posisinya setelah pindah
+/// halaman.
+class _GrupMenu extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final bool adaYangAktif;
+  final List<Widget> anak;
+  const _GrupMenu({
+    required this.icon,
+    required this.label,
+    required this.anak,
+    this.adaYangAktif = false,
+  });
+
+  @override
+  State<_GrupMenu> createState() => _GrupMenuState();
+}
+
+class _GrupMenuState extends State<_GrupMenu> {
+  late bool _terbuka = widget.adaYangAktif;
+
+  @override
+  void didUpdateWidget(covariant _GrupMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.adaYangAktif && !_terbuka) {
+      _terbuka = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final warnaAktif = Theme.of(context).colorScheme.primary;
+    final warnaTeks =
+        widget.adaYangAktif ? warnaAktif : AppColors.textPrimaryOf(context);
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(
+        leading: Icon(widget.icon, color: warnaTeks),
+        title: Text(widget.label,
+            style: TextStyle(
+                color: warnaTeks,
+                fontWeight:
+                    widget.adaYangAktif ? FontWeight.w700 : FontWeight.normal)),
+        trailing: Icon(_terbuka ? Icons.expand_less : Icons.expand_more,
+            color: warnaTeks),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        onTap: () => setState(() => _terbuka = !_terbuka),
+      ),
+      if (_terbuka)
+        Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: widget.anak),
+        ),
+    ]);
   }
 }
 
