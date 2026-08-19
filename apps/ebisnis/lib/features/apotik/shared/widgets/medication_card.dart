@@ -15,10 +15,10 @@ final _rp =
 ///
 /// **Hanya merender field yang BENAR-BENAR dikirim server** pada
 /// `apotik_item_cari`: `nama, kode, kandungan, barcode, satuan, stok,
-/// hargaJual, lasa, terkendali`. Field mockup yang belum ada di backend
-/// (golongan Rx/OTC, bentuk sediaan, kekuatan, high-alert, cold-chain)
-/// SENGAJA tidak dikarang — lihat IR-01 pada `docs/apotik-uiux/02-api-action-map.md`.
-/// Begitu server mengirimnya, cukup tambah badge di sini tanpa rombak layar.
+/// hargaJual, lasa, terkendali` dan — sejak IR-01 diimplementasikan di
+/// backend — `golonganObat, bentukSediaan, kekuatan, highAlert, coldChain`.
+/// Field yang tidak dikirim tetap TIDAK dikarang: badge hanya muncul bila
+/// nilainya benar-benar ada, sehingga server lama pun aman.
 class MedicationCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback? onTap;
@@ -38,6 +38,15 @@ class MedicationCard extends StatelessWidget {
   double get _harga => (item['hargaJual'] as num?)?.toDouble() ?? 0;
   bool get _lasa => item['lasa'] == true;
   bool get _terkendali => item['terkendali'] == true;
+  bool get _highAlert => item['highAlert'] == true;
+  bool get _coldChain => item['coldChain'] == true;
+  String get _golongan => '${item['golonganObat'] ?? ''}';
+
+  /// "500 mg • tablet" — hanya bagian yang ada yang ikut dirender.
+  String get _sediaan => [
+        '${item['kekuatan'] ?? ''}'.trim(),
+        '${item['bentukSediaan'] ?? ''}'.trim(),
+      ].where((e) => e.isNotEmpty).join(' • ');
   bool get _terkunci => alasanTerkunci != null;
 
   @override
@@ -46,9 +55,15 @@ class MedicationCard extends StatelessWidget {
     final habis = _stok <= 0;
     final nonaktif = _terkunci || habis;
 
+    // Urutan badge = urutan risiko: high-alert & terkendali lebih dulu supaya
+    // terbaca sebelum kasir sempat menekan kartunya.
+    final golonganPill = ApotikStatusPill.golongan(_golongan);
     final badge = <Widget>[
-      if (_lasa) ApotikStatusPill.lasa(),
+      if (_highAlert) ApotikStatusPill.highAlert(),
       if (_terkendali) ApotikStatusPill.terkendali(),
+      if (golonganPill != null && !_terkendali) golonganPill,
+      if (_lasa) ApotikStatusPill.lasa(),
+      if (_coldChain) ApotikStatusPill.coldChain(),
       if (habis) ApotikStatusPill.stokHabis(),
     ];
 
@@ -73,7 +88,7 @@ class MedicationCard extends StatelessWidget {
                   borderRadius:
                       BorderRadius.circular(ApotikDesignTokens.radiusCard),
                   border: Border.all(
-                      color: _terkendali
+                      color: (_terkendali || _highAlert)
                           ? t.danger.withValues(alpha: 0.45)
                           : t.border),
                 ),
@@ -109,6 +124,16 @@ class MedicationCard extends StatelessWidget {
                         ],
                       ],
                     ),
+                    if (_sediaan.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(_sediaan,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: t.textSecondary)),
+                    ],
                     if ('${item['kandungan'] ?? ''}'.trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text('${item['kandungan']}',

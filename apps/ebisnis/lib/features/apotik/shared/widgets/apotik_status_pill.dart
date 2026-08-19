@@ -74,6 +74,60 @@ class ApotikStatusPill extends StatelessWidget {
       ikon: Icons.lock_outline,
       penjelasan: 'Wajib nama pembeli + resep/dokter, tercatat di register');
 
+  /// IR-01 -- obat high-alert: risiko cedera tinggi bila salah pakai.
+  factory ApotikStatusPill.highAlert() => const ApotikStatusPill(
+      teks: 'High-alert',
+      nada: ApotikStatusNada.bahaya,
+      ikon: Icons.priority_high,
+      penjelasan: 'Risiko tinggi bila salah — verifikasi ganda sebelum serah');
+
+  /// IR-01 -- wajib rantai dingin 2-8 C.
+  factory ApotikStatusPill.coldChain() => const ApotikStatusPill(
+      teks: 'Cold-chain',
+      nada: ApotikStatusNada.info,
+      ikon: Icons.ac_unit,
+      penjelasan: 'Simpan 2-8 C — jangan biarkan di suhu ruang');
+
+  /// IR-01 -- golongan obat dari server (BEBAS/BEBAS_TERBATAS/KERAS/…).
+  /// Obat KERAS ke atas hanya boleh lewat mode Resep.
+  static ApotikStatusPill? golongan(String? kode) {
+    switch (kode) {
+      case 'KERAS':
+        return const ApotikStatusPill(
+            teks: 'Keras (Rx)',
+            nada: ApotikStatusNada.peringatan,
+            ikon: Icons.medication_liquid,
+            penjelasan: 'Wajib resep dokter');
+      case 'BEBAS_TERBATAS':
+        return const ApotikStatusPill(
+            teks: 'Bebas terbatas',
+            nada: ApotikStatusNada.info,
+            ikon: Icons.info_outline,
+            penjelasan: 'Ada peringatan khusus pada kemasan');
+      case 'NARKOTIKA':
+        return const ApotikStatusPill(
+            teks: 'Narkotika',
+            nada: ApotikStatusNada.bahaya,
+            ikon: Icons.lock_outline,
+            penjelasan: 'Wajib register & resep — tercatat di laporan');
+      case 'PSIKOTROPIKA':
+        return const ApotikStatusPill(
+            teks: 'Psikotropika',
+            nada: ApotikStatusNada.bahaya,
+            ikon: Icons.lock_outline,
+            penjelasan: 'Wajib register & resep — tercatat di laporan');
+      default:
+        return null; // BEBAS / tidak diketahui: tanpa badge.
+    }
+  }
+
+  /// IR-02 -- lot ditahan/karantina/recall/rusak; alasan dari server.
+  factory ApotikStatusPill.lotDitahan(String alasan) => ApotikStatusPill(
+      teks: alasan,
+      nada: ApotikStatusNada.bahaya,
+      ikon: Icons.block,
+      penjelasan: 'Tidak dapat dipilih');
+
   factory ApotikStatusPill.racikan() => const ApotikStatusPill(
       teks: 'Racikan',
       nada: ApotikStatusNada.klinis,

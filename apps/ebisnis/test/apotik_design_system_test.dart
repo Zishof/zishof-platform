@@ -157,11 +157,58 @@ void main() {
       expect(find.textContaining('Baris racikan'), findsOneWidget);
     });
 
-    testWidgets('TIDAK mengarang field yang tak dikirim server',
+    testWidgets('server lama tanpa field IR-01 tetap aman (tanpa badge palsu)',
         (tester) async {
       await tester.pumpWidget(_bungkus(MedicationCard(item: obat)));
       expect(find.textContaining('High-alert'), findsNothing);
       expect(find.textContaining('Cold-chain'), findsNothing);
+      expect(find.textContaining('Keras'), findsNothing);
+    });
+
+    testWidgets('IR-01: merender kekuatan, bentuk sediaan, dan badge risiko',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(item: <String, dynamic>{
+        ...obat,
+        'kekuatan': '500 mg',
+        'bentukSediaan': 'tablet',
+        'golonganObat': 'KERAS',
+        'highAlert': true,
+        'coldChain': true,
+      })));
+      expect(find.text('500 mg • tablet'), findsOneWidget);
+      expect(find.text('Keras (Rx)'), findsOneWidget);
+      expect(find.text('High-alert'), findsOneWidget);
+      expect(find.text('Cold-chain'), findsOneWidget);
+    });
+
+    testWidgets('IR-01: narkotika memakai badge terkendali, bukan duplikat',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(item: <String, dynamic>{
+        ...obat,
+        'golonganObat': 'NARKOTIKA',
+        'terkendali': true,
+      })));
+      expect(find.text('Terkendali'), findsOneWidget);
+      // Badge golongan tidak diulang saat sudah ada badge Terkendali.
+      expect(find.text('Narkotika'), findsNothing);
+    });
+
+    testWidgets('IR-01: golongan BEBAS tidak memunculkan badge',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(
+          item: <String, dynamic>{...obat, 'golonganObat': 'BEBAS'})));
+      expect(find.text('Keras (Rx)'), findsNothing);
+      expect(find.text('Bebas terbatas'), findsNothing);
+    });
+  });
+
+  group('IR-02 status lot', () {
+    testWidgets('lot ditahan memakai alasan dari server', (tester) async {
+      await tester
+          .pumpWidget(_bungkus(ApotikStatusPill.lotDitahan('Lot dikarantina')));
+      expect(find.text('Lot dikarantina'), findsOneWidget);
+      expect(find.bySemanticsLabel('Lot dikarantina. Tidak dapat dipilih'),
+          findsOneWidget);
     });
   });
 
