@@ -39,6 +39,11 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
+    // Label & sasaran tombol unduh/unggah mengikuti tab aktif, jadi tampilan
+    // harus dibangun ulang setiap tab berpindah.
+    _tab.addListener(() {
+      if (!_tab.indexIsChanging) setStateIfMounted(() {});
+    });
     _muat();
   }
 
@@ -83,30 +88,101 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     return peta;
   }
 
+  // ---- Definisi unduh/unggah per tab -------------------------------------
+  // Urutan kolom di bawah menjadi KONTRAK berkas Excel: hasil unduh dapat
+  // langsung disunting lalu diunggah kembali tanpa penyesuaian manual.
+  // Tab 0 (Akun) dan 1 (Daftar Akun) memakai definisi sama; datanya sama,
+  // hanya tampilannya yang berbeda.
+
+  String get _defJudul => _tab.index == 2
+      ? 'Bank'
+      : (_tab.index == 3 ? 'Jenis Transaksi' : 'Akun');
+
+  String get _defAksiImpor => _tab.index == 2
+      ? 'kode_akun_bank_impor'
+      : (_tab.index == 3 ? 'kode_akun_jenis_transaksi_impor' : 'kode_akun_impor');
+
+  List<String> get _defKolom {
+    if (_tab.index == 2) {
+      return const ['Nama Bank', 'Keterangan', 'Kode Akun', 'Aktif'];
+    }
+    if (_tab.index == 3) {
+      return const ['Kode', 'Nama', 'Keterangan', 'Kode Akun', 'Aktif'];
+    }
+    return const ['Kode', 'Nama', 'Keterangan', 'Posisi', 'Grup Akun', 'Kode Induk'];
+  }
+
+  List<List<String>> _defBaris() {
+    if (_tab.index == 2) {
+      return _bank
+          .map((b) => [
+                '${b['nama'] ?? ''}',
+                '${b['keterangan'] ?? ''}',
+                '${b['akunKode'] ?? ''}',
+                b['aktif'] == true ? 'Ya' : 'Tidak',
+              ])
+          .toList();
+    }
+    if (_tab.index == 3) {
+      return _jenisTransaksi
+          .map((t) => [
+                '${t['kode'] ?? ''}',
+                '${t['nama'] ?? ''}',
+                '${t['keterangan'] ?? ''}',
+                '${t['akunKode'] ?? ''}',
+                t['aktif'] == true ? 'Ya' : 'Tidak',
+              ])
+          .toList();
+    }
+    final peta = _kodeById;
+    return _akun
+        .map((a) => [
+              '${a['kode'] ?? ''}',
+              '${a['nama'] ?? ''}',
+              '${a['keterangan'] ?? ''}',
+              '${a['posisi'] ?? ''}',
+              '${a['grupAkun'] ?? ''}',
+              a['parentId'] == null ? '' : (peta['${a['parentId']}'] ?? ''),
+            ])
+        .toList();
+  }
+
+  Map<String, dynamic> _defKeBaris(List<String> r) {
+    String k(int i) => r.length > i ? r[i] : '';
+    if (_tab.index == 2) {
+      return {'nama': k(0), 'keterangan': k(1), 'kodeAkun': k(2), 'aktif': k(3)};
+    }
+    if (_tab.index == 3) {
+      return {
+        'kode': k(0),
+        'nama': k(1),
+        'keterangan': k(2),
+        'kodeAkun': k(3),
+        'aktif': k(4)
+      };
+    }
+    return {
+      'kode': k(0),
+      'nama': k(1),
+      'keterangan': k(2),
+      'posisi': k(3),
+      'grupAkun': k(4),
+      'kodeParent': k(5)
+    };
+  }
+
   Future<void> _unduhAkun() async {
     setStateIfMounted(() => _sibuk = true);
     try {
-      final peta = _kodeById;
       final bytes = buildSimpleXlsx(
-        sheetName: 'Akun',
-        headers: const [
-          'Kode', 'Nama', 'Keterangan', 'Posisi', 'Grup Akun', 'Kode Induk'
-        ],
-        rows: _akun
-            .map((a) => [
-                  '${a['kode'] ?? ''}',
-                  '${a['nama'] ?? ''}',
-                  '${a['keterangan'] ?? ''}',
-                  '${a['posisi'] ?? ''}',
-                  '${a['grupAkun'] ?? ''}',
-                  a['parentId'] == null ? '' : (peta['${a['parentId']}'] ?? ''),
-                ])
-            .toList(),
+        sheetName: _defJudul,
+        headers: _defKolom,
+        rows: _defBaris(),
       );
       final path = await FilePicker.platform.saveFile(
-          dialogTitle: 'Simpan Daftar Akun',
+          dialogTitle: 'Simpan $_defJudul',
           fileName:
-              'Kode_Akun_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+              '${_defJudul.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
           type: FileType.custom,
           allowedExtensions: const ['xlsx'],
           bytes: bytes);
@@ -137,16 +213,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     final rows = readSimpleXlsx(Uint8List.fromList(raw));
     final baris = <Map<String, dynamic>>[];
     for (final r in rows.skip(1)) {
-      String kol(int i) => r.length > i ? r[i].trim() : '';
-      if (kol(0).isEmpty && kol(1).isEmpty) continue;
-      baris.add({
-        'kode': kol(0),
-        'nama': kol(1),
-        'keterangan': kol(2),
-        'posisi': kol(3),
-        'grupAkun': kol(4),
-        'kodeParent': kol(5),
-      });
+      final bersih = r.map((e) => e.trim()).toList();
+      if (bersih.every((e) => e.isEmpty)) continue;
+      baris.add(_defKeBaris(bersih));
     }
     if (baris.isEmpty) {
       if (mounted) {
@@ -159,10 +228,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     final setuju = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Unggah Daftar Akun'),
-        content: Text('${baris.length} baris akan diproses. Kode yang belum ada '
-            'akan DIBUAT, kode yang sudah ada akan DIPERBARUI. Tidak ada akun '
-            'yang dihapus.'),
+        title: Text('Unggah $_defJudul'),
+        content: Text('${baris.length} baris akan diproses. Data yang belum ada '
+            'akan DIBUAT, yang sudah ada akan DIPERBARUI. Tidak ada data yang dihapus.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
@@ -175,14 +243,14 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     setStateIfMounted(() => _sibuk = true);
     try {
       final hasil =
-          await ApiClient.instance.aksi('kode_akun_impor', {'baris': baris});
+          await ApiClient.instance.aksi(_defAksiImpor, {'baris': baris});
       if (!mounted) return;
       final masalah = ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Hasil Unggah Akun'),
+          title: Text('Hasil Unggah $_defJudul'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -295,13 +363,13 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
               icon: const Icon(Icons.filter_alt_outlined, size: 18),
               label: const Text('Terapkan')),
           OutlinedButton.icon(
-              onPressed: _sibuk || _akun.isEmpty ? null : _unduhAkun,
+              onPressed: _sibuk ? null : _unduhAkun,
               icon: const Icon(Icons.download, size: 18),
-              label: const Text('Download Excel')),
+              label: Text('Download $_defJudul')),
           OutlinedButton.icon(
               onPressed: _sibuk ? null : _unggahAkun,
               icon: const Icon(Icons.upload_file, size: 18),
-              label: const Text('Upload Excel')),
+              label: Text('Upload $_defJudul')),
           if (_sibuk)
             const SizedBox(
                 width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
