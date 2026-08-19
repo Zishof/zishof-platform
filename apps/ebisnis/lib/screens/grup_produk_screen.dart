@@ -9,6 +9,7 @@ import '../api_client.dart';
 import '../sesi.dart';
 import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
+import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../widgets/indikator_sinkron_master.dart';
@@ -468,6 +469,11 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
   double? _angka(String t) =>
       t.trim().isEmpty ? null : double.tryParse(t.replaceAll(',', '.'));
 
+  /// Nilai harga utk ditampilkan sbg label ketika akun tak berhak ubah harga.
+  String _rupiah(String t) =>
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0)
+          .format(_angkaNol(t));
+
   double _angkaNol(String t) =>
       double.tryParse(t.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
 
@@ -716,21 +722,27 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               _judulBagian('Harga & Kebijakan Terpusat'),
               Row(children: [
                 Expanded(
-                  child: TextField(
-                      controller: _hargaBeli,
-                      enabled: Sesi.instance.bolehUbahHarga,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'HPP / Harga Beli')),
+                  child: Sesi.instance.bolehUbahHarga
+                      ? TextField(
+                          controller: _hargaBeli,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'HPP / Harga Beli'))
+                      : AppHargaTerkunci(
+                          label: 'HPP / Harga Beli',
+                          nilai: _rupiah(_hargaBeli.text)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                      controller: _hargaJual,
-                      enabled: Sesi.instance.bolehUbahHarga,
-                      keyboardType: TextInputType.number,
-                      decoration:
-                          const InputDecoration(labelText: 'Harga Jual')),
+                  child: Sesi.instance.bolehUbahHarga
+                      ? TextField(
+                          controller: _hargaJual,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: 'Harga Jual'))
+                      : AppHargaTerkunci(
+                          label: 'Harga Jual',
+                          nilai: _rupiah(_hargaJual.text)),
                 ),
               ]),
               SwitchListTile(

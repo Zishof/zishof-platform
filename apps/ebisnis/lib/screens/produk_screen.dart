@@ -1956,32 +1956,37 @@ class _FormProdukState extends State<_FormProduk> {
                   Row(
                     children: [
                       Expanded(
-                        child: AppFormTextField(
-                          label: 'Harga Beli',
-                          controller: _hargaBeli,
-                          enabled: _bahanBaku.isEmpty &&
-                              Sesi.instance.bolehUbahHarga,
-                          keyboardType: TextInputType.number,
-                          helperText: !Sesi.instance.bolehUbahHarga
-                              ? 'Terkunci — tidak diberikan akses ubah harga'
-                              : (_bahanBaku.isNotEmpty
-                                  ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
-                                  : null),
-                        ),
+                        child: Sesi.instance.bolehUbahHarga
+                            ? AppFormTextField(
+                                label: 'Harga Beli',
+                                controller: _hargaBeli,
+                                enabled: _bahanBaku.isEmpty,
+                                keyboardType: TextInputType.number,
+                                helperText: _bahanBaku.isNotEmpty
+                                    ? 'Otomatis dari Bahan Baku (${_formatRupiah.format(_totalHpp)})'
+                                    : null,
+                              )
+                            : AppHargaTerkunci(
+                                label: 'Harga Beli',
+                                nilai: _formatRupiah
+                                    .format(_angka(_hargaBeli.text)),
+                              ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: AppFormTextField(
-                          label: 'Harga Jual *',
-                          controller: _hargaJual,
-                          enabled: Sesi.instance.bolehUbahHarga,
-                          keyboardType: TextInputType.number,
-                          helperText: !Sesi.instance.bolehUbahHarga
-                              ? 'Terkunci — tidak diberikan akses ubah harga'
-                              : null,
-                          validator: (v) =>
-                              _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
-                        ),
+                        child: Sesi.instance.bolehUbahHarga
+                            ? AppFormTextField(
+                                label: 'Harga Jual *',
+                                controller: _hargaJual,
+                                keyboardType: TextInputType.number,
+                                validator: (v) =>
+                                    _angka(v ?? '') <= 0 ? 'Wajib > 0' : null,
+                              )
+                            : AppHargaTerkunci(
+                                label: 'Harga Jual',
+                                nilai: _formatRupiah
+                                    .format(_angka(_hargaJual.text)),
+                              ),
                       ),
                     ],
                   ),

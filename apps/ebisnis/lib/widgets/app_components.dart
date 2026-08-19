@@ -267,6 +267,73 @@ class AppFormTextField extends StatelessWidget {
   }
 }
 
+/// Penyaji harga untuk pengguna yang TIDAK diberi akses ubah harga.
+///
+/// Sengaja berupa LABEL (teks biasa), bukan kolom isian yang di-disable:
+/// kolom disable masih terlihat seperti tempat mengetik, ikut divalidasi,
+/// dan membingungkan kasir. Nilai di sini murni untuk dibaca.
+class AppHargaTerkunci extends StatelessWidget {
+  final String label;
+  final String nilai;
+  final String? catatan;
+
+  const AppHargaTerkunci({
+    super.key,
+    required this.label,
+    required this.nilai,
+    this.catatan,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline,
+                  size: 15, color: AppColors.textSecondaryOf(context)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SelectableText(
+                  nilai.isEmpty ? '-' : nilai,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimaryOf(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (catatan != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              catatan!,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondaryOf(context),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class AppReadonlyField extends StatelessWidget {
   final String label;
   final String value;

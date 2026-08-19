@@ -1004,6 +1004,30 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
     );
   }
 
+  /// Sel harga versi baca-saja: label, bukan kolom isian yang di-disable,
+  /// supaya baris tetap ringkas dan jelas tidak bisa diketik.
+  Widget _selHargaTerkunci(TextEditingController controller) {
+    return Tooltip(
+      message: Sesi.instance.pesanTidakBolehUbahHarga,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const Icon(Icons.lock_outline, size: 13, color: Colors.grey),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              _bulkRp.format(parseDesimalAtau(controller.text)),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusRow(_BulkRow row) {
     final color = row.produkBaru ? AppColors.primary : AppColors.success;
     final label = row.produkBaru ? 'Baru' : 'Existing';
@@ -1278,10 +1302,12 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
                         const SizedBox(width: 8),
                         SizedBox(
                             width: 112,
-                            child: _field(row.hargaBeli,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true))),
+                            child: Sesi.instance.bolehUbahHarga
+                                ? _field(row.hargaBeli,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true))
+                                : _selHargaTerkunci(row.hargaBeli)),
                         const SizedBox(width: 8),
                         SizedBox(
                             width: 92,

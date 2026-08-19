@@ -232,6 +232,18 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
         _produkDitemukan = hasil;
         _qtyController.clear();
         _hargaController.clear();
+        if (!Sesi.instance.bolehUbahHarga) {
+          // Akun ini tidak boleh mengubah harga, jadi kolomnya tampil sbg
+          // label. Nilainya diisikan otomatis dari harga penerimaan terakhir
+          // (jatuh ke harga beli master bila belum pernah diterima) supaya
+          // penerimaan barang tetap bisa diselesaikan tanpa mengetik harga.
+          final terakhir = (hasil['hargaBeliTerakhir'] as num?)?.toDouble() ?? 0;
+          final master = (hasil['hargaBeli'] as num?)?.toDouble() ?? 0;
+          final dipakai = terakhir > 0 ? terakhir : master;
+          if (dipakai > 0) {
+            _hargaController.text = dipakai.toStringAsFixed(0);
+          }
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -557,14 +569,29 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: TextField(
-                            controller: _hargaController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: AppFormStyle.fieldDecoration(context,
-                                labelText: 'Harga Beli Satuan *',
-                                isDense: true),
-                          ),
+                          // Tanpa hak ubah harga: nilainya ditampilkan sbg
+                          // label, bukan kolom isian yang di-disable.
+                          child: Sesi.instance.bolehUbahHarga
+                              ? TextField(
+                                  controller: _hargaController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  decoration: AppFormStyle.fieldDecoration(
+                                      context,
+                                      labelText: 'Harga Beli Satuan *',
+                                      isDense: true),
+                                )
+                              : AppHargaTerkunci(
+                                  label: 'Harga Beli Satuan',
+                                  nilai: _formatRupiah.format(
+                                      double.tryParse(_hargaController.text
+                                              .replaceAll(',', '.')
+                                              .trim()) ??
+                                          0),
+                                  catatan:
+                                      Sesi.instance.pesanTidakBolehUbahHarga,
+                                ),
                         ),
                         const SizedBox(width: 8),
                         IconButton.filled(

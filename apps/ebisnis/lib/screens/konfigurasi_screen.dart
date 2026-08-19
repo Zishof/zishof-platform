@@ -669,6 +669,36 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   List<Map<String, dynamic>> _daftarPenggunaToko = [];
   bool _memuatPenggunaToko = false;
 
+  /// Grup pengguna (Tbmrole / Hak Akses) yang boleh mengubah harga. Sifatnya
+  /// ATAU terhadap [_userBolehUbahHarga]: pengguna lolos bila role-nya terpilih
+  /// ATAU akunnya dipilih satu per satu.
+  final Set<String> _roleBolehUbahHarga = <String>{};
+  List<Map<String, dynamic>> _daftarHakAkses = [];
+  bool _memuatHakAkses = false;
+  String _cariHakAkses = '';
+
+  /// Daftar Hak Akses (Tbmrole) utk pemilih grup pengguna
+  /// (aksi server: hak_akses_list).
+  Future<void> _muatHakAkses() async {
+    if (_memuatHakAkses) return;
+    setStateIfMounted(() => _memuatHakAkses = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('hak_akses_list', {});
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _daftarHakAkses =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memuat daftar hak akses: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _memuatHakAkses = false);
+    }
+  }
+
   /// Daftar akun pengguna toko utk pemilih "boleh mengubah harga"
   /// (aksi server: pengguna_toko_list).
   Future<void> _muatPenggunaToko() async {
@@ -774,6 +804,11 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         ..addAll(((d['userBolehUbahHarga'] as List?) ?? const [])
             .map((e) => '$e'.trim().toLowerCase())
             .where((e) => e.isNotEmpty));
+      _roleBolehUbahHarga
+        ..clear()
+        ..addAll(((d['roleBolehUbahHarga'] as List?) ?? const [])
+            .map((e) => '$e'.trim().toLowerCase())
+            .where((e) => e.isNotEmpty));
       _tokoDemo = d['tokoDemo'] == true;
       Sesi.instance
         ..tokoNama = _nama.text.trim().isEmpty
@@ -796,6 +831,12 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         _lebarKertasStrukMm = PengaturanStruk.instance.lebarKertasMm;
         _marginKotakPriceTagMm = PengaturanStruk.instance.priceTagMarginKotakMm;
       });
+      // Kebijakan sudah nonaktif dari server -> daftar pilihannya ikut dimuat
+      // supaya centang yang tersimpan langsung terlihat.
+      if (!_semuaBolehUbahHarga) {
+        _muatPenggunaToko();
+        _muatHakAkses();
+      }
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -913,6 +954,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
         'semua_boleh_ubah_harga': _semuaBolehUbahHarga,
         'user_boleh_ubah_harga': _userBolehUbahHarga.toList(),
+        'role_boleh_ubah_harga': _roleBolehUbahHarga.toList(),
         if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
         'alasan_tahan': _alasanTahan.text
             .split(RegExp(r'[\r\n]+'))
@@ -1307,7 +1349,10 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
               onChanged: _bolehUbah
                   ? (nilai) {
                       setStateIfMounted(() => _semuaBolehUbahHarga = nilai);
-                      if (!nilai) _muatPenggunaToko();
+                      if (!nilai) {
+                        _muatPenggunaToko();
+                        _muatHakAkses();
+                      }
                     }
                   : null,
             ),
@@ -1361,11 +1406,88 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
                     );
                   }).toList(),
                 ),
-              if (!_semuaBolehUbahHarga && _userBolehUbahHarga.isEmpty)
+              const Divider(height: 24),
+              Row(children: [
+                const Expanded(
+                  child: Text('Grup pengguna (Hak Akses) yang boleh mengubah harga',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                TextButton.icon(
+                    onPressed: _memuatHakAkses ? null : _muatHakAkses,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Muat ulang')),
+              ]),
+              const Text(
+                  'Pengguna lolos bila grup hak aksesnya dipilih di sini ATAU akunnya dipilih di daftar atas.',
+                  style: TextStyle(fontSize: 12)),
+              if (_memuatHakAkses)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(minHeight: 2),
+                )
+              else if (_daftarHakAkses.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                      'Belum ada data hak akses. Buat grup lewat menu Hak Akses, lalu muat ulang.',
+                      style: TextStyle(fontSize: 12)),
+                )
+              else ...[
+                if (_daftarHakAkses.length > 8)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 4),
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        hintText: 'Cari hak akses...',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) => setStateIfMounted(
+                          () => _cariHakAkses = v.trim().toLowerCase()),
+                    ),
+                  ),
+                Column(
+                  children: _daftarHakAkses.where((r) {
+                    if (_cariHakAkses.isEmpty) return true;
+                    final id = '${r['roleId'] ?? ''}'.toLowerCase();
+                    // Yang sudah dicentang tetap terlihat agar tidak "hilang"
+                    // saat menyaring dan tanpa sadar dilepas.
+                    if (_roleBolehUbahHarga.contains(id)) return true;
+                    return id.contains(_cariHakAkses) ||
+                        '${r['nama'] ?? ''}'
+                            .toLowerCase()
+                            .contains(_cariHakAkses);
+                  }).map((r) {
+                    final id = '${r['roleId'] ?? ''}'.trim().toLowerCase();
+                    return CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _roleBolehUbahHarga.contains(id),
+                      title: Text('${r['nama'] ?? id}'),
+                      subtitle:
+                          Text(id, style: const TextStyle(fontSize: 11)),
+                      onChanged: _bolehUbah
+                          ? (v) => setStateIfMounted(() {
+                                if (v == true) {
+                                  _roleBolehUbahHarga.add(id);
+                                } else {
+                                  _roleBolehUbahHarga.remove(id);
+                                }
+                              })
+                          : null,
+                    );
+                  }).toList(),
+                ),
+              ],
+              if (!_semuaBolehUbahHarga &&
+                  _userBolehUbahHarga.isEmpty &&
+                  _roleBolehUbahHarga.isEmpty)
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text(
-                      'Belum ada pengguna dipilih — untuk sementara tidak ada yang dapat mengubah harga selain admin.',
+                      'Belum ada pengguna maupun grup dipilih — untuk sementara tidak ada yang dapat mengubah harga selain admin.',
                       style: TextStyle(fontSize: 12, color: Colors.orange)),
                 ),
             ],
