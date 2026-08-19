@@ -13,10 +13,12 @@ import '../widgets/safe_state.dart';
 
 /// Layar "Permintaan Pembelian (PR)" -- tahap 1 modul Pengadaan POS.
 ///
-/// Padanan layar ZKoss `PermintaanPengadaanMasterAssetAction`, disederhanakan ke lingkup
-/// TOKO + PRODUK sesuai keputusan produk 2026-08-19. Seluruh aturan bisnis (penomoran,
-/// hitung nilai, pagar ubah/hapus, keputusan setujui/tolak) berada di server
-/// `PengadaanPosApiHelper` sehingga Desktop, Android, dan JSP berperilaku identik.
+/// Memakai TABEL PENGADAAN BERSAMA dengan JSP dan ZKoss (keputusan produk 2026-08-20),
+/// dibedakan lewat kolom toko -- sehingga PR yang dibuat kasir terlihat juga pada alur
+/// pengadaan yang sudah ada. Barang menunjuk MasterAsset, bukan produk POS.
+/// Seluruh aturan bisnis (penomoran, hitung nilai, pagar ubah/hapus, keputusan
+/// setujui/tolak) berada di server `PengadaanPosApiHelper` sehingga Desktop, Android,
+/// dan JSP berperilaku identik.
 class PengadaanPrScreen extends StatefulWidget {
   const PengadaanPrScreen({super.key});
 
@@ -731,7 +733,7 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                 'detail': _baris
                     .where((b) => b.barangId != null)
                     .map((b) => {
-                          'produk_id': b.barangId,
+                          'master_asset_id': b.barangId,
                           'jumlah': _angka(b.jumlah.text),
                           'hargaBeli': _angka(b.harga.text),
                           'keterangan': b.keterangan.text.trim(),
