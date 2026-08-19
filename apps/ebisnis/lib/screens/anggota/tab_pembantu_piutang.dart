@@ -8,9 +8,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../services/simple_xlsx.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
 
@@ -43,6 +46,10 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
   List<Map<String, dynamic>> _data = [];
   Map<String, dynamic> _total = {};
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (termasuk
+  /// perubahan piutang yang dicatat kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -74,17 +81,42 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
       _error = null;
     });
     try {
-      final hasil =
-          await ApiClient.instance.aksi('pembantu_piutang_list', _parameter());
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _total = Map<String, dynamic>.from((hasil['total'] as Map?) ?? {});
-        _totalData = (hasil['totalData'] as num?)?.toInt() ?? 0;
-        _totalHalaman =
-            ((hasil['totalPages'] as num?)?.toInt() ?? 1).clamp(1, 999999);
-      });
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
+      // per rentang tanggal DAN filter anggota, sebab saldo awal/akhir tiap
+      // baris hanya sahih untuk kombinasi filter itu.
+      await MasterOffline.daftarCacheDulu(
+        'pembantu_piutang_list',
+        _parameter(),
+        'master:pembantu_piutang:${DateFormat('yyyyMMdd').format(_dari)}-${DateFormat('yyyyMMdd').format(_sampai)}:${_idAnggota ?? 'semua'}',
+        // Server tidak mengirim kolom 'id'; identitas baris = ID pelanggan.
+        kolomKunci: 'kodeAnggota',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            // Catatan: aksi ini memakai 'total' sbg OBJEK agregat (bukan
+            // cacah baris); DiffDaftarLokal sudah toleran terhadap itu dan
+            // paginasi layar ini memang memakai totalData/totalPages.
+            _data = _diff.terapkan(hasil);
+            if (_diff.dariServer) {
+              _total =
+                  Map<String, dynamic>.from((hasil['total'] as Map?) ?? {});
+              _totalData = (hasil['totalData'] as num?)?.toInt() ?? 0;
+              _totalHalaman =
+                  ((hasil['totalPages'] as num?)?.toInt() ?? 1)
+                      .clamp(1, 999999);
+            } else {
+              // Emisi lokal: cache memuat gabungan halaman yang pernah
+              // terunduh dan tanpa agregat server -- tampilkan apa adanya
+              // dalam satu halaman, totalnya dihitung dari baris yang ada.
+              _total = Map<String, dynamic>.from(_hitungTotal(_data));
+              _totalData = _data.length;
+              _totalHalaman = 1;
+            }
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -410,7 +442,17 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
               ],
               rows: [
                 ..._data.map((r) => AppTableRowData(cells: [
-                      AppTableCell.text('${r['kodeAnggota'] ?? '-'}'),
+                      AppTableCell(
+                        child: KilauBaris(
+                          kunci: MasterOffline.kunciBaris(r, 'kodeAnggota'),
+                          idBaru: _diff.idBaru,
+                          idBerubah: _diff.idBerubah,
+                          child: Text('${r['kodeAnggota'] ?? '-'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12.5)),
+                        ),
+                      ),
                       AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
                       _uang(r, 'saldoAwal'),
                       _uang(r, 'faktur', warna: AppColors.danger),

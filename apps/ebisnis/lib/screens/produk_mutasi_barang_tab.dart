@@ -8,9 +8,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 
 final _mutasiRp =
@@ -38,6 +41,10 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
   List<Map<String, dynamic>> _data = [];
   Map<String, dynamic> _summary = {};
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris yang
+  /// baru/berubah di server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -61,14 +68,35 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
       _error = null;
     });
     try {
-      final hasil =
-          await ApiClient.instance.aksi('produk_mutasi_ringkasan', _payload());
-      setStateIfMounted(() {
-        _data =
-            ((hasil['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _summary = (hasil['summary'] as Map?)?.cast<String, dynamic>() ?? {};
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-      });
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): tabel tampil seketika
+      // dari cache, hasil server menyusul + diff utk kilau baris. Cache
+      // dipisah per rentang tanggal karena seluruh kolom saldo/nilai baris
+      // hanya sahih untuk periode itu.
+      await MasterOffline.daftarCacheDulu(
+        'produk_mutasi_ringkasan',
+        _payload(),
+        'master:mutasi_barang:${_mutasiTanggal.format(_dari)}_${_mutasiTanggal.format(_sampai)}',
+        // Baris ringkasan mutasi tidak ber-'id'; satu-satunya kolom identitas
+        // yang dikirim server adalah kode barang (unik per produk). Baris yang
+        // kebetulan tanpa kode tetap aman: MasterOffline memperlakukannya
+        // sebagai "baris tanpa kunci" (tidak digandakan di cache), hanya saja
+        // tidak ikut berkilau.
+        kolomKunci: 'kode',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data = _diff.terapkan(hasil);
+            _total = _diff.total ?? _data.length;
+            // Baris TOTAL memakai summary server -- hanya ada pada emisi
+            // server, jadi nilai terakhir dipertahankan saat emisi lokal.
+            if (_diff.dariServer) {
+              _summary =
+                  (hasil['summary'] as Map?)?.cast<String, dynamic>() ?? {};
+            }
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -258,7 +286,18 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 999999);
     final rows = _data.map((r) => AppTableRowData(cells: [
-          AppTableCell.text('${r['kategori'] ?? '-'}', width: 130),
+          AppTableCell(
+            width: 130,
+            child: KilauBaris(
+              kunci: MasterOffline.kunciBaris(r, 'kode'),
+              idBaru: _diff.idBaru,
+              idBerubah: _diff.idBerubah,
+              child: Text('${r['kategori'] ?? '-'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5)),
+            ),
+          ),
           AppTableCell.text('${r['kode'] ?? '-'}', width: 95),
           AppTableCell.text('${r['barcode'] ?? '-'}', width: 110),
           AppTableCell.text('${r['nama'] ?? '-'}', width: 220),

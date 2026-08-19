@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/indikator_sinkron_master.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
@@ -51,6 +54,8 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
     }
   }
 
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muatKontrak() async {
     final pid = _propertiId;
     if (pid == null) {
@@ -65,11 +70,17 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
       _galat = null;
     });
     try {
-      final data =
-          await muatDaftarHotel('hotel_kontrak_pemilik_list', {'properti_id': pid});
-      setStateIfMounted(() {
-        _kontrak = data;
-        _memuat = false;
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): daftar kontrak
+      // properti ini tampil seketika dari cache, hasil server menyusul
+      // beserta diff utk animasi kilau baris.
+      await MasterOffline.daftarCacheDulu(
+          'hotel_kontrak_pemilik_list', {'properti_id': pid},
+          'master:hotel_kontrak:$pid', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _kontrak = _diff.terapkan(hasil);
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -289,8 +300,13 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
                                     color: aktif ? Colors.teal : Colors.grey),
                                 title: Row(children: [
                                   Expanded(
-                                      child: Text(
-                                          'Kamar ${k['kamar_nomor'] ?? '-'} — ${k['nama_pemilik'] ?? '-'}')),
+                                      child: KilauBaris(
+                                    kunci: MasterOffline.kunciBaris(k),
+                                    idBaru: _diff.idBaru,
+                                    idBerubah: _diff.idBerubah,
+                                    child: Text(
+                                        'Kamar ${k['kamar_nomor'] ?? '-'} — ${k['nama_pemilik'] ?? '-'}'),
+                                  )),
                                   IconButton(
                                       visualDensity: VisualDensity.compact,
                                       tooltip:

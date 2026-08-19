@@ -52,7 +52,11 @@ class DiffDaftarLokal {
       idBerubah =
           Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{});
       jumlahHapus = (hasil['jumlahHapus'] as int?) ?? 0;
-      total = (hasil['total'] as num?)?.toInt();
+      // 'total' bisa berupa OBJEK agregat pd sebagian aksi (mis.
+      // pembantu_piutang_list) -- jangan di-cast paksa, layar yang
+      // begitu memakai 'totalData'/'totalPages' utk paginasinya.
+      final totalMentah = hasil['total'];
+      total = totalMentah is num ? totalMentah.toInt() : null;
       if (adaPerubahan) versi++;
     } else {
       // Emisi lokal: tanpa kilau (belum ada pembanding server) dan tanpa

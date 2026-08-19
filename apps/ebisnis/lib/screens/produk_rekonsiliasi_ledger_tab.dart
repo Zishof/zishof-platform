@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 
 class ProdukRekonsiliasiLedgerTab extends StatefulWidget {
@@ -28,6 +30,10 @@ class _ProdukRekonsiliasiLedgerTabState
   double _totalSelisih = 0;
   List<Map<String, dynamic>> _data = [];
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris audit yang
+  /// baru/berubah di server.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -46,22 +52,39 @@ class _ProdukRekonsiliasiLedgerTabState
       _error = null;
     });
     try {
-      final hasil =
-          await ApiClient.instance.aksi('produk_rekonsiliasi_ledger', {
-        'page': _page,
-        'page_size': _pageSize,
-        'keyword': _cari.text.trim(),
-        'hanya_selisih': _hanyaSelisih,
-      });
-      setStateIfMounted(() {
-        _data =
-            ((hasil['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-        _jumlahProduk = (hasil['jumlahProduk'] as num?)?.toInt() ?? 0;
-        _tercakup = (hasil['produkTercakupLedger'] as num?)?.toInt() ?? 0;
-        _belumTercakup = (hasil['produkBelumTercakup'] as num?)?.toInt() ?? 0;
-        _totalSelisih = (hasil['totalSelisihAbsolut'] as num?)?.toDouble() ?? 0;
-      });
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): tabel audit tampil
+      // seketika dari cache, hasil server menyusul + diff utk kilau baris.
+      // Cache dipisah per mode saringan karena isi daftarnya memang berbeda.
+      await MasterOffline.daftarCacheDulu(
+        'produk_rekonsiliasi_ledger',
+        {
+          'page': _page,
+          'page_size': _pageSize,
+          'keyword': _cari.text.trim(),
+          'hanya_selisih': _hanyaSelisih,
+        },
+        'master:rekonsiliasi_ledger:${_hanyaSelisih ? 'selisih' : 'semua'}',
+        // Server tidak mengirim kolom 'id'; identitas baris = kode produk.
+        kolomKunci: 'kode',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data = _diff.terapkan(hasil);
+            _total = _diff.total ?? _data.length;
+            // 4 metrik global (dan paginasinya) hanya dikirim server --
+            // pertahankan nilai terakhir saat emisi berasal dari cache lokal.
+            if (_diff.dariServer) {
+              _jumlahProduk = (hasil['jumlahProduk'] as num?)?.toInt() ?? 0;
+              _tercakup = (hasil['produkTercakupLedger'] as num?)?.toInt() ?? 0;
+              _belumTercakup =
+                  (hasil['produkBelumTercakup'] as num?)?.toInt() ?? 0;
+              _totalSelisih =
+                  (hasil['totalSelisihAbsolut'] as num?)?.toDouble() ?? 0;
+            }
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -161,7 +184,12 @@ class _ProdukRekonsiliasiLedgerTabState
                 rows: _data.map((row) {
                   final selisih = (row['selisih'] as num?)?.toDouble() ?? 0;
                   return DataRow(cells: [
-                    DataCell(Text('${row['nama']}')),
+                    DataCell(KilauBaris(
+                      kunci: MasterOffline.kunciBaris(row, 'kode'),
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${row['nama']}'),
+                    )),
                     DataCell(Text('${row['kode']} / ${row['barcode']}')),
                     DataCell(Text(_angka(row['stokTersimpan']))),
                     DataCell(Text(_angka(row['stokLedger']))),

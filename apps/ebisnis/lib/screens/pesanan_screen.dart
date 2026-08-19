@@ -7,12 +7,15 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../services/pesanan_poller.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/panduan_stok_kosong.dart';
 import 'kasir_screen.dart';
 import 'struk_screen.dart';
@@ -69,6 +72,10 @@ class _PesananScreenState extends State<PesananScreen> {
   String? _statusPending;
   int _intervalRetryMenit = TransaksiOutboxService.intervalRetryMenitDefault;
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (pesanan
+  /// online baru / keranjang tertahan yang berubah di kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -99,22 +106,42 @@ class _PesananScreenState extends State<PesananScreen> {
         page: _halamanPesanan,
         pageSize: _pageSizePesanan,
       );
-      final hasil = await ApiClient.instance.aksi('pesanan_list', payload);
-      final data = ((hasil['pesanan'] as List?) ?? [])
-          .map((e) => Pesanan.fromJson(e as Map<String, dynamic>))
-          .toList();
-      setStateIfMounted(() {
-        _semua = data;
-        _totalPesanan = (hasil['total'] as num?)?.toInt() ?? data.length;
-        _daftarKasir = ((hasil['daftarKasir'] as List?) ?? const [])
-            .map((e) => '$e'.trim())
-            .where((e) => e.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        _ringkasan =
-            (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ?? const {};
-      });
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): daftar pesanan tampil
+      // seketika dari cache, hasil server menyusul + diff utk kilau baris.
+      // Respons aksi ini memakai field 'pesanan' (bukan 'data'). Cache dipisah
+      // per tab filter + saringan "hanya belum lunas" karena isi daftarnya
+      // memang berbeda; filter teks/tanggal cukup menumpang cache yang sama
+      // (merge per id, tidak pernah menghapus baris lokal).
+      await MasterOffline.daftarCacheDulu(
+        'pesanan_list',
+        payload,
+        'master:pesanan:${_filter.name}:${_hanyaBelumLunas ? 'belum_lunas' : 'semua'}',
+        fieldData: 'pesanan',
+        onData: (hasil) {
+          if (!mounted) return;
+          final data = _diff
+              .terapkan(hasil, fieldData: 'pesanan')
+              .map(Pesanan.fromJson)
+              .toList();
+          setStateIfMounted(() {
+            _semua = data;
+            _totalPesanan = _diff.total ?? data.length;
+            // Ringkasan KPI & daftar kasir hanya dikirim server -- pertahankan
+            // nilai terakhir saat emisi berasal dari cache lokal.
+            if (_diff.dariServer) {
+              _daftarKasir = ((hasil['daftarKasir'] as List?) ?? const [])
+                  .map((e) => '$e'.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toSet()
+                  .toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+              _ringkasan = (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ??
+                  const {};
+            }
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -1729,13 +1756,24 @@ class _PesananScreenState extends State<PesananScreen> {
                             return AppTableRowData(
                               onTap: () => _lihatDetail(p),
                               cells: [
-                                AppTableCell.text(
-                                  p.kode,
+                                AppTableCell(
                                   flex: 2,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimaryOf(context),
+                                  child: KilauBaris(
+                                    kunci:
+                                        MasterOffline.kunciBaris({'id': p.id}),
+                                    idBaru: _diff.idBaru,
+                                    idBerubah: _diff.idBerubah,
+                                    child: Text(
+                                      p.kode,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color:
+                                            AppColors.textPrimaryOf(context),
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 AppTableCell.text(
