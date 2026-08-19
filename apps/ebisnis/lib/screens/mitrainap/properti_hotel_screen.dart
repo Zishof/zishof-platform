@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../api_client.dart';
 import '../../services/master_offline.dart';
+import '../../sesi.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/kilau_perubahan.dart';
@@ -119,23 +121,95 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
     }
   }
 
+  /// Generator data contoh (ADMIN saja, aksi hotel_data_contoh -- dijaga ulang
+  /// server dgn Common.getApakahAdminLain). Membuat SATU properti contoh baru
+  /// lengkap: 3 tipe kamar, 9 kamar, 3 tamu, 2 reservasi, 2 kontrak pemilik.
+  /// Butuh koneksi (bukan mutasi master biasa -- tidak diantre offline).
+  Future<void> _buatDataContoh() async {
+    final lanjut = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Buat data contoh?'),
+        content: const Text(
+            'Akan dibuat SATU properti contoh baru berisi 3 tipe kamar, '
+            '9 kamar, 3 tamu, 2 reservasi, dan 2 kontrak pemilik.\n\n'
+            'Data properti yang sudah ada tidak diubah. Hapus atau nonaktifkan '
+            'properti contoh bila tidak diperlukan lagi.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Buat')),
+        ],
+      ),
+    );
+    if (lanjut != true || !mounted) return;
+    setStateIfMounted(() => _memuat = true);
+    try {
+      final res = await ApiClient.instance.aksi('hotel_data_contoh', {});
+      final sukses = res['status'] == '00' || res['status'] == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${res['description'] ?? (sukses ? 'Data contoh dibuat.' : res['status'])}'),
+        backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
+      ));
+      if (sukses) {
+        await _muat();
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal membuat data contoh: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error));
+    }
+    if (mounted) setStateIfMounted(() => _memuat = false);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final admin = Sesi.instance.isAdmin;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Properti Hotel'),
         actions: [
           const IndikatorSinkronMaster(),
+          if (admin)
+            IconButton(
+                onPressed: _memuat ? null : _buatDataContoh,
+                tooltip: 'Buat data contoh (admin)',
+                icon: const Icon(Icons.auto_awesome_outlined)),
           IconButton(
               onPressed: _muat,
               tooltip: 'Muat ulang',
               icon: const Icon(Icons.refresh)),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _simpan(null),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Properti'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Tombol data contoh menonjol saat daftar masih kosong -- admin baru
+          // biasanya ingin melihat bentuk datanya dulu sebelum entri manual.
+          if (admin && _daftar.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: FloatingActionButton.extended(
+                heroTag: 'fab-contoh-hotel',
+                onPressed: _memuat ? null : _buatDataContoh,
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Isi Data Contoh'),
+              ),
+            ),
+          FloatingActionButton.extended(
+            heroTag: 'fab-tambah-properti',
+            onPressed: () => _simpan(null),
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah Properti'),
+          ),
+        ],
       ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
