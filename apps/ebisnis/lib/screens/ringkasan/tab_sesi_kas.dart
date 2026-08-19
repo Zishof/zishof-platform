@@ -3,11 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
+/// Riwayat buka/tutup kas (`laporan_sesi_list`) -- sesi yang SUDAH tercatat,
+/// bukan angka kas berjalan. Memakai pola "baca lokal dulu"
+/// ([MasterOffline.daftarCacheDulu]) sehingga riwayat yang pernah dibuka tetap
+/// bisa dilihat saat OFFLINE, lengkap dgn kilau baris utk sesi baru/berubah.
 class RingkasanTabSesiKas extends StatefulWidget {
   const RingkasanTabSesiKas({super.key});
 
@@ -31,6 +37,10 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> {
   int _total = 0;
   List<Map<String, dynamic>> _data = [];
 
+  /// Diff emisi "baca lokal dulu" -- menggerakkan kilau baris (sesi yang baru
+  /// ditutup / dikoreksi oleh kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -50,18 +60,42 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> {
       _error = null;
     });
     try {
-      final h = await ApiClient.instance.aksi('laporan_sesi_list', {
-        'page': _halaman,
-        'pageSize': _ukuran,
-        'hanyaKasirSaya': _hanyaSaya,
-        'cariKasir': _cari.text.trim(),
-        if (_mulai != null) 'tglMulai': _tanggal.format(_mulai!),
-        if (_sampai != null) 'tglSampai': _tanggal.format(_sampai!),
-      });
-      setStateIfMounted(() {
-        _data = ((h['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (h['total'] as num?)?.toInt() ?? 0;
-      });
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot terakhir
+      // tampil seketika sehingga riwayat sesi kas yang pernah dibuka tetap bisa
+      // dilihat saat OFFLINE; hasil server menyusul + diff utk kilau baris.
+      //
+      // Kunci cache memuat SELURUH parameter yang mengubah isi laporan
+      // (periode, lingkup kasir, kata kunci) -- salah kunci berarti hasil
+      // filter A menimpa filter B. Nomor halaman TIDAK ikut: daftarCacheDulu
+      // me-MERGE per baris sehingga halaman lain yang pernah diunduh tetap
+      // tersimpan pada kunci yang sama.
+      await MasterOffline.daftarCacheDulu(
+        'laporan_sesi_list',
+        {
+          'page': _halaman,
+          'pageSize': _ukuran,
+          'hanyaKasirSaya': _hanyaSaya,
+          'cariKasir': _cari.text.trim(),
+          if (_mulai != null) 'tglMulai': _tanggal.format(_mulai!),
+          if (_sampai != null) 'tglSampai': _tanggal.format(_sampai!),
+        },
+        'master:ringkasan_sesi_kas:'
+        '${_mulai == null ? 'awal' : _tanggal.format(_mulai!)}_'
+        '${_sampai == null ? 'kini' : _tanggal.format(_sampai!)}:'
+        '${_hanyaSaya ? 'saya' : 'semua'}:'
+        '${_cari.text.trim().isEmpty ? 'semua' : _cari.text.trim()}',
+        // Server tidak mengirim kolom 'id' -- identitas baris = kode sesi.
+        kolomKunci: 'sesiKode',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data = _diff.terapkan(hasil);
+            // Total server hanya sahih pada emisi SERVER; emisi lokal jatuh ke
+            // jumlah baris yang ada supaya paginasi tidak menampilkan nol.
+            _total = _diff.total ?? _data.length;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -181,7 +215,18 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> {
             ],
             rows: _data
                 .map((r) => AppTableRowData(cells: [
-                      AppTableCell.text('${r['sesiKode'] ?? '-'}', flex: 2),
+                      AppTableCell(
+                        flex: 2,
+                        child: KilauBaris(
+                          kunci: MasterOffline.kunciBaris(r, 'sesiKode'),
+                          idBaru: _diff.idBaru,
+                          idBerubah: _diff.idBerubah,
+                          child: Text('${r['sesiKode'] ?? '-'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12.5)),
+                        ),
+                      ),
                       AppTableCell.text('${r['kasir'] ?? '-'}', flex: 2),
                       AppTableCell.text(
                           '${r['namaPerangkat']}'.trim().isEmpty

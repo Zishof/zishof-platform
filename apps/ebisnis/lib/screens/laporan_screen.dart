@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import 'laporan_detail_screen.dart';
 import '../widgets/safe_state.dart';
 
@@ -45,6 +48,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
   int _halaman = 1;
   static const int _pageSize = 15;
 
+  /// Diff emisi "baca lokal dulu" -- menggerakkan kilau baris katalog.
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -63,21 +69,38 @@ class _LaporanScreenState extends State<LaporanScreen> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(widget.aksiKatalog);
-      final arr = (hasil['kategori'] as List?) ?? [];
-      final pendukung = (hasil['pendukung'] as List?) ?? [];
-      setStateIfMounted(() {
-        _kategori =
-            arr.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        _pendukung =
-            pendukung.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        if (_kategoriDipilih.isNotEmpty &&
-            !_kategori
-                .any((e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
-          _kategoriDipilih = '';
-        }
-        _halaman = 1;
-      });
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): katalog yang pernah
+      // dibuka tetap bisa dilihat saat OFFLINE -- isinya metadata laporan
+      // (judul/keterangan/flag filter), bukan angka yang bisa basi. Kunci cache
+      // dipisah per aksi katalog karena `laporan_keuangan_katalog` hanya subset
+      // keuangan; identitas baris = nama kategori ('kat'), server tidak
+      // mengirim kolom 'id'.
+      await MasterOffline.daftarCacheDulu(
+        widget.aksiKatalog,
+        const {},
+        'master:laporan_katalog:${widget.aksiKatalog}',
+        fieldData: 'kategori',
+        kolomKunci: 'kat',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _kategori = _diff.terapkan(hasil, fieldData: 'kategori');
+            // 'pendukung' hanya ikut pada respons SERVER (emisi lokal cuma
+            // memuat daftar kategori) -- jangan dikosongkan oleh emisi lokal.
+            if (_diff.dariServer) {
+              _pendukung = ((hasil['pendukung'] as List?) ?? [])
+                  .map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList();
+            }
+            if (_kategoriDipilih.isNotEmpty &&
+                !_kategori.any(
+                    (e) => (e['kat'] as String? ?? '') == _kategoriDipilih)) {
+              _kategoriDipilih = '';
+            }
+            _halaman = 1;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -317,14 +340,27 @@ class _LaporanScreenState extends State<LaporanScreen> {
                             return AppTableRowData(
                               onTap: () => _bukaItem(item),
                               cells: [
-                                AppTableCell.text(
-                                  baris.kategori,
+                                // Kilau ditempel pada KATEGORI: itulah satuan
+                                // ber-identitas stabil pada respons katalog
+                                // ('kat'), sedangkan baris tabel di sini hasil
+                                // perataan item per kategori.
+                                AppTableCell(
                                   flex: 2,
-                                  maxLines: 2,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimaryOf(context),
+                                  child: KilauBaris(
+                                    kunci: MasterOffline.kunciBaris(
+                                        {'kat': baris.kategori}, 'kat'),
+                                    idBaru: _diff.idBaru,
+                                    idBerubah: _diff.idBerubah,
+                                    child: Text(
+                                      baris.kategori,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimaryOf(context),
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 AppTableCell.text(

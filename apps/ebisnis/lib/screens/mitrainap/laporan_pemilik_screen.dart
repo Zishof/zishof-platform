@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -28,6 +31,16 @@ class _LaporanPemilikScreenState extends State<LaporanPemilikScreen> {
   int? _kontrakId; // null = semua kontrak properti ini
   List<Map<String, dynamic>> _laporan = [];
 
+  /// Diff emisi "baca lokal dulu" utk daftar statement -- menggerakkan kilau
+  /// baris (statement yang baru terbit / berubah di server).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
+  static List<Map<String, dynamic>> _barisHotel(Map<String, dynamic> hasil) =>
+      ((hasil['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
   @override
   void initState() {
     super.initState();
@@ -40,12 +53,26 @@ class _LaporanPemilikScreenState extends State<LaporanPemilikScreen> {
       _galat = null;
     });
     try {
-      final data = await muatDaftarHotel('hotel_properti_list', {});
-      final id = _propertiId ?? (data.isNotEmpty ? idInt(data.first['id']) : null);
-      setStateIfMounted(() {
-        _properti = data;
-        _propertiId = id;
-      });
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu). Dropdown properti ikut
+      // dicache: tanpa properti, rantai kontrak+laporan di bawahnya tidak
+      // pernah jalan sehingga layar laporan tetap kosong saat OFFLINE.
+      // Kunci SENGAJA dibedakan dari 'master:hotel_properti' milik layar master
+      // Properti: layar itu meminta `termasuk_nonaktif: true`, dan karena
+      // daftarCacheDulu me-MERGE (tak pernah menghapus), berbagi kunci akan
+      // membocorkan properti NONAKTIF ke dropdown laporan ini.
+      await MasterOffline.daftarCacheDulu(
+        'hotel_properti_list',
+        const {},
+        'master:hotel_properti:aktif',
+        onData: (hasil) {
+          if (!mounted) return;
+          final data = _barisHotel(hasil);
+          setStateIfMounted(() {
+            _properti = data;
+            _propertiId ??= data.isNotEmpty ? idInt(data.first['id']) : null;
+          });
+        },
+      );
       await _muatKontrakDanLaporan();
     } catch (e) {
       setStateIfMounted(() {
@@ -70,22 +97,42 @@ class _LaporanPemilikScreenState extends State<LaporanPemilikScreen> {
       _galat = null;
     });
     try {
-      final kontrak =
-          await muatDaftarHotel('hotel_kontrak_pemilik_list', {'properti_id': pid});
-      final adaKontrakTerpilih =
-          kontrak.any((k) => idInt(k['id']) == _kontrakId);
-      final laporan = await muatDaftarHotel('hotel_laporan_pemilik_list', {
-        if (adaKontrakTerpilih && _kontrakId != null)
-          'kontrak_id': _kontrakId
-        else
-          'properti_id': pid,
-      });
-      setStateIfMounted(() {
-        _kontrak = kontrak;
-        if (!adaKontrakTerpilih) _kontrakId = null;
-        _laporan = laporan;
-        _memuat = false;
-      });
+      // Kontrak (isi dropdown) -- ikut baca lokal-dulu supaya pilihannya tetap
+      // ada saat offline. Kunci cache per PROPERTI, SAMA dengan layar Kontrak
+      // Pemilik (permintaan identik) supaya keduanya berbagi satu cache hangat.
+      await MasterOffline.daftarCacheDulu(
+        'hotel_kontrak_pemilik_list',
+        {'properti_id': pid},
+        'master:hotel_kontrak:$pid',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() => _kontrak = _barisHotel(hasil));
+        },
+      );
+      if (!_kontrak.any((k) => idInt(k['id']) == _kontrakId)) {
+        setStateIfMounted(() => _kontrakId = null);
+      }
+      final kontrakId = _kontrakId;
+      // Statement pemilik: laporan yang PERNAH dibuka tetap bisa dilihat saat
+      // OFFLINE. Kunci cache memuat SELURUH cakupan permintaannya (satu kontrak
+      // vs seluruh kontrak properti) -- salah kunci berarti daftar kontrak A
+      // menimpa kontrak B. Baris statement ber-kolom 'id' (identitas stabil),
+      // jadi kilau baris dipasang.
+      await MasterOffline.daftarCacheDulu(
+        'hotel_laporan_pemilik_list',
+        kontrakId != null ? {'kontrak_id': kontrakId} : {'properti_id': pid},
+        kontrakId != null
+            ? 'master:hotel_laporan_pemilik:kontrak:$kontrakId'
+            : 'master:hotel_laporan_pemilik:properti:$pid',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _laporan = _diff.terapkan(hasil);
+            _memuat = false;
+          });
+        },
+      );
+      setStateIfMounted(() => _memuat = false);
     } catch (e) {
       setStateIfMounted(() {
         _galat = '$e';
@@ -342,8 +389,13 @@ class _LaporanPemilikScreenState extends State<LaporanPemilikScreen> {
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
                                 leading: const Icon(Icons.receipt_long),
-                                title: Text(
-                                    'Kamar ${lp['kamar_nomor'] ?? '-'} — ${lp['nama_pemilik'] ?? '-'}'),
+                                title: KilauBaris(
+                                  kunci: MasterOffline.kunciBaris(lp),
+                                  idBaru: _diff.idBaru,
+                                  idBerubah: _diff.idBerubah,
+                                  child: Text(
+                                      'Kamar ${lp['kamar_nomor'] ?? '-'} — ${lp['nama_pemilik'] ?? '-'}'),
+                                ),
                                 subtitle: Text(
                                     '${lp['periode_mulai']} s/d ${lp['periode_selesai']} · '
                                     'bersih ${formatRupiahHotel.format(angka(lp['bersih_dibayarkan']))}'),

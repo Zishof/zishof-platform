@@ -3,10 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
 import '../services/dynamic_report.dart';
+import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import 'inventory_sales/cetak_util.dart';
 import 'struk_screen.dart';
@@ -158,9 +161,11 @@ Widget _angkaLaporan(
 /// Layar Laporan Transaksi (padanan laporan-transaksi.html/-renderer.js
 /// Electron) -- dasbor KPI (`transaksi_statistik`) di atas, lalu 6 sub-tab
 /// server-side paginated: Report Order (`laporan_order_list`), Report Sesi
-/// (`laporan_sesi_list`), Report Payment (`laporan_payment_list`). Ketiganya
-/// TIDAK dicache offline (laporan historis, selalu online) -- beda dari
-/// Produk/Anggota/Pesanan yang punya cache lokal.
+/// (`laporan_sesi_list`), Report Payment (`laporan_payment_list`). DAFTAR
+/// UTAMA (Report Order) memakai pola "baca lokal dulu"
+/// ([MasterOffline.daftarCacheDulu]) sehingga laporan yang pernah dibuka tetap
+/// bisa dilihat saat OFFLINE; tab lain tetap online-first (dasbor KPI +
+/// ekspor dinamis memang butuh data lengkap terkini dari server).
 class LaporanTransaksiScreen extends StatefulWidget {
   const LaporanTransaksiScreen({super.key});
 
@@ -1088,6 +1093,10 @@ class _TabOrderState extends State<_TabOrder> {
   DateTime? _sampai;
   String _cariPembeli = '';
 
+  /// Diff emisi "baca lokal dulu" -- menggerakkan kilau baris (termasuk order
+  /// baru/berubah yang dicatat kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   @override
   void initState() {
     super.initState();
@@ -1100,21 +1109,45 @@ class _TabOrderState extends State<_TabOrder> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_order_list', {
-        if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
-        if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
-        if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
-        'includePembayaran': true,
-        'includeSplitPembayaran': true,
-        'sertakanPembayaran': true,
-        'withPayments': true,
-        'page': _halaman,
-        'pageSize': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
-      });
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot terakhir
+      // tampil seketika sehingga laporan yang PERNAH dibuka tetap terlihat saat
+      // OFFLINE; hasil server menyusul + diff utk kilau baris.
+      //
+      // Kunci cache memuat SELURUH parameter yang mengubah isi laporan
+      // (periode + kata kunci pembeli) -- salah kunci berarti hasil periode A
+      // menimpa periode B. Nomor halaman sengaja TIDAK ikut: daftarCacheDulu
+      // me-MERGE per baris, jadi halaman lain yang pernah diunduh tetap
+      // tersimpan di kunci yang sama.
+      await MasterOffline.daftarCacheDulu(
+        'laporan_order_list',
+        {
+          if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
+          if (_sampai != null)
+            'tglSampai': _formatTanggalServer.format(_sampai!),
+          if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+          'includePembayaran': true,
+          'includeSplitPembayaran': true,
+          'sertakanPembayaran': true,
+          'withPayments': true,
+          'page': _halaman,
+          'pageSize': _pageSize,
+        },
+        'master:laporan_order:'
+        '${_mulai == null ? 'awal' : _formatTanggalServer.format(_mulai!)}_'
+        '${_sampai == null ? 'kini' : _formatTanggalServer.format(_sampai!)}:'
+        '${_cariPembeli.isEmpty ? 'semua' : _cariPembeli}',
+        // Baris order tidak selalu ber-kolom 'id' -- identitasnya idTransaksi.
+        kolomKunci: 'idTransaksi',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data = _diff.terapkan(hasil);
+            // Total server hanya sahih pada emisi SERVER; emisi lokal jatuh ke
+            // jumlah baris yang ada supaya paginasi tidak menampilkan nol.
+            _total = _diff.total ?? _data.length;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -1286,11 +1319,20 @@ class _TabOrderState extends State<_TabOrder> {
         return AppTableRowData(
           onTap: () => _lihatDetail(row),
           cells: [
-            AppTableCell.text(
-              '${row['nomorNota'] ?? '-'}',
+            AppTableCell(
               flex: 4,
-              style:
-                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              child: KilauBaris(
+                kunci: MasterOffline.kunciBaris(row, 'idTransaksi'),
+                idBaru: _diff.idBaru,
+                idBerubah: _diff.idBerubah,
+                child: Text(
+                  '${row['nomorNota'] ?? '-'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
             AppTableCell.text(_formatWaktu(row['waktu']), flex: 2),
             AppTableCell.text('${row['pembeli'] ?? 'Umum'}', flex: 2),
