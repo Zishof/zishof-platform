@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -30,6 +31,10 @@ class _BulkRow {
   final nama = TextEditingController();
   final qty = TextEditingController(text: '1');
   final hargaBeli = TextEditingController();
+
+  /// Asal nilai Harga Beli yang terisi otomatis (ditampilkan sbg tooltip/hint
+  /// supaya kasir tahu angkanya datang dari mana). Null = diisi manual.
+  String? sumberHarga;
   final diskon = TextEditingController(text: '0');
   final ppn = TextEditingController(text: '0');
   final batch = TextEditingController();
@@ -119,6 +124,9 @@ class _BulkValidation {
 }
 
 class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
+  /// Controller scroll horizontal tabel input -- dipakai Scrollbar agar
+  /// gagangnya terlihat dan dapat diseret pada layar kecil.
+  final _scrollTabel = ScrollController();
   final _faktur = TextEditingController();
   final _totalManual = TextEditingController();
   final _keterangan = TextEditingController();
@@ -138,6 +146,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
     _totalManual.dispose();
     _keterangan.dispose();
     _paste.dispose();
+    _scrollTabel.dispose();
     for (final row in _rows) {
       row.dispose();
     }
@@ -215,6 +224,14 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
 
   double? get _totalFaktur => parseDesimal(_totalManual.text);
   double get _totalBaris => _rows.fold(0, (sum, row) => sum + row.totalNetto);
+
+  /// Agregat diskon faktur (permintaan 2026-08-19): total potongan yang
+  /// DITERIMA dari supplier pada draft ini, plus subtotal sebelum diskon
+  /// supaya pengguna dapat mencocokkan dgn nota fisik.
+  double get _subtotalKotor => _rows.fold(0, (sum, row) => sum + row.subtotal);
+  double get _totalDiskon => _rows.fold(0, (sum, row) => sum + row.diskonNilai);
+  int get _barisBerdiskon =>
+      _activeRows.where((row) => row.diskonNilai > 0).length;
   int get _produkBaru => _activeRows.where((row) => row.produkBaru).length;
   int get _produkLama => _activeRows.where((row) => !row.produkBaru).length;
   List<_BulkRow> get _activeRows => _rows
@@ -426,9 +443,19 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
         row.namaMaster = '${hasil['nama'] ?? ''}'.trim();
         if (row.nama.text.trim().isEmpty) row.nama.text = row.namaMaster ?? '';
         if (row.hargaBeli.text.trim().isEmpty) {
-          final hargaBeli = (hasil['hargaBeli'] as num?)?.toDouble();
-          if (hargaBeli != null && hargaBeli > 0) {
-            row.hargaBeli.text = hargaBeli.toStringAsFixed(0);
+          // Prioritas: harga dari PENERIMAAN/KULAKAN TERAKHIR (server:
+          // hargaBeliTerakhir), baru jatuh ke harga beli master bila produk
+          // belum pernah diterima. Harga master bisa lama tidak diperbarui,
+          // sedangkan faktur kulakan hampir selalu memakai harga terakhir.
+          final hargaTerakhir =
+              (hasil['hargaBeliTerakhir'] as num?)?.toDouble() ?? 0;
+          final hargaMaster = (hasil['hargaBeli'] as num?)?.toDouble() ?? 0;
+          final dipakai = hargaTerakhir > 0 ? hargaTerakhir : hargaMaster;
+          if (dipakai > 0) {
+            row.hargaBeli.text = dipakai.toStringAsFixed(0);
+            row.sumberHarga = hargaTerakhir > 0
+                ? 'Harga dari penerimaan terakhir'
+                : 'Harga dari master produk';
           }
         }
         if (row.hargaJual.text.trim().isEmpty) {
@@ -1088,12 +1115,33 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
   }
 
   Widget _bulkTable() {
+    // Scroll horizontal SUDAH ada sebelumnya, tetapi tanpa scrollbar terlihat dan
+    // tidak dapat diseret dengan mouse, sehingga pada layar kecil kolom kanan
+    // (Batch, Expired, Harga Jual, Status) tampak "terpotong". Scrollbar kini
+    // selalu tampak + dapat diseret, dan area tabel juga bisa digeser dgn menekan
+    // dan menarik memakai mouse (ScrollConfiguration dragDevices).
     return AppSectionCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: SingleChildScrollView(
+        child: Scrollbar(
+          controller: _scrollTabel,
+          thumbVisibility: true,
+          trackVisibility: true,
+          scrollbarOrientation: ScrollbarOrientation.bottom,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: const {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
+              },
+            ),
+            child: SingleChildScrollView(
+          controller: _scrollTabel,
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 12),
           child: SizedBox(
             width: 1710,
             child: Column(
@@ -1308,6 +1356,8 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
               ],
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
@@ -1538,9 +1588,19 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
                 _chipRingkas('Baris', '${_activeRows.length}'),
                 _chipRingkas('Produk existing', '$_produkLama'),
                 _chipRingkas('Produk baru', '$_produkBaru'),
+                _chipRingkas('Subtotal', _bulkRp.format(_subtotalKotor)),
+                _chipRingkas(
+                    'Diskon diterima',
+                    _totalDiskon > 0
+                        ? '- ${_bulkRp.format(_totalDiskon)}  ($_barisBerdiskon baris)'
+                        : 'Tidak ada'),
                 _chipRingkas('Total baris', _bulkRp.format(_totalBaris)),
                 if (totalFaktur != null)
                   _chipRingkas('Total faktur', _bulkRp.format(totalFaktur)),
+                if (totalFaktur != null &&
+                    (totalFaktur - _totalBaris).abs() > 0.5)
+                  _chipRingkas('Selisih vs faktur',
+                      _bulkRp.format(totalFaktur - _totalBaris)),
               ]),
               const SizedBox(height: 12),
               _panelValidasi(validasi),
