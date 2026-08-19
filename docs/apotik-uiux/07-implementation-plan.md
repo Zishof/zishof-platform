@@ -5,10 +5,10 @@ existing dipertahankan sebagai adapter selama migrasi.
 
 | Fase | Isi | Commit |
 |---|---|---|
-| **0** | audit, peta route/API/permission, baseline test & performa | `chore(apotik-uiux): document current state and test baseline` |
-| **1** | design token, breakpoint, context bar, page header, status pill, state loading/empty/error, golden dasar | `feat(apotik-uiux): add adaptive apotik design system and shell` |
-| **2** | dashboard operasional berbasis prioritas | `feat(apotik-dashboard): add pharmacy operational command center` |
-| **3** | POS desktop 3 area + mobile 1 kolom, mode switcher, kartu obat, keranjang, hold/resume | `feat(apotik-pos): modernize OTC and prescription sales workspace` |
+| **0** ✅ | audit, peta route/API/permission, baseline test & performa | `12a76c5` |
+| **1** ✅ | design token, breakpoint, context bar, page header, status pill, state loading/empty/error | `6913f1b` |
+| **2** ✅ | dashboard operasional berbasis prioritas | `3a00ba1` |
+| **3** 🔶 | state machine POS + mode switcher + panel keranjang **selesai** (`8469045`); **sisa: merakit halaman POS 3-area dan mengalihkan `KasirApotikScreen` ke sana** | sebagian |
 | **4** | antrean resep, telaah klinis, dispensing, racikan (sebatas API) | `feat(apotik-rx): prescription queue and dispensing` |
 | **5** | persediaan, batch/FEFO, penerimaan PBF (pecah file besar) | `feat(apotik-inventory): batch, expiry and procurement workspace` |
 | **6** | pembayaran, perangkat, sinkronisasi | `feat(apotik-payment): payment, device and sync` |
@@ -16,6 +16,17 @@ existing dipertahankan sebagai adapter selama migrasi.
 | **8** | hardening: a11y, performa, golden lengkap, dokumentasi | `chore(apotik-uiux): hardening and full golden coverage` |
 
 Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
+
+## Status per 19 Agustus 2026
+
+Suite test: **71 (baseline) → 138 hijau**. Analyze bersih di seluruh fase.
+
+**Sisa Fase 3** (dikerjakan berikutnya): merakit `ApotikPosPage` tiga area
+(konteks+mode | katalog | keranjang) untuk desktop dan satu kolom + sticky
+action untuk mobile, lalu mengalihkan `KasirApotikScreen` ke sana sebagai
+route adapter. Sheet pilih-batch (FEFO) dan pilih-resep yang sudah terbukti
+di layar lama akan DIPINDAH, bukan ditulis ulang, agar pagar keselamatannya
+tidak berubah.
 
 ## Batas jujur
 
