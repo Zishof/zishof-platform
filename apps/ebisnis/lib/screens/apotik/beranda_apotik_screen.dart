@@ -9,6 +9,8 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
+import '../../app_variant.dart';
+import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
 
@@ -139,6 +141,11 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
   @override
   Widget build(BuildContext context) {
     final s = Sesi.instance;
+    // MODERNISASI FASE 2: varian APOTIK memakai dashboard command center
+    // berbasis prioritas (ApotikDashboardPage). Varian eMedik -- yang berbagi
+    // layar ini -- SENGAJA tetap memakai tampilan kartu+chip lama supaya
+    // perubahan apotik tidak merembet ke varian lain (aturan multi-varian).
+    if (AppVariant.isApotik) return _dashboardModern();
     final adaMenuApotik = _menuApotik.any((m) => s.bolehMenuVarianBaru(m.$1)) ||
         _menuEmedik.any((m) => s.bolehMenuVarianBaru(m.$1));
     return AppShell(
@@ -296,6 +303,29 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
 
   /// Tujuan navigasi menu yang layarnya SUDAH dibangun -- bertambah per fase.
   /// Menu tanpa tujuan tetap chip status (hak akses tetap terverifikasi UAT).
+  /// Command center Fase 2 dibungkus AppShell existing supaya sidebar, menu
+  /// aktif, dan bantuan kontekstual tetap konsisten dengan layar lain.
+  Widget _dashboardModern() {
+    return AppShell(
+      menuAktif: MenuEBisnis.berandaApotik,
+      judul: 'Dashboard Apotik',
+      subjudul: 'Prioritas kerja apotek: resep, expiry, dan stok',
+      scrollable: false,
+      body: ApotikDashboardPage(onBuka: _bukaTujuanDashboard),
+    );
+  }
+
+  void _bukaTujuanDashboard(ApotikTujuanDashboard tujuan) {
+    final layar = switch (tujuan) {
+      ApotikTujuanDashboard.resep => _layarTujuan('apotik_kasir'),
+      ApotikTujuanDashboard.batch => _layarTujuan('apotik_batch'),
+      ApotikTujuanDashboard.stok => _layarTujuan('apotik_formularium'),
+      ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
+    };
+    if (layar == null) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => layar));
+  }
+
   Widget? _layarTujuan(String kunci) {
     switch (kunci) {
       case 'apotik_kasir':
