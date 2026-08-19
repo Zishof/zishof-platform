@@ -358,8 +358,14 @@ class MasterOffline {
       Set<String>? idBerubah,
       int jumlahHapus = 0,
       String fieldData = 'data',
-      int? total}) {
+      int? total,
+      Map<String, dynamic>? responsAsli}) {
     return {
+      // Field top-level LAIN dari respons server diteruskan apa adanya --
+      // banyak layar membaca ringkasan/summary/totalOutstanding/daftarKasir
+      // di samping barisnya. Membuangnya membuat KPI layar diam-diam nol
+      // (ditemukan saat konversi hutang/piutang 2026-08-19).
+      ...?responsAsli,
       'status': '00',
       fieldData: data,
       'dariServer': dariServer,
@@ -372,6 +378,13 @@ class MasterOffline {
       'jumlahHapus': jumlahHapus,
     };
   }
+
+  /// Kunci baris versi PUBLIK -- dipakai layar utk `KilauBaris(kunci: ...)`
+  /// supaya persis sama dengan kunci diff internal. WAJIB dipakai bila layar
+  /// menyetel [kolomKunci] pada [daftarCacheDulu]; memakai nilai kolom
+  /// telanjang membuat kilau tidak pernah menyala.
+  static String kunciBaris(dynamic row, [String? kolomKunci]) =>
+      _kunciDiff(row, kolomKunci) ?? '';
 
   /// Kunci identitas satu baris daftar. Urutan: [kolomKunci] bila diberikan
   /// layar (mis. 'produkId'/'fakturId' utk daftar yang server-nya tidak
@@ -475,7 +488,11 @@ class MasterOffline {
         // (bila server mengirim total). Respons berhalaman/terfilter TIDAK
         // PERNAH menghapus data lokal (akar insiden "41 dihapus" 2026-08-19).
         final kataKunci = '${body['keyword'] ?? body['q'] ?? ''}'.trim();
-        final totalServer = (hasil['total'] as num?)?.toInt();
+        // Sebagian aksi memakai 'total' utk OBJEK agregat (mis.
+        // pembantu_piutang_list), bukan cacah baris -- jangan di-cast paksa.
+        final totalMentah = hasil['total'];
+        final totalServer =
+            totalMentah is num ? totalMentah.toInt() : null;
         final benarLengkap = responsLengkap &&
             kataKunci.isEmpty &&
             (totalServer == null || data.length >= totalServer);
@@ -555,7 +572,8 @@ class MasterOffline {
             idBerubah: idBerubah,
             jumlahHapus: jumlahHapus,
             fieldData: fieldData,
-            total: (hasil['total'] as num?)?.toInt()));
+            total: totalServer,
+            responsAsli: hasil));
       } else {
         onData({...hasil, 'dariServer': true});
       }

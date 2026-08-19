@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
@@ -25,6 +28,9 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
   int? _propertiId;
   String _filterStatus = _semua;
   List<Map<String, dynamic>> _daftar = [];
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (reservasi dari resepsionis lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -70,10 +76,27 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
     try {
       final body = <String, dynamic>{'properti_id': pid};
       if (_filterStatus != _semua) body['status'] = _filterStatus;
-      final data = await muatDaftarHotel('hotel_reservasi_list', body);
-      setStateIfMounted(() {
-        _daftar = data;
-        _memuat = false;
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
+      // per PROPERTI dan FILTER STATUS. Jalur BUAT/BATALKAN/CHECK-IN tetap
+      // online-only lewat ApiClient (butuh alokasi kamar real-time server).
+      await MasterOffline.daftarCacheDulu('hotel_reservasi_list', body,
+          'master:hotel_reservasi:$pid:$_filterStatus', onData: (hasil) {
+        if (!mounted) return;
+        if (hasil['data'] is! List) {
+          // Penolakan bisnis server (kontrak status PosApi) -- tampilkan
+          // pesannya spt perilaku muatDaftarHotel sebelumnya.
+          setStateIfMounted(() {
+            _galat =
+                '${hasil['description'] ?? 'Gagal memuat data (hotel_reservasi_list).'}';
+            _memuat = false;
+          });
+          return;
+        }
+        setStateIfMounted(() {
+          _daftar = _diff.terapkan(hasil);
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -347,13 +370,22 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
                               child: ListView.builder(
                                 padding:
                                     const EdgeInsets.fromLTRB(12, 4, 12, 88),
-                                itemCount: _daftar.length,
+                                itemCount: _daftar.length + 1,
                                 itemBuilder: (context, i) {
-                                  final r = _daftar[i];
+                                  if (i == 0) {
+                                    return BannerPerubahanServer(
+                                      key: ValueKey(
+                                          'perubahan:${_diff.versi}'),
+                                      baru: _diff.idBaru.length,
+                                      berubah: _diff.idBerubah.length,
+                                      dihapus: _diff.jumlahHapus,
+                                    );
+                                  }
+                                  final r = _daftar[i - 1];
                                   final status = '${r['status'] ?? 'BOOKED'}';
                                   final bolehAksi = status == 'BOOKED' ||
                                       status == 'CONFIRMED';
-                                  return Card(
+                                  final kartu = Card(
                                     child: ListTile(
                                       title: Text(
                                           '${r['tamu_nama'] ?? '-'} — '
@@ -404,6 +436,14 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
                                               ),
                                           ]),
                                     ),
+                                  );
+                                  // Kilau: reservasi baru/berubah di server
+                                  // (dibuat resepsionis lain) berpendar sesaat.
+                                  return KilauBaris(
+                                    kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                                    idBaru: _diff.idBaru,
+                                    idBerubah: _diff.idBerubah,
+                                    child: kartu,
                                   );
                                 },
                               ),

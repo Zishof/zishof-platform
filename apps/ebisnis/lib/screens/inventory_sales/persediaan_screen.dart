@@ -373,7 +373,8 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                               AppTableCell(
                                 flex: 1,
                                 child: KilauBaris(
-                                  kunci: '${p['produkId'] ?? ''}',
+                                  kunci:
+                                      MasterOffline.kunciBaris(p, 'produkId'),
                                   idBaru: _diff.idBaru,
                                   idBerubah: _diff.idBerubah,
                                   child: Text('${p['kode']}',

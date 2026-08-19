@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../parse_util.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../widgets/app_components.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
@@ -66,6 +69,9 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
   List<Map<String, dynamic>> _riwayat = [];
   int _halaman = 1;
   int _total = 0;
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (retur yang dicatat petugas lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -87,12 +93,18 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
       _errorRiwayat = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'retur_pembelian_list', {'page': _halaman, 'page_size': _pageSize});
-      setStateIfMounted(() {
-        _riwayat =
-            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
+      // dan HAPUS retur TETAP online-only lewat ApiClient (transaksional).
+      await MasterOffline.daftarCacheDulu('retur_pembelian_list',
+          {'page': _halaman, 'page_size': _pageSize}, 'master:retur_pembelian',
+          onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _riwayat = _diff.terapkan(hasil);
+          _total = _diff.total ?? _riwayat.length;
+          _memuatRiwayat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _errorRiwayat = e.toString());
@@ -438,6 +450,12 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
           const Text('Riwayat Retur Pembelian',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 8),
+          BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
           if (_memuatRiwayat)
             const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
@@ -460,10 +478,19 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
               ],
               rows: _riwayat.map((r) {
                 return AppTableRowData(cells: [
-                  AppTableCell.text('${r['namaProduk']}',
-                      flex: 3,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  AppTableCell(
+                    flex: 3,
+                    child: KilauBaris(
+                      kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${r['namaProduk']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                  ),
                   AppTableCell.text('${r['waktu']}', flex: 2),
                   AppTableCell.text('${_formatAngka.format(r['qty'] ?? 0)}x',
                       flex: 1, align: TextAlign.right),

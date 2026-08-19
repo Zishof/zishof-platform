@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -26,6 +29,9 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
   List<Map<String, dynamic>> _properti = [];
   int? _propertiId;
   List<Map<String, dynamic>> _daftar = [];
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (check-in/out dari shift lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -69,11 +75,29 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
       _galat = null;
     });
     try {
-      final data = await muatDaftarHotel('hotel_menginap_list',
-          {'properti_id': pid, 'status': 'IN_HOUSE'});
-      setStateIfMounted(() {
-        _daftar = data;
-        _memuat = false;
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris (tamu yang
+      // baru di-check-in shift lain langsung berpendar). Cache dipisah per
+      // PROPERTI. Jalur CHECK-IN/CHECK-OUT/FOLIO/PINDAH KAMAR TETAP online-only
+      // lewat ApiClient -- server penjaga aturan uang & alokasi kamar.
+      await MasterOffline.daftarCacheDulu('hotel_menginap_list',
+          {'properti_id': pid, 'status': 'IN_HOUSE'},
+          'master:hotel_menginap:$pid', onData: (hasil) {
+        if (!mounted) return;
+        if (hasil['data'] is! List) {
+          // Penolakan bisnis server (kontrak status PosApi) -- tampilkan
+          // pesannya spt perilaku muatDaftarHotel sebelumnya.
+          setStateIfMounted(() {
+            _galat =
+                '${hasil['description'] ?? 'Gagal memuat data (hotel_menginap_list).'}';
+            _memuat = false;
+          });
+          return;
+        }
+        setStateIfMounted(() {
+          _daftar = _diff.terapkan(hasil);
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -333,11 +357,20 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                               child: ListView.builder(
                                 padding:
                                     const EdgeInsets.fromLTRB(12, 4, 12, 88),
-                                itemCount: _daftar.length,
+                                itemCount: _daftar.length + 1,
                                 itemBuilder: (context, i) {
-                                  final s = _daftar[i];
+                                  if (i == 0) {
+                                    return BannerPerubahanServer(
+                                      key: ValueKey(
+                                          'perubahan:${_diff.versi}'),
+                                      baru: _diff.idBaru.length,
+                                      berubah: _diff.idBerubah.length,
+                                      dihapus: _diff.jumlahHapus,
+                                    );
+                                  }
+                                  final s = _daftar[i - 1];
                                   final saldo = angka(s['saldo_folio']);
-                                  return Card(
+                                  final kartu = Card(
                                     child: ListTile(
                                       leading: const Icon(
                                           Icons.hotel_outlined,
@@ -377,6 +410,14 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                                         ],
                                       ),
                                     ),
+                                  );
+                                  // Kilau: tamu yang baru di-check-in / berubah
+                                  // saldo folionya di server berpendar sesaat.
+                                  return KilauBaris(
+                                    kunci: '${s['id'] ?? s['_kunci'] ?? ''}',
+                                    idBaru: _diff.idBaru,
+                                    idBerubah: _diff.idBerubah,
+                                    child: kartu,
                                   );
                                 },
                               ),

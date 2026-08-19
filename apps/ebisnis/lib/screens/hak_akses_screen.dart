@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 
 /// Layar admin "Hak Akses" -- editor 13 checkbox per-menu untuk Grup
@@ -28,15 +31,31 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
     _muat();
   }
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (grup
+  /// pengguna baru/berubah dari admin lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
+  /// Kunci satu baris utk [KilauBaris]. Baris grup pengguna TIDAK punya kolom
+  /// 'id'; identitasnya `roleId` (bertipe String). MasterOffline menyusun
+  /// kunci diff-nya sebagai `<kolomKunci>=<nilai>` (lihat
+  /// MasterOffline._kunciDiff) sehingga format di sini WAJIB sama.
+  String _kunciKilau(Map<String, dynamic> r) => 'roleId=${r['roleId'] ?? ''}';
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('ebisnis_role_list');
-      _daftarRole =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): daftar grup pengguna
+      // yang terakhir diterima tampil seketika, hasil server menyusul + diff
+      // utk kilau baris.
+      await MasterOffline.daftarCacheDulu(
+          'ebisnis_role_list', const {}, 'master:ebisnis_role',
+          kolomKunci: 'roleId', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() => _daftarRole = _diff.terapkan(hasil));
+      });
     } catch (e) {
       _error = '$e';
     } finally {
@@ -77,7 +96,12 @@ class _HakAksesScreenState extends State<HakAksesScreen> {
                           return Card(
                             child: ListTile(
                               leading: const Icon(Icons.badge_outlined),
-                              title: Text('${r['roleName']}'),
+                              title: KilauBaris(
+                                kunci: _kunciKilau(r),
+                                idBaru: _diff.idBaru,
+                                idBerubah: _diff.idBerubah,
+                                child: Text('${r['roleName']}'),
+                              ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => Navigator.of(context).push(
                                 MaterialPageRoute(

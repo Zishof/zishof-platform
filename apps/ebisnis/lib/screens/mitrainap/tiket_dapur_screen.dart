@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
 
@@ -24,6 +27,9 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
   int? _propertiId; // null = semua properti
   bool _hanyaAktif = true;
   List<Map<String, dynamic>> _tiket = [];
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (tiket baru dari kasir/dapur lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -58,10 +64,31 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
         'status': _hanyaAktif ? 'AKTIF' : 'SEMUA',
         if (_propertiId != null) 'properti_id': _propertiId,
       };
-      final data = await muatDaftarHotel('hotel_kitchen_ticket_list', body);
-      setStateIfMounted(() {
-        _tiket = data;
-        _memuat = false;
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris (tiket baru
+      // dari kasir langsung "berpendar" di layar dapur). Cache dipisah per
+      // PROPERTI + cakupan status. Transisi status TETAP online-only lewat
+      // ApiClient -- server yang memvalidasi urutannya.
+      await MasterOffline.daftarCacheDulu(
+          'hotel_kitchen_ticket_list',
+          body,
+          'master:hotel_tiket_dapur:${_propertiId ?? 'semua'}:'
+              '${_hanyaAktif ? 'aktif' : 'semua'}', onData: (hasil) {
+        if (!mounted) return;
+        if (hasil['data'] is! List) {
+          // Penolakan bisnis server (kontrak status PosApi) -- tampilkan
+          // pesannya spt perilaku muatDaftarHotel sebelumnya.
+          setStateIfMounted(() {
+            _galat =
+                '${hasil['description'] ?? 'Gagal memuat data (hotel_kitchen_ticket_list).'}';
+            _memuat = false;
+          });
+          return;
+        }
+        setStateIfMounted(() {
+          _tiket = _diff.terapkan(hasil);
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -194,15 +221,23 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
                       : RefreshIndicator(
                           onRefresh: _muatTiket,
                           child: ListView.builder(
-                            itemCount: _tiket.length,
+                            itemCount: _tiket.length + 1,
                             itemBuilder: (context, i) {
-                              final t = _tiket[i];
+                              if (i == 0) {
+                                return BannerPerubahanServer(
+                                  key: ValueKey('perubahan:${_diff.versi}'),
+                                  baru: _diff.idBaru.length,
+                                  berubah: _diff.idBerubah.length,
+                                  dihapus: _diff.jumlahHapus,
+                                );
+                              }
+                              final t = _tiket[i - 1];
                               final status = '${t['status'] ?? 'QUEUED'}';
                               final item =
                                   (t['item'] as List? ?? const <dynamic>[])
                                       .whereType<Map>()
                                       .toList();
-                              return Card(
+                              final kartu = Card(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -246,6 +281,14 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
                                     ],
                                   ),
                                 ),
+                              );
+                              // Kilau: tiket yang BARU tiba dari server
+                              // (dikirim kasir) berpendar sesaat di layar dapur.
+                              return KilauBaris(
+                                kunci: '${t['id'] ?? t['_kunci'] ?? ''}',
+                                idBaru: _diff.idBaru,
+                                idBerubah: _diff.idBerubah,
+                                child: kartu,
                               );
                             },
                           ),

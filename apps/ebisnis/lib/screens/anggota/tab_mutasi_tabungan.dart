@@ -9,10 +9,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _formatRpMutasiTabungan =
@@ -56,25 +59,42 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
     _muat();
   }
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (termasuk
+  /// topup/belanja yang baru dicatat kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
+  /// Kunci satu baris utk [KilauBaris]. Daftar mutasi tabungan TIDAK punya
+  /// kolom 'id'; identitasnya `barisId` (mis. 'D12' topup, 'P34' belanja,
+  /// 'C56' cashback). MasterOffline menyusun kunci diff-nya sebagai
+  /// `<kolomKunci>=<nilai>` (lihat MasterOffline._kunciDiff) sehingga format
+  /// di sini WAJIB sama, kalau tidak kilau tidak pernah cocok.
+  String _kunciKilau(Map<String, dynamic> r) => 'barisId=${r['barisId'] ?? ''}';
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('mutasi_tabungan_list', {
-        'dari': DateFormat('yyyy-MM-dd').format(_dari),
-        'sampai': DateFormat('yyyy-MM-dd').format(_sampai),
-        if (_idAnggotaFilter != null) 'id_anggota': _idAnggotaFilter,
-      });
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) {
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
+      // per rentang tanggal DAN filter anggota, sebab kolom saldo berjalan
+      // tiap baris hanya sahih untuk kombinasi filter itu.
+      await MasterOffline.daftarCacheDulu(
+          'mutasi_tabungan_list',
+          {
+            'dari': DateFormat('yyyy-MM-dd').format(_dari),
+            'sampai': DateFormat('yyyy-MM-dd').format(_sampai),
+            if (_idAnggotaFilter != null) 'id_anggota': _idAnggotaFilter,
+          },
+          'master:mutasi_tabungan:${DateFormat('yyyyMMdd').format(_dari)}-${DateFormat('yyyyMMdd').format(_sampai)}:${_idAnggotaFilter ?? 'semua'}',
+          kolomKunci: 'barisId', onData: (hasil) {
+        if (!mounted) return;
         setStateIfMounted(() {
-          _data = data;
+          _data = _diff.terapkan(hasil);
           _halaman = 1;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _error = e.toString());
     } finally {
@@ -477,7 +497,18 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
               return AppTableRowData(cells: [
-                AppTableCell.text('${r['namaAnggota'] ?? '-'}', flex: 2),
+                AppTableCell(
+                  flex: 2,
+                  child: KilauBaris(
+                    kunci: _kunciKilau(r),
+                    idBaru: _diff.idBaru,
+                    idBerubah: _diff.idBerubah,
+                    child: Text('${r['namaAnggota'] ?? '-'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12.5)),
+                  ),
+                ),
                 AppTableCell.text(
                     waktu == null
                         ? '${r['waktu']}'

@@ -12,9 +12,12 @@ import '../parse_util.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
@@ -143,6 +146,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunciRiwayat = '';
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (faktur yang dicatat petugas lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
+  /// Kunci satu baris utk [KilauBaris]. Riwayat faktur kulakan TIDAK punya
+  /// kolom 'id' -- identitasnya `fakturId` (dipakai juga oleh
+  /// `kulakan_faktur_detail`). MasterOffline menyusun kunci diff-nya sbg
+  /// `namaKolom=nilai` (lihat MasterOffline._kunciDiff) sehingga format di
+  /// sini WAJIB sama, kalau tidak kilau tidak pernah cocok.
+  String _kunciKilau(Map<String, dynamic> f) => 'fakturId=${f['fakturId'] ?? ''}';
 
   void _setStateEntri(VoidCallback fn) {
     setStateIfMounted(fn);
@@ -174,16 +187,20 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       _errorRiwayat = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('kulakan_faktur_list', {
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
+      // FAKTUR tetap online-only lewat ApiClient (transaksional).
+      await MasterOffline.daftarCacheDulu('kulakan_faktur_list', {
         'page': _halaman,
         'page_size': _pageSize,
         if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
-      });
-      if (!mounted) return;
-      _setStateEntri(() {
-        _riwayat =
-            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+      }, 'master:kulakan_faktur', kolomKunci: 'fakturId', onData: (hasil) {
+        if (!mounted) return;
+        _setStateEntri(() {
+          _riwayat = _diff.terapkan(hasil);
+          _total = _diff.total ?? _riwayat.length;
+          _memuatRiwayat = false;
+        });
       });
     } catch (e) {
       if (!mounted) return;
@@ -1354,6 +1371,12 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
             },
           ),
           const SizedBox(height: 8),
+          BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
           if (_memuatRiwayat)
             const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
@@ -1383,10 +1406,19 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                     ? ((f['totalHitung'] as num? ?? 0) - diskon)
                     : (f['totalHitung'] ?? 0);
                 return AppTableRowData(cells: [
-                  AppTableCell.text('${f['nomorFaktur']}',
-                      flex: 2,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  AppTableCell(
+                    flex: 2,
+                    child: KilauBaris(
+                      kunci: _kunciKilau(f),
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${f['nomorFaktur']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                  ),
                   AppTableCell.text('${f['tanggalFaktur']}', flex: 2),
                   AppTableCell.text(supplier, flex: 2),
                   AppTableCell.text('${f['jumlahItem'] ?? 0}',

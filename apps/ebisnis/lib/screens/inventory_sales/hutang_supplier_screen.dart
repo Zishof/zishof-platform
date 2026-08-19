@@ -220,7 +220,7 @@ class _TabHutangState extends State<_TabHutang> {
                 AppTableCell(
                   flex: 2,
                   child: KilauBaris(
-                    kunci: '${h['fakturId'] ?? ''}',
+                    kunci: MasterOffline.kunciBaris(h, 'fakturId'),
                     idBaru: _diff.idBaru,
                     idBerubah: _diff.idBerubah,
                     child: Text(

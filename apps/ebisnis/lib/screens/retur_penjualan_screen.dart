@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../parse_util.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -797,6 +800,9 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (retur yang dicatat kasir lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -810,14 +816,20 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('retur_penjualan_list', {
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN /
+      // UBAH / HAPUS retur TETAP online-only lewat ApiClient (transaksional).
+      await MasterOffline.daftarCacheDulu('retur_penjualan_list', {
         if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
         'page': _halaman,
         'page_size': _pageSize,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+      }, 'master:retur_penjualan', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          _total = _diff.total ?? _data.length;
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _error = e.toString());
@@ -1004,6 +1016,12 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
             onChanged: _terapkanFilter,
           ),
           const SizedBox(height: 12),
+          BannerPerubahanServer(
+            key: ValueKey('perubahan:${_diff.versi}'),
+            baru: _diff.idBaru.length,
+            berubah: _diff.idBerubah.length,
+            dihapus: _diff.jumlahHapus,
+          ),
           if (_memuat)
             const Padding(
                 padding: EdgeInsets.symmetric(vertical: 60),
@@ -1021,6 +1039,8 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
             _TabelRiwayatRetur(
               data: _data,
               bolehKelola: Sesi.instance.bolehKelola,
+              idBaru: _diff.idBaru,
+              idBerubah: _diff.idBerubah,
               onUbah: _ubah,
               onHapus: _hapus,
               pagination: _total > _pageSize
@@ -1049,12 +1069,17 @@ class _TabelRiwayatRetur extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onUbah;
   final ValueChanged<Map<String, dynamic>> onHapus;
   final AppTablePagination? pagination;
+  // Penanda diff dari emisi server (baca lokal-dulu) utk kilau baris.
+  final Set<String> idBaru;
+  final Set<String> idBerubah;
 
   const _TabelRiwayatRetur({
     required this.data,
     required this.bolehKelola,
     required this.onUbah,
     required this.onHapus,
+    this.idBaru = const <String>{},
+    this.idBerubah = const <String>{},
     this.pagination,
   });
 
@@ -1081,7 +1106,18 @@ class _TabelRiwayatRetur extends StatelessWidget {
             (((r['qty'] as num?) ?? 0) * ((r['hargaSatuan'] as num?) ?? 0));
         return AppTableRowData(
           cells: [
-            AppTableCell.text('${r['waktu']}', flex: 2),
+            AppTableCell(
+              flex: 2,
+              child: KilauBaris(
+                kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                idBaru: idBaru,
+                idBerubah: idBerubah,
+                child: Text('${r['waktu']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5)),
+              ),
+            ),
             AppTableCell.text('${r['kodeTransaksiAsal']}', flex: 3),
             AppTableCell.text('${r['namaProduk']}', flex: 3),
             AppTableCell.text('${r['namaPembeli'] ?? 'Umum'}', flex: 2),

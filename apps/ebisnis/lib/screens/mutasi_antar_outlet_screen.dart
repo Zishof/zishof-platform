@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../parse_util.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
@@ -43,6 +46,9 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
   bool _memuatRiwayat = false;
   String? _errorRiwayat;
   List<Map<String, dynamic>> _riwayat = [];
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (mutasi yang dikirim outlet lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   bool get _isAdmin => Sesi.instance.isAdmin;
 
@@ -74,8 +80,18 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
       _errorRiwayat = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('mutasi_stok_list', {'toko_id': tokoId, 'limit': 100});
-      setStateIfMounted(() => _riwayat = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
+      // per TOKO ASAL supaya riwayat outlet lain tidak saling tercampur.
+      // Jalur KIRIM STOK tetap online-only lewat ApiClient (transaksional).
+      await MasterOffline.daftarCacheDulu('mutasi_stok_list', {'toko_id': tokoId, 'limit': 100}, 'master:mutasi_stok:$tokoId',
+          onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _riwayat = _diff.terapkan(hasil);
+          _memuatRiwayat = false;
+        });
+      });
     } catch (e) {
       setStateIfMounted(() => _errorRiwayat = e.toString());
     } finally {
@@ -312,6 +328,12 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
               ),
             const Text('Riwayat Mutasi Stok', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 8),
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:${_diff.versi}'),
+              baru: _diff.idBaru.length,
+              berubah: _diff.idBerubah.length,
+              dihapus: _diff.jumlahHapus,
+            ),
             if (_tokoAsalId == null)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
@@ -336,7 +358,18 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
                 rows: _riwayat.map((m) {
                   final masuk = m['arah'] == 'masuk';
                   return AppTableRowData(cells: [
-                    AppTableCell.text('${m['waktu']}', flex: 2),
+                    AppTableCell(
+                      flex: 2,
+                      child: KilauBaris(
+                        kunci: '${m['id'] ?? m['_kunci'] ?? ''}',
+                        idBaru: _diff.idBaru,
+                        idBerubah: _diff.idBerubah,
+                        child: Text('${m['waktu']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12.5)),
+                      ),
+                    ),
                     AppTableCell(
                       flex: 1,
                       child: Container(

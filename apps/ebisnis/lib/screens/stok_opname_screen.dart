@@ -9,10 +9,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../api_client.dart';
+import '../services/diff_daftar_lokal.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 
@@ -463,6 +466,9 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
   int _hari = 30;
   final _cariController = TextEditingController();
   String _kataKunci = '';
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (mutasi dari kasir/gudang lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -482,11 +488,22 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'stok_mutasi_ledger', {'hari': _hari, 'limit': 100, 'offset': 0});
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _adaLagi = hasil['adaLagi'] == true;
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
+      // per PERIODE supaya rentang 7/30/90/365 hari tidak saling menimpa.
+      // "Muat Lebih Banyak" (offset >0) TETAP online -- hanya halaman pertama
+      // yang punya snapshot lokal.
+      await MasterOffline.daftarCacheDulu('stok_mutasi_ledger',
+          {'hari': _hari, 'limit': 100, 'offset': 0},
+          'master:stok_mutasi_ledger:$_hari', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = _diff.terapkan(hasil);
+          // 'adaLagi' hanya dikirim server -- emisi lokal tidak boleh
+          // mematikan tombol "Muat Lebih Banyak" secara keliru.
+          if (_diff.dariServer) _adaLagi = hasil['adaLagi'] == true;
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = e.toString());
@@ -578,6 +595,12 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
               ),
             )
           else ...[
+            BannerPerubahanServer(
+              key: ValueKey('perubahan:${_diff.versi}'),
+              baru: _diff.idBaru.length,
+              berubah: _diff.idBerubah.length,
+              dihapus: _diff.jumlahHapus,
+            ),
             AppDataTable(
               minWidth: 1480,
               emptyText: 'Tidak ada mutasi stok dalam periode ini.',
@@ -596,7 +619,18 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
                 final qty = (r['qty'] as num?)?.toDouble() ?? 0;
                 final masuk = qty >= 0;
                 return AppTableRowData(cells: [
-                  AppTableCell.text('${r['waktu'] ?? ''}', flex: 2),
+                  AppTableCell(
+                    flex: 2,
+                    child: KilauBaris(
+                      kunci: '${r['id'] ?? r['_kunci'] ?? ''}',
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${r['waktu'] ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                  ),
                   AppTableCell(
                     flex: 2,
                     child: Container(
@@ -696,6 +730,9 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   String? _pesanError;
   Map<String, dynamic>? _produkDitemukan;
   List<Map<String, dynamic>> _riwayatHariIni = [];
+  // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
+  // + banner "pembaruan dari server" (opname yang dicatat petugas lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
 
   @override
   void initState() {
@@ -713,10 +750,14 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
 
   Future<void> _muatRiwayat() async {
     try {
-      final hasil = await ApiClient.instance.aksi('so_riwayat', {'limit': 30});
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) setStateIfMounted(() => _riwayatHariIni = data);
+      // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
+      // opname TETAP online-only lewat ApiClient (transaksional).
+      await MasterOffline.daftarCacheDulu(
+          'so_riwayat', {'limit': 30}, 'master:so_riwayat', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() => _riwayatHariIni = _diff.terapkan(hasil));
+      });
     } catch (_) {
       // riwayat gagal dimuat bukan blocker utk input baru.
     }
@@ -798,6 +839,21 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
   /// jalur read-only, mengikuti pola [AppDataTable] yg sama spt halaman
   /// Pelanggan/Produk supaya tampilan list konsisten di seluruh aplikasi.
   Widget _riwayatTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        BannerPerubahanServer(
+          key: ValueKey('perubahan:${_diff.versi}'),
+          baru: _diff.idBaru.length,
+          berubah: _diff.idBerubah.length,
+          dihapus: _diff.jumlahHapus,
+        ),
+        _riwayatTabelData(),
+      ],
+    );
+  }
+
+  Widget _riwayatTabelData() {
     return AppDataTable(
       minWidth: 820,
       emptyText: 'Belum ada catatan hari ini.',
@@ -817,7 +873,18 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
             : (selisih > 0 ? AppColors.success : AppColors.danger);
         return AppTableRowData(
           cells: [
-            AppTableCell.text('${k['waktu'] ?? ''}', flex: 2),
+            AppTableCell(
+              flex: 2,
+              child: KilauBaris(
+                kunci: '${k['id'] ?? k['_kunci'] ?? ''}',
+                idBaru: _diff.idBaru,
+                idBerubah: _diff.idBerubah,
+                child: Text('${k['waktu'] ?? ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5)),
+              ),
+            ),
             AppTableCell.text('${k['kode'] ?? ''}',
                 flex: 1,
                 style: const TextStyle(

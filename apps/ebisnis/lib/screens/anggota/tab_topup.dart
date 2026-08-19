@@ -9,10 +9,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../api_client.dart';
+import '../../services/diff_daftar_lokal.dart';
+import '../../services/master_offline.dart';
 import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 
 final _formatRupiah =
@@ -48,25 +51,33 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
     _muatDaftar();
   }
 
+  /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (termasuk
+  /// topup yang baru dicatat operator lain).
+  final DiffDaftarLokal _diff = DiffDaftarLokal();
+
   Future<void> _muatDaftar() async {
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('deposit_list', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-      });
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) {
+      // Baca LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
+      // seketika, hasil server menyusul + diff utk kilau baris. Baris deposit
+      // sudah ber-kolom 'id' sehingga kolomKunci tidak perlu disetel.
+      await MasterOffline.daftarCacheDulu(
+          'deposit_list',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:deposit_topup', onData: (hasil) {
+        if (!mounted) return;
         setStateIfMounted(() {
-          _daftar = data;
-          _total = (hasil['total'] as num?)?.toInt() ?? 0;
+          _daftar = _diff.terapkan(hasil);
+          _total = _diff.total ?? _daftar.length;
         });
-      }
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _pesanError = e.toString());
     } finally {
@@ -522,7 +533,18 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
               final expired = d['tanggalExpired'] != null;
               return AppTableRowData(
                 cells: [
-                  AppTableCell.text('${d['waktu'] ?? '-'}', flex: 2),
+                  AppTableCell(
+                    flex: 2,
+                    child: KilauBaris(
+                      kunci: '${d['id'] ?? d['_kunci'] ?? ''}',
+                      idBaru: _diff.idBaru,
+                      idBerubah: _diff.idBerubah,
+                      child: Text('${d['waktu'] ?? '-'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                  ),
                   AppTableCell(
                     flex: 3,
                     child: Column(
