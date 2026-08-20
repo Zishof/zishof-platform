@@ -118,9 +118,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       AppConfig.namaAplikasi,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 26,
+                        // Nama varian bisa panjang (mis. nama direktorat);
+                        // dikecilkan supaya tetap muat rapi di kartu Masuk.
+                        fontSize: AppConfig.namaAplikasi.length > 18 ? 20 : 26,
                         fontWeight: FontWeight.bold,
                         color: warna.primary,
+                        height: 1.2,
                       ),
                     ),
                     const Text(
