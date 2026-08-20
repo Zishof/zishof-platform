@@ -9,23 +9,27 @@ import '../widgets/jejak_galat.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
-/// <h3>Layar "History" -- jelajah tabel audit (Envers/AuditTrails) LINTAS baris.</h3>
+/// <h3>Layar "History" -- jelajah tabel audit (Envers/AuditTrails) LINTAS baris,
+/// lengkap dengan restore satuan maupun massal.</h3>
 ///
-/// Padanan tab "Semua" pada `GenericRevisiHelper` versi ZK, dan pelengkap tombol
-/// jam per baris yang sudah ada di tabel-tabel master.
+/// Meniru pola `GenericRevisiHelper` (ZK): saring dulu, lihat hasilnya, baru
+/// pulihkan -- satu per satu, atau seluruh yang cocok dengan saringan.
 ///
-/// <p>Perbedaannya penting: tombol jam per baris menuntut barisnya masih ada di
-/// layar untuk diklik. Baris yang <b>sudah terhapus</b> tidak muncul di mana pun,
-/// jadi tidak ada yang bisa diklik -- satu-satunya jalan menemukannya kembali
-/// adalah menyapu tabel audit menurut rentang tanggal. Itulah yang layar ini
-/// lakukan.</p>
+/// <p>Perbedaannya dengan tombol jam per baris yang sudah ada di tabel master
+/// penting: tombol itu menuntut barisnya MASIH ADA untuk diklik. Baris yang sudah
+/// terhapus tidak muncul di mana pun, jadi tidak ada yang bisa diklik -- padahal
+/// justru baris itulah yang dicari. Layar ini menyapu tabel audit menurut rentang
+/// tanggal, bukan menunggu seseorang menemukan barisnya lebih dulu.</p>
 ///
-/// <p>Rentang tanggal wajib (sama seperti versi ZK): tabel audit menyimpan seluruh
-/// sejarah, dan menyapunya tanpa batas akan menarik jutaan baris.</p>
+/// <p><b>Aturan revisi mana yang dipulihkan</b> disalin dari versi ZK: revisi
+/// diurutkan dari terbaru, revisi bertipe HAPUS dilewati, lalu revisi pertama yang
+/// tersisa untuk tiap baris dipakai. Artinya yang kembali adalah keadaan terakhir
+/// SEBELUM baris itu dihapus.</p>
 ///
-/// <p>Server membatasi aksinya ke ADMINISTRATOR karena hasilnya memuat data
-/// terhapus dari seluruh toko -- melewati pembatasan toko/pendaftar yang berlaku
-/// di layar biasa. Bila ditolak, pesannya ditampilkan apa adanya.</p>
+/// <p>Restore satuan dan restore massal memakai aksi server yang sama
+/// (`revisi_pulihkan_massal`, yang satuan hanya menambah saringan id). Itu
+/// disengaja: kalau jalurnya dipisah, "Pulihkan baris ini" dan "Pulihkan semua"
+/// akan menyimpang pelan-pelan sampai artinya berbeda bagi yang menekannya.</p>
 class RiwayatAuditScreen extends StatefulWidget {
   /// Kode entitas awal (lihat whitelist `RevisiApiHelper.ENTITAS`).
   final String entitasAwal;
@@ -90,10 +94,15 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
   DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
   DateTime _sampai = DateTime.now();
   int? _toko;
+  final _kataKunciCtl = TextEditingController();
+  final _nilaiKolomCtl = TextEditingController();
+  String? _kolom;
 
   List<Map<String, dynamic>> _daftarEntitas = const [];
+  List<Map<String, dynamic>> _kolomTersedia = const [];
   final List<Map<String, dynamic>> _hasil = [];
   bool _memuat = false;
+  bool _memulihkan = false;
   bool _adaLagi = false;
   String? _galat;
   bool _pernahCari = false;
@@ -103,6 +112,13 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     super.initState();
     _toko = Sesi.instance.tokoFilter;
     _muatDaftarEntitas();
+  }
+
+  @override
+  void dispose() {
+    _kataKunciCtl.dispose();
+    _nilaiKolomCtl.dispose();
+    super.dispose();
   }
 
   Future<void> _muatDaftarEntitas() async {
@@ -120,6 +136,38 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     }
   }
 
+  /// Saringan yang sedang berlaku. Dipakai untuk mencari DAN untuk memulihkan,
+  /// dari satu tempat -- supaya yang terlihat di layar dan yang akan dipulihkan
+  /// tidak mungkin berasal dari saringan yang berbeda.
+  Map<String, dynamic> _saringan() {
+    final kata = _kataKunciCtl.text.trim();
+    final nilai = _nilaiKolomCtl.text.trim();
+    return {
+      'entitas': _entitas,
+      'dari': _fTanggal.format(_dari),
+      'sampai': _fTanggal.format(_sampai),
+      'tipe': _tipe,
+      if (_toko != null) 'toko': _toko,
+      if (kata.isNotEmpty) 'kataKunci': kata,
+      if (_kolom != null && nilai.isNotEmpty) 'kolom': _kolom,
+      if (_kolom != null && nilai.isNotEmpty) 'nilai': nilai,
+    };
+  }
+
+  String _ringkasanSaringan() {
+    final bagian = <String>[
+      _labelKode(_entitas),
+      '${_fTampil.format(_dari)} s/d ${_fTampil.format(_sampai)}',
+      _tipe == 'SEMUA' ? 'semua perubahan' : _tipe.toLowerCase(),
+    ];
+    if (_toko != null) bagian.add('toko #$_toko');
+    final kata = _kataKunciCtl.text.trim();
+    if (kata.isNotEmpty) bagian.add('kata kunci "$kata"');
+    final nilai = _nilaiKolomCtl.text.trim();
+    if (_kolom != null && nilai.isNotEmpty) bagian.add('$_kolom = "$nilai"');
+    return bagian.join(' · ');
+  }
+
   Future<void> _cari({bool lanjut = false}) async {
     setStateIfMounted(() {
       _memuat = true;
@@ -129,11 +177,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     });
     try {
       final res = await ApiClient.instance.aksi('revisi_jelajah', {
-        'entitas': _entitas,
-        'dari': _fTanggal.format(_dari),
-        'sampai': _fTanggal.format(_sampai),
-        'tipe': _tipe,
-        if (_toko != null) 'toko': _toko,
+        ..._saringan(),
         'batas': 100,
         'mulai': lanjut ? _hasil.length : 0,
       });
@@ -141,10 +185,21 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
         throw Exception(res['description'] ?? 'Gagal memuat riwayat.');
       }
       final data = (res['data'] as List?) ?? const [];
+      final kolom = (res['kolom'] as List?) ?? const [];
       setStateIfMounted(() {
         _hasil.addAll(
             data.map((e) => Map<String, dynamic>.from(e as Map)).toList());
         _adaLagi = res['adaLagi'] == true;
+        if (kolom.isNotEmpty) {
+          _kolomTersedia =
+              kolom.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          if (_kolom != null &&
+              !_kolomTersedia.any((k) => k['nama'] == _kolom)) {
+            // Ganti entitas -> kolom lama bisa tidak ada lagi di entitas baru.
+            _kolom = null;
+            _nilaiKolomCtl.clear();
+          }
+        }
       });
     } catch (e) {
       setStateIfMounted(() => _galat = terapkanGalat(e));
@@ -174,6 +229,206 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
       }
     });
   }
+
+  // ── Restore ───────────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>?> _jalankanRestore({
+    Object? id,
+    required bool simulasi,
+    required bool timpa,
+  }) async {
+    try {
+      final res = await ApiClient.instance.aksi('revisi_pulihkan_massal', {
+        ..._saringan(),
+        if (id != null) 'id': id,
+        'simulasi': simulasi,
+        'timpaYangMasihAda': timpa,
+      });
+      if (res['status'] != '00') {
+        throw Exception(res['description'] ?? 'Restore ditolak server.');
+      }
+      return res;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(terapkanGalat(e))));
+      }
+      return null;
+    }
+  }
+
+  /// Alur restore: hitung dulu (tanpa menulis apa pun), tampilkan hasil hitungan,
+  /// baru minta persetujuan. Restore massal tidak punya tombol "batal" -- begitu
+  /// baris tertulis, keadaan sebelumnya hanya bisa dikejar lewat revisi baru.
+  Future<void> _pulihkan({Object? id}) async {
+    setStateIfMounted(() => _memulihkan = true);
+    try {
+      bool timpa = false;
+      final hitung =
+          await _jalankanRestore(id: id, simulasi: true, timpa: timpa);
+      if (hitung == null || !mounted) return;
+
+      final akan = (hitung['akanDipulihkan'] as num?)?.toInt() ?? 0;
+      final kandidat = (hitung['kandidat'] as num?)?.toInt() ?? 0;
+      final masihAda = (hitung['dilewatiMasihAda'] as num?)?.toInt() ?? 0;
+
+      if (akan == 0 && masihAda == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Tidak ada baris yang bisa dipulihkan.')));
+        return;
+      }
+
+      final setuju = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLokal) => AlertDialog(
+            title: Text(id == null ? 'Pulihkan semua yang cocok?' : 'Pulihkan baris #$id?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (id == null) ...[
+                  const Text('Saringan yang berlaku:',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text(_ringkasanSaringan(),
+                      style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 12),
+                ],
+                Text('$kandidat baris punya revisi yang bisa dipakai.'),
+                Text('$akan akan dihidupkan kembali (datanya sekarang hilang).',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                // Angka ini HARUS ikut berubah saat "timpa" dicentang. Hitungan
+                // tadi dibuat dengan timpa=false; membiarkannya diam berarti
+                // dialog menampilkan jumlah yang bukan jumlah yang akan terjadi.
+                if (masihAda > 0)
+                  Text(
+                    timpa
+                        ? '$masihAda baris yang masih ada IKUT ditimpa '
+                            '(total ${akan + masihAda} baris ditulis).'
+                        : '$masihAda dilewati karena datanya masih ada.',
+                    style: TextStyle(
+                      color:
+                          timpa ? AppColors.danger : AppColors.textSecondary,
+                      fontWeight: timpa ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Yang dipulihkan adalah keadaan terakhir sebelum baris dihapus '
+                  '(revisi HAPUS sendiri dilewati) — sama seperti "Restore Terbaru" '
+                  'di versi ZKoss.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: timpa,
+                  title: const Text('Timpa juga baris yang masih ada',
+                      style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    'Data yang sedang dipakai akan ditulis ulang dengan nilai '
+                    'revisi. Tidak bisa dibatalkan.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  onChanged: (v) => setLokal(() => timpa = v ?? false),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Pulihkan')),
+            ],
+          ),
+        ),
+      );
+      if (setuju != true || !mounted) return;
+
+      final hasil =
+          await _jalankanRestore(id: id, simulasi: false, timpa: timpa);
+      if (hasil == null || !mounted) return;
+      await _tampilkanLaporan(hasil);
+      if (mounted) await _cari();
+    } finally {
+      setStateIfMounted(() => _memulihkan = false);
+    }
+  }
+
+  Future<void> _tampilkanLaporan(Map<String, dynamic> hasil) async {
+    final rincian = (hasil['rincian'] as List?) ?? const [];
+    final gagal = (hasil['gagal'] as num?)?.toInt() ?? 0;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(gagal > 0 ? 'Selesai, sebagian gagal' : 'Restore selesai'),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${hasil['description'] ?? ''}'),
+              if (hasil['terpotong'] == true)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Sapuan dihentikan pada batas aman. Jalankan sekali lagi '
+                    'untuk sisanya.',
+                    style: TextStyle(fontSize: 12, color: AppColors.warning),
+                  ),
+                ),
+              if (rincian.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Rincian:',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: rincian.take(60).map((r) {
+                        final m = Map<String, dynamic>.from(r as Map);
+                        final st = '${m['status'] ?? ''}';
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 1),
+                          child: Text(
+                            '#${m['id']}  $st'
+                            '${m['pesan'] != null ? ' — ${m['pesan']}' : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: st == 'GAGAL'
+                                  ? AppColors.danger
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                if (rincian.length > 60)
+                  Text('... dan ${rincian.length - 60} baris lagi',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  // ── Tampilan ──────────────────────────────────────────────────────────────
 
   String _labelKode(String kode) => _labelEntitas[kode] ?? kode;
 
@@ -210,6 +465,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
           ]
         : _daftarEntitas;
     final adaKode = daftar.any((e) => e['kode'] == _entitas);
+    final sibuk = _memuat || _memulihkan;
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -240,18 +496,24 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                               overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged: _memuat
+                onChanged: sibuk
                     ? null
-                    : (v) => setStateIfMounted(() => _entitas = v ?? _entitas),
+                    : (v) => setStateIfMounted(() {
+                          _entitas = v ?? _entitas;
+                          // Kolom saringan milik entitas lama tidak berlaku lagi.
+                          _kolom = null;
+                          _nilaiKolomCtl.clear();
+                          _kolomTersedia = const [];
+                        }),
               ),
             ),
             OutlinedButton.icon(
-              onPressed: _memuat ? null : () => _pilihTanggal(awal: true),
+              onPressed: sibuk ? null : () => _pilihTanggal(awal: true),
               icon: const Icon(Icons.event_outlined, size: 18),
               label: Text('Dari ${_fTampil.format(_dari)}'),
             ),
             OutlinedButton.icon(
-              onPressed: _memuat ? null : () => _pilihTanggal(awal: false),
+              onPressed: sibuk ? null : () => _pilihTanggal(awal: false),
               icon: const Icon(Icons.event_available_outlined, size: 18),
               label: Text('Sampai ${_fTampil.format(_sampai)}'),
             ),
@@ -271,7 +533,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                   DropdownMenuItem(value: 'UBAH', child: Text('Diubah')),
                   DropdownMenuItem(value: 'TAMBAH', child: Text('Ditambah')),
                 ],
-                onChanged: _memuat
+                onChanged: sibuk
                     ? null
                     : (v) => setStateIfMounted(() => _tipe = v ?? _tipe),
               ),
@@ -300,15 +562,80 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                     ),
                   ],
                   onChanged:
-                      _memuat ? null : (v) => setStateIfMounted(() => _toko = v),
+                      sibuk ? null : (v) => setStateIfMounted(() => _toko = v),
                 ),
               ),
+            SizedBox(
+              width: 220,
+              child: TextField(
+                controller: _kataKunciCtl,
+                enabled: !sibuk,
+                decoration: const InputDecoration(
+                  labelText: 'Kata kunci',
+                  hintText: 'dicari di semua kolom teks',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: sibuk ? null : (_) => _cari(),
+              ),
+            ),
+            // Saringan kolom baru bisa dipakai setelah pencarian pertama:
+            // daftar kolomnya datang dari server bersama hasil, bukan ditebak
+            // di klien -- kolom yang ditebak akan meleset begitu Model berubah.
+            if (_kolomTersedia.isNotEmpty) ...[
+              SizedBox(
+                width: 200,
+                child: DropdownButtonFormField<String?>(
+                  value: _kolom,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Kolom tertentu',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: <DropdownMenuItem<String?>>[
+                    const DropdownMenuItem<String?>(
+                        value: null, child: Text('(tidak dipakai)')),
+                    ..._kolomTersedia.map(
+                      (k) => DropdownMenuItem<String?>(
+                        value: '${k['nama']}',
+                        child: Text('${k['nama']}',
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ],
+                  onChanged:
+                      sibuk ? null : (v) => setStateIfMounted(() => _kolom = v),
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: TextField(
+                  controller: _nilaiKolomCtl,
+                  enabled: !sibuk && _kolom != null,
+                  decoration: const InputDecoration(
+                    labelText: 'Nilai kolom',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: sibuk ? null : (_) => _cari(),
+                ),
+              ),
+            ],
             FilledButton.icon(
-              onPressed: _memuat ? null : () => _cari(),
+              onPressed: sibuk ? null : () => _cari(),
               icon: const Icon(Icons.search, size: 18),
               label: const Text('Cari'),
             ),
-            if (_memuat)
+            if (_pernahCari && _hasil.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: sibuk ? null : () => _pulihkan(),
+                icon: const Icon(Icons.restore, size: 18),
+                label: const Text('Pulihkan Semua (sesuai filter)'),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger),
+              ),
+            if (sibuk)
               const SizedBox(
                   width: 18,
                   height: 18,
@@ -351,8 +678,8 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: _warnaTipe(tipe).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
@@ -377,6 +704,14 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                           fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ),
+                  if (id != null)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Pulihkan data terakhir baris ini',
+                      icon: const Icon(Icons.restore, size: 18),
+                      onPressed:
+                          _memulihkan ? null : () => _pulihkan(id: id),
+                    ),
                   const Icon(Icons.chevron_right,
                       size: 18, color: AppColors.textSecondary),
                 ],
@@ -445,9 +780,10 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            '${_hasil.length} perubahan${_adaLagi ? '+ (masih ada lagi)' : ''}',
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary),
+            '${_hasil.length} perubahan${_adaLagi ? '+ (masih ada lagi)' : ''}'
+            '  ·  ${_ringkasanSaringan()}',
+            style:
+                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ),
         ..._hasil.map(_baris),
