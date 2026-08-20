@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:ebisnis/screens/kode_akun_screen.dart';
+import 'package:ebisnis/services/master_offline.dart';
 import 'package:ebisnis/screens/siklus_akuntansi_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// sengaja tidak diuji sebagai widget test: kegagalannya berupa BEBERAPA
 /// exception build sekaligus, yang selalu menggagalkan test walau ditangkap.
 void main() {
+  // Kedua layar membaca daftarnya cache-dulu (MasterOffline), yang menyalakan timer
+  // flush antrean. Timer itu milik aplikasi, bukan layar, jadi dimatikan di akhir tiap
+  // test supaya kerangka test tidak menganggapnya timer menggantung.
+  tearDown(MasterOffline.hentikanTimer);
+
   testWidgets('dibungkus Scaffold: Kode Akun tampil normal', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(
@@ -21,6 +27,9 @@ void main() {
       ),
     ));
     await tester.pump();
+    // Timer flush antrean MasterOffline milik aplikasi, bukan layar ini; dimatikan
+    // sebelum test berakhir supaya kerangka test tidak melihat timer menggantung.
+    MasterOffline.hentikanTimer();
     expect(tester.takeException(), isNull);
     expect(find.text('Akun'), findsWidgets);
   });
@@ -33,6 +42,9 @@ void main() {
       ),
     ));
     await tester.pump();
+    // Timer flush antrean MasterOffline milik aplikasi, bukan layar ini; dimatikan
+    // sebelum test berakhir supaya kerangka test tidak melihat timer menggantung.
+    MasterOffline.hentikanTimer();
     expect(tester.takeException(), isNull);
     expect(find.text('Saldo Awal'), findsWidgets);
   });

@@ -283,6 +283,10 @@ class _TabCoaState extends State<_TabCoa> with JejakGalat {
     );
     if (ya == true && kode.text.trim().isNotEmpty && nama.text.trim().isNotEmpty) {
       try {
+        // Bagan akun (COA) SENGAJA online-only: spec 13.3 menempatkan
+        // "perubahan rekening/harga sensitif" sebagai wajib online. Akun yang
+        // baru menyusul saat sinkronisasi akan membuat jurnal yang mengacu ke
+        // akun tak dikenal, jadi tidak boleh diantre diam-diam.
         await ApiClient.instance.aksi('si_coa_save', {
           if (akun != null) 'akun_id': akun['id'],
           'kode': kode.text.trim(),

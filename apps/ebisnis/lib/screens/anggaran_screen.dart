@@ -11,7 +11,9 @@ import '../api_client.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../services/master_offline.dart';
 import '../widgets/pemilih_akun.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 
 /// Layar **Anggaran (RAB Bulanan)** — padanan Desktop/Android dari empat layar ZK:
@@ -187,14 +189,28 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     });
     try {
       if (_tab.index == 0) {
-        final res = await ApiClient.instance.aksi('anggaran_item_list', _filter);
-        if (!mounted) return;
-        setStateIfMounted(() {
-          _item = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-          _ringkasanBulan = _bacaBulan(res['ringkasanBulan']);
-          _totalPagu = (res['totalPagu'] as num?)?.toDouble() ?? 0;
-          _hak = _bacaHak(res);
-        });
+        // BACA LOKAL DULU: baris yang masih mengantre kirim tetap terlihat, dan
+        // daftar tetap terbuka saat perangkat sedang offline.
+        await MasterOffline.daftarCacheDulu(
+          'anggaran_item_list',
+          _filter,
+          _cacheItem,
+          onData: (res) {
+            if (!mounted) return;
+            setStateIfMounted(() {
+              _item = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              // Ringkasan & hak hanya ikut pada emisi SERVER; emisi lokal cuma
+              // membawa barisnya, jadi nilai lama dipertahankan.
+              if (res.containsKey('ringkasanBulan')) {
+                _ringkasanBulan = _bacaBulan(res['ringkasanBulan']);
+              }
+              if (res.containsKey('totalPagu')) {
+                _totalPagu = (res['totalPagu'] as num?)?.toDouble() ?? 0;
+              }
+              if (res.containsKey('hak')) _hak = _bacaHak(res);
+            });
+          },
+        );
       } else if (_tab.index == 1) {
         final res = await ApiClient.instance.aksi('anggaran_realisasi_list', _filter);
         if (!mounted) return;
@@ -207,13 +223,23 @@ class _AnggaranScreenState extends State<AnggaranScreen>
           _hak = _bacaHak(res);
         });
       } else {
-        final res = await ApiClient.instance.aksi('anggaran_penggunaan_list', _filter);
-        if (!mounted) return;
-        setStateIfMounted(() {
-          _penggunaan = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-          _totalPenggunaanAktif = (res['totalAktif'] as num?)?.toDouble() ?? 0;
-          _hak = _bacaHak(res);
-        });
+        await MasterOffline.daftarCacheDulu(
+          'anggaran_penggunaan_list',
+          _filter,
+          _cachePenggunaan,
+          onData: (res) {
+            if (!mounted) return;
+            setStateIfMounted(() {
+              _penggunaan =
+                  ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              if (res.containsKey('totalAktif')) {
+                _totalPenggunaanAktif =
+                    (res['totalAktif'] as num?)?.toDouble() ?? 0;
+              }
+              if (res.containsKey('hak')) _hak = _bacaHak(res);
+            });
+          },
+        );
       }
     } catch (e) {
       setStateIfMounted(() => _galat = '$e');
@@ -222,7 +248,60 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     }
   }
 
-  Future<bool> _kirim(String aksi, Map<String, dynamic> body) async {
+  /// Kunci cache daftar item per penyaring -- pohon anggaran berbeda per tahun,
+  /// satuan kerja, sumber dana, dan revisi, jadi cache-nya tidak boleh dicampur.
+  String get _cacheItem =>
+      'master:anggaran_item:${_tahun ?? 0}:${_satkerId ?? 0}:${_sumberDanaId ?? 0}:$_revisi';
+
+  String get _cachePenggunaan =>
+      'master:anggaran_penggunaan:${_tahun ?? 0}:${_satkerId ?? 0}:$_revisi';
+
+  /// Mutasi ITEM anggaran: ONLINE-ONLY.
+  ///
+  /// Id item dirujuk baris Penggunaan Anggaran dan menjadi dasar posting; id lokal yang
+  /// belum ada di server akan merusak keduanya (spec offline 13.3). Pembacaan daftarnya
+  /// tetap cache-dulu sehingga layar tetap terbuka saat jaringan mati.
+  Future<bool> _kirimItem(String aksi, Map<String, dynamic> body) =>
+      _kirimServer(aksi, body);
+
+  /// Mutasi baris DAUN yang aman diantre (Penggunaan Anggaran): baris ini tidak
+  /// dirujuk id-nya oleh alur lain, dan itemnya sendiri sudah ada di server.
+  Future<bool> _kirimMaster(
+    String aksi,
+    Map<String, dynamic> body, {
+    required String kunci,
+    String? cacheKey,
+    Map<String, dynamic>? rowLokal,
+    bool hapusLokal = false,
+  }) async {
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: aksi,
+        body: body,
+        kunci: kunci,
+        cacheKey: cacheKey,
+        rowLokal: rowLokal,
+        hapusLokal: hapusLokal,
+      );
+      if (hasil['offline'] != true) {
+        _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
+      }
+      await _muatTabAktif();
+      return true;
+    } catch (e) {
+      _pesan('$e');
+      return false;
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  /// Aksi yang HARUS dihitung server (bukan mutasi baris master): hasilnya tidak punya
+  /// bentuk lokal yang benar, jadi tidak diantrekan. Contohnya "Buat Revisi Baru" yang
+  /// menyalin seluruh pohon revisi tertinggi -- mengantrekannya berisiko revisi ganda.
+  Future<bool> _kirimServer(String aksi, Map<String, dynamic> body) async {
     setStateIfMounted(() => _sibuk = true);
     try {
       final hasil = await ApiClient.instance.aksi(aksi, body);
@@ -452,7 +531,7 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       _pesan('Nama item anggaran wajib diisi.');
       return;
     }
-    await _kirim('anggaran_item_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': item['id'],
       'tahun': _tahun ?? 0,
       'satkerId': _satkerId ?? 0,
@@ -470,7 +549,8 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       'bulan': [
         for (var i = 0; i < 12; i++) double.tryParse(bulan[i].text.trim()) ?? 0,
       ],
-    });
+    };
+    await _kirimItem('anggaran_item_simpan', payload);
   }
 
   Future<void> _formPenggunaan({Map<String, dynamic>? data}) async {
@@ -566,7 +646,7 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       _pesan('Item anggaran dan uraian wajib diisi.');
       return;
     }
-    await _kirim('anggaran_penggunaan_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': data['id'],
       'workspaceId': workspaceId,
       'kode': kode.text.trim(),
@@ -574,7 +654,16 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       'keterangan': keterangan.text.trim(),
       'nilai': double.tryParse(nilai.text.trim()) ?? 0,
       'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(waktu),
-    });
+    };
+    await _kirimMaster(
+      'anggaran_penggunaan_simpan',
+      payload,
+      kunci: ubah
+          ? 'anggaran_penggunaan:${data['id']}'
+          : 'anggaran_penggunaan:baru:${DateTime.now().microsecondsSinceEpoch}',
+      cacheKey: _cachePenggunaan,
+      rowLokal: {...payload, 'aktif': true, 'sumber': 'Entri Manual'},
+    );
   }
 
   Future<void> _buatRevisiBaru() async {
@@ -585,7 +674,7 @@ class _AnggaranScreenState extends State<AnggaranScreen>
         tombol: 'Buat')) {
       return;
     }
-    final berhasil = await _kirim('anggaran_revisi_baru', {
+    final berhasil = await _kirimServer('anggaran_revisi_baru', {
       'tahun': _tahun ?? 0,
       'satkerId': _satkerId ?? 0,
       'sumberDanaId': _sumberDanaId ?? 0,
@@ -985,7 +1074,7 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                   : () async {
                       if (await _konfirmasi('Hapus item anggaran?',
                           '"${a['nama']}" akan dihapus. Item yang punya turunan atau sudah dipakai realisasi akan ditolak server.')) {
-                        await _kirim('anggaran_item_hapus', {'id': a['id']});
+                        await _kirimItem('anggaran_item_hapus', {'id': a['id']});
                       }
                     },
             ),
@@ -1152,8 +1241,14 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                           : () async {
                               if (await _konfirmasi('Hapus penggunaan anggaran?',
                                   '"${p['nama']}" akan dihapus permanen.')) {
-                                await _kirim(
-                                    'anggaran_penggunaan_hapus', {'id': p['id']});
+                                await _kirimMaster(
+                                  'anggaran_penggunaan_hapus',
+                                  {'id': p['id']},
+                                  kunci: 'anggaran_penggunaan:${p['id']}',
+                                  cacheKey: _cachePenggunaan,
+                                  rowLokal: {'id': p['id']},
+                                  hapusLokal: true,
+                                );
                               }
                             },
                     ),

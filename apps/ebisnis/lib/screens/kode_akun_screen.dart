@@ -9,6 +9,7 @@ import '../api_client.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../services/master_offline.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 
@@ -75,6 +76,11 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     super.dispose();
   }
 
+  /// Kunci cache per daftar. Pencarian ikut dalam kunci supaya hasil tersaring
+  /// tidak menimpa cache daftar penuh.
+  String _cache(String nama) =>
+      'master:kode_akun_$nama${_cari.trim().isEmpty ? '' : ':${_cari.trim()}'}';
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
@@ -82,24 +88,45 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     });
     try {
       final body = _cari.trim().isEmpty ? <String, dynamic>{} : {'cari': _cari.trim()};
-      final akun = await ApiClient.instance.aksi('kode_akun_daftar', body);
-      final bank = await ApiClient.instance.aksi('kode_akun_bank', body);
-      final grup = await ApiClient.instance.aksi('kode_akun_grup', {});
-      final jt = await ApiClient.instance.aksi('kode_akun_jenis_transaksi', body);
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _bank = ((bank['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _grupAkun = ((grup['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _jenisTransaksi = ((jt['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _hakAkun = _bacaHak(akun);
-        _hakBank = _bacaHak(bank);
-        _hakGrup = _bacaHak(grup);
-        _hakJenisTransaksi = _bacaHak(jt);
-        final n = (akun['panjangKodeAnak'] as num?)?.toInt();
-        if (n != null && n > 0 && n < 10) _panjangKodeAnak = n;
-        _memuat = false;
+      // BACA LOKAL DULU: baris yang masih mengantre kirim tetap terlihat dan daftar
+      // tetap terbuka saat perangkat offline; emisi server menyusul memperbarui.
+      await MasterOffline.daftarCacheDulu('kode_akun_daftar', body, _cache('akun'),
+          onData: (res) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _akun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          // Hak tombol & panjang kode anak hanya ikut pada emisi SERVER.
+          if (res.containsKey('hak')) _hakAkun = _bacaHak(res);
+          final n = (res['panjangKodeAnak'] as num?)?.toInt();
+          if (n != null && n > 0 && n < 10) _panjangKodeAnak = n;
+        });
       });
+      await MasterOffline.daftarCacheDulu('kode_akun_bank', body, _cache('bank'),
+          onData: (res) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _bank = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          if (res.containsKey('hak')) _hakBank = _bacaHak(res);
+        });
+      });
+      await MasterOffline.daftarCacheDulu('kode_akun_grup', const {}, _cache('grup'),
+          onData: (res) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _grupAkun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          if (res.containsKey('hak')) _hakGrup = _bacaHak(res);
+        });
+      });
+      await MasterOffline.daftarCacheDulu(
+          'kode_akun_jenis_transaksi', body, _cache('jenis_transaksi'),
+          onData: (res) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _jenisTransaksi = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          if (res.containsKey('hak')) _hakJenisTransaksi = _bacaHak(res);
+        });
+      });
+      setStateIfMounted(() => _memuat = false);
     } catch (e) {
       setStateIfMounted(() {
         _galat = '$e';
@@ -497,9 +524,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(teks)));
   }
 
-  /// Kirim satu aksi tulis lalu muat ulang. Pesan penolakan dari server (mis.
-  /// "Kode Akun sudah dipakai akun lain") ditampilkan apa adanya.
-  Future<bool> _kirim(String aksi, Map<String, dynamic> body) async {
+  /// Aksi TULIS bagan akun: ONLINE-ONLY.
+  ///
+  /// Spec offline 13.3 menempatkan "perubahan rekening/harga sensitif" sebagai wajib
+  /// online: akun yang baru muncul setelah sinkronisasi membuat jurnal mengacu ke akun
+  /// yang belum dikenal server. Pembacaan daftarnya tetap cache-dulu, jadi layar ini
+  /// tetap bisa dibuka saat jaringan mati -- yang dilarang hanya menunda MUTASI-nya.
+  Future<bool> _kirim(
+    String aksi,
+    Map<String, dynamic> body, {
+    String? kunci,
+    String? cacheKey,
+    Map<String, dynamic>? rowLokal,
+    bool hapusLokal = false,
+  }) async {
     setStateIfMounted(() => _sibuk = true);
     try {
       final hasil = await ApiClient.instance.aksi(aksi, body);
@@ -690,7 +728,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       _pesan('Kode dan Nama Akun wajib diisi.');
       return;
     }
-    await _kirim('kode_akun_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': akun['id'],
       'kode': kode.text.trim(),
       'nama': nama.text.trim(),
@@ -702,7 +740,18 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       'bankId': bankId ?? 0,
       'atasNama': atasNama.text.trim(),
       'noRek': noRek.text.trim(),
-    });
+    };
+    await _kirim(
+      'kode_akun_simpan',
+      payload,
+      kunci: ubah
+          ? 'kode_akun:${akun['id']}'
+          : 'kode_akun:baru:${DateTime.now().microsecondsSinceEpoch}',
+      cacheKey: _cache('akun'),
+      // Bentuk baris daftar: kolom tampilan diisi seadanya supaya tabel langsung
+      // memperlihatkan perubahan walau server belum menjawab.
+      rowLokal: {...payload, 'posisi': (debetCredit ?? 1) == 1 ? 'Debet' : 'Credit'},
+    );
   }
 
   Future<void> _formBank({Map<String, dynamic>? bank, bool salin = false}) async {
@@ -755,14 +804,22 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       _pesan('Nama Bank wajib diisi.');
       return;
     }
-    await _kirim('kode_akun_bank_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': bank['id'],
       'kode': kode.text.trim(),
       'nama': nama.text.trim(),
       'keterangan': keterangan.text.trim(),
       'akunId': akunId ?? 0,
       'aktif': aktif,
-    });
+    };
+    await _kirim(
+      'kode_akun_bank_simpan',
+      payload,
+      kunci: ubah
+          ? 'kode_akun_bank:${bank['id']}'
+          : 'kode_akun_bank:baru:${DateTime.now().microsecondsSinceEpoch}',
+      cacheKey: _cache('bank'),
+    );
   }
 
   Future<void> _formJenisTransaksi(
@@ -817,14 +874,22 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       _pesan('Nama Jenis Transaksi wajib diisi.');
       return;
     }
-    await _kirim('kode_akun_jenis_transaksi_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': jenis['id'],
       'kode': kode.text.trim(),
       'nama': nama.text.trim(),
       'keterangan': keterangan.text.trim(),
       'akunId': akunId ?? 0,
       'aktif': aktif,
-    });
+    };
+    await _kirim(
+      'kode_akun_jenis_transaksi_simpan',
+      payload,
+      kunci: ubah
+          ? 'kode_akun_jt:${jenis['id']}'
+          : 'kode_akun_jt:baru:${DateTime.now().microsecondsSinceEpoch}',
+      cacheKey: _cache('jenis_transaksi'),
+    );
   }
 
   Future<void> _formGrupAkun({Map<String, dynamic>? grup, bool salin = false}) async {
@@ -857,20 +922,30 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       _pesan('Nama Grup Akun wajib diisi.');
       return;
     }
-    await _kirim('kode_akun_grup_simpan', {
+    final payload = <String, dynamic>{
       if (ubah) 'id': grup['id'],
       'nama': nama.text.trim(),
       'keterangan': keterangan.text.trim(),
-    });
+    };
+    await _kirim(
+      'kode_akun_grup_simpan',
+      payload,
+      kunci: ubah
+          ? 'kode_akun_grup:${grup['id']}'
+          : 'kode_akun_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
+      cacheKey: _cache('grup'),
+    );
   }
 
-  Future<void> _hapus(String aksi, Object? id, String label) async {
+  Future<void> _hapus(String aksi, Object? id, String label,
+      {String? kunci, String? cacheKey}) async {
     if (id == null) return;
     if (!await _konfirmasi('Hapus data ini?',
         '"$label" akan dihapus permanen. Data yang sudah dipakai transaksi akan ditolak server.')) {
       return;
     }
-    await _kirim(aksi, {'id': id});
+    await _kirim(aksi, {'id': id},
+        kunci: kunci, cacheKey: cacheKey, rowLokal: {'id': id}, hapusLokal: true);
   }
 
   /// Empat tombol aksi pada pohon akun -- urutannya mengikuti layar ZK.
@@ -907,7 +982,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
               onPressed: _sibuk
                   ? null
                   : () => _hapus('kode_akun_hapus', a['id'],
-                      '${a['kode'] ?? ''} - ${a['nama'] ?? ''}'),
+                      '${a['kode'] ?? ''} - ${a['nama'] ?? ''}',
+                      kunci: 'kode_akun:${a['id']}', cacheKey: _cache('akun')),
             ),
         ]),
       );
@@ -1082,8 +1158,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                                   hak: _hakBank,
                                   onSalin: () => _formBank(bank: b, salin: true),
                                   onUbah: () => _formBank(bank: b),
-                                  onHapus: () => _hapus('kode_akun_bank_hapus', b['id'],
-                                      '${b['nama'] ?? ''}'),
+                                  onHapus: () => _hapus(
+                                      'kode_akun_bank_hapus', b['id'], '${b['nama'] ?? ''}',
+                                      kunci: 'kode_akun_bank:${b['id']}',
+                                      cacheKey: _cache('bank')),
                                 ),
                               ]))
                           .toList(),
@@ -1113,8 +1191,11 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                                   hak: _hakJenisTransaksi,
                                   onSalin: () => _formJenisTransaksi(jenis: t, salin: true),
                                   onUbah: () => _formJenisTransaksi(jenis: t),
-                                  onHapus: () => _hapus('kode_akun_jenis_transaksi_hapus',
-                                      t['id'], '${t['nama'] ?? ''}'),
+                                  onHapus: () => _hapus(
+                                      'kode_akun_jenis_transaksi_hapus', t['id'],
+                                      '${t['nama'] ?? ''}',
+                                      kunci: 'kode_akun_jt:${t['id']}',
+                                      cacheKey: _cache('jenis_transaksi')),
                                 ),
                               ]))
                           .toList(),
@@ -1142,8 +1223,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                                   hak: _hakGrup,
                                   onSalin: () => _formGrupAkun(grup: g, salin: true),
                                   onUbah: () => _formGrupAkun(grup: g),
-                                  onHapus: () => _hapus('kode_akun_grup_hapus', g['id'],
-                                      '${g['nama'] ?? ''}'),
+                                  onHapus: () => _hapus(
+                                      'kode_akun_grup_hapus', g['id'], '${g['nama'] ?? ''}',
+                                      kunci: 'kode_akun_grup:${g['id']}',
+                                      cacheKey: _cache('grup')),
                                 ),
                               ]))
                           .toList(),

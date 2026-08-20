@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -5,6 +8,8 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_dasbor_tab.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
@@ -23,7 +28,8 @@ class PengadaanTagihanScreen extends StatefulWidget {
   State<PengadaanTagihanScreen> createState() => _PengadaanTagihanScreenState();
 }
 
-class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
+class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -43,7 +49,14 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
   @override
   void initState() {
     super.initState();
+    _tabUtama = TabController(length: 2, vsync: this);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _tabUtama.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -101,17 +114,24 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
     }
   }
 
+  /// Kirim perubahan tagihan secara LOCAL-FIRST: ditulis ke antrean perangkat
+  /// lebih dulu, baru diupayakan sampai ke server. Petugas yang menerima faktur
+  /// di lapangan tanpa sinyal tidak perlu menunggu.
   Future<void> _kirim(String aksi, Map<String, dynamic> body) async {
     try {
-      final r = await ApiClient.instance.aksi(aksi, body);
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: aksi,
+        body: body,
+        kunci: '$aksi:${body['id']}',
+        cacheKey: 'master:pengadaan_tagihan',
+      );
       if (!mounted) return;
-      final sukses = r['status'] == '00' || r['status'] == 'success';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(sukses
-              ? 'Tersimpan.'
-              : '${r['description'] ?? 'Gagal memproses tagihan.'}'),
-          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
-      if (sukses) await _muat();
+          content: Text(r['offline'] == true
+              ? 'Tersimpan di perangkat, akan dikirim otomatis.'
+              : 'Tersimpan.')));
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -152,8 +172,9 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
         return AlertDialog(
           title: Text('Terima Tagihan · ${row['kode'] ?? ''}'),
           content: SizedBox(
-            width: 420,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+            width: 460,
+            child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -177,7 +198,11 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
                     labelText: 'Tanggal tagihan *',
                     suffixIcon: Icon(Icons.event, size: 18)),
               ),
-            ]),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              _PapanLampiran(bastId: (row['id'] as num).toInt()),
+            ])),
           ),
           actions: [
             TextButton(
@@ -225,6 +250,31 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
     await _kirim('pengadaan_tagihan_batal', {'id': row['id']});
   }
 
+
+  /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
+  /// "Tagihan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
+  /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
+  Widget _bungkusTab(Widget isiData) {
+    return Column(children: [
+      TabBar(
+        controller: _tabUtama,
+        tabs: const [
+          Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
+          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Tagihan'),
+        ],
+      ),
+      Expanded(
+        child: TabBarView(
+          controller: _tabUtama,
+          children: [
+            const PengadaanDasborTab(tahap: 'tagihan'),
+            isiData,
+          ],
+        ),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -241,7 +291,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
             icon: const Icon(Icons.refresh)),
       ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      body: Column(children: [
+      body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -294,7 +344,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
           ),
         ),
         Expanded(child: _isiTabel(totalHalaman)),
-      ]),
+      ])),
     );
   }
 
@@ -419,5 +469,219 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> {
         ]),
       ),
     ]);
+  }
+}
+
+/// Papan lampiran dokumen tagihan pada satu BAST.
+///
+/// Berkasnya disimpan di tabel `LampiranLain` yang SAMA dengan versi ZKoss, dengan
+/// `ref` = id BAST dan `jenis` = nama slot. Karena itu berkas yang diunggah dari POS
+/// langsung terbaca di ZKoss, dan sebaliknya.
+///
+/// Slot yang ditandai wajib -- Invoice -- harus terisi sebelum tagihan dapat
+/// diterima. Pagarnya ada di server, jadi Desktop, Android, dan JSP berlaku sama;
+/// papan ini hanya memberi tahu lebih awal.
+class _PapanLampiran extends StatefulWidget {
+  final int bastId;
+  const _PapanLampiran({required this.bastId});
+
+  @override
+  State<_PapanLampiran> createState() => _PapanLampiranState();
+}
+
+class _PapanLampiranState extends State<_PapanLampiran> {
+  List<Map<String, dynamic>> _slot = [];
+  bool _memuat = true;
+  String? _sibuk;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() => _memuat = true);
+    try {
+      final r = await ApiClient.instance
+          .aksi('pengadaan_lampiran_daftar', {'bast_id': widget.bastId});
+      _slot = ((r['data'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (_) {
+      _slot = [];
+    }
+    setStateIfMounted(() => _memuat = false);
+  }
+
+  Future<void> _unggah(Map<String, dynamic> slot) async {
+    final harusGambar = slot['harusGambar'] == true;
+    final hasil = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: harusGambar
+          ? const ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+          : const ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'pdf'],
+      withData: true,
+    );
+    if (hasil == null || hasil.files.isEmpty) return;
+    final berkas = hasil.files.single;
+    final bytes = berkas.bytes;
+    if (bytes == null || !mounted) return;
+    setStateIfMounted(() => _sibuk = '${slot['kunci']}');
+    try {
+      final r = await ApiClient.instance.aksi('pengadaan_lampiran_unggah', {
+        'bast_id': widget.bastId,
+        'kunci': slot['kunci'],
+        'nama_file': berkas.name,
+        'file_base64': base64Encode(bytes),
+      });
+      if (!mounted) return;
+      if (r['status'] != '00' && r['status'] != 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${r['description'] ?? 'Gagal mengunggah lampiran.'}'),
+            backgroundColor: Theme.of(context).colorScheme.error));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengunggah: $e')));
+      }
+    }
+    setStateIfMounted(() => _sibuk = null);
+    await _muat();
+  }
+
+  Future<void> _hapus(Map<String, dynamic> slot) async {
+    setStateIfMounted(() => _sibuk = '${slot['kunci']}');
+    try {
+      // Local-first: dicatat di antrean lokal dulu, baru dikirim. Penghapusan
+      // lampiran tidak membawa berkas sehingga ringan diantre; hanya UNGGAH
+      // yang tetap butuh sambungan (lihat catatan di _unggah).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'pengadaan_lampiran_hapus',
+        body: {'lampiran_id': slot['lampiran_id']},
+        kunci: 'pengadaan_lampiran_hapus:${slot['lampiran_id']}',
+      );
+    } catch (_) {}
+    setStateIfMounted(() => _sibuk = null);
+    await _muat();
+  }
+
+  Future<void> _lihat(Map<String, dynamic> slot) async {
+    setStateIfMounted(() => _sibuk = '${slot['kunci']}');
+    Map<String, dynamic>? r;
+    try {
+      r = await ApiClient.instance.aksi(
+          'pengadaan_lampiran_unduh', {'lampiran_id': slot['lampiran_id']});
+    } catch (e) {
+      r = null;
+    }
+    setStateIfMounted(() => _sibuk = null);
+    if (!mounted || r == null) return;
+    final b64 = '${r['fileBase64'] ?? ''}';
+    final tipe = '${r['tipe'] ?? ''}';
+    if (b64.isEmpty) return;
+    if (!tipe.startsWith('image/')) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${r['namaFile'] ?? 'Berkas'} bertipe $tipe -- '
+              'pratinjau hanya tersedia untuk gambar.')));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('${slot['nama']}'),
+        content: SingleChildScrollView(
+            child: Image.memory(base64Decode(b64), fit: BoxFit.contain)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_memuat) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+            child: SizedBox(
+                width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Lampiran Dokumen',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text(
+            'Invoice wajib diunggah dan harus berupa gambar. Lampiran lain '
+            'bersifat pelengkap.',
+            style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+        const SizedBox(height: 6),
+        ..._slot.map(_barisSlot),
+      ],
+    );
+  }
+
+  Widget _barisSlot(Map<String, dynamic> slot) {
+    final ada = slot['ada'] == true;
+    final wajib = slot['wajib'] == true;
+    final sibuk = _sibuk == '${slot['kunci']}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        Icon(ada ? Icons.check_circle : Icons.upload_file,
+            size: 16,
+            color: ada
+                ? Colors.green
+                : (wajib ? Colors.red : Colors.grey)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${slot['nama']}${wajib ? ' *' : ''}',
+                  style: const TextStyle(fontSize: 12)),
+              Text(
+                  ada
+                      ? '${slot['namaFile']}'
+                      : (wajib ? 'belum diunggah' : 'opsional'),
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: ada
+                          ? Colors.grey
+                          : (wajib ? Colors.red : Colors.grey))),
+            ],
+          ),
+        ),
+        if (sibuk)
+          const SizedBox(
+              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+        else ...[
+          if (ada)
+            IconButton(
+                tooltip: 'Lihat',
+                iconSize: 18,
+                onPressed: () => _lihat(slot),
+                icon: const Icon(Icons.visibility)),
+          IconButton(
+              tooltip: ada ? 'Ganti berkas' : 'Unggah',
+              iconSize: 18,
+              onPressed: () => _unggah(slot),
+              icon: const Icon(Icons.file_upload)),
+          if (ada)
+            IconButton(
+                tooltip: 'Hapus',
+                iconSize: 18,
+                onPressed: () => _hapus(slot),
+                icon: const Icon(Icons.delete_outline)),
+        ],
+      ]),
+    );
   }
 }

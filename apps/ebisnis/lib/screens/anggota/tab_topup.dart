@@ -18,6 +18,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/proses_simpan_master.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -397,7 +398,13 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     );
     if (konfirmasi != true) return;
     try {
-      await ApiClient.instance.aksi('deposit_hapus', {'id': d['id']});
+      // Lokal dulu, baru dikirim (pola master).
+      await prosesSimpanMaster(
+        context,
+        aksi: 'deposit_hapus',
+        body: {'id': d['id']},
+        kunci: 'deposit:${d['id']}',
+      );
       await _muatDaftar();
     } catch (e) {
       if (mounted) {

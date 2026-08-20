@@ -1172,6 +1172,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'TUTUP = permintaan tidak dilanjutkan lagi'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Nilai PR dihitung ulang server dari barisnya, jadi total dokumen selalu sama dengan rinciannya',
         'PR yang sudah disetujui tidak dapat diubah; batalkan keputusannya dulu bila perlu dikoreksi',
         'Menolak wajib menyertakan alasan minimal 5 karakter supaya pembuat PR tahu apa yang harus diperbaiki'
@@ -1213,6 +1216,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'LUNAS = seluruh nilai PO sudah dibayar dan disetujui'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Tombol Dari PR menampilkan BARANG-nya, dikelompokkan per nomor PR; barang dari beberapa PR boleh digabung ke dalam satu pesanan',
         'Jumlah seluruh termin wajib sama dengan nilai PO; selisih lebih dari Rp 1 akan ditolak saat menyimpan',
         'DP dan termin saling meniadakan. Bila memakai termin, tuliskan uang mukanya sebagai termin pertama',
@@ -1255,6 +1261,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Tanpa PO = penerimaan langsung untuk pembelian toko tanpa pesanan'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Barang datang kurang? Simpan dahulu yang benar-benar diterima, lalu tekan Back Order / Pesan Kembali untuk menutup sisanya dan menerbitkan pesanan susulan',
         'Sisa pesanan yang sudah ditutup tidak menerima barang lagi -- kekurangannya diterima pada pesanan susulan',
         'PPN dan PPh diisi per baris dalam persen; nilainya ikut muncul di layar Bayar Pajak',
@@ -1298,6 +1307,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'SUDAH DITAGIH = nomor dan tanggal faktur sudah tercatat'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Invoice WAJIB diunggah dan harus berupa gambar; tagihan tidak dapat diterima sebelum lampiran itu ada',
         'Faktur Pajak, Surat Jalan, dan Kwitansi bersifat pelengkap',
         'Berkasnya tersimpan di tabel lampiran yang sama dengan versi ZKoss, jadi terbaca di kedua versi',
@@ -1337,6 +1349,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Pengajuan transfer = permintaan pencairan yang masuk antrean keuangan'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Cara transfer wajib dipilih karena akun pada cara transfer itulah yang dipakai saat jurnal dibentuk',
         'Tagihan yang sudah diajukan pada dokumen lain tidak muncul lagi, supaya tidak terbayar dua kali',
         'Dokumen DRAFT belum diakui sebagai pembayaran; status pesanan baru berubah setelah DISETUJUI',
@@ -1414,6 +1429,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Terutang = pajak yang sudah timbul tetapi belum disetor'
       ],
       catatanPenting: [
+        'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
+        'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
+
         'Pajak datang dari dua sumber: PPN/PPh yang diketik pada penerimaan barang (lencana BAST), dan PPh termin dari pembayaran vendor (lencana BAYAR)',
         'Baris yang dokumennya belum disetujui tetap ditampilkan tetapi belum dapat disetor',
         'PPN menambah tagihan ke vendor, sedangkan PPh dipotong dari kas yang keluar. Keduanya mudah tertukar, jadi ditampilkan terpisah',

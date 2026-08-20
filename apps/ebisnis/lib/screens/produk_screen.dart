@@ -2008,7 +2008,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     }
     setStateIfMounted(() => baris.mengunggah = true);
     try {
-      await MasterOffline.simpanAtauAntre('produk_foto_hapus', {'id': baris.id},
+      // Lokal dulu, baru dikirim -- sama seperti master lain.
+      await prosesSimpanMaster(context,
+          aksi: 'produk_foto_hapus',
+          body: {'id': baris.id},
           kunci: 'produk_foto:${baris.id}');
       setStateIfMounted(() => _foto.remove(baris));
     } catch (e) {

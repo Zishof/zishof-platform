@@ -55,8 +55,16 @@ void main() {
 
   test('kode akun anak memakai panjang dari server, bukan angka mati', () {
     // Padanan properti akun_lenght pada layar ZK: kode anak = kode induk + N nol.
-    expect(source, contains("akun['panjangKodeAnak']"));
+    expect(source, contains("res['panjangKodeAnak']"));
     expect(source, contains("'0' * _panjangKodeAnak"));
+  });
+
+  test('CRUD ditulis lokal dulu sebelum dikirim ke server', () {
+    expect(source, contains('prosesSimpanMaster('));
+    expect(source, contains('MasterOffline.daftarCacheDulu('));
+    // Impor Excel tetap server-only: satu berkas berisi banyak baris yang diproses
+    // server per baris dengan laporan diterima/ditolak.
+    expect(source, contains("ApiClient.instance.aksi(_defAksiImpor"));
   });
 
   test('menu akuntansi digerbangi kunci fail-closed di kedua platform', () {

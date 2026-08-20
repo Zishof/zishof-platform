@@ -163,6 +163,9 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
       final payload = <String, bool>{
         for (final m in _menu) '${m['kunci']}': m['boleh'] == true
       };
+      // Kontrol akses TIDAK boleh diantre: hak yang dicabut harus benar-benar
+      // berlaku di server saat itu juga, bukan "menyusul nanti". Sengaja
+      // online-only (spec 13.3) dan dikunci uji master_offline_kontrak_test.
       await ApiClient.instance.aksi('ebisnis_role_menu_simpan',
           {'role_id': widget.roleId, 'menu': payload});
       if (mounted) {

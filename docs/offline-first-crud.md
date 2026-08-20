@@ -79,3 +79,59 @@ Kasir/POS & keranjang (punya jalur `transaksi_pending` sendiri), layar
 pelanggan (realtime), cetak label, impor Excel, log error & riwayat
 sinkronisasi (sudah baca DB lokal), dan sesi kas berjalan — angka basi di
 sana menyesatkan.
+
+## Audit jalur TULIS — apakah semua sudah "lokal dulu"? (2026-08-21)
+
+Seluruh titik mutasi di `apps/ebisnis/lib` ditelusuri: setiap panggilan
+`ApiClient.instance.aksi(...)` yang namanya menandakan perubahan data.
+
+**Jalur yang sah untuk menulis:**
+
+- `prosesSimpanMaster(...)` — menulis ke `outbox_master` LEBIH DULU
+  (`MasterOffline.antreLokal`), baru mencoba mengirim dengan indikator
+  bertahap. Ini satu-satunya pola yang benar-benar *local-first*.
+- `MasterOffline.antreLokal` + `kirimSatuAntrean` — sama, tanpa dialog. Dipakai
+  bila jendela proses tidak pantas muncul (mis. layar pelanggan).
+
+`MasterOffline.simpanAtauAntre` **bukan** local-first: ia mencoba server dulu
+dan hanya mengantre bila jaringan gagal. Datanya tetap tidak hilang, tetapi
+urutannya terbalik. Tiga pemakai terakhirnya sudah dipindahkan ke
+`prosesSimpanMaster`; fungsi itu dibiarkan ada untuk pemakaian programatik,
+bukan untuk form.
+
+**Dipindahkan ke local-first pada audit ini:**
+
+| Layar | Aksi |
+|---|---|
+| `anggota/tab_satuan_kerja.dart` | `satuan_kerja_simpan`, `satuan_kerja_hapus`, `satuan_kerja_anggota_simpan` |
+| `anggota/tab_topup.dart` | `deposit_hapus` |
+| `konfigurasi_screen.dart` | `otomatis_pesanan_global_simpan` |
+| `inventory_sales/hutang_supplier_screen.dart` | `si_purchase_terms_save` |
+| `mitrainap/kamar_hotel_screen.dart` | seluruh mutasi kamar (dari server-dulu) |
+| `pengadaan_tagihan_screen.dart` | `pengadaan_lampiran_hapus` (dari server-dulu) |
+| `produk_screen.dart` | `produk_foto_hapus` (dari server-dulu) |
+| `layar_pelanggan_screen.dart` | `survey_kepuasan_simpan` — sebelumnya kegagalan kirim ditelan diam-diam dan rating hilang |
+
+**Sengaja TETAP online-only.** Bukan kelalaian; mengantrekannya akan merusak
+data atau uang. Dikunci uji `master_offline_kontrak_test.dart`:
+
+| Alasan | Aksi |
+|---|---|
+| Kontrol akses harus berlaku seketika | `ebisnis_role_menu_simpan` |
+| Spec 13.3 "perubahan rekening/harga sensitif" | `si_coa_save` |
+| Spec 13.3 "reversal" | `batalkan_transaksi`, `edit_transaksi` |
+| Spec 13.3 "journal posting" | `jurnal_umum_posting` |
+| Kredensial | `pedagang_ubah` dengan `password_baru` |
+| Butuh id server seketika untuk dokumen yang sedang disusun | `produk_simpan` & `penyedia_simpan` (kulakan), `hotel_tamu_simpan` |
+| Respons server menentukan langkah berikutnya | `mutasi_stok_simpan` (cabang "pilih manual"), `produk_duplikat_hapus` (server yang menghitung penggabungan) |
+| Sudah punya jalur luring sendiri | penjualan kasir → `transaksi_outbox_service` |
+
+**Belum diputuskan — perlu keputusan bisnis, bukan teknis.** Dokumen final yang
+memindahkan stok/uang: retur pembelian & penjualan, stok opname, opname/retur
+apotik, pembayaran hutang anggota, penyesuaian saldo voucher, faktur kulakan,
+reservasi & folio hotel. Semuanya membawa `idempotency_key` sehingga replay
+aman, tetapi bila diantre, penolakan bisnis (mis. qty melebihi sisa karena
+sudah diretur di mesin lain) baru ketahuan saat pengiriman latar — pengguna
+sudah meninggalkan layar dan mungkin sudah menyerahkan uang atau barang.
+Mengubahnya menuntut otorisasi stok dari server seperti diminta spec 13.3
+("jangan sekadar melewati validasi"), bukan sekadar mengganti pemanggilan.

@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -28,7 +29,8 @@ class PengadaanPrScreen extends StatefulWidget {
   State<PengadaanPrScreen> createState() => _PengadaanPrScreenState();
 }
 
-class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
+class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -49,7 +51,14 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
   @override
   void initState() {
     super.initState();
+    _tabUtama = TabController(length: 2, vsync: this);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _tabUtama.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -194,19 +203,25 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
       if (ok != true || !mounted) return;
     }
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_pr_putusan', {
-        'id': pr['id'],
-        'keputusan': keputusan,
-        if (alasan.isNotEmpty) 'alasan': alasan,
-      });
+      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
+      // Petugas yang menyetujui di gudang tanpa sinyal tidak perlu menunggu.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'pengadaan_pr_putusan',
+        body: {
+          'id': pr['id'],
+          'keputusan': keputusan,
+          if (alasan.isNotEmpty) 'alasan': alasan,
+        },
+        kunci: 'pengadaan_pr_putusan:${pr['id']}',
+        cacheKey: 'master:pengadaan_pr',
+      );
       if (!mounted) return;
-      final sukses = r['status'] == '00' || r['status'] == 'success';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(sukses
-              ? 'Keputusan tersimpan: ${r['statusPr'] ?? keputusan}'
-              : '${r['description'] ?? 'Gagal menyimpan keputusan.'}'),
-          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
-      if (sukses) await _muat();
+          content: Text(r['offline'] == true
+              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
+              : 'Keputusan tersimpan: ${r['statusPr'] ?? keputusan}')));
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -263,6 +278,31 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
     if (hasil == true && mounted) await _muat();
   }
 
+
+  /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
+  /// "Permintaan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
+  /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
+  Widget _bungkusTab(Widget isiData) {
+    return Column(children: [
+      TabBar(
+        controller: _tabUtama,
+        tabs: const [
+          Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
+          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Permintaan'),
+        ],
+      ),
+      Expanded(
+        child: TabBarView(
+          controller: _tabUtama,
+          children: [
+            const PengadaanDasborTab(tahap: 'pr'),
+            isiData,
+          ],
+        ),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -288,7 +328,7 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Buat PR'),
       ),
-      body: Column(children: [
+      body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -342,7 +382,7 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
           ),
         ),
         Expanded(child: _isiTabel(totalHalaman)),
-      ]),
+      ])),
     );
   }
 
@@ -520,6 +560,12 @@ class _FormPrDialogState extends State<_FormPrDialog> {
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   late final TextEditingController _keterangan;
   final List<_BarisPr> _baris = [];
+
+  /// Anggaran yang dibebani permintaan ini. WAJIB kecuali [_tanpaAnggaran]
+  /// dicentang -- PR memotong anggaran, jadi sumbernya harus jelas sejak awal.
+  int? _anggaranId;
+  String _anggaranNama = '';
+  bool _tanpaAnggaran = false;
   bool get _baru => widget.awal == null;
   String get _status => '${widget.detailAwal?['header']?['status'] ?? 'DRAFT'}';
   bool get _terkunci => _status != 'DRAFT';
@@ -530,6 +576,9 @@ class _FormPrDialogState extends State<_FormPrDialog> {
     final h = widget.detailAwal?['header'] as Map?;
     _keterangan = TextEditingController(
         text: '${h?['keterangan'] ?? widget.awal?['keterangan'] ?? ''}');
+    _anggaranId = (h?['workspace_id'] as num?)?.toInt();
+    _anggaranNama = '${h?['anggaran'] ?? ''}';
+    _tanpaAnggaran = h?['tanpaAnggaran'] == true;
     for (final d in ((widget.detailAwal?['detail'] as List?) ?? const [])) {
       final m = Map<String, dynamic>.from(d as Map);
       _baris.add(_BarisPr(
@@ -550,6 +599,21 @@ class _FormPrDialogState extends State<_FormPrDialog> {
       b.dispose();
     }
     super.dispose();
+  }
+
+
+  /// Pemilih Anggaran. Menampilkan pagu, realisasi, dan sisanya supaya kemampuan
+  /// anggaran terlihat SEBELUM permintaan diajukan -- bukan setelah ditolak penyetuju.
+  Future<void> _pilihAnggaran() async {
+    final pilihan = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _PilihAnggaranDialog(),
+    );
+    if (pilihan == null || !mounted) return;
+    setState(() {
+      _anggaranId = (pilihan['id'] as num?)?.toInt();
+      _anggaranNama = '${pilihan['kode'] ?? ''} ${pilihan['nama'] ?? ''}'.trim();
+    });
   }
 
   double _angka(String s) =>
@@ -657,6 +721,60 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                     labelText: 'Keterangan / kebutuhan',
                     hintText: 'Mis. stok minuman menipis untuk akhir pekan'),
               ),
+              const SizedBox(height: 10),
+              // Saat "Tanpa anggaran" dicentang, pemilih anggarannya DISEMBUNYIKAN --
+              // bukan sekadar dimatikan. Kolom mati yang tetap terlihat hanya
+              // mengundang pertanyaan apakah masih perlu diisi. Pola yang sama dipakai
+              // versi ZKoss lewat centang "Non RKA".
+              Row(children: [
+                if (!_tanpaAnggaran)
+                  Expanded(
+                    child: InkWell(
+                      onTap: _terkunci ? null : _pilihAnggaran,
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Anggaran *',
+                          isDense: true,
+                          suffixIcon: const Icon(Icons.search, size: 18),
+                          errorText:
+                              _anggaranId == null ? 'Wajib dipilih' : null,
+                        ),
+                        child: Text(
+                            _anggaranNama.isEmpty
+                                ? 'Pilih anggaran'
+                                : _anggaranNama,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  )
+                else
+                  const Expanded(
+                    child: Text('Permintaan ini tidak membebani anggaran.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                const SizedBox(width: 8),
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Checkbox(
+                    value: _tanpaAnggaran,
+                    onChanged: _terkunci
+                        ? null
+                        : (v) => setState(() {
+                              _tanpaAnggaran = v ?? false;
+                              if (_tanpaAnggaran) {
+                                _anggaranId = null;
+                                _anggaranNama = '';
+                              }
+                            }),
+                  ),
+                  const SizedBox(
+                    width: 56,
+                    child: Text('Tanpa anggaran',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 10)),
+                  ),
+                ]),
+              ]),
               Padding(
                 padding: const EdgeInsets.only(top: 14, bottom: 4),
                 child: Row(children: [
@@ -754,6 +872,9 @@ class _FormPrDialogState extends State<_FormPrDialog> {
               Navigator.pop(context, <String, dynamic>{
                 if (!_baru) 'id': widget.awal!['id'],
                 'keterangan': _keterangan.text.trim(),
+                'tanpaAnggaran': _tanpaAnggaran,
+                if (!_tanpaAnggaran && _anggaranId != null)
+                  'workspace_id': _anggaranId,
                 'detail': _baris
                     .where((b) => b.barangId != null || b.masterAssetId != null)
                     .map((b) => {
@@ -770,6 +891,120 @@ class _FormPrDialogState extends State<_FormPrDialog> {
             },
             child: const Text('Simpan'),
           ),
+      ],
+    );
+  }
+}
+
+/// Pemilih Anggaran (Workspace) untuk Permintaan Pembelian.
+///
+/// Angka pagu/realisasi/sisa berasal dari kolom yang dipelihara modul Anggaran
+/// sendiri, bukan dihitung ulang di sini -- supaya tidak muncul definisi kedua
+/// yang lambat laun berbeda dengan layar Anggaran.
+class _PilihAnggaranDialog extends StatefulWidget {
+  const _PilihAnggaranDialog();
+
+  @override
+  State<_PilihAnggaranDialog> createState() => _PilihAnggaranDialogState();
+}
+
+class _PilihAnggaranDialogState extends State<_PilihAnggaranDialog> {
+  static final _fmtRp =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  List<Map<String, dynamic>> _hasil = [];
+  bool _memuat = true;
+  String _catatan = '';
+  final _cari = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  @override
+  void dispose() {
+    _cari.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() => _memuat = true);
+    try {
+      final r = await ApiClient.instance.aksi('pengadaan_anggaran_cari', {
+        if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
+        'limit': 50,
+      });
+      _hasil = ((r['data'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      _catatan = '${r['catatan'] ?? ''}';
+    } catch (e) {
+      _hasil = [];
+      _catatan = 'Gagal memuat anggaran: $e';
+    }
+    setStateIfMounted(() => _memuat = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Pilih Anggaran'),
+      content: SizedBox(
+        width: 600,
+        height: 440,
+        child: Column(children: [
+          TextField(
+            controller: _cari,
+            decoration: InputDecoration(
+                labelText: 'Cari kode / nama anggaran',
+                isDense: true,
+                suffixIcon:
+                    IconButton(onPressed: _muat, icon: const Icon(Icons.search))),
+            onSubmitted: (_) => _muat(),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : _hasil.isEmpty
+                    ? Center(
+                        child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                            _catatan.isEmpty
+                                ? 'Tidak ada anggaran aktif.'
+                                : _catatan,
+                            textAlign: TextAlign.center),
+                      ))
+                    : ListView.builder(
+                        itemCount: _hasil.length,
+                        itemBuilder: (_, i) {
+                          final a = _hasil[i];
+                          final sisa = (a['sisa'] as num?)?.toDouble() ?? 0;
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                                '${a['kode'] ?? ''} ${a['nama'] ?? ''}'.trim()),
+                            subtitle: Text(
+                                'pagu ${_fmtRp.format(a['pagu'] ?? 0)}'
+                                ' · realisasi ${_fmtRp.format(a['realisasi'] ?? 0)}'
+                                ' · dalam proses ${_fmtRp.format(a['dalamProses'] ?? 0)}',
+                                style: const TextStyle(fontSize: 10)),
+                            trailing: Text(_fmtRp.format(sisa),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: sisa <= 0 ? Colors.red : Colors.teal)),
+                            onTap: () => Navigator.pop(context, a),
+                          );
+                        },
+                      ),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
       ],
     );
   }

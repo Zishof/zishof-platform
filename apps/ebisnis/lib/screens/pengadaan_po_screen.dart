@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -30,7 +31,8 @@ class PengadaanPoScreen extends StatefulWidget {
   State<PengadaanPoScreen> createState() => _PengadaanPoScreenState();
 }
 
-class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
+class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -51,7 +53,14 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
   @override
   void initState() {
     super.initState();
+    _tabUtama = TabController(length: 2, vsync: this);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _tabUtama.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -164,38 +173,19 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
     }
   }
 
-  /// Buat PO dari PR yang sudah disetujui. Server mengembalikan SISA yang belum
-  /// dipesan per baris PR, sehingga satu PR dapat dipecah menjadi beberapa PO
-  /// tanpa terjadi pemesanan berlebih.
+  /// Buat PO dengan mengambil BARANG dari Permintaan Pembelian -- padanan layar
+  /// "Ambil Barang PR" versi ZKoss. Pemilihnya menampilkan barang yang masih boleh
+  /// dipesan, dikelompokkan per nomor PR, dan boleh dicentang lintas PR sehingga
+  /// beberapa permintaan dapat digabung menjadi satu pesanan.
   Future<void> _dariPr() async {
     final pilihan = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dctx) => const _PilihPrDialog(),
+      builder: (dctx) => const _AmbilBarangPrDialog(),
     );
     if (pilihan == null || !mounted) return;
-    try {
-      final r = await ApiClient.instance
-          .aksi('pengadaan_po_dari_pr', {'pr_id': pilihan['id']});
-      if (!mounted) return;
-      if (r['status'] != '00' && r['status'] != 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r['description'] ?? 'Gagal menyiapkan PO dari PR.'}'),
-            backgroundColor: Theme.of(context).colorScheme.error));
-        return;
-      }
-      final isian = (r['detail'] as List?) ?? const [];
-      if (isian.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r['catatan'] ?? 'Tidak ada sisa yang perlu dipesan '
-                'dari PR ini.'}')));
-        return;
-      }
-      await _form(dariPr: Map<String, dynamic>.from(r));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal: $e')));
-    }
+    final isian = (pilihan['detail'] as List?) ?? const [];
+    if (isian.isEmpty) return;
+    await _form(dariPr: Map<String, dynamic>.from(pilihan));
   }
 
   /// Keputusan atas PO. Menolak WAJIB beralasan -- server menolak alasan < 5 karakter,
@@ -231,19 +221,24 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
       if (ok != true || !mounted) return;
     }
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_po_putusan', {
-        'id': po['id'],
-        'keputusan': keputusan,
-        if (alasan.isNotEmpty) 'alasan': alasan,
-      });
+      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'pengadaan_po_putusan',
+        body: {
+          'id': po['id'],
+          'keputusan': keputusan,
+          if (alasan.isNotEmpty) 'alasan': alasan,
+        },
+        kunci: 'pengadaan_po_putusan:${po['id']}',
+        cacheKey: 'master:pengadaan_po',
+      );
       if (!mounted) return;
-      final sukses = r['status'] == '00' || r['status'] == 'success';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(sukses
-              ? 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}'
-              : '${r['description'] ?? 'Gagal menyimpan keputusan.'}'),
-          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
-      if (sukses) await _muat();
+          content: Text(r['offline'] == true
+              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
+              : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}')));
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -300,6 +295,31 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
     if (hasil == true && mounted) await _muat();
   }
 
+
+  /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
+  /// "Pesanan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
+  /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
+  Widget _bungkusTab(Widget isiData) {
+    return Column(children: [
+      TabBar(
+        controller: _tabUtama,
+        tabs: const [
+          Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
+          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Pesanan'),
+        ],
+      ),
+      Expanded(
+        child: TabBarView(
+          controller: _tabUtama,
+          children: [
+            const PengadaanDasborTab(tahap: 'po'),
+            isiData,
+          ],
+        ),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -335,7 +355,7 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
           label: const Text('Buat PO'),
         ),
       ]),
-      body: Column(children: [
+      body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -390,7 +410,7 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
           ),
         ),
         Expanded(child: _isiTabel(totalHalaman)),
-      ]),
+      ])),
     );
   }
 
@@ -540,19 +560,44 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> {
   }
 }
 
-/// Pemilih PR yang sudah disetujui, sebagai sumber isian PO.
-class _PilihPrDialog extends StatefulWidget {
-  const _PilihPrDialog();
+/// Baris barang PR yang sedang ditawarkan pada pemilih "Ambil Barang PR".
+class _BarangPr {
+  final Map<String, dynamic> data;
+  final TextEditingController jumlah;
+  bool dipilih = false;
+  _BarangPr(this.data)
+      : jumlah = TextEditingController(text: '${data['sisa'] ?? data['jumlah'] ?? 0}');
+  void dispose() => jumlah.dispose();
 
-  @override
-  State<_PilihPrDialog> createState() => _PilihPrDialogState();
+  double get sisa => ((data['sisa'] ?? 0) as num).toDouble();
+  double get harga => ((data['hargaBeli'] ?? 0) as num).toDouble();
 }
 
-class _PilihPrDialogState extends State<_PilihPrDialog> {
+/// Pemilih BARANG Permintaan Pembelian, dikelompokkan per nomor PR -- padanan layar
+/// "Ambil Barang PR" pada versi ZKoss.
+///
+/// Berbeda dengan pemilih sebelumnya yang meminta pengguna memilih satu DOKUMEN PR,
+/// layar ini menampilkan barangnya langsung sehingga satu Pemesanan Pembelian boleh
+/// menggabungkan barang dari beberapa PR sekaligus -- persis kebiasaan di lapangan
+/// ketika beberapa permintaan kecil digabung menjadi satu pesanan ke penyedia.
+class _AmbilBarangPrDialog extends StatefulWidget {
+  const _AmbilBarangPrDialog();
+
+  @override
+  State<_AmbilBarangPrDialog> createState() => _AmbilBarangPrDialogState();
+}
+
+class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-  List<Map<String, dynamic>> _hasil = [];
+  static final _fmtQty = NumberFormat.decimalPattern('id_ID');
+
+  /// Kelompok PR beserta baris barangnya, urut sesuai kiriman server.
+  final List<Map<String, dynamic>> _grup = [];
+  final Map<int, List<_BarangPr>> _barang = {};
+  final Set<int> _terbuka = {};
   bool _memuat = true;
+  String _catatan = '';
   final _cari = TextEditingController();
 
   @override
@@ -564,70 +609,275 @@ class _PilihPrDialogState extends State<_PilihPrDialog> {
   @override
   void dispose() {
     _cari.dispose();
+    for (final daftar in _barang.values) {
+      for (final b in daftar) {
+        b.dispose();
+      }
+    }
     super.dispose();
   }
+
+  double _angka(String teks) =>
+      double.tryParse(teks.replaceAll('.', '').replaceAll(',', '.').trim()) ?? 0;
 
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_pr_daftar', {
-        'status': 'DISETUJUI',
+      final r = await ApiClient.instance.aksi('pengadaan_pr_barang_tersedia', {
         if (_cari.text.trim().isNotEmpty) 'cari': _cari.text.trim(),
-        'page': 1,
-        'pageSize': 50,
+        'limit': 30,
       });
-      _hasil = ((r['data'] as List?) ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-    } catch (_) {
-      _hasil = [];
+      for (final daftar in _barang.values) {
+        for (final b in daftar) {
+          b.dispose();
+        }
+      }
+      _barang.clear();
+      _grup
+        ..clear()
+        ..addAll(((r['data'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map)));
+      _terbuka.clear();
+      for (final g in _grup) {
+        final id = (g['pr_id'] as num).toInt();
+        _barang[id] = ((g['detail'] as List?) ?? const [])
+            .map((e) => _BarangPr(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        // PR pertama dibuka supaya barangnya langsung terlihat tanpa satu klik lagi.
+        if (_terbuka.isEmpty) _terbuka.add(id);
+      }
+      _catatan = '${r['catatan'] ?? ''}';
+    } catch (e) {
+      _grup.clear();
+      _barang.clear();
+      _catatan = 'Gagal memuat barang PR: $e';
     }
     setStateIfMounted(() => _memuat = false);
+  }
+
+  List<_BarangPr> get _semua =>
+      _barang.values.expand((e) => e).toList(growable: false);
+
+  int get _jumlahDipilih => _semua.where((b) => b.dipilih).length;
+
+  double get _nilaiDipilih => _semua
+      .where((b) => b.dipilih)
+      .fold(0.0, (t, b) => t + _angka(b.jumlah.text) * b.harga);
+
+  Widget _kepalaPr(Map<String, dynamic> g, List<_BarangPr> daftar) {
+    final id = (g['pr_id'] as num).toInt();
+    final semuaDipilih = daftar.isNotEmpty && daftar.every((b) => b.dipilih);
+    final sebagian = daftar.any((b) => b.dipilih) && !semuaDipilih;
+    return InkWell(
+      onTap: () => setState(() =>
+          _terbuka.contains(id) ? _terbuka.remove(id) : _terbuka.add(id)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(children: [
+          Checkbox(
+            value: semuaDipilih ? true : (sebagian ? null : false),
+            tristate: true,
+            onChanged: (v) => setState(() {
+              final pilih = v ?? false;
+              for (final b in daftar) {
+                b.dipilih = pilih;
+              }
+              if (pilih) _terbuka.add(id);
+            }),
+          ),
+          Icon(_terbuka.contains(id) ? Icons.expand_less : Icons.expand_more,
+              size: 18),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${g['kode'] ?? '-'}',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                    '${g['keterangan'] ?? ''}'
+                    '${g['disetujuiOleh'] == null || '${g['disetujuiOleh']}'.isEmpty ? '' : ' · disetujui ${g['disetujuiOleh']}'}',
+                    style: const TextStyle(fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          Text('${daftar.length} barang · ${_fmtRp.format(g['nilaiSisa'] ?? 0)}',
+              style: const TextStyle(fontSize: 11)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _barisBarang(_BarangPr b) {
+    final datang = ((b.data['jumlahDatang'] ?? 0) as num).toDouble();
+    return Padding(
+      padding: const EdgeInsets.only(left: 32, right: 4, bottom: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        SizedBox(
+          width: 32,
+          child: Checkbox(
+            value: b.dipilih,
+            onChanged: (v) => setState(() => b.dipilih = v ?? false),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  '${b.data['kodeBarang'] == null || '${b.data['kodeBarang']}'.isEmpty ? '' : '${b.data['kodeBarang']} · '}'
+                  '${b.data['barang'] ?? '-'}',
+                  style: const TextStyle(fontSize: 12)),
+              Text(
+                  'diminta ${_fmtQty.format(b.data['jumlahDiminta'] ?? 0)}'
+                  ' · sudah dipesan ${_fmtQty.format(b.data['jumlahSudahDipesan'] ?? 0)}'
+                  '${datang > 0 ? ' · sudah datang ${_fmtQty.format(datang)}' : ''}'
+                  ' · sisa ${_fmtQty.format(b.sisa)}',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: b.jumlah,
+            keyboardType: TextInputType.number,
+            enabled: b.dipilih,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+                labelText: 'Jumlah', isDense: true),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 100,
+          child: Text(_fmtRp.format(b.harga),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11)),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 110,
+          child: Text(_fmtRp.format(_angka(b.jumlah.text) * b.harga),
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      ]),
+    );
+  }
+
+  void _ambil() {
+    final terpilih = <Map<String, dynamic>>[];
+    for (final g in _grup) {
+      final id = (g['pr_id'] as num).toInt();
+      for (final b in (_barang[id] ?? const <_BarangPr>[])) {
+        if (!b.dipilih) continue;
+        final jml = _angka(b.jumlah.text);
+        if (jml <= 0) continue;
+        final baris = Map<String, dynamic>.from(b.data);
+        baris['jumlah'] = jml;
+        baris['hargaTotal'] = jml * b.harga;
+        baris['pr_kode'] = g['kode'];
+        terpilih.add(baris);
+      }
+    }
+    if (terpilih.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Centang dahulu barang yang ingin dipesan, '
+              'dan pastikan jumlahnya lebih dari nol.')));
+      return;
+    }
+    final kodePr = <String>{};
+    for (final b in terpilih) {
+      kodePr.add('${b['pr_kode'] ?? ''}');
+    }
+    Navigator.pop(context, <String, dynamic>{
+      'detail': terpilih,
+      'pr_kode': kodePr.join(', '),
+      'nilai': terpilih.fold<double>(
+          0, (t, b) => t + ((b['hargaTotal'] ?? 0) as num).toDouble()),
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Pilih Permintaan Pembelian'),
+      title: const Text('Ambil Barang PR'),
       content: SizedBox(
-        width: 560,
-        height: 440,
+        width: 760,
+        height: 480,
         child: Column(children: [
           TextField(
             controller: _cari,
             decoration: InputDecoration(
-                labelText: 'Cari kode / keterangan PR',
-                suffixIcon:
-                    IconButton(onPressed: _muat, icon: const Icon(Icons.search))),
+                labelText: 'Cari kode PR / keterangan',
+                isDense: true,
+                suffixIcon: IconButton(
+                    onPressed: _muat, icon: const Icon(Icons.search))),
             onSubmitted: (_) => _muat(),
           ),
-          const SizedBox(height: 8),
-          const Text(
-              'Hanya PR berstatus DISETUJUI yang dapat dijadikan pesanan.',
-              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+          const SizedBox(height: 6),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+                'Centang barang yang ingin dipesan. Barang dari beberapa PR boleh '
+                'digabung ke dalam satu Pemesanan Pembelian.',
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+          ),
           const SizedBox(height: 6),
           Expanded(
             child: _memuat
                 ? const Center(child: CircularProgressIndicator())
-                : _hasil.isEmpty
-                    ? const Center(
-                        child: Text('Belum ada PR disetujui yang bisa dipesan.'))
+                : _grup.isEmpty
+                    ? Center(
+                        child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                            _catatan.isEmpty
+                                ? 'Belum ada barang PR yang menunggu dipesan.'
+                                : _catatan,
+                            textAlign: TextAlign.center),
+                      ))
                     : ListView.builder(
-                        itemCount: _hasil.length,
-                        itemBuilder: (_, i) => ListTile(
-                          dense: true,
-                          title: Text('${_hasil[i]['kode'] ?? '-'}'),
-                          subtitle: Text('${_hasil[i]['keterangan'] ?? ''}'),
-                          trailing: Text(_fmtRp.format(_hasil[i]['nilai'] ?? 0)),
-                          onTap: () => Navigator.pop(context, _hasil[i]),
-                        ),
+                        itemCount: _grup.length,
+                        itemBuilder: (_, i) {
+                          final g = _grup[i];
+                          final id = (g['pr_id'] as num).toInt();
+                          final daftar = _barang[id] ?? const <_BarangPr>[];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            child: Column(children: [
+                              _kepalaPr(g, daftar),
+                              if (_terbuka.contains(id)) ...[
+                                const Divider(height: 1),
+                                const SizedBox(height: 4),
+                                ...daftar.map(_barisBarang),
+                              ],
+                            ]),
+                          );
+                        },
                       ),
           ),
+          const Divider(height: 12),
+          Row(children: [
+            Text('$_jumlahDipilih barang dipilih',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            Text(_fmtRp.format(_nilaiDipilih),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ]),
         ]),
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+        FilledButton.icon(
+            onPressed: _jumlahDipilih == 0 ? null : _ambil,
+            icon: const Icon(Icons.playlist_add_check),
+            label: const Text('Ambil Barang')),
       ],
     );
   }

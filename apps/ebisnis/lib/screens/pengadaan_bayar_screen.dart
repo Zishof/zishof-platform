@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -24,7 +25,8 @@ class PengadaanBayarScreen extends StatefulWidget {
   State<PengadaanBayarScreen> createState() => _PengadaanBayarScreenState();
 }
 
-class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
+class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -45,7 +47,14 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
   @override
   void initState() {
     super.initState();
+    _tabUtama = TabController(length: 2, vsync: this);
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _tabUtama.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -147,24 +156,29 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
       if (pilih != true || !mounted) return;
     }
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_bayar_putusan', {
-        'id': row['id'],
-        'keputusan': keputusan,
-        if (keputusan == 'SETUJUI' && ajukanTransfer) 'ajukanTransfer': true,
-      });
+      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'pengadaan_bayar_putusan',
+        body: {
+          'id': row['id'],
+          'keputusan': keputusan,
+          if (keputusan == 'SETUJUI' && ajukanTransfer) 'ajukanTransfer': true,
+        },
+        kunci: 'pengadaan_bayar_putusan:${row['id']}',
+        cacheKey: 'master:pengadaan_bayar',
+      );
       if (!mounted) return;
-      final sukses = r['status'] == '00' || r['status'] == 'success';
       final trfDibuat = (r['transferDibuat'] as num?)?.toInt() ?? 0;
       final trfDitarik = (r['transferDitarik'] as num?)?.toInt() ?? 0;
       final catatanTrf = trfDibuat > 0
           ? ' · $trfDibuat pengajuan transfer dibuat'
           : (trfDitarik > 0 ? ' · $trfDitarik pengajuan transfer ditarik' : '');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(sukses
-              ? 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}$catatanTrf'
-              : '${r['description'] ?? 'Gagal menyimpan keputusan.'}'),
-          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
-      if (sukses) await _muat();
+          content: Text(r['offline'] == true
+              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
+              : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}$catatanTrf')));
+      await _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -299,6 +313,31 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
     }
   }
 
+
+  /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
+  /// "Pembayaran" (daftar + CRUD). Susunannya sengaja disamakan di keenam
+  /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
+  Widget _bungkusTab(Widget isiData) {
+    return Column(children: [
+      TabBar(
+        controller: _tabUtama,
+        tabs: const [
+          Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
+          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Pembayaran'),
+        ],
+      ),
+      Expanded(
+        child: TabBarView(
+          controller: _tabUtama,
+          children: [
+            const PengadaanDasborTab(tahap: 'dpc'),
+            isiData,
+          ],
+        ),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -320,7 +359,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
         icon: const Icon(Icons.payments_outlined),
         label: const Text('Bayar Vendor'),
       ),
-      body: Column(children: [
+      body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -373,7 +412,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
           ),
         ),
         Expanded(child: _isiTabel(totalHalaman)),
-      ]),
+      ])),
     );
   }
 
@@ -632,7 +671,15 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   late final TextEditingController _keterangan;
+  late final TextEditingController _judul;
+  late final TextEditingController _tglRealisasi;
   final List<_BarisBayar> _baris = [];
+
+  /// Pilihan Cara Transfer -- mengikuti form Proses Transfer versi ZKoss.
+  /// Akun pada cara transfer inilah yang dipakai saat jurnal dibentuk.
+  List<Map<String, dynamic>> _caraBayar = [];
+  int? _caraBayarId;
+  bool _memuatCaraBayar = true;
 
   bool get _baru => widget.awal == null;
   String get _status => '${widget.detailAwal?['header']?['status'] ?? 'DRAFT'}';
@@ -643,6 +690,13 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
     super.initState();
     _keterangan = TextEditingController(
         text: '${widget.detailAwal?['header']?['keterangan'] ?? ''}');
+    _judul = TextEditingController(
+        text: '${widget.detailAwal?['header']?['judul'] ?? ''}');
+    _tglRealisasi = TextEditingController(
+        text: '${widget.detailAwal?['header']?['tanggalRealisasi'] ?? ''}');
+    _caraBayarId =
+        (widget.detailAwal?['header']?['cara_bayar_id'] as num?)?.toInt();
+    _muatCaraBayar();
 
     // Baris yang sudah ada pada dokumen ini ditandai terpilih; sisanya dari
     // daftar tagihan terbuka ditawarkan dengan nilai bayar 0.
@@ -688,10 +742,29 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
   @override
   void dispose() {
     _keterangan.dispose();
+    _judul.dispose();
+    _tglRealisasi.dispose();
     for (final b in _baris) {
       b.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _muatCaraBayar() async {
+    try {
+      final r = await ApiClient.instance.aksi('pengadaan_cara_bayar_opsi', {});
+      if (!mounted) return;
+      setState(() {
+        _caraBayar = ((r['data'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _caraBayarId ??= (r['bawaan_id'] as num?)?.toInt();
+        _memuatCaraBayar = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _memuatCaraBayar = false);
+    }
   }
 
   double _angka(String s) =>
@@ -702,6 +775,14 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
       .fold(0, (s, b) => s + _angka(b.dibayar.text));
 
   void _simpan() {
+    // Cara transfer TIDAK menghalangi penyimpanan draf -- ia baru dituntut saat
+    // pembayaran disetujui, karena di titik itulah jurnal dibentuk. Di sini cukup
+    // diingatkan supaya tidak terlupa sampai tahap persetujuan.
+    if (_caraBayarId == null && _caraBayar.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cara transfer belum dipilih. Draf tetap tersimpan, '
+              'tetapi harus diisi sebelum pembayaran disetujui.')));
+    }
     final dipilih = _baris.where((b) => b.pilih).toList();
     if (dipilih.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -725,7 +806,11 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
     Navigator.pop(context, <String, dynamic>{
       if (!_baru) 'id': widget.awal!['id'],
       'penyedia_id': widget.penyediaId,
+      'judul': _judul.text.trim(),
       'keterangan': _keterangan.text.trim(),
+      if (_caraBayarId != null) 'cara_bayar_id': _caraBayarId,
+      if (_tglRealisasi.text.trim().isNotEmpty)
+        'tanggalRealisasi': _tglRealisasi.text.trim(),
       'detail': dipilih
           .map((b) => {
                 'po_id': b.poId,
@@ -775,11 +860,75 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
                     style: TextStyle(fontSize: 12)),
               ),
               TextField(
+                controller: _judul,
+                enabled: !_terkunci,
+                decoration: const InputDecoration(
+                    labelText: 'Judul transfer',
+                    hintText: 'Mis. Pembayaran termin I CV Sumber Rejeki',
+                    isDense: true),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  flex: 3,
+                  child: _memuatCaraBayar
+                      ? const InputDecorator(
+                          decoration: InputDecoration(
+                              labelText: 'Cara transfer *', isDense: true),
+                          child: Text('memuat...'))
+                      : _caraBayar.isEmpty
+                          ? InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Cara transfer', isDense: true),
+                              child: Text(
+                                  'Belum ada Cara Transfer aktif. Atur dahulu di '
+                                  'master Cara Pembayaran Transfer agar pembayaran '
+                                  'dapat dijurnal.',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange.shade900)))
+                          : DropdownButtonFormField<int>(
+                              value: _caraBayarId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                  labelText: 'Cara transfer *',
+                                  helperText:
+                                      'Akun pada cara transfer dipakai saat jurnal dibentuk',
+                                  isDense: true),
+                              items: _caraBayar
+                                  .map((c) => DropdownMenuItem<int>(
+                                        value: (c['id'] as num).toInt(),
+                                        child: Text(
+                                            '${c['nama'] ?? ''}'
+                                            '${'${c['akun'] ?? ''}'.isEmpty ? '' : ' - ${c['akun']}'}',
+                                            overflow: TextOverflow.ellipsis),
+                                      ))
+                                  .toList(),
+                              onChanged: _terkunci
+                                  ? null
+                                  : (v) => setState(() => _caraBayarId = v),
+                            ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _tglRealisasi,
+                    enabled: !_terkunci,
+                    decoration: const InputDecoration(
+                        labelText: 'Tanggal realisasi',
+                        hintText: 'hh-bb-tttt',
+                        isDense: true),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              TextField(
                 controller: _keterangan,
                 enabled: !_terkunci,
                 decoration: const InputDecoration(
                     labelText: 'Keterangan pembayaran',
-                    hintText: 'Mis. transfer BCA 20 Agustus'),
+                    hintText: 'Mis. transfer BCA 20 Agustus',
+                    isDense: true),
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 14, bottom: 4),

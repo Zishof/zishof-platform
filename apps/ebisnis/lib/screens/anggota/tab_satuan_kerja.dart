@@ -4,6 +4,7 @@ import '../../api_client.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 
 /// Tab "Satuan Kerja" -- kelola satuan kerja lalu pilih member mana saja yang
@@ -113,14 +114,26 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
       return;
     }
     try {
-      await ApiClient.instance.aksi('satuan_kerja_simpan', {
+      final body = <String, dynamic>{
         if (ubah) 'id': '${satuanKerja['id']}',
         'kode': kode.text.trim(),
         'nama': nama.text.trim(),
         'keterangan': keterangan.text.trim(),
         'alamat': alamat.text.trim(),
         'aktif': aktif,
-      });
+      };
+      // Lokal dulu, baru dikirim: antre -> indikator kirim -> tutup. Offline
+      // pun tidak menahan pengguna; pengiriman ulang berjalan di latar.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'satuan_kerja_simpan',
+        body: body,
+        kunci: ubah
+            ? 'satuan_kerja:${satuanKerja['id']}'
+            : 'satuan_kerja:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:satuan_kerja',
+        rowLokal: body,
+      );
       await _muatDaftar();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,8 +165,15 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
     );
     if (ya != true) return;
     try {
-      await ApiClient.instance
-          .aksi('satuan_kerja_hapus', {'id': '${sk['id']}'});
+      await prosesSimpanMaster(
+        context,
+        aksi: 'satuan_kerja_hapus',
+        body: {'id': '${sk['id']}'},
+        kunci: 'satuan_kerja:${sk['id']}',
+        cacheKey: 'master:satuan_kerja',
+        rowLokal: {'id': sk['id']},
+        hapusLokal: true,
+      );
       await _muatDaftar();
     } catch (e) {
       if (!mounted) return;
@@ -372,11 +392,17 @@ class _DialogAturMemberState extends State<_DialogAturMember> {
   Future<void> _simpan() async {
     setStateIfMounted(() => _menyimpan = true);
     try {
-      final hasil =
-          await ApiClient.instance.aksi('satuan_kerja_anggota_simpan', {
-        'satuan_kerja_id': '${widget.satuanKerja['id']}',
-        'anggota_id': _terpilih.toList(),
-      });
+      // Penugasan member juga lokal dulu. Kuncinya per satuan kerja supaya
+      // pengiriman ulang tidak menumpuk bila daftar diubah berkali-kali.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'satuan_kerja_anggota_simpan',
+        body: {
+          'satuan_kerja_id': '${widget.satuanKerja['id']}',
+          'anggota_id': _terpilih.toList(),
+        },
+        kunci: 'satuan_kerja_anggota:${widget.satuanKerja['id']}',
+      );
       if (!mounted) return;
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(

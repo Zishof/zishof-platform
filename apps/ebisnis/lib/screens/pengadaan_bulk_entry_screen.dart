@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../services/simple_xlsx.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 
 /// Jenis dokumen pengadaan yang dapat diisi massal.
@@ -64,10 +65,17 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
   final _kurir = TextEditingController();
   final List<_BarisBulk> _baris = [];
   int? _penyediaId;
+
+  /// Anggaran untuk bulk entry PR. Wajib kecuali dinyatakan tanpa anggaran --
+  /// aturan yang sama dengan form PR satuan, ditegakkan juga oleh server.
+  int? _anggaranId;
+  String _anggaranNama = '';
+  bool _tanpaAnggaran = false;
   String _penyediaNama = '';
   bool _sibuk = false;
 
   bool get _perluPenyedia => widget.jenis != JenisPengadaanBulk.pr;
+  bool get _perluAnggaran => widget.jenis == JenisPengadaanBulk.pr;
 
   String get _judul {
     switch (widget.jenis) {
@@ -88,6 +96,18 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
         return 'Draf pesanan massal; tersimpan sebagai PO berstatus DRAFT.';
       case JenisPengadaanBulk.bast:
         return 'Draf penerimaan massal tanpa PO; tersimpan sebagai BAST DRAFT.';
+    }
+  }
+
+  /// Kunci snapshot daftar yang ikut diperbarui optimistis saat luring.
+  String get _cacheKey {
+    switch (widget.jenis) {
+      case JenisPengadaanBulk.pr:
+        return 'master:pengadaan_pr';
+      case JenisPengadaanBulk.po:
+        return 'master:pengadaan_po';
+      case JenisPengadaanBulk.bast:
+        return 'master:pengadaan_bast';
     }
   }
 
@@ -135,6 +155,10 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
     }
     if (_perluPenyedia && _penyediaId == null) {
       pesan.add('Penyedia/vendor belum dipilih.');
+    }
+    if (_perluAnggaran && !_tanpaAnggaran && _anggaranId == null) {
+      pesan.add('Anggaran belum dipilih. Centang "Tanpa anggaran" bila '
+          'permintaan ini memang tidak membebani anggaran.');
     }
     if (_jumlahBelum > 0) {
       pesan.add('$_jumlahBelum baris belum cocok dengan produk. '
@@ -374,6 +398,47 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
     setState(() => c.text = DateFormat('dd-MM-yyyy').format(pilih));
   }
 
+
+  /// Pemilih Anggaran untuk bulk entry PR. Memakai aksi yang sama dengan form PR
+  /// satuan, sehingga daftar dan angkanya identik.
+  Future<void> _pilihAnggaran() async {
+    final r = await ApiClient.instance
+        .aksi('pengadaan_anggaran_cari', const {'limit': 50});
+    if (!mounted) return;
+    final daftar = ((r['data'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    if (daftar.isEmpty) {
+      _pesan('${r['catatan'] ?? 'Tidak ada anggaran aktif.'}', sukses: false);
+      return;
+    }
+    final pilih = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Pilih Anggaran'),
+        children: daftar
+            .map((a) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(c, a),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${a['kode'] ?? ''} ${a['nama'] ?? ''}'.trim()),
+                      Text('sisa ${_fmtRp.format(a['sisa'] ?? 0)}',
+                          style: const TextStyle(
+                              fontSize: 10, color: Colors.grey)),
+                    ],
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+    if (pilih == null || !mounted) return;
+    setState(() {
+      _anggaranId = (pilih['id'] as num?)?.toInt();
+      _anggaranNama = '${pilih['kode'] ?? ''} ${pilih['nama'] ?? ''}'.trim();
+    });
+  }
+
   Future<void> _simpan() async {
     if (_penghalang.isNotEmpty) {
       _pesan(_penghalang.first, sukses: false);
@@ -394,6 +459,9 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
           .toList();
       final body = <String, dynamic>{
         'keterangan': _keterangan.text.trim(),
+        if (_perluAnggaran) 'tanpaAnggaran': _tanpaAnggaran,
+        if (_perluAnggaran && !_tanpaAnggaran && _anggaranId != null)
+          'workspace_id': _anggaranId,
         'detail': detail,
         if (_penyediaId != null) 'penyedia_id': _penyediaId,
         if (widget.jenis == JenisPengadaanBulk.po) ...{
@@ -406,14 +474,19 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
           'kurir': _kurir.text.trim(),
         },
       };
-      final r = await ApiClient.instance.aksi(_aksiSimpan, body);
+      // Local-first: dokumen hasil bulk entry ditulis ke antrean perangkat dulu.
+      // Entri massal biasanya dikerjakan di gudang; sinyal di sana jarang bagus.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: _aksiSimpan,
+        body: body,
+        kunci: '$_aksiSimpan:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cacheKey,
+      );
       if (!mounted) return;
-      final sukses = r['status'] == '00' || r['status'] == 'success';
-      if (!sukses) {
-        _pesan('${r['description'] ?? 'Gagal menyimpan dokumen.'}', sukses: false);
-        return;
-      }
-      _pesan('Tersimpan sebagai ${r['kode'] ?? ''}.');
+      _pesan(r['offline'] == true
+          ? 'Tersimpan di perangkat, akan dikirim otomatis.'
+          : 'Tersimpan sebagai ${r['kode'] ?? ''}.');
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       _pesan('Gagal menyimpan: $e', sukses: false);
@@ -450,6 +523,56 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
       'Header Dokumen',
       'Data belum menjadi dokumen sampai Anda menekan Simpan di bagian Review.',
       Column(children: [
+        if (_perluAnggaran)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: [
+              // Saat tanpa anggaran, pemilihnya DISEMBUNYIKAN -- bukan dimatikan.
+              if (!_tanpaAnggaran)
+                Expanded(
+                  child: InkWell(
+                    onTap: _pilihAnggaran,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Anggaran *',
+                        isDense: true,
+                        suffixIcon: Icon(Icons.search, size: 18),
+                      ),
+                      child: Text(
+                          _anggaranNama.isEmpty
+                              ? 'Belum dipilih'
+                              : _anggaranNama,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                )
+              else
+                const Expanded(
+                  child: Text('Permintaan ini tidak membebani anggaran.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ),
+              const SizedBox(width: 8),
+              Column(mainAxisSize: MainAxisSize.min, children: [
+                Checkbox(
+                  value: _tanpaAnggaran,
+                  onChanged: (v) => setState(() {
+                    _tanpaAnggaran = v ?? false;
+                    if (_tanpaAnggaran) {
+                      _anggaranId = null;
+                      _anggaranNama = '';
+                    }
+                  }),
+                ),
+                const SizedBox(
+                  width: 56,
+                  child: Text('Tanpa anggaran',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 10)),
+                ),
+              ]),
+            ]),
+          ),
         if (_perluPenyedia)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),

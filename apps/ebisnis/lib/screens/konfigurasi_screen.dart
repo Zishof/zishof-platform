@@ -715,13 +715,29 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
   Future<void> _simpanGlobalOtomatis({bool? bayar, bool? layani}) async {
     setStateIfMounted(() => _menyimpanGlobal = true);
     try {
-      final res = await ApiClient.instance.aksi('otomatis_pesanan_global_simpan', {
-        if (bayar != null) 'bayar': bayar,
-        if (layani != null) 'layani': layani,
-      });
+      // Lokal dulu lalu dikirim; saat offline saklar tetap berubah dan
+      // dikirim otomatis nanti. Kuncinya tetap supaya klik berulang hanya
+      // menyisakan keadaan terakhir di antrean.
+      final res = await prosesSimpanMaster(
+        context,
+        aksi: 'otomatis_pesanan_global_simpan',
+        body: {
+          if (bayar != null) 'bayar': bayar,
+          if (layani != null) 'layani': layani,
+        },
+        kunci: 'otomatis_pesanan_global',
+      );
       setStateIfMounted(() {
-        _globalOtomatisBayar = res['bayar'] == true;
-        _globalOtomatisLayani = res['layani'] == true;
+        // Saat terkirim, server yang menentukan; saat masih terantre, pakai
+        // nilai yang baru saja dipilih pengguna supaya saklar tidak melompat
+        // balik ke keadaan lama.
+        final terantre = res['offline'] == true;
+        _globalOtomatisBayar = terantre
+            ? (bayar ?? _globalOtomatisBayar)
+            : res['bayar'] == true;
+        _globalOtomatisLayani = terantre
+            ? (layani ?? _globalOtomatisLayani)
+            : res['layani'] == true;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

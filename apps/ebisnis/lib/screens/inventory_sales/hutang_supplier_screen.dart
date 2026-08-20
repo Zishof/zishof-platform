@@ -13,6 +13,7 @@ import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/proses_simpan_master.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -1431,15 +1432,22 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> with JejakGalat {
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('si_purchase_terms_save', {
-        'faktur_id': widget.faktur['fakturId'],
-        'jenis_pembayaran': _jenis,
-        'termin_hari': int.tryParse(_termin.text.trim()) ?? 0,
-        if (_jenis == 'DP')
-          'dibayar_awal':
-              double.tryParse(_dibayarAwal.text.replaceAll(',', '.')) ?? 0,
-        'keterangan': _keterangan.text.trim(),
-      });
+      // Lokal dulu, baru dikirim. Kuncinya per faktur supaya penyuntingan
+      // termin berulang hanya menyisakan keadaan terakhir di antrean.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'si_purchase_terms_save',
+        body: {
+          'faktur_id': widget.faktur['fakturId'],
+          'jenis_pembayaran': _jenis,
+          'termin_hari': int.tryParse(_termin.text.trim()) ?? 0,
+          if (_jenis == 'DP')
+            'dibayar_awal':
+                double.tryParse(_dibayarAwal.text.replaceAll(',', '.')) ?? 0,
+          'keterangan': _keterangan.text.trim(),
+        },
+        kunci: 'si_purchase_terms:${widget.faktur['fakturId']}',
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));

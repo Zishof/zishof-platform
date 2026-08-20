@@ -8,7 +8,9 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/app_components.dart';
+import '../services/master_offline.dart';
 import '../widgets/pemilih_akun.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 
@@ -82,17 +84,67 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       _galat = null;
     });
     try {
-      final sa = await ApiClient.instance.aksi('saldo_awal_daftar', {});
-      final tp = await ApiClient.instance.aksi('penyesuaian_template_daftar', {});
+      // BACA LOKAL DULU: baris yang masih mengantre kirim tetap terlihat dan daftar
+      // tetap terbuka saat perangkat offline; emisi server menyusul memperbarui.
+      await MasterOffline.daftarCacheDulu('saldo_awal_daftar', const {}, _cacheSaldoAwal,
+          onData: (sa) {
+        if (!mounted) return;
+        setStateIfMounted(() =>
+            _saldoAwal = ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      });
+      await MasterOffline.daftarCacheDulu(
+          'penyesuaian_template_daftar', const {}, _cacheTemplate, onData: (tp) {
+        if (!mounted) return;
+        setStateIfMounted(() =>
+            _template = ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      });
       final ak = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
       if (!mounted) return;
       setStateIfMounted(() {
-        _saldoAwal = ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _template = ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((ak['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  static const String _cacheSaldoAwal = 'master:saldo_awal_akun';
+  static const String _cacheTemplate = 'master:penyesuaian_template';
+
+  /// Mutasi data MASTER: ditulis LOKAL dulu (antrean outbox + snapshot daftar), baru
+  /// dikirim. Berbeda dari [_aksi] yang dipakai proses hitung/posting milik server.
+  Future<bool> _simpanMaster(
+    String aksi,
+    Map<String, dynamic> body, {
+    required String kunci,
+    required String cacheKey,
+    Map<String, dynamic>? rowLokal,
+    bool hapusLokal = false,
+  }) async {
+    setStateIfMounted(() {
+      _sibuk = true;
+      _galat = null;
+    });
+    try {
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: aksi,
+        body: body,
+        kunci: kunci,
+        cacheKey: cacheKey,
+        rowLokal: rowLokal ?? body,
+        hapusLokal: hapusLokal,
+      );
+      if (hasil['offline'] != true) {
+        _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
+      }
+      await _muatSemua();
+      return true;
+    } catch (e) {
+      if (mounted) setStateIfMounted(() => _galat = e.toString());
+      return false;
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
@@ -217,13 +269,17 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       _pesan('Akun belum dipilih.');
       return;
     }
-    final hasil = await _aksi('saldo_awal_simpan', {
+    final payload = <String, dynamic>{
+      if (baris != null) 'id': baris['id'],
       'kodeAkun': kode,
       'debet': double.tryParse(debet.text.trim()) ?? 0,
       'kredit': double.tryParse(kredit.text.trim()) ?? 0,
       'keterangan': ket.text.trim(),
       'tanggal': _fmt.format(tanggal),
-    });
+    };
+    // ONLINE-ONLY: baris saldo awal adalah MASUKAN posting neraca awal. Mengantre
+    // sebagian baris lalu memposting menghasilkan neraca yang tidak seimbang.
+    final hasil = await _aksi('saldo_awal_simpan', payload);
     if (hasil != null) _pesan('${hasil['message'] ?? 'Tersimpan.'}');
     await _muatSemua();
   }
@@ -417,7 +473,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       if ((a['id'] as num?)?.toInt() == debetId) kodeDebet = '${a['kode'] ?? ''}';
       if ((a['id'] as num?)?.toInt() == kreditId) kodeKredit = '${a['kode'] ?? ''}';
     }
-    final hasil = await _aksi('penyesuaian_template_simpan', {
+    final payload = <String, dynamic>{
       if (t != null) 'id': t['id'],
       'nama': nama.text.trim(),
       'akunDebetKode': kodeDebet,
@@ -426,9 +482,15 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       'frekuensi': frekuensi,
       'aktif': aktif,
       'keterangan': ket.text.trim(),
-    });
-    if (hasil != null) _pesan('${hasil['message'] ?? ''}');
-    await _muatSemua();
+    };
+    await _simpanMaster(
+      'penyesuaian_template_simpan',
+      payload,
+      kunci: t == null
+          ? 'penyesuaian_template:baru:${DateTime.now().microsecondsSinceEpoch}'
+          : 'penyesuaian_template:${t['id']}',
+      cacheKey: _cacheTemplate,
+    );
   }
 
   Future<void> _hapusTemplate(Map<String, dynamic> t) async {
@@ -436,9 +498,14 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         'Template "${t['nama']}" dihapus. Jurnal yang terlanjur terbentuk tetap tersimpan.')) {
       return;
     }
-    final hasil = await _aksi('penyesuaian_template_hapus', {'id': t['id']});
-    if (hasil != null) _pesan('${hasil['message'] ?? ''}');
-    await _muatSemua();
+    await _simpanMaster(
+      'penyesuaian_template_hapus',
+      {'id': t['id']},
+      kunci: 'penyesuaian_template:${t['id']}',
+      cacheKey: _cacheTemplate,
+      rowLokal: {'id': t['id']},
+      hapusLokal: true,
+    );
   }
 
   Future<void> _drafPenyesuaianJalan() async {

@@ -5,6 +5,7 @@ import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/proses_simpan_master.dart';
 import 'mitrainap_common.dart';
 
 /// Kamar & Tipe Kamar per properti -- dua tab di atas satu pilihan properti
@@ -138,14 +139,17 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
     }
   }
 
-  /// Offline-first (pola MasterOffline seragam semua master): server dulu,
-  /// putus jaringan -> antre outbox_master + snackbar "tersimpan lokal";
-  /// pengiriman latar + indikator animasi ditangani IndikatorSinkronMaster.
+  /// Local-first (pola seragam semua master): data ditulis ke antrean lokal
+  /// LEBIH DULU, baru dicoba dikirim dengan indikator animasi bertahap.
+  /// Putus jaringan tidak menahan pengguna -- pengiriman ulang berjalan di
+  /// latar tiap [MasterOffline.intervalFlush] dan berhenti sendiri saat
+  /// terkirim.
   Future<void> _kirim(
       String aksi, Map<String, dynamic> body, String pesanSukses,
       {required String kunci}) async {
     try {
-      final res = await MasterOffline.simpanAtauAntre(aksi, body, kunci: kunci);
+      final res = await prosesSimpanMaster(context,
+          aksi: aksi, body: body, kunci: kunci);
       final sukses = apiSukses(res);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

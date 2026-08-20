@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../services/master_offline.dart';
 import '../sesi.dart';
 import '../widgets/safe_state.dart';
 
@@ -258,13 +259,32 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       _mengirimRating = true;
     });
     try {
-      await ApiClient.instance.aksi('survey_kepuasan_simpan', {
-        'rating': rating,
-        'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
-      });
+      // Local-first, TANPA dialog: ini layar yang dilihat PELANGGAN, jadi
+      // tidak boleh memunculkan jendela proses milik kasir. Nilai ditulis ke
+      // antrean lokal dulu supaya rating tidak hilang saat jaringan mati --
+      // sebelumnya kegagalan kirim ditelan diam-diam dan rating lenyap.
+      // Kuncinya unik per pengiriman: setiap rating adalah data tersendiri
+      // dan tidak boleh saling menimpa di antrean.
+      final idAntrean = await MasterOffline.antreLokal(
+        'survey_kepuasan_simpan',
+        {
+          'rating': rating,
+          'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
+        },
+        kunci: 'survey_kepuasan:${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await MasterOffline.kirimSatuAntrean(
+        idAntrean,
+        'survey_kepuasan_simpan',
+        {
+          'rating': rating,
+          'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
+        },
+      );
     } catch (_) {
       // Gagal kirim (mis. offline sesaat) -- bukan blocker, layar tetap
       // menampilkan ucapan terima kasih lalu kembali ke Idle spt biasa.
+      // Barisnya tetap di antrean dan dikirim ulang otomatis di latar.
     }
     if (!mounted) return;
     setStateIfMounted(() => _mengirimRating = false);

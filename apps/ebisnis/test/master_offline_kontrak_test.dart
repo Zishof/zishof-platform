@@ -106,6 +106,14 @@ void main() {
     'lib/screens/mitrainap/resepsionis_hotel_screen.dart': [
       "'hotel_tamu_simpan'"
     ],
+    // Bagan akun: spec 13.3 menempatkan "perubahan rekening/harga sensitif"
+    // sebagai wajib online. Akun yang baru muncul setelah sinkronisasi akan
+    // membuat jurnal mengacu ke akun tak dikenal.
+    'lib/screens/inventory_sales/kas_jurnal_screen.dart': ["'si_coa_save'"],
+    // Pembalikan transaksi = "reversal" pada spec 13.3.
+    'lib/screens/riwayat_penjualan_screen.dart': ["aksi('batalkan_transaksi'"],
+    // Posting jurnal = "journal posting" pada spec 13.3.
+    'lib/screens/jurnal_umum_screen.dart': ["aksi('jurnal_umum_posting'"],
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
     // real-time) -- entri lamanya dipindah dari daftar online-only ini.
@@ -149,6 +157,43 @@ void main() {
           isTrue,
           reason: '$file belum memasang indikator per-baris');
     }
+  });
+
+  // Mutasi yang WAJIB local-first: ditulis ke antrean lokal LEBIH DULU, baru
+  // dikirim. Daftar ini menjaga hasil audit agar tidak diam-diam dikembalikan
+  // ke pola "server dulu" (MasterOffline.simpanAtauAntre) di kemudian hari.
+  const wajibLokalDulu = <String, String>{
+    'lib/screens/anggota/tab_satuan_kerja.dart': "'satuan_kerja_simpan'",
+    'lib/screens/anggota/tab_topup.dart': "'deposit_hapus'",
+    'lib/screens/mitrainap/kamar_hotel_screen.dart': 'prosesSimpanMaster(',
+    'lib/screens/pengadaan_tagihan_screen.dart':
+        "'pengadaan_lampiran_hapus'",
+    'lib/screens/inventory_sales/hutang_supplier_screen.dart':
+        "'si_purchase_terms_save'",
+  };
+
+  test('mutasi wajib local-first tidak kembali ke pola server-dulu', () {
+    for (final entri in wajibLokalDulu.entries) {
+      final source = File(entri.key).readAsStringSync();
+      final indeks = source.indexOf(entri.value);
+      expect(indeks, greaterThanOrEqualTo(0),
+          reason: '${entri.key} kehilangan penanda ${entri.value}');
+      final sekitar = source.substring(
+          (indeks - 400).clamp(0, indeks), (indeks + 200).clamp(0, source.length));
+      expect(sekitar, contains('prosesSimpanMaster'),
+          reason: '${entri.key}: ${entri.value} harus lewat prosesSimpanMaster '
+              '(tulis lokal dulu), bukan ApiClient langsung atau '
+              'simpanAtauAntre yang mencoba server lebih dulu');
+    }
+  });
+
+  test('rating pelanggan diantre lokal dulu tanpa dialog kasir', () {
+    final layar =
+        File('lib/screens/layar_pelanggan_screen.dart').readAsStringSync();
+    expect(layar, contains('MasterOffline.antreLokal'),
+        reason: 'rating harus tercatat lokal sebelum dikirim');
+    expect(layar, isNot(contains('prosesSimpanMaster')),
+        reason: 'layar pelanggan tidak boleh memunculkan dialog proses kasir');
   });
 
   test('aksi sensitif tetap online-only (tidak diantre diam-diam)', () {

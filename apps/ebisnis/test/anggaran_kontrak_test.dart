@@ -90,6 +90,19 @@ void main() {
     expect(layar, contains('_konteksTeks'));
   });
 
+  test('CRUD ditulis lokal dulu sebelum dikirim ke server', () {
+    // prosesSimpanMaster: antre lokal + snapshot daftar -> baru kirim; offline tidak
+    // menahan pengguna. Daftar dibaca cache-dulu supaya baris yang masih mengantre
+    // tetap terlihat.
+    expect(layar, contains('prosesSimpanMaster('));
+    expect(layar, contains('MasterOffline.daftarCacheDulu('));
+    expect(layar, contains('_cacheItem'));
+    expect(layar, contains('_cachePenggunaan'));
+    // "Buat Revisi Baru" dihitung server (menyalin seluruh pohon) -- sengaja TIDAK
+    // diantrekan supaya tidak menghasilkan revisi ganda saat akhirnya terkirim.
+    expect(layar, contains("_kirimServer('anggaran_revisi_baru'"));
+  });
+
   test('tombol mengikuti hak akses dari server', () {
     expect(layar, contains("res['hak']"));
     for (final aksi in ["'create'", "'update'", "'delete'"]) {
