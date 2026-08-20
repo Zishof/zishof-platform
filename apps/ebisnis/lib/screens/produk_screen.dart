@@ -354,6 +354,57 @@ class _ProdukScreenState extends State<ProdukScreen> {
     }
   }
 
+  /// Isi "Nama Pemasok Utama" produk yang MASIH kosong dari penerimaan barang
+  /// (kulakan) terakhir tiap produk. Dua langkah: pratinjau dulu supaya jumlah
+  /// yang akan tersentuh terlihat sebelum apa pun disimpan.
+  ///
+  /// Satuan TIDAK ikut diisi -- tidak ada satu pun tabel yang mencatatnya di
+  /// luar impor Excel, jadi tidak ada sumber untuk ditarik.
+  Future<void> _isiPemasokDariKulakan() async {
+    try {
+      final pratinjau = await ApiClient.instance
+          .aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': true});
+      final kandidat = (pratinjau['kandidat'] as num?)?.toInt() ?? 0;
+      if (!mounted) return;
+      if (kandidat == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Tidak ada produk yang bisa diisi: pemasoknya sudah terisi, '
+                'atau belum pernah ada penerimaan barang.')));
+        return;
+      }
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          title: const Text('Isi Pemasok dari Kulakan'),
+          content: Text(
+              '$kandidat produk yang pemasoknya masih kosong akan diisi dari '
+              'penerimaan barang terakhir masing-masing.\n\n'
+              'Produk yang pemasoknya sudah terisi tidak akan diubah.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dctx, true),
+                child: const Text('Isi Sekarang')),
+          ],
+        ),
+      );
+      if (lanjut != true) return;
+      final hasil = await ApiClient.instance
+          .aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${hasil['description'] ?? 'Selesai.'}')));
+      await _muatSemua();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal mengisi pemasok: $e')));
+    }
+  }
+
   /// Bersihkan Duplikat -- preview (`produk_duplikat_cari`) lalu konfirmasi
   /// hapus (`produk_duplikat_hapus`), keduanya digerbang server-side ke
   /// admin/supervisor toko. `jenis` menentukan kunci pencocokan duplikat.
@@ -593,6 +644,12 @@ class _ProdukScreenState extends State<ProdukScreen> {
             icon: Icons.cleaning_services_outlined,
             label: 'Bersihkan',
           ),
+        ),
+      if (Sesi.instance.bolehKelola)
+        HeaderActionButton(
+          icon: Icons.local_shipping_outlined,
+          label: 'Isi Pemasok',
+          onPressed: _isiPemasokDariKulakan,
         ),
       HeaderActionButton(
         icon: Icons.refresh,
