@@ -11,7 +11,13 @@ import 'bantuan_kontekstual.dart';
 class BantuanScreen extends StatefulWidget {
   final String? menuId;
   final String? menuJudul;
-  const BantuanScreen({super.key, this.menuId, this.menuJudul});
+
+  /// Kata kunci awal untuk kotak pencarian. Dipakai pilihan "Tanya Jawab" pada
+  /// tombol bantuan mengambang agar layar langsung terbuka pada bagian tanya jawab
+  /// halaman yang bersangkutan, bukan di pucuk artikel.
+  final String? cariAwal;
+  const BantuanScreen(
+      {super.key, this.menuId, this.menuJudul, this.cariAwal});
 
   @override
   State<BantuanScreen> createState() => _BantuanScreenState();
@@ -20,6 +26,20 @@ class BantuanScreen extends StatefulWidget {
 class _BantuanScreenState extends State<BantuanScreen> {
   int _terpilih = defaultTargetPlatform == TargetPlatform.android ? 1 : 0;
   String _cari = '';
+  late final TextEditingController _ctlCari;
+
+  @override
+  void initState() {
+    super.initState();
+    _cari = widget.cariAwal ?? '';
+    _ctlCari = TextEditingController(text: _cari);
+  }
+
+  @override
+  void dispose() {
+    _ctlCari.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,12 +79,14 @@ class _BantuanScreenState extends State<BantuanScreen> {
             onPilih: (nilai) => setState(() {
               _terpilih = nilai;
               _cari = '';
+              _ctlCari.clear();
             }),
           );
           final konten = _IsiArtikel(
             artikel: artikel,
             bagian: bagian,
             query: _cari,
+            controllerCari: _ctlCari,
             onCari: (nilai) => setState(() => _cari = nilai),
           );
           if (widget.menuId != null) return konten;
@@ -149,11 +171,13 @@ class _IsiArtikel extends StatelessWidget {
   final ArtikelBantuan artikel;
   final List<BagianBantuan> bagian;
   final String query;
+  final TextEditingController controllerCari;
   final ValueChanged<String> onCari;
   const _IsiArtikel({
     required this.artikel,
     required this.bagian,
     required this.query,
+    required this.controllerCari,
     required this.onCari,
   });
 
@@ -172,6 +196,7 @@ class _IsiArtikel extends StatelessWidget {
               style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 18),
           TextField(
+            controller: controllerCari,
             onChanged: onCari,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
