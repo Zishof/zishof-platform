@@ -257,6 +257,48 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> {
     if (hasil == true && mounted) await _muat();
   }
 
+
+  /// Sinkronkan penerimaan yang sudah disetujui ke stok POS lewat Kulakan.
+  /// Server menolak sinkronisasi kedua karena akan menggandakan stok, jadi
+  /// konfirmasinya menegaskan bahwa langkah ini hanya sekali.
+  Future<void> _sinkronKulakan(Map<String, dynamic> bast) async {
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Sinkronkan ke Kulakan'),
+        content: Text('Tambahkan barang pada ${bast['kode']} ke stok toko '
+            'sebagai faktur Kulakan? Langkah ini hanya dapat dilakukan sekali '
+            'untuk penerimaan ini.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Sinkronkan')),
+        ],
+      ),
+    );
+    if (yakin != true || !mounted) return;
+    try {
+      final r = await ApiClient.instance
+          .aksi('pengadaan_bast_sinkron_kulakan', {'id': bast['id']});
+      if (!mounted) return;
+      final sukses = r['status'] == '00' || r['status'] == 'success';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(sukses
+              ? 'Stok bertambah lewat faktur ${r['nomorFaktur'] ?? ''} '
+                  '(${r['jumlahBaris'] ?? 0} baris).'
+              : '${r['description'] ?? 'Gagal menyinkronkan.'}'),
+          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
+      if (sukses) await _muat();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -463,6 +505,19 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> {
             tooltip: 'Batalkan persetujuan',
             icon: const Icon(Icons.undo, size: 18),
             onPressed: () => _putusan(bast, 'BATAL')),
+      if (disetujui && bast['sudahSinkron'] != true)
+        IconButton(
+            tooltip: 'Sinkronkan ke stok Kulakan',
+            icon: const Icon(Icons.sync_alt, size: 18, color: Color(0xFF00695C)),
+            onPressed: () => _sinkronKulakan(bast)),
+      if (bast['sudahSinkron'] == true)
+        Tooltip(
+          message: 'Sudah masuk stok lewat faktur ${bast['nomorFakturKulakan'] ?? ''}',
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: Icon(Icons.check_circle, size: 18, color: Color(0xFF00695C)),
+          ),
+        ),
       if (bast['id'] != null)
         IconButton(
             tooltip: 'Riwayat data (AuditTrails)',
