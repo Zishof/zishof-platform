@@ -10,8 +10,11 @@ AppId={{C4F1A9E7-3D82-4A16-95B7-2E6C0D7PETRA}
 AppName=eKantin Petra
 AppVersion={#AppVersion}
 AppPublisher=Zishof
-DefaultDirName={autopf}\eKantin Petra
-DefaultGroupName=eKantin Petra
+; Folder & grup DIBEDAKAN dari aplikasi anggota (eKantin Petra Anggota):
+; keduanya dipasang di komputer yang sama dan sebelumnya sama-sama
+; menulis ke "eKantin Petra", sehingga saling menimpa berkasnya.
+DefaultDirName={autopf}\eKantin Petra POS
+DefaultGroupName=eKantin Petra POS
 UninstallDisplayIcon={app}\ebisnis_petra.exe
 OutputBaseFilename=eKantin-Petra-Setup-{#AppVersion}
 OutputDir=dist

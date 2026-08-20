@@ -13,8 +13,10 @@ AppId={{4C8D1F62-77B3-49AE-B25C-6E0F3A1PETRA}
 AppName=Direktorat Pengembangan Usaha Sosial
 AppVersion={#AppVersion}
 AppPublisher=Zishof
-DefaultDirName={autopf}\eKantin Petra
-DefaultGroupName=eKantin Petra
+; Folder & grup DIBEDAKAN dari POS (eKantin Petra POS) -- lihat catatan
+; yang sama di apps/ebisnis/installer/petra.iss.
+DefaultDirName={autopf}\eKantin Petra Anggota
+DefaultGroupName=eKantin Petra Anggota
 UninstallDisplayIcon={app}\zishof.exe
 ; Nama berkas mengikuti penamaan yang dipakai saat distribusi ke Petra.
 ; Versinya tetap tercatat di metadata installer (AppVersion), bukan hilang.
@@ -39,9 +41,9 @@ Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignore
 Source: "..\..\ebisnis\installer\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\eKantin Petra"; Filename: "{app}\zishof.exe"
-Name: "{group}\Uninstall eKantin Petra"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\eKantin Petra"; Filename: "{app}\zishof.exe"; Tasks: desktopicon
+Name: "{group}\eKantin Petra Anggota"; Filename: "{app}\zishof.exe"
+Name: "{group}\Uninstall eKantin Petra Anggota"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\eKantin Petra Anggota"; Filename: "{app}\zishof.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Memasang komponen Microsoft Visual C++ Runtime..."; Check: VCRedistNeeded; Flags: waituntilterminated
