@@ -35,6 +35,7 @@ import '../screens/laporan_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
+import '../screens/anggaran_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
@@ -70,13 +71,19 @@ import 'app_version_label.dart';
 /// Layar yang belum dibangun ditandai "Segera Hadir" (dinonaktifkan) -- lihat
 /// task #182-189 utk urutan pengerjaan, jangan hapus entrinya supaya progres
 /// tetap terlihat sambil layar-layar itu menyusul satu per satu.
-/// Halaman untuk tiga submenu siklus akuntansi. Layarnya satu (bertab), tiap
-/// menu hanya mendarat di tabnya sendiri -- pola yang sama dipakai sidebar
-/// Desktop supaya kedua platform menampilkan menu yang identik.
-Widget _halamanSiklus(String judul, int tabAwal) => Scaffold(
+/// Bungkus halaman untuk layar akuntansi yang badannya berupa Column bertab
+/// (KodeAkunScreen & SiklusAkuntansiScreen). Keduanya BUKAN halaman utuh: tanpa
+/// Scaffold, TabBar/ListTile di dalamnya gagal dengan "No Material widget found"
+/// begitu menu dibuka. Sidebar Desktop membungkusnya dengan AppShell; drawer
+/// Android memakai Scaffold ringkas ini supaya keduanya sama-sama aman.
+Widget _halamanAkuntansi(String judul, Widget badan) => Scaffold(
       appBar: AppBar(title: Text(judul)),
-      body: SiklusAkuntansiScreen(tabAwal: tabAwal),
+      body: badan,
     );
+
+/// Tiga submenu siklus akuntansi memakai layar yang sama, beda tab awalnya.
+Widget _halamanSiklus(String judul, int tabAwal) =>
+    _halamanAkuntansi(judul, SiklusAkuntansiScreen(tabAwal: tabAwal));
 
 class AppDrawer extends StatelessWidget {
   final String menuAktif;
@@ -705,6 +712,7 @@ class AppDrawer extends StatelessWidget {
                             'Posting Kulakan',
                             'Posting Bayar Hutang',
                             'Posting Terima Piutang',
+                            'Anggaran (RAB Bulanan)',
                             'Laporan-Laporan Keuangan',
                           ].contains(menuAktif),
                           anak: [
@@ -758,7 +766,9 @@ class AppDrawer extends StatelessWidget {
                                 aktif: menuAktif == 'Kode Akun',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Kode Akun',
-                                    builder: (_) => const KodeAkunScreen(tabAwal: 0)),
+                                    builder: (_) => _halamanAkuntansi(
+                                        'Kode Akun',
+                                        const KodeAkunScreen(tabAwal: 0))),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('grup_akun'))
                               _ItemMenu(
@@ -767,7 +777,9 @@ class AppDrawer extends StatelessWidget {
                                 aktif: menuAktif == 'Grup Akun',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Grup Akun',
-                                    builder: (_) => const KodeAkunScreen(tabAwal: 4)),
+                                    builder: (_) => _halamanAkuntansi(
+                                        'Grup Akun',
+                                        const KodeAkunScreen(tabAwal: 4))),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('jenis_transaksi'))
                               _ItemMenu(
@@ -776,7 +788,9 @@ class AppDrawer extends StatelessWidget {
                                 aktif: menuAktif == 'Jenis Transaksi',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Jenis Transaksi',
-                                    builder: (_) => const KodeAkunScreen(tabAwal: 3)),
+                                    builder: (_) => _halamanAkuntansi(
+                                        'Jenis Transaksi',
+                                        const KodeAkunScreen(tabAwal: 3))),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('bank_akun'))
                               _ItemMenu(
@@ -785,7 +799,9 @@ class AppDrawer extends StatelessWidget {
                                 aktif: menuAktif == 'Bank',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Bank',
-                                    builder: (_) => const KodeAkunScreen(tabAwal: 2)),
+                                    builder: (_) => _halamanAkuntansi(
+                                        'Bank',
+                                        const KodeAkunScreen(tabAwal: 2))),
                               ),
                             // Enam layar berikut sebelumnya hanya tab di dalam layar
                             // Laporan Keuangan; kini tiap layar punya kunci menunya
@@ -869,6 +885,22 @@ class AppDrawer extends StatelessWidget {
                                   subjudul:
                                       'Membukukan penerimaan piutang dari pelanggan toko',
                                   bukaPosting: 'posting_terima_piutang',
+                                ),
+                              ),
+                            ),
+                            // Anggaran/RAB bulanan: satu layar bertab (Rencana Bulanan,
+                            // Realisasi, Penggunaan Anggaran) -- padanan empat layar ZK.
+                            if (Sesi.instance.bolehMenuVarianBaru('anggaran'))
+                            _ItemMenu(
+                              icon: Icons.savings_outlined,
+                              label: 'Anggaran (RAB Bulanan)',
+                              aktif: menuAktif == 'Anggaran (RAB Bulanan)',
+                              onTap: () => _pindahMenu(
+                                context,
+                                label: 'Anggaran (RAB Bulanan)',
+                                builder: (_) => Scaffold(
+                                  appBar: AppBar(title: const Text('Anggaran (RAB Bulanan)')),
+                                  body: const AnggaranScreen(),
                                 ),
                               ),
                             ),
