@@ -47,6 +47,7 @@ import '../screens/laporan_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
+import '../screens/anggaran_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
@@ -148,6 +149,9 @@ enum MenuEBisnis {
   postingKulakan,
   postingBayarHutang,
   postingTerimaPiutang,
+  // Anggaran/RAB bulanan (2026-08-21): rencana per bulan, revisi, realisasi, dan
+  // penggunaan anggaran -- padanan empat layar ZK di paket rab.
+  anggaran,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -306,6 +310,7 @@ const _kunciMenuAkuntansi = <MenuEBisnis, String>{
   MenuEBisnis.postingKulakan: 'posting_kulakan',
   MenuEBisnis.postingBayarHutang: 'posting_bayar_hutang',
   MenuEBisnis.postingTerimaPiutang: 'posting_terima_piutang',
+  MenuEBisnis.anggaran: 'anggaran',
 };
 
 /// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
@@ -547,6 +552,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.laporanKeuangan, Icons.folder_open_outlined,
       'Katalog Laporan',
       builder: _bangunLaporanKeuangan),
+  _ItemMenuShell(
+      MenuEBisnis.anggaran, Icons.savings_outlined, 'Anggaran (RAB Bulanan)',
+      builder: _bangunAnggaran),
   _ItemMenuShell(MenuEBisnis.kodeAkun, Icons.account_tree_outlined, 'Kode Akun',
       builder: _bangunKodeAkun),
   _ItemMenuShell(MenuEBisnis.grupAkun, Icons.workspaces_outline, 'Grup Akun',
@@ -692,6 +700,7 @@ const _grupMenu = <_GrupMenuShell>[
     'Akuntansi',
     [
       MenuEBisnis.laporanKeuangan,
+      MenuEBisnis.anggaran,
       MenuEBisnis.kodeAkun,
       MenuEBisnis.grupAkun,
       MenuEBisnis.jenisTransaksi,
@@ -754,6 +763,11 @@ Widget _bangunLaporanKeuangan(BuildContext c) => const LaporanScreen(
 
 /// Layar akuntansi memakai LAYAR YANG SAMA dengan tab-nya, hanya mendarat di
 /// bagian yang tepat -- tidak ada duplikasi logika posting/jurnal.
+Widget _bangunAnggaran(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.anggaran,
+    'Anggaran (RAB Bulanan)',
+    'Rencana belanja per bulan, revisi, realisasi, dan penggunaan anggaran',
+    const AnggaranScreen());
 Widget _bangunKodeAkun(BuildContext c) => _halamanAkuntansi(
     MenuEBisnis.kodeAkun,
     'Kode Akun',
@@ -1079,6 +1093,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Posting Bayar Hutang';
     case MenuEBisnis.postingTerimaPiutang:
       return 'Posting Terima Piutang';
+    case MenuEBisnis.anggaran:
+      return 'Anggaran (RAB Bulanan)';
     case MenuEBisnis.riwayatSinkron:
       return 'Riwayat Sinkronisasi';
     case MenuEBisnis.logError:
@@ -1208,6 +1224,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.postingBayarHutang;
     case 'Posting Terima Piutang':
       return MenuEBisnis.postingTerimaPiutang;
+    case 'Anggaran (RAB Bulanan)':
+      return MenuEBisnis.anggaran;
     case 'Riwayat Sinkronisasi':
       return MenuEBisnis.riwayatSinkron;
     case 'Log Error':
