@@ -25,7 +25,7 @@ void main() {
       () {
     // Harus sama dengan jumlah MenuEBisnis pada app_shell.dart. Penambahan menu
     // baru wajib diikuti artikel bantuan sebelum test ini dapat lulus.
-    expect(spesifikasiBantuanMenu.length, 43);
+    expect(spesifikasiBantuanMenu.length, 50);
     for (final entri in spesifikasiBantuanMenu.entries) {
       final artikel =
           artikelBantuanUntukMenu(entri.key, entri.value.judul, 'android');

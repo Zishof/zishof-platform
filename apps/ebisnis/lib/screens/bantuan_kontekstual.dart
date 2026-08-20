@@ -1161,7 +1161,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Daftar PR',
         'Form permintaan',
         'Pemilih barang',
-        'Tombol setujui dan tolak'
+        'Tombol setujui dan tolak',
+        'Alasan penolakan pada PR yang ditolak'
       ],
       objekUtama: 'permintaan pembelian',
       hasilAkhir: 'PR disetujui yang siap dijadikan pesanan',
@@ -1212,6 +1213,7 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'LUNAS = seluruh nilai PO sudah dibayar dan disetujui'
       ],
       catatanPenting: [
+        'Tombol Dari PR menampilkan BARANG-nya, dikelompokkan per nomor PR; barang dari beberapa PR boleh digabung ke dalam satu pesanan',
         'Jumlah seluruh termin wajib sama dengan nilai PO; selisih lebih dari Rp 1 akan ditolak saat menyimpan',
         'DP dan termin saling meniadakan. Bila memakai termin, tuliskan uang mukanya sebagai termin pertama',
         'PO yang sudah disetujui atau sudah menerima pembayaran tidak dapat diubah',
@@ -1242,7 +1244,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Daftar penerimaan',
         'Form BAST',
         'Penanda sisa boleh diterima',
-        'Tombol sinkron ke Kulakan'
+        'Tombol sinkron ke Kulakan',
+        'Rincian jumlah dipesan dibanding jumlah diterima'
       ],
       objekUtama: 'berita acara serah terima barang',
       hasilAkhir: 'barang tercatat diterima dan stok toko bertambah',
@@ -1252,6 +1255,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Tanpa PO = penerimaan langsung untuk pembelian toko tanpa pesanan'
       ],
       catatanPenting: [
+        'Barang datang kurang? Simpan dahulu yang benar-benar diterima, lalu tekan Back Order / Pesan Kembali untuk menutup sisanya dan menerbitkan pesanan susulan',
+        'Sisa pesanan yang sudah ditutup tidak menerima barang lagi -- kekurangannya diterima pada pesanan susulan',
+        'PPN dan PPh diisi per baris dalam persen; nilainya ikut muncul di layar Bayar Pajak',
         'Jumlah diterima tidak boleh melebihi sisa yang dipesan; angka sisanya tertera pada tiap baris',
         'Satu PO boleh diterima bertahap bila barang datang beberapa kali',
         'Stok baru bertambah setelah BAST disetujui DAN disinkronkan ke Kulakan',
@@ -1275,12 +1281,15 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Pilih penerimaan yang sudah disetujui',
         'Isi nomor faktur',
         'Isi tanggal faktur',
-        'Simpan tagihan'
+        'Simpan tagihan',
+        'Periksa kembali di daftar sudah ditagih'
       ],
       ilustrasi: [
         'Daftar siap ditagih',
         'Penanda belum dan sudah ditagih',
-        'Form nomor faktur'
+        'Form nomor faktur',
+        'Kolom tanggal faktur',
+        'Daftar penerimaan yang sudah ditagih'
       ],
       objekUtama: 'faktur vendor atas penerimaan barang',
       hasilAkhir: 'tagihan tercatat dan siap dibayar',
@@ -1289,6 +1298,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'SUDAH DITAGIH = nomor dan tanggal faktur sudah tercatat'
       ],
       catatanPenting: [
+        'Invoice WAJIB diunggah dan harus berupa gambar; tagihan tidak dapat diterima sebelum lampiran itu ada',
+        'Faktur Pajak, Surat Jalan, dan Kwitansi bersifat pelengkap',
+        'Berkasnya tersimpan di tabel lampiran yang sama dengan versi ZKoss, jadi terbaca di kedua versi',
         'Hanya penerimaan yang sudah DISETUJUI yang muncul di sini; barang yang belum diakui diterima tidak boleh menimbulkan kewajiban bayar',
         'Nomor dan tanggal faktur keduanya wajib karena menjadi rujukan pembayaran',
         'Nomor faktur yang sama pada penyedia yang sama akan ditolak untuk mencegah tagihan berganda',
@@ -1314,7 +1326,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Daftar pembayaran',
         'Tagihan terbuka per termin',
         'Kolom sisa dan nilai bayar',
-        'Pilihan ajukan transfer'
+        'Pilihan ajukan transfer',
+        'Ringkasan pajak yang menjadi terutang'
       ],
       objekUtama: 'dokumen pembayaran vendor',
       hasilAkhir: 'pesanan tercatat terbayar dan pajaknya menjadi terutang',
@@ -1324,6 +1337,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Pengajuan transfer = permintaan pencairan yang masuk antrean keuangan'
       ],
       catatanPenting: [
+        'Cara transfer wajib dipilih karena akun pada cara transfer itulah yang dipakai saat jurnal dibentuk',
+        'Tagihan yang sudah diajukan pada dokumen lain tidak muncul lagi, supaya tidak terbayar dua kali',
         'Dokumen DRAFT belum diakui sebagai pembayaran; status pesanan baru berubah setelah DISETUJUI',
         'Nilai bayar tidak boleh melebihi sisa tagihan terminnya',
         'Pembayaran yang sudah disetujui tidak dapat diubah maupun dihapus; batalkan persetujuannya dulu',
@@ -1341,28 +1356,35 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       ]),
   'pengadaanBdp': SpesifikasiBantuanMenu(
       judul: 'Barang Dalam Proses',
-      tujuan: 'memantau barang yang sudah dipesan tetapi belum diterima',
+      tujuan:
+          'merekap penerimaan barang (BAST) beserta nilai dan statusnya, sekaligus memantau kiriman yang belum datang',
       workflow: [
-        'Buka daftar',
-        'Saring yang terlambat',
-        'Periksa umur pesanan',
-        'Tindak lanjuti ke penyedia'
+        'Pilih pandangan Sudah Diterima atau Belum Datang',
+        'Saring bila perlu',
+        'Periksa nilai dan status',
+        'Tindak lanjuti ke penyedia',
+        'Pantau ulang setelah barang datang'
       ],
       ilustrasi: [
-        'Ringkasan nilai belum datang',
-        'Kolom dipesan, diterima, belum datang',
-        'Penanda lewat batas kirim'
+        'Sakelar dua pandangan',
+        'Ringkasan nilai dan status persetujuan',
+        'Penanda sudah/belum masuk stok',
+        'Saringan penyedia dan periode',
+        'Rincian nilai per pesanan'
       ],
-      objekUtama: 'sisa pesanan yang belum datang',
-      hasilAkhir: 'pesanan tertunda terpantau dan dapat ditagih ke penyedia',
+      objekUtama: 'penerimaan barang beserta statusnya',
+      hasilAkhir:
+          'nilai barang yang sudah diterima terpantau, dan kiriman tertunda dapat ditagih ke penyedia',
       istilah: [
+        'CIP = Pekerjaan Dalam Pelaksanaan, kelompok aset yang pengerjaannya belum selesai',
+        'Sudah masuk stok = penerimaan ini sudah disalin menjadi faktur Kulakan',
         'Belum datang = jumlah dipesan dikurangi yang sudah diterima',
-        'Umur = berapa hari sejak pesanan dibuat',
         'Terlambat = sudah melewati batas kirim yang disepakati'
       ],
       catatanPenting: [
-        'Halaman ini tidak dapat diubah; isinya dihitung dari selisih pesanan dan penerimaan',
-        'Angkanya memakai definisi yang sama dengan pagar penerimaan, jadi tidak akan berbeda dengan sisa yang boleh diterima di layar BAST'
+        'Istilah "Barang Dalam Proses" di sini mengikuti versi ZKoss: sumbernya PENERIMAAN, bukan pesanan yang belum datang',
+        'Penyaring CIP mati secara bawaan, karena pada pemasangan POS umumnya belum ada kelompok aset yang ditandai CIP',
+        'Halaman ini tidak dapat diubah; isinya dihitung dari dokumen yang sudah tercatat'
       ]),
   'pengadaanPajak': SpesifikasiBantuanMenu(
       judul: 'Bayar Pajak',
@@ -1379,7 +1401,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Ringkasan PPh dan PPN',
         'Daftar pajak terutang',
         'Form bukti setor',
-        'Riwayat setoran'
+        'Riwayat setoran',
+        'Tab Terutang dan tab Riwayat'
       ],
       objekUtama: 'setoran pajak atas pembayaran vendor',
       hasilAkhir: 'kewajiban pajak tercatat lunas beserta bukti setornya',
@@ -1391,6 +1414,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Terutang = pajak yang sudah timbul tetapi belum disetor'
       ],
       catatanPenting: [
+        'Pajak datang dari dua sumber: PPN/PPh yang diketik pada penerimaan barang (lencana BAST), dan PPh termin dari pembayaran vendor (lencana BAYAR)',
+        'Baris yang dokumennya belum disetujui tetap ditampilkan tetapi belum dapat disetor',
         'PPN menambah tagihan ke vendor, sedangkan PPh dipotong dari kas yang keluar. Keduanya mudah tertukar, jadi ditampilkan terpisah',
         'Pajak baru menjadi terutang setelah pembayaran vendor disetujui',
         'Nilainya dihitung sebanding dengan porsi yang benar-benar dibayar, sehingga pembayaran sebagian tidak menyetorkan pajak atas nilai yang belum dibayar',
