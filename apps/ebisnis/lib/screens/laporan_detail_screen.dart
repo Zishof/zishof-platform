@@ -70,8 +70,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
       'r': widget.item['id'],
       if (_tglMulai != null) 'tglMulai': _formatTgl.format(_tglMulai!),
       if (_tglSampai != null) 'tglSampai': _formatTgl.format(_tglSampai!),
-      if (_adaFilterProduk && _controllerProduk.text.trim().isNotEmpty) 'qProduk': _controllerProduk.text.trim(),
-      if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty) 'qPelanggan': _controllerPelanggan.text.trim(),
+      if (_adaFilterProduk && _controllerProduk.text.trim().isNotEmpty)
+        'qProduk': _controllerProduk.text.trim(),
+      if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty)
+        'qPelanggan': _controllerPelanggan.text.trim(),
       if (_adaFilterPerToko && _perToko) 'perToko': 'true',
     };
   }
@@ -152,14 +154,22 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
   Future<void> _cetakPdf() async {
     setStateIfMounted(() => _memprosesPdf = true);
     try {
-      final hasil = await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
+      final hasil =
+          await ApiClient.instance.aksi('laporan_pdf', _buatPayload());
       final b64 = hasil['pdfBase64'] as String?;
-      if (b64 == null || b64.isEmpty) throw Exception('Server tidak mengembalikan berkas PDF.');
+      if (b64 == null || b64.isEmpty) {
+        throw Exception('Server tidak mengembalikan berkas PDF.');
+      }
       final bytes = base64Decode(b64);
       if (!mounted) return;
-      await Printing.layoutPdf(onLayout: (_) async => Uint8List.fromList(bytes), name: '${widget.item['id']}.pdf');
+      await Printing.layoutPdf(
+          onLayout: (_) async => Uint8List.fromList(bytes),
+          name: '${widget.item['id']}.pdf');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuat PDF: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal membuat PDF: $e')));
+      }
     } finally {
       if (mounted) setStateIfMounted(() => _memprosesPdf = false);
     }
@@ -178,28 +188,46 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
   Future<void> _eksporExcel() async {
     final hasil = _hasil;
     if (hasil == null) return;
-    final kolom = ((hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    final baris = ((hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
+    final kolom = ((hasil['kolom'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final baris = ((hasil['baris'] as List?) ?? [])
+        .map((e) => List<dynamic>.from(e as List))
+        .toList();
     if (kolom.isEmpty) return;
 
     try {
       final bytes = _bangunXlsx(kolom, baris);
-      final namaFile = '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
-      final path = await FilePicker.platform.saveFile(dialogTitle: 'Simpan Laporan (Excel)', fileName: namaFile, bytes: bytes, type: FileType.custom, allowedExtensions: ['xlsx']);
+      final namaFile =
+          '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
+      final path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Simpan Laporan (Excel)',
+          fileName: namaFile,
+          bytes: bytes,
+          type: FileType.custom,
+          allowedExtensions: ['xlsx']);
       if (path == null) return;
       // Sama seperti ekspor Excel Produk -- Desktop hanya mengembalikan path,
       // mobile sudah menulis via `bytes`; tulis ulang idempoten (isi sama).
       await File(path).writeAsBytes(bytes);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel disimpan: $path')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Excel disimpan: $path')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengekspor Excel: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengekspor Excel: $e')));
+      }
     }
   }
 
   Future<void> _pilihTanggal({required bool mulai}) async {
     final awal = (mulai ? _tglMulai : _tglSampai) ?? DateTime.now();
-    final dipilih = await showDatePicker(context: context, initialDate: awal, firstDate: DateTime(2015), lastDate: DateTime(2100));
+    final dipilih = await showDatePicker(
+        context: context,
+        initialDate: awal,
+        firstDate: DateTime(2015),
+        lastDate: DateTime(2100));
     if (dipilih != null) {
       setStateIfMounted(() {
         if (mulai) {
@@ -216,7 +244,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBgOf(context),
       appBar: AppBar(
-        title: Text(widget.item['judul'] as String? ?? 'Laporan', overflow: TextOverflow.ellipsis),
+        title: Text(widget.item['judul'] as String? ?? 'Laporan',
+            overflow: TextOverflow.ellipsis),
         backgroundColor: AppColors.sidebarBg,
         foregroundColor: Colors.white,
       ),
@@ -229,44 +258,79 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
               Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(widget.item['ket'] as String,
-                      style:
-                          TextStyle(color: AppColors.textSecondaryOf(context)))),
+                      style: TextStyle(
+                          color: AppColors.textSecondaryOf(context)))),
             AppSectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      Expanded(child: _kotakTanggal('Tanggal Mulai', _tglMulai, () => _pilihTanggal(mulai: true))),
+                      Expanded(
+                          child: _kotakTanggal('Tanggal Mulai', _tglMulai,
+                              () => _pilihTanggal(mulai: true))),
                       const SizedBox(width: 12),
-                      Expanded(child: _kotakTanggal('Tanggal Sampai', _tglSampai, () => _pilihTanggal(mulai: false))),
+                      Expanded(
+                          child: _kotakTanggal('Tanggal Sampai', _tglSampai,
+                              () => _pilihTanggal(mulai: false))),
                     ],
                   ),
                   if (_adaFilterProduk) ...[
                     const SizedBox(height: 12),
-                    TextField(controller: _controllerProduk, decoration: const InputDecoration(labelText: 'Cari Produk', border: OutlineInputBorder(), isDense: true)),
+                    TextField(
+                        controller: _controllerProduk,
+                        decoration: const InputDecoration(
+                            labelText: 'Cari Produk',
+                            border: OutlineInputBorder(),
+                            isDense: true)),
                   ],
                   if (_adaFilterPelanggan) ...[
                     const SizedBox(height: 12),
-                    TextField(controller: _controllerPelanggan, decoration: const InputDecoration(labelText: 'Cari Pelanggan', border: OutlineInputBorder(), isDense: true)),
+                    TextField(
+                        controller: _controllerPelanggan,
+                        decoration: const InputDecoration(
+                            labelText: 'Cari Pelanggan',
+                            border: OutlineInputBorder(),
+                            isDense: true)),
                   ],
                   if (_adaFilterPerToko)
-                    CheckboxListTile(value: _perToko, onChanged: (v) => setStateIfMounted(() => _perToko = v ?? false), title: const Text('Tampilkan per Toko'), contentPadding: EdgeInsets.zero, dense: true),
+                    CheckboxListTile(
+                        value: _perToko,
+                        onChanged: (v) =>
+                            setStateIfMounted(() => _perToko = v ?? false),
+                        title: const Text('Tampilkan per Toko'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true),
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: _memuat ? null : _tampilkan,
-                          icon: _memuat ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.play_arrow),
+                          icon: _memuat
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.play_arrow),
                           label: const Text('Tampilkan'),
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white),
                         ),
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton.icon(
-                        onPressed: _hasil == null || _memprosesPdf ? null : _cetakPdf,
-                        icon: _memprosesPdf ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.picture_as_pdf_outlined),
+                        onPressed:
+                            _hasil == null || _memprosesPdf ? null : _cetakPdf,
+                        icon: _memprosesPdf
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.picture_as_pdf_outlined),
                         label: const Text('PDF'),
                       ),
                       const SizedBox(width: 10),
@@ -284,8 +348,11 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
             if (_pesanError != null)
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.danger), borderRadius: BorderRadius.circular(8)),
-                child: Text(_pesanError!, style: const TextStyle(color: AppColors.danger)),
+                decoration: BoxDecoration(
+                    color: AppColors.latarLembut(AppColors.danger),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(_pesanError!,
+                    style: const TextStyle(color: AppColors.danger)),
               ),
             // Penanda salinan tersimpan -- di kolom utama, tepat DI ATAS tabel
             // laporan, supaya angkanya tidak terbaca sebagai data terkini.
@@ -306,8 +373,12 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
     return InkWell(
       onTap: onTap,
       child: InputDecorator(
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
-        child: Text(nilai == null ? '-' : DateFormat('dd-MM-yyyy').format(nilai)),
+        decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+            isDense: true),
+        child:
+            Text(nilai == null ? '-' : DateFormat('dd-MM-yyyy').format(nilai)),
       ),
     );
   }
@@ -351,8 +422,11 @@ class _TabelLaporanState extends State<_TabelLaporan> {
   /// Popup "data penghitungan" saat angka laporan diklik. Bila baris ini terdaftar
   /// punya laporan RINCIAN di server (mis. HPP Laba Rugi), rincian itu diambil dgn
   /// filter yang sama; selain itu ditampilkan asal-usul baris (seluruh kolomnya).
-  Future<void> _bukaRincianBaris(BuildContext context,
-      List<Map<String, dynamic>> kolom, List<dynamic> baris, int kolomKe) async {
+  Future<void> _bukaRincianBaris(
+      BuildContext context,
+      List<Map<String, dynamic>> kolom,
+      List<dynamic> baris,
+      int kolomKe) async {
     final labelBaris =
         (baris.isNotEmpty ? '${baris[0] ?? ''}' : '').trim().toLowerCase();
     String? idRincian;
@@ -368,12 +442,17 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
     if (idRincian == null) {
       if (!context.mounted) return;
+      // Dimensi baris dikenali dari LABEL kolomnya, lalu dikirim ke aksi
+      // laporan_rincian_transaksi supaya popup menampilkan NOTA-nya, bukan
+      // sekadar mengulang isi baris ringkasan (permintaan 21-08-2026).
+      final dimensi = _dimensiBaris(kolom, baris);
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
           title: Text('Asal Angka: $judul'),
           content: SizedBox(
-            width: 460,
+            width: dimensi.isEmpty ? 460 : 860,
+            height: dimensi.isEmpty ? null : 460,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 for (var i = 0; i < kolom.length; i++)
@@ -388,12 +467,26 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                       Expanded(
                           child: Text(
                               i < baris.length
-                                  ? _fmtSel(baris[i], '${kolom[i]['t'] ?? 'text'}',
+                                  ? _fmtSel(
+                                      baris[i],
+                                      '${kolom[i]['t'] ?? 'text'}',
                                       '${kolom[i]['l'] ?? ''}')
                                   : '',
                               style: const TextStyle(fontSize: 12))),
                     ]),
                   ),
+                if (dimensi.isNotEmpty) ...[
+                  const Divider(height: 22),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Transaksi penyusun angka ini',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                  const SizedBox(height: 6),
+                  _RincianTransaksi(
+                      payloadFilter: widget.payloadFilter, dimensi: dimensi),
+                ],
                 if ('${widget.hasil['catatan'] ?? ''}'.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
@@ -430,7 +523,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snap.hasError) {
-                return Center(child: Text('Gagal memuat rincian: ${snap.error}'));
+                return Center(
+                    child: Text('Gagal memuat rincian: ${snap.error}'));
               }
               final d = snap.data ?? const <String, dynamic>{};
               final kol = ((d['kolom'] as List?) ?? [])
@@ -442,50 +536,54 @@ class _TabelLaporanState extends State<_TabelLaporan> {
               if (rows.isEmpty) {
                 return const Center(child: Text('Tidak ada data penyusun.'));
               }
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if ('${d['catatan'] ?? ''}'.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text('${d['catatan']}',
-                        style: const TextStyle(
-                            fontSize: 11, fontStyle: FontStyle.italic)),
-                  ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SingleChildScrollView(
-                      child: DataTable(
-                        columnSpacing: 18,
-                        columns: [
-                          for (final k in kol)
-                            DataColumn(
-                                label: Text('${k['l'] ?? ''}',
-                                    style: const TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700)))
-                        ],
-                        rows: [
-                          for (final r in rows)
-                            DataRow(cells: [
-                              for (var i = 0; i < kol.length; i++)
-                                DataCell(Text(
-                                    i < r.length
-                                        ? _fmtSel(r[i], '${kol[i]['t'] ?? 'text'}',
-                                            '${kol[i]['l'] ?? ''}')
-                                        : '',
-                                    style: const TextStyle(fontSize: 11.5)))
-                            ])
-                        ],
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ('${d['catatan'] ?? ''}'.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('${d['catatan']}',
+                            style: const TextStyle(
+                                fontSize: 11, fontStyle: FontStyle.italic)),
+                      ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SingleChildScrollView(
+                          child: DataTable(
+                            columnSpacing: 18,
+                            columns: [
+                              for (final k in kol)
+                                DataColumn(
+                                    label: Text('${k['l'] ?? ''}',
+                                        style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700)))
+                            ],
+                            rows: [
+                              for (final r in rows)
+                                DataRow(cells: [
+                                  for (var i = 0; i < kol.length; i++)
+                                    DataCell(Text(
+                                        i < r.length
+                                            ? _fmtSel(
+                                                r[i],
+                                                '${kol[i]['t'] ?? 'text'}',
+                                                '${kol[i]['l'] ?? ''}')
+                                            : '',
+                                        style: const TextStyle(fontSize: 11.5)))
+                                ])
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text('${rows.length} baris penyusun.',
-                      style: const TextStyle(fontSize: 11)),
-                ),
-              ]);
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text('${rows.length} baris penyusun.',
+                          style: const TextStyle(fontSize: 11)),
+                    ),
+                  ]);
             },
           ),
         ),
@@ -511,7 +609,9 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     if (v == null) return '';
     final neg = v < 0;
     final abs = v.abs();
-    final formatter = hitung ? NumberFormat.decimalPattern('id_ID') : NumberFormat('#,##0.00', 'id_ID');
+    final formatter = hitung
+        ? NumberFormat.decimalPattern('id_ID')
+        : NumberFormat('#,##0.00', 'id_ID');
     final s = formatter.format(abs);
     return neg ? '($s)' : s;
   }
@@ -522,13 +622,18 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     return v.toString();
   }
 
-  Color _warnaBiruGelap(BuildContext context) =>
-      AppColors.gelap(context) ? AppColors.darkTextPrimary : AppColors.sidebarBg;
+  Color _warnaBiruGelap(BuildContext context) => AppColors.gelap(context)
+      ? AppColors.darkTextPrimary
+      : AppColors.sidebarBg;
 
   @override
   Widget build(BuildContext context) {
-    final kolom = ((widget.hasil['kolom'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    final baris = ((widget.hasil['baris'] as List?) ?? []).map((e) => List<dynamic>.from(e as List)).toList();
+    final kolom = ((widget.hasil['kolom'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final baris = ((widget.hasil['baris'] as List?) ?? [])
+        .map((e) => List<dynamic>.from(e as List))
+        .toList();
     final catatan = widget.hasil['catatan'] as String?;
     final grup = (widget.hasil['grup'] as num?)?.toInt() ?? -1;
     final grandTotal = widget.hasil['grandTotal'] == true;
@@ -555,7 +660,10 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       );
     }
 
-    final numIdx = <int>[for (var i = 0; i < kolom.length; i++) if (kolom[i]['t'] == 'num') i];
+    final numIdx = <int>[
+      for (var i = 0; i < kolom.length; i++)
+        if (kolom[i]['t'] == 'num') i
+    ];
     final semuaBaris = <AppTableRowData>[];
 
     List<AppTableCell> selKosong({String? labelAwal, TextStyle? styleAwal}) {
@@ -624,7 +732,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           if (i == grup) {
             teks = 'Subtotal $key';
           } else if (sums.containsKey(i)) {
-            teks = _fmtNum(sums[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
+            teks = _fmtNum(
+                sums[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
           final isNum = kolom[i]['t'] == 'num';
           return AppTableCell.text(
@@ -657,13 +766,16 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           kunciSaatIni = kunci;
         }
         for (final i in numIdx) {
-          jumlahSaatIni[i] = (jumlahSaatIni[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
+          jumlahSaatIni[i] =
+              (jumlahSaatIni[i] ?? 0) + ((r[i] as num?)?.toDouble() ?? 0);
         }
         final rSalinan = List<dynamic>.from(r);
         rSalinan[grup] = null;
         semuaBaris.add(barisData(rSalinan));
       }
-      if (kunciSaatIni != null) tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
+      if (kunciSaatIni != null) {
+        tambahBarisSubtotal(kunciSaatIni, jumlahSaatIni);
+      }
     } else {
       for (final r in baris) {
         semuaBaris.add(barisData(r));
@@ -683,7 +795,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           if (i == 0) {
             teks = 'TOTAL';
           } else if (total.containsKey(i)) {
-            teks = _fmtNum(total[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
+            teks = _fmtNum(
+                total[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
           final isNum = kolom[i]['t'] == 'num';
           return AppTableCell.text(
@@ -705,8 +818,11 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     if (_halaman > totalHalaman) _halaman = totalHalaman;
     final mulai = (_halaman - 1) * _pageSize;
     final sampai = (mulai + _pageSize).clamp(0, semuaBaris.length) as int;
-    final rows = mulai >= semuaBaris.length ? <AppTableRowData>[] : semuaBaris.sublist(mulai, sampai);
-    final minWidth = (_lebarKolom * kolom.length) < 760 ? 760.0 : _lebarKolom * kolom.length;
+    final rows = mulai >= semuaBaris.length
+        ? <AppTableRowData>[]
+        : semuaBaris.sublist(mulai, sampai);
+    final minWidth =
+        (_lebarKolom * kolom.length) < 760 ? 760.0 : _lebarKolom * kolom.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -759,9 +875,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             totalHalaman: totalHalaman,
             totalData: baris.length,
             labelData: 'baris',
-            onSebelumnya: _halaman > 1
-                ? () => setStateIfMounted(() => _halaman--)
-                : null,
+            onSebelumnya:
+                _halaman > 1 ? () => setStateIfMounted(() => _halaman--) : null,
             onBerikutnya: _halaman < totalHalaman
                 ? () => setStateIfMounted(() => _halaman++)
                 : null,
@@ -931,6 +1046,141 @@ class _SelAngkaRincian extends StatelessWidget {
 /// Peta baris laporan ringkasan -> id laporan RINCIAN di server. Menambah
 /// drill-down baru cukup mendaftarkannya di sini (padanan PETA_RINCIAN di
 /// laporan_laporan.jsp) + membuat cabangnya di LaporanKantinUtil.
+/// Kenali dimensi baris laporan dari LABEL kolomnya, supaya satu aksi server
+/// dapat melayani seluruh keluarga laporan berbasis transaksi tanpa daftar
+/// khusus per laporan. Label dicocokkan longgar (mengandung kata kunci) karena
+/// tiap laporan memakai penyebutan yang berbeda-beda.
+///
+/// Mengembalikan peta kosong bila baris tidak punya dimensi yang dapat dipakai
+/// menyaring transaksi (mis. laporan stok atau baris total) -- pemanggil lalu
+/// menampilkan asal-usul baris apa adanya spt sebelumnya.
+Map<String, dynamic> _dimensiBaris(
+    List<Map<String, dynamic>> kolom, List<dynamic> baris) {
+  final hasil = <String, dynamic>{};
+  for (var i = 0; i < kolom.length && i < baris.length; i++) {
+    final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
+    final tipe = '${kolom[i]['t'] ?? 'text'}';
+    if (tipe != 'text') {
+      continue;
+    }
+    final nilai = '${baris[i] ?? ''}'.trim();
+    if (nilai.isEmpty || nilai == '-') {
+      continue;
+    }
+    if (label.contains('kode') && !hasil.containsKey('kodeProduk')) {
+      hasil['kodeProduk'] = nilai;
+    } else if ((label.contains('nama produk') || label.contains('barang')) &&
+        !hasil.containsKey('namaProduk')) {
+      hasil['namaProduk'] = nilai;
+    } else if (label.contains('kasir') && !hasil.containsKey('kasir')) {
+      hasil['kasir'] = nilai;
+    } else if ((label.contains('metode') || label.contains('kas/bank')) &&
+        !hasil.containsKey('metode')) {
+      hasil['metode'] = nilai;
+    } else if ((label.contains('pelanggan') ||
+            label.contains('anggota') ||
+            label.contains('member')) &&
+        !hasil.containsKey('pelanggan')) {
+      hasil['pelanggan'] = nilai;
+    }
+  }
+  return hasil;
+}
+
+/// Daftar transaksi penyusun satu angka laporan.
+class _RincianTransaksi extends StatelessWidget {
+  final Map<String, dynamic> payloadFilter;
+  final Map<String, dynamic> dimensi;
+
+  const _RincianTransaksi({required this.payloadFilter, required this.dimensi});
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = <String, dynamic>{
+      'tglMulai': payloadFilter['tglMulai'],
+      'tglSampai': payloadFilter['tglSampai'],
+      ...dimensi,
+    };
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ApiClient.instance.aksi('laporan_rincian_transaksi', payload),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text('Rincian transaksi tidak dapat dimuat: ${snap.error}',
+                style: const TextStyle(fontSize: 12)),
+          );
+        }
+        final data = ((snap.data?['data'] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+        if (data.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+                'Tidak ada transaksi yang cocok. Angka ini kemungkinan berasal '
+                'dari sumber selain penjualan (mis. stok atau data master).',
+                style: TextStyle(fontSize: 12)),
+          );
+        }
+        final rp = NumberFormat.currency(
+            locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 18,
+                headingRowHeight: 34,
+                dataRowMinHeight: 30,
+                dataRowMaxHeight: 40,
+                columns: const [
+                  DataColumn(label: Text('Waktu')),
+                  DataColumn(label: Text('No. Nota')),
+                  DataColumn(label: Text('Kasir')),
+                  DataColumn(label: Text('Pelanggan')),
+                  DataColumn(label: Text('Produk')),
+                  DataColumn(label: Text('Qty'), numeric: true),
+                  DataColumn(label: Text('Harga'), numeric: true),
+                  DataColumn(label: Text('Total'), numeric: true),
+                ],
+                rows: [
+                  for (final r in data)
+                    DataRow(cells: [
+                      DataCell(Text('${r['waktu'] ?? ''}'.split('.').first)),
+                      DataCell(Text('${r['nota'] ?? ''}')),
+                      DataCell(Text('${r['kasir'] ?? ''}')),
+                      DataCell(Text('${r['pelanggan'] ?? ''}')),
+                      DataCell(Text('${r['produk'] ?? ''}')),
+                      DataCell(Text('${(r['qty'] as num?)?.toDouble() ?? 0}')),
+                      DataCell(Text(
+                          rp.format((r['harga'] as num?)?.toDouble() ?? 0))),
+                      DataCell(Text(
+                          rp.format((r['total'] as num?)?.toDouble() ?? 0))),
+                    ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${data.length} baris transaksi  ·  total '
+              '${rp.format((snap.data?['totalNilai'] as num?)?.toDouble() ?? 0)}'
+              '${snap.data?['dibatasi'] == true ? '  (dibatasi, masih ada baris lain)' : ''}',
+              style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 const Map<String, List<List<String>>> _petaRincianLaporan = {
   'fin_laba_rugi': [
     ['hpp', 'fin_laba_rugi_rincian_hpp'],
