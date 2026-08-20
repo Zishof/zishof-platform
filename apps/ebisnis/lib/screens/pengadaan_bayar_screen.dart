@@ -105,17 +105,63 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> {
     }
   }
 
+  /// Saat menyetujui, penyetuju memilih apakah pembayaran ini masuk antrean
+  /// transfer bank. Pembayaran tunai tidak perlu masuk antrean pencairan, jadi
+  /// pilihannya ditanyakan alih-alih diasumsikan.
   Future<void> _putusan(Map<String, dynamic> row, String keputusan) async {
+    bool ajukanTransfer = false;
+    if (keputusan == 'SETUJUI') {
+      final pilih = await showDialog<bool>(
+        context: context,
+        builder: (d) => StatefulBuilder(builder: (c, setLocal) {
+          return AlertDialog(
+            title: Text('Setujui ${row['kode'] ?? ''}'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('Nilai ${_fmtRp.format(row['nilai'] ?? 0)} kepada '
+                  '${row['penyedia'] ?? '-'}.'),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ajukanTransfer,
+                onChanged: (v) =>
+                    setLocal(() => ajukanTransfer = v ?? false),
+                title: const Text('Ajukan transfer bank',
+                    style: TextStyle(fontSize: 13)),
+                subtitle: const Text(
+                    'Masukkan ke antrean pencairan keuangan. Kosongkan bila '
+                    'dibayar tunai.',
+                    style: TextStyle(fontSize: 11)),
+              ),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(d, true),
+                  child: const Text('Setujui')),
+            ],
+          );
+        }),
+      );
+      if (pilih != true || !mounted) return;
+    }
     try {
       final r = await ApiClient.instance.aksi('pengadaan_bayar_putusan', {
         'id': row['id'],
         'keputusan': keputusan,
+        if (keputusan == 'SETUJUI' && ajukanTransfer) 'ajukanTransfer': true,
       });
       if (!mounted) return;
       final sukses = r['status'] == '00' || r['status'] == 'success';
+      final trfDibuat = (r['transferDibuat'] as num?)?.toInt() ?? 0;
+      final trfDitarik = (r['transferDitarik'] as num?)?.toInt() ?? 0;
+      final catatanTrf = trfDibuat > 0
+          ? ' · $trfDibuat pengajuan transfer dibuat'
+          : (trfDitarik > 0 ? ' · $trfDitarik pengajuan transfer ditarik' : '');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(sukses
-              ? 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}'
+              ? 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}$catatanTrf'
               : '${r['description'] ?? 'Gagal menyimpan keputusan.'}'),
           backgroundColor: sukses ? null : Theme.of(context).colorScheme.error));
       if (sukses) await _muat();
