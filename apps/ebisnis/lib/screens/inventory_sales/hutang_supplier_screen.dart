@@ -12,6 +12,7 @@ import '../../widgets/safe_state.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -96,7 +97,7 @@ class _TabHutang extends StatefulWidget {
   State<_TabHutang> createState() => _TabHutangState();
 }
 
-class _TabHutangState extends State<_TabHutang> {
+class _TabHutangState extends State<_TabHutang> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -144,7 +145,7 @@ class _TabHutangState extends State<_TabHutang> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -155,7 +156,7 @@ class _TabHutangState extends State<_TabHutang> {
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _PanelError(pesan: _error!, onCoba: _muat);
+      return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     }
     return RefreshIndicator(
       onRefresh: _muat,
@@ -293,7 +294,7 @@ class _TabPembayaran extends StatefulWidget {
   State<_TabPembayaran> createState() => _TabPembayaranState();
 }
 
-class _TabPembayaranState extends State<_TabPembayaran> {
+class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -332,7 +333,7 @@ class _TabPembayaranState extends State<_TabPembayaran> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -461,8 +462,7 @@ class _TabPembayaranState extends State<_TabPembayaran> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -485,8 +485,7 @@ class _TabPembayaranState extends State<_TabPembayaran> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -504,7 +503,7 @@ class _TabPembayaranState extends State<_TabPembayaran> {
   Widget build(BuildContext context) {
     final bolehBayar = Sesi.instance.bolehAksiIs('hutang', 'create');
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: bolehBayar
@@ -696,7 +695,7 @@ class _FormPembayaranHutang extends StatefulWidget {
   State<_FormPembayaranHutang> createState() => _FormPembayaranHutangState();
 }
 
-class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
+class _FormPembayaranHutangState extends State<_FormPembayaranHutang> with JejakGalat {
   Map<String, dynamic>? _supplier;
   List<Map<String, dynamic>> _fakturs = [];
   final Map<int, TextEditingController> _alokasi = {};
@@ -707,15 +706,6 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
   final _keterangan = TextEditingController();
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   /// Kunci idempoten DIBUAT SEKALI saat form dibuka -- retry Simpan yang sama
   /// memakai kunci yang sama sehingga server tidak menggandakan pembayaran.
@@ -765,7 +755,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
       setStateIfMounted(() => _fakturs =
           ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     }
   }
 
@@ -796,7 +786,6 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('si_payable_payment_create', {
@@ -812,7 +801,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -834,7 +823,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
               'Alokasi tidak boleh melebihi outstanding tiap faktur; total pembayaran = jumlah alokasi. Retry aman (idempoten).',
           icon: Icons.payments_outlined,
           errorText: _error,
-          errorDetail: _detailGalat,
+          errorDetail: detailUntuk(_error),
           children: [
             AppFormSection(judul: 'Supplier & Faktur', children: [
               OutlinedButton.icon(
@@ -1065,7 +1054,7 @@ class _TabAging extends StatefulWidget {
   State<_TabAging> createState() => _TabAgingState();
 }
 
-class _TabAgingState extends State<_TabAging> {
+class _TabAgingState extends State<_TabAging> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1095,7 +1084,7 @@ class _TabAgingState extends State<_TabAging> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -1112,7 +1101,7 @@ class _TabAgingState extends State<_TabAging> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1211,7 +1200,7 @@ class _TabFaktur extends StatefulWidget {
   State<_TabFaktur> createState() => _TabFakturState();
 }
 
-class _TabFakturState extends State<_TabFaktur> {
+class _TabFakturState extends State<_TabFaktur> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -1243,7 +1232,7 @@ class _TabFakturState extends State<_TabFaktur> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -1317,7 +1306,7 @@ class _TabFakturState extends State<_TabFaktur> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1420,22 +1409,13 @@ class _FormTerminFaktur extends StatefulWidget {
   State<_FormTerminFaktur> createState() => _FormTerminFakturState();
 }
 
-class _FormTerminFakturState extends State<_FormTerminFaktur> {
+class _FormTerminFakturState extends State<_FormTerminFaktur> with JejakGalat {
   String _jenis = 'CREDIT';
   final _termin = TextEditingController(text: '30');
   final _dibayarAwal = TextEditingController(text: '0');
   final _keterangan = TextEditingController();
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void dispose() {
@@ -1449,7 +1429,6 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('si_purchase_terms_save', {
@@ -1463,7 +1442,7 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -1484,7 +1463,7 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
               'CASH = lunas saat faktur (tanpa hutang); DP = sebagian dibayar; CREDIT = penuh jadi hutang. Jatuh tempo = tanggal faktur + termin.',
           icon: Icons.schedule_outlined,
           errorText: _error,
-          errorDetail: _detailGalat,
+          errorDetail: detailUntuk(_error),
           children: [
             AppFormSection(judul: 'Jenis Pembayaran', children: [
               DropdownButtonFormField<String>(
@@ -1556,7 +1535,7 @@ class _TabLaporanPembelian extends StatefulWidget {
   State<_TabLaporanPembelian> createState() => _TabLaporanPembelianState();
 }
 
-class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
+class _TabLaporanPembelianState extends State<_TabLaporanPembelian> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1589,7 +1568,7 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -1597,7 +1576,7 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1733,7 +1712,9 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> {
 class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelError({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelError(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -1744,6 +1725,7 @@ class _PanelError extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

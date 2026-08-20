@@ -15,6 +15,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _bulkRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -124,7 +125,7 @@ class _BulkValidation {
   bool get canPost => errors.isEmpty;
 }
 
-class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
+class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with JejakGalat {
   /// Controller scroll horizontal tabel input -- dipakai Scrollbar agar
   /// gagangnya terlihat dan dapat diseret pada layar kecil.
   final _scrollTabel = ScrollController();
@@ -823,7 +824,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _posting = false);
     }
@@ -976,7 +977,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
             SnackBar(content: Text('${parsed.length} baris Excel $mode.')));
       }
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _error = e.toString());
+      if (mounted) setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _mengimporExcel = false);
     }
@@ -1657,8 +1658,15 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> {
                   decoration: BoxDecoration(
                       color: AppColors.latarLembut(AppColors.danger),
                       borderRadius: BorderRadius.circular(8)),
-                  child:
-                      Text(_error!, style: TextStyle(color: AppColors.danger)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!,
+                          style: TextStyle(color: AppColors.danger)),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(height: 12),

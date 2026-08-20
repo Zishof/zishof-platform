@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatRpMutasiTabungan =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -38,7 +39,7 @@ class AnggotaTabMutasiTabungan extends StatefulWidget {
       _AnggotaTabMutasiTabunganState();
 }
 
-class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
+class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -96,7 +97,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _error = e.toString());
+      if (mounted) setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -343,6 +344,7 @@ class _AnggotaTabMutasiTabunganState extends State<AnggotaTabMutasiTabungan> {
             const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
+            AppDetailGalatOpsional(detail: detailUntuk(_error)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
           ]),

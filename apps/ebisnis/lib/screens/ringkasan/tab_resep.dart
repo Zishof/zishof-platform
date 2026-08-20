@@ -3,6 +3,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab 6/9 "Resep, HPP & Margin" -- aksi `resep_hpp_margin`.
 ///
@@ -17,7 +18,7 @@ class RingkasanTabResep extends StatefulWidget {
   State<RingkasanTabResep> createState() => _RingkasanTabResepState();
 }
 
-class _RingkasanTabResepState extends State<RingkasanTabResep> {
+class _RingkasanTabResepState extends State<RingkasanTabResep> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -40,7 +41,7 @@ class _RingkasanTabResepState extends State<RingkasanTabResep> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

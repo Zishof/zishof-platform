@@ -15,6 +15,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 import '../struk_screen.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
@@ -253,7 +254,7 @@ class RingkasanTabUmum extends StatefulWidget {
   State<RingkasanTabUmum> createState() => _RingkasanTabUmumState();
 }
 
-class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
+class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
   final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
@@ -462,7 +463,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya).
       if (!(e is ApiException && e.offline && barisCache != null)) {
-        setStateIfMounted(() => _error = e.toString());
+        setStateIfMounted(() => _error = terapkanGalat(e));
       }
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
@@ -840,8 +841,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -876,8 +876,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -978,8 +977,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -1085,8 +1083,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }

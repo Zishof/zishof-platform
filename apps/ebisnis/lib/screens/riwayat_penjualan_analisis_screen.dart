@@ -19,6 +19,7 @@ import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _rpAnalisis =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -33,7 +34,7 @@ class RiwayatPenjualanAnalisisScreen extends StatefulWidget {
 }
 
 class _RiwayatPenjualanAnalisisScreenState
-    extends State<RiwayatPenjualanAnalisisScreen> {
+    extends State<RiwayatPenjualanAnalisisScreen> with JejakGalat {
   DateTime _mulai = DateTime.now().subtract(const Duration(days: 29));
   DateTime _sampai = DateTime.now();
   bool _memuat = true;
@@ -134,7 +135,7 @@ class _RiwayatPenjualanAnalisisScreenState
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya), jangan menutupinya dgn dialog.
       if (e is ApiException && e.offline && adaCacheLokal) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,
             aktivitas: 'memuat analisis riwayat penjualan');

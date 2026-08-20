@@ -11,6 +11,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -50,7 +51,7 @@ class ReturPembelianTab extends StatefulWidget {
   State<ReturPembelianTab> createState() => _ReturPembelianTabState();
 }
 
-class _ReturPembelianTabState extends State<ReturPembelianTab> {
+class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
   static const _pageSize = 15;
 
   final _barcodeController = TextEditingController();
@@ -107,7 +108,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _errorRiwayat = e.toString());
+      setStateIfMounted(() => _errorRiwayat = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuatRiwayat = false);
     }
@@ -135,7 +136,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
         _hargaController.clear();
       });
     } catch (e) {
-      setStateIfMounted(() => _errorForm = e.toString());
+      setStateIfMounted(() => _errorForm = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _mencari = false);
     }
@@ -215,7 +216,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> {
       _halaman = 1;
       await _muatRiwayat();
     } catch (e) {
-      setStateIfMounted(() => _errorForm = e.toString());
+      setStateIfMounted(() => _errorForm = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }

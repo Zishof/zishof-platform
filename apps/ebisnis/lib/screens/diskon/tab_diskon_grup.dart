@@ -15,6 +15,8 @@ import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
+import '../../widgets/app_components.dart';
 
 final _rupiahGrup =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -28,7 +30,7 @@ class TabDiskonGrup extends StatefulWidget {
   State<TabDiskonGrup> createState() => _TabDiskonGrupState();
 }
 
-class _TabDiskonGrupState extends State<TabDiskonGrup> {
+class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
   static const _pageSize = 15;
   List<Map<String, dynamic>> _data = [];
   bool _loading = true;
@@ -86,7 +88,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _loading = false);
     }
@@ -107,8 +109,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
         return;
       }
@@ -130,6 +131,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> {
       return Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, textAlign: TextAlign.center),
+        AppDetailGalatOpsional(detail: detailUntuk(_error)),
         const SizedBox(height: 12),
         FilledButton(onPressed: _load, child: const Text('Coba Lagi'))
       ]));
@@ -282,7 +284,7 @@ class _FormDiskonGrup extends StatefulWidget {
   State<_FormDiskonGrup> createState() => _FormDiskonGrupState();
 }
 
-class _FormDiskonGrupState extends State<_FormDiskonGrup> {
+class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _nama,
       _ket,
@@ -562,7 +564,7 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _saving = false);
     }

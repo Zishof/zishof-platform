@@ -4,6 +4,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 String _formatTanggalJam(dynamic raw) {
   final s = raw?.toString() ?? '';
@@ -24,7 +25,7 @@ class RingkasanTabKepatuhan extends StatefulWidget {
   State<RingkasanTabKepatuhan> createState() => _RingkasanTabKepatuhanState();
 }
 
-class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> {
+class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -47,7 +48,7 @@ class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

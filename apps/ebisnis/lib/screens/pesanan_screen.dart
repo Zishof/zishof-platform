@@ -20,6 +20,7 @@ import '../widgets/panduan_stok_kosong.dart';
 import 'kasir_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -42,7 +43,7 @@ class PesananScreen extends StatefulWidget {
   State<PesananScreen> createState() => _PesananScreenState();
 }
 
-class _PesananScreenState extends State<PesananScreen> {
+class _PesananScreenState extends State<PesananScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Pesanan> _semua = [];
@@ -143,7 +144,7 @@ class _PesananScreenState extends State<PesananScreen> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -168,7 +169,7 @@ class _PesananScreenState extends State<PesananScreen> {
         _pesanError = null;
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (aturLoading && mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1475,6 +1476,7 @@ class _PesananScreenState extends State<PesananScreen> {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_pesanError!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muat, child: const Text('Coba Lagi')),

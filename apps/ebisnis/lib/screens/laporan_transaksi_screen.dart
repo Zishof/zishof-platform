@@ -13,6 +13,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import 'inventory_sales/cetak_util.dart';
 import 'struk_screen.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -1082,7 +1083,7 @@ class _TabOrder extends StatefulWidget {
   State<_TabOrder> createState() => _TabOrderState();
 }
 
-class _TabOrderState extends State<_TabOrder> {
+class _TabOrderState extends State<_TabOrder> with JejakGalat {
   static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
@@ -1149,7 +1150,7 @@ class _TabOrderState extends State<_TabOrder> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1281,8 +1282,7 @@ class _TabOrderState extends State<_TabOrder> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -1434,7 +1434,7 @@ class _TabSesi extends StatefulWidget {
   State<_TabSesi> createState() => _TabSesiState();
 }
 
-class _TabSesiState extends State<_TabSesi> {
+class _TabSesiState extends State<_TabSesi> with JejakGalat {
   static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
@@ -1467,7 +1467,7 @@ class _TabSesiState extends State<_TabSesi> {
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1625,7 +1625,7 @@ class _TabTransaksiPerKasir extends StatefulWidget {
   State<_TabTransaksiPerKasir> createState() => _TabTransaksiPerKasirState();
 }
 
-class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
+class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -1667,7 +1667,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> {
         _jumlahTransaksi = (hasil['jumlahTransaksi'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -2243,7 +2243,7 @@ class _TabPayment extends StatefulWidget {
   State<_TabPayment> createState() => _TabPaymentState();
 }
 
-class _TabPaymentState extends State<_TabPayment> {
+class _TabPaymentState extends State<_TabPayment> with JejakGalat {
   static const _pageSize = 10;
   bool _memuat = true;
   String? _error;
@@ -2276,7 +2276,7 @@ class _TabPaymentState extends State<_TabPayment> {
         _total = (hasil['total'] as num?)?.toInt() ?? 0;
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -2423,7 +2423,7 @@ class _TabPenjualanKasir extends StatefulWidget {
   State<_TabPenjualanKasir> createState() => _TabPenjualanKasirState();
 }
 
-class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
+class _TabPenjualanKasirState extends State<_TabPenjualanKasir> with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -2512,7 +2512,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir> {
         }
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -2917,8 +2917,7 @@ Future<void> _lihatDetailPenjualanKasir(
     );
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      snackbarGalat(context, e);
     }
   }
 }
@@ -2932,7 +2931,7 @@ class _TabPenerimaanKasir extends StatefulWidget {
   State<_TabPenerimaanKasir> createState() => _TabPenerimaanKasirState();
 }
 
-class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
+class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -3018,7 +3017,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> {
         }
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -3375,8 +3374,7 @@ Future<void> _lihatRincianPenerimaan(
     );
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      snackbarGalat(context, e);
     }
   }
 }

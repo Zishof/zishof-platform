@@ -4,6 +4,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Register cetak append-only Inventory & Sales (P10).
 ///
@@ -17,7 +18,7 @@ class TabRiwayatCetak extends StatefulWidget {
   State<TabRiwayatCetak> createState() => _TabRiwayatCetakState();
 }
 
-class _TabRiwayatCetakState extends State<TabRiwayatCetak> {
+class _TabRiwayatCetakState extends State<TabRiwayatCetak> with JejakGalat {
   final _jenis = TextEditingController();
   final _referensi = TextEditingController();
   bool _memuat = true;
@@ -57,7 +58,7 @@ class _TabRiwayatCetakState extends State<TabRiwayatCetak> {
       });
     } catch (e) {
       setStateIfMounted(() {
-        _error = e.toString();
+        _error = terapkanGalat(e);
         _memuat = false;
       });
     }
@@ -123,6 +124,7 @@ class _TabRiwayatCetakState extends State<TabRiwayatCetak> {
               icon: Icons.error_outline,
               color: AppColors.danger,
               text: _error!,
+              detail: detailUntuk(_error),
             )
           else if (_data.isEmpty)
             const Padding(

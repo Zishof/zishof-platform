@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab 2/9 "Keuangan & Kinerja" -- aksi `dashboard_keuangan` (semua jendela
 /// dihitung SAMPAI tanggal acuan; default hari ini). Berisi 3 sub-bagian:
@@ -14,7 +15,7 @@ class RingkasanTabKeuangan extends StatefulWidget {
   State<RingkasanTabKeuangan> createState() => _RingkasanTabKeuanganState();
 }
 
-class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> {
+class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakGalat {
   static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
@@ -65,7 +66,7 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

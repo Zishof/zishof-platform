@@ -4,6 +4,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab "Sinkronisasi Siswa/Mahasiswa" (padanan `sinkron_siswa_mahasiswa.jsp`)
 /// -- bulk-buat/perbarui AnggotaKoperasi dari data master Mahasiswa/Siswa yg
@@ -19,7 +20,7 @@ class AnggotaTabSinkronisasi extends StatefulWidget {
       _AnggotaTabSinkronisasiState();
 }
 
-class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
+class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with JejakGalat {
   bool _modeMahasiswa = true;
   bool _memuatReferensi = true;
   bool _menjalankan = false;
@@ -138,7 +139,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
         });
       }
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuatReferensi = false);
     }
@@ -196,7 +197,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
       );
       if (mounted) setStateIfMounted(() => _hasilTerakhir = hasil);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menjalankan = false);
     }
@@ -480,6 +481,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> {
               if (_pesanError != null) ...[
                 Text(_pesanError!,
                     style: const TextStyle(color: AppColors.danger)),
+                AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
                 const SizedBox(height: 8),
               ],
               SizedBox(

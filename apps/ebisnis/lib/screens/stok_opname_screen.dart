@@ -18,6 +18,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 final _formatRupiah =
@@ -266,7 +267,7 @@ class _TabMutasiStok extends StatefulWidget {
   State<_TabMutasiStok> createState() => _TabMutasiStokState();
 }
 
-class _TabMutasiStokState extends State<_TabMutasiStok> {
+class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   Map<String, dynamic>? _dasbor;
@@ -293,7 +294,7 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
         _ringkasanHariIni = results[1];
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -310,6 +311,7 @@ class _TabMutasiStokState extends State<_TabMutasiStok> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(_pesanError!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
               ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
             ],
@@ -457,7 +459,7 @@ class _TabMonitorBarang extends StatefulWidget {
   State<_TabMonitorBarang> createState() => _TabMonitorBarangState();
 }
 
-class _TabMonitorBarangState extends State<_TabMonitorBarang> {
+class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
   bool _memuat = true;
   bool _memuatLagi = false;
   String? _pesanError;
@@ -506,7 +508,7 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -721,7 +723,7 @@ class _TabInputOpname extends StatefulWidget {
   State<_TabInputOpname> createState() => _TabInputOpnameState();
 }
 
-class _TabInputOpnameState extends State<_TabInputOpname> {
+class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
   final _barcodeController = TextEditingController();
   final _stokFisikController = TextEditingController();
   final _keteranganController = TextEditingController();
@@ -780,7 +782,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
         _keteranganController.text = '';
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _mencari = false);
     }
@@ -829,7 +831,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> {
       });
       await _muatRiwayat();
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -1063,7 +1065,7 @@ class _AntreanSo {
 }
 
 class _TabSoByScanState extends State<_TabSoByScan>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, JejakGalat {
   final _barcodeController = TextEditingController();
   final _barcodeFocus = FocusNode(debugLabel: 'so-by-scan-barcode');
   bool _mencari = false;
@@ -1130,7 +1132,7 @@ class _TabSoByScanState extends State<_TabSoByScan>
       }
       _barcodeController.clear();
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) {
         setStateIfMounted(() => _mencari = false);

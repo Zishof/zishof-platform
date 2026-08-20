@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Dialog posting jurnal untuk rantai pengadaan &rarr; pembayaran toko:
 /// kulakan, pembayaran hutang supplier, penerimaan piutang customer, dan
@@ -33,7 +34,7 @@ class PostingTokoDialog extends StatefulWidget {
   State<PostingTokoDialog> createState() => _PostingTokoDialogState();
 }
 
-class _PostingTokoDialogState extends State<PostingTokoDialog> {
+class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
   static final DateFormat _fmt = DateFormat('yyyy-MM-dd');
   static final NumberFormat _uang = NumberFormat.decimalPattern('id');
 
@@ -87,7 +88,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
       if (!mounted) return;
       setStateIfMounted(() => _data = Map<String, dynamic>.from(hasil));
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _galat = e.toString());
+      if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
@@ -136,7 +137,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
               '${masalah.isEmpty ? '.' : ', ${masalah.length} gagal: ${masalah.first}'}')));
       await _muatDraf();
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _galat = e.toString());
+      if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
@@ -194,6 +195,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
               if (_galat != null) ...[
                 const SizedBox(height: 8),
                 Text(_galat!, style: const TextStyle(color: Colors.red)),
+                AppDetailGalatOpsional(detail: detailUntuk(_galat)),
               ],
               const SizedBox(height: 12),
               Expanded(

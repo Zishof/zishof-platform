@@ -13,7 +13,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
-import '../../api_client.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -32,7 +32,7 @@ class MasterSalesScreen extends StatefulWidget {
   State<MasterSalesScreen> createState() => _MasterSalesScreenState();
 }
 
-class _MasterSalesScreenState extends State<MasterSalesScreen> {
+class _MasterSalesScreenState extends State<MasterSalesScreen> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -102,7 +102,7 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -214,6 +214,7 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> {
                           size: 48, color: Colors.red),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                           onPressed: _muat, child: const Text('Coba Lagi')),
@@ -420,7 +421,7 @@ class _FormSales extends StatefulWidget {
   State<_FormSales> createState() => _FormSalesState();
 }
 
-class _FormSalesState extends State<_FormSales> {
+class _FormSalesState extends State<_FormSales> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
   late final TextEditingController _nama;
@@ -434,15 +435,6 @@ class _FormSalesState extends State<_FormSales> {
   bool _menyimpan = false;
   bool _adaPerubahan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   bool get _ubah => widget.data != null;
 
@@ -499,7 +491,6 @@ class _FormSalesState extends State<_FormSales> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       await prosesSimpanMaster(context,
@@ -523,7 +514,7 @@ class _FormSalesState extends State<_FormSales> {
               : 'si_sales:baru:${DateTime.now().microsecondsSinceEpoch}');
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -577,7 +568,7 @@ class _FormSalesState extends State<_FormSales> {
                   : 'Kode legacy 2 karakter dipertahankan sebagai teks apa adanya.',
               icon: _ubah ? Icons.edit_outlined : Icons.badge_outlined,
               errorText: _error,
-              errorDetail: _detailGalat,
+              errorDetail: detailUntuk(_error),
               children: [
                 AppFormSection(judul: 'Identitas Sales', children: [
                   Row(children: [

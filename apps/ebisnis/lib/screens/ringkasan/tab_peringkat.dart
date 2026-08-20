@@ -3,6 +3,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab 5/9 "Peringkat Mitra" -- aksi `peringkat_mitra`. Lintas-toko utk akun
 /// admin (`semuaToko: true`), terbatas ke toko sendiri utk akun pedagang/kasir.
@@ -12,7 +13,7 @@ class RingkasanTabPeringkat extends StatefulWidget {
   State<RingkasanTabPeringkat> createState() => _RingkasanTabPeringkatState();
 }
 
-class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> {
+class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -35,7 +36,7 @@ class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

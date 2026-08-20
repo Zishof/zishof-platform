@@ -11,7 +11,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/pemilih_akun.dart';
-import '../api_client.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Layar "Supplier (Penyedia)" -- CRUD penuh master data pemasok, dipakai
 /// sbg picker di Kulakan per-Faktur (`ais.database.model.library.Penyedia`).
@@ -27,7 +27,7 @@ class SupplierScreen extends StatefulWidget {
   State<SupplierScreen> createState() => _SupplierScreenState();
 }
 
-class _SupplierScreenState extends State<SupplierScreen> {
+class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -89,7 +89,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _error = e.toString());
+      if (mounted) setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -151,8 +151,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -185,6 +184,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muatDaftar,
@@ -343,7 +343,7 @@ class _FormSupplier extends StatefulWidget {
   State<_FormSupplier> createState() => _FormSupplierState();
 }
 
-class _FormSupplierState extends State<_FormSupplier> {
+class _FormSupplierState extends State<_FormSupplier> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
   late final TextEditingController _nama;
@@ -359,15 +359,6 @@ class _FormSupplierState extends State<_FormSupplier> {
   late final TextEditingController _keterangan;
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void initState() {
@@ -417,7 +408,6 @@ class _FormSupplierState extends State<_FormSupplier> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       final body = {
@@ -446,7 +436,7 @@ class _FormSupplierState extends State<_FormSupplier> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -470,7 +460,7 @@ class _FormSupplierState extends State<_FormSupplier> {
             subtitle: 'Data pemasok/vendor untuk faktur Kulakan.',
             icon: Icons.local_shipping_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             children: [
               AppFormSection(
                 judul: 'Identitas',

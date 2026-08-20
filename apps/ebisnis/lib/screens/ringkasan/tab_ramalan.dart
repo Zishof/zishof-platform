@@ -3,6 +3,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab 7/9 "Ramalan Penjualan" -- aksi `ramalan_penjualan`. Prediksi dihitung
 /// SERVER-SIDE (regresi linear sederhana atas 14 titik transaksi harian) --
@@ -13,7 +14,7 @@ class RingkasanTabRamalan extends StatefulWidget {
   State<RingkasanTabRamalan> createState() => _RingkasanTabRamalanState();
 }
 
-class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
+class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -36,7 +37,7 @@ class _RingkasanTabRamalanState extends State<RingkasanTabRamalan> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

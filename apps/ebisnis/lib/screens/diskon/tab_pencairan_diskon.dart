@@ -11,6 +11,7 @@ import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatRupiahPd =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -38,7 +39,7 @@ class TabPencairanDiskon extends StatefulWidget {
   State<TabPencairanDiskon> createState() => _TabPencairanDiskonState();
 }
 
-class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
+class _TabPencairanDiskonState extends State<TabPencairanDiskon> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -102,7 +103,7 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -192,6 +193,7 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muatDaftar,
@@ -376,7 +378,7 @@ class _FormPencairan extends StatefulWidget {
   State<_FormPencairan> createState() => _FormPencairanState();
 }
 
-class _FormPencairanState extends State<_FormPencairan> {
+class _FormPencairanState extends State<_FormPencairan> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kodePencairan;
   late final TextEditingController _nominal;
@@ -392,15 +394,6 @@ class _FormPencairanState extends State<_FormPencairan> {
   bool _mencariSaldo = false;
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
   Timer? _debounce;
   List<Map<String, dynamic>> _hasilCariAnggota = [];
 
@@ -570,7 +563,6 @@ class _FormPencairanState extends State<_FormPencairan> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       final body = {
@@ -602,7 +594,7 @@ class _FormPencairanState extends State<_FormPencairan> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -625,7 +617,7 @@ class _FormPencairanState extends State<_FormPencairan> {
             subtitle: 'Pencairan saldo cashback anggota koperasi.',
             icon: Icons.payments_outlined,
             errorText: _error,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_error),
             children: [
               AppFormSection(
                 judul: 'Referensi & Waktu',

@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Label tampilan kunci menu varian Inventory & Sales (kunci server =
 /// `EbisnisMenuKatalog.MODUL_INVENTORY_SALES`, lihat AIS). Dipakai kartu
@@ -53,7 +54,7 @@ class BerandaInventorySalesScreen extends StatefulWidget {
 }
 
 class _BerandaInventorySalesScreenState
-    extends State<BerandaInventorySalesScreen> {
+    extends State<BerandaInventorySalesScreen> with JejakGalat {
   bool _memuat = true;
   String? _error;
 
@@ -88,7 +89,7 @@ class _BerandaInventorySalesScreenState
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -120,6 +121,7 @@ class _BerandaInventorySalesScreenState
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muat, child: const Text('Coba Lagi')),

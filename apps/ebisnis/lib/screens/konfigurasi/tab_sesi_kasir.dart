@@ -8,6 +8,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Riwayat sesi kas seluruh kasir pada toko aktif. Kasir hanya membaca,
 /// sedangkan supervisor/admin dapat melakukan koreksi berjejak audit.
@@ -18,7 +19,7 @@ class TabSesiKasir extends StatefulWidget {
   State<TabSesiKasir> createState() => _TabSesiKasirState();
 }
 
-class _TabSesiKasirState extends State<TabSesiKasir> {
+class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
   final _rupiah =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   final _formatTanggalServer = DateFormat('yyyy-MM-dd');
@@ -560,7 +561,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
       });
     } catch (e) {
       setStateIfMounted(() {
-        _error = e.toString();
+        _error = terapkanGalat(e);
         _memuat = false;
       });
     }
@@ -709,8 +710,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
           const SnackBar(content: Text('Koreksi sesi kas berhasil disimpan.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      snackbarGalat(context, e);
     } finally {
       modal.dispose();
       tunai.dispose();
@@ -806,7 +806,8 @@ class _TabSesiKasirState extends State<TabSesiKasir> {
             AppInfoBanner(
                 icon: Icons.error_outline,
                 color: AppColors.danger,
-                text: _error!)
+                text: _error!,
+                detail: detailUntuk(_error))
           else
             AppDataTable(
               minWidth: 1340,

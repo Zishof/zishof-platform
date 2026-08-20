@@ -10,6 +10,7 @@ import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/kilau_perubahan.dart';
 import 'cetak_util.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -31,7 +32,7 @@ class PersediaanScreen extends StatefulWidget {
   State<PersediaanScreen> createState() => _PersediaanScreenState();
 }
 
-class _PersediaanScreenState extends State<PersediaanScreen> {
+class _PersediaanScreenState extends State<PersediaanScreen> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -82,7 +83,7 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -264,6 +265,7 @@ class _PersediaanScreenState extends State<PersediaanScreen> {
                           size: 48, color: Colors.red),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                           onPressed: _muat, child: const Text('Coba Lagi')),
@@ -474,7 +476,7 @@ class _KartuStokSheet extends StatefulWidget {
   State<_KartuStokSheet> createState() => _KartuStokSheetState();
 }
 
-class _KartuStokSheetState extends State<_KartuStokSheet> {
+class _KartuStokSheetState extends State<_KartuStokSheet> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _baris = [];
@@ -505,7 +507,7 @@ class _KartuStokSheetState extends State<_KartuStokSheet> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }

@@ -11,6 +11,7 @@ import '../../sesi.dart';
 import '../../widgets/app_components.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -45,7 +46,7 @@ class TabAturanDiskon extends StatefulWidget {
   State<TabAturanDiskon> createState() => _TabAturanDiskonState();
 }
 
-class _TabAturanDiskonState extends State<TabAturanDiskon> {
+class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -117,7 +118,7 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     }
   }
 
@@ -188,6 +189,7 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muatSemua,
@@ -398,7 +400,7 @@ class _FormDiskon extends StatefulWidget {
   State<_FormDiskon> createState() => _FormDiskonState();
 }
 
-class _FormDiskonState extends State<_FormDiskon> {
+class _FormDiskonState extends State<_FormDiskon> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
@@ -421,15 +423,6 @@ class _FormDiskonState extends State<_FormDiskon> {
   int? _tipeAnggotaId;
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   // Masa Berlaku -- `null` = tanpa batas (dikirim kosong ke server, cocok
   // dgn `diskonSimpan` yg menganggap tanggal_mulai/tanggal_selesai kosong
@@ -538,7 +531,6 @@ class _FormDiskonState extends State<_FormDiskon> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       final body = {
@@ -585,7 +577,7 @@ class _FormDiskonState extends State<_FormDiskon> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -613,7 +605,7 @@ class _FormDiskonState extends State<_FormDiskon> {
                 : 'Susun aturan potongan yang akan dipakai saat transaksi kasir.',
             icon: ubah ? Icons.edit_calendar_outlined : Icons.discount_outlined,
             errorText: _error,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_error),
             // ignore: sort_child_properties_last
             children: [
               AppFormSection(

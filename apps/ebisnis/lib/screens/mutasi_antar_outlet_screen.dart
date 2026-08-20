@@ -10,6 +10,7 @@ import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
@@ -31,7 +32,7 @@ class MutasiAntarOutletScreen extends StatefulWidget {
   State<MutasiAntarOutletScreen> createState() => _MutasiAntarOutletScreenState();
 }
 
-class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
+class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with JejakGalat {
   Map<String, dynamic>? _tokoAsalTerpilih; // hanya diisi manual utk admin; non-admin pakai Sesi.instance.tokoId
   Map<String, dynamic>? _tokoTujuanTerpilih;
   Map<String, dynamic>? _produkAsalTerpilih;
@@ -93,7 +94,7 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _errorRiwayat = e.toString());
+      setStateIfMounted(() => _errorRiwayat = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuatRiwayat = false);
     }
@@ -208,7 +209,7 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> {
       });
       await _muatRiwayat();
     } catch (e) {
-      setStateIfMounted(() => _errorForm = e.toString());
+      setStateIfMounted(() => _errorForm = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -407,7 +408,7 @@ class _SheetPilihToko extends StatefulWidget {
   State<_SheetPilihToko> createState() => _SheetPilihTokoState();
 }
 
-class _SheetPilihTokoState extends State<_SheetPilihToko> {
+class _SheetPilihTokoState extends State<_SheetPilihToko> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _daftar = [];
@@ -427,7 +428,7 @@ class _SheetPilihTokoState extends State<_SheetPilihToko> {
       final hasil = await ApiClient.instance.aksi('mutasi_stok_toko_list', {});
       setStateIfMounted(() => _daftar = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -482,7 +483,7 @@ class _SheetPilihProduk extends StatefulWidget {
   State<_SheetPilihProduk> createState() => _SheetPilihProdukState();
 }
 
-class _SheetPilihProdukState extends State<_SheetPilihProduk> {
+class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
   final _cariController = TextEditingController();
   bool _memuat = true;
   String? _error;
@@ -509,7 +510,7 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> {
       final hasil = await ApiClient.instance.aksi('mutasi_stok_produk_list', {'toko_id': widget.tokoId, 'keyword': keyword});
       setStateIfMounted(() => _daftar = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

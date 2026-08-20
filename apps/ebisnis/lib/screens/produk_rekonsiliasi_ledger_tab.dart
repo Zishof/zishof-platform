@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 class ProdukRekonsiliasiLedgerTab extends StatefulWidget {
   const ProdukRekonsiliasiLedgerTab({super.key});
@@ -16,7 +17,7 @@ class ProdukRekonsiliasiLedgerTab extends StatefulWidget {
 }
 
 class _ProdukRekonsiliasiLedgerTabState
-    extends State<ProdukRekonsiliasiLedgerTab> {
+    extends State<ProdukRekonsiliasiLedgerTab> with JejakGalat {
   static const _pageSize = 15;
   final _cari = TextEditingController();
   bool _memuat = true;
@@ -86,7 +87,7 @@ class _ProdukRekonsiliasiLedgerTabState
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -155,7 +156,8 @@ class _ProdukRekonsiliasiLedgerTabState
             AppInfoBanner(
                 icon: Icons.error_outline,
                 color: AppColors.danger,
-                text: _error!),
+                text: _error!,
+                detail: detailUntuk(_error)),
           ],
           if (_memuat)
             const Padding(

@@ -11,6 +11,7 @@ import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// <h3>Beranda varian "POS Apotik" -- landing setelah login (LANGKAH 2).</h3>
 ///
@@ -28,7 +29,7 @@ class BerandaApotikScreen extends StatefulWidget {
   State<BerandaApotikScreen> createState() => _BerandaApotikScreenState();
 }
 
-class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
+class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGalat {
   bool _memuat = true;
   bool _provisionBerjalan = false;
   String? _error;
@@ -94,7 +95,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -130,7 +131,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
               'Data contoh sedang dibuat di latar. Katalog besar dapat memerlukan beberapa menit.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      snackbarGalat(context, e);
     } finally {
       setStateIfMounted(() => _provisionBerjalan = false);
     }
@@ -180,6 +181,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
                           size: 48, color: Colors.red),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                           onPressed: _muat, child: const Text('Coba Lagi')),

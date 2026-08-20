@@ -10,6 +10,7 @@ import '../services/simple_xlsx.dart';
 import '../widgets/app_components.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Layar siklus akuntansi: **Saldo Awal**, **Jurnal Penyesuaian Berkala**, dan **Tutup Buku**.
 ///
@@ -34,7 +35,7 @@ class SiklusAkuntansiScreen extends StatefulWidget {
 }
 
 class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, JejakGalat {
   static final DateFormat _fmt = DateFormat('yyyy-MM-dd');
   static final DateFormat _fmtBulan = DateFormat('yyyy-MM');
   static final NumberFormat _uang = NumberFormat.decimalPattern('id');
@@ -91,7 +92,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         _akun = ((ak['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _galat = e.toString());
+      if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
@@ -106,7 +107,7 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       final hasil = await ApiClient.instance.aksi(nama, body);
       return Map<String, dynamic>.from(hasil);
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _galat = e.toString());
+      if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
       return null;
     } finally {
       setStateIfMounted(() => _sibuk = false);

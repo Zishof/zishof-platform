@@ -15,6 +15,7 @@ import '../../widgets/progress_sinkron_awal.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
 
@@ -34,7 +35,7 @@ class AnggotaTabDataMember extends StatefulWidget {
   State<AnggotaTabDataMember> createState() => _AnggotaTabDataMemberState();
 }
 
-class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
+class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakGalat {
   bool _memuat = true;
   bool _sinkronBerjalan = false;
   bool _memulaiDataSample = false;
@@ -149,7 +150,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = terapkanGalat(e));
     }
   }
 
@@ -333,8 +334,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
       await _muatSemua();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -354,6 +354,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
               ElevatedButton(
                   onPressed: _muatSemua, child: const Text('Coba Lagi')),
@@ -670,7 +671,7 @@ class _FormAnggota extends StatefulWidget {
   State<_FormAnggota> createState() => _FormAnggotaState();
 }
 
-class _FormAnggotaState extends State<_FormAnggota> {
+class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nama;
   late final TextEditingController _kode;
@@ -687,15 +688,6 @@ class _FormAnggotaState extends State<_FormAnggota> {
   DateTime? _tanggalKadaluarsa;
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   Kategori? get _tipeTerpilih {
     for (final k in widget.tipeAnggota) {
@@ -766,7 +758,6 @@ class _FormAnggotaState extends State<_FormAnggota> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       final ubah = widget.anggota != null;
@@ -802,7 +793,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -828,7 +819,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
                 : 'Lengkapi identitas pelanggan/member agar transaksi dan laporan lebih mudah dilacak.',
             icon: ubah ? Icons.edit_outlined : Icons.person_add_alt_1_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             actions: [
               OutlinedButton.icon(
                 onPressed:

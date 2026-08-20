@@ -14,6 +14,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import 'laporan_detail_screen.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Katalog ~150 laporan (32 kategori) -- padanan `laporan.html`/`laporan-renderer.js`
 /// Electron & `laporan_laporan.jsp`. Metadata katalog (`laporan_katalog`) SEPENUHNYA
@@ -49,7 +50,7 @@ class LaporanScreen extends StatefulWidget {
   State<LaporanScreen> createState() => _LaporanScreenState();
 }
 
-class _LaporanScreenState extends State<LaporanScreen> {
+class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _kategori = [];
@@ -115,7 +116,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -595,7 +596,7 @@ class _DaftarAkunDialog extends StatefulWidget {
   State<_DaftarAkunDialog> createState() => _DaftarAkunDialogState();
 }
 
-class _DaftarAkunDialogState extends State<_DaftarAkunDialog> {
+class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _akun = [];
@@ -628,7 +629,7 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = terapkanGalat(e);
         _memuat = false;
       });
     }
@@ -716,7 +717,7 @@ class _PostingKeuanganDialog extends StatefulWidget {
   State<_PostingKeuanganDialog> createState() => _PostingKeuanganDialogState();
 }
 
-class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
+class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with JejakGalat {
   late DateTime _mulai;
   DateTime _sampai = DateTime.now();
   bool _memuat = false;
@@ -797,7 +798,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
             SnackBar(content: Text('${widget.judul} berhasil diposting.')));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setState(() => _memuat = false);
     }
@@ -853,7 +854,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
       // Muat ulang draft agar transaksi yang sudah diposting hilang dari daftar.
       await _proses(false);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setState(() => _memuat = false);
     }

@@ -448,15 +448,21 @@ class AppInfoBanner extends StatelessWidget {
   final String text;
   final Color color;
 
+  /// Jejak teknis kegagalan bila banner ini dipakai untuk menampilkan galat --
+  /// lihat [AppDetailGalat]. Diisi dari `JejakGalat.detailUntuk(pesan)`.
+  final String? detail;
+
   const AppInfoBanner({
     super.key,
     required this.text,
     this.icon = Icons.info_outline,
     this.color = AppColors.info,
+    this.detail,
   });
 
   @override
   Widget build(BuildContext context) {
+    final adaDetail = (detail ?? '').trim().isNotEmpty;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -471,9 +477,16 @@ class AppInfoBanner extends StatelessWidget {
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12, height: 1.35, color: color),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  text,
+                  style: TextStyle(fontSize: 12, height: 1.35, color: color),
+                ),
+                if (adaDetail) AppDetailGalat(detail: detail!.trim()),
+              ],
             ),
           ),
         ],
@@ -555,6 +568,21 @@ class AppDetailGalat extends StatelessWidget {
       ),
     );
   }
+}
+
+/// [AppDetailGalat] yang aman dipasang langsung di dalam daftar `children`
+/// tanpa pengecekan null: menghilang sendiri bila galatnya memang tidak punya
+/// lapis teknis (mis. kegagalan lokal, atau banner sedang menampilkan pesan
+/// validasi -- lihat `JejakGalat.detailUntuk`).
+class AppDetailGalatOpsional extends StatelessWidget {
+  final String? detail;
+
+  const AppDetailGalatOpsional({super.key, this.detail});
+
+  @override
+  Widget build(BuildContext context) => (detail ?? '').trim().isEmpty
+      ? const SizedBox.shrink()
+      : AppDetailGalat(detail: detail!.trim());
 }
 
 class AppFormStyle {

@@ -31,6 +31,7 @@ import 'konfigurasi/tab_riwayat_cetak.dart';
 import 'konfigurasi/tab_sesi_kasir.dart';
 import '../product_profile.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Layar Konfigurasi (padanan konfigurasi.html/konfigurasi-renderer.js
 /// Electron) -- 5 sub-tab: Identitas Mesin (lokal, core_device), Profil Toko
@@ -652,7 +653,7 @@ class _TabProfilToko extends StatefulWidget {
   State<_TabProfilToko> createState() => _TabProfilTokoState();
 }
 
-class _TabProfilTokoState extends State<_TabProfilToko> {
+class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
   /// Pilihan tri-state untuk satu perlakuan otomatis.
   ///
   /// "Ikut pengaturan global" sengaja dibuat pilihan tersendiri, bukan sekadar
@@ -938,7 +939,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         _muatHakAkses();
       }
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1088,7 +1089,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
             content: Text('Profil dan kebijakan toko tersimpan.')));
       }
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -1419,6 +1420,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text(_error!,
                 style: TextStyle(color: AppColors.textPrimaryOf(context))),
+            AppDetailGalatOpsional(detail: detailUntuk(_error)),
             const SizedBox(height: 12),
             ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi'))
           ]),
@@ -1758,7 +1760,7 @@ class _TabAkunPengguna extends StatefulWidget {
   State<_TabAkunPengguna> createState() => _TabAkunPenggunaState();
 }
 
-class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
+class _TabAkunPenggunaState extends State<_TabAkunPengguna> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1782,7 +1784,7 @@ class _TabAkunPenggunaState extends State<_TabAkunPengguna> {
         _bolehKelola = hasil['bolehKelola'] == true;
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1924,7 +1926,7 @@ class _FormAkun extends StatefulWidget {
   State<_FormAkun> createState() => _FormAkunState();
 }
 
-class _FormAkunState extends State<_FormAkun> {
+class _FormAkunState extends State<_FormAkun> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _userid;
   late final TextEditingController _password;
@@ -2005,7 +2007,7 @@ class _FormAkunState extends State<_FormAkun> {
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }

@@ -22,6 +22,7 @@ import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -115,7 +116,7 @@ class _TabKulakanFaktur extends StatefulWidget {
   State<_TabKulakanFaktur> createState() => _TabKulakanFakturState();
 }
 
-class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
+class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   static const _pageSize = 15;
 
   // ==== Header faktur (diisi SEKALI, diikuti banyak baris produk) ====
@@ -205,7 +206,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       });
     } catch (e) {
       if (!mounted) return;
-      _setStateEntri(() => _errorRiwayat = e.toString());
+      _setStateEntri(() => _errorRiwayat = terapkanGalat(e));
     } finally {
       if (mounted) _setStateEntri(() => _memuatRiwayat = false);
     }
@@ -248,7 +249,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       });
     } catch (e) {
       if (!mounted) return;
-      _setStateEntri(() => _errorForm = e.toString());
+      _setStateEntri(() => _errorForm = terapkanGalat(e));
     } finally {
       if (mounted) _setStateEntri(() => _mencari = false);
     }
@@ -417,7 +418,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       }
     } catch (e) {
       if (!mounted) return;
-      _setStateEntri(() => _errorForm = e.toString());
+      _setStateEntri(() => _errorForm = terapkanGalat(e));
     } finally {
       if (mounted) _setStateEntri(() => _menyimpanFaktur = false);
     }

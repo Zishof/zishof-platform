@@ -10,6 +10,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 const _opsiMode = [
   ('FULLSCREEN', 'Layar Penuh', Icons.fullscreen),
@@ -38,7 +39,7 @@ class TabScreensaver extends StatefulWidget {
   State<TabScreensaver> createState() => _TabScreensaverState();
 }
 
-class _TabScreensaverState extends State<TabScreensaver> {
+class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
   bool _memuat = true;
   String? _error;
   bool _menyimpanPengaturan = false;
@@ -72,7 +73,7 @@ class _TabScreensaverState extends State<TabScreensaver> {
     try {
       await Future.wait([_muatPengaturan(), _muatSlide()]);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -283,6 +284,7 @@ class _TabScreensaverState extends State<TabScreensaver> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_error)),
               const SizedBox(height: 16),
               ElevatedButton(onPressed: _muatSemua, child: const Text('Coba Lagi')),
             ],

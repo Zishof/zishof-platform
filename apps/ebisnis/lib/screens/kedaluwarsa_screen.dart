@@ -12,6 +12,7 @@ import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatAngkaKedaluwarsa = NumberFormat.decimalPattern('id_ID');
 final _formatTanggalKedaluwarsa = DateFormat('dd/MM/yyyy');
@@ -23,7 +24,7 @@ class KedaluwarsaScreen extends StatefulWidget {
   State<KedaluwarsaScreen> createState() => _KedaluwarsaScreenState();
 }
 
-class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
+class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
   static const _pageSize = 15;
   final _cari = TextEditingController();
   bool _memuat = true;
@@ -72,7 +73,7 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -93,8 +94,7 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
         return;
       }
@@ -268,8 +268,7 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> {
                         }
                       } catch (e) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text('$e')));
+                          snackbarGalat(context, e);
                         }
                         setDialogState(() => menyimpan = false);
                       }

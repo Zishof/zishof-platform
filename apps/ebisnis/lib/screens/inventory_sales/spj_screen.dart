@@ -11,6 +11,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'nota_sales_screen.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
@@ -55,7 +56,7 @@ Color _warnaStatusSpj(String s) {
   return Colors.grey;
 }
 
-class _SpjScreenState extends State<SpjScreen> {
+class _SpjScreenState extends State<SpjScreen> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -86,7 +87,7 @@ class _SpjScreenState extends State<SpjScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -158,7 +159,7 @@ class _SpjScreenState extends State<SpjScreen> {
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? _PanelError(pesan: _error!, onCoba: _muat)
+                  ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
                   : _data.isEmpty
                       ? Center(
                           child: Text('Belum ada SPJ.',
@@ -261,7 +262,7 @@ class _DetailSpj extends StatefulWidget {
   State<_DetailSpj> createState() => _DetailSpjState();
 }
 
-class _DetailSpjState extends State<_DetailSpj> {
+class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
   Map<String, dynamic>? _d;
   String? _error;
   bool _proses = false;
@@ -280,7 +281,7 @@ class _DetailSpjState extends State<_DetailSpj> {
       setStateIfMounted(
           () => _d = Map<String, dynamic>.from(hasil['data'] as Map));
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     }
   }
 
@@ -297,8 +298,7 @@ class _DetailSpjState extends State<_DetailSpj> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _proses = false);
@@ -332,8 +332,7 @@ class _DetailSpjState extends State<_DetailSpj> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _proses = false);
@@ -353,7 +352,7 @@ class _DetailSpjState extends State<_DetailSpj> {
             onPressed: () => Navigator.of(context).pop(_berubah)),
       ),
       body: _error != null
-          ? _PanelError(pesan: _error!, onCoba: _muat)
+          ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
           : d == null
               ? const Center(child: CircularProgressIndicator())
               : ListView(padding: const EdgeInsets.all(16), children: [
@@ -576,7 +575,7 @@ class _FormSpj extends StatefulWidget {
   State<_FormSpj> createState() => _FormSpjState();
 }
 
-class _FormSpjState extends State<_FormSpj> {
+class _FormSpjState extends State<_FormSpj> with JejakGalat {
   int? _salesId;
   String _salesNama = '';
   DateTime _berangkat = DateTime.now();
@@ -619,7 +618,7 @@ class _FormSpjState extends State<_FormSpj> {
         }
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -671,7 +670,7 @@ class _FormSpjState extends State<_FormSpj> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _menyimpan = false);
     }
@@ -1012,7 +1011,9 @@ class _DialogCariProdukSpjState extends State<_DialogCariProdukSpj> {
 class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelError({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelError(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -1023,6 +1024,7 @@ class _PanelError extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

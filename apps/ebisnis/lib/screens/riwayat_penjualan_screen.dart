@@ -19,6 +19,7 @@ import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
 import '../services/pengaturan_koreksi_transaksi.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -942,7 +943,7 @@ class RiwayatPenjualanScreen extends StatefulWidget {
   State<RiwayatPenjualanScreen> createState() => _RiwayatPenjualanScreenState();
 }
 
-class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
+class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with JejakGalat {
   final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
@@ -1362,7 +1363,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
           return;
         }
       }
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1589,8 +1590,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -1658,8 +1658,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }

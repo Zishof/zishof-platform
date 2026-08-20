@@ -50,4 +50,32 @@ void main() {
 
     expect(find.text('Detail Error'), findsNothing);
   });
+
+  testWidgets('banner daftar ikut membawa penyingkap', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: AppInfoBanner(
+          text: 'Data belum dapat dimuat.',
+          detail: 'Referensi API-777\nHTTP 500',
+        ),
+      ),
+    ));
+
+    expect(find.text('Detail Error'), findsOneWidget);
+    expect(find.textContaining('API-777'), findsNothing);
+
+    await tester.tap(find.text('Detail Error'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('API-777'), findsOneWidget);
+  });
+
+  testWidgets('penyingkap opsional menghilang saat detail null',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: AppDetailGalatOpsional(detail: null)),
+    ));
+
+    expect(find.text('Detail Error'), findsNothing);
+    expect(find.byType(SizedBox), findsWidgets);
+  });
 }

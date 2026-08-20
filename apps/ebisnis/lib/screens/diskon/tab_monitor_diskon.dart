@@ -5,6 +5,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Periode filter -- SAMA PERSIS 6 pilihan `MonitorDiskonKantinAction`
 /// (ZK) / `KantinHelper.monitorDiskonTimeCond` (server): today/week/month/
@@ -31,7 +32,7 @@ class TabMonitorDiskon extends StatefulWidget {
   State<TabMonitorDiskon> createState() => _TabMonitorDiskonState();
 }
 
-class _TabMonitorDiskonState extends State<TabMonitorDiskon> {
+class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -77,7 +78,7 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -35,7 +36,7 @@ class AnggotaTabTopup extends StatefulWidget {
   State<AnggotaTabTopup> createState() => _AnggotaTabTopupState();
 }
 
-class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
+class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
@@ -79,7 +80,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -400,8 +401,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -421,6 +421,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
               ElevatedButton(
                   onPressed: _muatDaftar, child: const Text('Coba Lagi')),

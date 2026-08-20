@@ -21,6 +21,7 @@ import '../widgets/safe_state.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/proses_simpan_master.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -851,8 +852,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return ok;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
       return false;
     }
@@ -1255,8 +1255,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);

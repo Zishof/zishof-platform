@@ -16,6 +16,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
+import '../../widgets/jejak_galat.dart';
 
 final _rpPembantuPiutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -30,7 +31,7 @@ class AnggotaTabPembantuPiutang extends StatefulWidget {
       _AnggotaTabPembantuPiutangState();
 }
 
-class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
+class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> with JejakGalat {
   static const _pageSize = 15;
   final _cari = TextEditingController();
   late DateTime _dari;
@@ -118,7 +119,7 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -220,8 +221,7 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _mengekspor = false);
@@ -292,8 +292,7 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
           onLayout: (_) => doc.save(), name: 'Pembantu_Piutang.pdf');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _mengekspor = false);
@@ -418,6 +417,7 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Text(_error!, textAlign: TextAlign.center),
+                    AppDetailGalatOpsional(detail: detailUntuk(_error)),
                     const SizedBox(height: 12),
                     ElevatedButton(
                         onPressed: _muat, child: const Text('Coba Lagi')),

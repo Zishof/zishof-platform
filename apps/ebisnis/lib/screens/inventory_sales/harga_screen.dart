@@ -11,6 +11,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'cetak_util.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -91,7 +92,7 @@ class _TabAnalisisHarga extends StatefulWidget {
   State<_TabAnalisisHarga> createState() => _TabAnalisisHargaState();
 }
 
-class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
+class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -127,7 +128,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -248,6 +249,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> {
             const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
+            AppDetailGalatOpsional(detail: detailUntuk(_error)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
           ]),
@@ -394,7 +396,7 @@ class _TabHargaVersi extends StatefulWidget {
   State<_TabHargaVersi> createState() => _TabHargaVersiState();
 }
 
-class _TabHargaVersiState extends State<_TabHargaVersi> {
+class _TabHargaVersiState extends State<_TabHargaVersi> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -440,7 +442,7 @@ class _TabHargaVersiState extends State<_TabHargaVersi> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -631,7 +633,7 @@ class _FormVersiHarga extends StatefulWidget {
   State<_FormVersiHarga> createState() => _FormVersiHargaState();
 }
 
-class _FormVersiHargaState extends State<_FormVersiHarga> {
+class _FormVersiHargaState extends State<_FormVersiHarga> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   final _harga = TextEditingController();
   final _keterangan = TextEditingController();
@@ -640,15 +642,6 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
   Map<String, dynamic>? _produk;
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void dispose() {
@@ -700,7 +693,6 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi(
@@ -714,7 +706,7 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -739,7 +731,7 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
                 'Overlap tanggal efektif yang sama ditolak; histori tidak pernah ditimpa.',
             icon: Icons.price_change_outlined,
             errorText: _error,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_error),
             children: [
               AppFormSection(judul: 'Versi Harga', children: [
                 OutlinedButton.icon(

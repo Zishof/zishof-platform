@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Riwayat buka/tutup kas (`laporan_sesi_list`) -- sesi yang SUDAH tercatat,
 /// bukan angka kas berjalan. Memakai pola "baca lokal dulu"
@@ -21,7 +22,7 @@ class RingkasanTabSesiKas extends StatefulWidget {
   State<RingkasanTabSesiKas> createState() => _RingkasanTabSesiKasState();
 }
 
-class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> {
+class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> with JejakGalat {
   static const _ukuran = 15;
   final _cari = TextEditingController();
   final _rupiah =
@@ -97,7 +98,7 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }

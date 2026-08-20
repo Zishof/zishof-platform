@@ -10,6 +10,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -52,7 +53,7 @@ Color _warnaStatus(String s) {
   return Colors.grey;
 }
 
-class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
+class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -89,7 +90,7 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -185,7 +186,7 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> {
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? _PanelError(pesan: _error!, onCoba: _muat)
+                  ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
                   : _data.isEmpty
                       ? Center(
                           child: Text(
@@ -281,7 +282,7 @@ class _DetailOrderSheet extends StatefulWidget {
   State<_DetailOrderSheet> createState() => _DetailOrderSheetState();
 }
 
-class _DetailOrderSheetState extends State<_DetailOrderSheet> {
+class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
   Map<String, dynamic>? _d;
   String? _error;
   bool _proses = false;
@@ -300,7 +301,7 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> {
       setStateIfMounted(
           () => _d = Map<String, dynamic>.from(hasil['data'] as Map));
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     }
   }
 
@@ -316,8 +317,7 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _proses = false);
@@ -338,8 +338,7 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _proses = false);
@@ -382,7 +381,7 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> {
         maxChildSize: 0.95,
         builder: (_, scroll) {
           if (_error != null) {
-            return _PanelError(pesan: _error!, onCoba: _muat);
+            return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
           }
           final d = _d;
           if (d == null) {
@@ -546,7 +545,7 @@ class _FormOrder extends StatefulWidget {
   State<_FormOrder> createState() => _FormOrderState();
 }
 
-class _FormOrderState extends State<_FormOrder> {
+class _FormOrderState extends State<_FormOrder> with JejakGalat {
   int? _customerId;
   String _customerNama = '';
   int? _salesId;
@@ -591,7 +590,7 @@ class _FormOrderState extends State<_FormOrder> {
         }
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -673,7 +672,7 @@ class _FormOrderState extends State<_FormOrder> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _menyimpan = false);
     }
@@ -840,7 +839,9 @@ class _KartuOrder extends StatelessWidget {
 class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelError({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelError(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -851,6 +852,7 @@ class _PanelError extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

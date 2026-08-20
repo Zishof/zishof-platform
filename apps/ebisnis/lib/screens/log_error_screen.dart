@@ -10,6 +10,7 @@ import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../api_client.dart';
+import '../widgets/jejak_galat.dart';
 
 const _urlIssueBaruGithub =
     'https://github.com/Zishof/zishof-platform/issues/new';
@@ -35,7 +36,7 @@ class LogErrorScreen extends StatefulWidget {
   State<LogErrorScreen> createState() => _LogErrorScreenState();
 }
 
-class _LogErrorScreenState extends State<LogErrorScreen> {
+class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   List<Map<String, dynamic>> _data = [];
@@ -67,7 +68,7 @@ class _LogErrorScreenState extends State<LogErrorScreen> {
       final value = await ApiClient.instance.aksi('error_log_health');
       setStateIfMounted(() => _health = value);
     } catch (e) {
-      setStateIfMounted(() => _healthError = e.toString());
+      setStateIfMounted(() => _healthError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuatHealth = false);
     }

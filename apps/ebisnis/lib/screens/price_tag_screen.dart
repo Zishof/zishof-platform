@@ -19,6 +19,7 @@ import '../services/pengaturan_struk.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Cetak price tag dengan beberapa model operasional:
 /// tag rak, stiker barcode produk, dan promo tag ukuran besar.
@@ -468,7 +469,7 @@ final _ukuranPromo = [
     ),
 ];
 
-class _PriceTagScreenState extends State<PriceTagScreen> {
+class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _semuaProduk = [];
@@ -683,7 +684,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
         unawaited(_muatProdukPromoJikaPerlu());
       }
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -1033,7 +1034,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> {
       if (!mounted) return;
       setStateIfMounted(() {
         _promoProdukIds = <int>{};
-        _pesanProdukPromo = e.toString();
+        _pesanProdukPromo = terapkanGalat(e);
       });
     } finally {
       if (mounted) setStateIfMounted(() => _memuatProdukPromo = false);

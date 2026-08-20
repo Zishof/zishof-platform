@@ -3,6 +3,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab 8/9 "Monitor Promo & Cashback" -- aksi `monitor_promo_cashback`.
 class RingkasanTabPromo extends StatefulWidget {
@@ -11,7 +12,7 @@ class RingkasanTabPromo extends StatefulWidget {
   State<RingkasanTabPromo> createState() => _RingkasanTabPromoState();
 }
 
-class _RingkasanTabPromoState extends State<RingkasanTabPromo> {
+class _RingkasanTabPromoState extends State<RingkasanTabPromo> with JejakGalat {
   bool _memuat = true;
   String? _error;
   Map<String, dynamic>? _d;
@@ -34,7 +35,7 @@ class _RingkasanTabPromoState extends State<RingkasanTabPromo> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

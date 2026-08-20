@@ -11,6 +11,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import 'struk_retur_util.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -119,7 +120,7 @@ class _TabBuatRetur extends StatefulWidget {
   State<_TabBuatRetur> createState() => _TabBuatReturState();
 }
 
-class _TabBuatReturState extends State<_TabBuatRetur> {
+class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
   final _kataKunciController = TextEditingController();
   bool _mencari = false;
   String? _errorPencarian;
@@ -156,7 +157,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() => _hasilPencarian = data);
     } catch (e) {
-      setStateIfMounted(() => _errorPencarian = e.toString());
+      setStateIfMounted(() => _errorPencarian = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _mencari = false);
     }
@@ -178,8 +179,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
           () => _baris = items.map((i) => _BarisRetur(i)).toList());
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
       setStateIfMounted(() => _transaksiTerpilih = null);
     } finally {
@@ -298,7 +298,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
         }
       }
     } catch (e) {
-      setStateIfMounted(() => _errorSimpan = e.toString());
+      setStateIfMounted(() => _errorSimpan = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -357,6 +357,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
                 icon: Icons.error_outline,
                 color: AppColors.danger,
                 text: _errorPencarian!,
+                detail: detailUntuk(_errorPencarian),
               ),
             ),
           if (!_mencari)
@@ -841,7 +842,7 @@ class _TabelTransaksiRetur extends StatelessWidget {
   }
 }
 
-class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
+class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -881,7 +882,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -921,8 +922,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -1052,8 +1052,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -1120,6 +1119,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
                 icon: Icons.error_outline,
                 color: AppColors.danger,
                 text: _error!,
+                detail: detailUntuk(_error),
               ),
             )
           else

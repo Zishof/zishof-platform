@@ -28,6 +28,7 @@ import 'price_tag_screen.dart';
 import 'produk_mutasi_barang_tab.dart';
 import 'produk_rekonsiliasi_ledger_tab.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -87,7 +88,7 @@ class ProdukScreen extends StatefulWidget {
   State<ProdukScreen> createState() => _ProdukScreenState();
 }
 
-class _ProdukScreenState extends State<ProdukScreen> {
+class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Produk> _semuaProduk = [];
@@ -226,7 +227,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
         _statistik = statistik;
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -576,8 +577,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
       await _muatSemua();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -960,6 +960,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                               const SizedBox(height: 12),
                                               Text(_pesanError!,
                                                   textAlign: TextAlign.center),
+                                              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
                                               const SizedBox(height: 16),
                                               ElevatedButton(
                                                   onPressed: _muatSemua,
@@ -1546,22 +1547,13 @@ class _FormKebijakanRetur extends StatefulWidget {
   State<_FormKebijakanRetur> createState() => _FormKebijakanReturState();
 }
 
-class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
+class _FormKebijakanReturState extends State<_FormKebijakanRetur> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
   bool _aktif = true;
   bool _menyimpan = false;
   String? _error;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void initState() {
@@ -1584,7 +1576,6 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
     setState(() {
       _menyimpan = true;
       _error = null;
-      _detailGalat = null;
     });
     try {
       final ubah = widget.kebijakan != null;
@@ -1609,7 +1600,7 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => _error = _terapkanDetailGalat(e));
+      if (mounted) setState(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setState(() => _menyimpan = false);
     }
@@ -1634,7 +1625,7 @@ class _FormKebijakanReturState extends State<_FormKebijakanRetur> {
                   'Tuliskan nama dan penjelasan aturan retur yang mudah dipahami petugas.',
               icon: Icons.assignment_return_outlined,
               errorText: _error,
-              errorDetail: _detailGalat,
+              errorDetail: detailUntuk(_error),
               actions: [
                 OutlinedButton.icon(
                   onPressed: _menyimpan ? null : () => Navigator.pop(context),
@@ -1738,7 +1729,7 @@ class _FotoBaris {
   _FotoBaris({this.id, this.url, this.bytes, this.namaFile});
 }
 
-class _FormProdukState extends State<_FormProduk> {
+class _FormProdukState extends State<_FormProduk> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
   late final TextEditingController _nama;
@@ -1763,15 +1754,6 @@ class _FormProdukState extends State<_FormProduk> {
   String _jenisItem = 'JUAL';
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
   final List<_BahanBakuBaris> _bahanBaku = [];
 
   /// Pilihan Produk Ekstra (add-on/modifier) -- cuma daftar id (beda dari
@@ -2067,7 +2049,6 @@ class _FormProdukState extends State<_FormProduk> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       final ubah = widget.produk != null;
@@ -2149,7 +2130,7 @@ class _FormProdukState extends State<_FormProduk> {
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -2174,7 +2155,7 @@ class _FormProdukState extends State<_FormProduk> {
                 'Atur identitas, harga, stok, dan resep bahan baku produk.',
             icon: ubah ? Icons.edit_note_outlined : Icons.add_box_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             actions: [
               OutlinedButton.icon(
                 onPressed:

@@ -13,6 +13,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -31,7 +32,7 @@ class NotaSalesScreen extends StatefulWidget {
   State<NotaSalesScreen> createState() => _NotaSalesScreenState();
 }
 
-class _NotaSalesScreenState extends State<NotaSalesScreen> {
+class _NotaSalesScreenState extends State<NotaSalesScreen> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -61,7 +62,7 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> {
         });
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -78,7 +79,7 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _PanelErrorNs(pesan: _error!, onCoba: _muat)
+              ? _PanelErrorNs(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
               : _data.isEmpty
                   ? Center(
                       child: Text(
@@ -165,7 +166,7 @@ class DetailSesiNotaSales extends StatefulWidget {
   State<DetailSesiNotaSales> createState() => _DetailSesiNotaSalesState();
 }
 
-class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
+class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> with JejakGalat {
   Map<String, dynamic>? _d;
   String? _error;
   bool _proses = false;
@@ -184,7 +185,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
       setStateIfMounted(
           () => _d = Map<String, dynamic>.from(hasil['data'] as Map));
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     }
   }
 
@@ -200,8 +201,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
       await _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     } finally {
       setStateIfMounted(() => _proses = false);
@@ -341,8 +341,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         await _muat();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
       }
     }
@@ -417,8 +416,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         await _muat();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
       }
     }
@@ -563,8 +561,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         await _muat();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
       }
     }
@@ -871,7 +868,7 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
         ],
       ),
       body: _error != null
-          ? _PanelErrorNs(pesan: _error!, onCoba: _muat)
+          ? _PanelErrorNs(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
           : d == null
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
@@ -1122,7 +1119,9 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> {
 class _PanelErrorNs extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelErrorNs({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelErrorNs(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -1133,6 +1132,7 @@ class _PanelErrorNs extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

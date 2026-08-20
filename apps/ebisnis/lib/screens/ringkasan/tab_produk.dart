@@ -4,6 +4,7 @@ import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 const _periodeOpsi = ['harian', 'mingguan', 'bulanan', 'semester', 'tahunan'];
 
@@ -17,7 +18,7 @@ class RingkasanTabProduk extends StatefulWidget {
   State<RingkasanTabProduk> createState() => _RingkasanTabProdukState();
 }
 
-class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
+class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat {
   static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
@@ -76,7 +77,7 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> {
       setStateIfMounted(() => _d = hasil);
     } catch (e) {
       if (!mounted) return;
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

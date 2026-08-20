@@ -12,6 +12,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
@@ -29,7 +30,7 @@ class LabaRugiScreen extends StatefulWidget {
   State<LabaRugiScreen> createState() => _LabaRugiScreenState();
 }
 
-class _LabaRugiScreenState extends State<LabaRugiScreen> {
+class _LabaRugiScreenState extends State<LabaRugiScreen> with JejakGalat {
   DateTime _dari = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _sampai = DateTime.now();
   int? _salesId;
@@ -169,7 +170,7 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
       }
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -251,7 +252,7 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _PanelErrorLr(pesan: _error!, onCoba: _muat)
+              ? _PanelErrorLr(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
               : RefreshIndicator(
                   onRefresh: _muat,
                   child: ListView(
@@ -589,7 +590,9 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> {
 class _PanelErrorLr extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelErrorLr({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelErrorLr(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -600,6 +603,7 @@ class _PanelErrorLr extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

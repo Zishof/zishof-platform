@@ -18,6 +18,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'tab_mutasi_tabungan.dart' show PilihAnggotaSheet;
+import '../../widgets/jejak_galat.dart';
 
 final _formatRpMutasiHutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -38,7 +39,7 @@ class AnggotaTabMutasiHutang extends StatefulWidget {
   State<AnggotaTabMutasiHutang> createState() => _AnggotaTabMutasiHutangState();
 }
 
-class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
+class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -96,7 +97,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _error = e.toString());
+      if (mounted) setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -345,6 +346,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> {
             const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
+            AppDetailGalatOpsional(detail: detailUntuk(_error)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _muat, child: const Text('Coba Lagi')),
           ]),
@@ -603,7 +605,7 @@ class _FormBayarHutang extends StatefulWidget {
   State<_FormBayarHutang> createState() => _FormBayarHutangState();
 }
 
-class _FormBayarHutangState extends State<_FormBayarHutang> {
+class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   final _nominal = TextEditingController();
   final _keterangan = TextEditingController();
@@ -612,15 +614,6 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
   DateTime _waktu = DateTime.now();
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void dispose() {
@@ -651,7 +644,6 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('hutang_bayar_simpan', {
@@ -662,7 +654,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -685,7 +677,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
             subtitle: 'Catat pelunasan/cicilan hutang anggota.',
             icon: Icons.money_off_csred_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             children: [
               AppFormSection(judul: 'Anggota', children: [
                 OutlinedButton.icon(

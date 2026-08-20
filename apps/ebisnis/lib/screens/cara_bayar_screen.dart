@@ -11,7 +11,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
-import '../api_client.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
@@ -26,7 +26,7 @@ class CaraBayarScreen extends StatefulWidget {
   State<CaraBayarScreen> createState() => _CaraBayarScreenState();
 }
 
-class _CaraBayarScreenState extends State<CaraBayarScreen> {
+class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
   static const _pageSize = 15;
   bool _memuat = true;
   String? _error;
@@ -88,7 +88,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _error = e.toString());
+      if (mounted) setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -150,8 +150,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -184,6 +183,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muatDaftar,
@@ -385,7 +385,7 @@ class _FormCaraBayar extends StatefulWidget {
   State<_FormCaraBayar> createState() => _FormCaraBayarState();
 }
 
-class _FormCaraBayarState extends State<_FormCaraBayar> {
+class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
   late final TextEditingController _nama;
@@ -402,15 +402,6 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   // Gap-closure "Ada Kembalian" -- selama admin belum menyentuh switch-nya sendiri di form Tambah,
   // ikuti field Nama secara live (ilike "tunai" -> Ya). Sekali disentuh manual (atau form Ubah
@@ -462,7 +453,6 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       // (daftar akun dimuat terpisah, lihat _muatAkun)
@@ -492,7 +482,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -528,7 +518,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
             subtitle: 'Atur cara pembayaran koperasi/kantin.',
             icon: Icons.payments_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             children: [
               AppFormSection(
                 judul: 'Identitas',

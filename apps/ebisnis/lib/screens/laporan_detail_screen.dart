@@ -13,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
 /// form filter dibangun murni dari metadata katalog (`produk`/`pelanggan`/
@@ -28,7 +29,7 @@ class LaporanDetailScreen extends StatefulWidget {
   State<LaporanDetailScreen> createState() => _LaporanDetailScreenState();
 }
 
-class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
+class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGalat {
   final _formatTgl = DateFormat('yyyy-MM-dd');
   DateTime? _tglMulai;
   DateTime? _tglSampai;
@@ -142,10 +143,10 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> {
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya).
       if (!e.offline || !adaCacheLokal) {
-        setStateIfMounted(() => _pesanError = e.toString());
+        setStateIfMounted(() => _pesanError = terapkanGalat(e));
       }
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }

@@ -10,6 +10,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
@@ -83,7 +84,7 @@ class _TabJurnal extends StatefulWidget {
   State<_TabJurnal> createState() => _TabJurnalState();
 }
 
-class _TabJurnalState extends State<_TabJurnal> {
+class _TabJurnalState extends State<_TabJurnal> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -118,7 +119,7 @@ class _TabJurnalState extends State<_TabJurnal> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -126,7 +127,7 @@ class _TabJurnalState extends State<_TabJurnal> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelErrorKj(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelErrorKj(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -211,7 +212,7 @@ class _TabCoa extends StatefulWidget {
   State<_TabCoa> createState() => _TabCoaState();
 }
 
-class _TabCoaState extends State<_TabCoa> {
+class _TabCoaState extends State<_TabCoa> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -245,7 +246,7 @@ class _TabCoaState extends State<_TabCoa> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -291,8 +292,7 @@ class _TabCoaState extends State<_TabCoa> {
         _muat();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          snackbarGalat(context, e);
         }
       }
     }
@@ -302,7 +302,7 @@ class _TabCoaState extends State<_TabCoa> {
   Widget build(BuildContext context) {
     final bolehKelola = !Sesi.instance.isSalesKeliling;
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelErrorKj(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelErrorKj(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: bolehKelola
@@ -385,7 +385,9 @@ class _TabCoaState extends State<_TabCoa> {
 class _PanelErrorKj extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelErrorKj({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelErrorKj(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -396,6 +398,7 @@ class _PanelErrorKj extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),

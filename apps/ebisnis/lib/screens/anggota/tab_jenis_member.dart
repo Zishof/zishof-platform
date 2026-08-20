@@ -9,6 +9,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab "Jenis Member" (padanan `jenis_anggota_koperasi.jsp`) -- klasifikasi
 /// keanggotaan UTAMA yg mengatur aturan bisnis: label saldo/cashback, saldo
@@ -23,7 +24,7 @@ class AnggotaTabJenisMember extends StatefulWidget {
   State<AnggotaTabJenisMember> createState() => _AnggotaTabJenisMemberState();
 }
 
-class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
+class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
@@ -94,7 +95,7 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = terapkanGalat(e));
     }
   }
 
@@ -165,8 +166,7 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -186,6 +186,7 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
               ElevatedButton(
                   onPressed: _muatSemua, child: const Text('Coba Lagi')),
@@ -367,7 +368,7 @@ class _FormJenisMember extends StatefulWidget {
   State<_FormJenisMember> createState() => _FormJenisMemberState();
 }
 
-class _FormJenisMemberState extends State<_FormJenisMember> {
+class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _kode;
   late final TextEditingController _nama;
@@ -387,15 +388,6 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
   Set<int> _caraBayarDipilih = {};
   bool _menyimpan = false;
   String? _pesanError;
-  String? _detailGalat;
-
-  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
-  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
-  String _terapkanDetailGalat(Object e) {
-    final galat = GalatTampil.dari(e);
-    _detailGalat = galat.detail;
-    return galat.pesan;
-  }
 
   @override
   void initState() {
@@ -447,7 +439,6 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
-      _detailGalat = null;
     });
     try {
       final body = {
@@ -484,7 +475,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -509,7 +500,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
                 'Klasifikasi utama keanggotaan -- mengatur aturan saldo, topup, dan belanja rutin.',
             icon: Icons.category_outlined,
             errorText: _pesanError,
-            errorDetail: _detailGalat,
+            errorDetail: detailUntuk(_pesanError),
             children: [
               AppFormSection(
                 judul: 'Identitas',

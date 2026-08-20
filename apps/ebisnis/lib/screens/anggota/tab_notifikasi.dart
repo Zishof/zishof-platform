@@ -6,6 +6,7 @@ import '../../widgets/proses_simpan_master.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 /// Tab "Notifikasi" (padanan `notifikasi.jsp`) -- log/riwayat notifikasi yg
 /// SUDAH dikirim ke member (mis. peringatan wajib-belanja-rutin dari Tab
@@ -19,7 +20,7 @@ class AnggotaTabNotifikasi extends StatefulWidget {
   State<AnggotaTabNotifikasi> createState() => _AnggotaTabNotifikasiState();
 }
 
-class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
+class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
@@ -56,7 +57,7 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
         });
       });
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -103,8 +104,7 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
       await _muatDaftar();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -154,6 +154,7 @@ class _AnggotaTabNotifikasiState extends State<AnggotaTabNotifikasi> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(_pesanError!, textAlign: TextAlign.center),
+              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               const SizedBox(height: 16),
               ElevatedButton(
                   onPressed: _muatDaftar, child: const Text('Coba Lagi')),

@@ -15,6 +15,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/jejak_galat.dart';
 
 final _mutasiRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -28,7 +29,7 @@ class ProdukMutasiBarangTab extends StatefulWidget {
   State<ProdukMutasiBarangTab> createState() => _ProdukMutasiBarangTabState();
 }
 
-class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
+class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> with JejakGalat {
   static const _pageSize = 15;
   late DateTime _dari;
   late DateTime _sampai;
@@ -98,7 +99,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
@@ -371,6 +372,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> {
                           color: AppColors.danger, size: 42),
                       const SizedBox(height: 8),
                       Text(_error!, textAlign: TextAlign.center),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
                       TextButton(
                           onPressed: _muat, child: const Text('Coba Lagi')),
                     ]))

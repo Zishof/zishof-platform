@@ -13,6 +13,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/jejak_galat.dart';
 
 final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
@@ -104,7 +105,7 @@ class _TabPiutang extends StatefulWidget {
   State<_TabPiutang> createState() => _TabPiutangState();
 }
 
-class _TabPiutangState extends State<_TabPiutang> {
+class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -149,7 +150,7 @@ class _TabPiutangState extends State<_TabPiutang> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -157,7 +158,7 @@ class _TabPiutangState extends State<_TabPiutang> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -275,7 +276,7 @@ class _TabPenerimaan extends StatefulWidget {
   State<_TabPenerimaan> createState() => _TabPenerimaanState();
 }
 
-class _TabPenerimaanState extends State<_TabPenerimaan> {
+class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
   int? _customerId;
   String _customerNama = '';
   List<Map<String, dynamic>> _faktur = [];
@@ -347,7 +348,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> {
         }
       });
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -408,7 +409,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> {
           : 'Penerimaan tersimpan: ${hasil['nomor'] ?? hasil['id']} — kwitansi bisa dicetak di tab Riwayat.');
       if (hasil['offline'] != true) await _muatFaktur();
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _menyimpan = false);
     }
@@ -605,7 +606,7 @@ class _TabRiwayat extends StatefulWidget {
   State<_TabRiwayat> createState() => _TabRiwayatState();
 }
 
-class _TabRiwayatState extends State<_TabRiwayat> {
+class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -639,7 +640,7 @@ class _TabRiwayatState extends State<_TabRiwayat> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -770,8 +771,7 @@ class _TabRiwayatState extends State<_TabRiwayat> {
       _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -792,8 +792,7 @@ class _TabRiwayatState extends State<_TabRiwayat> {
       _muat();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        snackbarGalat(context, e);
       }
     }
   }
@@ -801,7 +800,7 @@ class _TabRiwayatState extends State<_TabRiwayat> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -930,7 +929,7 @@ class _TabAgingCustomer extends StatefulWidget {
   State<_TabAgingCustomer> createState() => _TabAgingCustomerState();
 }
 
-class _TabAgingCustomerState extends State<_TabAgingCustomer> {
+class _TabAgingCustomerState extends State<_TabAgingCustomer> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -962,7 +961,7 @@ class _TabAgingCustomerState extends State<_TabAgingCustomer> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -979,7 +978,7 @@ class _TabAgingCustomerState extends State<_TabAgingCustomer> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1063,7 +1062,7 @@ class _TabAgingSales extends StatefulWidget {
   State<_TabAgingSales> createState() => _TabAgingSalesState();
 }
 
-class _TabAgingSalesState extends State<_TabAgingSales> {
+class _TabAgingSalesState extends State<_TabAgingSales> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1094,7 +1093,7 @@ class _TabAgingSalesState extends State<_TabAgingSales> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -1102,7 +1101,7 @@ class _TabAgingSalesState extends State<_TabAgingSales> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1188,7 +1187,7 @@ class _TabLaporanPiutang extends StatefulWidget {
   State<_TabLaporanPiutang> createState() => _TabLaporanPiutangState();
 }
 
-class _TabLaporanPiutangState extends State<_TabLaporanPiutang> {
+class _TabLaporanPiutangState extends State<_TabLaporanPiutang> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1228,7 +1227,7 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> {
     } catch (e) {
       setStateIfMounted(() {
         _memuat = false;
-        _error = e.toString();
+        _error = terapkanGalat(e);
       });
     }
   }
@@ -1275,7 +1274,7 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, onCoba: _muat);
+    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1454,7 +1453,9 @@ class _DialogCariCustomerPiutangState
 class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
-  const _PanelError({required this.pesan, required this.onCoba});
+  final String? detail;
+  const _PanelError(
+      {required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -1465,6 +1466,7 @@ class _PanelError extends StatelessWidget {
           const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 12),
           Text(pesan, textAlign: TextAlign.center),
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ]),
