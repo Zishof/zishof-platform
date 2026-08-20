@@ -60,6 +60,8 @@ IDI_APP_ICON            ICON                    "resources\\icon_inventory_sales
 IDI_APP_ICON            ICON                    "resources\\icon_apotik.ico"
 #elif defined(EBISNIS_VARIANT_EMEDIK)
 IDI_APP_ICON            ICON                    "resources\\icon_emedik.ico"
+#elif defined(EBISNIS_VARIANT_PETRA)
+IDI_APP_ICON            ICON                    "resources\\icon_petra.ico"
 #else
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 #endif

@@ -43,17 +43,21 @@ sempit otomatis kembali ke kartu satu kolom supaya formulir tidak terhimpit.
 Teks kontak diambil dari `AppVariant.alamatKontakLogin`, `teleponKontakLogin`,
 dan `emailKontakLogin`.
 
-## Aset yang masih perlu diganti
+## Aset
 
-`assets/images/petra/icon.png` dan `login-background.png` saat ini masih salinan
-aset eBisnis (lihat `assets/images/petra/BACA-DULU.txt`). Keduanya harus diganti
-dengan aset asli sebelum rilis ke pengguna.
+| Berkas | Sumber |
+|---|---|
+| `assets/images/petra/icon.png` | Logo resmi UKP, diunduh dari `https://www.petra.ac.id/img/icons/android-chrome-512x512.png` (512x512 RGBA), disimpan ulang non-interlaced |
+| `assets/images/petra/login-background.png` | Dibangkitkan sendiri: gradasi biru korporat 1920x1080 dgn watermark logo transparan 10% |
+| `windows/runner/resources/icon_petra.ico` | Dari icon.png, berisi 256/128/64/48/32/16 |
 
-Ikon Windows juga belum bercabang: `windows/runner/Runner.rc` bagian `Icon`
-masih jatuh ke `app_icon.ico`. Setelah logo asli tersedia, buat
-`windows/runner/resources/icon_petra.ico` lalu tambahkan cabang
-`#elif defined(EBISNIS_VARIANT_PETRA)` di bagian tersebut, dan arahkan
-`SetupIconFile` di `installer/petra.iss` ke ikon itu.
+Latar layar Masuk sengaja TIDAK memakai foto kampus: gradasi buatan sendiri
+menghindari soal hak pakai foto pihak lain, dan karena kartu Masuk menutup
+bagian tengah layar, bidang warna rapi lebih terbaca daripada foto ramai.
+
+Ikon Windows sudah bercabang di `windows/runner/Runner.rc`
+(`#elif defined(EBISNIS_VARIANT_PETRA)`) dan `installer/petra.iss` memakai
+`icon_petra.ico`.
 
 ## Catatan pemaketan
 

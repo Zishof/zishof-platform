@@ -17,9 +17,7 @@ OutputBaseFilename=eKantin-Petra-Setup-{#AppVersion}
 OutputDir=dist
 Compression=lzma2
 SolidCompression=yes
-; Ikon installer masih memakai ikon eBisnis. Ganti ke icon_petra.ico setelah
-; logo asli UKP tersedia (lihat assets/images/petra/BACA-DULU.txt).
-SetupIconFile=..\windows\runner\resources\app_icon.ico
+SetupIconFile=..\windows\runner\resources\icon_petra.ico
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
