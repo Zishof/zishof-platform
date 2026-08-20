@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'kode_akun_screen.dart';
 import 'posting_toko_dialog.dart';
+import 'siklus_akuntansi_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
@@ -150,6 +151,22 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
       return;
     }
+    // Siklus akuntansi (saldo awal, penyesuaian berkala, tutup buku) -- satu layar bertab;
+    // ketiganya menentukan benar tidaknya Neraca/Buku Besar/Neraca Saldo.
+    const petaSiklus = {
+      'saldo_awal_akun': 0,
+      'jurnal_penyesuaian': 1,
+      'tutup_buku': 2,
+    };
+    if (petaSiklus.containsKey(id)) {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(item['judul'] as String? ?? 'Siklus Akuntansi')),
+          body: SiklusAkuntansiScreen(tabAwal: petaSiklus[id]!),
+        ),
+      ));
+      return;
+    }
     // Empat posting penutup rantai pengadaan->pembayaran toko. Dialognya terpisah
     // karena kontrak drafnya berbeda (per dokumen, dengan alasan bila belum siap).
     const petaPostingToko = {
@@ -199,6 +216,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
         return Icons.savings_outlined;
       case 'posting_penyesuaian':
         return Icons.tune_outlined;
+      case 'saldo_awal_akun':
+        return Icons.play_circle_outline;
+      case 'jurnal_penyesuaian':
+        return Icons.rule_folder_outlined;
+      case 'tutup_buku':
+        return Icons.lock_outline;
       default:
         return Icons.post_add_outlined;
     }
