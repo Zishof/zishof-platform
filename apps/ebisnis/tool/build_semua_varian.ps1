@@ -75,9 +75,20 @@ foreach ($variant in $variants) {
 }
 
 # Sidik jari tiap artefak; dipakai penerima untuk memastikan berkas tidak berubah di jalan.
+# Get-FileHash tidak ada di Windows PowerShell 2.0 (dan pada sebagian sesi non-interaktif
+# skrip ini pernah berhenti persis di sini setelah SEMUA varian selesai dibangun), jadi
+# sediakan jalur cadangan lewat certutil yang selalu ada di Windows.
+function Sidik-Jari([string]$berkas) {
+    if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+        return (Get-FileHash -LiteralPath $berkas -Algorithm SHA256).Hash.ToLower()
+    }
+    $keluaran = & certutil -hashfile $berkas SHA256
+    if ($LASTEXITCODE -ne 0) { throw "certutil gagal menghitung SHA256 untuk $berkas" }
+    return (($keluaran | Where-Object { $_ -match '^[0-9a-fA-F ]{40,}$' } | Select-Object -First 1) -replace '\s', '').ToLower()
+}
+
 Get-ChildItem -LiteralPath $artifactDir -File | Where-Object { $_.Name -notlike '*.sha256.txt' } | ForEach-Object {
-    $h = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower()
-    "$h  $($_.Name)" | Set-Content -LiteralPath "$($_.FullName).sha256.txt" -Encoding ascii
+    "$(Sidik-Jari $_.FullName)  $($_.Name)" | Set-Content -LiteralPath "$($_.FullName).sha256.txt" -Encoding ascii
 }
 
 Write-Host ""
