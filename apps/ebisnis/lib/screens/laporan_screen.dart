@@ -340,7 +340,10 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
-              ? Center(child: Text('Gagal memuat: $_pesanError'))
+              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Gagal memuat: $_pesanError'),
+                AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+              ]))
               : _pendukung.isEmpty
                   ? _katalog()
                   : _katalogBertab(),
@@ -676,7 +679,10 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
                 child: _memuat
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Text('Gagal memuat akun: $_error'))
+                        ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('Gagal memuat akun: $_error'),
+                          AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                        ]))
                         : ListView.separated(
                             itemCount: akun.length,
                             separatorBuilder: (_, __) =>

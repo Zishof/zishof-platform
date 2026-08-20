@@ -17,6 +17,8 @@ import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/panduan_stok_kosong.dart';
+import '../widgets/riwayat_data_dialog.dart';
+import 'riwayat_audit_screen.dart';
 import 'kasir_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -1448,6 +1450,24 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
           onPressed: _sedangSinkronPending ? null : _sinkronkanPendingSekarang,
         ),
       ],
+      // Menelusuri PESANAN YANG SUDAH HILANG dari daftar ini. Tombol jam per
+      // baris tidak menolong untuk kasus itu -- barisnya sudah tidak ada untuk
+      // diklik. Server membatasi aksinya ke administrator, jadi tombolnya pun
+      // hanya muncul di sana supaya tidak menjanjikan yang akan ditolak.
+      if (Sesi.instance.isAdmin)
+        HeaderActionButton(
+          icon: Icons.history,
+          label: 'History',
+          tooltip: 'Telusuri tabel audit -- termasuk pesanan yang terhapus',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const RiwayatAuditScreen(
+                  entitasAwal: 'pesanan',
+                  tipeAwal: 'HAPUS',
+                  menuAktif: MenuEBisnis.pesanan,
+                  labelKembali: 'Pesanan',
+                ),
+              )),
+        ),
       HeaderActionButton(
           icon: Icons.refresh, label: 'Muat Ulang', onPressed: _muat),
     ];
@@ -1907,6 +1927,16 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                   Navigator.of(context).pop();
                   _lihatDetail(p);
                 }),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Riwayat data ini'),
+              subtitle: const Text('Siapa mengubah apa, dan kapan'),
+              onTap: () {
+                Navigator.of(context).pop();
+                tampilkanRiwayatData(context,
+                    entitas: 'pesanan', id: p.id, judul: p.kode);
+              },
+            ),
             if (p.dariPembeliOnline && !_sudahTerbayar(p))
               ListTile(
                 leading: const Icon(Icons.check_circle_outline,

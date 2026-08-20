@@ -507,7 +507,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       if (_galat != null)
         Padding(
           padding: const EdgeInsets.all(8),
-          child: Text(_galat!, style: const TextStyle(color: Colors.red)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_galat!, style: const TextStyle(color: Colors.red)),
+            AppDetailGalatOpsional(detail: detailUntuk(_galat)),
+          ]),
         ),
       Expanded(
         child: TabBarView(controller: _tab, children: [

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 
 import '../theme/app_colors.dart';
+import 'app_components.dart';
 
 final formatRupiahDasbor =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -720,7 +721,10 @@ class _CandlePainter extends CustomPainter {
 
 /// Placeholder standar dipakai semua tab dasbor saat memuat/error.
 Widget statusMuatDasbor(
-    {required bool memuat, String? error, required VoidCallback onCoba}) {
+    {required bool memuat,
+    String? error,
+    required VoidCallback onCoba,
+    String? detail}) {
   if (memuat) {
     return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
@@ -735,6 +739,9 @@ Widget statusMuatDasbor(
           const Icon(Icons.error_outline, size: 40, color: Colors.red),
           const SizedBox(height: 8),
           Text(error ?? 'Gagal memuat.', textAlign: TextAlign.center),
+          // Jejak teknis kegagalan (lihat JejakGalat.detailUntuk): tertutup
+          // secara bawaan, menghilang sendiri bila galatnya tanpa lapis teknis.
+          AppDetailGalatOpsional(detail: detail),
           const SizedBox(height: 12),
           ElevatedButton(onPressed: onCoba, child: const Text('Coba Lagi')),
         ],

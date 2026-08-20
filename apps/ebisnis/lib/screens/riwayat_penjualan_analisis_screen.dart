@@ -1342,7 +1342,10 @@ class _RiwayatPenjualanAnalisisScreenState
                 else if (_error != null)
                   Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Center(child: Text(_error!)))
+                      child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_error!),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                      ])))
                 else if (_hasil == null)
                   const Padding(
                       padding: EdgeInsets.all(24),

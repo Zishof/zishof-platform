@@ -97,7 +97,11 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
   @override
   Widget build(BuildContext context) {
     if (_memuat || _error != null)
-      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+      return statusMuatDasbor(
+          memuat: _memuat,
+          error: _error,
+          detail: detailUntuk(_error),
+          onCoba: _muat);
     final d = _d!;
     final stok = ((d['stok'] as List?) ?? []).cast<Map<String, dynamic>>();
     final bahanBaku = (d['bahanBaku'] as Map<String, dynamic>?) ?? {};

@@ -297,8 +297,11 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                     decoration: BoxDecoration(
                         color: Colors.red.shade50,
                         borderRadius: BorderRadius.circular(8)),
-                    child: Text(_errorForm!,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_errorForm!,
                         style: TextStyle(color: Colors.red.shade700)),
+                      AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
+                    ]),
                   ),
                 if (_produkDitemukan != null) ...[
                   const SizedBox(height: 12),
@@ -464,7 +467,10 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
           else if (_errorRiwayat != null)
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text(_errorRiwayat!)))
+                child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_errorRiwayat!),
+                  AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
+                ])))
           else
             AppDataTable(
               minWidth: 800,

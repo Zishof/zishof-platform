@@ -352,8 +352,11 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                 decoration: BoxDecoration(
                     color: AppColors.latarLembut(AppColors.danger),
                     borderRadius: BorderRadius.circular(8)),
-                child: Text(_pesanError!,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_pesanError!,
                     style: const TextStyle(color: AppColors.danger)),
+                  AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+                ]),
               ),
             // Penanda salinan tersimpan -- di kolom utama, tepat DI ATAS tabel
             // laporan, supaya angkanya tidak terbaca sebagai data terkini.

@@ -472,8 +472,11 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
             decoration: BoxDecoration(
                 color: Colors.red.shade50,
                 borderRadius: BorderRadius.circular(8)),
-            child: Text(_errorSimpan!,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(_errorSimpan!,
                 style: TextStyle(color: Colors.red.shade700)),
+              AppDetailGalatOpsional(detail: detailUntuk(_errorSimpan)),
+            ]),
           ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

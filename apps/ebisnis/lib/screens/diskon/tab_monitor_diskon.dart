@@ -166,7 +166,11 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
         ),
         Expanded(
           child: _memuat || _error != null
-              ? statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat)
+              ? statusMuatDasbor(
+          memuat: _memuat,
+          error: _error,
+          detail: detailUntuk(_error),
+          onCoba: _muat)
               : _isiDasbor(context),
         ),
       ],

@@ -81,7 +81,11 @@ class _RingkasanTabPelangganState extends State<RingkasanTabPelanggan> with Jeja
   @override
   Widget build(BuildContext context) {
     if (_memuat || _error != null)
-      return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+      return statusMuatDasbor(
+          memuat: _memuat,
+          error: _error,
+          detail: detailUntuk(_error),
+          onCoba: _muat);
     final d = _d!;
     final jamSibukMentah =
         ((d['jamSibuk'] as List?) ?? []).cast<Map<String, dynamic>>();

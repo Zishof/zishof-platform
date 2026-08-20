@@ -74,7 +74,11 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
 
   @override
   Widget build(BuildContext context) {
-    if (_memuat || _error != null) return statusMuatDasbor(memuat: _memuat, error: _error, onCoba: _muat);
+    if (_memuat || _error != null) return statusMuatDasbor(
+          memuat: _memuat,
+          error: _error,
+          detail: detailUntuk(_error),
+          onCoba: _muat);
     final d = _d!;
     final laba = (d['laba'] as Map<String, dynamic>?) ?? {};
     final labaKpi = (laba['kpi'] as Map<String, dynamic>?) ?? {};

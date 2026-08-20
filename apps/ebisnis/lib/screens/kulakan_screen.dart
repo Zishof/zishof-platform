@@ -539,8 +539,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 decoration: BoxDecoration(
                     color: AppColors.latarLembut(AppColors.danger),
                     borderRadius: BorderRadius.circular(8)),
-                child: Text(_errorForm!,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_errorForm!,
                     style: TextStyle(color: AppColors.danger)),
+                  AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
+                ]),
               ),
             if (_produkDitemukan != null) ...[
               const SizedBox(height: 12),
@@ -1541,7 +1544,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           else if (_errorRiwayat != null)
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text(_errorRiwayat!)))
+                child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_errorRiwayat!),
+                  AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
+                ])))
           else
             AppDataTable(
               minWidth: 900,

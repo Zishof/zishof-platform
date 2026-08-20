@@ -15,6 +15,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import 'struk_screen.dart';
 import 'riwayat_penjualan_analisis_screen.dart';
+import 'riwayat_audit_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
@@ -2041,6 +2042,23 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with Je
                 runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [
+                  // Tombol jam di tiap baris hanya menjangkau nota yang MASIH ada.
+                  // Untuk nota yang sudah lenyap dari daftar, satu-satunya jalan
+                  // adalah menyapu tabel audit menurut rentang tanggal.
+                  if (Sesi.instance.isAdmin)
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const RiwayatAuditScreen(
+                              entitasAwal: 'transaksi',
+                              tipeAwal: 'HAPUS',
+                              menuAktif: MenuEBisnis.riwayatPenjualan,
+                              labelKembali: 'Riwayat Penjualan',
+                            ),
+                          )),
+                      icon: const Icon(Icons.history, size: 18),
+                      label: const Text('History'),
+                    ),
                   if (Sesi.instance.bolehDataSample)
                     OutlinedButton.icon(
                       onPressed: _mulaiDataSampleTransaksi,
@@ -2309,7 +2327,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with Je
               Center(
                   child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(_error!)))
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_error!),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                      ])))
             else
               AppDataTable(
                 minWidth: 980,

@@ -432,8 +432,11 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
             Padding(
                 padding: const EdgeInsets.all(30),
                 child: Center(
-                    child: Text(_error!,
-                        style: const TextStyle(color: Colors.red))))
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_error!,
+                        style: const TextStyle(color: Colors.red)),
+                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                    ])))
           else
             AppDataTable(
               minWidth: 980,

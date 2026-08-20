@@ -20,6 +20,7 @@ import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/app_components.dart';
 
 /// Cetak price tag dengan beberapa model operasional:
 /// tag rak, stiker barcode produk, dan promo tag ukuran besar.
@@ -1924,7 +1925,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
-              ? Center(child: Text('Gagal memuat: $_pesanError'))
+              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Gagal memuat: $_pesanError'),
+                AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+              ]))
               : Column(
                   children: [
                     Expanded(
@@ -2292,7 +2296,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                       size: 16, color: AppColors.textSecondary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(
                     _memuatProdukPromo
                         ? 'Memuat produk yang terhubung promo...'
                         : _pesanProdukPromo != null
@@ -2303,6 +2308,8 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
+                    AppDetailGalatOpsional(detail: detailUntuk(_pesanProdukPromo)),
+                  ]),
                 ),
                 IconButton(
                   onPressed: _memuatProdukPromo

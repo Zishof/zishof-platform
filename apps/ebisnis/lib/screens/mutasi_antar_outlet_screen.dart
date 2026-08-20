@@ -300,7 +300,10 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
                       padding: const EdgeInsets.all(10),
                       margin: const EdgeInsets.only(top: 12),
                       decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                      child: Text(_errorForm!, style: TextStyle(color: Colors.red.shade700)),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_errorForm!, style: TextStyle(color: Colors.red.shade700)),
+                        AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
+                      ]),
                     ),
                   const SizedBox(height: 14),
                   Align(
@@ -343,7 +346,10 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
             else if (_memuatRiwayat)
               const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
             else if (_errorRiwayat != null)
-              Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Text(_errorRiwayat!)))
+              Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(_errorRiwayat!),
+                AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
+              ])))
             else
               AppDataTable(
                 minWidth: 900,
@@ -452,7 +458,10 @@ class _SheetPilihTokoState extends State<_SheetPilihToko> with JejakGalat {
               child: _memuat
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Text(_error!))
+                      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_error!),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                      ]))
                       : ListView(
                           controller: scrollController,
                           children: [
@@ -540,7 +549,10 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
               child: _memuat
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Text(_error!))
+                      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_error!),
+                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                      ]))
                       : ListView(
                           controller: scrollController,
                           children: [
