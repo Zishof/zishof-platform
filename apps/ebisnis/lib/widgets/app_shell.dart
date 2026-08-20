@@ -72,6 +72,7 @@ import '../screens/mitrainap/kontrak_pemilik_screen.dart';
 import '../screens/mitrainap/laporan_pemilik_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
+import 'bantuan_fab.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -687,6 +688,29 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
   _menuAktifNotifier.value = item.kunci;
 }
 
+/// Muat daftar toko untuk combo filter (aksi `toko_filter_list`).
+///
+/// Server yang memutuskan apakah pengguna ini boleh melihat seluruh toko dan
+/// toko mana saja yang masuk daftar -- klien tidak menyimpulkannya sendiri.
+/// Aman dipanggil berulang; kegagalan dibiarkan senyap karena filter ini
+/// pelengkap, bukan syarat aplikasi berjalan.
+Future<void> muatDaftarTokoFilter() async {
+  try {
+    final res = await ApiClient.instance.aksi('toko_filter_list');
+    final data = res['data'];
+    Sesi.instance.bolehSemuaToko = res['bolehSemuaToko'] == true;
+    if (data is List) {
+      Sesi.instance.daftarTokoFilter = data
+          .whereType<Map>()
+          .map((e) => e.map((k, v) => MapEntry('$k', v)))
+          .toList();
+    }
+  } catch (_) {
+    // Biarkan: chip tetap menampilkan nama toko aktif spt sebelumnya.
+  }
+}
+
+
 /// Pemilih toko global untuk semua halaman Desktop/Android. Otorisasi tetap
 /// diverifikasi server oleh `pilih_toko_aktif`; daftar di UI bukan sumber hak.
 Future<bool> _pilihTokoGlobal(BuildContext context) async {
@@ -1060,6 +1084,27 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  /// Gabungkan FAB milik layar dengan tombol bantuan mengambang.
+  ///
+  /// Tombol bantuan dipasang terpusat di sini supaya SELURUH layar yang memakai
+  /// [AppShell] memperolehnya sekaligus, tanpa perlu menyunting satu per satu.
+  /// Bila layar sudah punya FAB sendiri, keduanya ditumpuk: FAB layar di atas,
+  /// tombol bantuan di bawah, sehingga tombol utama layar tetap yang terdekat
+  /// dengan ibu jari.
+  Widget _fabDenganBantuan() {
+    final bantuan =
+        BantuanFab(menuId: widget.menuAktif.name, judul: widget.judul);
+    final milikLayar = widget.floatingActionButton;
+    if (milikLayar == null) {
+      return bantuan;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [milikLayar, const SizedBox(height: 12), bantuan],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<MenuEBisnis>(
@@ -1119,14 +1164,14 @@ class _AppShellState extends State<AppShell> {
               }
             },
           ),
-          floatingActionButton: widget.floatingActionButton,
+          floatingActionButton: _fabDenganBantuan(),
           body: widget.body,
           bottomNavigationBar: widget.bottomBar,
         );
       }
       return Scaffold(
         backgroundColor: AppColors.pageBgOf(context),
-        floatingActionButton: widget.floatingActionButton,
+        floatingActionButton: _fabDenganBantuan(),
         body: Row(
           children: [
             ValueListenableBuilder<bool>(
@@ -1562,6 +1607,14 @@ class _AppTopbarState extends State<_AppTopbar> {
     super.initState();
     CoreDb.instance.sesiKasVersi.addListener(_muat);
     _muat();
+    // Daftar toko utk combo filter ditarik sekali saat bilah atas dipasang.
+    // Ditaruh di sini (bukan saat login) supaya sesi lama yang token-nya masih
+    // tersimpan pun tetap mendapatkannya tanpa perlu masuk ulang.
+    if (Sesi.instance.daftarTokoFilter.isEmpty) {
+      muatDaftarTokoFilter().then((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -1597,6 +1650,59 @@ class _AppTopbarState extends State<_AppTopbar> {
     }
   }
 
+  /// Combo filter toko untuk peran berizin "Boleh melihat seluruh toko".
+  ///
+  /// Berbeda dgn [_pindahToko] yang MENGUBAH toko aktif di server (dan ikut
+  /// mengubah tempat transaksi dicatat), pilihan di sini hanya menyaring
+  /// tampilan Dashboard dan Laporan -- disisipkan ke payload oleh ApiClient.
+  Future<void> _pilihFilterToko() async {
+    final sesi = Sesi.instance;
+    if (sesi.daftarTokoFilter.isEmpty) {
+      await muatDaftarTokoFilter();
+      if (!mounted) return;
+    }
+    final dipilih = await showDialog<Object?>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Tampilkan data toko'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'semua'),
+            child: Row(children: [
+              Icon(Icons.select_all,
+                  size: 18, color: AppColors.textSecondaryOf(dialogContext)),
+              const SizedBox(width: 10),
+              const Text('Semua Toko'),
+              if (sesi.tokoFilter == null) ...[
+                const Spacer(),
+                const Icon(Icons.check, size: 16, color: AppColors.success),
+              ],
+            ]),
+          ),
+          const Divider(height: 1),
+          ...sesi.daftarTokoFilter.map((t) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, t['id']),
+                child: Row(children: [
+                  Icon(Icons.storefront_outlined,
+                      size: 18,
+                      color: AppColors.textSecondaryOf(dialogContext)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('${t['nama'] ?? ''}')),
+                  if (sesi.tokoFilter == t['id'])
+                    const Icon(Icons.check,
+                        size: 16, color: AppColors.success),
+                ]),
+              )),
+        ],
+      ),
+    );
+    if (dipilih == null || !mounted) return;
+    setState(() {
+      sesi.tokoFilter = dipilih == 'semua' ? null : dipilih as int;
+    });
+    _muatUlangHalamanAktif(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final kasTerbuka = _kasAktif != null;
@@ -1614,7 +1720,13 @@ class _AppTopbarState extends State<_AppTopbar> {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: Sesi.instance.multiToko ? _pindahToko : null,
+              // Peran berizin lintas toko memakai chip ini sbg FILTER laporan
+              // (termasuk pilihan "Semua Toko"); peran multi-toko biasa tetap
+              // memakainya utk BERPINDAH toko aktif. Keduanya beda arti, jadi
+              // yang berizin didahulukan.
+              onTap: Sesi.instance.bolehSemuaToko
+                  ? _pilihFilterToko
+                  : (Sesi.instance.multiToko ? _pindahToko : null),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                 child: Row(children: [
@@ -1622,13 +1734,16 @@ class _AppTopbarState extends State<_AppTopbar> {
                       color: AppColors.textSecondaryOf(context), size: 18),
                   const SizedBox(width: 6),
                   Text(
-                      Sesi.instance.tokoNama.isEmpty
-                          ? AppVariant.namaAplikasi
-                          : Sesi.instance.tokoNama,
+                      Sesi.instance.bolehSemuaToko
+                          ? Sesi.instance.namaTokoFilter
+                          : (Sesi.instance.tokoNama.isEmpty
+                              ? AppVariant.namaAplikasi
+                              : Sesi.instance.tokoNama),
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimaryOf(context))),
-                  if (Sesi.instance.multiToko) ...[
+                  if (Sesi.instance.multiToko ||
+                      Sesi.instance.bolehSemuaToko) ...[
                     const SizedBox(width: 4),
                     Icon(Icons.arrow_drop_down,
                         size: 18, color: AppColors.textSecondaryOf(context)),

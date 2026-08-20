@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:core_db/core_db.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'sesi.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/server_config.dart';
 import 'widgets/app_error_info.dart';
@@ -46,9 +47,29 @@ class ApiClient {
 
   /// Memanggil satu aksi Api_eBisnis. [body] digabung dengan {action: aksi}.
   /// Melempar [ApiException] bila status bukan "success" ATAU permintaan HTTP gagal.
+  /// Aksi yang ikut disaring oleh combo filter toko di bilah atas.
+  ///
+  /// Hanya BACA (Dashboard + Laporan). Aksi kasir sengaja TIDAK ikut: itu
+  /// operasi pada satu toko, dan menyuntik toko lain ke sana berarti mencatat
+  /// transaksi ke toko yang salah.
+  static bool _ikutFilterToko(String namaAksi) =>
+      namaAksi.startsWith('dashboard_') || namaAksi.startsWith('laporan_');
+
   Future<Map<String, dynamic>> aksi(String namaAksi,
       [Map<String, dynamic>? body]) async {
     final payload = <String, dynamic>{'action': namaAksi, ...?body};
+    // Peran berizin lintas toko: pilihan combo disisipkan di satu tempat
+    // supaya tiap layar tidak perlu mengingatnya sendiri. Toko yang sudah
+    // ditentukan pemanggil TIDAK ditimpa.
+    if (Sesi.instance.bolehSemuaToko &&
+        Sesi.instance.tokoFilter != null &&
+        _ikutFilterToko(namaAksi) &&
+        !payload.containsKey('tokoId') &&
+        !payload.containsKey('id_toko') &&
+        !payload.containsKey('idToko') &&
+        !payload.containsKey('toko_id')) {
+      payload['tokoId'] = Sesi.instance.tokoFilter;
+    }
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
 

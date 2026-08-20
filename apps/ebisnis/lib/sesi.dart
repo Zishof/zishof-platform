@@ -43,6 +43,22 @@ class Sesi {
   /// `multiToko`/`daftarToko`/`tokoAktifId`, hanya klien yang belum pernah
   /// menampilkan pemilihnya. `daftarToko`: List of {id, nama}.
   bool multiToko = false;
+
+  /// ── Filter toko lintas-toko (izin Tbmrole "Boleh melihat seluruh toko") ──
+  /// [bolehSemuaToko] berasal dari server (aksi `toko_filter_list`), TIDAK
+  /// disimpulkan di klien. [tokoFilter] null berarti "Semua Toko"; nilainya
+  /// disisipkan ke payload Dashboard/Laporan oleh ApiClient.
+  bool bolehSemuaToko = false;
+  int? tokoFilter;
+  List<Map<String, dynamic>> daftarTokoFilter = const [];
+
+  String get namaTokoFilter {
+    if (tokoFilter == null) return 'Semua Toko';
+    for (final t in daftarTokoFilter) {
+      if (t['id'] == tokoFilter) return '${t['nama'] ?? ''}';
+    }
+    return tokoNama;
+  }
   List<Map<String, dynamic>> daftarToko = [];
 
   /// Flag per-menu dari `konfigurasi.aksesMenu` (server, Tbmrole.ebisnisMenu) --
