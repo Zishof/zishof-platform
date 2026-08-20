@@ -31,9 +31,10 @@ class LaporanScreen extends StatefulWidget {
   final String judul;
   final String subjudul;
 
-  /// Bila diisi ('posting_hpp' / 'posting_penjualan'), dialog posting terkait langsung
-  /// dibuka begitu layar tampil -- dipakai submenu Akuntansi > Posting HPP / Posting
-  /// Penjualan supaya tidak perlu menduplikasi dialognya jadi layar tersendiri.
+  /// Id layar pendukung yang tabnya langsung terbuka saat layar tampil (mis.
+  /// 'posting_hpp', 'posting_kulakan'). Dipakai submenu grup "Akuntansi" supaya
+  /// tiap menu mendarat di bagiannya tanpa menduplikasi panelnya jadi layar
+  /// tersendiri. Id yang tidak ada pada katalog server diabaikan (tab katalog).
   final String? bukaPosting;
   const LaporanScreen({
     super.key,
@@ -348,13 +349,11 @@ class _LaporanScreenState extends State<LaporanScreen> {
   /// Tab seperti layar Kulakan: tab pertama katalog laporan, sisanya tiap layar
   /// pendukung (Akun/Perkiraan dan enam posting) ditampilkan LANGSUNG di dalam tab.
   Widget _katalogBertab() {
-    final petaAwal = {
-      'posting_hpp': 'posting_hpp',
-      'posting_penjualan': 'posting_penjualan',
-    };
+    // Tab awal boleh id pendukung APA PUN (submenu grup "Akuntansi" memakai
+    // seluruhnya). Id yang tidak dikenal server tinggal jatuh ke tab katalog.
     int indexAwal = 0;
     final minta = widget.bukaPosting;
-    if (minta != null && petaAwal.containsKey(minta)) {
+    if (minta != null && minta.isNotEmpty) {
       final idx = _pendukung.indexWhere((e) => e['id'] == minta);
       if (idx >= 0) indexAwal = idx + 1;
     }

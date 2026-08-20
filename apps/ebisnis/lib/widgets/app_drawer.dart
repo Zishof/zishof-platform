@@ -34,6 +34,7 @@ import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/laporan_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
+import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
@@ -69,6 +70,14 @@ import 'app_version_label.dart';
 /// Layar yang belum dibangun ditandai "Segera Hadir" (dinonaktifkan) -- lihat
 /// task #182-189 utk urutan pengerjaan, jangan hapus entrinya supaya progres
 /// tetap terlihat sambil layar-layar itu menyusul satu per satu.
+/// Halaman untuk tiga submenu siklus akuntansi. Layarnya satu (bertab), tiap
+/// menu hanya mendarat di tabnya sendiri -- pola yang sama dipakai sidebar
+/// Desktop supaya kedua platform menampilkan menu yang identik.
+Widget _halamanSiklus(String judul, int tabAwal) => Scaffold(
+      appBar: AppBar(title: Text(judul)),
+      body: SiklusAkuntansiScreen(tabAwal: tabAwal),
+    );
+
 class AppDrawer extends StatelessWidget {
   final String menuAktif;
   final ValueChanged<String>? onPilihMenu;
@@ -690,6 +699,12 @@ class AppDrawer extends StatelessWidget {
                             'Grup Akun',
                             'Jenis Transaksi',
                             'Bank',
+                            'Saldo Awal (Neraca Awal)',
+                            'Jurnal Penyesuaian Berkala',
+                            'Tutup Buku (Laba Ditahan)',
+                            'Posting Kulakan',
+                            'Posting Bayar Hutang',
+                            'Posting Terima Piutang',
                             'Laporan-Laporan Keuangan',
                           ].contains(menuAktif),
                           anak: [
@@ -772,6 +787,91 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Bank',
                                     builder: (_) => const KodeAkunScreen(tabAwal: 2)),
                               ),
+                            // Enam layar berikut sebelumnya hanya tab di dalam layar
+                            // Laporan Keuangan; kini tiap layar punya kunci menunya
+                            // sendiri di EbisnisMenuKatalog sehingga admin bisa
+                            // membatasinya per peran lewat grid CRUD TbmroleAction.
+                            if (Sesi.instance.bolehMenuVarianBaru('saldo_awal_akun'))
+                            _ItemMenu(
+                              icon: Icons.play_circle_outline,
+                              label: 'Saldo Awal (Neraca Awal)',
+                              aktif: menuAktif == 'Saldo Awal (Neraca Awal)',
+                              onTap: () => _pindahMenu(context,
+                                  label: 'Saldo Awal (Neraca Awal)',
+                                  builder: (_) => _halamanSiklus(
+                                      'Saldo Awal (Neraca Awal)', 0)),
+                            ),
+                            if (Sesi.instance.bolehMenuVarianBaru('jurnal_penyesuaian'))
+                            _ItemMenu(
+                              icon: Icons.rule_folder_outlined,
+                              label: 'Jurnal Penyesuaian Berkala',
+                              aktif: menuAktif == 'Jurnal Penyesuaian Berkala',
+                              onTap: () => _pindahMenu(context,
+                                  label: 'Jurnal Penyesuaian Berkala',
+                                  builder: (_) => _halamanSiklus(
+                                      'Jurnal Penyesuaian Berkala', 1)),
+                            ),
+                            if (Sesi.instance.bolehMenuVarianBaru('tutup_buku'))
+                            _ItemMenu(
+                              icon: Icons.lock_outline,
+                              label: 'Tutup Buku (Laba Ditahan)',
+                              aktif: menuAktif == 'Tutup Buku (Laba Ditahan)',
+                              onTap: () => _pindahMenu(context,
+                                  label: 'Tutup Buku (Laba Ditahan)',
+                                  builder: (_) => _halamanSiklus(
+                                      'Tutup Buku (Laba Ditahan)', 2)),
+                            ),
+                            if (Sesi.instance.bolehMenuVarianBaru('posting_kulakan'))
+                            _ItemMenu(
+                              icon: Icons.local_shipping_outlined,
+                              label: 'Posting Kulakan',
+                              aktif: menuAktif == 'Posting Kulakan',
+                              onTap: () => _pindahMenu(
+                                context,
+                                label: 'Posting Kulakan',
+                                builder: (_) => const LaporanScreen(
+                                  aksiKatalog: 'laporan_keuangan_katalog',
+                                  judul: 'Posting Kulakan',
+                                  subjudul:
+                                      'Membukukan pembelian barang toko (persediaan & utang supplier)',
+                                  bukaPosting: 'posting_kulakan',
+                                ),
+                              ),
+                            ),
+                            if (Sesi.instance.bolehMenuVarianBaru('posting_bayar_hutang'))
+                            _ItemMenu(
+                              icon: Icons.payments_outlined,
+                              label: 'Posting Bayar Hutang',
+                              aktif: menuAktif == 'Posting Bayar Hutang',
+                              onTap: () => _pindahMenu(
+                                context,
+                                label: 'Posting Bayar Hutang',
+                                builder: (_) => const LaporanScreen(
+                                  aksiKatalog: 'laporan_keuangan_katalog',
+                                  judul: 'Posting Bayar Hutang',
+                                  subjudul:
+                                      'Membukukan pembayaran hutang ke supplier toko',
+                                  bukaPosting: 'posting_bayar_hutang',
+                                ),
+                              ),
+                            ),
+                            if (Sesi.instance.bolehMenuVarianBaru('posting_terima_piutang'))
+                            _ItemMenu(
+                              icon: Icons.savings_outlined,
+                              label: 'Posting Terima Piutang',
+                              aktif: menuAktif == 'Posting Terima Piutang',
+                              onTap: () => _pindahMenu(
+                                context,
+                                label: 'Posting Terima Piutang',
+                                builder: (_) => const LaporanScreen(
+                                  aksiKatalog: 'laporan_keuangan_katalog',
+                                  judul: 'Posting Terima Piutang',
+                                  subjudul:
+                                      'Membukukan penerimaan piutang dari pelanggan toko',
+                                  bukaPosting: 'posting_terima_piutang',
+                                ),
+                              ),
+                            ),
                             _ItemMenu(
                               icon: Icons.folder_open_outlined,
                               label: 'Laporan-Laporan',
