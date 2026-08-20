@@ -1081,7 +1081,13 @@ class StrukScreen extends StatelessWidget {
                         // Alur pembayaran dari Pesanan membuka Kasir sebagai
                         // route sementara, lalu menggantinya dengan layar struk.
                         // Pop dari sini mengembalikan kasir ke daftar Pesanan.
-                        onKembali: () => Navigator.of(context).maybePop(),
+                        //
+                        // maybePop() DIAM TANPA PESAN bila tidak ada route di
+                        // bawahnya -- tombolnya terlihat aktif tapi tidak
+                        // melakukan apa pun (laporan kasir 21-08-2026). Karena
+                        // itu selalu disediakan tujuan cadangan: kembali ke
+                        // Kasir, sama spt tombol Transaksi Baru.
+                        onKembali: () => _kembaliDariStruk(context),
                       ),
                       const SizedBox(height: 16),
                       _StrukPreview(
@@ -1748,6 +1754,20 @@ class _TotalStruk extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Tujuan tombol "Kembali ke Halaman Sebelumnya" pada layar struk.
+///
+/// Mengembalikan ke halaman sebelumnya bila ada; bila layar struk adalah satu-
+/// satunya route (mis. dibuka lewat pushReplacement dari route pertama), pindah
+/// ke Kasir supaya tombol tidak pernah menjadi jalan buntu.
+void _kembaliDariStruk(BuildContext context) {
+  final nav = Navigator.of(context);
+  if (nav.canPop()) {
+    nav.pop();
+    return;
+  }
+  nav.pushReplacement(MaterialPageRoute(builder: (_) => const KasirScreen()));
 }
 
 class _TombolStruk extends StatelessWidget {
