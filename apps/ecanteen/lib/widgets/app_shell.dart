@@ -93,7 +93,13 @@ class AppShell extends StatelessWidget {
               title: Text(judul),
               actions: aksi,
             ),
-      floatingActionButton: floatingActionButton,
+      // Di ponsel keranjang sudah punya tempat di bilah bawah (berikut
+      // penanda jumlahnya), jadi tombol mengambang dimatikan supaya tidak
+      // menumpuk di sudut yang sama.
+      floatingActionButton: sidebarMenetap ? floatingActionButton : null,
+      // Di ponsel, empat menu paling sering dipakai naik ke bilah bawah --
+      // pola yang lazim untuk aplikasi belanja. Sisanya tetap di laci.
+      bottomNavigationBar: sidebarMenetap ? null : _bilahBawah(context),
       body: Row(
         children: [
           if (sidebarMenetap)
@@ -137,6 +143,49 @@ class AppShell extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  static const _menuBawah = <MenuAnggota>[
+    MenuAnggota.belanja,
+    MenuAnggota.keranjang,
+    MenuAnggota.pesanan,
+    MenuAnggota.riwayat,
+  ];
+
+  Widget _bilahBawah(BuildContext context) {
+    final indeks = _menuBawah.indexOf(menuAktif);
+    return NavigationBar(
+      height: 62,
+      backgroundColor: AppColors.cardBg,
+      indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      // Menu yang sedang aktif tapi TIDAK ada di bilah bawah (mis. Isi Saldo)
+      // tetap valid; indeks 0 dipakai sekadar supaya tidak ada yang tersorot
+      // keliru, dan penyorotannya dimatikan lewat warna indikator.
+      selectedIndex: indeks < 0 ? 0 : indeks,
+      onDestinationSelected: (i) => onPilihMenu(context, _menuBawah[i]),
+      destinations: [
+        const NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Belanja'),
+        NavigationDestination(
+          icon: Badge.count(
+            count: Keranjang.instance.jumlahItem,
+            isLabelVisible: Keranjang.instance.jumlahItem > 0,
+            child: const Icon(Icons.shopping_cart_outlined),
+          ),
+          selectedIcon: const Icon(Icons.shopping_cart),
+          label: 'Keranjang',
+        ),
+        const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Pesanan'),
+        const NavigationDestination(
+            icon: Icon(Icons.history), label: 'Riwayat'),
+      ],
     );
   }
 }

@@ -27,6 +27,14 @@ class AppColors {
   static const warning = Color(0xFFF59E0B);
   static const danger = Color(0xFFDC2626);
 
+  /// Gradasi kartu saldo di Beranda -- dua nada dari warna identitas varian.
+  /// Dipakai HANYA pada satu kartu; sisanya tetap datar supaya halaman tidak
+  /// ramai.
+  static const gradasiSaldoAwal =
+      AppVariant.isPetra ? Color(0xFF1565D8) : Color(0xFF1E3A5F);
+  static const gradasiSaldoAkhir =
+      AppVariant.isPetra ? Color(0xFF0D47A1) : Color(0xFF16293F);
+
   /// Warna latar layar Masuk. Identitas VARIAN build, dipakai sebelum
   /// identitas pengguna diketahui -- nilainya disamakan dgn POS Desktop.
   static const latarMasuk =

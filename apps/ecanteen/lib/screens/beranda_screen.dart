@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../services/keranjang.dart';
 import '../services/server_config.dart';
 import '../services/sesi.dart';
+import '../theme/app_colors.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
 import 'login_screen.dart';
@@ -270,10 +271,14 @@ class _BerandaScreenState extends State<BerandaScreen> {
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_produk.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                              child: Text('Tidak ada produk pada toko ini.')),
+                        _kosong(
+                          Icons.search_off,
+                          _cari.text.trim().isEmpty
+                              ? 'Belum ada produk'
+                              : 'Produk tidak ditemukan',
+                          _cari.text.trim().isEmpty
+                              ? 'Toko ini belum memasang produk apa pun. Coba pilih toko lain.'
+                              : 'Tidak ada produk yang cocok dengan pencarian Anda di toko ini.',
                         )
                       else
                         _gridProduk(),
@@ -311,50 +316,159 @@ class _BerandaScreenState extends State<BerandaScreen> {
     );
   }
 
+  /// Kartu saldo: satu-satunya elemen bergradasi di halaman ini, sekaligus
+  /// pintasan ke Isi Saldo dan Bayar QR supaya anggota tidak perlu membuka
+  /// menu untuk dua aksi yang paling sering dipakai.
   Widget _kartuSaldo() {
     final sesi = Sesi.instance;
-    final warna = Theme.of(context).colorScheme;
-    return Card(
-      color: warna.primaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(sesi.kode.isEmpty ? 'Member' : 'Kode ${sesi.kode}',
-                      style: const TextStyle(fontSize: 12)),
-                  const SizedBox(height: 6),
-                  if (sesi.tampilkanSaldo) ...[
-                    Text(sesi.labelSaldo, style: const TextStyle(fontSize: 12)),
-                    Text(rupiah(sesi.saldo),
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold)),
-                  ],
-                  if (sesi.tampilkanCashback) ...[
-                    const SizedBox(height: 6),
-                    Text('${sesi.labelCashback}: ${rupiah(sesi.sisaCashback)}',
-                        style: const TextStyle(fontSize: 12)),
-                  ],
-                  if (sesi.minimalSaldo > 0) ...[
-                    const SizedBox(height: 6),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.gradasiSaldoAwal, AppColors.gradasiSaldoAkhir],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.gradasiSaldoAkhir.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Saldo mengendap minimal ${rupiah(sesi.minimalSaldo)}',
-                      style: const TextStyle(fontSize: 11),
+                      sesi.nama.isEmpty ? 'Anggota' : sesi.nama,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    if (sesi.kode.isNotEmpty)
+                      Text('Kode ${sesi.kode}',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11.5)),
                   ],
-                ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Segarkan saldo',
-              onPressed: _segarkanSaldo,
-              icon: const Icon(Icons.refresh),
+              IconButton(
+                tooltip: 'Segarkan saldo',
+                onPressed: _segarkanSaldo,
+                icon: const Icon(Icons.refresh, color: Colors.white70),
+              ),
+            ],
+          ),
+          if (sesi.tampilkanSaldo) ...[
+            const SizedBox(height: 10),
+            Text(sesi.labelSaldo,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 2),
+            Text(
+              rupiah(sesi.saldo),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  height: 1.1),
             ),
           ],
+          if (sesi.tampilkanCashback || sesi.minimalSaldo > 0) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (sesi.tampilkanCashback)
+                  _pil('${sesi.labelCashback} ${rupiah(sesi.sisaCashback)}',
+                      Icons.card_giftcard_outlined),
+                if (sesi.minimalSaldo > 0)
+                  _pil('Mengendap min. ${rupiah(sesi.minimalSaldo)}',
+                      Icons.lock_outline),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              if (sesi.aktifkanTopup)
+                Expanded(
+                  child: _tombolPintasan(
+                    'Isi ${sesi.labelSaldo}',
+                    Icons.add_card_outlined,
+                    () => navigasiMenu(context, MenuAnggota.isiSaldo),
+                  ),
+                ),
+              if (sesi.aktifkanTopup && sesi.aktifkanBayarQr)
+                const SizedBox(width: 10),
+              if (sesi.aktifkanBayarQr)
+                Expanded(
+                  child: _tombolPintasan(
+                    'Bayar QR',
+                    Icons.qr_code_scanner,
+                    () => navigasiMenu(context, MenuAnggota.bayarQr),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pil(String teks, IconData ikon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(ikon, size: 13, color: Colors.white70),
+          const SizedBox(width: 5),
+          Text(teks,
+              style: const TextStyle(color: Colors.white, fontSize: 11.5)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tombolPintasan(String label, IconData ikon, VoidCallback onTap) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.18),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(ikon, size: 16, color: Colors.white),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -362,10 +476,11 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   Widget _pemilihToko() {
     if (_toko.isEmpty) {
-      return const Text('Belum ada toko aktif.');
+      return const Text('Belum ada toko aktif.',
+          style: TextStyle(color: AppColors.textSecondary));
     }
     return SizedBox(
-      height: 40,
+      height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _toko.length,
@@ -374,16 +489,44 @@ class _BerandaScreenState extends State<BerandaScreen> {
           final t = _toko[i];
           final id = '${t['id']}';
           final aktif = id == _idTokoAktif;
-          return ChoiceChip(
-            label: Text('${t['nama'] ?? ''}'),
-            selected: aktif,
-            onSelected: (_) {
-              setState(() {
-                _idTokoAktif = id;
-                _halaman = 1;
-              });
-              _muatProduk();
-            },
+          return Material(
+            color: aktif ? AppColors.primary : AppColors.cardBg,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                setState(() {
+                  _idTokoAktif = id;
+                  _halaman = 1;
+                });
+                _muatProduk();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: aktif ? AppColors.primary : AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.storefront_outlined,
+                        size: 15,
+                        color: aktif ? Colors.white : AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${t['nama'] ?? ''}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            aktif ? FontWeight.bold : FontWeight.normal,
+                        color: aktif ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -392,91 +535,157 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   Widget _gridProduk() {
     return LayoutBuilder(builder: (context, c) {
-      final kolom = c.maxWidth > 900
-          ? 4
-          : c.maxWidth > 600
-              ? 3
-              : 2;
+      final kolom = c.maxWidth > 1100
+          ? 5
+          : c.maxWidth > 900
+              ? 4
+              : c.maxWidth > 600
+                  ? 3
+                  : 2;
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: kolom,
-          childAspectRatio: 0.82,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          childAspectRatio: 0.74,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
         itemCount: _produk.length,
-        itemBuilder: (context, i) {
-          final p = _produk[i];
-          final harga = (p['harga'] as num?)?.toDouble() ?? 0;
-          return Card(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        itemBuilder: (context, i) => _kartuProduk(_produk[i]),
+      );
+    });
+  }
+
+  Widget _kartuProduk(Map<String, dynamic> p) {
+    final harga = (p['harga'] as num?)?.toDouble() ?? 0;
+    final nama = '${p['nama'] ?? ''}';
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Gambar mengisi penuh lebar kartu; rasio tetap supaya seluruh
+          // kartu di grid sejajar walau tinggi gambarnya berbeda-beda.
+          AspectRatio(
+            aspectRatio: 1.25,
+            child: Container(
+              color: AppColors.pageBg,
+              child: Image.network(
+                ServerConfig.instance.urlGambarProduk(p['id']),
+                fit: BoxFit.cover,
+                // Produk tanpa lampiran tetap dilayani server (ikon bawaan),
+                // dan koneksi bisa gagal -- keduanya jatuh ke lambang lokal
+                // supaya kartu tidak pernah kosong.
+                errorBuilder: (context, error, stack) => const Center(
+                  child: Icon(Icons.fastfood_outlined,
+                      size: 34, color: AppColors.textSecondary),
+                ),
+                loadingBuilder: (context, anak, progres) => progres == null
+                    ? anak
+                    : const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        ServerConfig.instance.urlGambarProduk(p['id']),
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        // Produk tanpa lampiran tetap dilayani server (ikon
-                        // bawaan), dan koneksi bisa gagal -- keduanya jatuh ke
-                        // ikon lokal supaya kartu tidak pernah kosong.
-                        errorBuilder: (context, error, stack) => Center(
-                          child: Icon(Icons.fastfood_outlined,
-                              size: 40,
-                              color: Theme.of(context).colorScheme.primary),
+                    child: Text(
+                      nama,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          height: 1.25,
+                          color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          rupiah(harga),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14),
                         ),
-                        loadingBuilder: (context, anak, progres) =>
-                            progres == null
-                                ? anak
-                                : const Center(
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    ),
-                                  ),
                       ),
-                    ),
-                  ),
-                  Text(
-                    '${p['nama'] ?? ''}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(rupiah(harga),
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 32,
-                    child: FilledButton.tonal(
-                      style: FilledButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          textStyle: const TextStyle(fontSize: 12)),
-                      onPressed: () => _tambahKeKeranjang(p),
-                      child: const Text('Tambah'),
-                    ),
+                      const SizedBox(width: 6),
+                      // Tombol tambah dibuat bulat & kecil supaya nama produk
+                      // tetap mendapat ruang terbesar di kartu.
+                      Material(
+                        color: AppColors.primary,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => _tambahKeKeranjang(p),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(Icons.add,
+                                size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          );
-        },
-      );
-    });
+          ),
+        ],
+      ),
+    );
   }
+
+  /// Keadaan kosong yang menjelaskan, bukan sekadar satu baris teks.
+  Widget _kosong(IconData ikon, String judul, String penjelasan) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(ikon, size: 34, color: AppColors.primary),
+          ),
+          const SizedBox(height: 14),
+          Text(judul,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(penjelasan,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 13, height: 1.4)),
+        ],
+      ),
+    );
+  }
+
 }
