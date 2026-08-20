@@ -59,12 +59,13 @@ void main() {
     expect(source, contains("'0' * _panjangKodeAnak"));
   });
 
-  test('CRUD ditulis lokal dulu sebelum dikirim ke server', () {
-    expect(source, contains('prosesSimpanMaster('));
+  test('baca cache-dulu, tetapi mutasi bagan akun tetap online-only', () {
+    // Membaca offline aman dan membuat layar tetap terbuka saat jaringan mati.
     expect(source, contains('MasterOffline.daftarCacheDulu('));
-    // Impor Excel tetap server-only: satu berkas berisi banyak baris yang diproses
-    // server per baris dengan laporan diterima/ditolak.
-    expect(source, contains("ApiClient.instance.aksi(_defAksiImpor"));
+    // Spec offline 13.3: "perubahan rekening/harga sensitif" wajib online -- akun yang
+    // baru muncul setelah sinkronisasi membuat jurnal mengacu ke akun tak dikenal.
+    expect(source, isNot(contains('prosesSimpanMaster(')));
+    expect(source, contains('ONLINE-ONLY'));
   });
 
   test('menu akuntansi digerbangi kunci fail-closed di kedua platform', () {

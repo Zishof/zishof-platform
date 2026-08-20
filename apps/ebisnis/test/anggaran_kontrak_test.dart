@@ -90,16 +90,18 @@ void main() {
     expect(layar, contains('_konteksTeks'));
   });
 
-  test('CRUD ditulis lokal dulu sebelum dikirim ke server', () {
-    // prosesSimpanMaster: antre lokal + snapshot daftar -> baru kirim; offline tidak
-    // menahan pengguna. Daftar dibaca cache-dulu supaya baris yang masih mengantre
-    // tetap terlihat.
-    expect(layar, contains('prosesSimpanMaster('));
+  test('baca cache-dulu; mutasi sensitif tetap online sesuai spec 13.3', () {
+    // Daftar dibaca cache-dulu -> layar tetap terbuka saat jaringan mati.
     expect(layar, contains('MasterOffline.daftarCacheDulu('));
     expect(layar, contains('_cacheItem'));
     expect(layar, contains('_cachePenggunaan'));
-    // "Buat Revisi Baru" dihitung server (menyalin seluruh pohon) -- sengaja TIDAK
-    // diantrekan supaya tidak menghasilkan revisi ganda saat akhirnya terkirim.
+    // Baris DAUN (penggunaan anggaran) aman diantre: itemnya sudah ada di server.
+    expect(layar, contains('prosesSimpanMaster('));
+    // ITEM anggaran ONLINE-ONLY: id-nya dirujuk baris penggunaan dan menjadi dasar
+    // posting, jadi id lokal yang belum ada di server merusak keduanya.
+    expect(layar, contains("_kirimItem('anggaran_item_simpan'"));
+    expect(layar, contains("_kirimItem('anggaran_item_hapus'"));
+    // "Buat Revisi Baru" dihitung server (menyalin seluruh pohon).
     expect(layar, contains("_kirimServer('anggaran_revisi_baru'"));
   });
 
