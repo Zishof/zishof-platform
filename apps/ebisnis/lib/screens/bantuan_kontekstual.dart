@@ -1143,6 +1143,270 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       ],
       objekUtama: 'laporan laba rugi',
       hasilAkhir: 'sumber keuntungan atau kerugian dapat diidentifikasi'),
+  // --- Modul Pengadaan: PR -> PO -> BAST -> Terima Tagihan -> Bayar Tagihan -> Bayar Pajak ---
+  // Kuncinya adalah nama enum MenuEBisnis, sehingga BantuanFab yang dipasang AppShell
+  // langsung menemukannya tanpa perubahan di masing-masing layar.
+  'pengadaanPr': SpesifikasiBantuanMenu(
+      judul: 'Permintaan Pembelian (PR)',
+      tujuan:
+          'mengajukan kebutuhan barang toko sebelum dipesan ke penyedia',
+      workflow: [
+        'Buat PR',
+        'Pilih barang',
+        'Isi jumlah dan harga',
+        'Ajukan',
+        'Disetujui atau ditolak'
+      ],
+      ilustrasi: [
+        'Daftar PR',
+        'Form permintaan',
+        'Pemilih barang',
+        'Tombol setujui dan tolak'
+      ],
+      objekUtama: 'permintaan pembelian',
+      hasilAkhir: 'PR disetujui yang siap dijadikan pesanan',
+      istilah: [
+        'DRAFT = masih dapat diubah dan dihapus',
+        'DISETUJUI = terkunci, menjadi dasar pembuatan PO',
+        'TUTUP = permintaan tidak dilanjutkan lagi'
+      ],
+      catatanPenting: [
+        'Nilai PR dihitung ulang server dari barisnya, jadi total dokumen selalu sama dengan rinciannya',
+        'PR yang sudah disetujui tidak dapat diubah; batalkan keputusannya dulu bila perlu dikoreksi',
+        'Menolak wajib menyertakan alasan minimal 5 karakter supaya pembuat PR tahu apa yang harus diperbaiki'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Kenapa nomor PR tidak bisa saya ketik sendiri?',
+          'Nomor dibuat otomatis dengan pola PR/toko/periode/urut agar tidak kembar antar toko dan antar bulan.'
+        ],
+        [
+          'Barang yang saya cari tidak muncul.',
+          'Pemilih barang mengambil dari Produk POS milik toko Anda. Bila belum ada, daftarkan dulu di menu Produk.'
+        ],
+      ]),
+  'pengadaanPo': SpesifikasiBantuanMenu(
+      judul: 'Pemesanan Pembelian (PO)',
+      tujuan:
+          'memesan barang ke penyedia, sekali bayar maupun bertahap dengan termin',
+      workflow: [
+        'Buat PO atau ambil dari PR',
+        'Pilih penyedia',
+        'Isi baris barang',
+        'Atur termin bila bertahap',
+        'Ajukan dan setujui'
+      ],
+      ilustrasi: [
+        'Daftar PO',
+        'Form pesanan',
+        'Pemilih penyedia',
+        'Jadwal termin',
+        'Tombol bagi rata'
+      ],
+      objekUtama: 'pesanan pembelian dan jadwal pembayarannya',
+      hasilAkhir: 'PO disetujui yang siap diterima barangnya',
+      istilah: [
+        'Termin = pembayaran bertahap sesuai jadwal',
+        'DPP = nilai dasar pengenaan pajak, yaitu nilai penagihan termin',
+        'DP = uang muka, hanya berlaku pada PO tanpa termin',
+        'LUNAS = seluruh nilai PO sudah dibayar dan disetujui'
+      ],
+      catatanPenting: [
+        'Jumlah seluruh termin wajib sama dengan nilai PO; selisih lebih dari Rp 1 akan ditolak saat menyimpan',
+        'DP dan termin saling meniadakan. Bila memakai termin, tuliskan uang mukanya sebagai termin pertama',
+        'PO yang sudah disetujui atau sudah menerima pembayaran tidak dapat diubah',
+        'PPh dan PPN diisi di sini per termin, dan itulah yang nanti muncul di menu Bayar Pajak'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Apa beda "Dari PR" dengan "Buat PO"?',
+          '"Dari PR" mengambil sisa yang belum dipesan dari permintaan yang sudah disetujui, sehingga satu PR bisa dipecah menjadi beberapa PO tanpa kelebihan pesan. "Buat PO" untuk pesanan langsung tanpa permintaan.'
+        ],
+        [
+          'Tombol Bagi Rata itu untuk apa?',
+          'Membagi nilai PO rata ke seluruh termin. Pembulatannya dibebankan ke termin terakhir supaya jumlahnya tepat sama dengan nilai PO.'
+        ],
+      ]),
+  'pengadaanBast': SpesifikasiBantuanMenu(
+      judul: 'Penerimaan Barang (BAST)',
+      tujuan:
+          'mencatat barang yang datang dari penyedia dan memasukkannya ke stok toko',
+      workflow: [
+        'Terima dari PO atau terima langsung',
+        'Periksa jumlah yang datang',
+        'Isi harga, potongan, dan PPN',
+        'Setujui',
+        'Sinkronkan ke stok Kulakan'
+      ],
+      ilustrasi: [
+        'Daftar penerimaan',
+        'Form BAST',
+        'Penanda sisa boleh diterima',
+        'Tombol sinkron ke Kulakan'
+      ],
+      objekUtama: 'berita acara serah terima barang',
+      hasilAkhir: 'barang tercatat diterima dan stok toko bertambah',
+      istilah: [
+        'BAST = Berita Acara Serah Terima, bukti barang sudah diterima',
+        'Sisa boleh diterima = jumlah dipesan dikurangi yang sudah diterima dokumen lain',
+        'Tanpa PO = penerimaan langsung untuk pembelian toko tanpa pesanan'
+      ],
+      catatanPenting: [
+        'Jumlah diterima tidak boleh melebihi sisa yang dipesan; angka sisanya tertera pada tiap baris',
+        'Satu PO boleh diterima bertahap bila barang datang beberapa kali',
+        'Stok baru bertambah setelah BAST disetujui DAN disinkronkan ke Kulakan',
+        'Sinkronisasi hanya dapat dilakukan sekali; pengulangan ditolak agar stok tidak tergandakan'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Kenapa tidak ada tombol Tolak seperti di PR dan PO?',
+          'Penerimaan barang tidak mengenal penolakan. Bila keliru, perbaiki dokumennya atau hapus selama masih berstatus DRAFT.'
+        ],
+        [
+          'Sinkronisasi gagal karena barang belum berpadanan produk toko.',
+          'Barisnya menunjuk barang inventaris yang belum punya padanan Produk POS. Buat dokumennya dari daftar Produk POS, atau petakan barang tersebut lebih dulu.'
+        ],
+      ]),
+  'pengadaanTagihan': SpesifikasiBantuanMenu(
+      judul: 'Terima Tagihan Vendor',
+      tujuan:
+          'mencatat nomor dan tanggal faktur vendor atas barang yang sudah diterima',
+      workflow: [
+        'Pilih penerimaan yang sudah disetujui',
+        'Isi nomor faktur',
+        'Isi tanggal faktur',
+        'Simpan tagihan'
+      ],
+      ilustrasi: [
+        'Daftar siap ditagih',
+        'Penanda belum dan sudah ditagih',
+        'Form nomor faktur'
+      ],
+      objekUtama: 'faktur vendor atas penerimaan barang',
+      hasilAkhir: 'tagihan tercatat dan siap dibayar',
+      istilah: [
+        'BELUM DITAGIH = barang sudah diterima tetapi fakturnya belum masuk',
+        'SUDAH DITAGIH = nomor dan tanggal faktur sudah tercatat'
+      ],
+      catatanPenting: [
+        'Hanya penerimaan yang sudah DISETUJUI yang muncul di sini; barang yang belum diakui diterima tidak boleh menimbulkan kewajiban bayar',
+        'Nomor dan tanggal faktur keduanya wajib karena menjadi rujukan pembayaran',
+        'Nomor faktur yang sama pada penyedia yang sama akan ditolak untuk mencegah tagihan berganda',
+        'Tagihan tidak dapat dibatalkan bila pesanannya sudah menerima pembayaran'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Penerimaan saya tidak muncul di daftar.',
+          'Pastikan BAST-nya sudah disetujui. Selama masih DRAFT, dokumen itu belum boleh ditagihkan.'
+        ],
+      ]),
+  'pengadaanDpc': SpesifikasiBantuanMenu(
+      judul: 'Pembayaran Vendor',
+      tujuan: 'membayar tagihan penyedia atas pesanan yang sudah disetujui',
+      workflow: [
+        'Pilih vendor',
+        'Centang tagihan yang dibayar',
+        'Isi nilai bayar',
+        'Simpan',
+        'Setujui dan pilih apakah diajukan transfer'
+      ],
+      ilustrasi: [
+        'Daftar pembayaran',
+        'Tagihan terbuka per termin',
+        'Kolom sisa dan nilai bayar',
+        'Pilihan ajukan transfer'
+      ],
+      objekUtama: 'dokumen pembayaran vendor',
+      hasilAkhir: 'pesanan tercatat terbayar dan pajaknya menjadi terutang',
+      istilah: [
+        'Tagihan terbuka = termin yang masih menyisakan kewajiban bayar',
+        'Sisa = nilai tagih dikurangi yang sudah dibayar dokumen lain',
+        'Pengajuan transfer = permintaan pencairan yang masuk antrean keuangan'
+      ],
+      catatanPenting: [
+        'Dokumen DRAFT belum diakui sebagai pembayaran; status pesanan baru berubah setelah DISETUJUI',
+        'Nilai bayar tidak boleh melebihi sisa tagihan terminnya',
+        'Pembayaran yang sudah disetujui tidak dapat diubah maupun dihapus; batalkan persetujuannya dulu',
+        'Centang ajukan transfer bank hanya bila dibayar lewat transfer. Pembayaran tunai tidak perlu masuk antrean pencairan'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Saya sudah menyimpan pembayaran, kenapa PO belum berkurang?',
+          'Pembayaran baru diakui setelah disetujui. Selama masih draf, kolom dibayar pada PO memang belum berubah.'
+        ],
+        [
+          'Bisakah membayar sebagian dari satu termin?',
+          'Bisa. Kurangi nilai bayarnya, dan sisanya tetap muncul sebagai tagihan terbuka pada pembayaran berikutnya.'
+        ],
+      ]),
+  'pengadaanBdp': SpesifikasiBantuanMenu(
+      judul: 'Barang Dalam Proses',
+      tujuan: 'memantau barang yang sudah dipesan tetapi belum diterima',
+      workflow: [
+        'Buka daftar',
+        'Saring yang terlambat',
+        'Periksa umur pesanan',
+        'Tindak lanjuti ke penyedia'
+      ],
+      ilustrasi: [
+        'Ringkasan nilai belum datang',
+        'Kolom dipesan, diterima, belum datang',
+        'Penanda lewat batas kirim'
+      ],
+      objekUtama: 'sisa pesanan yang belum datang',
+      hasilAkhir: 'pesanan tertunda terpantau dan dapat ditagih ke penyedia',
+      istilah: [
+        'Belum datang = jumlah dipesan dikurangi yang sudah diterima',
+        'Umur = berapa hari sejak pesanan dibuat',
+        'Terlambat = sudah melewati batas kirim yang disepakati'
+      ],
+      catatanPenting: [
+        'Halaman ini tidak dapat diubah; isinya dihitung dari selisih pesanan dan penerimaan',
+        'Angkanya memakai definisi yang sama dengan pagar penerimaan, jadi tidak akan berbeda dengan sisa yang boleh diterima di layar BAST'
+      ]),
+  'pengadaanPajak': SpesifikasiBantuanMenu(
+      judul: 'Bayar Pajak',
+      tujuan:
+          'menyetor PPh yang dipotong dan mencatat PPN dari pembayaran vendor',
+      workflow: [
+        'Buka tab Terutang',
+        'Centang baris yang disetor',
+        'Isi NTPN dan tanggal setor',
+        'Setor',
+        'Periksa di tab Riwayat'
+      ],
+      ilustrasi: [
+        'Ringkasan PPh dan PPN',
+        'Daftar pajak terutang',
+        'Form bukti setor',
+        'Riwayat setoran'
+      ],
+      objekUtama: 'setoran pajak atas pembayaran vendor',
+      hasilAkhir: 'kewajiban pajak tercatat lunas beserta bukti setornya',
+      istilah: [
+        'DPP = dasar pengenaan pajak, yaitu nilai penagihan termin',
+        'PPh = pajak yang DIPOTONG dari pembayaran dan disetor ke negara',
+        'PPN = pajak masukan yang DIBAYARKAN kepada vendor bersama tagihan',
+        'NTPN = Nomor Transaksi Penerimaan Negara, bukti setoran diterima kas negara',
+        'Terutang = pajak yang sudah timbul tetapi belum disetor'
+      ],
+      catatanPenting: [
+        'PPN menambah tagihan ke vendor, sedangkan PPh dipotong dari kas yang keluar. Keduanya mudah tertukar, jadi ditampilkan terpisah',
+        'Pajak baru menjadi terutang setelah pembayaran vendor disetujui',
+        'Nilainya dihitung sebanding dengan porsi yang benar-benar dibayar, sehingga pembayaran sebagian tidak menyetorkan pajak atas nilai yang belum dibayar',
+        'NTPN dan tanggal setor wajib diisi karena keduanya bukti bahwa uangnya masuk kas negara',
+        'Baris yang sudah disetor tidak dapat disetor ulang'
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Saya salah mengisi NTPN, bagaimana memperbaikinya?',
+          'Batalkan setorannya di tab Riwayat. Rekamannya dinonaktifkan tanpa dihapus, dan pajaknya kembali menjadi terutang sehingga dapat disetor ulang dengan bukti yang benar.'
+        ],
+        [
+          'Kenapa jenis pajaknya kosong?',
+          'Jenis PPh dan PPN ditetapkan per termin saat membuat PO. Bila kosong, lengkapi dulu pada pesanan yang bersangkutan.'
+        ],
+      ]),
 };
 
 ArtikelBantuan artikelBantuanUntukMenu(
