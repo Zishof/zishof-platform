@@ -687,6 +687,15 @@ class _FormAnggotaState extends State<_FormAnggota> {
   DateTime? _tanggalKadaluarsa;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   Kategori? get _tipeTerpilih {
     for (final k in widget.tipeAnggota) {
@@ -757,6 +766,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       final ubah = widget.anggota != null;
@@ -792,7 +802,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -818,6 +828,7 @@ class _FormAnggotaState extends State<_FormAnggota> {
                 : 'Lengkapi identitas pelanggan/member agar transaksi dan laporan lebih mudah dilacak.',
             icon: ubah ? Icons.edit_outlined : Icons.person_add_alt_1_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             actions: [
               OutlinedButton.icon(
                 onPressed:

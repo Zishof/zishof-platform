@@ -10,6 +10,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
+import '../../api_client.dart';
 
 final _formatRpTipeMember =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -367,6 +368,15 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
   bool _wajibEmail = false;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void initState() {
@@ -399,6 +409,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       final body = {
@@ -425,7 +436,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -450,6 +461,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> {
                 'Kategori referensi sivitas -- mengaitkan member ke Mahasiswa/Siswa/Guru/Dosen/Pegawai berdasar nama.',
             icon: Icons.label_outline,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(
                 judul: 'Identitas',

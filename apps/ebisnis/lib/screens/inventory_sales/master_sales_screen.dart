@@ -13,6 +13,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/riwayat_audit_dialog.dart';
 import '../../widgets/safe_state.dart';
+import '../../api_client.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -433,6 +434,15 @@ class _FormSalesState extends State<_FormSales> {
   bool _menyimpan = false;
   bool _adaPerubahan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   bool get _ubah => widget.data != null;
 
@@ -489,6 +499,7 @@ class _FormSalesState extends State<_FormSales> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       await prosesSimpanMaster(context,
@@ -512,7 +523,7 @@ class _FormSalesState extends State<_FormSales> {
               : 'si_sales:baru:${DateTime.now().microsecondsSinceEpoch}');
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -566,6 +577,7 @@ class _FormSalesState extends State<_FormSales> {
                   : 'Kode legacy 2 karakter dipertahankan sebagai teks apa adanya.',
               icon: _ubah ? Icons.edit_outlined : Icons.badge_outlined,
               errorText: _error,
+              errorDetail: _detailGalat,
               children: [
                 AppFormSection(judul: 'Identitas Sales', children: [
                   Row(children: [

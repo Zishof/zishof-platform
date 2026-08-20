@@ -612,6 +612,15 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
   DateTime _waktu = DateTime.now();
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void dispose() {
@@ -642,6 +651,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('hutang_bayar_simpan', {
@@ -652,7 +662,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -675,6 +685,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> {
             subtitle: 'Catat pelunasan/cicilan hutang anggota.',
             icon: Icons.money_off_csred_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(judul: 'Anggota', children: [
                 OutlinedButton.icon(

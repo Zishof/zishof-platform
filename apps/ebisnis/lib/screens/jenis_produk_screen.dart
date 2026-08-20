@@ -11,6 +11,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../api_client.dart';
 
 /// Layar "Jenis Produk" (kategori) — padanan master ZK `JenisProdukAction` &
 /// JSP `barang/jenis_produk.jsp`. CRUD penuh + pemilihan 3 akun akuntansi per
@@ -367,6 +368,15 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   // Daftar akun untuk 3 pemilih (dimuat sekali dari server).
   bool _memuatAkun = true;
@@ -406,7 +416,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) setStateIfMounted(() => _akun = data);
     } catch (e) {
-      if (mounted) setStateIfMounted(() => _pesanError = e.toString());
+      if (mounted) setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuatAkun = false);
     }
@@ -425,6 +435,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       final maks =
@@ -454,7 +465,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -478,6 +489,7 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
             subtitle: 'Atur kategori produk & akun akuntansinya.',
             icon: Icons.category_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(
                 judul: 'Identitas',

@@ -11,6 +11,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
+import '../api_client.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
@@ -401,6 +402,15 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
   bool _aktif = true;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   // Gap-closure "Ada Kembalian" -- selama admin belum menyentuh switch-nya sendiri di form Tambah,
   // ikuti field Nama secara live (ilike "tunai" -> Ya). Sekali disentuh manual (atau form Ubah
@@ -452,6 +462,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       // (daftar akun dimuat terpisah, lihat _muatAkun)
@@ -481,7 +492,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -517,6 +528,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
             subtitle: 'Atur cara pembayaran koperasi/kantin.',
             icon: Icons.payments_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(
                 judul: 'Identitas',

@@ -584,6 +584,15 @@ class _FormCustomerState extends State<_FormCustomer> {
   bool _menyimpan = false;
   bool _adaPerubahan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   bool get _ubah => widget.data != null;
 
@@ -664,6 +673,7 @@ class _FormCustomerState extends State<_FormCustomer> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       await prosesSimpanMaster(context,
@@ -692,7 +702,7 @@ class _FormCustomerState extends State<_FormCustomer> {
               : 'si_customer:baru:${DateTime.now().microsecondsSinceEpoch}');
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -746,6 +756,7 @@ class _FormCustomerState extends State<_FormCustomer> {
                   : 'Kode teks legacy (nol di depan dipertahankan); duplikat ditolak.',
               icon: _ubah ? Icons.edit_outlined : Icons.people_alt_outlined,
               errorText: _error,
+              errorDetail: _detailGalat,
               children: [
                 AppFormSection(judul: 'Identitas Customer', children: [
                   AppFormTextField(

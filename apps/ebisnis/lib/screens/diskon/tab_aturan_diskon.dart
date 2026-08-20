@@ -421,6 +421,15 @@ class _FormDiskonState extends State<_FormDiskon> {
   int? _tipeAnggotaId;
   bool _menyimpan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   // Masa Berlaku -- `null` = tanpa batas (dikirim kosong ke server, cocok
   // dgn `diskonSimpan` yg menganggap tanggal_mulai/tanggal_selesai kosong
@@ -529,6 +538,7 @@ class _FormDiskonState extends State<_FormDiskon> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       final body = {
@@ -575,7 +585,7 @@ class _FormDiskonState extends State<_FormDiskon> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -603,6 +613,7 @@ class _FormDiskonState extends State<_FormDiskon> {
                 : 'Susun aturan potongan yang akan dipakai saat transaksi kasir.',
             icon: ubah ? Icons.edit_calendar_outlined : Icons.discount_outlined,
             errorText: _error,
+            errorDetail: _detailGalat,
             // ignore: sort_child_properties_last
             children: [
               AppFormSection(

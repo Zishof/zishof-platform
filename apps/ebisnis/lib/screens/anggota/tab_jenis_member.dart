@@ -387,6 +387,15 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
   Set<int> _caraBayarDipilih = {};
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void initState() {
@@ -438,6 +447,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       final body = {
@@ -474,7 +484,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -499,6 +509,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> {
                 'Klasifikasi utama keanggotaan -- mengatur aturan saldo, topup, dan belanja rutin.',
             icon: Icons.category_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(
                 judul: 'Identitas',

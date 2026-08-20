@@ -707,6 +707,15 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
   final _keterangan = TextEditingController();
   bool _menyimpan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   /// Kunci idempoten DIBUAT SEKALI saat form dibuka -- retry Simpan yang sama
   /// memakai kunci yang sama sehingga server tidak menggandakan pembayaran.
@@ -756,7 +765,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
       setStateIfMounted(() => _fakturs =
           ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     }
   }
 
@@ -787,6 +796,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('si_payable_payment_create', {
@@ -802,7 +812,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -824,6 +834,7 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang> {
               'Alokasi tidak boleh melebihi outstanding tiap faktur; total pembayaran = jumlah alokasi. Retry aman (idempoten).',
           icon: Icons.payments_outlined,
           errorText: _error,
+          errorDetail: _detailGalat,
           children: [
             AppFormSection(judul: 'Supplier & Faktur', children: [
               OutlinedButton.icon(
@@ -1416,6 +1427,15 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
   final _keterangan = TextEditingController();
   bool _menyimpan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void dispose() {
@@ -1429,6 +1449,7 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi('si_purchase_terms_save', {
@@ -1442,7 +1463,7 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -1463,6 +1484,7 @@ class _FormTerminFakturState extends State<_FormTerminFaktur> {
               'CASH = lunas saat faktur (tanpa hutang); DP = sebagian dibayar; CREDIT = penuh jadi hutang. Jatuh tempo = tanggal faktur + termin.',
           icon: Icons.schedule_outlined,
           errorText: _error,
+          errorDetail: _detailGalat,
           children: [
             AppFormSection(judul: 'Jenis Pembayaran', children: [
               DropdownButtonFormField<String>(

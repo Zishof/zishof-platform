@@ -278,3 +278,30 @@ class ApiException implements Exception {
   @override
   String toString() => '${info.pesan} ${info.solusi.first}';
 }
+
+/// Dua lapis sebuah kegagalan: kalimat untuk pengguna, dan jejak teknis yang
+/// disalin ke admin.
+///
+/// Kontrak API memang memisahkan `message` dari `teknis`, tetapi layar yang
+/// menyimpan `e.toString()` membuang lapis kedua tanpa sisa -- padahal di
+/// situlah alasan sebenarnya berada ketika server menyamarkan penolakan.
+/// Dipakai bersama `AppFormSheet.errorDetail`.
+class GalatTampil {
+  /// Kalimat untuk pengguna: pesan server ditambah satu langkah solusi bila ada.
+  final String pesan;
+
+  /// Jejak teknis berikut kode referensinya; null untuk galat non-API (mis.
+  /// kesalahan parsing lokal) yang memang tidak punya lapis kedua.
+  final String? detail;
+
+  const GalatTampil(this.pesan, this.detail);
+
+  factory GalatTampil.dari(Object error) {
+    if (error is! ApiException) return GalatTampil(error.toString(), null);
+    final info = error.info;
+    return GalatTampil(
+      info.solusi.isEmpty ? info.pesan : '${info.pesan}\n${info.solusi.first}',
+      'Referensi ${info.kodeReferensi}\n${info.teknis}',
+    );
+  }
+}

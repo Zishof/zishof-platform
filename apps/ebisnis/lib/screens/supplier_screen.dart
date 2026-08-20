@@ -11,6 +11,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/pemilih_akun.dart';
+import '../api_client.dart';
 
 /// Layar "Supplier (Penyedia)" -- CRUD penuh master data pemasok, dipakai
 /// sbg picker di Kulakan per-Faktur (`ais.database.model.library.Penyedia`).
@@ -358,6 +359,15 @@ class _FormSupplierState extends State<_FormSupplier> {
   late final TextEditingController _keterangan;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void initState() {
@@ -407,6 +417,7 @@ class _FormSupplierState extends State<_FormSupplier> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailGalat = null;
     });
     try {
       final body = {
@@ -435,7 +446,7 @@ class _FormSupplierState extends State<_FormSupplier> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() => _pesanError = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -459,6 +470,7 @@ class _FormSupplierState extends State<_FormSupplier> {
             subtitle: 'Data pemasok/vendor untuk faktur Kulakan.',
             icon: Icons.local_shipping_outlined,
             errorText: _pesanError,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(
                 judul: 'Identitas',

@@ -640,6 +640,15 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
   Map<String, dynamic>? _produk;
   bool _menyimpan = false;
   String? _error;
+  String? _detailGalat;
+
+  /// Menyimpan jejak teknis kegagalan utk penyingkap "Detail Error", lalu
+  /// mengembalikan kalimat yang memang ditujukan kepada pengguna.
+  String _terapkanDetailGalat(Object e) {
+    final galat = GalatTampil.dari(e);
+    _detailGalat = galat.detail;
+    return galat.pesan;
+  }
 
   @override
   void dispose() {
@@ -691,6 +700,7 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
     setStateIfMounted(() {
       _menyimpan = true;
       _error = null;
+      _detailGalat = null;
     });
     try {
       await ApiClient.instance.aksi(
@@ -704,7 +714,7 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
       });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setStateIfMounted(() => _error = e.toString());
+      setStateIfMounted(() => _error = _terapkanDetailGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -729,6 +739,7 @@ class _FormVersiHargaState extends State<_FormVersiHarga> {
                 'Overlap tanggal efektif yang sama ditolak; histori tidak pernah ditimpa.',
             icon: Icons.price_change_outlined,
             errorText: _error,
+            errorDetail: _detailGalat,
             children: [
               AppFormSection(judul: 'Versi Harga', children: [
                 OutlinedButton.icon(
