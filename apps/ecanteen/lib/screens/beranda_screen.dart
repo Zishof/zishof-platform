@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/aturan_diskon.dart';
 import '../models/keranjang_item.dart';
 import '../services/api_client.dart';
 import '../services/keranjang.dart';
+import '../services/server_config.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import 'bayar_qr_screen.dart';
+import 'dashboard_screen.dart';
 import 'keranjang_screen.dart';
 import 'login_screen.dart';
+import 'pengaturan_server_screen.dart';
 import 'pesanan_screen.dart';
 import 'topup_screen.dart';
 import 'transaksi_screen.dart';
@@ -165,6 +170,20 @@ class _BerandaScreenState extends State<BerandaScreen> {
     ));
   }
 
+  /// Notifikasi belum punya aksi API tersendiri, jadi dibuka lewat jembatan
+  /// sesi web (mobile_auth.jsp) -- pengguna tidak perlu login ulang.
+  Future<void> _bukaNotifikasi() async {
+    final token = Sesi.instance.token;
+    if (token == null || token.isEmpty) return;
+    final url = ServerConfig.instance.urlJembatan(token, tujuan: 'notifikasi');
+    final ok =
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak dapat membuka notifikasi.')));
+    }
+  }
+
   Future<void> _keluar() async {
     await Sesi.instance.keluar();
     Keranjang.instance.kosongkan();
@@ -193,22 +212,89 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 _segarkanSaldo();
               },
             ),
-          IconButton(
-            tooltip: 'Pesanan',
-            icon: const Icon(Icons.receipt_long_outlined),
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PesananScreen())),
-          ),
-          IconButton(
-            tooltip: 'Riwayat Transaksi',
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TransaksiScreen())),
-          ),
-          IconButton(
-            tooltip: 'Keluar',
-            icon: const Icon(Icons.logout),
-            onPressed: _keluar,
+          if (sesi.aktifkanBayarQr)
+            IconButton(
+              tooltip: 'Bayar dengan QR',
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () async {
+                await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BayarQrScreen()));
+                _segarkanSaldo();
+              },
+            ),
+          // Sisanya masuk menu supaya bilah judul tidak meluber di layar ponsel.
+          PopupMenuButton<String>(
+            onSelected: (nilai) {
+              switch (nilai) {
+                case 'pesanan':
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const PesananScreen()));
+                  break;
+                case 'riwayat':
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const TransaksiScreen()));
+                  break;
+                case 'ringkasan':
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const DashboardScreen()));
+                  break;
+                case 'notifikasi':
+                  _bukaNotifikasi();
+                  break;
+                case 'server':
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const PengaturanServerScreen()));
+                  break;
+                case 'keluar':
+                  _keluar();
+                  break;
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'pesanan',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.receipt_long_outlined),
+                    title: Text('Pesanan Saya')),
+              ),
+              PopupMenuItem(
+                value: 'riwayat',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.history),
+                    title: Text('Riwayat')),
+              ),
+              PopupMenuItem(
+                value: 'ringkasan',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.insights_outlined),
+                    title: Text('Ringkasan Belanja')),
+              ),
+              PopupMenuItem(
+                value: 'notifikasi',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.notifications_outlined),
+                    title: Text('Notifikasi')),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'server',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.dns_outlined),
+                    title: Text('Alamat Server')),
+              ),
+              PopupMenuItem(
+                value: 'keluar',
+                child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.logout),
+                    title: Text('Keluar')),
+              ),
+            ],
           ),
         ],
       ),
@@ -419,10 +505,32 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Center(
-                      child: Icon(Icons.fastfood_outlined,
-                          size: 40,
-                          color: Theme.of(context).colorScheme.primary),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        ServerConfig.instance.urlGambarProduk(p['id']),
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        // Produk tanpa lampiran tetap dilayani server (ikon
+                        // bawaan), dan koneksi bisa gagal -- keduanya jatuh ke
+                        // ikon lokal supaya kartu tidak pernah kosong.
+                        errorBuilder: (context, error, stack) => Center(
+                          child: Icon(Icons.fastfood_outlined,
+                              size: 40,
+                              color: Theme.of(context).colorScheme.primary),
+                        ),
+                        loadingBuilder: (context, anak, progres) =>
+                            progres == null
+                                ? anak
+                                : const Center(
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  ),
+                      ),
                     ),
                   ),
                   Text(

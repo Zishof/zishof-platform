@@ -76,6 +76,26 @@ class ServerConfig {
       '&jenis=ais.database.model.inventory.Produk'
       '&render=true';
 
+  /// Jembatan sesi web utk halaman yang belum punya aksi API.
+  ///
+  /// `mobile_auth.jsp` menukar token mobile menjadi sesi web lalu mengalihkan
+  /// ke halaman kantin. Dipakai untuk TOPUP: pembuatan tagihan memanggil
+  /// payment gateway dan seluruh logikanya ada di _topup_service.jsp, jadi
+  /// alur itu dipakai ulang apa adanya alih-alih diduplikasi di aplikasi --
+  /// menyalin jalur uang berisiko menyimpang diam-diam.
+  ///
+  /// [tujuan] hanya menerima nama yang di-whitelist server: topup, va,
+  /// notifikasi.
+  String urlJembatan(String token, {String? tujuan}) {
+    final t = Uri.encodeQueryComponent(token);
+    final n = tujuan == null ? '' : '&next=${Uri.encodeQueryComponent(tujuan)}';
+    // hanya_tampil_jsp=true: JSP dirender tanpa layout, sama spt pemanggilan
+    // _topup_service. Penting krn halaman ini hanya melakukan redirect --
+    // kalau dibungkus layout, header respons bisa terlanjur terkirim.
+    return '$baseUrl/baru?hanya_tampil_jsp=true'
+        '&p=kantin%2Fmember&s=mobile_auth&token=$t$n';
+  }
+
   /// Nama berkas lampiran bawaan -- dipakai JSP utk menandai "tidak ada foto".
   static const String namaGambarBawaan = 'administrator-icon_default.png';
 }

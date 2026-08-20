@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_client.dart';
+import '../services/server_config.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
@@ -49,6 +51,25 @@ class _TopupScreenState extends State<TopupScreen> {
     }
   }
 
+  /// Buka alur topup versi web lewat jembatan sesi (mobile_auth.jsp).
+  ///
+  /// Pembuatan tagihan memanggil payment gateway dan seluruh logikanya ada di
+  /// _topup_service.jsp. Alur itu dipakai ulang apa adanya -- menyalin jalur
+  /// uang ke aplikasi berisiko menyimpang tanpa ketahuan.
+  Future<void> _bukaTopupWeb() async {
+    final token = Sesi.instance.token;
+    if (token == null || token.isEmpty) {
+      setState(() => _galat = 'Sesi berakhir. Silakan masuk kembali.');
+      return;
+    }
+    final url = ServerConfig.instance.urlJembatan(token, tujuan: 'topup');
+    final ok = await launchUrl(Uri.parse(url),
+        mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      setState(() => _galat = 'Tidak dapat membuka halaman pembayaran.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,15 +112,29 @@ class _TopupScreenState extends State<TopupScreen> {
                       'kantin.',
                       style: TextStyle(fontSize: 13, color: Colors.black54),
                     )
-                  else
+                  else ...[
                     ..._saluran.map((s) => Card(
                           child: ListTile(
                             leading: const Icon(Icons.account_balance_outlined),
                             title: Text('${s['nama'] ?? ''}'),
-                            subtitle: const Text(
-                                'Buat tagihan lewat petugas atau kanal resmi'),
                           ),
                         )),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: _bukaTopupWeb,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Buat Tagihan Pembayaran'),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Pembuatan tagihan diproses di halaman pembayaran '
+                        'resmi. Anda akan masuk otomatis, tidak perlu login '
+                        'ulang.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 22),
                   const Text('Tagihan / Virtual Account',
                       style: TextStyle(fontWeight: FontWeight.bold)),
