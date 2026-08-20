@@ -256,13 +256,26 @@ class _AnggaranScreenState extends State<AnggaranScreen>
   String get _cachePenggunaan =>
       'master:anggaran_penggunaan:${_tahun ?? 0}:${_satkerId ?? 0}:$_revisi';
 
-  /// Mutasi ITEM anggaran: ONLINE-ONLY.
+  /// Mutasi ITEM anggaran: LOKAL DULU dengan id sementara.
   ///
-  /// Id item dirujuk baris Penggunaan Anggaran dan menjadi dasar posting; id lokal yang
-  /// belum ada di server akan merusak keduanya (spec offline 13.3). Pembacaan daftarnya
-  /// tetap cache-dulu sehingga layar tetap terbuka saat jaringan mati.
-  Future<bool> _kirimItem(String aksi, Map<String, dynamic> body) =>
-      _kirimServer(aksi, body);
+  /// Item baru yang dibuat offline mendapat id negatif; baris Penggunaan Anggaran yang
+  /// menunjuknya ikut ditukar saat sinkron, dan penggunaan itu DITAHAN sampai itemnya
+  /// benar-benar terkirim -- jadi tidak pernah ada penggunaan yang menggantung.
+  Future<bool> _kirimItem(String aksi, Map<String, dynamic> body) {
+    final hapus = aksi.endsWith('_hapus');
+    return _kirimMaster(
+      aksi,
+      body,
+      kunci: body['id'] == null
+          ? 'anggaran_item:baru:${DateTime.now().microsecondsSinceEpoch}'
+          : 'anggaran_item:${body['id']}',
+      cacheKey: _cacheItem,
+      rowLokal: hapus ? {'id': body['id']} : {...body, 'hargaTotal': 0},
+      hapusLokal: hapus,
+      entitas: 'anggaran_item',
+      baru: !hapus && body['id'] == null,
+    );
+  }
 
   /// Mutasi baris DAUN yang aman diantre (Penggunaan Anggaran): baris ini tidak
   /// dirujuk id-nya oleh alur lain, dan itemnya sendiri sudah ada di server.
@@ -273,17 +286,24 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     String? cacheKey,
     Map<String, dynamic>? rowLokal,
     bool hapusLokal = false,
+    String entitas = 'anggaran',
+    bool baru = false,
   }) async {
     setStateIfMounted(() => _sibuk = true);
     try {
+      final idLokal = baru ? MasterOffline.idSementaraBaru() : null;
       final hasil = await prosesSimpanMaster(
         context,
         aksi: aksi,
         body: body,
         kunci: kunci,
         cacheKey: cacheKey,
-        rowLokal: rowLokal,
+        rowLokal: idLokal == null
+            ? rowLokal
+            : {...(rowLokal ?? body), 'id': idLokal},
         hapusLokal: hapusLokal,
+        idLokal: idLokal,
+        entitas: entitas,
       );
       if (hasil['offline'] != true) {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
@@ -663,6 +683,8 @@ class _AnggaranScreenState extends State<AnggaranScreen>
           : 'anggaran_penggunaan:baru:${DateTime.now().microsecondsSinceEpoch}',
       cacheKey: _cachePenggunaan,
       rowLokal: {...payload, 'aktif': true, 'sumber': 'Entri Manual'},
+      entitas: 'anggaran_penggunaan',
+      baru: !ubah,
     );
   }
 

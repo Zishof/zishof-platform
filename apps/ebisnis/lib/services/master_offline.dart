@@ -240,13 +240,21 @@ class MasterOffline {
     String? cacheKey,
     Map<String, dynamic>? rowLokal,
     bool hapusLokal = false,
+    int? idLokal,
+    String entitas = 'master',
   }) async {
     pastikanTimer();
     final antreBody = <String, dynamic>{
       ...body,
       'client_mutation_id':
           '${kunci ?? aksi}:${DateTime.now().microsecondsSinceEpoch}',
+      // Baris BARU yang dibuat offline membawa id sementaranya sendiri supaya
+      // pasangannya bisa dicatat begitu server memberi id sungguhan.
+      if (idLokal != null) 'id_lokal': idLokal,
     };
+    if (idLokal != null) {
+      await CoreDb.instance.idSementaraCatat(idLokal, entitas);
+    }
     final id = await CoreDb.instance
         .outboxMasterTambah(aksi, kunci, jsonEncode(antreBody));
     if (cacheKey != null && rowLokal != null) {
@@ -266,7 +274,17 @@ class MasterOffline {
       int idAntrean, String aksi, Map<String, dynamic> body,
       {String? kunci}) async {
     try {
-      final hasil = await ApiClient.instance.aksi(aksi, body);
+      // Rujukan ke baris yang dibuat offline ditukar dgn id server yang sudah ada;
+      // bila pembuatnya belum terkirim, kiriman ini ditahan (tetap antre).
+      final peta = await CoreDb.instance.idSementaraTerpetakan();
+      final siap = await tukarIdSementara(body, peta);
+      if (siap == null) {
+        throw ApiException(
+            'Menunggu data induk yang dibuat offline selesai terkirim.',
+            offline: true, aktivitas: aksi);
+      }
+      final hasil = await ApiClient.instance.aksi(aksi, siap);
+      await _catatPemetaan(siap, hasil);
       await CoreDb.instance.outboxMasterTandaiSukses(idAntrean);
       _tandaiBarisSukses(kunci);
       await _muatUlangHitungan();
@@ -286,6 +304,82 @@ class MasterOffline {
       }
       await _muatUlangHitungan();
       rethrow;
+    }
+  }
+
+
+  // ==================== ID SEMENTARA UNTUK BARIS OFFLINE ====================
+  //
+  // Baris master yang dibuat saat offline belum punya id server, padahal baris lain
+  // bisa langsung menunjuknya (Penggunaan Anggaran -> item anggaran, Bank -> akun).
+  // Klien memberi id SEMENTARA bernilai negatif; saat antrean dikirim, setiap rujukan
+  // ke id itu ditukar dengan id sungguhan yang sudah diketahui. Rujukan yang belum
+  // punya pasangan DITAHAN (bukan dikirim apa adanya) supaya tidak pernah ada baris
+  // yang menunjuk data yang belum ada di server.
+
+  static int _urutIdSementara = 0;
+
+  /// Id sementara baru: NEGATIF (id server selalu positif, jadi mustahil bentrok)
+  /// dan menaik sehingga unik lintas entitas pada satu perangkat.
+  static int idSementaraBaru() {
+    _urutIdSementara = (_urutIdSementara + 1) % 1000;
+    return -(DateTime.now().millisecondsSinceEpoch * 1000 + _urutIdSementara);
+  }
+
+  static bool _idSementara(Object? v) => v is int && v < 0;
+
+  /// Kolom yang isinya RUJUKAN id -- hanya kolom inilah yang boleh ditukar. Menukar
+  /// semua bilangan negatif berbahaya: nominal debet/kredit pun bisa negatif.
+  static bool _kolomId(String kunci) {
+    final k = kunci.toLowerCase();
+    return k == 'id' ||
+        k.endsWith('id') && !k.endsWith('void') ||
+        k.endsWith('_id');
+  }
+
+  /// Tukar seluruh rujukan id sementara di [body] dengan id server yang sudah
+  /// diketahui. Mengembalikan null bila masih ada rujukan yang BELUM punya
+  /// pasangan -- pemanggil wajib menahan pengiriman baris itu.
+  static Future<Map<String, dynamic>?> tukarIdSementara(
+      Map<String, dynamic> body, Map<int, int> peta) async {
+    var tertunda = false;
+
+    Object? telusuri(String kunci, Object? nilai) {
+      if (nilai is Map) {
+        return {
+          for (final e in nilai.entries) '${e.key}': telusuri('${e.key}', e.value)
+        };
+      }
+      if (nilai is List) {
+        return [for (final e in nilai) telusuri(kunci, e)];
+      }
+      if (_kolomId(kunci) && _idSementara(nilai)) {
+        final server = peta[nilai as int];
+        if (server == null) {
+          // Kekecualian: 'id_lokal' memang MENYIMPAN id sementaranya sendiri.
+          if (kunci.toLowerCase() != 'id_lokal') tertunda = true;
+          return nilai;
+        }
+        return server;
+      }
+      return nilai;
+    }
+
+    final hasil = <String, dynamic>{
+      for (final e in body.entries) e.key: telusuri(e.key, e.value)
+    };
+    return tertunda ? null : hasil;
+  }
+
+  /// Catat pasangan id sementara -> id server setelah baris pembuatnya terkirim.
+  static Future<void> _catatPemetaan(
+      Map<String, dynamic> body, Map<String, dynamic> hasil) async {
+    final lokal = body['id_lokal'];
+    final server = hasil['id'];
+    if (lokal is int && lokal < 0 && server is num) {
+      await CoreDb.instance.idSementaraPetakan(lokal, server.toInt());
+      // Sekali terpetakan, baris antrean lain yang menunggunya bisa ikut jalan.
+      revisiBaris.value++;
     }
   }
 
@@ -673,8 +767,17 @@ class MasterOffline {
           _tandaiBarisGagal(kunci);
           continue;
         }
+        // Tukar rujukan id sementara -> id server. Peta dibaca ULANG tiap baris
+        // karena baris sebelumnya dalam putaran ini mungkin baru saja mengisinya.
+        final peta = await CoreDb.instance.idSementaraTerpetakan();
+        final siap = await tukarIdSementara(body, peta);
+        if (siap == null) {
+          // Induknya belum terkirim -- lewati dulu, jangan ditandai gagal.
+          continue;
+        }
         try {
-          await ApiClient.instance.aksi(aksi, body);
+          final hasil = await ApiClient.instance.aksi(aksi, siap);
+          await _catatPemetaan(siap, hasil);
           await CoreDb.instance.outboxMasterTandaiSukses(id);
           _tandaiBarisSukses(kunci);
           terkirim++;
@@ -691,6 +794,9 @@ class MasterOffline {
     } finally {
       _sedangFlush = false;
       if (terkirim > 0) {
+        // Pemetaan id sementara yang sudah lama selesai tidak dirujuk siapa pun lagi;
+        // dibersihkan berkala supaya tabelnya tidak tumbuh tanpa batas.
+        unawaited(CoreDb.instance.idSementaraBersihkan());
         // Fase "baru tersinkron" sesaat -> indikator menganimasikan centang,
         // lalu kembali ke fase kalkulasi normal.
         await _muatUlangHitungan(paksaFase: FaseSinkron.baruTersinkron);

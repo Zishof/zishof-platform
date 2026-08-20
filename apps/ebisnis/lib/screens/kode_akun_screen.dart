@@ -10,6 +10,7 @@ import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 
@@ -524,24 +525,43 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(teks)));
   }
 
-  /// Aksi TULIS bagan akun: ONLINE-ONLY.
+  /// Aksi TULIS bagan akun: LOKAL DULU, lalu dikirim.
   ///
-  /// Spec offline 13.3 menempatkan "perubahan rekening/harga sensitif" sebagai wajib
-  /// online: akun yang baru muncul setelah sinkronisasi membuat jurnal mengacu ke akun
-  /// yang belum dikenal server. Pembacaan daftarnya tetap cache-dulu, jadi layar ini
-  /// tetap bisa dibuka saat jaringan mati -- yang dilarang hanya menunda MUTASI-nya.
+  /// Baris BARU yang dibuat offline memakai id SEMENTARA bernilai negatif. Setiap
+  /// rujukan ke id itu (mis. Bank -> akun kas) ditukar dengan id server saat antrean
+  /// dikirim, dan baris yang induknya belum terkirim ditahan lebih dulu -- sehingga
+  /// tidak pernah ada data yang menunjuk akun yang belum dikenal server (spec 13.3).
   Future<bool> _kirim(
     String aksi,
     Map<String, dynamic> body, {
-    String? kunci,
-    String? cacheKey,
+    required String kunci,
+    required String cacheKey,
     Map<String, dynamic>? rowLokal,
     bool hapusLokal = false,
+    String entitas = 'kode_akun',
   }) async {
     setStateIfMounted(() => _sibuk = true);
     try {
-      final hasil = await ApiClient.instance.aksi(aksi, body);
-      _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
+      // Tanpa 'id' berarti baris BARU -> siapkan id sementaranya.
+      final baru = !hapusLokal && (body['id'] == null || '${body['id']}'.isEmpty);
+      final idLokal = baru ? MasterOffline.idSementaraBaru() : null;
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: aksi,
+        body: body,
+        kunci: kunci,
+        cacheKey: cacheKey,
+        rowLokal: {
+          ...(rowLokal ?? body),
+          if (idLokal != null) 'id': idLokal,
+        },
+        hapusLokal: hapusLokal,
+        idLokal: idLokal,
+        entitas: entitas,
+      );
+      if (hasil['offline'] != true) {
+        _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
+      }
       await _muat();
       return true;
     } catch (e) {
@@ -815,6 +835,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     await _kirim(
       'kode_akun_bank_simpan',
       payload,
+      entitas: 'bank',
       kunci: ubah
           ? 'kode_akun_bank:${bank['id']}'
           : 'kode_akun_bank:baru:${DateTime.now().microsecondsSinceEpoch}',
@@ -885,6 +906,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     await _kirim(
       'kode_akun_jenis_transaksi_simpan',
       payload,
+      entitas: 'jenis_transaksi',
       kunci: ubah
           ? 'kode_akun_jt:${jenis['id']}'
           : 'kode_akun_jt:baru:${DateTime.now().microsecondsSinceEpoch}',
@@ -930,6 +952,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     await _kirim(
       'kode_akun_grup_simpan',
       payload,
+      entitas: 'grup_akun',
       kunci: ubah
           ? 'kode_akun_grup:${grup['id']}'
           : 'kode_akun_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
@@ -938,7 +961,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   }
 
   Future<void> _hapus(String aksi, Object? id, String label,
-      {String? kunci, String? cacheKey}) async {
+      {required String kunci, required String cacheKey}) async {
     if (id == null) return;
     if (!await _konfirmasi('Hapus data ini?',
         '"$label" akan dihapus permanen. Data yang sudah dipakai transaksi akan ditolak server.')) {

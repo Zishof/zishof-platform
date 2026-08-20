@@ -116,7 +116,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 10,
+        version: 11,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -401,7 +401,31 @@ class CoreDb {
         // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
       }
     }
+    if (versiLama < 11) {
+      // Pemetaan id sementara -> id server utk baris master yang dibuat offline.
+      try {
+        await db.execute(_ddlIdSementara);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
+      }
+    }
   }
+
+  /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
+  ///
+  /// Kuncinya HANYA nilai id lokalnya, tanpa nama entitas: id sementara dibuat dari
+  /// pencacah waktu sehingga unik lintas entitas, dan tanpa entitas penukaran nilai di
+  /// dalam payload menjadi sederhana -- setiap bilangan negatif yang dikenal ditukar,
+  /// apa pun nama kolomnya.
+  static const _ddlIdSementara = '''
+      CREATE TABLE id_sementara (
+        id_lokal INTEGER PRIMARY KEY,
+        entitas TEXT,
+        id_server INTEGER,
+        dibuat_pada TEXT NOT NULL,
+        dipetakan_pada TEXT
+      )
+    ''';
 
   static const _ddlOutboxIs = '''
       CREATE TABLE outbox_is (
@@ -541,6 +565,7 @@ class CoreDb {
     await db.execute(_ddlOutboxIs);
     await db.execute(_ddlTokoAktifAkun);
     await db.execute(_ddlOutboxMaster);
+    await db.execute(_ddlIdSementara);
   }
 
   /// Pilihan toko terakhir per kombinasi server+akun. Penyimpanan ini sengaja
@@ -692,6 +717,79 @@ class CoreDb {
         'UPDATE outbox_master SET percobaan = COALESCE(percobaan,0) + 1,'
         ' pesan_error = ? WHERE id = ?',
         [pesan, id]);
+  }
+
+
+  // ======================== ID SEMENTARA (OFFLINE) ========================
+  // Lihat _ddlIdSementara. Alurnya: catat() saat baris dibuat offline ->
+  // petakan() begitu server memberi id sungguhan -> cari()/belumDipetakan()
+  // dipakai MasterOffline saat menukar rujukan sebelum mengirim antrean.
+
+  /// Catat id sementara yang baru dipakai satu baris master offline.
+  Future<void> idSementaraCatat(int idLokal, String entitas) async {
+    final database = await db;
+    await database.insert(
+      'id_sementara',
+      {
+        'id_lokal': idLokal,
+        'entitas': entitas,
+        'dibuat_pada': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Simpan hasil penukaran setelah baris pembuatnya berhasil terkirim.
+  Future<void> idSementaraPetakan(int idLokal, int idServer) async {
+    final database = await db;
+    await database.update(
+      'id_sementara',
+      {
+        'id_server': idServer,
+        'dipetakan_pada': DateTime.now().toIso8601String(),
+      },
+      where: 'id_lokal = ?',
+      whereArgs: [idLokal],
+    );
+  }
+
+  /// Id server untuk satu id sementara, atau null bila baris pembuatnya belum
+  /// terkirim (rujukan yang memakainya HARUS ditahan dulu).
+  Future<int?> idSementaraCari(int idLokal) async {
+    final database = await db;
+    final hasil = await database.query('id_sementara',
+        columns: ['id_server'], where: 'id_lokal = ?', whereArgs: [idLokal], limit: 1);
+    if (hasil.isEmpty) return null;
+    return (hasil.first['id_server'] as num?)?.toInt();
+  }
+
+  /// Seluruh pemetaan yang sudah selesai -- dipakai menukar rujukan secara borongan.
+  Future<Map<int, int>> idSementaraTerpetakan() async {
+    final database = await db;
+    final hasil = await database.query('id_sementara',
+        columns: ['id_lokal', 'id_server'], where: 'id_server IS NOT NULL');
+    return {
+      for (final r in hasil)
+        (r['id_lokal'] as num).toInt(): (r['id_server'] as num).toInt(),
+    };
+  }
+
+  /// Berapa baris yang masih menunggu id server (indikator + pagar pengiriman).
+  Future<int> jumlahIdSementaraTertunda() async {
+    final database = await db;
+    final hasil = await database.rawQuery(
+        'SELECT COUNT(*) AS n FROM id_sementara WHERE id_server IS NULL');
+    return (hasil.first['n'] as int?) ?? 0;
+  }
+
+  /// Bersihkan pemetaan lama yang sudah tidak dirujuk siapa pun.
+  Future<void> idSementaraBersihkan({int simpanHari = 30}) async {
+    final database = await db;
+    final batas = DateTime.now()
+        .subtract(Duration(days: simpanHari))
+        .toIso8601String();
+    await database.delete('id_sementara',
+        where: 'id_server IS NOT NULL AND dipetakan_pada < ?', whereArgs: [batas]);
   }
 
   Future<int> jumlahOutboxMasterPending() async {

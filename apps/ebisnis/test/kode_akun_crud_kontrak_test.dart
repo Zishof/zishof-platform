@@ -59,13 +59,14 @@ void main() {
     expect(source, contains("'0' * _panjangKodeAnak"));
   });
 
-  test('baca cache-dulu, tetapi mutasi bagan akun tetap online-only', () {
+  test('baca cache-dulu; mutasi lokal-dulu dgn id sementara', () {
     // Membaca offline aman dan membuat layar tetap terbuka saat jaringan mati.
     expect(source, contains('MasterOffline.daftarCacheDulu('));
-    // Spec offline 13.3: "perubahan rekening/harga sensitif" wajib online -- akun yang
-    // baru muncul setelah sinkronisasi membuat jurnal mengacu ke akun tak dikenal.
-    expect(source, isNot(contains('prosesSimpanMaster(')));
-    expect(source, contains('ONLINE-ONLY'));
+    // Mutasi ditulis lokal dulu; keberatan spec 13.3 (jurnal mengacu akun tak
+    // dikenal) ditangani id sementara yang ditukar saat sinkron.
+    expect(source, contains('prosesSimpanMaster('));
+    expect(source, contains('MasterOffline.idSementaraBaru()'));
+    expect(source, contains('idLokal:'));
   });
 
   test('menu akuntansi digerbangi kunci fail-closed di kedua platform', () {

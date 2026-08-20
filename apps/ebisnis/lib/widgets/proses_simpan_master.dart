@@ -32,6 +32,11 @@ Future<Map<String, dynamic>> prosesSimpanMaster(
   Map<String, dynamic>? rowLokal,
   bool hapusLokal = false,
   Duration batasTungguKirim = const Duration(seconds: 6),
+  /// Id SEMENTARA (negatif) untuk baris BARU yang dibuat offline. Diteruskan ke
+  /// antrean supaya pasangannya dengan id server tercatat begitu terkirim, dan
+  /// baris lain yang menunjuknya ikut ditukar saat sinkron.
+  int? idLokal,
+  String entitas = 'master',
 }) async {
   final hasil = await showDialog<_HasilProses>(
     context: context,
@@ -44,6 +49,8 @@ Future<Map<String, dynamic>> prosesSimpanMaster(
       rowLokal: rowLokal,
       hapusLokal: hapusLokal,
       batasTungguKirim: batasTungguKirim,
+      idLokal: idLokal,
+      entitas: entitas,
     ),
   );
   if (hasil == null) {
@@ -68,6 +75,8 @@ class _DialogProsesSimpan extends StatefulWidget {
   final String aksi;
   final Map<String, dynamic> body;
   final String? kunci;
+  final int? idLokal;
+  final String entitas;
   final String? cacheKey;
   final Map<String, dynamic>? rowLokal;
   final bool hapusLokal;
@@ -77,6 +86,8 @@ class _DialogProsesSimpan extends StatefulWidget {
     required this.aksi,
     required this.body,
     required this.kunci,
+    required this.idLokal,
+    required this.entitas,
     required this.cacheKey,
     required this.rowLokal,
     required this.hapusLokal,
@@ -107,6 +118,8 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
         cacheKey: widget.cacheKey,
         rowLokal: widget.rowLokal,
         hapusLokal: widget.hapusLokal,
+        idLokal: widget.idLokal,
+        entitas: widget.entitas,
       );
       if (!mounted) return;
       setState(() => _lokalSelesai = true);

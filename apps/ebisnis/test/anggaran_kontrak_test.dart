@@ -97,10 +97,12 @@ void main() {
     expect(layar, contains('_cachePenggunaan'));
     // Baris DAUN (penggunaan anggaran) aman diantre: itemnya sudah ada di server.
     expect(layar, contains('prosesSimpanMaster('));
-    // ITEM anggaran ONLINE-ONLY: id-nya dirujuk baris penggunaan dan menjadi dasar
-    // posting, jadi id lokal yang belum ada di server merusak keduanya.
+    // ITEM anggaran juga lokal-dulu, aman karena id sementaranya ditukar saat
+    // sinkron dan baris penggunaan yang menunjuknya ditahan sampai itemnya terkirim.
     expect(layar, contains("_kirimItem('anggaran_item_simpan'"));
     expect(layar, contains("_kirimItem('anggaran_item_hapus'"));
+    expect(layar, contains('MasterOffline.idSementaraBaru()'));
+    expect(layar, contains("entitas: 'anggaran_item'"));
     // "Buat Revisi Baru" dihitung server (menyalin seluruh pohon).
     expect(layar, contains("_kirimServer('anggaran_revisi_baru'"));
   });
