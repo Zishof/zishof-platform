@@ -186,6 +186,12 @@ class _IsiArtikel extends StatelessWidget {
           // Dua diagram khusus akuntansi: siklus dari transaksi sampai laporan, dan
           // aturan debet/kredit. Hanya tampil di menu akuntansi supaya halaman bantuan
           // menu lain tidak jadi panjang tanpa alasan.
+          // Alur opname saldo voucher; hanya di halaman Pelanggan/Anggota tempat
+          // tombol Penyesuaian Saldo berada.
+          if (artikel.id == 'anggota') ...[
+            const _DiagramPenyesuaianSaldo(),
+            const SizedBox(height: 20),
+          ],
           if (const [
             'jurnalUmum',
             'postingHpp',
@@ -312,6 +318,82 @@ class _WorkflowDiagram extends StatelessWidget {
 /// Dibuat karena pertanyaan paling sering dari pengguna toko adalah "kenapa angka di
 /// laporan belum berubah padahal transaksinya sudah ada": jawabannya hampir selalu ada
 /// pada tahap POSTING yang belum dijalankan. Diagram ini menegaskan posisi tahap itu.
+/// Alur Penyesuaian Saldo (opname saldo voucher) — dibuat karena pertanyaan tersering
+/// pengguna toko adalah "kalau saldonya saya betulkan, apakah riwayat topup hilang?".
+/// Diagram ini menegaskan bahwa saldo TIDAK ditimpa: yang dibuat adalah satu mutasi
+/// koreksi senilai selisihnya.
+class _DiagramPenyesuaianSaldo extends StatelessWidget {
+  const _DiagramPenyesuaianSaldo();
+
+  static const tahap = <(String, String, IconData)>[
+    ('1. Telusuri dulu', 'Buka Mutasi Voucher anggota — sering kali selisih ternyata transaksi yang belum tersinkron, bukan salah catat',
+        Icons.search),
+    ('2. Baca saldo sistem', 'Aplikasi menghitung ulang: seluruh topup dikurangi seluruh pemakaian',
+        Icons.calculate_outlined),
+    ('3. Isi saldo seharusnya', 'Angka yang benar menurut pemeriksaan Anda — sejajar dengan "stok fisik" pada opname barang',
+        Icons.edit_outlined),
+    ('4. Selisih & alasan', 'Selisih dihitung otomatis; alasan wajib diisi beserta buktinya',
+        Icons.rule),
+    ('5. Mutasi koreksi dibuat', 'Sistem menambah SATU baris mutasi senilai selisih — riwayat lama tetap utuh, tidak ada yang ditimpa',
+        Icons.playlist_add_check),
+    ('6. Tercatat & dapat dilaporkan', 'Saldo langsung cocok; catatannya muncul di Laporan-Laporan > Deposit / Saldo',
+        Icons.assessment_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        color: const Color(0xFFEFF3FB),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Diagram alur Penyesuaian Saldo (opname saldo voucher)',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+                'Penyesuaian saldo bekerja seperti stok opname pada barang, hanya objeknya saldo. '
+                'Perhatikan tahap 5: saldo tidak pernah ditimpa.'),
+            const SizedBox(height: 14),
+            ...tahap.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFC3D2EA))),
+                      child: Icon(t.$3, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t.$1,
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text(t.$2,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ]),
+                    ),
+                  ]),
+                )),
+            const Divider(height: 20),
+            const Text(
+                'Topup vs Penyesuaian: pakai Topup bila anggota benar-benar menyetor uang, '
+                'pakai Penyesuaian bila catatannya yang perlu dibetulkan. Keduanya sama-sama '
+                'menambah saldo, tetapi artinya berbeda bagi pemeriksa.',
+                style: TextStyle(fontStyle: FontStyle.italic)),
+          ]),
+        ),
+      );
+}
+
 class _DiagramSiklusAkuntansi extends StatelessWidget {
   const _DiagramSiklusAkuntansi();
 

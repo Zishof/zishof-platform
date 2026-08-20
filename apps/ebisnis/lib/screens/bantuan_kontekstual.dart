@@ -118,7 +118,58 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Buku mutasi'
       ],
       objekUtama: 'profil dan rekening anggota',
-      hasilAkhir: 'data anggota serta saldo yang akurat dan dapat ditelusuri'),
+      hasilAkhir: 'data anggota serta saldo yang akurat dan dapat ditelusuri',
+      istilah: [
+        'Saldo voucher/deposit = uang milik anggota yang dititipkan di toko dan dipakai untuk belanja',
+        'Saldo menurut sistem = hasil hitungan aplikasi, yaitu seluruh topup dikurangi seluruh pemakaian; angkanya TIDAK disimpan sebagai satu kolom melainkan dihitung ulang tiap kali dibuka',
+        'Saldo seharusnya = saldo yang benar menurut hasil pemeriksaan petugas, sejajar dengan "stok fisik" pada opname barang',
+        'Penyesuaian Saldo = opname saldo: membandingkan saldo sistem dengan saldo seharusnya lalu mencatat selisihnya beserta alasannya',
+        'Selisih = saldo seharusnya dikurangi saldo sistem; positif berarti saldo anggota ditambah, negatif berarti dikurangi',
+        'Topup = penambahan saldo karena anggota menyetor uang; berbeda dari penyesuaian yang sifatnya mengoreksi catatan',
+        'Mutasi voucher = daftar setiap penambahan dan pemakaian saldo, termasuk baris koreksi hasil penyesuaian',
+      ],
+      catatanPenting: [
+        'Penyesuaian Saldo bukan pengganti Topup. Topup dipakai ketika anggota benar-benar menyetor uang; penyesuaian dipakai ketika catatan saldo tidak cocok dengan kenyataan, misalnya topup terlanjur dientri dua kali',
+        'Alasan penyesuaian wajib diisi dan sebaiknya menyebut buktinya, misalnya "koreksi topup ganda 19 Agustus nota TP-0912" — inilah satu-satunya keterangan yang tersisa ketika koreksi ini ditanyakan berbulan-bulan kemudian',
+        'Saldo tidak ditimpa. Sistem membuat satu baris mutasi senilai selisihnya, sehingga riwayat topup dan pemakaian yang lama tetap utuh dan dapat ditelusuri',
+        'Saldo sistem dibaca ulang dari server saat menyimpan, jadi angka di layar yang sudah lama terbuka tidak akan ikut terpakai; bila ada kasir lain yang baru saja menambah topup, penyesuaian Anda tetap dihitung dari saldo terbaru',
+        'Yang boleh menyesuaikan saldo hanya pengguna yang berhak menambah dan mengubah topup/deposit. Bila tombolnya tidak terlihat, itu memang hak akses, bukan aplikasi rusak',
+        'Periksa dulu tab Mutasi Voucher sebelum menyesuaikan. Sering kali selisih yang dikira kesalahan sistem ternyata transaksi yang belum tersinkron atau belanja yang belum dibaca',
+      ],
+      tanyaJawabTambahan: [
+        [
+          'Apa itu Penyesuaian Saldo dan kapan saya memakainya?',
+          'Penyesuaian Saldo adalah opname untuk saldo voucher anggota, cara kerjanya sama seperti Stok Opname pada barang: aplikasi menampilkan saldo menurut catatannya, Anda mengisi saldo yang seharusnya, lalu selisihnya dicatat beserta alasannya. Pakai fitur ini hanya ketika catatan saldo memang tidak cocok dengan kenyataan — misalnya topup terlanjur dientri dua kali, setoran tercatat pada anggota yang salah, atau saldo awal saat pertama memakai sistem belum lengkap. Bila anggota memang menyetor uang, gunakan Topup, bukan penyesuaian.',
+        ],
+        [
+          'Di mana tombolnya dan mengapa saya tidak melihatnya?',
+          'Tombol "Penyesuaian Saldo" ada di halaman Pelanggan, tab Saldo Voucher, sebaris dengan tombol Preview/PDF/Excel. Tombol itu hanya muncul untuk pengguna yang berhak menambah dan mengubah topup/deposit. Jika tidak terlihat, mintalah admin mengaktifkan hak "Boleh Entry Topup" pada peran Anda. Sekadar catatan: menyembunyikan tombol bukan satu-satunya pengaman — server menolak juga bila hak itu tidak ada.',
+        ],
+        [
+          'Apakah saldo lama akan hilang atau tertimpa?',
+          'Tidak. Saldo anggota tidak disimpan sebagai satu angka yang bisa ditimpa, melainkan dihitung dari seluruh mutasinya. Penyesuaian membuat SATU baris mutasi baru senilai selisih — positif bila saldo perlu ditambah, negatif bila perlu dikurangi. Seluruh topup dan pemakaian sebelumnya tetap tercatat apa adanya, dan koreksinya terlihat jelas di tab Mutasi Voucher dengan penanda [Penyesuaian Saldo].',
+        ],
+        [
+          'Bagaimana urutan kerja yang benar?',
+          'Pertama, buka tab Mutasi Voucher anggota tersebut dan telusuri dulu penyebab selisihnya; sering kali ada transaksi yang belum tersinkron. Kedua, bila memang perlu dikoreksi, tekan Penyesuaian Saldo lalu pilih anggotanya. Ketiga, baca "Saldo menurut sistem" yang muncul. Keempat, isi "Saldo seharusnya" sesuai hasil pemeriksaan. Kelima, periksa angka Selisih beserta keterangan arah koreksinya (ditambah atau dikurangi). Keenam, tulis alasan yang menyebut bukti. Terakhir, simpan dan pastikan saldo di daftar sudah berubah.',
+        ],
+        [
+          'Tombol Simpan tidak bisa ditekan, apa yang kurang?',
+          'Tombol baru aktif bila empat hal terpenuhi: anggota sudah dipilih, saldo sistem sudah termuat, kolom saldo seharusnya sudah diisi, dan alasan sudah ditulis. Selain itu, bila saldo yang Anda masukkan sama persis dengan saldo sistem, penyesuaian ditolak karena memang tidak ada yang perlu dikoreksi.',
+        ],
+        [
+          'Saya salah memasukkan angka penyesuaian, bagaimana memperbaikinya?',
+          'Jangan menghapus catatannya. Buat penyesuaian baru dengan saldo yang benar, dan pada alasannya sebutkan bahwa ini mengoreksi penyesuaian sebelumnya. Dengan begitu riwayatnya tetap runtut dan pemeriksa dapat melihat apa yang terjadi, sama seperti prinsip koreksi pada jurnal akuntansi.',
+        ],
+        [
+          'Di mana saya bisa melihat riwayat penyesuaian?',
+          'Ada tiga tempat. Riwayat singkat tampil langsung di bagian bawah dialog Penyesuaian Saldo. Untuk laporan yang bisa dicetak dan diekspor, buka menu Laporan-Laporan kategori "Deposit / Saldo": pilih "Rincian Penyesuaian Saldo (Opname Voucher)" untuk melihat satu baris per penyesuaian, atau "Rekap Penyesuaian Saldo per Anggota" untuk melihat siapa yang paling sering disesuaikan beserta total selisihnya. Selain itu, mutasi koreksinya sendiri juga terlihat di tab Mutasi Voucher anggota.',
+        ],
+        [
+          'Apakah penyesuaian saldo memengaruhi laporan keuangan?',
+          'Saldo voucher adalah titipan uang anggota, sehingga penyesuaiannya mengubah jumlah kewajiban toko kepada anggota. Angkanya langsung terlihat pada laporan saldo dan mutasi voucher. Untuk pembukuan resminya, ikuti kebijakan bagian keuangan: penyesuaian bernilai besar sebaiknya disertai jurnal koreksi lewat menu Akuntansi > Jurnal Umum agar buku besar ikut mencerminkannya.',
+        ],
+      ]),
   'produk': SpesifikasiBantuanMenu(
       judul: 'Produk',
       tujuan:
