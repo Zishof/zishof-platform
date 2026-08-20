@@ -212,6 +212,39 @@ class _LoginScreenState extends State<LoginScreen> {
             fontSize: 12,
           ),
         ),
+        // Kaki kartu khusus varian yang menyediakan teks hak cipta (Petra),
+        // mengikuti tampilan versi web-nya.
+        if (AppVariant.hakCiptaLogin.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Divider(color: warnaSubjudul.withValues(alpha: 0.25), height: 1),
+          const SizedBox(height: 12),
+          Text(
+            AppVariant.hakCiptaLogin,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: warnaSubjudul, fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _warnaLatar.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _warnaLatar.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.shield_outlined, size: 13, color: _warnaLatar),
+                  const SizedBox(width: 6),
+                  Text('Sistem Informasi Terpadu & Terenkripsi',
+                      style: TextStyle(color: _warnaLatar, fontSize: 11)),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
