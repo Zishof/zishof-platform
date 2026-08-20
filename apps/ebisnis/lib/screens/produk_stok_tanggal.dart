@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:core_db/core_db.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
@@ -26,6 +29,13 @@ class StokPerTanggal {
   /// [tanggal] null berarti stok terkini (server memakai batas hari ini).
   /// [kataKunci] diteruskan sebagai `qProduk` supaya hasil ekspor SAMA dengan
   /// yang tersaring di layar.
+  /// Kunci cache dibentuk dari SELURUH parameter yang memengaruhi hasil,
+  /// supaya kombinasi tanggal + kata kunci yang berbeda tidak saling menimpa.
+  static String _kunciCache(DateTime? tanggal, String kataKunci) =>
+      'laporan:stok_per_tanggal'
+      ':${tanggal == null ? "terkini" : _fmtTgl.format(tanggal)}'
+      ':${kataKunci.trim().isEmpty ? "-" : kataKunci.trim().toLowerCase()}';
+
   static Future<HasilStokTanggal> ambil({
     DateTime? tanggal,
     String kataKunci = '',
@@ -35,7 +45,33 @@ class StokPerTanggal {
       if (tanggal != null) 'tglSampai': _fmtTgl.format(tanggal),
       if (kataKunci.trim().isNotEmpty) 'qProduk': kataKunci.trim(),
     };
-    final hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+    final kunci = _kunciCache(tanggal, kataKunci);
+
+    Map<String, dynamic> hasil;
+    var dariCache = false;
+    DateTime? disimpanPada;
+    try {
+      hasil = await ApiClient.instance.aksi('laporan_jalankan', payload);
+      // Simpan salinan supaya filter tanggal & ekspor tetap bisa dipakai saat
+      // jaringan putus. Stempel waktu ikut disimpan DI DALAM amplop agar
+      // pemuatan berikutnya bisa memberi tahu KAPAN salinan ini dibuat.
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...hasil,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
+    } on ApiException catch (e) {
+      // Hanya gangguan jaringan yang boleh jatuh ke salinan. Penolakan server
+      // (mis. hak akses) TIDAK disamarkan jadi data lama -- itu akan menutupi
+      // masalah sebenarnya.
+      final tersimpan =
+          e.offline ? await CoreDb.instance.ambilCacheReferensi(kunci) : null;
+      if (tersimpan == null) rethrow;
+      hasil = jsonDecode(tersimpan) as Map<String, dynamic>;
+      dariCache = true;
+      disimpanPada = DateTime.tryParse('${hasil['_disimpanPada'] ?? ''}');
+    }
 
     final kolom = ((hasil['kolom'] as List?) ?? [])
         .map((e) => '${(e is Map ? (e['judul'] ?? e['nama'] ?? e) : e)}')
@@ -76,6 +112,8 @@ class StokPerTanggal {
       baris: baris,
       stokPerKode: perKode,
       tanggal: tanggal,
+      dariCache: dariCache,
+      disimpanPada: disimpanPada,
     );
   }
 
@@ -97,11 +135,19 @@ class HasilStokTanggal {
 
   final DateTime? tanggal;
 
+  /// true bila angka ini berasal dari salinan tersimpan (jaringan sedang
+  /// terputus), bukan dari server. Layar WAJIB menampilkannya -- stok lama
+  /// yang disangka terkini lebih berbahaya daripada tidak ada angka.
+  final bool dariCache;
+  final DateTime? disimpanPada;
+
   const HasilStokTanggal({
     required this.kolom,
     required this.baris,
     required this.stokPerKode,
     this.tanggal,
+    this.dariCache = false,
+    this.disimpanPada,
   });
 
   bool get kosong => baris.isEmpty;

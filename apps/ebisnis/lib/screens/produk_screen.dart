@@ -331,7 +331,18 @@ class _ProdukScreenState extends State<ProdukScreen> {
     final tgl = _tanggalStok == null
         ? 'Stok terkini'
         : 'Stok per ${DateFormat('dd/MM/yyyy').format(_tanggalStok!)}';
-    return k.isEmpty ? tgl : '$tgl  -  pencarian "$k"';
+    var teks = k.isEmpty ? tgl : '$tgl  -  pencarian "$k"';
+    // Laporan yang dicetak/diekspor ikut menyandang keterangannya: berkas
+    // beredar lepas dari layar, dan pembacanya tidak punya cara lain untuk
+    // tahu angkanya berasal dari salinan lama.
+    final c = _stokTanggal;
+    if (c != null && c.dariCache) {
+      teks += c.disimpanPada == null
+          ? '  -  dari salinan tersimpan (jaringan terputus)'
+          : '  -  dari salinan tersimpan '
+              '${DateFormat('dd/MM/yyyy HH:mm').format(c.disimpanPada!)}';
+    }
+    return teks;
   }
 
   Future<void> _aturAtauPreviewLaporan({required bool preview}) async {
@@ -420,6 +431,37 @@ class _ProdukScreenState extends State<ProdukScreen> {
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2)),
+        // Angka dari salinan tersimpan WAJIB ditandai: stok lama yang disangka
+        // terkini lebih berbahaya daripada tidak ada angka sama sekali.
+        if (_stokTanggal?.dariCache == true)
+          Tooltip(
+            message: _stokTanggal?.disimpanPada == null
+                ? 'Angka dari salinan tersimpan (jaringan terputus).'
+                : 'Salinan tersimpan '
+                    '${DateFormat('dd/MM/yyyy HH:mm').format(_stokTanggal!.disimpanPada!)}.',
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border:
+                    Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.cloud_off_outlined,
+                    size: 14, color: AppColors.warning),
+                const SizedBox(width: 6),
+                Text(
+                  _stokTanggal?.disimpanPada == null
+                      ? 'Salinan tersimpan'
+                      : 'Salinan ${DateFormat('dd/MM HH:mm').format(_stokTanggal!.disimpanPada!)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.warning),
+                ),
+              ]),
+            ),
+          ),
         const SizedBox(width: 4),
         OutlinedButton.icon(
           onPressed: sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
