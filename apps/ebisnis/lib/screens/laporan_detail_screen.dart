@@ -445,7 +445,14 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       // Dimensi baris dikenali dari LABEL kolomnya, lalu dikirim ke aksi
       // laporan_rincian_transaksi supaya popup menampilkan NOTA-nya, bukan
       // sekadar mengulang isi baris ringkasan (permintaan 21-08-2026).
-      final dimensi = _dimensiBaris(kolom, baris);
+      // Rincian transaksi butuh RENTANG TANGGAL. Laporan yang tidak punya
+      // filter tanggal (mis. stok, data master) tidak mengirimnya, dan
+      // memaksakan permintaan hanya menghasilkan pesan error membingungkan.
+      final adaRentang =
+          '${widget.payloadFilter['tglMulai'] ?? ''}'.isNotEmpty &&
+              '${widget.payloadFilter['tglSampai'] ?? ''}'.isNotEmpty;
+      final dimensi =
+          adaRentang ? _dimensiBaris(kolom, baris) : const <String, dynamic>{};
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
@@ -474,6 +481,15 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                                   : '',
                               style: const TextStyle(fontSize: 12))),
                     ]),
+                  ),
+                if (dimensi.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 10),
+                    child: Text(
+                        'Angka ini tidak berasal dari transaksi penjualan '
+                        '(mis. stok atau data master), sehingga tidak ada '
+                        'nota penyusun yang bisa ditampilkan.',
+                        style: TextStyle(fontSize: 11)),
                   ),
                 if (dimensi.isNotEmpty) ...[
                   const Divider(height: 22),
