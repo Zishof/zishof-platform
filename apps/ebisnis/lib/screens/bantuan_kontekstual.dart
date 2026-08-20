@@ -1204,6 +1204,17 @@ ArtikelBantuan artikelBantuanUntukMenu(
                 'anjuran administratif: masing-masing berpengaruh langsung pada angka '
                 'yang dibaca pimpinan. Bila ragu, simpan sebagai draf terlebih dahulu, '
                 'mintalah bagian keuangan memeriksa, baru lanjutkan ke tahap berikutnya.'),
+      // BARU 20-08-2026: tanyaJawabTambahan sudah terisi untuk sejumlah menu sejak lama,
+      // tetapi tidak pernah ikut dirender sehingga isinya tidak pernah sampai ke pengguna.
+      // Kini ditampilkan sebagai bagian tersendiri, sekaligus menjadi sasaran pilihan
+      // "Tanya Jawab" pada tombol bantuan mengambang.
+      if (s.tanyaJawabTambahan.isNotEmpty)
+        BagianBantuan(
+            'Tanya Jawab halaman ini',
+            s.tanyaJawabTambahan
+                .where((qa) => qa.length >= 2)
+                .map((qa) => 'Tanya: ${qa[0]} Jawab: ${qa[1]}')
+                .join(' ')),
       ...platform.bagian,
     ],
   );
