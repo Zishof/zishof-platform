@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../api_client.dart';
+import '../../sesi.dart';
 import '../../services/dynamic_report.dart';
 import '../../services/master_offline.dart';
 import '../../theme/app_colors.dart';
@@ -265,6 +267,21 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     );
   }
 
+  /// Buka dialog penyesuaian saldo. [baris] boleh diisi bila dipanggil dari satu baris
+  /// anggota, sehingga membernya langsung terpilih.
+  Future<void> _bukaPenyesuaian([Map<String, dynamic>? baris]) async {
+    final berubah = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogPenyesuaianSaldo(
+        idAnggota: baris == null ? null : baris['idAnggota'],
+        namaAnggota: baris == null ? null : '${baris['namaAnggota'] ?? ''}',
+        daftarAnggota: _saldoPerAnggota,
+      ),
+    );
+    if (berubah == true) await _muat();
+  }
+
   @override
   Widget build(BuildContext context) {
     final daftar = _saldoPerAnggota;
@@ -312,6 +329,14 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
               onPressed: _menyiapkanLaporan ? null : () => _ekspor('word'),
               icon: const Icon(Icons.description_outlined, size: 18),
               label: const Text('Word')),
+          // Penyesuaian Saldo = "stok opname" untuk saldo voucher. Hanya tampil bagi
+          // pengguna yang boleh menambah & mengubah topup/deposit; server menegakkan
+          // gerbang yang sama (Tbmrole.bolehEntryTopup), jadi ini murni penyaring tampilan.
+          if (Sesi.instance.bolehEntryTopup)
+            FilledButton.icon(
+                onPressed: _memuat ? null : () => _bukaPenyesuaian(),
+                icon: const Icon(Icons.rule, size: 18),
+                label: const Text('Penyesuaian Saldo')),
           IconButton(
               onPressed: _memuat ? null : _muat,
               tooltip: 'Muat ulang',
@@ -400,5 +425,351 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                       ),
       ),
     ]);
+  }
+}
+
+
+/// Dialog **Penyesuaian Saldo** — opname saldo voucher/deposit member.
+///
+/// Alurnya sengaja dibuat sama dengan Stok Opname barang: pilih objeknya, sistem menampilkan
+/// nilai menurut catatan, petugas mengisi nilai yang seharusnya, selisih dihitung otomatis dan
+/// wajib diberi alasan. Bedanya hanya cara koreksi diterapkan — saldo member dihitung dari
+/// mutasi, jadi server membuat satu baris deposit senilai selisihnya (positif menambah, negatif
+/// mengurangi) supaya riwayat mutasi tetap utuh.
+///
+/// Saldo sistem SELALU dibaca ulang dari server saat member dipilih dan diperiksa lagi saat
+/// menyimpan, sehingga angka di layar yang sudah basi tidak akan ikut terpakai.
+class _DialogPenyesuaianSaldo extends StatefulWidget {
+  const _DialogPenyesuaianSaldo({
+    this.idAnggota,
+    this.namaAnggota,
+    required this.daftarAnggota,
+  });
+
+  final Object? idAnggota;
+  final String? namaAnggota;
+  final List<Map<String, dynamic>> daftarAnggota;
+
+  @override
+  State<_DialogPenyesuaianSaldo> createState() => _DialogPenyesuaianSaldoState();
+}
+
+class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
+  static final _fmtRp =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  final _saldoFisik = TextEditingController();
+  final _keterangan = TextEditingController();
+  final _cariAnggota = TextEditingController();
+
+  Object? _idAnggota;
+  String _namaAnggota = '';
+  double? _saldoSistem;
+  bool _memuatSaldo = false;
+  bool _menyimpan = false;
+  String? _pesan;
+  List<Map<String, dynamic>> _riwayat = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _idAnggota = widget.idAnggota;
+    _namaAnggota = widget.namaAnggota ?? '';
+    if (_idAnggota != null) _cekSaldo();
+    _muatRiwayat();
+  }
+
+  @override
+  void dispose() {
+    _saldoFisik.dispose();
+    _keterangan.dispose();
+    _cariAnggota.dispose();
+    super.dispose();
+  }
+
+  Future<void> _muatRiwayat() async {
+    try {
+      final hasil =
+          await ApiClient.instance.aksi('penyesuaian_saldo_list', {'limit': 25});
+      if (!mounted) return;
+      setStateIfMounted(() => _riwayat =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+    } catch (_) {
+      // Riwayat hanya pelengkap; kegagalannya tidak boleh menghalangi penyesuaian.
+    }
+  }
+
+  Future<void> _cekSaldo() async {
+    if (_idAnggota == null) return;
+    setStateIfMounted(() {
+      _memuatSaldo = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('penyesuaian_saldo_cek', {'id_member': '$_idAnggota'});
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _saldoSistem = ((hasil['saldoSistem'] as num?) ?? 0).toDouble();
+        final nama = '${hasil['namaMember'] ?? ''}';
+        if (nama.isNotEmpty) _namaAnggota = nama;
+        _memuatSaldo = false;
+      });
+    } catch (e) {
+      setStateIfMounted(() {
+        _pesan = 'Gagal membaca saldo: $e';
+        _memuatSaldo = false;
+      });
+    }
+  }
+
+  double get _fisik =>
+      double.tryParse(_saldoFisik.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+  double get _selisih => _saldoSistem == null ? 0 : _fisik - _saldoSistem!;
+  bool get _siap =>
+      _idAnggota != null &&
+      _saldoSistem != null &&
+      _saldoFisik.text.trim().isNotEmpty &&
+      _selisih.abs() >= 0.005 &&
+      _keterangan.text.trim().isNotEmpty;
+
+  Future<void> _simpan() async {
+    setStateIfMounted(() {
+      _menyimpan = true;
+      _pesan = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('penyesuaian_saldo_simpan', {
+        'id_member': '$_idAnggota',
+        'saldo_fisik': '$_fisik',
+        'keterangan': _keterangan.text.trim(),
+      });
+      if (!mounted) return;
+      if ('${hasil['status']}' != '00') {
+        setStateIfMounted(() =>
+            _pesan = '${hasil['description'] ?? 'Penyesuaian ditolak server.'}');
+        return;
+      }
+      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${hasil['description'] ?? 'Saldo disesuaikan.'}')));
+    } catch (e) {
+      setStateIfMounted(() => _pesan = 'Gagal menyimpan: $e');
+    } finally {
+      setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kunci = _cariAnggota.text.trim().toLowerCase();
+    final pilihan = kunci.isEmpty
+        ? widget.daftarAnggota.take(30).toList()
+        : widget.daftarAnggota
+            .where((r) => '${r['namaAnggota']}'.toLowerCase().contains(kunci))
+            .take(30)
+            .toList();
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              const Expanded(
+                  child: Text('Penyesuaian Saldo (Opname Saldo Voucher)',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              IconButton(
+                  onPressed:
+                      _menyimpan ? null : () => Navigator.of(context).pop(false),
+                  icon: const Icon(Icons.close)),
+            ]),
+            const SizedBox(height: 4),
+            const Text(
+                'Isi saldo yang SEHARUSNYA menurut hasil pemeriksaan. Sistem akan membuat satu '
+                'mutasi senilai selisihnya, bukan menimpa saldo, sehingga riwayat mutasi tetap utuh.'),
+            const SizedBox(height: 12),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                flex: 4,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _cariAnggota,
+                        decoration: const InputDecoration(
+                            labelText: 'Cari anggota',
+                            prefixIcon: Icon(Icons.search),
+                            isDense: true),
+                        onChanged: (_) => setStateIfMounted(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 210,
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          child: ListView.builder(
+                            itemCount: pilihan.length,
+                            itemBuilder: (_, i) {
+                              final r = pilihan[i];
+                              final terpilih = '${r['idAnggota']}' == '$_idAnggota';
+                              return ListTile(
+                                dense: true,
+                                selected: terpilih,
+                                title: Text('${r['namaAnggota'] ?? ''}',
+                                    overflow: TextOverflow.ellipsis),
+                                subtitle: Text(
+                                    'Saldo tampil: ${_fmtRp.format(r['saldoAkhir'] ?? 0)}',
+                                    style: const TextStyle(fontSize: 11)),
+                                onTap: () {
+                                  setStateIfMounted(() {
+                                    _idAnggota = r['idAnggota'];
+                                    _namaAnggota = '${r['namaAnggota'] ?? ''}';
+                                    _saldoSistem = null;
+                                    _saldoFisik.clear();
+                                  });
+                                  _cekSaldo();
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ]),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 5,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppInfoBanner(
+                        icon: Icons.person_outline,
+                        color: AppColors.primary,
+                        text: _idAnggota == null
+                            ? 'Pilih anggota di sebelah kiri.'
+                            : 'Anggota: $_namaAnggota',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        const Expanded(child: Text('Saldo menurut sistem')),
+                        _memuatSaldo
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2))
+                            : Text(
+                                _saldoSistem == null
+                                    ? '-'
+                                    : _fmtRp.format(_saldoSistem),
+                                style:
+                                    const TextStyle(fontWeight: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _saldoFisik,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.right,
+                        decoration: const InputDecoration(
+                            labelText: 'Saldo seharusnya *',
+                            isDense: true,
+                            border: OutlineInputBorder()),
+                        onChanged: (_) => setStateIfMounted(() {}),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        const Expanded(child: Text('Selisih')),
+                        Text(
+                          _saldoSistem == null ? '-' : _fmtRp.format(_selisih),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: _selisih < 0
+                                  ? AppColors.danger
+                                  : AppColors.success),
+                        ),
+                      ]),
+                      if (_saldoSistem != null && _selisih.abs() >= 0.005)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                              _selisih > 0
+                                  ? 'Saldo anggota akan DITAMBAH sebesar selisih ini.'
+                                  : 'Saldo anggota akan DIKURANGI sebesar selisih ini.',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _keterangan,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                            labelText: 'Alasan penyesuaian *',
+                            hintText: 'mis. koreksi topup ganda 19 Agustus',
+                            isDense: true,
+                            border: OutlineInputBorder()),
+                        onChanged: (_) => setStateIfMounted(() {}),
+                      ),
+                      if (_pesan != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(_pesan!,
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error)),
+                        ),
+                    ]),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            const Text('Riwayat penyesuaian terakhir',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            Expanded(
+              child: _riwayat.isEmpty
+                  ? const Center(child: Text('Belum ada penyesuaian saldo.'))
+                  : ListView.separated(
+                      itemCount: _riwayat.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final r = _riwayat[i];
+                        final selisih = ((r['selisih'] as num?) ?? 0).toDouble();
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                              '${r['namaMember'] ?? '-'} — ${_fmtRp.format(selisih)}',
+                              style: TextStyle(
+                                  color: selisih < 0
+                                      ? AppColors.danger
+                                      : AppColors.success)),
+                          subtitle: Text(
+                              '${r['waktu'] ?? ''} • ${_fmtRp.format(r['saldoSistem'] ?? 0)} '
+                              '→ ${_fmtRp.format(r['saldoFisik'] ?? 0)} • ${r['keterangan'] ?? ''}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11)),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              TextButton(
+                  onPressed:
+                      _menyimpan ? null : () => Navigator.of(context).pop(false),
+                  child: const Text('Tutup')),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _siap && !_menyimpan ? _simpan : null,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan Penyesuaian'),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
   }
 }
