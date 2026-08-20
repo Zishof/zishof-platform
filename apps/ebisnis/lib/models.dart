@@ -13,6 +13,14 @@ class Produk {
   final String kategoriNama;
   final int? kebijakanReturId;
   final String kebijakanReturNama;
+
+  /// Pemasok utama & satuan (UOM). Sebelumnya hanya bisa terisi lewat impor
+  /// Excel, sehingga katalog yang dibuat dari form Produk selalu kosong pada
+  /// kedua kolom ini dan ekspor "Daftar Barang dan Jasa" ikut kosong. Kini
+  /// keduanya dapat disunting langsung di form Produk.
+  final String pemasokNama;
+  final String satuanNama;
+
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -63,6 +71,8 @@ class Produk {
     required this.kategoriNama,
     this.kebijakanReturId,
     this.kebijakanReturNama = 'Tanpa Kebijakan Retur',
+    this.pemasokNama = '',
+    this.satuanNama = '',
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -86,6 +96,8 @@ class Produk {
         kebijakanReturId: (j['kebijakanReturId'] as num?)?.toInt(),
         kebijakanReturNama:
             (j['kebijakanReturNama'] ?? 'Tanpa Kebijakan Retur') as String,
+        pemasokNama: (j['pemasokNama'] ?? '') as String,
+        satuanNama: (j['satuanNama'] ?? '') as String,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
@@ -194,8 +206,8 @@ class CaraBayar {
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
-      masukSebagaiHutang: j['masukSebagaiHutang'] == true ||
-          j['masuk_sebagai_hutang'] == true,
+      masukSebagaiHutang:
+          j['masukSebagaiHutang'] == true || j['masuk_sebagai_hutang'] == true,
       memotongDeposit: j['memotongDeposit'] == true ||
           j['memotong_deposit'] == true ||
           j['potongSaldo'] == true ||

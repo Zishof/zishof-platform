@@ -164,8 +164,7 @@ class _ProdukScreenState extends State<ProdukScreen> {
               ? Set<String>.from(
                   katalog['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (katalog['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (katalog['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -1415,6 +1414,10 @@ class _FormProdukState extends State<_FormProduk> {
   late final TextEditingController _hargaJual;
   late final TextEditingController _stok;
   late final TextEditingController _keterangan;
+
+  /// Pemasok utama & satuan (UOM) -- lihat Produk.pemasokNama/satuanNama.
+  late final TextEditingController _pemasok;
+  late final TextEditingController _satuan;
   int? _kategoriId;
   int? _kebijakanReturId;
   bool _izinkanJualMinusStok = false;
@@ -1456,6 +1459,8 @@ class _FormProdukState extends State<_FormProduk> {
         text: p == null ? '0' : p.hargaJual.toStringAsFixed(0));
     _stok = TextEditingController(text: p == null ? '0' : p.stok.toString());
     _keterangan = TextEditingController(text: p?.keterangan ?? '');
+    _pemasok = TextEditingController(text: p?.pemasokNama ?? '');
+    _satuan = TextEditingController(text: p?.satuanNama ?? '');
     _kategoriId = p?.kategoriId;
     _kebijakanReturId = p?.kebijakanReturId ??
         (widget.kebijakanRetur.where((e) => e.bawaan).isNotEmpty
@@ -1487,6 +1492,8 @@ class _FormProdukState extends State<_FormProduk> {
     _hargaJual.dispose();
     _stok.dispose();
     _keterangan.dispose();
+    _pemasok.dispose();
+    _satuan.dispose();
     for (final b in _bahanBaku) {
       b.dispose();
     }
@@ -1677,8 +1684,7 @@ class _FormProdukState extends State<_FormProduk> {
     }
     setStateIfMounted(() => baris.mengunggah = true);
     try {
-      await MasterOffline.simpanAtauAntre(
-          'produk_foto_hapus', {'id': baris.id},
+      await MasterOffline.simpanAtauAntre('produk_foto_hapus', {'id': baris.id},
           kunci: 'produk_foto:${baris.id}');
       setStateIfMounted(() => _foto.remove(baris));
     } catch (e) {
@@ -1735,6 +1741,8 @@ class _FormProdukState extends State<_FormProduk> {
           'harga_jual': _angka(_hargaJual.text),
           'stok': _angka(_stok.text),
           'keterangan': _keterangan.text.trim(),
+          'pemasok_nama': _pemasok.text.trim(),
+          'satuan_nama': _satuan.text.trim(),
           'kategori_id': _kategoriId,
           'kebijakan_retur_id': _kebijakanReturId,
           'izinkan_jual_minus_stok': _izinkanJualMinusStok,
@@ -1870,6 +1878,30 @@ class _FormProdukState extends State<_FormProduk> {
                   AppFormTextField(
                     label: 'Barcode (opsional)',
                     controller: _barcode,
+                  ),
+                  // Pemasok & Satuan: sengaja isian bebas, bukan dropdown.
+                  // Master-nya dibuat otomatis di server bila nama belum ada,
+                  // jadi tidak perlu membuka layar master lebih dulu. Kedua
+                  // kolom ini yang mengisi "Nama Pemasok Utama" dan "Satuan"
+                  // pada ekspor Daftar Barang dan Jasa.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Nama Pemasok Utama',
+                          controller: _pemasok,
+                          hintText: 'mis. AB Grosir',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppFormTextField(
+                          label: 'Satuan',
+                          controller: _satuan,
+                          hintText: 'mis. Pcs',
+                        ),
+                      ),
+                    ],
                   ),
                   DropdownButtonFormField<int?>(
                     value: _kategoriId,
