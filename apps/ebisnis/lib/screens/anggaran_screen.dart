@@ -1,7 +1,14 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../api_client.dart';
+import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/pemilih_akun.dart';
@@ -586,6 +593,195 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     if (berhasil) await _muatRevisi();
   }
 
+  // ==================================================================== ekspor
+  // Isi berkas SELALU mengikuti tab yang sedang aktif beserta penyaringnya, sehingga
+  // yang tercetak sama persis dengan yang sedang dilihat pengguna.
+
+  String get _judulTab => _tab.index == 0
+      ? 'Rencana Bulanan'
+      : (_tab.index == 1 ? 'Realisasi' : 'Penggunaan Anggaran');
+
+  String get _konteksTeks {
+    final satker = _satkerOpsi.firstWhere(
+        (s) => (s['id'] as num?)?.toInt() == _satkerId,
+        orElse: () => const <String, dynamic>{});
+    final sd = _sumberDanaOpsi.firstWhere(
+        (s) => (s['id'] as num?)?.toInt() == _sumberDanaId,
+        orElse: () => const <String, dynamic>{});
+    final bagian = <String>[
+      'Tahun ${_tahun ?? '-'}',
+      if (satker.isNotEmpty) 'Satker ${satker['nama'] ?? ''}',
+      if (sd.isNotEmpty) 'Sumber Dana ${sd['nama'] ?? ''}',
+      'Revisi $_revisi',
+      if (_cari.text.trim().isNotEmpty) 'Cari "${_cari.text.trim()}"',
+    ];
+    return bagian.join(' · ');
+  }
+
+  String _teksItem(Map<String, dynamic> a) =>
+      '${'    ' * ((a['_level'] as int?) ?? 0)}${a['kode'] ?? ''} ${a['nama'] ?? ''}'.trim();
+
+  List<String> get _kolomEkspor {
+    if (_tab.index == 0) {
+      return ['Tingkat', 'Kode', 'Item', 'Total Setahun', ...namaBulan];
+    }
+    if (_tab.index == 1) {
+      return [
+        'Tingkat', 'Kode', 'Item', 'Pagu', 'Realisasi', 'Sisa', 'Persen', 'Transaksi',
+        ...namaBulan
+      ];
+    }
+    return ['Waktu', 'Kode', 'Uraian', 'Item Anggaran', 'Sumber', 'Nilai', 'Aktif'];
+  }
+
+  /// Baris ekspor. Angka dikirim sebagai angka (bukan teks) supaya bisa langsung
+  /// dijumlah di Excel; kolom "Tingkat" menjaga hierarki tetap terbaca walau
+  /// indentasi teks hilang saat berkas dibuka di aplikasi lain.
+  List<List<Object?>> _barisEkspor() {
+    if (_tab.index == 0) {
+      return _pohon(_item).map((a) {
+        final bulan = _bacaBulan(a['bulan']);
+        return <Object?>[
+          (a['_level'] as int?) ?? 0,
+          '${a['kode'] ?? ''}',
+          _teksItem(a),
+          (a['hargaTotal'] as num?)?.toDouble() ?? 0,
+          ...bulan,
+        ];
+      }).toList();
+    }
+    if (_tab.index == 1) {
+      return _pohon(_realisasi).map((a) {
+        final real = _bacaBulan(a['realisasiBulan']);
+        return <Object?>[
+          (a['_level'] as int?) ?? 0,
+          '${a['kode'] ?? ''}',
+          _teksItem(a),
+          (a['hargaTotal'] as num?)?.toDouble() ?? 0,
+          (a['realisasi'] as num?)?.toDouble() ?? 0,
+          (a['sisa'] as num?)?.toDouble() ?? 0,
+          (a['persen'] as num?)?.toDouble() ?? 0,
+          (a['jumlahTransaksi'] as num?)?.toInt() ?? 0,
+          ...real,
+        ];
+      }).toList();
+    }
+    return _penggunaan
+        .map((p) => <Object?>[
+              '${p['waktu'] ?? ''}',
+              '${p['kode'] ?? ''}',
+              '${p['nama'] ?? ''}',
+              '${p['workspaceLabel'] ?? ''}',
+              '${p['sumber'] ?? ''}',
+              (p['nilai'] as num?)?.toDouble() ?? 0,
+              p['aktif'] == true ? 'Ya' : 'Tidak',
+            ])
+        .toList();
+  }
+
+  String get _namaBerkas =>
+      'Anggaran_${_judulTab.replaceAll(' ', '_')}_${_tahun ?? 0}_R$_revisi'
+      '_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}';
+
+  Future<void> _unduhExcel() async {
+    final baris = _barisEkspor();
+    if (baris.isEmpty) {
+      _pesan('Tidak ada data untuk diunduh pada tab ini.');
+      return;
+    }
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final bytes = buildSimpleXlsx(
+        sheetName: _judulTab,
+        headers: _kolomEkspor,
+        rows: baris,
+      );
+      final path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Simpan $_judulTab',
+          fileName: '$_namaBerkas.xlsx',
+          type: FileType.custom,
+          allowedExtensions: const ['xlsx'],
+          bytes: bytes);
+      if (path != null) await File(path).writeAsBytes(bytes);
+      _pesan('${baris.length} baris disiapkan ke Excel.');
+    } catch (e) {
+      _pesan('Gagal mengunduh: $e');
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  Future<void> _cetakPdf() async {
+    final baris = _barisEkspor();
+    if (baris.isEmpty) {
+      _pesan('Tidak ada data untuk dicetak pada tab ini.');
+      return;
+    }
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final kolom = _kolomEkspor;
+      final doc = pw.Document();
+      doc.addPage(
+        pw.MultiPage(
+          // Mendatar: tabel rencana dan realisasi punya dua belas kolom bulan.
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(18),
+          header: (_) => pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Anggaran (RAB Bulanan) — $_judulTab',
+                    style: pw.TextStyle(
+                        fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                pw.Text(_konteksTeks, style: const pw.TextStyle(fontSize: 9)),
+                pw.SizedBox(height: 6),
+              ]),
+          footer: (ctx) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text('Halaman ${ctx.pageNumber} dari ${ctx.pagesCount}',
+                style: const pw.TextStyle(fontSize: 8)),
+          ),
+          build: (_) => [
+            pw.TableHelper.fromTextArray(
+              headers: kolom,
+              data: baris
+                  .map((r) => r
+                      .map((v) => v is num ? _uang.format(v) : '${v ?? ''}')
+                      .toList())
+                  .toList(),
+              cellStyle: const pw.TextStyle(fontSize: 6.5),
+              headerStyle:
+                  pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold),
+              cellAlignment: pw.Alignment.centerRight,
+              cellAlignments: {0: pw.Alignment.centerLeft, 2: pw.Alignment.centerLeft},
+              columnWidths: _tab.index == 2
+                  ? null
+                  : {2: const pw.FlexColumnWidth(3)},
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text(_ringkasCetak(), style: const pw.TextStyle(fontSize: 8)),
+          ],
+        ),
+      );
+      await Printing.layoutPdf(
+          onLayout: (_) async => doc.save(), name: '$_namaBerkas.pdf');
+    } catch (e) {
+      _pesan('Gagal menyiapkan PDF: $e');
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
+  String _ringkasCetak() {
+    if (_tab.index == 0) {
+      return 'Total pagu setahun: ${_uang.format(_totalPagu)}';
+    }
+    if (_tab.index == 1) {
+      return 'Pagu: ${_uang.format(_totalPagu)}   Realisasi: ${_uang.format(_totalRealisasi)}'
+          '   Sisa: ${_uang.format(_totalPagu - _totalRealisasi)}';
+    }
+    return 'Total penggunaan aktif: ${_uang.format(_totalPenggunaanAktif)}';
+  }
+
   // ==================================================================== tampilan
 
   Widget _penyaring() {
@@ -693,6 +889,15 @@ class _AnggaranScreenState extends State<AnggaranScreen>
             onPressed: _memuat ? null : _muatTabAktif,
             icon: const Icon(Icons.filter_alt_outlined, size: 18),
             label: const Text('Terapkan')),
+        OutlinedButton.icon(
+            onPressed: _sibuk || _memuat ? null : _unduhExcel,
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Download Excel')),
+        OutlinedButton.icon(
+            onPressed: _sibuk || _memuat ? null : _cetakPdf,
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Cetak PDF')),
+
         if (_tab.index == 0 && _boleh('create'))
           FilledButton.icon(
               onPressed: _sibuk ? null : () => _formItem(),
@@ -839,20 +1044,34 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       ),
       _stripBulan('Pagu', _paguBulan),
       _stripBulan('Realisasi', _realisasiBulan),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 6),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Baris induk menampilkan jumlah seluruh turunannya, baik pagu maupun realisasi.',
+            style: TextStyle(fontSize: 11.5),
+          ),
+        ),
+      ),
       Expanded(
         child: AppDataTable(
-          minWidth: 1100,
+          minWidth: 2400,
           emptyText: 'Belum ada data realisasi untuk penyaring ini.',
-          columns: const [
-            AppTableColumn('Item', flex: 5),
-            AppTableColumn('Pagu', flex: 2, align: TextAlign.right),
-            AppTableColumn('Realisasi', flex: 2, align: TextAlign.right),
-            AppTableColumn('Sisa', flex: 2, align: TextAlign.right),
-            AppTableColumn('%', flex: 1, align: TextAlign.right),
-            AppTableColumn('Transaksi', flex: 1, align: TextAlign.right),
+          columns: [
+            const AppTableColumn('Item', flex: 5),
+            const AppTableColumn('Pagu', flex: 2, align: TextAlign.right),
+            const AppTableColumn('Realisasi', flex: 2, align: TextAlign.right),
+            const AppTableColumn('Sisa', flex: 2, align: TextAlign.right),
+            const AppTableColumn('%', flex: 1, align: TextAlign.right),
+            const AppTableColumn('Trx', flex: 1, align: TextAlign.right),
+            // Dua belas kolom realisasi per bulan -- inti layar realisasi_bulanan.zul.
+            for (final b in namaBulan)
+              AppTableColumn(b, width: 104, align: TextAlign.right),
           ],
           rows: data.map((a) {
             final persen = (a['persen'] as num?)?.toDouble() ?? 0;
+            final realBulan = _bacaBulan(a['realisasiBulan']);
             return AppTableRowData(cells: [
               AppTableCell.text(
                   '${'    ' * ((a['_level'] as int?) ?? 0)}${a['kode'] ?? ''} ${a['nama'] ?? ''}',
@@ -867,6 +1086,9 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                   flex: 1, align: TextAlign.right),
               AppTableCell.text('${a['jumlahTransaksi'] ?? 0}',
                   flex: 1, align: TextAlign.right),
+              for (var i = 0; i < 12; i++)
+                AppTableCell.text(_uang.format(realBulan[i]),
+                    width: 104, align: TextAlign.right),
             ]);
           }).toList(),
         ),

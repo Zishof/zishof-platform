@@ -53,6 +53,18 @@ void main() {
     expect(layar, contains("for (var i = 0; i < 12; i++)"));
   });
 
+  test('pohon berjenjang seperti modul Akun, dgn angka menjumlah ke atas', () {
+    // Pohon disusun dari parentId lalu diberi indentasi sesuai kedalaman -- idiom yang
+    // sama dengan tabel pada layar Kode Akun.
+    expect(layar, contains('_pohon('));
+    expect(layar, contains("'_level'"));
+    expect(layar, contains("'    ' * ((a['_level'] as int?) ?? 0)"));
+    // Pagu diagregasi server saat menyimpan; realisasi diagregasi saat dibaca
+    // (padanan WorkspaceTreeModel.ubahHargaTotalParentss & ubahRealisasiParents).
+    expect(layar, contains("a['realisasiBulan']"));
+    expect(layar, contains('Baris induk menampilkan jumlah seluruh turunannya'));
+  });
+
   test('tiga tab: rencana, realisasi, penggunaan anggaran', () {
     expect(layar, contains('Rencana Bulanan'));
     expect(layar, contains('Realisasi'));
@@ -64,6 +76,18 @@ void main() {
     // harus dibatalkan dari dokumen asalnya supaya realisasi tetap sinkron.
     expect(layar, contains("'Entri Manual'"));
     expect(layar, contains('Icons.lock_outline'));
+  });
+
+  test('ketiga tab punya Download Excel dan Cetak PDF', () {
+    expect(layar, contains("'Download Excel'"));
+    expect(layar, contains("'Cetak PDF'"));
+    // Excel memakai pembangun yang sama dgn layar lain; PDF lewat paket printing.
+    expect(layar, contains('buildSimpleXlsx('));
+    expect(layar, contains('Printing.layoutPdf('));
+    // Isi berkas mengikuti TAB AKTIF beserta penyaringnya, bukan satu tabel tetap.
+    expect(layar, contains('_kolomEkspor'));
+    expect(layar, contains('_barisEkspor()'));
+    expect(layar, contains('_konteksTeks'));
   });
 
   test('tombol mengikuti hak akses dari server', () {
