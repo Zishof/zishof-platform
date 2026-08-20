@@ -44,11 +44,14 @@ class AppSetting {
   /// "Ubah Alamat Server" pada layar Masuk.
   ///
   /// Al-Bahjah tetap memakai server khusus
-  /// https://ecampus.staialbahjah.ac.id/albahjah.
-  static const String baseUrlHost =
-      AppVariant.isAlBahjah ? 'ecampus.staialbahjah.ac.id' : 'ebisnis.id';
-  static const String baseUrlContextPath =
-      AppVariant.isAlBahjah ? 'albahjah' : 'ebisnis';
+  /// https://ecampus.staialbahjah.ac.id/albahjah, dan eKantin Petra memakai
+  /// https://kantinpcu.ecampus.id/petra.
+  static const String baseUrlHost = AppVariant.isAlBahjah
+      ? 'ecampus.staialbahjah.ac.id'
+      : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id');
+  static const String baseUrlContextPath = AppVariant.isAlBahjah
+      ? 'albahjah'
+      : (AppVariant.isPetra ? 'petra' : 'ebisnis');
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya

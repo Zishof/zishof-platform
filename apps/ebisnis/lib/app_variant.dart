@@ -34,6 +34,13 @@ class AppVariant {
   /// Build: `-t lib/main_mitrainap.dart --dart-define=EBISNIS_VARIANT=mitrainap`.
   static const isMitraInap = kode == 'mitrainap';
 
+  /// Varian "eKantin Petra" -- kantin Universitas Kristen Petra, dikelola
+  /// Direktorat Pengembangan Usaha Sosial. Server bawaan
+  /// kantinpcu.ecampus.id/petra (lihat AppSetting.baseUrlHost). Layar Masuk
+  /// memakai tata letak dua kolom mengikuti versi web-nya.
+  /// Build: `-t lib/main_petra.dart --dart-define=EBISNIS_VARIANT=petra`.
+  static const isPetra = kode == 'petra';
+
   static const isEBisnis = kode == 'default' || kode == 'ebisnis';
 
   /// Namespace stabil untuk seluruh data lokal. Nilai ini tidak mengikuti
@@ -46,7 +53,11 @@ class AppVariant {
           ? 'inventory_sales'
           : (isApotik
               ? 'apotik'
-              : (isEmedik ? 'emedik' : (isMitraInap ? 'mitrainap' : 'ebisnis'))));
+              : (isEmedik
+                  ? 'emedik'
+                  : (isMitraInap
+                      ? 'mitrainap'
+                      : (isPetra ? 'petra' : 'ebisnis')))));
 
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
@@ -56,7 +67,9 @@ class AppVariant {
               ? 'eBisnis POS Apotik'
               : (isEmedik
                   ? 'eBisnis POS eMedik'
-                  : (isMitraInap ? 'MitraInap' : 'eBisnis'))));
+                  : (isMitraInap
+                      ? 'MitraInap'
+                      : (isPetra ? 'eKantin Petra' : 'eBisnis')))));
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isInventorySales
@@ -65,7 +78,9 @@ class AppVariant {
               ? 'POS Apotik'
               : (isEmedik
                   ? 'POS eMedik'
-                  : (isMitraInap ? 'MitraInap' : 'eBisnis POS'))));
+                  : (isMitraInap
+                      ? 'MitraInap'
+                      : (isPetra ? 'eKantin Petra' : 'eBisnis POS')))));
   static const updateAssetKeyword = isAlBahjah
       ? 'albahjah'
       : (isInventorySales
@@ -74,10 +89,14 @@ class AppVariant {
               ? 'apotik'
               : (isEmedik
                   ? 'emedik'
-                  : (isMitraInap ? 'mitrainap' : 'ebisnis'))));
+                  : (isMitraInap
+                      ? 'mitrainap'
+                      : (isPetra ? 'petra' : 'ebisnis')))));
   static const String? updateTagPrefix = isApotik
       ? 'apotik-'
-      : (isEmedik ? 'emedik-' : (isMitraInap ? 'mitrainap-' : null));
+      : (isEmedik
+          ? 'emedik-'
+          : (isMitraInap ? 'mitrainap-' : (isPetra ? 'petra-' : null)));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isInventorySales
@@ -88,7 +107,9 @@ class AppVariant {
                   ? 'eBisnis POS eMedik Flutter'
                   : (isMitraInap
                       ? 'MitraInap Flutter'
-                      : 'eBisnis Flutter Pilot'))));
+                      : (isPetra
+                          ? 'eKantin Petra Flutter'
+                          : 'eBisnis Flutter Pilot')))));
   static const logoAsset = isAlBahjah
       ? 'assets/images/albahjah/icon.png'
       : (isInventorySales
@@ -97,7 +118,9 @@ class AppVariant {
               ? 'assets/images/apotik/icon.png'
               : (isEmedik
                   ? 'assets/images/emedik/icon.png'
-                  : 'assets/images/ebisnis/icon.png')));
+                  : (isPetra
+                      ? 'assets/images/petra/icon.png'
+                      : 'assets/images/ebisnis/icon.png'))));
 
   /// Latar layar masuk mengikuti unit usaha. Aset sengaja dipisah per varian
   /// agar identitas eBisnis umum, Inventory, Apotik, eMedik, dan Al-Bahjah
@@ -110,13 +133,17 @@ class AppVariant {
               ? 'assets/images/apotik/login-background.png'
               : (isEmedik
                   ? 'assets/images/emedik/login-background.png'
-                  : 'assets/images/ebisnis/login-background.png')));
+                  : (isPetra
+                      ? 'assets/images/petra/login-background.png'
+                      : 'assets/images/ebisnis/login-background.png'))));
 
   /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
   /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
   /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
   /// "Al-Bahjah POS", HANYA di kartu login.
-  static const judulLogin = isAlBahjah ? 'Unit Usaha Al Bahjah' : namaAplikasi;
+  static const judulLogin = isAlBahjah
+      ? 'Unit Usaha Al Bahjah'
+      : (isPetra ? 'Masuk eKantin' : namaAplikasi);
 
   /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
   /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
@@ -128,5 +155,25 @@ class AppVariant {
               ? 'Masuk sesuai peran Anda di layanan Apotik'
               : (isEmedik
                   ? 'Masuk sesuai peran Anda di layanan eMedik'
-                  : 'Masuk ke sistem operasional eBisnis')));
+                  : (isPetra
+                      ? 'Selamat datang kembali, silakan masuk ke akun Anda.'
+                      : 'Masuk ke sistem operasional eBisnis'))));
+
+  /// ── Identitas panel kiri layar Masuk (khusus Petra) ────────────────────
+  /// Versi web eKantin Petra memakai kartu dua kolom: panel biru berisi
+  /// identitas unit + kontak, dan panel putih berisi formulir. Nilai di bawah
+  /// mengisi panel kiri tersebut; varian lain tidak memakainya.
+  static const namaOrganisasiLogin =
+      isPetra ? 'Direktorat Pengembangan Usaha Sosial' : namaAplikasi;
+  static const alamatKontakLogin = isPetra
+      ? 'Gedung Entrance Hall (EH), Lantai 2. UNIVERSITAS KRISTEN PETRA'
+      : '';
+  static const teleponKontakLogin = isPetra ? '+62-881-2526-094' : '';
+  static const emailKontakLogin = isPetra ? 'office-dpus@petra.ac.id' : '';
+  static const hakCiptaLogin =
+      isPetra ? '© 2026 Direktorat Pengembangan Usaha Sosial' : '';
+
+  /// Tata letak Masuk dua kolom (panel identitas + formulir). Sementara hanya
+  /// Petra yang memakainya; varian lain tetap kartu tunggal spt sebelumnya.
+  static const loginDuaKolom = isPetra;
 }

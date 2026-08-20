@@ -59,8 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
   /// bisa diubah pengguna kapan saja lewat Konfigurasi) krn layar ini muncul
   /// SEBELUM identitas pengguna diketahui, jadi warnanya murni identitas
   /// VARIAN build, sama spt [AppVariant.logoAsset]/[AppVariant.judulLogin].
-  static const _warnaLatar =
-      AppVariant.isAlBahjah ? Color(0xFF14532D) : Color(0xFF1E3A5F);
+  static const _warnaLatar = AppVariant.isAlBahjah
+      ? Color(0xFF14532D)
+      : (AppVariant.isPetra ? Color(0xFF1565D8) : Color(0xFF1E3A5F));
 
   @override
   Widget build(BuildContext context) {
@@ -91,93 +92,207 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 380),
-                  child: Card(
-                    elevation: 12,
-                    shadowColor: Colors.black54,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Image.asset(AppVariant.logoAsset, height: 64),
-                          const SizedBox(height: 12),
-                          Text(AppVariant.judulLogin,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: warnaJudul)),
-                          Text(AppVariant.subJudulLogin,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: warnaSubjudul)),
-                          const SizedBox(height: 24),
-                          TextField(
-                            controller: _userCtrl,
-                            decoration: const InputDecoration(
-                                labelText: 'Username',
-                                border: OutlineInputBorder()),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: _passCtrl,
-                            decoration: const InputDecoration(
-                                labelText: 'Password',
-                                border: OutlineInputBorder()),
-                            obscureText: true,
-                            onSubmitted: (_) => _login(),
-                          ),
-                          if (_pesanError != null) ...[
-                            const SizedBox(height: 12),
-                            AppErrorPanel(info: _pesanError!),
-                          ],
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _memproses ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _warnaLatar,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                child: LayoutBuilder(builder: (context, kendala) {
+                  // Dua kolom hanya bila varian memintanya DAN layar cukup
+                  // lebar; di ponsel/jendela sempit tetap satu kolom supaya
+                  // formulir tidak terhimpit.
+                  final duaKolom =
+                      AppVariant.loginDuaKolom && kendala.maxWidth >= 720;
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: duaKolom ? 860 : 380),
+                    child: Card(
+                      elevation: 12,
+                      shadowColor: Colors.black54,
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      child: duaKolom
+                          ? IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                      flex: 5,
+                                      child: _panelIdentitas(warnaSubjudul)),
+                                  Expanded(
+                                    flex: 6,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(32),
+                                      child: _kolomFormulir(
+                                          warnaJudul, warnaSubjudul,
+                                          tampilkanLogo: false),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.all(28),
+                              child: _kolomFormulir(warnaJudul, warnaSubjudul,
+                                  tampilkanLogo: true),
                             ),
-                            child: _memproses
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white))
-                                : const Text('Masuk'),
-                          ),
-                          const SizedBox(height: 12),
-                          Center(
-                            child: TextButton(
-                              onPressed: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          const PengaturanServerScreen())),
-                              child: const Text('Ubah Alamat Server'),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          AppVersionLabel(
-                            style: TextStyle(
-                              color: warnaSubjudul,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Kolom formulir Masuk. Dipakai apa adanya pada tata letak satu
+  /// kolom, dan sebagai kolom kanan pada tata letak dua kolom (di sana
+  /// logo dimatikan karena sudah tampil di panel identitas kiri).
+  Widget _kolomFormulir(Color warnaJudul, Color warnaSubjudul,
+      {required bool tampilkanLogo}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (tampilkanLogo) ...[
+          Image.asset(AppVariant.logoAsset, height: 64),
+          const SizedBox(height: 12),
+        ],
+        Text(AppVariant.judulLogin,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 26, fontWeight: FontWeight.bold, color: warnaJudul)),
+        Text(AppVariant.subJudulLogin,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: warnaSubjudul)),
+        const SizedBox(height: 24),
+        TextField(
+          controller: _userCtrl,
+          decoration: const InputDecoration(
+              labelText: 'Username', border: OutlineInputBorder()),
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _passCtrl,
+          decoration: const InputDecoration(
+              labelText: 'Password', border: OutlineInputBorder()),
+          obscureText: true,
+          onSubmitted: (_) => _login(),
+        ),
+        if (_pesanError != null) ...[
+          const SizedBox(height: 12),
+          AppErrorPanel(info: _pesanError!),
+        ],
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _memproses ? null : _login,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _warnaLatar,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: _memproses
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Text('Masuk'),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const PengaturanServerScreen())),
+            child: const Text('Ubah Alamat Server'),
+          ),
+        ),
+        const SizedBox(height: 2),
+        AppVersionLabel(
+          style: TextStyle(
+            color: warnaSubjudul,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Panel identitas (kolom kiri) pada tata letak Masuk dua kolom: logo unit,
+  /// nama organisasi, dan kotak kontak -- mengikuti versi web eKantin.
+  Widget _panelIdentitas(Color warnaSubjudul) {
+    Widget barisKontak(IconData ikon, String teks) {
+      if (teks.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(ikon, size: 14, color: Colors.white70),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(teks,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 12, height: 1.4)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: _warnaLatar,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(AppVariant.logoAsset, height: 84),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              AppVariant.namaOrganisasiLogin,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  height: 1.3,
+                  fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('HUBUNGI KAMI',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  barisKontak(
+                      Icons.location_on_outlined, AppVariant.alamatKontakLogin),
+                  barisKontak(
+                      Icons.phone_outlined, AppVariant.teleponKontakLogin),
+                  barisKontak(Icons.mail_outline, AppVariant.emailKontakLogin),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

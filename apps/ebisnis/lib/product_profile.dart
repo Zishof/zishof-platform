@@ -114,6 +114,20 @@ class AppProductProfile {
   /// hotel hasil seed mematikan menu POS lama lewat aksesMenu (fail-closed).
   /// Ikon masih menumpang aset ebisnis -- aset khusus menyusul; JANGAN
   /// menunjuk path aset yang belum ada (crash load gambar).
+  /// Varian "eKantin Petra" -- kantin Universitas Kristen Petra (Direktorat
+  /// Pengembangan Usaha Sosial). Fiturnya sama dgn POS eBisnis; yang berbeda
+  /// hanya identitas, aset, server bawaan (kantinpcu.ecampus.id/petra), dan
+  /// tata letak layar Masuk.
+  const AppProductProfile.petra()
+      : this._(
+          kode: 'petra',
+          namaAplikasi: 'eKantin Petra',
+          namaSidebar: 'eKantin Petra',
+          updateAssetKeyword: 'petra',
+          logoAsset: 'assets/images/petra/icon.png',
+          fiturGrup: const {FiturGrup.pos},
+        );
+
   const AppProductProfile.mitrainap()
       : this._(
           kode: 'mitrainap',
@@ -134,6 +148,7 @@ class AppProductProfile {
     if (AppVariant.isApotik) return const AppProductProfile.apotik();
     if (AppVariant.isEmedik) return const AppProductProfile.emedik();
     if (AppVariant.isMitraInap) return const AppProductProfile.mitrainap();
+    if (AppVariant.isPetra) return const AppProductProfile.petra();
     return const AppProductProfile.ebisnis();
   }
 
@@ -161,10 +176,12 @@ class AppProductProfile {
     // Belum ada rilis bertag mitrainap-* -- prefix khusus justru PENGAMAN:
     // updater tidak akan menarik rilis `v*` ebisnis ke instalasi MitraInap.
     if (kode == 'mitrainap') return 'mitrainap-';
+    if (kode == 'petra') return 'petra-';
     return null;
   }
 
-  bool cocokDenganDartDefine() => kode == AppProductProfile.dariDartDefine().kode;
+  bool cocokDenganDartDefine() =>
+      kode == AppProductProfile.dariDartDefine().kode;
 
   /// Layar pertama setelah login sukses. Varian Inventory & Sales SELALU lewat
   /// beranda per-aktor (Admin/Pemilik -> dasbor modul; Sales -> "Sesi Hari
@@ -188,10 +205,10 @@ class AppProductProfile {
   /// Gerbang menu level-varian (dipanggil `bolehTampilMenu` app_shell) --
   /// kunci menu khusus satu varian tidak pernah dirakit ke varian lain.
   bool bolehMenuVarian(String kunciMenuVarian) {
-    if (kunciMenuVarian == FiturGrup.inventorySales
-        || kunciMenuVarian == FiturGrup.apotik
-        || kunciMenuVarian == FiturGrup.emedik
-        || kunciMenuVarian == FiturGrup.mitrainap) {
+    if (kunciMenuVarian == FiturGrup.inventorySales ||
+        kunciMenuVarian == FiturGrup.apotik ||
+        kunciMenuVarian == FiturGrup.emedik ||
+        kunciMenuVarian == FiturGrup.mitrainap) {
       return fiturGrup.contains(kunciMenuVarian);
     }
     return true;

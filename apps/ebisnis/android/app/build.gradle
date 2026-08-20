@@ -89,6 +89,11 @@ android {
             applicationId "id.zishof.mitrainap"
             resValue "string", "app_name", "MitraInap"
         }
+        petra {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.petra"
+            resValue "string", "app_name", "eKantin Petra"
+        }
     }
 
     signingConfigs {

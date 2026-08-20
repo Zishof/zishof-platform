@@ -1,0 +1,10 @@
+SEMENTARA -- kedua berkas di folder ini masih salinan aset eBisnis supaya build
+tidak gagal (aset yang ditunjuk tapi tidak ada = crash saat memuat gambar).
+
+Ganti dengan aset asli Universitas Kristen Petra sebelum rilis:
+  icon.png              logo UKP, persegi, latar transparan, minimal 512x512
+  login-background.png  foto latar layar Masuk, lanskap, minimal 1920x1080
+
+Setelah diganti, ikon Windows juga perlu dibuat:
+  windows/runner/resources/icon_petra.ico   (dari icon.png, sertakan 256/48/32/16)
+lalu tambahkan cabangnya di windows/runner/Runner.rc bagian "Icon".
