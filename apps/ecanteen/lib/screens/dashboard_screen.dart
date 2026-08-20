@@ -4,6 +4,8 @@ import '../services/api_client.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Ringkasan belanja member: jumlah transaksi, pengeluaran, penghematan,
 /// total topup, tren 6 bulan, dan toko favorit (aksi `kantin_dashboard`).
@@ -59,9 +61,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ringkasan Belanja')),
-      body: _memuat
+    return AppShell(
+      menuAktif: MenuAnggota.ringkasan,
+      judul: 'Ringkasan Belanja',
+      subjudul: 'Rekap transaksi, penghematan, dan toko favorit Anda.',
+      onPilihMenu: navigasiMenu,
+      child: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _galat != null
               ? Padding(

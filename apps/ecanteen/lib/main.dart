@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_config.dart';
+import 'theme/app_colors.dart';
 import 'screens/beranda_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/server_config.dart';
@@ -18,23 +19,56 @@ class ECanteenApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final skema = ColorScheme.fromSeed(seedColor: const Color(0xFF1B6FE3));
+    // Tema disamakan dgn POS Desktop: halaman abu sangat terang, kartu putih
+    // bergaris tipis, aksen biru. Anggota dan petugas jadi melihat satu
+    // keluarga tampilan meski aplikasinya berbeda.
+    final skema = ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      primary: AppColors.primary,
+    );
     return MaterialApp(
       title: AppConfig.namaAplikasi,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: skema,
         useMaterial3: true,
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
+        scaffoldBackgroundColor: AppColors.pageBg,
+        cardTheme: CardThemeData(
+          color: AppColors.cardBg,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(color: AppColors.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        dividerTheme: const DividerThemeData(color: AppColors.border),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.pageBg,
           isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(8)),
           ),
+        ),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: AppColors.primary,
         ),
       ),
       // Token yang tersimpan belum tentu masih berlaku; BerandaScreen

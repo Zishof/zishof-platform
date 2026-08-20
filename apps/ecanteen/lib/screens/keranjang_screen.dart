@@ -7,6 +7,8 @@ import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
 import 'pindai_meja_screen.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Keranjang + checkout.
 ///
@@ -140,19 +142,20 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
     final keranjang = Keranjang.instance;
     final kelompok = keranjang.kelompokPerToko();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Keranjang'),
-        actions: [
-          if (keranjang.items.isNotEmpty)
-            IconButton(
-              tooltip: 'Kosongkan keranjang',
-              icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () => keranjang.kosongkan(),
-            ),
-        ],
-      ),
-      body: keranjang.items.isEmpty
+    return AppShell(
+      menuAktif: MenuAnggota.keranjang,
+      judul: 'Keranjang',
+      subjudul: 'Isi keranjang dipecah otomatis menjadi satu pesanan per toko.',
+      onPilihMenu: navigasiMenu,
+      aksi: [
+        if (keranjang.items.isNotEmpty)
+          IconButton(
+            tooltip: 'Kosongkan keranjang',
+            icon: const Icon(Icons.delete_sweep_outlined),
+            onPressed: () => keranjang.kosongkan(),
+          ),
+      ],
+      child: keranjang.items.isEmpty
           ? const Center(child: Text('Keranjang masih kosong.'))
           : ListView(
               padding: const EdgeInsets.all(12),
@@ -396,9 +399,11 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
   }
 
   Widget _layarSukses(HasilCheckout h) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Transaksi Berhasil')),
-      body: Center(
+    return AppShell(
+      menuAktif: MenuAnggota.keranjang,
+      judul: 'Transaksi Berhasil',
+      onPilihMenu: navigasiMenu,
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
@@ -429,9 +434,9 @@ class _KeranjangScreenState extends State<KeranjangScreen> {
                       color: Colors.green)),
               const SizedBox(height: 26),
               FilledButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => navigasiMenu(context, MenuAnggota.belanja),
                 icon: const Icon(Icons.home_outlined),
-                label: const Text('Selesai & Ke Beranda'),
+                label: const Text('Selesai & Ke Belanja'),
               ),
             ],
           ),

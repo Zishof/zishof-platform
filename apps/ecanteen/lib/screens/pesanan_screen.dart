@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Pesanan (draft) member: yang belum lunas dapat dibatalkan sendiri.
 ///
@@ -86,9 +88,12 @@ class _PesananScreenState extends State<PesananScreen> {
   Widget build(BuildContext context) {
     final totalHalaman =
         _total == 0 ? 1 : ((_total - 1) ~/ _perHalaman) + 1;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pesanan Saya')),
-      body: _memuat
+    return AppShell(
+      menuAktif: MenuAnggota.pesanan,
+      judul: 'Pesanan Saya',
+      subjudul: 'Pesanan yang belum dibayar dapat Anda batalkan sendiri.',
+      onPilihMenu: navigasiMenu,
+      child: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _galat != null
               ? Padding(

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Riwayat transaksi lunas + rincian itemnya, dan riwayat barang yang dibeli.
 class TransaksiScreen extends StatefulWidget {
@@ -15,20 +17,27 @@ class TransaksiScreen extends StatefulWidget {
 class _TransaksiScreenState extends State<TransaksiScreen> {
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Riwayat'),
-          bottom: const TabBar(tabs: [
-            Tab(text: 'Transaksi'),
-            Tab(text: 'Barang Dibeli'),
-          ]),
+    return AppShell(
+      menuAktif: MenuAnggota.riwayat,
+      judul: 'Riwayat',
+      subjudul: 'Transaksi yang sudah lunas dan barang yang pernah Anda beli.',
+      onPilihMenu: navigasiMenu,
+      child: const DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(tabs: [
+              Tab(text: 'Transaksi'),
+              Tab(text: 'Barang Dibeli'),
+            ]),
+            Expanded(
+              child: TabBarView(children: [
+                _TabTransaksi(),
+                _TabBarang(),
+              ]),
+            ),
+          ],
         ),
-        body: const TabBarView(children: [
-          _TabTransaksi(),
-          _TabBarang(),
-        ]),
       ),
     );
   }

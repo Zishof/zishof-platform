@@ -6,6 +6,8 @@ import '../services/server_config.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Isi saldo (topup) + daftar Virtual Account / tagihan yang pernah dibuat.
 ///
@@ -72,9 +74,12 @@ class _TopupScreenState extends State<TopupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Isi ${Sesi.instance.labelSaldo}')),
-      body: _memuat
+    return AppShell(
+      menuAktif: MenuAnggota.isiSaldo,
+      judul: 'Isi ${Sesi.instance.labelSaldo}',
+      subjudul: 'Saluran isi saldo mengikuti pengaturan jenis keanggotaan Anda.',
+      onPilihMenu: navigasiMenu,
+      child: _memuat
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _muat,

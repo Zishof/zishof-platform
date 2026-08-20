@@ -9,6 +9,8 @@ import '../services/api_client.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Bayar dengan memindai QR tagihan dari kasir.
 ///
@@ -114,9 +116,12 @@ class _BayarQrScreenState extends State<BayarQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Bayar dengan QR')),
-      body: Column(
+    return AppShell(
+      menuAktif: MenuAnggota.bayarQr,
+      judul: 'Bayar dengan QR',
+      subjudul: 'Pindai QR tagihan dari kasir untuk membayar dari saldo Anda.',
+      onPilihMenu: navigasiMenu,
+      child: Column(
         children: [
           if (_kameraDidukung && _sukses == null)
             SizedBox(
@@ -173,7 +178,8 @@ class _BayarQrScreenState extends State<BayarQrScreen> {
                   ),
                   const SizedBox(height: 14),
                   FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () =>
+                        navigasiMenu(context, MenuAnggota.belanja),
                     child: const Text('Selesai'),
                   ),
                 ] else ...[

@@ -42,6 +42,31 @@ class AppVariant {
   /// terlihat.
   static const namespacePenyimpanan = 'ecanteen';
 
+  /// Logo yang tampil di layar Masuk. Varian umum memakai ikon aplikasi.
+  static const logoAsset = isPetra
+      ? 'assets/images/petra/icon.png'
+      : 'assets/icon/ecanteen-icon.png';
+
+  /// ── Identitas panel kiri layar Masuk ──────────────────────────────────
+  /// Disamakan dgn POS Desktop varian yang sama supaya petugas dan anggota
+  /// melihat identitas yang persis sama.
+  static const judulLogin = isPetra ? 'Masuk eKantin' : namaAplikasi;
+  static const subJudulLogin = isPetra
+      ? 'Selamat datang kembali, silakan masuk ke akun Anda.'
+      : 'Masuk dengan akun member Anda';
+  static const namaOrganisasiLogin =
+      isPetra ? 'Direktorat Pengembangan Usaha Sosial' : namaAplikasi;
+  static const alamatKontakLogin = isPetra
+      ? 'Gedung Entrance Hall (EH), Lantai 2. UNIVERSITAS KRISTEN PETRA'
+      : '';
+  static const teleponKontakLogin = isPetra ? '+62-881-2526-094' : '';
+  static const emailKontakLogin = isPetra ? 'office-dpus@petra.ac.id' : '';
+  static const hakCiptaLogin =
+      isPetra ? '© 2026 Direktorat Pengembangan Usaha Sosial' : '';
+
+  /// Tata letak Masuk dua kolom (panel identitas + formulir).
+  static const loginDuaKolom = isPetra;
+
   /// Server bawaan per varian. Pengguna tetap dapat menggantinya lewat
   /// layar Alamat Server.
   static const hostBawaan =

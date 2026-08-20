@@ -9,14 +9,10 @@ import '../services/server_config.dart';
 import '../services/sesi.dart';
 import '../widgets/format.dart';
 import '../widgets/panel_galat.dart';
-import 'bayar_qr_screen.dart';
-import 'dashboard_screen.dart';
-import 'keranjang_screen.dart';
 import 'login_screen.dart';
 import 'pengaturan_server_screen.dart';
-import 'pesanan_screen.dart';
-import 'topup_screen.dart';
-import 'transaksi_screen.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/navigasi.dart';
 
 /// Beranda member: ringkasan saldo, pemilih toko, dan katalog produk.
 class BerandaScreen extends StatefulWidget {
@@ -194,125 +190,43 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sesi = Sesi.instance;
     final totalHalaman =
         _totalProduk == 0 ? 1 : ((_totalProduk - 1) ~/ _perHalaman) + 1;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(sesi.nama.isEmpty ? 'Beranda' : sesi.nama),
-        actions: [
-          if (sesi.aktifkanTopup)
-            IconButton(
-              tooltip: 'Isi Saldo',
-              icon: const Icon(Icons.account_balance_wallet_outlined),
-              onPressed: () async {
-                await Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const TopupScreen()));
-                _segarkanSaldo();
-              },
-            ),
-          if (sesi.aktifkanBayarQr)
-            IconButton(
-              tooltip: 'Bayar dengan QR',
-              icon: const Icon(Icons.qr_code_scanner),
-              onPressed: () async {
-                await Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const BayarQrScreen()));
-                _segarkanSaldo();
-              },
-            ),
-          // Sisanya masuk menu supaya bilah judul tidak meluber di layar ponsel.
-          PopupMenuButton<String>(
-            onSelected: (nilai) {
-              switch (nilai) {
-                case 'pesanan':
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const PesananScreen()));
-                  break;
-                case 'riwayat':
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const TransaksiScreen()));
-                  break;
-                case 'ringkasan':
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const DashboardScreen()));
-                  break;
-                case 'notifikasi':
-                  _bukaNotifikasi();
-                  break;
-                case 'server':
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const PengaturanServerScreen()));
-                  break;
-                case 'keluar':
-                  _keluar();
-                  break;
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'pesanan',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.receipt_long_outlined),
-                    title: Text('Pesanan Saya')),
-              ),
-              PopupMenuItem(
-                value: 'riwayat',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.history),
-                    title: Text('Riwayat')),
-              ),
-              PopupMenuItem(
-                value: 'ringkasan',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.insights_outlined),
-                    title: Text('Ringkasan Belanja')),
-              ),
-              PopupMenuItem(
-                value: 'notifikasi',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.notifications_outlined),
-                    title: Text('Notifikasi')),
-              ),
-              PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'server',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.dns_outlined),
-                    title: Text('Alamat Server')),
-              ),
-              PopupMenuItem(
-                value: 'keluar',
-                child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.logout),
-                    title: Text('Keluar')),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return AppShell(
+      menuAktif: MenuAnggota.belanja,
+      judul: 'Belanja',
+      subjudul: 'Pilih toko, lalu tambahkan produk ke keranjang.',
+      onPilihMenu: navigasiMenu,
+      aksi: [
+        IconButton(
+          tooltip: 'Notifikasi',
+          icon: const Icon(Icons.notifications_outlined),
+          onPressed: _bukaNotifikasi,
+        ),
+        IconButton(
+          tooltip: 'Alamat Server',
+          icon: const Icon(Icons.dns_outlined),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const PengaturanServerScreen())),
+        ),
+        IconButton(
+          tooltip: 'Keluar',
+          icon: const Icon(Icons.logout),
+          onPressed: _keluar,
+        ),
+      ],
       floatingActionButton: Keranjang.instance.items.isEmpty
           ? null
           : FloatingActionButton.extended(
-              onPressed: () async {
-                await Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const KeranjangScreen()));
-                _segarkanSaldo();
-              },
+              onPressed: () => navigasiMenu(context, MenuAnggota.keranjang),
               icon: Badge.count(
                 count: Keranjang.instance.jumlahItem,
                 child: const Icon(Icons.shopping_cart_outlined),
               ),
               label: Text(rupiah(Keranjang.instance.grandTotal)),
             ),
-      body: _memuat
+      child: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _galat != null
               ? Padding(
