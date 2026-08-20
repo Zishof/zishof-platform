@@ -11,6 +11,8 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
+import 'pengadaan_bulk_entry_screen.dart';
+
 /// Layar "Penerimaan Barang/Jasa (BAST)" -- tahap 3 modul Pengadaan POS.
 ///
 /// Memakai TABEL PENGADAAN BERSAMA dengan JSP dan ZKoss (dibedakan kolom toko);
@@ -243,6 +245,18 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> {
     }
   }
 
+
+  /// Bulk entry mengikuti skema Kulakan: header, tempel/Excel, tabel item, review.
+  Future<void> _bulkEntry() async {
+    final hasil = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const PengadaanBulkEntryScreen(
+              jenis: JenisPengadaanBulk.bast)),
+    );
+    if (hasil == true && mounted) await _muat();
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -253,6 +267,10 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> {
       scrollable: false,
       actionsAppBar: [
         const IndikatorSinkronMaster(),
+        IconButton(
+            onPressed: _bulkEntry,
+            tooltip: 'Bulk entry (tempel / Excel)',
+            icon: const Icon(Icons.table_view_outlined)),
         IconButton(
             onPressed: _muat,
             tooltip: 'Muat ulang',
@@ -558,6 +576,10 @@ class _PilihPoDialogState extends State<_PilihPoDialog> {
 /// Satu baris barang pada form BAST.
 class _BarisBast {
   int? barangId;
+
+  /// Id MasterAsset asal, dipakai bila baris berasal dari dokumen hulu
+  /// yang barangnya belum berpadanan produk POS.
+  int? masterAssetId;
   String namaBarang;
 
   /// Baris PO asal (null bila penerimaan langsung tanpa PO).
@@ -572,6 +594,7 @@ class _BarisBast {
   final TextEditingController kondisi;
   _BarisBast({
     this.barangId,
+    this.masterAssetId,
     required this.namaBarang,
     this.poDetailId,
     this.sisaBoleh,
@@ -644,7 +667,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
     for (final d in ((widget.detailAwal?['detail'] as List?) ?? const [])) {
       final m = Map<String, dynamic>.from(d as Map);
       _baris.add(_BarisBast(
-        barangId: (m['master_asset_id'] as num?)?.toInt(),
+        barangId: (m['produk_id'] as num?)?.toInt(),
+        masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
         poDetailId: (m['po_detail_id'] as num?)?.toInt(),
         sisaBoleh: (m['sisaBolehDiterima'] as num?)?.toDouble(),
@@ -656,7 +680,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
     for (final d in ((widget.dariPo?['detail'] as List?) ?? const [])) {
       final m = Map<String, dynamic>.from(d as Map);
       _baris.add(_BarisBast(
-        barangId: (m['master_asset_id'] as num?)?.toInt(),
+        barangId: (m['produk_id'] as num?)?.toInt(),
+        masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
         poDetailId: (m['po_detail_id'] as num?)?.toInt(),
         sisaBoleh: (m['sisaBolehDiterima'] as num?)?.toDouble(),
@@ -1079,7 +1104,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
   /// Validasi di layar hanya untuk umpan balik cepat; server tetap menegakkan
   /// aturan yang sama sehingga kanal lain berperilaku identik.
   void _simpan() {
-    if (_baris.where((b) => b.barangId != null).isEmpty) {
+    if (_baris.where((b) => b.barangId != null || b.masterAssetId != null).isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tambahkan minimal satu baris barang.')));
       return;
@@ -1113,9 +1138,12 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       'tanggalTagihan': _tglTagihan.text.trim(),
       'kurir': _kurir.text.trim(),
       'detail': _baris
-          .where((b) => b.barangId != null)
+          .where((b) => b.barangId != null || b.masterAssetId != null)
           .map((b) => {
-                'master_asset_id': b.barangId,
+                if (b.barangId != null)
+                  'produk_id': b.barangId
+                else
+                  'master_asset_id': b.masterAssetId,
                 if (b.poDetailId != null) 'po_detail_id': b.poDetailId,
                 'diterima': _angka(b.diterima.text),
                 'hargaBeli': _angka(b.harga.text),

@@ -11,6 +11,8 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
+import 'pengadaan_bulk_entry_screen.dart';
+
 /// Layar "Permintaan Pembelian (PR)" -- tahap 1 modul Pengadaan POS.
 ///
 /// Memakai TABEL PENGADAAN BERSAMA dengan JSP dan ZKoss (keputusan produk 2026-08-20),
@@ -249,6 +251,18 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
     }
   }
 
+
+  /// Bulk entry mengikuti skema Kulakan: header, tempel/Excel, tabel item, review.
+  Future<void> _bulkEntry() async {
+    final hasil = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const PengadaanBulkEntryScreen(
+              jenis: JenisPengadaanBulk.pr)),
+    );
+    if (hasil == true && mounted) await _muat();
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
@@ -259,6 +273,10 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> {
       scrollable: false,
       actionsAppBar: [
         const IndikatorSinkronMaster(),
+        IconButton(
+            onPressed: _bulkEntry,
+            tooltip: 'Bulk entry (tempel / Excel)',
+            icon: const Icon(Icons.table_view_outlined)),
         IconButton(
             onPressed: _muat,
             tooltip: 'Muat ulang',
@@ -463,12 +481,17 @@ class _BarisPr {
   /// Barang menunjuk MasterAsset (tabel pengadaan BERSAMA dgn JSP/ZKoss),
   /// bukan produk POS -- lihat catatan di PengadaanPosApiHelper.cariBarang.
   int? barangId;
+
+  /// Id MasterAsset asal, dipakai bila baris berasal dari dokumen hulu
+  /// yang barangnya belum berpadanan produk POS.
+  int? masterAssetId;
   String namaBarang;
   final TextEditingController jumlah;
   final TextEditingController harga;
   final TextEditingController keterangan;
   _BarisPr({
     this.barangId,
+    this.masterAssetId,
     required this.namaBarang,
     String jumlahAwal = '1',
     String hargaAwal = '0',
@@ -510,7 +533,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
     for (final d in ((widget.detailAwal?['detail'] as List?) ?? const [])) {
       final m = Map<String, dynamic>.from(d as Map);
       _baris.add(_BarisPr(
-        barangId: (m['master_asset_id'] as num?)?.toInt(),
+        barangId: (m['produk_id'] as num?)?.toInt(),
+        masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
         jumlahAwal: '${m['jumlah'] ?? 1}',
         hargaAwal: '${m['hargaBeli'] ?? 0}',
@@ -731,9 +755,12 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                 if (!_baru) 'id': widget.awal!['id'],
                 'keterangan': _keterangan.text.trim(),
                 'detail': _baris
-                    .where((b) => b.barangId != null)
+                    .where((b) => b.barangId != null || b.masterAssetId != null)
                     .map((b) => {
-                          'master_asset_id': b.barangId,
+                          if (b.barangId != null)
+                  'produk_id': b.barangId
+                else
+                  'master_asset_id': b.masterAssetId,
                           'jumlah': _angka(b.jumlah.text),
                           'hargaBeli': _angka(b.harga.text),
                           'keterangan': b.keterangan.text.trim(),
