@@ -44,6 +44,9 @@ import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/jurnal_umum_screen.dart';
+import '../screens/kode_akun_screen.dart';
+import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
@@ -136,6 +139,15 @@ enum MenuEBisnis {
   grupAkun,
   jenisTransaksi,
   bankAkun,
+  // Enam layar berikut sebelumnya HANYA berupa tab di dalam layar Laporan
+  // Keuangan. Sejak 2026-08-21 ikut menjadi submenu grup "Akuntansi" supaya
+  // susunan menu Desktop sama persis dengan drawer Android.
+  saldoAwalAkun,
+  jurnalPenyesuaian,
+  tutupBuku,
+  postingKulakan,
+  postingBayarHutang,
+  postingTerimaPiutang,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -218,12 +230,18 @@ class _GrupMenuShell {
   final String label;
   final List<MenuEBisnis> items;
 
-  /// Grup yang dapat dilipat dan TERTUTUP secara bawaan. Dipakai untuk kelompok
-  /// bertahap yang panjang seperti Pengadaan, supaya sidebar tidak penuh oleh
-  /// menu yang jarang dibuka. Grup tetap terbuka sendiri bila menu aktif berada
-  /// di dalamnya -- pengguna harus selalu bisa melihat posisinya.
-  final bool dapatDilipat;
-  const _GrupMenuShell(this.label, this.items, {this.dapatDilipat = false});
+  /// SELURUH grup dapat dilipat (permintaan 21-08-2026) supaya sidebar tidak
+  /// penuh oleh menu yang jarang dibuka. Dibiarkan sbg properti -- bukan
+  /// konstanta di tempat pemakaian -- agar aturan ini dapat dibaca dan diuji
+  /// dari satu tempat bila kelak ada grup yang perlu dikecualikan.
+  bool get dapatDilipat => true;
+
+  /// Kondisi awal saat pengguna belum pernah menyentuh grup ini. Bawaannya
+  /// TERTUTUP; hanya Operasional yang dibuka sejak awal karena itulah menu
+  /// yang dipakai kasir sehari-hari.
+  final bool terbukaBawaan;
+
+  const _GrupMenuShell(this.label, this.items, {this.terbukaBawaan = false});
 }
 
 /// Kunci `MenuEBisnis` -> kunci `konfigurasi.aksesMenu` server (lihat
@@ -265,6 +283,29 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.riwayatSinkron: 'riwayatsinkronisasi',
   MenuEBisnis.logError: 'logerror',
   MenuEBisnis.konfigurasi: 'konfigurasi',
+};
+
+/// Submenu grup "Akuntansi" -> kunci `aksesMenu` server. Dibaca FAIL-CLOSED
+/// (`bolehMenuVarianBaru`: kunci hilang = tidak boleh) supaya sama persis dengan
+/// gerbang drawer Android -- satu perubahan hak akses berlaku di dua platform.
+///
+/// Enam kunci terakhir milik layar yang sebelumnya hanya berupa tab; sejak menjadi
+/// submenu keenamnya terdaftar di `EbisnisMenuKatalog` sehingga admin dapat
+/// menyalakan/mematikannya per peran lewat grid CRUD `TbmroleAction`.
+const _kunciMenuAkuntansi = <MenuEBisnis, String>{
+  MenuEBisnis.jurnalUmum: 'jurnal_umum',
+  MenuEBisnis.postingHpp: 'posting_hpp',
+  MenuEBisnis.postingPenjualan: 'posting_penjualan',
+  MenuEBisnis.kodeAkun: 'kode_akun',
+  MenuEBisnis.grupAkun: 'grup_akun',
+  MenuEBisnis.jenisTransaksi: 'jenis_transaksi',
+  MenuEBisnis.bankAkun: 'bank_akun',
+  MenuEBisnis.saldoAwalAkun: 'saldo_awal_akun',
+  MenuEBisnis.jurnalPenyesuaian: 'jurnal_penyesuaian',
+  MenuEBisnis.tutupBuku: 'tutup_buku',
+  MenuEBisnis.postingKulakan: 'posting_kulakan',
+  MenuEBisnis.postingBayarHutang: 'posting_bayar_hutang',
+  MenuEBisnis.postingTerimaPiutang: 'posting_terima_piutang',
 };
 
 /// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
@@ -351,6 +392,10 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
           Sesi.instance.isSalesKeliling;
     }
     return true;
+  }
+  final kunciAkuntansi = _kunciMenuAkuntansi[kunci];
+  if (kunciAkuntansi != null) {
+    return Sesi.instance.bolehMenuVarianBaru(kunciAkuntansi);
   }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
@@ -496,9 +541,47 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.laporanLaporan, Icons.folder_outlined, 'Laporan-Laporan',
       builder: _bangunLaporanLaporan),
-  _ItemMenuShell(MenuEBisnis.laporanKeuangan, Icons.account_balance_outlined,
-      'Laporan Keuangan',
+  // Grup "Akuntansi": tiap tab layar Laporan Keuangan punya menunya sendiri,
+  // memakai ikon yang sama dengan tabnya supaya pengguna lama tidak kehilangan
+  // penanda visual yang sudah dikenal.
+  _ItemMenuShell(MenuEBisnis.laporanKeuangan, Icons.folder_open_outlined,
+      'Katalog Laporan',
       builder: _bangunLaporanKeuangan),
+  _ItemMenuShell(MenuEBisnis.kodeAkun, Icons.account_tree_outlined, 'Kode Akun',
+      builder: _bangunKodeAkun),
+  _ItemMenuShell(MenuEBisnis.grupAkun, Icons.workspaces_outline, 'Grup Akun',
+      builder: _bangunGrupAkun),
+  _ItemMenuShell(
+      MenuEBisnis.jenisTransaksi, Icons.swap_horiz, 'Jenis Transaksi',
+      builder: _bangunJenisTransaksi),
+  _ItemMenuShell(MenuEBisnis.bankAkun, Icons.account_balance, 'Bank',
+      builder: _bangunBankAkun),
+  _ItemMenuShell(MenuEBisnis.jurnalUmum, Icons.edit_note, 'Jurnal Umum',
+      builder: _bangunJurnalUmum),
+  _ItemMenuShell(
+      MenuEBisnis.postingHpp, Icons.inventory_2_outlined, 'Posting HPP',
+      builder: _bangunPostingHpp),
+  _ItemMenuShell(MenuEBisnis.postingPenjualan, Icons.point_of_sale_outlined,
+      'Posting Penjualan',
+      builder: _bangunPostingPenjualan),
+  _ItemMenuShell(MenuEBisnis.saldoAwalAkun, Icons.play_circle_outline,
+      'Saldo Awal (Neraca Awal)',
+      builder: _bangunSaldoAwalAkun),
+  _ItemMenuShell(MenuEBisnis.jurnalPenyesuaian, Icons.rule_folder_outlined,
+      'Jurnal Penyesuaian Berkala',
+      builder: _bangunJurnalPenyesuaian),
+  _ItemMenuShell(
+      MenuEBisnis.tutupBuku, Icons.lock_outline, 'Tutup Buku (Laba Ditahan)',
+      builder: _bangunTutupBuku),
+  _ItemMenuShell(MenuEBisnis.postingKulakan, Icons.local_shipping_outlined,
+      'Posting Kulakan',
+      builder: _bangunPostingKulakan),
+  _ItemMenuShell(MenuEBisnis.postingBayarHutang, Icons.payments_outlined,
+      'Posting Bayar Hutang',
+      builder: _bangunPostingBayarHutang),
+  _ItemMenuShell(MenuEBisnis.postingTerimaPiutang, Icons.savings_outlined,
+      'Posting Terima Piutang',
+      builder: _bangunPostingTerimaPiutang),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -516,6 +599,20 @@ const _daftarMenu = <_ItemMenuShell>[
       MenuEBisnis.tokoKelola, Icons.storefront_outlined, 'Kelola Toko',
       builder: _bangunTokoKelola),
 ];
+
+/// Ringkasan grup sidebar utk pengujian: label, apakah dapat dilipat, apakah
+/// terbuka secara bawaan, dan jumlah menunya. Sengaja mengembalikan data polos
+/// supaya `_GrupMenuShell` tetap privat, sementara aturan tampilannya tetap
+/// dapat dikunci oleh test tanpa merender seluruh cangkang aplikasi.
+List<({String label, bool dapatDilipat, bool terbukaBawaan, int jumlahItem})>
+    ringkasanGrupSidebar() => _grupMenu
+        .map((g) => (
+              label: g.label,
+              dapatDilipat: g.dapatDilipat,
+              terbukaBawaan: g.terbukaBawaan,
+              jumlahItem: g.items.length,
+            ))
+        .toList();
 
 const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Apotik & Farmasi', [
@@ -549,7 +646,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.kasJurnal,
     MenuEBisnis.labaRugi,
   ]),
-  _GrupMenuShell('Operasional', [
+  _GrupMenuShell(terbukaBawaan: true, 'Operasional', [
     MenuEBisnis.kasir,
     MenuEBisnis.pesanan,
     MenuEBisnis.layarPelanggan,
@@ -571,24 +668,45 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.caraBayar,
   ]),
   _GrupMenuShell(
-      'Pengadaan',
-      [
-        MenuEBisnis.pengadaanPr,
-        MenuEBisnis.pengadaanPo,
-        MenuEBisnis.pengadaanBast,
-        MenuEBisnis.pengadaanTagihan,
-        MenuEBisnis.pengadaanDpc,
-        MenuEBisnis.pengadaanBdp,
-        MenuEBisnis.pengadaanPajak,
-      ],
-      dapatDilipat: true),
+    'Pengadaan',
+    [
+      MenuEBisnis.pengadaanPr,
+      MenuEBisnis.pengadaanPo,
+      MenuEBisnis.pengadaanBast,
+      MenuEBisnis.pengadaanTagihan,
+      MenuEBisnis.pengadaanDpc,
+      MenuEBisnis.pengadaanBdp,
+      MenuEBisnis.pengadaanPajak,
+    ],
+  ),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
     MenuEBisnis.riwayatPenjualan,
     MenuEBisnis.laporanTransaksi,
     MenuEBisnis.laporanLaporan,
-    MenuEBisnis.laporanKeuangan,
   ]),
+  // Urutannya mengikuti urutan tab pada layar Laporan Keuangan supaya pengguna
+  // lama menemukan menu di tempat yang sama. Dapat dilipat spt grup Pengadaan:
+  // isinya panjang dan tidak dibuka tiap hari.
+  _GrupMenuShell(
+    'Akuntansi',
+    [
+      MenuEBisnis.laporanKeuangan,
+      MenuEBisnis.kodeAkun,
+      MenuEBisnis.grupAkun,
+      MenuEBisnis.jenisTransaksi,
+      MenuEBisnis.bankAkun,
+      MenuEBisnis.jurnalUmum,
+      MenuEBisnis.postingHpp,
+      MenuEBisnis.postingPenjualan,
+      MenuEBisnis.saldoAwalAkun,
+      MenuEBisnis.jurnalPenyesuaian,
+      MenuEBisnis.tutupBuku,
+      MenuEBisnis.postingKulakan,
+      MenuEBisnis.postingBayarHutang,
+      MenuEBisnis.postingTerimaPiutang,
+    ],
+  ),
   _GrupMenuShell('Sistem', [
     MenuEBisnis.riwayatSinkron,
     MenuEBisnis.logError,
@@ -633,6 +751,95 @@ Widget _bangunLaporanKeuangan(BuildContext c) => const LaporanScreen(
       judul: 'Laporan Keuangan',
       subjudul: 'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
     );
+
+/// Layar akuntansi memakai LAYAR YANG SAMA dengan tab-nya, hanya mendarat di
+/// bagian yang tepat -- tidak ada duplikasi logika posting/jurnal.
+Widget _bangunKodeAkun(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.kodeAkun,
+    'Kode Akun',
+    'Bagan akun (chart of account) beserta kode dan saldo normalnya',
+    const KodeAkunScreen(tabAwal: 0));
+Widget _bangunGrupAkun(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.grupAkun,
+    'Grup Akun',
+    'Pengelompokan akun untuk klasifikasi laporan',
+    const KodeAkunScreen(tabAwal: 4));
+Widget _bangunJenisTransaksi(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.jenisTransaksi,
+    'Jenis Transaksi',
+    'Jenis transaksi beserta akun debet/kredit bawaannya',
+    const KodeAkunScreen(tabAwal: 3));
+Widget _bangunBankAkun(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.bankAkun,
+    'Bank',
+    'Daftar bank beserta kode dan akun kas/bank yang dipakai jurnal',
+    const KodeAkunScreen(tabAwal: 2));
+Widget _bangunJurnalUmum(BuildContext c) => const JurnalUmumScreen();
+Widget _bangunSaldoAwalAkun(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.saldoAwalAkun,
+    'Saldo Awal (Neraca Awal)',
+    'Saldo pembukaan tiap akun sebelum sistem dipakai',
+    const SiklusAkuntansiScreen(tabAwal: 0));
+Widget _bangunJurnalPenyesuaian(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.jurnalPenyesuaian,
+    'Jurnal Penyesuaian Berkala',
+    'Amortisasi, akrual, dan penyisihan yang dijurnal tiap periode',
+    const SiklusAkuntansiScreen(tabAwal: 1));
+Widget _bangunTutupBuku(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.tutupBuku,
+    'Tutup Buku (Laba Ditahan)',
+    'Menutup akun laba rugi ke Laba Ditahan pada akhir periode',
+    const SiklusAkuntansiScreen(tabAwal: 2));
+
+/// Bungkus layar akuntansi yang badannya berupa tab (KodeAkun/Siklus) menjadi
+/// halaman utuh: keduanya mengurus scroll sendiri, jadi [AppShell.scrollable]
+/// wajib false.
+Widget _halamanAkuntansi(
+        MenuEBisnis menu, String judul, String subjudul, Widget badan) =>
+    AppShell(
+        menuAktif: menu,
+        judul: judul,
+        subjudul: subjudul,
+        scrollable: false,
+        body: badan);
+
+/// Lima posting tetap memakai LaporanScreen supaya panel drafnya persis sama
+/// dengan tab lamanya; [LaporanScreen.bukaPosting] yang menentukan tab mana yang
+/// terbuka begitu layar tampil.
+Widget _postingKeuangan(
+        MenuEBisnis menu, String judul, String subjudul, String idPendukung) =>
+    LaporanScreen(
+      aksiKatalog: 'laporan_keuangan_katalog',
+      menuAktif: menu,
+      judul: judul,
+      subjudul: subjudul,
+      bukaPosting: idPendukung,
+    );
+Widget _bangunPostingHpp(BuildContext c) => _postingKeuangan(
+    MenuEBisnis.postingHpp,
+    'Posting HPP',
+    'Membukukan harga pokok penjualan ke buku besar',
+    'posting_hpp');
+Widget _bangunPostingPenjualan(BuildContext c) => _postingKeuangan(
+    MenuEBisnis.postingPenjualan,
+    'Posting Penjualan',
+    'Membukukan penjualan kasir ke buku besar',
+    'posting_penjualan');
+Widget _bangunPostingKulakan(BuildContext c) => _postingKeuangan(
+    MenuEBisnis.postingKulakan,
+    'Posting Kulakan',
+    'Membukukan pembelian barang toko (persediaan & utang supplier)',
+    'posting_kulakan');
+Widget _bangunPostingBayarHutang(BuildContext c) => _postingKeuangan(
+    MenuEBisnis.postingBayarHutang,
+    'Posting Bayar Hutang',
+    'Membukukan pembayaran hutang ke supplier toko',
+    'posting_bayar_hutang');
+Widget _bangunPostingTerimaPiutang(BuildContext c) => _postingKeuangan(
+    MenuEBisnis.postingTerimaPiutang,
+    'Posting Terima Piutang',
+    'Membukukan penerimaan piutang dari pelanggan toko',
+    'posting_terima_piutang');
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -860,6 +1067,18 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Jenis Transaksi';
     case MenuEBisnis.bankAkun:
       return 'Bank';
+    case MenuEBisnis.saldoAwalAkun:
+      return 'Saldo Awal (Neraca Awal)';
+    case MenuEBisnis.jurnalPenyesuaian:
+      return 'Jurnal Penyesuaian Berkala';
+    case MenuEBisnis.tutupBuku:
+      return 'Tutup Buku (Laba Ditahan)';
+    case MenuEBisnis.postingKulakan:
+      return 'Posting Kulakan';
+    case MenuEBisnis.postingBayarHutang:
+      return 'Posting Bayar Hutang';
+    case MenuEBisnis.postingTerimaPiutang:
+      return 'Posting Terima Piutang';
     case MenuEBisnis.riwayatSinkron:
       return 'Riwayat Sinkronisasi';
     case MenuEBisnis.logError:
@@ -960,7 +1179,35 @@ MenuEBisnis? _menuDariLabel(String label) {
     case 'Laporan-Laporan':
       return MenuEBisnis.laporanLaporan;
     case 'Laporan Keuangan':
+    case 'Laporan-Laporan Keuangan':
+    case 'Katalog Laporan':
       return MenuEBisnis.laporanKeuangan;
+    case 'Kode Akun':
+      return MenuEBisnis.kodeAkun;
+    case 'Grup Akun':
+      return MenuEBisnis.grupAkun;
+    case 'Jenis Transaksi':
+      return MenuEBisnis.jenisTransaksi;
+    case 'Bank':
+      return MenuEBisnis.bankAkun;
+    case 'Jurnal Umum':
+      return MenuEBisnis.jurnalUmum;
+    case 'Posting HPP':
+      return MenuEBisnis.postingHpp;
+    case 'Posting Penjualan':
+      return MenuEBisnis.postingPenjualan;
+    case 'Saldo Awal (Neraca Awal)':
+      return MenuEBisnis.saldoAwalAkun;
+    case 'Jurnal Penyesuaian Berkala':
+      return MenuEBisnis.jurnalPenyesuaian;
+    case 'Tutup Buku (Laba Ditahan)':
+      return MenuEBisnis.tutupBuku;
+    case 'Posting Kulakan':
+      return MenuEBisnis.postingKulakan;
+    case 'Posting Bayar Hutang':
+      return MenuEBisnis.postingBayarHutang;
+    case 'Posting Terima Piutang':
+      return MenuEBisnis.postingTerimaPiutang;
     case 'Riwayat Sinkronisasi':
       return MenuEBisnis.riwayatSinkron;
     case 'Log Error':
@@ -1451,14 +1698,17 @@ class _SidebarGroup extends StatefulWidget {
 
 class _SidebarGroupState extends State<_SidebarGroup> {
   /// Null berarti pengguna belum menyentuh grup ini, sehingga kondisinya
-  /// mengikuti bawaan: tertutup, kecuali menu aktif ada di dalamnya.
+  /// mengikuti bawaan grup ([_GrupMenuShell.terbukaBawaan]) atau terbuka
+  /// karena menu aktif berada di dalamnya.
   bool? _dibukaPengguna;
 
   bool get _berisiMenuAktif => widget.grup.items.contains(widget.menuAktif);
 
   bool get _terbuka {
     if (!widget.grup.dapatDilipat) return true;
-    return _dibukaPengguna ?? _berisiMenuAktif;
+    // Menu aktif SELALU membuka grupnya, bahkan bila bawaannya tertutup --
+    // kalau tidak, pengguna kehilangan petunjuk posisinya sendiri.
+    return _dibukaPengguna ?? (widget.grup.terbukaBawaan || _berisiMenuAktif);
   }
 
   @override
