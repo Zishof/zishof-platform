@@ -24,6 +24,7 @@ import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/pengadaan_bast_screen.dart';
+import '../screens/pengadaan_bayar_screen.dart';
 import '../screens/pengadaan_tagihan_screen.dart';
 import '../screens/pengadaan_po_screen.dart';
 import '../screens/pengadaan_pr_screen.dart';
@@ -111,6 +112,7 @@ enum MenuEBisnis {
   pengadaanPo,
   pengadaanBast,
   pengadaanTagihan,
+  pengadaanDpc,
   penyedia,
   diskon,
   caraBayar,
@@ -234,6 +236,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.pengadaanPo: 'pengadaan_po',
   MenuEBisnis.pengadaanBast: 'pengadaan_bast',
   MenuEBisnis.pengadaanTagihan: 'pengadaan_tagihan',
+  MenuEBisnis.pengadaanDpc: 'pengadaan_dpc',
   // Kunci server "penyedia" (aksesMenu, lihat PosApi.java:1012-1013) sudah
   // ada dari sebelumnya (dialiaskan ke "vendor" juga) -- baru dipakai di
   // sini pertama kali sejak layar CRUD Supplier ditambahkan.
@@ -450,6 +453,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.pengadaanTagihan, Icons.request_quote_outlined,
       'Terima Tagihan Vendor',
       builder: _bangunPengadaanTagihan),
+  _ItemMenuShell(MenuEBisnis.pengadaanDpc, Icons.payments_outlined,
+      'Pembayaran Vendor',
+      builder: _bangunPengadaanBayar),
   _ItemMenuShell(MenuEBisnis.penyedia, Icons.local_shipping_outlined,
       'Supplier (Penyedia)',
       builder: _bangunPenyedia),
@@ -549,6 +555,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.pengadaanPo,
     MenuEBisnis.pengadaanBast,
     MenuEBisnis.pengadaanTagihan,
+    MenuEBisnis.pengadaanDpc,
   ]),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
@@ -582,6 +589,7 @@ Widget _bangunPengadaanPr(BuildContext c) => const PengadaanPrScreen();
 Widget _bangunPengadaanPo(BuildContext c) => const PengadaanPoScreen();
 Widget _bangunPengadaanBast(BuildContext c) => const PengadaanBastScreen();
 Widget _bangunPengadaanTagihan(BuildContext c) => const PengadaanTagihanScreen();
+Widget _bangunPengadaanBayar(BuildContext c) => const PengadaanBayarScreen();
 Widget _bangunDiskon(BuildContext c) => const DiskonScreen();
 Widget _bangunCaraBayar(BuildContext c) => const CaraBayarScreen();
 Widget _bangunPenyedia(BuildContext c) => const SupplierScreen();
@@ -764,6 +772,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Penerimaan Barang (BAST)';
     case MenuEBisnis.pengadaanTagihan:
       return 'Terima Tagihan Vendor';
+    case MenuEBisnis.pengadaanDpc:
+      return 'Pembayaran Vendor';
     case MenuEBisnis.penyedia:
       return 'Supplier (Penyedia)';
     case MenuEBisnis.diskon:
