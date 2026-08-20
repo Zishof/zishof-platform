@@ -768,6 +768,91 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     }
   }
 
+  /// Perbaiki faktur yang sudah terlanjur diinput.
+  ///
+  /// Server tidak punya aksi "ubah faktur" — dan memang tidak sepele, karena satu faktur sudah
+  /// terlanjur menambah stok, membentuk batch, serta memperbarui harga beli. Karena itu Edit di
+  /// sini dijalankan sebagai koreksi yang jujur dan memakai jalur yang sudah teruji:
+  /// **faktur lama DIBATALKAN** (stok & batch dikembalikan oleh server, jejaknya tetap tersimpan
+  /// sebagai faktur batal), lalu form Entri Faktur dibuka sudah TERISI data lama supaya pengguna
+  /// tinggal membetulkan bagian yang salah dan menyimpannya kembali.
+  ///
+  /// Konsekuensinya disampaikan lebih dulu di dialog konfirmasi, termasuk risiko bila pengguna
+  /// menutup form sebelum menyimpan: faktur lama sudah terlanjur batal dan harus dientri ulang.
+  Future<void> _editFaktur(Map<String, dynamic> f, Map<String, dynamic> header,
+      List<Map<String, dynamic>> items) async {
+    final nomor = '${header['nomorFaktur'] ?? ''}';
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Edit Faktur'),
+        content: Text(
+            'Faktur $nomor akan DIBATALKAN lebih dulu (stok dan batch yang pernah masuk '
+            'dikembalikan), lalu datanya dimuat ke form Entri Faktur agar dapat diperbaiki '
+            'dan disimpan kembali.\n\n'
+            'Perhatian: bila form ditutup sebelum disimpan, faktur lama tetap dalam keadaan '
+            'batal dan perlu dientri ulang.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(c, true),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Lanjut Edit'),
+          ),
+        ],
+      ),
+    );
+    if (setuju != true) return;
+
+    try {
+      final res = await ApiClient.instance
+          .aksi('kulakan_faktur_batal', {'faktur_id': f['fakturId']});
+      if ('${res['status']}' != '00') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Faktur tidak dapat dibatalkan: ${res['description'] ?? res['status']}')));
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal membatalkan faktur: $e')));
+      return;
+    }
+
+    if (!mounted) return;
+    // Isi ulang form entri dengan data faktur lama.
+    _fakturController.text = nomor;
+    final tglTeks = '${header['tanggalFaktur'] ?? ''}';
+    _tanggalFaktur = DateTime.tryParse(tglTeks) ?? _tanggalFaktur;
+    final idSupplier = header['supplierId'];
+    _supplierTerpilih = idSupplier == null
+        ? null
+        : {'id': idSupplier, 'nama': '${header['namaSupplier'] ?? ''}'};
+    _keteranganController.text = '${header['keterangan'] ?? ''}';
+    _itemsFaktur
+      ..clear()
+      ..addAll(items.map((it) => _ItemFaktur(
+            produkId: ((it['produkId'] as num?) ?? 0).toInt(),
+            nama: '${it['namaProduk'] ?? ''}',
+            kode: '${it['kodeProduk'] ?? ''}',
+            qty: ((it['qty'] as num?) ?? 0).toDouble(),
+            harga: ((it['hargaBeliSatuan'] as num?) ?? 0).toDouble(),
+          )));
+    setStateIfMounted(() {});
+
+    Navigator.of(context).pop(); // tutup dialog detail.
+    await _muatRiwayat();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Faktur $nomor dibatalkan. Perbaiki datanya lalu simpan '
+            'kembali sebagai faktur pengganti.')));
+    await _bukaEntriFaktur();
+  }
+
   Future<void> _lihatDetailFaktur(Map<String, dynamic> f) async {
     Map<String, dynamic>? detail;
     try {
@@ -800,6 +885,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
                   foregroundColor: AppColors.danger),
               icon: const Icon(Icons.block_outlined, size: 18),
               label: const Text('Batalkan'),
+            ),
+          // Perbaikan faktur yang sudah terlanjur diinput. Butuh hak HAPUS (faktur
+          // lama dibatalkan) sekaligus hak TAMBAH (faktur pengganti disimpan).
+          if (Sesi.instance.bolehKelola ||
+              (Sesi.instance.bolehAksiPos('kulakan', 'delete') &&
+                  Sesi.instance.bolehAksiPos('kulakan', 'create')))
+            OutlinedButton.icon(
+              onPressed: () => _editFaktur(f, header, items),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Edit'),
             ),
           OutlinedButton.icon(
             onPressed: () => _unduhFakturPdf(header, items),

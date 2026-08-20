@@ -45,6 +45,11 @@ class StrukScreen extends StatelessWidget {
   final double? saldo;
   final bool modeCetakUlang;
 
+  /// Judul dokumen yang dicetak tepat di bawah identitas toko, mis.
+  /// "FAKTUR RETUR PENJUALAN". Kosong = struk penjualan biasa (perilaku lama),
+  /// sehingga struk kasir tidak berubah sama sekali.
+  final String? jenisDokumen;
+
   const StrukScreen({
     super.key,
     required this.kode,
@@ -62,6 +67,7 @@ class StrukScreen extends StatelessWidget {
     this.kembalian,
     this.saldo,
     this.modeCetakUlang = false,
+    this.jenisDokumen,
   });
 
   double get _subtotalItem => item.fold<double>(
@@ -566,6 +572,10 @@ class StrukScreen extends StatelessWidget {
     if (Sesi.instance.tokoTelp.trim().isNotEmpty) {
       centered(Sesi.instance.tokoTelp);
     }
+    if (jenisDokumen != null && jenisDokumen!.trim().isNotEmpty) {
+      text('');
+      centered(jenisDokumen!.trim().toUpperCase(), bold: true);
+    }
     text('-' * columns);
     info('No', kode);
     info('Tanggal', waktu);
@@ -672,6 +682,8 @@ class StrukScreen extends StatelessWidget {
 
     if (Sesi.instance.tokoTelp.trim().isNotEmpty) tinggi += 4;
     if (statusLabel != null && statusLabel!.trim().isNotEmpty) tinggi += 5;
+    // Judul dokumen (mis. FAKTUR RETUR PENJUALAN) menambah satu baris + jarak.
+    if (jenisDokumen != null && jenisDokumen!.trim().isNotEmpty) tinggi += 7;
 
     for (final baris in item) {
       final nama = '${baris['nama'] ?? ''}'.trim();
@@ -799,6 +811,14 @@ class StrukScreen extends StatelessWidget {
             textAlign: pw.TextAlign.center,
             style: const pw.TextStyle(fontSize: 8),
           ),
+        if (jenisDokumen != null && jenisDokumen!.trim().isNotEmpty) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            jenisDokumen!.trim().toUpperCase(),
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        ],
         _garisPdf(),
         _infoPdf('No', kode),
         _infoPdf('Tanggal', waktu),
@@ -1084,6 +1104,7 @@ class StrukScreen extends StatelessWidget {
                         kembalian: kembalian,
                         saldo: saldo,
                         statusLabel: statusLabel,
+                        jenisDokumen: jenisDokumen,
                         formatUang: _formatUang,
                         formatAngka: (v) => _formatAngka.format(v),
                         formatQty: _formatQty,
@@ -1274,6 +1295,7 @@ class _StrukPreview extends StatelessWidget {
   final double? kembalian;
   final double? saldo;
   final String? statusLabel;
+  final String? jenisDokumen;
   final String Function(num nilai) formatUang;
   final String Function(num nilai) formatAngka;
   final String Function(num nilai) formatQty;
@@ -1298,6 +1320,7 @@ class _StrukPreview extends StatelessWidget {
     required this.kembalian,
     required this.saldo,
     required this.statusLabel,
+    this.jenisDokumen,
     required this.formatUang,
     required this.formatAngka,
     required this.formatQty,
@@ -1367,6 +1390,16 @@ class _StrukPreview extends StatelessWidget {
                   Sesi.instance.tokoTelp,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 11),
+                ),
+              if (jenisDokumen != null && jenisDokumen!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    jenisDokumen!.trim().toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w800),
+                  ),
                 ),
               const _GarisStruk(),
               _InfoStruk(label: 'No', value: kode),

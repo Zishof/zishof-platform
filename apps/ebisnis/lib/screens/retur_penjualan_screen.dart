@@ -10,6 +10,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
+import 'struk_retur_util.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -238,8 +239,23 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
             .toList(),
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Retur berhasil disimpan.')));
+        // Data struk diambil SEBELUM form dikosongkan; setelah ini _baris sudah
+        // direset sehingga tidak bisa lagi dibaca.
+        final itemStruk = dipilih
+            .map((b) => itemStrukRetur(
+                  nama: '${b.item['nama'] ?? '-'}',
+                  qty: b.qty,
+                  harga: b.hargaSatuan,
+                ))
+            .toList();
+        final totalStruk =
+            dipilih.fold<double>(0, (jumlah, b) => jumlah + b.subtotal);
+        final kodeStruk = '${_transaksiTerpilih!['nomorNota'] ?? ''}';
+        final pelangganStruk = '${_transaksiTerpilih!['pembeli'] ?? ''}';
+        final metodeStruk = _metodePengembalian;
+        final waktuStruk =
+            DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now());
+
         setStateIfMounted(() {
           _transaksiTerpilih = null;
           _baris = [];
@@ -247,6 +263,39 @@ class _TabBuatReturState extends State<_TabBuatRetur> {
           _kataKunciController.clear();
           _idempotencyKey = null;
         });
+
+        final cetak = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            icon: const Icon(Icons.check_circle_outline, color: AppColors.success),
+            title: const Text('Retur berhasil disimpan'),
+            content: Text(
+                'Retur atas nota $kodeStruk sebesar '
+                '${_formatRupiah.format(totalStruk)} sudah tercatat. '
+                'Cetak faktur retur untuk diserahkan kepada pembeli?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Nanti Saja')),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(c, true),
+                icon: const Icon(Icons.print_outlined, size: 18),
+                label: const Text('Cetak Faktur Retur'),
+              ),
+            ],
+          ),
+        );
+        if (cetak == true && mounted) {
+          await bukaStrukRetur(
+            context,
+            kode: kodeStruk,
+            waktu: waktuStruk,
+            item: itemStruk,
+            total: totalStruk,
+            metode: metodeStruk,
+            pelanggan: pelangganStruk,
+          );
+        }
       }
     } catch (e) {
       setStateIfMounted(() => _errorSimpan = e.toString());
@@ -878,6 +927,44 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
     }
   }
 
+  /// Cetak faktur retur dari riwayat.
+  ///
+  /// Satu peristiwa retur biasanya menghasilkan BEBERAPA baris (satu per barang) dengan nomor
+  /// nota dan waktu yang sama, sehingga barisnya dikumpulkan dulu supaya yang tercetak adalah
+  /// satu faktur utuh — bukan selembar per barang.
+  Future<void> _cetak(Map<String, dynamic> r) async {
+    final nota = '${r['kodeTransaksiAsal'] ?? ''}';
+    final waktu = '${r['waktu'] ?? ''}';
+    final serumpun = _data
+        .where((e) =>
+            '${e['kodeTransaksiAsal'] ?? ''}' == nota &&
+            '${e['waktu'] ?? ''}' == waktu)
+        .toList();
+    final baris = serumpun.isEmpty ? [r] : serumpun;
+    final item = baris
+        .map((e) => itemStrukRetur(
+              nama: '${e['namaProduk'] ?? '-'}',
+              qty: (e['qty'] as num?) ?? 0,
+              harga: (e['hargaSatuan'] as num?) ?? 0,
+            ))
+        .toList();
+    final total = baris.fold<double>(0, (jumlah, e) {
+      final nilai = (e['totalNilai'] as num?) ??
+          (((e['qty'] as num?) ?? 0) * ((e['hargaSatuan'] as num?) ?? 0));
+      return jumlah + nilai.toDouble();
+    });
+    if (!mounted) return;
+    await bukaStrukRetur(
+      context,
+      kode: nota,
+      waktu: waktu,
+      item: item,
+      total: total,
+      metode: '${r['metodePengembalian'] ?? ''}',
+      pelanggan: '${r['namaPembeli'] ?? ''}',
+    );
+  }
+
   Future<void> _ubah(Map<String, dynamic> r) async {
     final qtyController = TextEditingController(text: '${r['qty']}');
     final hargaController = TextEditingController(text: '${r['hargaSatuan']}');
@@ -1043,6 +1130,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> {
               idBerubah: _diff.idBerubah,
               onUbah: _ubah,
               onHapus: _hapus,
+              onCetak: _cetak,
               pagination: _total > _pageSize
                   ? AppTablePagination(
                       halaman: _halaman,
@@ -1068,6 +1156,7 @@ class _TabelRiwayatRetur extends StatelessWidget {
   final bool bolehKelola;
   final ValueChanged<Map<String, dynamic>> onUbah;
   final ValueChanged<Map<String, dynamic>> onHapus;
+  final ValueChanged<Map<String, dynamic>>? onCetak;
   final AppTablePagination? pagination;
   // Penanda diff dari emisi server (baca lokal-dulu) utk kilau baris.
   final Set<String> idBaru;
@@ -1078,6 +1167,7 @@ class _TabelRiwayatRetur extends StatelessWidget {
     required this.bolehKelola,
     required this.onUbah,
     required this.onHapus,
+    this.onCetak,
     this.idBaru = const <String>{},
     this.idBerubah = const <String>{},
     this.pagination,
@@ -1086,7 +1176,7 @@ class _TabelRiwayatRetur extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppDataTable(
-      minWidth: bolehKelola ? 1120 : 1040,
+      minWidth: bolehKelola ? 1160 : 1080,
       emptyText: 'Belum ada riwayat retur.',
       pagination: pagination,
       columns: [
@@ -1098,8 +1188,8 @@ class _TabelRiwayatRetur extends StatelessWidget {
         const AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         const AppTableColumn('Kondisi', flex: 2),
         const AppTableColumn('Metode', flex: 2),
-        if (bolehKelola)
-          const AppTableColumn('Aksi', width: 92, align: TextAlign.center),
+        AppTableColumn('Aksi',
+            width: bolehKelola ? 132 : 52, align: TextAlign.center),
       ],
       rows: data.map((r) {
         final totalNilai = (r['totalNilai'] as num?) ??
@@ -1133,28 +1223,37 @@ class _TabelRiwayatRetur extends StatelessWidget {
             ),
             AppTableCell.text('${r['kondisiBarang']}', flex: 2),
             AppTableCell.text('${r['metodePengembalian']}', flex: 2),
-            if (bolehKelola)
-              AppTableCell(
-                width: 92,
-                align: TextAlign.center,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+            AppTableCell(
+              width: bolehKelola ? 132 : 52,
+              align: TextAlign.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Cetak faktur boleh untuk semua yang dapat melihat riwayat:
+                  // mencetak ulang bukti tidak mengubah data apa pun.
+                  IconButton(
+                    tooltip: 'Cetak faktur retur',
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    color: AppColors.textSecondaryOf(context),
+                    onPressed: onCetak == null ? null : () => onCetak!(r),
+                  ),
+                  if (bolehKelola)
                     IconButton(
                       tooltip: 'Ubah',
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       color: AppColors.primary,
                       onPressed: () => onUbah(r),
                     ),
+                  if (bolehKelola)
                     IconButton(
                       tooltip: 'Hapus',
                       icon: const Icon(Icons.delete_outline, size: 18),
                       color: AppColors.danger,
                       onPressed: () => onHapus(r),
                     ),
-                  ],
-                ),
+                ],
               ),
+            ),
           ],
         );
       }).toList(),
