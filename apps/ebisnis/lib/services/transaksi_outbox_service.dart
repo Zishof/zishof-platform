@@ -83,12 +83,31 @@ class TransaksiOutboxService {
     return _intervalRetryMenit;
   }
 
-  Future<HasilSinkronisasiTransaksi> sinkronkan() {
+  /// [sertakanGagal] mengembalikan transaksi ber-status GAGAL ke antrean lebih
+  /// dulu. HANYA dipakai oleh pemicu MANUAL (tombol Sinkronkan), bukan timer
+  /// otomatis -- supaya penolakan bisnis yang memang permanen tidak dikirim
+  /// berulang tanpa sepengetahuan pengguna.
+  Future<HasilSinkronisasiTransaksi> sinkronkan({bool sertakanGagal = false}) {
     final aktif = _prosesAktif;
     if (aktif != null) return aktif;
-    final proses = _sinkronkanInternal();
+    final proses = _sinkronkanInternal(sertakanGagal: sertakanGagal);
     _prosesAktif = proses;
     return proses.whenComplete(() => _prosesAktif = null);
+  }
+
+  /// Jumlah transaksi yang masih tertahan di perangkat ini: PENDING (menunggu
+  /// giliran kirim) dan GAGAL (sudah divonis, tidak akan dijemput retry).
+  Future<({int pending, int gagal})> hitungTertahan() async {
+    final pending = await CoreDb.instance.transaksiPendingBelumSinkron(
+      akunKunci: Sesi.instance.userId,
+      tokoId: Sesi.instance.tokoId,
+      jedaRetry: Duration.zero,
+    );
+    final gagal = await CoreDb.instance.transaksiGagalBelumSinkron(
+      akunKunci: Sesi.instance.userId,
+      tokoId: Sesi.instance.tokoId,
+    );
+    return (pending: pending.length, gagal: gagal.length);
   }
 
   /// Dipanggil tepat setelah transaksi committed ke SQLite. Jika proses lama
@@ -104,9 +123,21 @@ class TransaksiOutboxService {
     await sinkronkan();
   }
 
-  Future<HasilSinkronisasiTransaksi> _sinkronkanInternal() async {
+  Future<HasilSinkronisasiTransaksi> _sinkronkanInternal(
+      {bool sertakanGagal = false}) async {
     if (!ApiClient.instance.sudahLogin) {
       return const HasilSinkronisasiTransaksi(total: 0, berhasil: 0);
+    }
+
+    if (sertakanGagal) {
+      final gagal = await CoreDb.instance.transaksiGagalBelumSinkron(
+        akunKunci: Sesi.instance.userId,
+        tokoId: Sesi.instance.tokoId,
+      );
+      if (gagal.isNotEmpty) {
+        await CoreDb.instance.kembalikanTransaksiKeAntrean(
+            gagal.map((r) => '${r['kode_unik'] ?? ''}').toList());
+      }
     }
 
     final pending = await CoreDb.instance.transaksiPendingBelumSinkron(
@@ -165,7 +196,8 @@ class TransaksiOutboxService {
           continue;
         }
         await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
-        if (dapatDicobaUlang(e)) {
+        final percobaan = (row['percobaan'] as num?)?.toInt() ?? 0;
+        if (dapatDicobaUlang(e) && percobaan < batasPercobaanOtomatis) {
           _jadwalkanRetrySetelahJeda();
           if (e is ApiException && e.offline) {
             // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
@@ -329,10 +361,40 @@ class TransaksiOutboxService {
   /// Network, HTTP 5xx, respons server yang tidak valid, dan error internal
   /// tanpa kode bisnis adalah kegagalan teknis yang aman dicoba ulang dengan
   /// idempotency key yang sama.
+  /// Kode penolakan yang BENAR-BENAR permanen: mengirim ulang tidak akan
+  /// mengubah hasilnya karena penyebabnya ada pada data/aturan bisnis, bukan
+  /// pada gangguan teknis sesaat.
+  ///
+  /// Daftar ini sengaja berupa DAFTAR TERTUTUP, bukan "apa pun yang punya
+  /// kode". Sebelumnya setiap respons bernomor kode dianggap permanen,
+  /// sehingga `SERVER_ERROR` -- kode CADANGAN yang dipakai server untuk
+  /// exception tak terklasifikasi, dan dikirim lewat HTTP 200 sehingga tidak
+  /// pernah tersaring oleh syarat >= 500 -- ikut divonis permanen. Akibatnya
+  /// gangguan sesaat membuat nota berhenti di perangkat kasir dan TIDAK PERNAH
+  /// sampai ke server, hilang dari omzet tanpa jejak (insiden Toko Al-Bahjah
+  /// 20-08-2026, nota AB22008202600105).
+  static const Set<String> kodePenolakanPermanen = {
+    'DATA_TIDAK_LENGKAP',
+    'TIDAK_DITEMUKAN',
+    'PESANAN_PERLU_DIMUAT_ULANG',
+    'STOK_TIDAK_CUKUP',
+    'PRODUK_KADALUARSA',
+  };
+
+  /// Batas percobaan otomatis sebelum transaksi diparkir sbg GAGAL. Mencegah
+  /// kode tak dikenal berputar tanpa akhir, sambil tetap menyediakan jalur
+  /// Kirim Ulang manual.
+  static const int batasPercobaanOtomatis = 20;
+
   bool dapatDicobaUlang(Object error) {
     if (error is! ApiException) return true;
     if (error.offline || (error.statusHttp ?? 0) >= 500) return true;
-    return (error.kode ?? '').trim().isEmpty;
+    final kode = (error.kode ?? '').trim().toUpperCase();
+    if (kode.isEmpty) return true;
+    // Selain daftar permanen -- termasuk SERVER_ERROR dan kode baru yang belum
+    // dikenal versi ini -- diperlakukan sbg gangguan teknis dan dicoba lagi.
+    // Aman thd transaksi ganda karena retry memakai kode_unik asli.
+    return !kodePenolakanPermanen.contains(kode);
   }
 
   bool _transaksiSudahAdaDiServer(Object error) {

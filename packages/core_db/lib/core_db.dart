@@ -639,8 +639,8 @@ class CoreDb {
   /// kunci sama DIGANTI (coalesce) -- edit terakhir yang menang saat replay.
   /// Return id baris antrean yang baru dibuat -- dipakai alur "simpan lokal
   /// dulu" utk mencoba mengirim baris ITU saja segera setelah antre.
-  Future<int> outboxMasterTambah(String aksi, String? kunci,
-      String payloadJson) async {
+  Future<int> outboxMasterTambah(
+      String aksi, String? kunci, String payloadJson) async {
     final database = await db;
     return database.transaction<int>((txn) async {
       if (kunci != null && kunci.isNotEmpty) {
@@ -985,6 +985,57 @@ class CoreDb {
       whereArgs: [kodeUnik],
     );
     await _cadangkanBarisTransaksi(kodeUnik);
+  }
+
+  /// Transaksi yang pernah divonis GAGAL dan MASIH belum ada di server.
+  ///
+  /// Dipakai layar Riwayat Sinkronisasi dan tombol Sinkronkan manual: nota yang
+  /// terlanjur ditandai GAGAL tidak pernah lagi diambil retry otomatis (retry
+  /// hanya membaca status PENDING), sehingga tanpa jalur ini nilainya hilang
+  /// dari omzet server selamanya.
+  Future<List<Map<String, Object?>>> transaksiGagalBelumSinkron({
+    String? akunKunci,
+    int? tokoId,
+    int limit = 200,
+  }) async {
+    final database = await db;
+    final klausa = <String>["status = 'GAGAL'"];
+    final args = <Object?>[];
+    if (akunKunci != null && akunKunci.isNotEmpty) {
+      klausa.add('(akun_kunci = ? OR akun_kunci IS NULL)');
+      args.add(akunKunci);
+    }
+    if (tokoId != null) {
+      klausa.add('(toko_id = ? OR toko_id IS NULL)');
+      args.add(tokoId);
+    }
+    return database.query(
+      'transaksi_pending',
+      where: klausa.join(' AND '),
+      whereArgs: args,
+      orderBy: 'dibuat_pada ASC',
+      limit: limit,
+    );
+  }
+
+  /// Kembalikan transaksi GAGAL ke antrean kirim (PENDING) supaya siklus
+  /// sinkronisasi mengambilnya lagi. Hitungan percobaan direset agar jeda retry
+  /// tidak langsung menahannya, dan pesan error lama dibersihkan supaya riwayat
+  /// tidak menampilkan sebab yang sudah tidak berlaku.
+  ///
+  /// Aman terhadap transaksi ganda: pengiriman ulang memakai `kode_unik` asli,
+  /// dan server menolak duplikat lewat DUPLIKAT_KODE_TRANSAKSI yang oleh
+  /// pengirim diperlakukan sebagai "sudah ada di server".
+  Future<int> kembalikanTransaksiKeAntrean(List<String> kodeUnik) async {
+    if (kodeUnik.isEmpty) return 0;
+    final database = await db;
+    final tanda = List.filled(kodeUnik.length, '?').join(',');
+    return database.rawUpdate(
+      'UPDATE transaksi_pending SET status = ?, percobaan = 0, '
+      'terakhir_dicoba = NULL, pesan_error = NULL, diperbarui_pada = ? '
+      'WHERE kode_unik IN ($tanda) AND status = ?',
+      ['PENDING', DateTime.now().toIso8601String(), ...kodeUnik, 'GAGAL'],
+    );
   }
 
   /// Arsip transaksi milik akun/toko aktif, termasuk yang sudah tersinkron.

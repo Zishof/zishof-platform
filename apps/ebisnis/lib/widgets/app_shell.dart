@@ -74,6 +74,7 @@ import '../screens/mitrainap/laporan_pemilik_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 import 'bantuan_fab.dart';
+import '../services/transaksi_outbox_service.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -373,8 +374,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.propertiHotel, Icons.apartment_outlined, 'Properti Hotel',
       builder: _bangunPropertiHotel),
-  _ItemMenuShell(MenuEBisnis.kamarHotel, Icons.meeting_room_outlined,
-      'Kamar & Tipe Kamar',
+  _ItemMenuShell(
+      MenuEBisnis.kamarHotel, Icons.meeting_room_outlined, 'Kamar & Tipe Kamar',
       builder: _bangunKamarHotel),
   _ItemMenuShell(MenuEBisnis.reservasiHotel, Icons.event_available_outlined,
       'Tamu & Reservasi',
@@ -382,11 +383,11 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.resepsionisHotel, Icons.luggage_outlined,
       'Check-in / Check-out',
       builder: _bangunResepsionisHotel),
-  _ItemMenuShell(MenuEBisnis.tiketDapur, Icons.restaurant_outlined,
-      'Tiket Dapur',
+  _ItemMenuShell(
+      MenuEBisnis.tiketDapur, Icons.restaurant_outlined, 'Tiket Dapur',
       builder: _bangunTiketDapur),
-  _ItemMenuShell(MenuEBisnis.kontrakPemilik, Icons.handshake_outlined,
-      'Kontrak Pemilik',
+  _ItemMenuShell(
+      MenuEBisnis.kontrakPemilik, Icons.handshake_outlined, 'Kontrak Pemilik',
       builder: _bangunKontrakPemilik),
   _ItemMenuShell(MenuEBisnis.laporanPemilikHotel, Icons.receipt_long_outlined,
       'Laporan Pemilik',
@@ -466,14 +467,14 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.pengadaanTagihan, Icons.request_quote_outlined,
       'Terima Tagihan Vendor',
       builder: _bangunPengadaanTagihan),
-  _ItemMenuShell(MenuEBisnis.pengadaanDpc, Icons.payments_outlined,
-      'Pembayaran Vendor',
+  _ItemMenuShell(
+      MenuEBisnis.pengadaanDpc, Icons.payments_outlined, 'Pembayaran Vendor',
       builder: _bangunPengadaanBayar),
   _ItemMenuShell(MenuEBisnis.pengadaanBdp, Icons.local_shipping_outlined,
       'Barang Dalam Proses',
       builder: _bangunPengadaanBdp),
-  _ItemMenuShell(MenuEBisnis.pengadaanPajak, Icons.account_balance,
-      'Bayar Pajak',
+  _ItemMenuShell(
+      MenuEBisnis.pengadaanPajak, Icons.account_balance, 'Bayar Pajak',
       builder: _bangunPengadaanPajak),
   _ItemMenuShell(MenuEBisnis.penyedia, Icons.local_shipping_outlined,
       'Supplier (Penyedia)',
@@ -569,15 +570,18 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.diskon,
     MenuEBisnis.caraBayar,
   ]),
-  _GrupMenuShell('Pengadaan', [
-    MenuEBisnis.pengadaanPr,
-    MenuEBisnis.pengadaanPo,
-    MenuEBisnis.pengadaanBast,
-    MenuEBisnis.pengadaanTagihan,
-    MenuEBisnis.pengadaanDpc,
-    MenuEBisnis.pengadaanBdp,
-    MenuEBisnis.pengadaanPajak,
-  ], dapatDilipat: true),
+  _GrupMenuShell(
+      'Pengadaan',
+      [
+        MenuEBisnis.pengadaanPr,
+        MenuEBisnis.pengadaanPo,
+        MenuEBisnis.pengadaanBast,
+        MenuEBisnis.pengadaanTagihan,
+        MenuEBisnis.pengadaanDpc,
+        MenuEBisnis.pengadaanBdp,
+        MenuEBisnis.pengadaanPajak,
+      ],
+      dapatDilipat: true),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
     MenuEBisnis.riwayatPenjualan,
@@ -609,7 +613,8 @@ Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunPengadaanPr(BuildContext c) => const PengadaanPrScreen();
 Widget _bangunPengadaanPo(BuildContext c) => const PengadaanPoScreen();
 Widget _bangunPengadaanBast(BuildContext c) => const PengadaanBastScreen();
-Widget _bangunPengadaanTagihan(BuildContext c) => const PengadaanTagihanScreen();
+Widget _bangunPengadaanTagihan(BuildContext c) =>
+    const PengadaanTagihanScreen();
 Widget _bangunPengadaanBayar(BuildContext c) => const PengadaanBayarScreen();
 Widget _bangunPengadaanBdp(BuildContext c) => const PengadaanBdpScreen();
 Widget _bangunPengadaanPajak(BuildContext c) => const PengadaanPajakScreen();
@@ -717,7 +722,6 @@ Future<void> muatDaftarTokoFilter() async {
     // Biarkan: chip tetap menampilkan nama toko aktif spt sebelumnya.
   }
 }
-
 
 /// Pemilih toko global untuk semua halaman Desktop/Android. Otorisasi tetap
 /// diverifikasi server oleh `pilih_toko_aktif`; daftar di UI bukan sumber hak.
@@ -1611,6 +1615,8 @@ class _AppTopbar extends StatefulWidget {
 class _AppTopbarState extends State<_AppTopbar> {
   Map<String, Object?>? _kasAktif;
   int _pendingSync = 0;
+  int _gagalSync = 0;
+  bool _sinkronBerjalan = false;
 
   @override
   void initState() {
@@ -1635,12 +1641,43 @@ class _AppTopbarState extends State<_AppTopbar> {
 
   Future<void> _muat() async {
     final kas = await CoreDb.instance.sesiKasAktif();
-    final pending = await CoreDb.instance.jumlahTransaksiPending();
+    // Hitung PENDING dan GAGAL sekaligus. Sebelumnya chip hanya membaca
+    // PENDING, sehingga nota yang sudah divonis GAGAL -- yang justru TIDAK
+    // akan dijemput retry otomatis -- tampil seolah semuanya beres.
+    final tertahan = await TransaksiOutboxService.instance.hitungTertahan();
     if (mounted) {
       setStateIfMounted(() {
         _kasAktif = kas;
-        _pendingSync = pending;
+        _pendingSync = tertahan.pending;
+        _gagalSync = tertahan.gagal;
       });
+    }
+  }
+
+  /// Sinkronisasi MANUAL: mengembalikan nota GAGAL ke antrean lalu mengirim
+  /// semuanya. Dipisahkan dari timer otomatis supaya pengiriman ulang atas
+  /// nota yang pernah ditolak selalu merupakan keputusan pengguna.
+  Future<void> _sinkronkanManual() async {
+    if (_sinkronBerjalan) return;
+    setStateIfMounted(() => _sinkronBerjalan = true);
+    try {
+      final hasil =
+          await TransaksiOutboxService.instance.sinkronkan(sertakanGagal: true);
+      await _muat();
+      if (!mounted) return;
+      final sisa = _pendingSync + _gagalSync;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(hasil.total == 0
+            ? 'Tidak ada transaksi tertahan.'
+            : '${hasil.berhasil} dari ${hasil.total} transaksi terkirim.'
+                '${sisa > 0 ? ' Sisa $sisa masih tertahan.' : ''}'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sinkronisasi gagal: $e')));
+    } finally {
+      setStateIfMounted(() => _sinkronBerjalan = false);
     }
   }
 
@@ -1699,8 +1736,7 @@ class _AppTopbarState extends State<_AppTopbar> {
                   const SizedBox(width: 10),
                   Expanded(child: Text('${t['nama'] ?? ''}')),
                   if (sesi.tokoFilter == t['id'])
-                    const Icon(Icons.check,
-                        size: 16, color: AppColors.success),
+                    const Icon(Icons.check, size: 16, color: AppColors.success),
                 ]),
               )),
         ],
@@ -1773,13 +1809,41 @@ class _AppTopbarState extends State<_AppTopbar> {
             ),
             const SizedBox(width: 10),
           ],
-          _chipStatus(
-            icon: _pendingSync == 0
-                ? Icons.cloud_done_outlined
-                : Icons.cloud_sync_outlined,
-            label: _pendingSync == 0 ? 'Sync Online' : '$_pendingSync Tertunda',
-            warna: _pendingSync == 0 ? AppColors.teal : AppColors.warning,
-          ),
+          Builder(builder: (ctx) {
+            final tertahan = _pendingSync + _gagalSync;
+            final adaGagal = _gagalSync > 0;
+            return Tooltip(
+              message: _sinkronBerjalan
+                  ? 'Sedang menyinkronkan...'
+                  : tertahan == 0
+                      ? 'Semua transaksi sudah terkirim. Klik untuk memeriksa lagi.'
+                      : 'Klik untuk mengirim ulang sekarang'
+                          '${adaGagal ? ' ($_gagalSync perlu ditinjau)' : ''}',
+              child: InkWell(
+                onTap: _sinkronBerjalan ? null : _sinkronkanManual,
+                borderRadius: BorderRadius.circular(20),
+                child: _chipStatus(
+                  icon: _sinkronBerjalan
+                      ? Icons.sync
+                      : tertahan == 0
+                          ? Icons.cloud_done_outlined
+                          : adaGagal
+                              ? Icons.cloud_off_outlined
+                              : Icons.cloud_sync_outlined,
+                  label: _sinkronBerjalan
+                      ? 'Menyinkronkan...'
+                      : tertahan == 0
+                          ? 'Sinkronkan'
+                          : '$tertahan Tertahan',
+                  warna: tertahan == 0
+                      ? AppColors.teal
+                      : adaGagal
+                          ? AppColors.danger
+                          : AppColors.warning,
+                ),
+              ),
+            );
+          }),
           const SizedBox(width: 16),
           IconButton(
             tooltip: 'Segarkan Status',
