@@ -30,10 +30,12 @@ android {
         versionName = flutter.versionName
     }
 
-    // Satu dimensi varian. `umum` mempertahankan applicationId asli
-    // (com.ecanteen.zishof); `petra` memakai akhiran tersendiri supaya kedua
-    // varian bisa terpasang berdampingan di satu perangkat tanpa saling
-    // menimpa data.
+    // Satu dimensi varian; yang berbeda HANYA label peluncur.
+    //
+    // Kedua varian memakai applicationId yang sama (com.ecanteen.zishof)
+    // karena itulah paket yang terdaftar di Google Play. Konsekuensinya
+    // keduanya menempati slot pemasangan yang sama -- satu perangkat hanya
+    // bisa memuat salah satunya, dan memasang yang lain akan menggantikannya.
     flavorDimensions += "product"
     productFlavors {
         create("umum") {
@@ -42,7 +44,6 @@ android {
         }
         create("petra") {
             dimension = "product"
-            applicationIdSuffix = ".petra"
             resValue("string", "app_name", "Direktorat Pengembangan Usaha Sosial")
         }
     }

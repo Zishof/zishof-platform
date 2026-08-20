@@ -34,7 +34,13 @@ class AppVariant {
   /// Namespace penyimpanan lokal. Sengaja TIDAK mengikuti nama tampilan
   /// supaya perubahan branding tidak pernah memutus sesi/preferensi yang
   /// sudah tersimpan di perangkat.
-  static const namespacePenyimpanan = isPetra ? 'ecanteen_petra' : 'ecanteen';
+  ///
+  /// SATU nilai untuk semua varian: keduanya memakai applicationId yang sama
+  /// (com.ecanteen.zishof, paket terdaftar di Google Play) sehingga menempati
+  /// slot pemasangan yang sama. Kalau namespace-nya dipisah, mengganti build
+  /// umum <-> petra akan membuat pengguna keluar sesi tanpa alasan yang
+  /// terlihat.
+  static const namespacePenyimpanan = 'ecanteen';
 
   /// Server bawaan per varian. Pengguna tetap dapat menggantinya lewat
   /// layar Alamat Server.

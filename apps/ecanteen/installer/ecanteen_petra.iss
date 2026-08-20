@@ -16,7 +16,9 @@ AppPublisher=Zishof
 DefaultDirName={autopf}\eKantin Petra
 DefaultGroupName=eKantin Petra
 UninstallDisplayIcon={app}\zishof.exe
-OutputBaseFilename=eCanteen-Petra-Setup-{#AppVersion}
+; Nama berkas mengikuti penamaan yang dipakai saat distribusi ke Petra.
+; Versinya tetap tercatat di metadata installer (AppVersion), bukan hilang.
+OutputBaseFilename=eKantin-Anggota-Petra-Setup
 OutputDir=dist
 Compression=lzma2
 SolidCompression=yes
