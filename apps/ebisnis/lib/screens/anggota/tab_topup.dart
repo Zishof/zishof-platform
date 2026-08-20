@@ -649,6 +649,7 @@ class _FormTopupState extends State<_FormTopup> {
   DateTime? _tanggalExpired;
   bool _menyimpan = false;
   String? _pesanError;
+  String? _detailError;
   Timer? _debounceCariMember;
 
   @override
@@ -740,6 +741,7 @@ class _FormTopupState extends State<_FormTopup> {
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
+      _detailError = null;
     });
     try {
       final ubah = widget.deposit != null;
@@ -755,8 +757,23 @@ class _FormTopupState extends State<_FormTopup> {
             : DateFormat('yyyy-MM-dd').format(_tanggalExpired!),
       });
       if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      // Server memisahkan kalimat untuk pengguna (`message` + `solusi`) dari
+      // jejak teknis (`teknis`). Sebelumnya form ini hanya memakai
+      // `e.toString()` sehingga `teknis` -- satu-satunya tempat alasan
+      // penolakan muncul saat server menyamarkannya -- terbuang.
+      final info = e.info;
+      setStateIfMounted(() {
+        _pesanError = info.solusi.isEmpty
+            ? info.pesan
+            : '${info.pesan}\n${info.solusi.first}';
+        _detailError = 'Referensi ${info.kodeReferensi}\n${info.teknis}';
+      });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = e.toString());
+      setStateIfMounted(() {
+        _pesanError = e.toString();
+        _detailError = null;
+      });
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
@@ -782,6 +799,7 @@ class _FormTopupState extends State<_FormTopup> {
                 : 'Isi saldo member secara manual.',
             icon: Icons.add_card_outlined,
             errorText: _pesanError,
+            errorDetail: _detailError,
             // Urutan ini mengikuti struktur form lama; children sengaja tetap
             // sebelum actions agar diff layar Topup mudah diaudit.
             // ignore: sort_child_properties_last

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import 'safe_state.dart';
 
@@ -481,6 +482,81 @@ class AppInfoBanner extends StatelessWidget {
   }
 }
 
+/// Penyingkap "Detail Error" di bawah pesan kegagalan.
+///
+/// Ada karena kontrak API memisahkan `message` (kalimat untuk pengguna) dari
+/// `teknis` (jejak untuk admin/developer), tetapi sebagian layar hanya
+/// menampilkan `message` sehingga keterangan yang menjelaskan penyebabnya
+/// hilang begitu saja. Ditutup secara bawaan supaya kasir tidak terganggu, dan
+/// isinya dapat disalin utuh — itulah yang berguna saat melapor ke admin.
+class AppDetailGalat extends StatelessWidget {
+  final String detail;
+
+  const AppDetailGalat({super.key, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+        childrenPadding: const EdgeInsets.only(bottom: 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        leading: Icon(Icons.bug_report_outlined,
+            size: 18, color: AppColors.textSecondaryOf(context)),
+        title: Text(
+          'Detail Error',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondaryOf(context),
+          ),
+        ),
+        subtitle: Text(
+          'Buka bila perlu dikirimkan ke admin/developer.',
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.textSecondaryOf(context),
+          ),
+        ),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.textSecondaryOf(context)),
+              border: Border.all(color: AppColors.borderOf(context)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: SelectableText(
+              detail,
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.4,
+                fontFamily: 'monospace',
+                color: AppColors.textPrimaryOf(context),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: detail));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  const SnackBar(content: Text('Detail error disalin.')),
+                );
+              },
+              icon: const Icon(Icons.copy_all_outlined, size: 16),
+              label: const Text('Salin'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AppFormStyle {
   AppFormStyle._();
 
@@ -528,6 +604,12 @@ class AppFormSheet extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final String? errorText;
+
+  /// Keterangan teknis kegagalan (isi `ApiException.teknis` berikut kode
+  /// referensinya). Disembunyikan di balik "Detail Error" yang bisa dibuka:
+  /// [errorText] tetap kalimat untuk pengguna, sedangkan ini yang disalin ke
+  /// admin ketika pesan penolakan server belum cukup menjelaskan.
+  final String? errorDetail;
   final List<Widget> children;
   final List<Widget> actions;
 
@@ -538,6 +620,7 @@ class AppFormSheet extends StatelessWidget {
     this.subtitle,
     required this.icon,
     this.errorText,
+    this.errorDetail,
     required this.children,
     required this.actions,
   });
@@ -616,6 +699,8 @@ class AppFormSheet extends StatelessWidget {
             text: errorText!,
             color: AppColors.danger,
           ),
+          if ((errorDetail ?? '').trim().isNotEmpty)
+            AppDetailGalat(detail: errorDetail!.trim()),
         ],
         const SizedBox(height: 14),
         ...children,
