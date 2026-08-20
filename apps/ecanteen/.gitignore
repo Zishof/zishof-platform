@@ -17,3 +17,7 @@ android/local.properties
 android/app/debug/
 android/app/profile/
 android/app/release/
+
+# Artefak rilis (diunggah ke GitHub, bukan disimpan di repo)
+release-artifacts/
+installer/dist/

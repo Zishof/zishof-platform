@@ -106,7 +106,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.storefront, size: 54, color: warna.primary),
+                    // Ikon aplikasi dipakai sbg lambang di layar Masuk supaya
+                    // identitasnya sama dgn ikon di launcher/taskbar.
+                    Image.asset('assets/icon/ecanteen-icon.png',
+                        height: 72,
+                        errorBuilder: (context, error, stack) =>
+                            Icon(Icons.storefront,
+                                size: 54, color: warna.primary)),
                     const SizedBox(height: 10),
                     Text(
                       AppConfig.namaAplikasi,
