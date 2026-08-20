@@ -19,6 +19,12 @@ import '../screens/laporan_transaksi_screen.dart';
 import '../screens/ringkasan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/kulakan_screen.dart';
+import '../screens/pengadaan_bast_screen.dart';
+import '../screens/pengadaan_bayar_screen.dart';
+import '../screens/pengadaan_bdp_screen.dart';
+import '../screens/pengadaan_po_screen.dart';
+import '../screens/pengadaan_pr_screen.dart';
+import '../screens/pengadaan_tagihan_screen.dart';
 import '../screens/supplier_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/log_error_screen.dart';
@@ -793,6 +799,83 @@ class AppDrawer extends StatelessWidget {
                             label: 'Riwayat Sinkronisasi',
                             builder: (_) => const RiwayatSinkronisasiScreen(),
                           ),
+                        ),
+                      // "Pengadaan" adalah GRUP yang bisa dibuka-tutup (bawaan: tertutup),
+                      // mengikuti permintaan pemilik produk. Tiap tahap punya kunci menunya
+                      // sendiri sehingga admin dapat membatasi per layar lewat grid CRUD peran.
+                      if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pr') ||
+                          Sesi.instance.bolehMenuVarianBaru('pengadaan_po') ||
+                          Sesi.instance.bolehMenuVarianBaru('pengadaan_bast') ||
+                          Sesi.instance.bolehMenuVarianBaru('pengadaan_tagihan') ||
+                          Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc') ||
+                          Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
+                        _GrupMenu(
+                          icon: Icons.assignment_outlined,
+                          label: 'Pengadaan',
+                          adaYangAktif: const [
+                            'Permintaan Pembelian (PR)',
+                            'Pemesanan Pembelian (PO)',
+                            'Penerimaan Barang (BAST)',
+                            'Terima Tagihan Vendor',
+                            'Pembayaran Vendor',
+                            'Barang Dalam Proses',
+                          ].contains(menuAktif),
+                          anak: [
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pr'))
+                              _ItemMenu(
+                                icon: Icons.assignment_outlined,
+                                label: 'Permintaan Pembelian (PR)',
+                                aktif: menuAktif == 'Permintaan Pembelian (PR)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Permintaan Pembelian (PR)',
+                                    builder: (_) => const PengadaanPrScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_po'))
+                              _ItemMenu(
+                                icon: Icons.receipt_long_outlined,
+                                label: 'Pemesanan Pembelian (PO)',
+                                aktif: menuAktif == 'Pemesanan Pembelian (PO)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Pemesanan Pembelian (PO)',
+                                    builder: (_) => const PengadaanPoScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_bast'))
+                              _ItemMenu(
+                                icon: Icons.inventory_2_outlined,
+                                label: 'Penerimaan Barang (BAST)',
+                                aktif: menuAktif == 'Penerimaan Barang (BAST)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Penerimaan Barang (BAST)',
+                                    builder: (_) => const PengadaanBastScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_tagihan'))
+                              _ItemMenu(
+                                icon: Icons.request_quote_outlined,
+                                label: 'Terima Tagihan Vendor',
+                                aktif: menuAktif == 'Terima Tagihan Vendor',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Terima Tagihan Vendor',
+                                    builder: (_) => const PengadaanTagihanScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc'))
+                              _ItemMenu(
+                                icon: Icons.payments_outlined,
+                                label: 'Pembayaran Vendor',
+                                aktif: menuAktif == 'Pembayaran Vendor',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Pembayaran Vendor',
+                                    builder: (_) => const PengadaanBayarScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
+                              _ItemMenu(
+                                icon: Icons.local_shipping_outlined,
+                                label: 'Barang Dalam Proses',
+                                aktif: menuAktif == 'Barang Dalam Proses',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Barang Dalam Proses',
+                                    builder: (_) => const PengadaanBdpScreen()),
+                              ),
+                          ],
                         ),
                       if (Sesi.instance.bolehMenu('logerror'))
                         _ItemMenu(

@@ -213,7 +213,13 @@ class _ItemMenuShell {
 class _GrupMenuShell {
   final String label;
   final List<MenuEBisnis> items;
-  const _GrupMenuShell(this.label, this.items);
+
+  /// Grup yang dapat dilipat dan TERTUTUP secara bawaan. Dipakai untuk kelompok
+  /// bertahap yang panjang seperti Pengadaan, supaya sidebar tidak penuh oleh
+  /// menu yang jarang dibuka. Grup tetap terbuka sendiri bila menu aktif berada
+  /// di dalamnya -- pengguna harus selalu bisa melihat posisinya.
+  final bool dapatDilipat;
+  const _GrupMenuShell(this.label, this.items, {this.dapatDilipat = false});
 }
 
 /// Kunci `MenuEBisnis` -> kunci `konfigurasi.aksesMenu` server (lihat
@@ -563,7 +569,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.pengadaanTagihan,
     MenuEBisnis.pengadaanDpc,
     MenuEBisnis.pengadaanBdp,
-  ]),
+  ], dapatDilipat: true),
   _GrupMenuShell('Transaksi & Laporan', [
     MenuEBisnis.returPenjualan,
     MenuEBisnis.riwayatPenjualan,
@@ -1370,7 +1376,7 @@ class _AppSidebar extends StatelessWidget {
   }
 }
 
-class _SidebarGroup extends StatelessWidget {
+class _SidebarGroup extends StatefulWidget {
   final _GrupMenuShell grup;
   final MenuEBisnis menuAktif;
   final bool ringkas;
@@ -1381,28 +1387,74 @@ class _SidebarGroup extends StatelessWidget {
   });
 
   @override
+  State<_SidebarGroup> createState() => _SidebarGroupState();
+}
+
+class _SidebarGroupState extends State<_SidebarGroup> {
+  /// Null berarti pengguna belum menyentuh grup ini, sehingga kondisinya
+  /// mengikuti bawaan: tertutup, kecuali menu aktif ada di dalamnya.
+  bool? _dibukaPengguna;
+
+  bool get _berisiMenuAktif => widget.grup.items.contains(widget.menuAktif);
+
+  bool get _terbuka {
+    if (!widget.grup.dapatDilipat) return true;
+    return _dibukaPengguna ?? _berisiMenuAktif;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = grup.items
+    final items = widget.grup.items
         .map(_itemMenu)
         .whereType<_ItemMenuShell>()
         .where((item) => bolehTampilMenu(item.kunci))
         .toList();
     if (items.isEmpty) return const SizedBox.shrink();
+
+    // Mode ringkas hanya menampilkan ikon; melipat di sana justru menyembunyikan
+    // satu-satunya jalan menuju menu itu, jadi isinya selalu ditampilkan.
+    final bolehLipat = widget.grup.dapatDilipat && !widget.ringkas;
+    final tampilkanIsi = !bolehLipat || _terbuka;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (ringkas)
+          if (widget.ringkas)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 18, vertical: 4),
               child: Divider(color: Color(0x447D96AE), height: 1),
+            )
+          else if (bolehLipat)
+            InkWell(
+              onTap: () => setState(() => _dibukaPengguna = !_terbuka),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 12, 7),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(
+                      widget.grup.label.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.sidebarText,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _terbuka ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: AppColors.sidebarText,
+                  ),
+                ]),
+              ),
             )
           else
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 4, 12, 7),
               child: Text(
-                grup.label.toUpperCase(),
+                widget.grup.label.toUpperCase(),
                 style: const TextStyle(
                   color: AppColors.sidebarText,
                   fontSize: 10,
@@ -1410,12 +1462,13 @@ class _SidebarGroup extends StatelessWidget {
                 ),
               ),
             ),
-          ...items.map((item) => _SidebarItem(
-                item: item,
-                aktif: item.kunci == menuAktif,
-                menuAktif: menuAktif,
-                ringkas: ringkas,
-              )),
+          if (tampilkanIsi)
+            ...items.map((item) => _SidebarItem(
+                  item: item,
+                  aktif: item.kunci == widget.menuAktif,
+                  menuAktif: widget.menuAktif,
+                  ringkas: widget.ringkas,
+                )),
         ],
       ),
     );
