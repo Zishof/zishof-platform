@@ -374,6 +374,10 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
   int? _akunPendapatanId;
   int? _akunPpnKeluaranId;
   int? _akunHppId;
+  /// Akun selisih persediaan (susut/temuan) -- lawan jurnal stok opname.
+  int? _akunSelisihPersediaanId;
+  /// Akun retur penjualan (kontra-pendapatan); kosong = pakai akun pendapatan.
+  int? _akunReturPenjualanId;
 
   @override
   void initState() {
@@ -389,6 +393,8 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
     _akunPendapatanId = (j?['akunPendapatanId'] as num?)?.toInt();
     _akunPpnKeluaranId = (j?['akunPpnKeluaranId'] as num?)?.toInt();
     _akunHppId = (j?['akunHppId'] as num?)?.toInt();
+    _akunSelisihPersediaanId = (j?['akunSelisihPersediaanId'] as num?)?.toInt();
+    _akunReturPenjualanId = (j?['akunReturPenjualanId'] as num?)?.toInt();
     _muatAkun();
   }
 
@@ -433,6 +439,8 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
         'akunPendapatanId': _akunPendapatanId,
         'akunPpnKeluaranId': _akunPpnKeluaranId,
         'akunHppId': _akunHppId,
+        'akunSelisihPersediaanId': _akunSelisihPersediaanId,
+        'akunReturPenjualanId': _akunReturPenjualanId,
       };
       await prosesSimpanMaster(
         context,
@@ -528,6 +536,26 @@ class _FormJenisProdukState extends State<_FormJenisProduk> {
                       daftar: _akun,
                       nilai: _akunHppId,
                       onChanged: (v) => setStateIfMounted(() => _akunHppId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    PemilihAkunField(
+                      label: 'Akun Retur Penjualan',
+                      daftar: _akun,
+                      nilai: _akunReturPenjualanId,
+                      helperText: 'Didebet saat retur penjualan dijurnal. '
+                          'Kosongkan untuk memakai Akun Pendapatan di atas.',
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _akunReturPenjualanId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    PemilihAkunField(
+                      label: 'Akun Selisih Persediaan',
+                      daftar: _akun,
+                      nilai: _akunSelisihPersediaanId,
+                      helperText: 'Lawan jurnal saat selisih stok opname diposting '
+                          '(susut atau temuan barang).',
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _akunSelisihPersediaanId = v),
                     ),
                   ],
                 ],

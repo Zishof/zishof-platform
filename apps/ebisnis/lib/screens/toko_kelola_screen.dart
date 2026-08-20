@@ -8,6 +8,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/pemilih_akun.dart';
 
 /// Kelola Toko/Outlet (admin-only) -- padanan layar ZK TokoAction & JSP toko.jsp.
 ///
@@ -446,6 +447,12 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
   late bool _bolehStokHabis;
   late bool _tokoDemo;
   late final Set<String> _unit;
+  // Akun akuntansi outlet -- menempel di master Toko, bukan konfigurasi global.
+  int? _akunKasId;
+  int? _akunPiutangId;
+  int? _akunModalAwalId;
+  int? _akunLabaDitahanId;
+  List<Map<String, dynamic>> _akun = [];
 
   @override
   void initState() {
@@ -462,6 +469,23 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
     _unit = ((a?['unit_usaha'] as List?) ?? [])
         .map((e) => (e as Map)['kode'].toString())
         .toSet();
+    _akunKasId = (a?['akun_kas_id'] as num?)?.toInt();
+    _akunPiutangId = (a?['akun_piutang_id'] as num?)?.toInt();
+    _akunModalAwalId = (a?['akun_modal_awal_id'] as num?)?.toInt();
+    _akunLabaDitahanId = (a?['akun_laba_ditahan_id'] as num?)?.toInt();
+    _muatAkun();
+  }
+
+  Future<void> _muatAkun() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 2000}, 'master:akun_list');
+      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      if (mounted) setState(() => _akun = data);
+    } catch (e) {
+      // Daftar akun opsional -- kegagalan memuat tidak boleh memblokir simpan toko.
+      if (mounted) setState(() => _akun = const []);
+    }
   }
 
   @override
@@ -520,6 +544,38 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
                   value: _tokoDemo,
                   onChanged: (v) => setState(() => _tokoDemo = v)),
               const Divider(),
+              const Text('Akun Akuntansi Outlet',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text(
+                  'Dipakai jurnal toko: kas/bank untuk pembayaran & penerimaan tunai, '
+                  'piutang untuk pelunasan pelanggan, modal awal untuk jurnal pembukaan, '
+                  'dan laba ditahan untuk tutup buku.',
+                  style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              PemilihAkunField(
+                  label: 'Akun Kas/Bank',
+                  daftar: _akun,
+                  nilai: _akunKasId,
+                  onChanged: (v) => setState(() => _akunKasId = v)),
+              const SizedBox(height: 10),
+              PemilihAkunField(
+                  label: 'Akun Piutang Usaha',
+                  daftar: _akun,
+                  nilai: _akunPiutangId,
+                  onChanged: (v) => setState(() => _akunPiutangId = v)),
+              const SizedBox(height: 10),
+              PemilihAkunField(
+                  label: 'Akun Modal/Ekuitas Awal',
+                  daftar: _akun,
+                  nilai: _akunModalAwalId,
+                  onChanged: (v) => setState(() => _akunModalAwalId = v)),
+              const SizedBox(height: 10),
+              PemilihAkunField(
+                  label: 'Akun Laba Ditahan',
+                  daftar: _akun,
+                  nilai: _akunLabaDitahanId,
+                  onChanged: (v) => setState(() => _akunLabaDitahanId = v)),
+              const Divider(),
               const Text('Unit Usaha (boleh pilih lebih dari satu)',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const Text(
@@ -556,6 +612,10 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
               'boleh_transaksi_stok_habis': _bolehStokHabis,
               'toko_demo': _tokoDemo,
               'unit_usaha': _unit.toList(),
+              'akun_kas_id': _akunKasId ?? 0,
+              'akun_piutang_id': _akunPiutangId ?? 0,
+              'akun_modal_awal_id': _akunModalAwalId ?? 0,
+              'akun_laba_ditahan_id': _akunLabaDitahanId ?? 0,
             });
           },
           child: const Text('Simpan'),

@@ -4,6 +4,7 @@ import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
+import '../widgets/pemilih_akun.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -392,6 +393,10 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
   bool _online = false;
   bool _memotongDeposit = false;
   bool _masukSebagaiHutang = false;
+  /// Akun Kas/Bank metode ini -- menempel di master Cara Pembayaran, dipakai jurnal
+  /// penjualan tunai, pembayaran hutang, dan penerimaan piutang.
+  int? _akunId;
+  List<Map<String, dynamic>> _akun = [];
   bool _adaKembalian = false;
   bool _aktif = true;
   bool _menyimpan = false;
@@ -413,6 +418,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
     _online = c?['online'] == true;
     _memotongDeposit = c?['memotongDeposit'] == true;
     _masukSebagaiHutang = c?['masukSebagaiHutang'] == true;
+    _akunId = (c?['akunId'] as num?)?.toInt();
+    _muatAkun();
     if (c == null) {
       _adaKembalian =
           false; // nama masih kosong -- mengikuti field Nama begitu diketik
@@ -447,6 +454,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
       _pesanError = null;
     });
     try {
+      // (daftar akun dimuat terpisah, lihat _muatAkun)
       final body = {
         if (widget.cara != null) 'id': widget.cara!['id'],
         'kode': _kode.text.trim(),
@@ -456,6 +464,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
         'online': _online,
         'memotongDeposit': _memotongDeposit,
         'masukSebagaiHutang': _masukSebagaiHutang,
+        'akunId': _akunId ?? 0,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
       };
@@ -475,6 +484,18 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
       setStateIfMounted(() => _pesanError = e.toString());
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
+    }
+  }
+
+  Future<void> _muatAkun() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 2000}, 'master:akun_list');
+      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      setStateIfMounted(() => _akun = data);
+    } catch (e) {
+      // Daftar akun opsional; kegagalan memuat tidak boleh memblokir simpan cara bayar.
+      setStateIfMounted(() => _akun = const []);
     }
   }
 
@@ -511,6 +532,19 @@ class _FormCaraBayarState extends State<_FormCaraBayar> {
                       label: 'Keterangan',
                       controller: _keterangan,
                       maxLines: 2),
+                ],
+              ),
+              AppFormSection(
+                judul: 'Akuntansi',
+                children: [
+                  PemilihAkunField(
+                    label: 'Akun Kas/Bank',
+                    daftar: _akun,
+                    nilai: _akunId,
+                    helperText: 'Akun yang didebet/dikredit saat metode ini dipakai pada '
+                        'jurnal. Kosongkan untuk memakai Akun Kas/Bank pada master Toko.',
+                    onChanged: (v) => setStateIfMounted(() => _akunId = v),
+                  ),
                 ],
               ),
               AppFormSection(
