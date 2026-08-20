@@ -12,6 +12,7 @@ import 'anggota/tab_saldo_voucher.dart';
 import 'anggota/tab_mutasi_tabungan.dart';
 import 'anggota/tab_mutasi_hutang.dart';
 import 'anggota/tab_pembantu_piutang.dart';
+import 'anggota/tab_satuan_kerja.dart';
 
 /// Layar "Pelanggan" (padanan `anggota.jsp` JSP -- "Manajemen Anggota") --
 /// 6 sub-tab persis urutan JSP: Data Member Baru, Jenis Member, Tipe
@@ -38,7 +39,10 @@ class _AnggotaScreenState extends State<AnggotaScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 9, vsync: this);
+    // WAJIB sama dgn jumlah Tab di TabBar dan widget di TabBarView; kalau
+    // berbeda, layar ini gagal dibuka. Sebelumnya tertinggal di 9 padahal
+    // tabnya sudah bertambah.
+    _tab = TabController(length: 11, vsync: this);
   }
 
   @override
@@ -77,6 +81,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               Tab(text: 'Mutasi Hutang'),
               Tab(text: 'Pembantu Piutang'),
               Tab(text: 'Notifikasi'),
+              Tab(text: 'Satuan Kerja'),
               Tab(text: 'Sinkronisasi Siswa/Mahasiswa'),
             ],
           ),
@@ -91,6 +96,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               AnggotaTabMutasiHutang(),
               AnggotaTabPembantuPiutang(),
               AnggotaTabNotifikasi(),
+              AnggotaTabSatuanKerja(),
               AnggotaTabSinkronisasi(),
             ]),
           ),
