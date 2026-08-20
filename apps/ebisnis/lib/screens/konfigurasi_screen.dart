@@ -653,6 +653,89 @@ class _TabProfilToko extends StatefulWidget {
 }
 
 class _TabProfilTokoState extends State<_TabProfilToko> {
+  /// Pilihan tri-state untuk satu perlakuan otomatis.
+  ///
+  /// "Ikut pengaturan global" sengaja dibuat pilihan tersendiri, bukan sekadar
+  /// sakelar mati: tanpa itu, toko yang belum pernah disentuh tidak dapat
+  /// dibedakan dari toko yang sengaja mematikannya, sehingga akan ikut menyala
+  /// begitu global dinyalakan -- justru kebalikan dari maksud pengaturan per
+  /// toko.
+  Widget _pilihanOtomatis({
+    required String label,
+    required String keterangan,
+    required bool? nilai,
+    required bool global,
+    required void Function(bool?)? onUbah,
+  }) {
+    final efektif = nilai ?? global;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(keterangan, style: const TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          children: [
+            ChoiceChip(
+              label: Text('Ikut global (${global ? 'aktif' : 'nonaktif'})'),
+              selected: nilai == null,
+              onSelected: onUbah == null ? null : (_) => onUbah(null),
+            ),
+            ChoiceChip(
+              label: const Text('Aktifkan'),
+              selected: nilai == true,
+              onSelected: onUbah == null ? null : (_) => onUbah(true),
+            ),
+            ChoiceChip(
+              label: const Text('Matikan'),
+              selected: nilai == false,
+              onSelected: onUbah == null ? null : (_) => onUbah(false),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          efektif
+              ? 'Berlaku sekarang: AKTIF untuk toko ini.'
+              : 'Berlaku sekarang: NONAKTIF untuk toko ini.',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: efektif ? AppColors.warning : AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Simpan pengaturan GLOBAL. Terpisah dari tombol Simpan profil toko karena
+  /// cakupannya beda -- satu menyentuh semua toko, satunya hanya toko ini.
+  Future<void> _simpanGlobalOtomatis({bool? bayar, bool? layani}) async {
+    setStateIfMounted(() => _menyimpanGlobal = true);
+    try {
+      final res = await ApiClient.instance.aksi('otomatis_pesanan_global_simpan', {
+        if (bayar != null) 'bayar': bayar,
+        if (layani != null) 'layani': layani,
+      });
+      setStateIfMounted(() {
+        _globalOtomatisBayar = res['bayar'] == true;
+        _globalOtomatisLayani = res['layani'] == true;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pengaturan global tersimpan.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _menyimpanGlobal = false);
+    }
+  }
+
   bool _memuat = true;
   bool _menyimpan = false;
   bool _memilihLogo = false;
@@ -664,6 +747,14 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
   /// Kebijakan UBAH HARGA per toko. Default AKTIF = semua pengguna boleh
   /// mengubah harga (perilaku lama). Bila dimatikan, hanya akun pada
   /// [_userBolehUbahHarga] yang boleh -- ditegakkan di server.
+  /// Proses otomatis setelah lewat jam 24. Nilai per toko tri-state:
+  /// null = ikut global, true/false = toko menentukan sendiri.
+  bool? _otomatisBayarToko;
+  bool? _otomatisLayaniToko;
+  bool _globalOtomatisBayar = false;
+  bool _globalOtomatisLayani = false;
+  bool _menyimpanGlobal = false;
+
   bool _semuaBolehUbahHarga = true;
   final Set<String> _userBolehUbahHarga = <String>{};
   List<Map<String, dynamic>> _daftarPenggunaToko = [];
@@ -799,6 +890,15 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
           ((d['alasanTahan'] as List?) ?? []).map((e) => '$e').join('\n');
       _bolehTransaksiStokHabis = d['bolehTransaksiStokHabis'] == true;
       _semuaBolehUbahHarga = d['semuaBolehUbahHarga'] != false;
+      // null WAJIB dipertahankan sbg null (ikut global), bukan dijadikan false.
+      _otomatisBayarToko = d['otomatisBayarSetelahJam24'] is bool
+          ? d['otomatisBayarSetelahJam24'] as bool
+          : null;
+      _otomatisLayaniToko = d['otomatisLayaniSetelahJam24'] is bool
+          ? d['otomatisLayaniSetelahJam24'] as bool
+          : null;
+      _globalOtomatisBayar = d['globalOtomatisBayarSetelahJam24'] == true;
+      _globalOtomatisLayani = d['globalOtomatisLayaniSetelahJam24'] == true;
       _userBolehUbahHarga
         ..clear()
         ..addAll(((d['userBolehUbahHarga'] as List?) ?? const [])
@@ -953,6 +1053,10 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
         'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
         'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
         'semua_boleh_ubah_harga': _semuaBolehUbahHarga,
+        // Kunci SELALU dikirim, isinya boleh null -> server membedakan
+        // "kembalikan ke ikut global" dari "jangan diubah".
+        'otomatis_bayar_setelah_jam_24': _otomatisBayarToko,
+        'otomatis_layani_setelah_jam_24': _otomatisLayaniToko,
         'user_boleh_ubah_harga': _userBolehUbahHarga.toList(),
         'role_boleh_ubah_harga': _roleBolehUbahHarga.toList(),
         if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
@@ -1334,6 +1438,78 @@ class _TabProfilTokoState extends State<_TabProfilToko> {
                   'Hanya admin atau supervisor toko yang dapat mengubah profil ini.',
             ),
           ),
+        AppFormSection(
+          judul: 'Proses Otomatis Setelah Lewat Jam 24',
+          deskripsi:
+              'Pesanan yang belum diproses sampai berganti hari dapat ditandai '
+              'otomatis. Keduanya MATI secara bawaan: menyalakannya berarti '
+              'sistem menganggap uang sudah diterima atau barang sudah '
+              'diserahkan tanpa ada orang yang mengonfirmasi.',
+          children: [
+            // ── Per toko ────────────────────────────────────────────────
+            const Text('Toko ini',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            _pilihanOtomatis(
+              label: 'Bayar otomatis',
+              keterangan:
+                  'Pesanan belum lunas dari hari sebelumnya ditandai terbayar.',
+              nilai: _otomatisBayarToko,
+              global: _globalOtomatisBayar,
+              onUbah: _bolehUbah
+                  ? (v) => setStateIfMounted(() => _otomatisBayarToko = v)
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            _pilihanOtomatis(
+              label: 'Layani otomatis',
+              keterangan:
+                  'Transaksi yang belum dilayani dari hari sebelumnya ditandai '
+                  'terlayani.',
+              nilai: _otomatisLayaniToko,
+              global: _globalOtomatisLayani,
+              onUbah: _bolehUbah
+                  ? (v) => setStateIfMounted(() => _otomatisLayaniToko = v)
+                  : null,
+            ),
+
+            // ── Global (admin saja) ─────────────────────────────────────
+            if (Sesi.instance.isAdmin) ...[
+              const Divider(height: 26),
+              const Text('Global (semua toko)',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              const Padding(
+                padding: EdgeInsets.only(top: 2, bottom: 6),
+                child: Text(
+                  'Dipakai toko yang pilihannya masih "Ikut pengaturan global". '
+                  'Toko yang menentukan sendiri TIDAK terpengaruh.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+              AppFormSwitchTile(
+                title: 'Bayar otomatis (global)',
+                subtitle: _globalOtomatisBayar ? 'AKTIF' : 'NONAKTIF',
+                value: _globalOtomatisBayar,
+                onChanged: _menyimpanGlobal
+                    ? null
+                    : (v) => _simpanGlobalOtomatis(bayar: v),
+              ),
+              AppFormSwitchTile(
+                title: 'Layani otomatis (global)',
+                subtitle: _globalOtomatisLayani ? 'AKTIF' : 'NONAKTIF',
+                value: _globalOtomatisLayani,
+                onChanged: _menyimpanGlobal
+                    ? null
+                    : (v) => _simpanGlobalOtomatis(layani: v),
+              ),
+              if (_menyimpanGlobal)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+            ],
+          ],
+        ),
         AppFormSection(
           judul: 'Kebijakan Ubah Harga',
           deskripsi:
