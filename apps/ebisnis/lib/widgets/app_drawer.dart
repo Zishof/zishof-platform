@@ -666,10 +666,13 @@ class AppDrawer extends StatelessWidget {
                           ),
                         ),
                       // "Akuntansi" adalah GRUP yang bisa dibuka-tutup (bawaan: tertutup).
+                      // Gerbangnya memakai bolehMenuVarianBaru (kunci hilang = TIDAK boleh),
+                      // karena menu ini fail-closed di server: bawaannya hanya terbuka untuk
+                      // peran keu (Keuangan) dan am (Admin), selain itu harus dinyalakan admin.
                       // Kunci induknya tetap 'laporankeuangan' supaya hak akses peran yang
                       // sudah ada tidak berubah arti; tiap submenu punya kuncinya sendiri
                       // sehingga admin bisa membatasi per layar lewat grid CRUD peran.
-                      if (Sesi.instance.bolehMenu('laporankeuangan'))
+                      if (Sesi.instance.bolehMenuVarianBaru('laporankeuangan'))
                         _GrupMenu(
                           icon: Icons.account_balance_outlined,
                           label: 'Akuntansi',
@@ -684,7 +687,7 @@ class AppDrawer extends StatelessWidget {
                             'Laporan-Laporan Keuangan',
                           ].contains(menuAktif),
                           anak: [
-                            if (Sesi.instance.bolehMenu('jurnal_umum'))
+                            if (Sesi.instance.bolehMenuVarianBaru('jurnal_umum'))
                               _ItemMenu(
                                 icon: Icons.edit_note,
                                 label: 'Jurnal Umum',
@@ -693,7 +696,7 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Jurnal Umum',
                                     builder: (_) => const JurnalUmumScreen()),
                               ),
-                            if (Sesi.instance.bolehMenu('posting_hpp'))
+                            if (Sesi.instance.bolehMenuVarianBaru('posting_hpp'))
                               _ItemMenu(
                                 icon: Icons.inventory_2_outlined,
                                 label: 'Posting HPP',
@@ -710,7 +713,7 @@ class AppDrawer extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            if (Sesi.instance.bolehMenu('posting_penjualan'))
+                            if (Sesi.instance.bolehMenuVarianBaru('posting_penjualan'))
                               _ItemMenu(
                                 icon: Icons.point_of_sale_outlined,
                                 label: 'Posting Penjualan',
@@ -727,7 +730,7 @@ class AppDrawer extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            if (Sesi.instance.bolehMenu('kode_akun'))
+                            if (Sesi.instance.bolehMenuVarianBaru('kode_akun'))
                               _ItemMenu(
                                 icon: Icons.account_tree_outlined,
                                 label: 'Kode Akun',
@@ -736,7 +739,7 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Kode Akun',
                                     builder: (_) => const KodeAkunScreen(tabAwal: 0)),
                               ),
-                            if (Sesi.instance.bolehMenu('grup_akun'))
+                            if (Sesi.instance.bolehMenuVarianBaru('grup_akun'))
                               _ItemMenu(
                                 icon: Icons.workspaces_outline,
                                 label: 'Grup Akun',
@@ -745,7 +748,7 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Grup Akun',
                                     builder: (_) => const KodeAkunScreen(tabAwal: 4)),
                               ),
-                            if (Sesi.instance.bolehMenu('jenis_transaksi'))
+                            if (Sesi.instance.bolehMenuVarianBaru('jenis_transaksi'))
                               _ItemMenu(
                                 icon: Icons.swap_horiz,
                                 label: 'Jenis Transaksi',
@@ -754,7 +757,7 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Jenis Transaksi',
                                     builder: (_) => const KodeAkunScreen(tabAwal: 3)),
                               ),
-                            if (Sesi.instance.bolehMenu('bank_akun'))
+                            if (Sesi.instance.bolehMenuVarianBaru('bank_akun'))
                               _ItemMenu(
                                 icon: Icons.account_balance,
                                 label: 'Bank',

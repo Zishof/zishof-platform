@@ -1,4 +1,5 @@
 import 'package:ebisnis/widgets/app_components.dart';
+import 'package:ebisnis/sesi.dart';
 import 'package:ebisnis/widgets/app_drawer.dart';
 import 'package:ebisnis/widgets/app_shell.dart';
 import 'package:flutter/material.dart';
@@ -63,8 +64,6 @@ void main() {
       'Kedaluwarsa',
       'Mutasi Antar Outlet',
       'Cara Pembayaran',
-      // Menu keuangan kini berupa grup 'Akuntansi' yang bawaannya tertutup.
-      'Akuntansi',
       'Konfigurasi',
     ]) {
       await tester.scrollUntilVisible(
@@ -74,6 +73,33 @@ void main() {
       );
       expect(find.text(label), findsOneWidget);
     }
+    // Grup "Akuntansi" SENGAJA tidak ikut diuji di sini: menunya fail-closed
+    // (bawaannya hanya terbuka untuk peran keu/am), sehingga pada sesi uji tanpa
+    // aksesMenu memang tidak boleh muncul. Perilakunya diuji terpisah di bawah.
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('menu Akuntansi tersembunyi tanpa hak, muncul setelah diberi hak',
+      (tester) async {
+    pakaiUkuranPonsel(tester);
+    Sesi.instance.aksesMenu = {};
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: AppDrawer()),
+    ));
+    await tester.pump();
+    expect(find.text('Akuntansi'), findsNothing,
+        reason: 'menu akuntansi fail-closed: tanpa hak, tidak boleh tampil');
+
+    Sesi.instance.aksesMenu = {'laporankeuangan': true};
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: AppDrawer()),
+    ));
+    await tester.pump();
+    final daftar = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(find.text('Akuntansi'), 260,
+        scrollable: daftar);
+    expect(find.text('Akuntansi'), findsOneWidget);
+    Sesi.instance.aksesMenu = {};
     expect(tester.takeException(), isNull);
   });
 }

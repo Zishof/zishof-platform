@@ -14,11 +14,20 @@ import '../widgets/safe_state.dart';
 /// yang belum siap tetap terlihat beserta alasannya, dan posting bisa dilakukan
 /// per baris atau sekaligus untuk yang sudah siap.
 class PostingTokoDialog extends StatefulWidget {
-  const PostingTokoDialog({super.key, required this.jenis, required this.judul});
+  const PostingTokoDialog({
+    super.key,
+    required this.jenis,
+    required this.judul,
+    this.inline = false,
+  });
 
   /// `kulakan` | `bayar_hutang` | `terima_piutang` | `penyesuaian`
   final String jenis;
   final String judul;
+
+  /// true = ditampilkan sebagai panel di dalam tab (tanpa bungkus Dialog dan tanpa
+  /// tombol Tutup, karena di dalam tab tombol itu akan menutup seluruh halaman).
+  final bool inline;
 
   @override
   State<PostingTokoDialog> createState() => _PostingTokoDialogState();
@@ -137,10 +146,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
   Widget build(BuildContext context) {
     final rincian = _rincian;
     final siap = rincian.where((r) => r['siap'] == true).toList();
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 760),
-        child: Padding(
+    final Widget isi = Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -150,10 +156,11 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
                     child: Text(widget.judul,
                         style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.w700))),
-                IconButton(
-                    tooltip: 'Tutup',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close)),
+                if (!widget.inline)
+                  IconButton(
+                      tooltip: 'Tutup',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close)),
               ]),
               const SizedBox(height: 4),
               Text(
@@ -237,7 +244,14 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> {
               ),
             ],
           ),
-        ),
+        );
+    if (widget.inline) {
+      return isi;
+    }
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 760),
+        child: isi,
       ),
     );
   }

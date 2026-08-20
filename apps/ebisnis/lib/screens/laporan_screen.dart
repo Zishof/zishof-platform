@@ -64,16 +64,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
   void initState() {
     super.initState();
     _muat();
-    final posting = widget.bukaPosting;
-    if (posting != null && posting.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _bukaPendukungInline({
-          'id': posting,
-          'judul': posting == 'posting_hpp' ? 'Posting HPP' : 'Posting Penjualan',
-        });
-      });
-    }
+    // Submenu Akuntansi > Posting HPP / Posting Penjualan langsung mendarat di
+    // tabnya (lihat _katalogBertab), tidak lagi membuka dialog melayang.
   }
 
   @override
@@ -191,34 +183,58 @@ class _LaporanScreenState extends State<LaporanScreen> {
     await _bukaItem(item);
   }
 
-  Widget _dataPendukung() {
-    if (_pendukung.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        children: _pendukung.map((item) {
-          final id = item['id'] as String? ?? '';
-          final ikon = id == 'akun_perkiraan'
-              ? Icons.account_tree_outlined
-              : id == 'posting_hpp'
-                  ? Icons.inventory_2_outlined
-                  : id == 'posting_kulakan'
-                      ? Icons.local_shipping_outlined
-                      : id == 'posting_bayar_hutang'
-                          ? Icons.payments_outlined
-                          : id == 'posting_terima_piutang'
-                              ? Icons.savings_outlined
-                              : id == 'posting_penyesuaian'
-                                  ? Icons.tune_outlined
-                                  : Icons.post_add_outlined;
-          return OutlinedButton.icon(
-            onPressed: () => _bukaPendukungInline(item),
-            icon: Icon(ikon, size: 18),
-            label: Text(item['judul'] as String? ?? '-'),
-          );
-        }).toList(),
+  static IconData _ikonPendukung(String id) {
+    switch (id) {
+      case 'akun_perkiraan':
+        return Icons.account_tree_outlined;
+      case 'posting_hpp':
+        return Icons.inventory_2_outlined;
+      case 'posting_penjualan':
+        return Icons.point_of_sale_outlined;
+      case 'posting_kulakan':
+        return Icons.local_shipping_outlined;
+      case 'posting_bayar_hutang':
+        return Icons.payments_outlined;
+      case 'posting_terima_piutang':
+        return Icons.savings_outlined;
+      case 'posting_penyesuaian':
+        return Icons.tune_outlined;
+      default:
+        return Icons.post_add_outlined;
+    }
+  }
+
+  /// Panel isi untuk satu tab pendukung. Semua ditampilkan LANGSUNG di dalam tab
+  /// (mode `inline`), bukan lagi dialog melayang, supaya perpindahan antar bagian
+  /// terasa sama seperti tab pada layar Kulakan.
+  Widget _panelPendukung(Map<String, dynamic> item) {
+    final id = item['id'] as String? ?? '';
+    final judul = item['judul'] as String? ?? 'Posting';
+    if (id == 'akun_perkiraan') {
+      return const KodeAkunScreen();
+    }
+    const petaPostingToko = {
+      'posting_kulakan': 'kulakan',
+      'posting_bayar_hutang': 'bayar_hutang',
+      'posting_terima_piutang': 'terima_piutang',
+      'posting_penyesuaian': 'penyesuaian',
+    };
+    final jenisToko = petaPostingToko[id];
+    if (jenisToko != null) {
+      return PostingTokoDialog(jenis: jenisToko, judul: judul, inline: true);
+    }
+    if (id == 'posting_hpp' || id == 'posting_penjualan') {
+      return _PostingKeuanganDialog(
+          jenis: id == 'posting_hpp' ? 'hpp' : 'penjualan',
+          judul: judul,
+          inline: true);
+    }
+    // Item lain (mis. laporan ber-URL) tetap memakai jalur pembuka lama.
+    return Center(
+      child: FilledButton.icon(
+        onPressed: () => _bukaPendukungInline(item),
+        icon: Icon(_ikonPendukung(id)),
+        label: Text('Buka $judul'),
       ),
     );
   }
@@ -293,12 +309,65 @@ class _LaporanScreenState extends State<LaporanScreen> {
             onPressed: _muat,
             tooltip: 'Muat ulang')
       ],
-      scrollable: true,
+      // Saat tab pendukung tampil, badan mengurus scroll-nya sendiri (TabBarView
+      // butuh tinggi terbatas); tanpa tab, perilaku scroll lama dipertahankan.
+      scrollable: _pendukung.isEmpty,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
               ? Center(child: Text('Gagal memuat: $_pesanError'))
-              : Builder(
+              : _pendukung.isEmpty
+                  ? _katalog()
+                  : _katalogBertab(),
+    );
+  }
+
+  /// Tab seperti layar Kulakan: tab pertama katalog laporan, sisanya tiap layar
+  /// pendukung (Akun/Perkiraan dan enam posting) ditampilkan LANGSUNG di dalam tab.
+  Widget _katalogBertab() {
+    final petaAwal = {
+      'posting_hpp': 'posting_hpp',
+      'posting_penjualan': 'posting_penjualan',
+    };
+    int indexAwal = 0;
+    final minta = widget.bukaPosting;
+    if (minta != null && petaAwal.containsKey(minta)) {
+      final idx = _pendukung.indexWhere((e) => e['id'] == minta);
+      if (idx >= 0) indexAwal = idx + 1;
+    }
+    return DefaultTabController(
+      length: _pendukung.length + 1,
+      initialIndex: indexAwal,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondaryOf(context),
+          indicatorColor: AppColors.primary,
+          tabs: [
+            const Tab(
+                icon: Icon(Icons.folder_open_outlined),
+                text: 'Katalog Laporan'),
+            ..._pendukung.map((item) => Tab(
+                  icon: Icon(_ikonPendukung(item['id'] as String? ?? '')),
+                  text: item['judul'] as String? ?? '-',
+                )),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(children: [
+            SingleChildScrollView(
+                padding: const EdgeInsets.only(top: 12), child: _katalog()),
+            ..._pendukung.map(_panelPendukung),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _katalog() {
+    return Builder(
                   builder: (context) {
                     final data = _terfilter;
                     final totalHalaman = _totalHalaman(data.length);
@@ -306,7 +375,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _dataPendukung(),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: LayoutBuilder(
@@ -480,8 +548,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       ],
                     );
                   },
-                ),
-    );
+                );
   }
 }
 
@@ -616,7 +683,12 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> {
 class _PostingKeuanganDialog extends StatefulWidget {
   final String jenis;
   final String judul;
-  const _PostingKeuanganDialog({required this.jenis, required this.judul});
+
+  /// true = tampil sebagai panel di dalam tab (tanpa bungkus Dialog dan tanpa
+  /// tombol Tutup, karena di dalam tab tombol itu akan menutup seluruh halaman).
+  final bool inline;
+  const _PostingKeuanganDialog(
+      {required this.jenis, required this.judul, this.inline = false});
 
   @override
   State<_PostingKeuanganDialog> createState() => _PostingKeuanganDialogState();
@@ -777,10 +849,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 780),
-        child: Padding(
+    final Widget isi = Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -790,9 +859,10 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
                     child: Text(widget.judul,
                         style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.w700))),
-                IconButton(
-                    onPressed: _memuat ? null : () => Navigator.pop(context),
-                    icon: const Icon(Icons.close)),
+                if (!widget.inline)
+                  IconButton(
+                      onPressed: _memuat ? null : () => Navigator.pop(context),
+                      icon: const Icon(Icons.close)),
               ]),
               const Text(
                   'Pratinjau dan posting dilakukan langsung di halaman ini.'),
@@ -945,7 +1015,14 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> {
               ]),
             ],
           ),
-        ),
+        );
+    if (widget.inline) {
+      return isi;
+    }
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 780),
+        child: isi,
       ),
     );
   }
