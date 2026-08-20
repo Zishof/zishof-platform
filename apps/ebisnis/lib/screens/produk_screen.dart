@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
 import '../models.dart';
+import '../services/dynamic_report.dart';
+import 'produk_stok_tanggal.dart';
 import '../services/kompresi_gambar.dart';
 import '../services/master_offline.dart';
 import '../widgets/indikator_baris_sinkron.dart';
@@ -43,6 +45,11 @@ const _paletKartuProduk = [
   Color(0xFFEA580C),
   Color(0xFF0284C7)
 ];
+
+/// Tampilkan stok tanpa desimal bila bulat -- stok per tanggal datang sbg
+/// pecahan dari server, dan "12" jauh lebih mudah dibaca daripada "12.0".
+String _teksStok(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
 /// Mode pencocokan duplikat -- persis 5 mode yg didukung `produk_duplikat_cari`/
 /// `produk_duplikat_hapus` server (field `jenis`, BUKAN `mode`).
@@ -106,6 +113,13 @@ class _ProdukScreenState extends State<ProdukScreen> {
   /// lihat JavaDoc `prosesKatalog`) -- tidak perlu round-trip server baru.
   /// `'SEMUA'` = tanpa filter (default).
   String _filterJenisItem = 'SEMUA';
+
+  /// Tanggal acuan stok. null = stok berjalan (perilaku lama).
+  DateTime? _tanggalStok;
+  HasilStokTanggal? _stokTanggal;
+  bool _memuatStokTanggal = false;
+  DynamicReportModel? _modelLaporan;
+  bool _menyiapkanLaporan = false;
 
   @override
   void initState() {
@@ -264,6 +278,178 @@ class _ProdukScreenState extends State<ProdukScreen> {
 
   int get _totalHalaman =>
       (_totalProduk / _itemPerHalaman).ceil().clamp(1, 999999);
+
+  /// Ambil ulang stok pada tanggal acuan. Dipanggil saat tanggal berubah dan
+  /// saat kata kunci berubah, supaya angka di layar selalu cocok dgn filter.
+  Future<void> _muatStokTanggal() async {
+    if (_tanggalStok == null) {
+      setStateIfMounted(() => _stokTanggal = null);
+      return;
+    }
+    setStateIfMounted(() => _memuatStokTanggal = true);
+    try {
+      final hasil = await StokPerTanggal.ambil(
+          tanggal: _tanggalStok, kataKunci: _kataKunci);
+      setStateIfMounted(() => _stokTanggal = hasil);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memuat stok per tanggal: $e')));
+        setStateIfMounted(() => _tanggalStok = null);
+      }
+    } finally {
+      setStateIfMounted(() => _memuatStokTanggal = false);
+    }
+  }
+
+  Future<void> _pilihTanggalStok() async {
+    final kini = DateTime.now();
+    final pilih = await showDatePicker(
+      context: context,
+      initialDate: _tanggalStok ?? kini,
+      firstDate: DateTime(kini.year - 5),
+      // Stok masa depan tidak bermakna: tidak ada mutasi setelah hari ini.
+      lastDate: kini,
+      helpText: 'Tampilkan stok pada tanggal',
+    );
+    if (pilih == null) return;
+    setStateIfMounted(() => _tanggalStok = pilih);
+    await _muatStokTanggal();
+  }
+
+  /// Bahan laporan = baris `stok_per_tanggal` yang SUDAH tersaring server
+  /// (kata kunci + tanggal), jadi yang diekspor persis yang tampil.
+  Future<HasilStokTanggal?> _bahanLaporan() async {
+    if (_stokTanggal != null) return _stokTanggal;
+    // Belum memilih tanggal -> pakai stok terkini, tetap lewat laporan yang
+    // sama supaya kolom dan angkanya konsisten dgn mode tanggal.
+    return StokPerTanggal.ambil(kataKunci: _kataKunci);
+  }
+
+  String get _subjudulLaporan {
+    final k = _kataKunci.trim();
+    final tgl = _tanggalStok == null
+        ? 'Stok terkini'
+        : 'Stok per ${DateFormat('dd/MM/yyyy').format(_tanggalStok!)}';
+    return k.isEmpty ? tgl : '$tgl  -  pencarian "$k"';
+  }
+
+  Future<void> _aturAtauPreviewLaporan({required bool preview}) async {
+    setStateIfMounted(() => _menyiapkanLaporan = true);
+    try {
+      final bahan = await _bahanLaporan();
+      if (bahan == null || !mounted) return;
+      final data = bahan.keLaporan(
+          judul: 'Laporan Stok Produk', subjudul: _subjudulLaporan);
+      final model = await DynamicReportDesigner.show(context,
+          data: data, initial: _modelLaporan, initialTab: preview ? 0 : 1);
+      if (model != null) setStateIfMounted(() => _modelLaporan = model);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menyiapkan laporan: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _menyiapkanLaporan = false);
+    }
+  }
+
+  Future<void> _eksporLaporan(String format) async {
+    setStateIfMounted(() => _menyiapkanLaporan = true);
+    try {
+      final bahan = await _bahanLaporan();
+      if (bahan == null || !mounted) return;
+      final data = bahan.keLaporan(
+          judul: 'Laporan Stok Produk', subjudul: _subjudulLaporan);
+      final model = _modelLaporan ?? DynamicReportModel.fromData(data);
+      _modelLaporan = model;
+      final slug = _tanggalStok == null
+          ? 'stok-produk'
+          : 'stok-produk-${DateFormat('yyyyMMdd').format(_tanggalStok!)}';
+      if (format == 'pdf') {
+        await DynamicReportDesigner.exportPdf(data, model, '$slug.pdf');
+      } else if (format == 'excel') {
+        if (!mounted) return;
+        await DynamicReportDesigner.exportExcel(
+            context, data, model, '$slug.xlsx');
+      } else {
+        if (!mounted) return;
+        await DynamicReportDesigner.exportWord(
+            context, data, model, '$slug.doc');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengekspor: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _menyiapkanLaporan = false);
+    }
+  }
+
+  /// Bilah filter tanggal + ekspor laporan.
+  Widget _bilahStokDanLaporan() {
+    final sibuk = _menyiapkanLaporan || _memuatStokTanggal;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          onPressed: sibuk ? null : _pilihTanggalStok,
+          icon: const Icon(Icons.event_outlined, size: 18),
+          label: Text(_tanggalStok == null
+              ? 'Stok terkini'
+              : 'Stok per ${DateFormat('dd/MM/yyyy').format(_tanggalStok!)}'),
+        ),
+        if (_tanggalStok != null)
+          IconButton(
+            tooltip: 'Kembali ke stok terkini',
+            onPressed: sibuk
+                ? null
+                : () {
+                    setStateIfMounted(() {
+                      _tanggalStok = null;
+                      _stokTanggal = null;
+                    });
+                  },
+            icon: const Icon(Icons.clear, size: 18),
+          ),
+        if (_memuatStokTanggal)
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+        const SizedBox(width: 4),
+        OutlinedButton.icon(
+          onPressed: sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: const Text('Preview'),
+        ),
+        OutlinedButton.icon(
+          onPressed:
+              sibuk ? null : () => _aturAtauPreviewLaporan(preview: false),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Atur Model'),
+        ),
+        OutlinedButton.icon(
+          onPressed: sibuk ? null : () => _eksporLaporan('pdf'),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: const Text('PDF'),
+        ),
+        OutlinedButton.icon(
+          onPressed: sibuk ? null : () => _eksporLaporan('excel'),
+          icon: const Icon(Icons.table_view_outlined, size: 18),
+          label: const Text('Excel'),
+        ),
+        OutlinedButton.icon(
+          onPressed: sibuk ? null : () => _eksporLaporan('word'),
+          icon: const Icon(Icons.description_outlined, size: 18),
+          label: const Text('Word'),
+        ),
+      ],
+    );
+  }
 
   Future<void> _bukaFormProduk({Produk? produk}) async {
     // Daftar relasi resep/ekstra bukan tabel utama, namun tetap dimuat secara
@@ -763,8 +949,14 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                   _halaman = 0;
                                                 });
                                                 _muatSemua();
+                                                // Stok per tanggal ikut
+                                                // disaring kata kunci, jadi
+                                                // harus ditarik ulang.
+                                                _muatStokTanggal();
                                               },
                                             ),
+                                            const SizedBox(height: 10),
+                                            _bilahStokDanLaporan(),
                                             const SizedBox(height: 10),
                                             Align(
                                               alignment: Alignment.centerLeft,
@@ -873,6 +1065,9 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                     ? _TabelProduk(
                                                         produkList:
                                                             _produkHalamanIni,
+                                                        stokPerKode:
+                                                            _stokTanggal
+                                                                ?.stokPerKode,
                                                         idBaru: _idBaru,
                                                         idBerubah: _idBerubah,
                                                         onTap: (p) =>
@@ -884,6 +1079,10 @@ class _ProdukScreenState extends State<ProdukScreen> {
                                                         children: _produkHalamanIni
                                                             .map((p) => _BarisProduk(
                                                                 produk: p,
+                                                                stokTanggal:
+                                                                    _stokTanggal
+                                                                        ?.stokPerKode[
+                                                                            p.kode],
                                                                 idBaru: _idBaru,
                                                                 idBerubah:
                                                                     _idBerubah,
@@ -1014,17 +1213,26 @@ class _BarisProduk extends StatelessWidget {
   final Set<String> idBerubah;
   final VoidCallback onTap;
   final VoidCallback onRiwayat;
+
+  /// Stok pada tanggal acuan bila pengguna memilih tanggal lampau; null
+  /// berarti pakai stok berjalan milik [produk].
+  final double? stokTanggal;
   const _BarisProduk(
       {required this.produk,
       required this.idBaru,
       required this.idBerubah,
       required this.onTap,
-      required this.onRiwayat});
+      required this.onRiwayat,
+      this.stokTanggal});
 
   @override
   Widget build(BuildContext context) {
-    final habis = produk.stok <= 0;
-    final rendah = !habis && produk.stok <= 5;
+    // Tanggal acuan dipilih -> tampilkan stok pada tanggal itu. Ambang
+    // "habis"/"rendah" mengikuti angka yang SEDANG ditampilkan supaya penanda
+    // warnanya tidak bertentangan dgn angkanya sendiri.
+    final stokTampil = stokTanggal ?? produk.stok.toDouble();
+    final habis = stokTampil <= 0;
+    final rendah = !habis && stokTampil <= 5;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: AppSectionCard(
@@ -1056,7 +1264,7 @@ class _BarisProduk extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
                   StatusPill(
-                      label: habis ? 'Habis' : 'Stok ${produk.stok}',
+                      label: habis ? 'Habis' : 'Stok ${_teksStok(stokTampil)}',
                       warna: habis
                           ? AppColors.danger
                           : (rendah ? AppColors.warning : AppColors.success)),
@@ -1088,12 +1296,17 @@ class _TabelProduk extends StatelessWidget {
   final Set<String> idBerubah;
   final void Function(Produk) onTap;
   final void Function(Produk) onRiwayat;
+
+  /// Stok pada tanggal acuan, dipetakan per kode produk. null = stok berjalan.
+  final Map<String, double>? stokPerKode;
+
   const _TabelProduk(
       {required this.produkList,
       required this.idBaru,
       required this.idBerubah,
       required this.onTap,
-      required this.onRiwayat});
+      required this.onRiwayat,
+      this.stokPerKode});
 
   @override
   Widget build(BuildContext context) {
@@ -1138,6 +1351,7 @@ class _TabelProduk extends StatelessWidget {
           for (final p in produkList)
             _BarisTabelProduk(
                 produk: p,
+                stokTanggal: stokPerKode?[p.kode],
                 idBaru: idBaru,
                 idBerubah: idBerubah,
                 onTap: () => onTap(p),
@@ -1160,17 +1374,26 @@ class _BarisTabelProduk extends StatelessWidget {
   final Set<String> idBerubah;
   final VoidCallback onTap;
   final VoidCallback onRiwayat;
+
+  /// Stok pada tanggal acuan bila pengguna memilih tanggal lampau; null
+  /// berarti pakai stok berjalan milik [produk].
+  final double? stokTanggal;
   const _BarisTabelProduk(
       {required this.produk,
       required this.idBaru,
       required this.idBerubah,
       required this.onTap,
-      required this.onRiwayat});
+      required this.onRiwayat,
+      this.stokTanggal});
 
   @override
   Widget build(BuildContext context) {
-    final habis = produk.stok <= 0;
-    final rendah = !habis && produk.stok <= 5;
+    // Tanggal acuan dipilih -> tampilkan stok pada tanggal itu. Ambang
+    // "habis"/"rendah" mengikuti angka yang SEDANG ditampilkan supaya penanda
+    // warnanya tidak bertentangan dgn angkanya sendiri.
+    final stokTampil = stokTanggal ?? produk.stok.toDouble();
+    final habis = stokTampil <= 0;
+    final rendah = !habis && stokTampil <= 5;
     final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty
         ? 0
         : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
@@ -1241,7 +1464,7 @@ class _BarisTabelProduk extends StatelessWidget {
               flex: 2,
               child: Center(
                 child: StatusPill(
-                    label: '${produk.stok}',
+                    label: _teksStok(stokTampil),
                     warna: habis
                         ? AppColors.danger
                         : (rendah ? AppColors.warning : AppColors.success)),

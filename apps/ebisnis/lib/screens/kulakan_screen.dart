@@ -5,6 +5,7 @@ import 'package:core_hw/core_hw.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -906,6 +907,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
             icon: const Icon(Icons.table_view_outlined, size: 18),
             label: const Text('Excel'),
           ),
+          OutlinedButton.icon(
+            onPressed: () => _cetakFaktur(header, items),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: const Text('Print'),
+          ),
           TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Tutup'))
@@ -1178,10 +1184,13 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
     }
   }
 
-  Future<void> _unduhFakturPdf(
-      Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
-    try {
-      final data = _buatLaporanFaktur(header, items);
+  /// Bangun dokumen faktur. Dipisah dari penyimpanan supaya tombol Pdf
+  /// (simpan berkas) dan Print (kirim ke printer) memakai SATU sumber tata
+  /// letak -- kalau digandakan, format cetak akan diam-diam menyimpang dari
+  /// format PDF setiap kali salah satunya diubah.
+  pw.Document _dokumenFakturPdf(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) {
+    final data = _buatLaporanFaktur(header, items);
       final biru = PdfColor.fromInt(0xff0f3b5f);
       final abu = PdfColor.fromInt(0xffe5e7eb);
       final doc = pw.Document();
@@ -1343,7 +1352,14 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
           ],
         ),
       );
-      final aman = _namaFileAman(data.nomorFaktur);
+    return doc;
+  }
+
+  Future<void> _unduhFakturPdf(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
+    try {
+      final doc = _dokumenFakturPdf(header, items);
+      final aman = _namaFileAman(_buatLaporanFaktur(header, items).nomorFaktur);
       await _simpanUnduhanLaporan(
         namaFile: 'Faktur-Pembelian-$aman.pdf',
         bytes: await doc.save(),
@@ -1355,6 +1371,24 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal membuat PDF faktur: $e')));
+    }
+  }
+
+  /// Kirim faktur langsung ke printer, memakai tata letak yang PERSIS SAMA
+  /// dengan tombol Pdf.
+  Future<void> _cetakFaktur(
+      Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
+    try {
+      final doc = _dokumenFakturPdf(header, items);
+      final aman = _namaFileAman(_buatLaporanFaktur(header, items).nomorFaktur);
+      await Printing.layoutPdf(
+        name: 'Faktur-Pembelian-$aman',
+        onLayout: (format) async => doc.save(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak faktur: $e')));
     }
   }
 
