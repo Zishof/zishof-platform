@@ -710,14 +710,6 @@ class CoreDb {
     await database.delete('outbox_master', where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Batalkan baris antrean berdasarkan kuncinya -- dipakai saat pengguna
-  /// MENGURUNGKAN penghapusan yang belum sempat terkirim.
-  Future<int> outboxMasterHapusKunci(String kunci) async {
-    final database = await db;
-    return database.delete('outbox_master',
-        where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
-  }
-
   Future<List<Map<String, Object?>>> outboxMasterPending() async {
     final database = await db;
     return database.query('outbox_master',

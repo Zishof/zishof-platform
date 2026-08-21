@@ -99,8 +99,11 @@ void main() {
     expect(layar, contains('prosesSimpanMaster('));
     // ITEM anggaran juga lokal-dulu, aman karena id sementaranya ditukar saat
     // sinkron dan baris penggunaan yang menunjuknya ditahan sampai itemnya terkirim.
-    expect(layar, contains("_kirimItem('anggaran_item_simpan'"));
-    expect(layar, contains("_kirimItem('anggaran_item_hapus'"));
+    // Diperiksa terpisah dari nama aksinya supaya perubahan format baris (mis.
+    // pemenggalan oleh dart format) tidak menggagalkan uji kontrak ini.
+    expect(layar, contains('_kirimItem('));
+    expect(layar, contains("'anggaran_item_simpan'"));
+    expect(layar, contains("'anggaran_item_hapus'"));
     expect(layar, contains('MasterOffline.idSementaraBaru()'));
     expect(layar, contains("entitas: 'anggaran_item'"));
     // "Buat Revisi Baru" dihitung server (menyalin seluruh pohon).

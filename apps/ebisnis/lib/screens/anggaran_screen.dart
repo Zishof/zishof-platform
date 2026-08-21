@@ -14,6 +14,7 @@ import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/proses_simpan_master.dart';
+import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
 
@@ -975,6 +976,22 @@ class _AnggaranScreenState extends State<AnggaranScreen>
 
   // ==================================================================== tampilan
 
+  /// Penghapusan lokal bersifat LUNAK; baris yang belum terkirim masih tersimpan di
+  /// perangkat dan dapat dikembalikan dari sini.
+  Future<void> _bukaTerhapus() async {
+    final tabPenggunaan = _tab.index == 2;
+    final jumlah = await bukaPulihkanTerhapus(
+      context,
+      cacheKey: tabPenggunaan ? _cachePenggunaan : _cacheItem,
+      judul: tabPenggunaan ? 'Penggunaan Terhapus' : 'Item Anggaran Terhapus',
+      labelBaris: (b) => '${b['kode'] ?? ''} ${b['nama'] ?? ''}'.trim(),
+      keteranganBaris: (b) => tabPenggunaan
+          ? '${b['waktu'] ?? ''}  ${_uang.format((b['nilai'] as num?)?.toDouble() ?? 0)}'
+          : '${b['keterangan'] ?? ''}',
+    );
+    if (jumlah > 0) await _muatTabAktif();
+  }
+
   Widget _penyaring() {
     final sdTerpakai = _sumberDanaOpsi
         .where((s) =>
@@ -1095,6 +1112,11 @@ class _AnggaranScreenState extends State<AnggaranScreen>
                 onPressed: _memuat ? null : _muatTabAktif,
                 icon: const Icon(Icons.filter_alt_outlined, size: 18),
                 label: const Text('Terapkan')),
+            if (_tab.index != 1)
+              OutlinedButton.icon(
+                  onPressed: _sibuk || _memuat ? null : _bukaTerhapus,
+                  icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
+                  label: const Text('Data Terhapus')),
             OutlinedButton.icon(
                 onPressed: _sibuk || _memuat ? null : _unduhExcel,
                 icon: const Icon(Icons.download, size: 18),

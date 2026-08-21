@@ -10,6 +10,7 @@ import '../services/simple_xlsx.dart';
 import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
 import '../widgets/proses_simpan_master.dart';
+import '../widgets/pulihkan_terhapus.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
@@ -1035,6 +1036,22 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     );
   }
 
+  /// Jalan pulang untuk penghapusan yang belum terkirim: penghapusan lokal bersifat
+  /// LUNAK, jadi barisnya masih ada di perangkat dan bisa dikembalikan.
+  Future<void> _bukaTerhapus() async {
+    final nama = _tab.index == 2
+        ? 'bank'
+        : (_tab.index == 3 ? 'jenis_transaksi' : (_tab.index == 4 ? 'grup' : 'akun'));
+    final jumlah = await bukaPulihkanTerhapus(
+      context,
+      cacheKey: _cache(nama),
+      judul: '$_defJudulTab Terhapus',
+      labelBaris: (b) => '${b['kode'] ?? ''} ${b['nama'] ?? ''}'.trim(),
+      keteranganBaris: (b) => '${b['keterangan'] ?? ''}',
+    );
+    if (jumlah > 0) await _muat();
+  }
+
   Future<void> _hapus(String aksi, Object? id, String label,
       {required String kunci, required String cacheKey}) async {
     if (id == null) return;
@@ -1196,6 +1213,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 onPressed: _sibuk ? null : _tambahTabIni,
                 icon: const Icon(Icons.add, size: 18),
                 label: Text('Tambah $_defJudulTab')),
+          OutlinedButton.icon(
+              onPressed: _sibuk ? null : _bukaTerhapus,
+              icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
+              label: const Text('Data Terhapus')),
           OutlinedButton.icon(
               onPressed: _sibuk ? null : _unduhAkun,
               icon: const Icon(Icons.download, size: 18),
