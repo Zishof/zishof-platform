@@ -109,6 +109,10 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
         _cacheKey,
         kolomKunci: 'id',
         onData: (hasil) {
+          () async {
+            final t = await MasterOffline.daftarTerhapusLokal(_cacheKey);
+            if (mounted) setStateIfMounted(() => _terhapus = t);
+          }();
       if (!mounted) return;
       setStateIfMounted(() {
         _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -139,12 +143,15 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
   /// server penghapusannya sungguhan -- riwayatnya ada pada audit trail server.
   bool _tampilkanTerhapus = false;
 
-  List<Map<String, dynamic>> get _terlihat => _data
-      .where((b) => (b['_dihapusLokal'] == true) == _tampilkanTerhapus)
-      .toList();
+  /// Diisi dari [MasterOffline.daftarTerhapusLokal]. Tidak bisa diambil dari
+  /// [_data] karena `daftarCacheDulu` memang MENYARING baris bertanda `_dihapus`
+  /// supaya tidak muncul di layar mana pun.
+  List<Map<String, dynamic>> _terhapus = const [];
 
-  int get _jumlahTerhapus =>
-      _data.where((b) => b['_dihapusLokal'] == true).length;
+  List<Map<String, dynamic>> get _terlihat =>
+      _tampilkanTerhapus ? _terhapus : _data;
+
+  int get _jumlahTerhapus => _terhapus.length;
 
   bool _boleh(String aksi) => _hak[aksi] != false;
 
@@ -164,6 +171,7 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     required String kunci,
     Map<String, dynamic>? rowLokal,
     int? idLokal,
+    bool hapusLokal = false,
   }) async {
     setStateIfMounted(() => _sibuk = true);
     try {
@@ -174,6 +182,7 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
         kunci: kunci,
         cacheKey: _cacheKey,
         rowLokal: rowLokal,
+        hapusLokal: hapusLokal,
         idLokal: idLokal,
         entitas: 'pj_kas_besar',
       );
@@ -596,20 +605,6 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     );
   }
 
-  /// Susun ulang payload simpan dari satu baris daftar -- dipakai memulihkan
-  /// dokumen yang sudah dihapus, tanpa membuka formulirnya lagi.
-  Map<String, dynamic> _payloadDari(Map<String, dynamic> b) => {
-        'kasBesarId': (b['kasBesarId'] as num?)?.toInt() ?? 0,
-        'nama': '${b['nama'] ?? ''}',
-        'keterangan': '${b['keterangan'] ?? ''}',
-        'rincian': (b['rincian'] as List?) ?? const [],
-        'dikembalikan': (b['dikembalikan'] as num?)?.toDouble() ?? 0,
-        'tanggalStor': '${b['tanggalStor'] ?? ''}',
-        'namaSponsor': '${b['namaSponsor'] ?? ''}',
-        'dariSponsor': (b['dariSponsor'] as num?)?.toDouble() ?? 0,
-        'statusDokumen': 'Pengajuan',
-      };
-
   static DateTime? _tgl(Object? v) {
     final s = '${v ?? ''}'.trim();
     if (s.isEmpty) return null;
@@ -657,21 +652,21 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
           visualDensity: VisualDensity.compact,
           tooltip: 'Cetak / pratinjau',
           icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: _sibuk || b['_dihapusLokal'] == true
+          onPressed: _sibuk || _tampilkanTerhapus
               ? null
               : () => cetakDokumenKeuangan(context,
                   modul: 'pj_kas_besar',
                   id: (b['id'] as num).toInt(),
                   kode: '${b['kode'] ?? ''}'),
         ),
-        if (b['_dihapusLokal'] == true && _boleh('create'))
+        if (_tampilkanTerhapus && _boleh('create'))
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Pulihkan sebagai dokumen baru',
             icon: const Icon(Icons.restore_from_trash_outlined, size: 18),
             onPressed: _sibuk ? null : () => _pulihkanBaris(b),
           ),
-        if (b['_dihapusLokal'] != true && _boleh('update') && !terkunci)
+        if (!_tampilkanTerhapus && _boleh('update') && !terkunci)
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Ubah PJ',
@@ -726,6 +721,9 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
   /// Hapus: server menghapus sungguhan (riwayatnya ada pada audit trail server),
   /// sedangkan SALINAN LOKAL hanya DITANDAI terhapus -- barisnya tetap tersimpan
   /// sehingga masih bisa dilihat dan datanya dipakai untuk memulihkan.
+  /// Hapus: server menghapus sungguhan (jejaknya ada pada audit trail server),
+  /// sedangkan di perangkat penandaannya diserahkan ke MasterOffline supaya
+  /// pembatalannya ikut membuang perintah hapus yang masih mengantre.
   Future<void> _hapusBaris(Map<String, dynamic> b) async {
     if (!await _konfirmasi(
         'Hapus PJ ini?',
@@ -739,33 +737,39 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
       'pj_kas_besar_hapus',
       {'id': b['id']},
       kunci: 'pj_kas_besar:${b['id']}',
-      rowLokal: {
-        ...b,
-        '_dihapusLokal': true,
-        '_dihapusPada': DateTime.now().toIso8601String(),
-      },
+      rowLokal: {'id': b['id']},
+      hapusLokal: true,
     );
   }
 
-  /// Pulihkan baris yang ditandai terhapus: karena di server dokumennya sudah
-  /// hilang, pemulihan berarti MEMBUAT ULANG dokumen dari salinan lokal (nomor
-  /// dokumennya baru). Ditegaskan di dialog supaya tidak dikira mengembalikan
-  /// dokumen lama beserta nomornya.
+  /// Membatalkan penghapusan yang MASIH mengantre di perangkat.
+  ///
+  /// Begitu hapusnya terkirim, server sudah benar-benar menghapus dokumennya dan
+  /// pengembalian datanya ditempuh lewat tabel audit di sisi server -- bukan dari
+  /// layar ini. Karena itu [MasterOffline.pulihkanLokal] mengembalikan false bila
+  /// barisnya sudah tidak bertanda.
   Future<void> _pulihkanBaris(Map<String, dynamic> b) async {
     if (!await _konfirmasi(
-        'Pulihkan PJ ini?',
+        'Batalkan penghapusan PJ ini?',
         '${b['kode']} — ${b['nama']}\n\n'
-            'Datanya dikirim ulang sebagai dokumen BARU (nomor dokumen baru), '
-            'karena dokumen lamanya sudah dihapus di server.',
-        'Pulihkan')) {
+            'Berlaku selama penghapusannya belum terkirim ke server. Bila sudah '
+            'terkirim, pengembalian datanya dilakukan lewat catatan audit di '
+            'server, bukan dari layar ini.',
+        'Batalkan penghapusan')) {
       return;
     }
-    await _kirimLokalDulu(
-      'pj_kas_besar_simpan',
-      _payloadDari(b),
-      kunci: 'pj_kas_besar:pulih:${b['id']}',
-      rowLokal: {...b, '_dihapusLokal': false},
-    );
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final berhasil = await MasterOffline.pulihkanLokal(
+          _cacheKey, b['id'], kunci: 'pj_kas_besar:${b['id']}');
+      _pesan(berhasil
+          ? 'Penghapusan dibatalkan.'
+          : 'Tidak dapat dibatalkan: penghapusannya sudah terkirim ke server. '
+              'Pemulihan data dilakukan lewat catatan audit di server.');
+      await _muatDaftar();
+    } finally {
+      if (mounted) setStateIfMounted(() => _sibuk = false);
+    }
   }
 
   /// Dua tab pada setiap menu Keuangan: "Dasbor" (ringkasan angka) dan daftar

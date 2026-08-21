@@ -1,0 +1,291 @@
+﻿{
+    "fail":  28,
+    "pass":  19,
+    "hasil":  [
+                  {
+                      "kode":  "LOGIN-P",
+                      "nama":  "Login akun Pemilik",
+                      "status":  "PASS",
+                      "detail":  "token diterima"
+                  },
+                  {
+                      "kode":  "LOGIN-S",
+                      "nama":  "Login akun Sales Keliling",
+                      "status":  "PASS",
+                      "detail":  "token diterima"
+                  },
+                  {
+                      "kode":  "DEPLOY",
+                      "nama":  "Server memuat kode P4-P6 (si_profit_loss_params dikenal)",
+                      "status":  "PASS",
+                      "detail":  "sales aktif terdaftar: 1"
+                  },
+                  {
+                      "kode":  "CTX-P",
+                      "nama":  "si_actor_context: aktor Pemilik dikenali",
+                      "status":  "FAIL",
+                      "detail":  "actorType tak terduga: "
+                  },
+                  {
+                      "kode":  "CTX-S",
+                      "nama":  "si_actor_context: aktor Sales dikenali + scope",
+                      "status":  "FAIL",
+                      "detail":  "actorType tak terduga: "
+                  },
+                  {
+                      "kode":  "RBAC-NEG",
+                      "nama":  "RBAC negatif: Sales DITOLAK menyimpan COA",
+                      "status":  "PASS",
+                      "detail":  "ditolak sesuai harapan: The remote server returned an error: (403) Forbidden."
+                  },
+                  {
+                      "kode":  "SCR-01",
+                      "nama":  "Master Supplier: create + detail",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_supplier_detail ditolak server: ID supplier wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-02",
+                      "nama":  "Daftar Supplier: baris uji muncul di list",
+                      "status":  "PASS",
+                      "detail":  "1 baris"
+                  },
+                  {
+                      "kode":  "SCR-04",
+                      "nama":  "Master Customer: create + saldo piutang terbaca",
+                      "status":  "PASS",
+                      "detail":  "id=1 saldoPiutang=0"
+                  },
+                  {
+                      "kode":  "SCR-07",
+                      "nama":  "Master Sales: list terbaca (ambil sales pertama utk SPJ)",
+                      "status":  "FAIL",
+                      "detail":  "Cannot index into a null array."
+                  },
+                  {
+                      "kode":  "MIG-001a",
+                      "nama":  "Impor DBF (produk): run pertama membuat",
+                      "status":  "PASS",
+                      "detail":  "dibuat=1 diperbarui=0 dilewati=0"
+                  },
+                  {
+                      "kode":  "MIG-001b",
+                      "nama":  "Impor DBF idempoten: run kedua TIDAK menggandakan",
+                      "status":  "PASS",
+                      "detail":  "dibuat=0 OK; dilewati/diperbarui=1/0"
+                  },
+                  {
+                      "kode":  "KATALOG",
+                      "nama":  "Katalog memuat produk uji (utk item order)",
+                      "status":  "FAIL",
+                      "detail":  "produk uji tidak muncul di katalog"
+                  },
+                  {
+                      "kode":  "SCR-08",
+                      "nama":  "Persediaan: balance + kartu stok produk uji",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_inventory_ledger ditolak server: produk_id wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-18",
+                      "nama":  "Harga Beli Supplier: simpan versi + list",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_supplier_price_save ditolak server: supplier_id, produk_id, harga, dan tanggal_efektif (yyyy-MM-dd) wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-19",
+                      "nama":  "Harga Jual Customer: simpan versi + list",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_customer_price_save ditolak server: produk_id, harga, dan tanggal_efektif (yyyy-MM-dd) wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-17",
+                      "nama":  "Analisis Harga terbaca",
+                      "status":  "PASS",
+                      "detail":  "1 baris analisis"
+                  },
+                  {
+                      "kode":  "SCR-22",
+                      "nama":  "Ledger Hutang Supplier terbaca",
+                      "status":  "PASS",
+                      "detail":  "1 baris"
+                  },
+                  {
+                      "kode":  "SCR-27",
+                      "nama":  "Aging Hutang terbaca",
+                      "status":  "PASS",
+                      "detail":  "ok"
+                  },
+                  {
+                      "kode":  "SCR-29",
+                      "nama":  "Laporan Pembelian per periode terbaca",
+                      "status":  "PASS",
+                      "detail":  "ok"
+                  },
+                  {
+                      "kode":  "SCR-30a",
+                      "nama":  "Sales Order: create (idempoten kode_unik)",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_sales_order_create ditolak server: Item ke-1 tidak valid (produk_id/jumlah\u003e0/harga\u003e=0)."
+                  },
+                  {
+                      "kode":  "SCR-30b",
+                      "nama":  "Sales Order: transisi PESAN -\u003e SIAP_KIRIM -\u003e TERKIRIM",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_sales_order_status ditolak server: order_id dan status wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-30c",
+                      "nama":  "Transisi ilegal DITOLAK (TERKIRIM -\u003e PESAN)",
+                      "status":  "PASS",
+                      "detail":  "ditolak: Aksi si_sales_order_status ditolak server: order_id dan status wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-31",
+                      "nama":  "Terbit faktur piutang (idempoten per order) + deep-link",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_sales_order_invoice ditolak server: order_id wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-32",
+                      "nama":  "Ledger Piutang: faktur muncul + outstanding benar (50000)",
+                      "status":  "FAIL",
+                      "detail":  "faktur tidak muncul di receivable_list"
+                  },
+                  {
+                      "kode":  "SCR-34a",
+                      "nama":  "Collection parsial 20000 (idempoten kode_unik)",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_collection_create ditolak server: Baris alokasi tidak valid (piutang_id/nominal)."
+                  },
+                  {
+                      "kode":  "SCR-34b",
+                      "nama":  "Overpayment DITOLAK (alokasi \u003e sisa)",
+                      "status":  "PASS",
+                      "detail":  "ditolak: Aksi si_collection_create ditolak server: Baris alokasi tidak valid (piutang_id/nominal)."
+                  },
+                  {
+                      "kode":  "SCR-33",
+                      "nama":  "Filter lunas: pelunasan sisa 30000 -\u003e faktur hilang dari daftar berjalan + order LUNAS",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_collection_create ditolak server: Baris alokasi tidak valid (piutang_id/nominal)."
+                  },
+                  {
+                      "kode":  "SCR-35",
+                      "nama":  "Riwayat penerimaan memuat 2 kwitansi UAT",
+                      "status":  "FAIL",
+                      "detail":  "hanya 0 kwitansi"
+                  },
+                  {
+                      "kode":  "SCR-36",
+                      "nama":  "Data kwitansi (receipt) terbaca + alokasi benar",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_collection_receipt ditolak server: penerimaan_id wajib diisi."
+                  },
+                  {
+                      "kode":  "SCR-37",
+                      "nama":  "Aging per customer terbaca",
+                      "status":  "PASS",
+                      "detail":  "ok"
+                  },
+                  {
+                      "kode":  "SCR-38",
+                      "nama":  "Aging per sales terbaca",
+                      "status":  "PASS",
+                      "detail":  "ok"
+                  },
+                  {
+                      "kode":  "PRA-SPJ",
+                      "nama":  "Order+faktur kedua (bekal nota dibawa)",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_sales_order_create ditolak server: Item ke-1 tidak valid (produk_id/jumlah\u003e0/harga\u003e=0)."
+                  },
+                  {
+                      "kode":  "SCR-39a",
+                      "nama":  "SPJ: create + barang bulk + nota assign",
+                      "status":  "FAIL",
+                      "detail":  "tidak ada profil sales aktif (buat dulu di Master Sales)"
+                  },
+                  {
+                      "kode":  "SCR-39b",
+                      "nama":  "SPJ: dobel-bawa invoice DITOLAK di SPJ kedua",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_spj_create ditolak server: sales_id wajib diisi (aktor sales: profil sales aktif wajib ada)."
+                  },
+                  {
+                      "kode":  "SCR-39c",
+                      "nama":  "SPJ: SUBMITTED -\u003e APPROVED (approval Pemilik)",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_spj_status ditolak server: SPJ tidak ditemukan."
+                  },
+                  {
+                      "kode":  "SCR-40a",
+                      "nama":  "Sesi: trip_start idempoten + OPENING_ADVANCE",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_trip_start ditolak server: SPJ tidak ditemukan."
+                  },
+                  {
+                      "kode":  "SCR-40b",
+                      "nama":  "Sesi: tagih dlm sesi (COLLECTION_CASH) + jual tunai + biaya idempoten + kulakan + setoran",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_collection_create ditolak server: Baris alokasi tidak valid (piutang_id/nominal)."
+                  },
+                  {
+                      "kode":  "SCR-41",
+                      "nama":  "Laporan sesi: DUA rumus benar (hasil bersih 5000; kas seharusnya 210000)",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_trip_detail ditolak server: Sesi tidak ditemukan."
+                  },
+                  {
+                      "kode":  "SCR-40c",
+                      "nama":  "Rekonsiliasi: DITOLAK saat barang belum habis, lalu lolos setelah alokasi",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_trip_return ditolak server: Sesi tidak ditemukan."
+                  },
+                  {
+                      "kode":  "SCR-42",
+                      "nama":  "Tutup sesi (approval) + selisih kas 0 + snapshot",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_trip_detail ditolak server: Sesi tidak ditemukan."
+                  },
+                  {
+                      "kode":  "SCR-43",
+                      "nama":  "Kas \u0026 Jurnal terbaca (akunting.transaksi)",
+                      "status":  "PASS",
+                      "detail":  "0 baris; D=0 K=0"
+                  },
+                  {
+                      "kode":  "SCR-44",
+                      "nama":  "Master Akun: list + create perkiraan UAT",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_coa_list ditolak server: Terjadi kesalahan pada sistem. Silakan hubungi administrator."
+                  },
+                  {
+                      "kode":  "SCR-46",
+                      "nama":  "Laba Kotor: HPP snapshot benar (8 terjual x 7000)",
+                      "status":  "FAIL",
+                      "detail":  "produk uji tidak muncul di laba kotor"
+                  },
+                  {
+                      "kode":  "SCR-47",
+                      "nama":  "Laporan Laba/Rugi varian terbaca + komponen konsisten",
+                      "status":  "PASS",
+                      "detail":  "pendapatanFaktur=0 jualTunai=0 hpp=0 beban=0 labaBersih=0"
+                  },
+                  {
+                      "kode":  "SCOPE-S",
+                      "nama":  "Sales hanya melihat order miliknya",
+                      "status":  "PASS",
+                      "detail":  "0 order terlihat"
+                  },
+                  {
+                      "kode":  "CLEAN",
+                      "nama":  "Nonaktifkan supplier \u0026 customer uji",
+                      "status":  "FAIL",
+                      "detail":  "Aksi si_supplier_deactivate ditolak server: ID supplier wajib diisi."
+                  }
+              ],
+    "baseUrl":  "http://localhost:18080/ais/Api_eBisnis",
+    "waktu":  "20260813-061809",
+    "skip":  0
+}

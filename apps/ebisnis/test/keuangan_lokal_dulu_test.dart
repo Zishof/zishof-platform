@@ -12,6 +12,7 @@ void main() {
     'PJ Uang Muka': File('lib/screens/pj_uang_muka_screen.dart').readAsStringSync(),
     'Kas Besar': File('lib/screens/kas_besar_screen.dart').readAsStringSync(),
     'PJ Kas Besar': File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync(),
+    'Kas Kecil': File('lib/screens/kas_kecil_screen.dart').readAsStringSync(),
   };
 
   layar.forEach((nama, source) {
@@ -32,13 +33,15 @@ void main() {
         expect(source, contains('idLokal:'));
       });
 
-      test('hapus bersifat soft di perangkat + dapat dipulihkan', () {
-        expect(source, contains("'_dihapusLokal': true"));
-        expect(source, contains("'_dihapusPada'"));
-        expect(source, contains('_pulihkanBaris('));
-        // Baris terhapus TIDAK dibuang dari salinan lokal: tidak memakai hapusLokal.
-        expect(source, isNot(contains('hapusLokal: true')));
-        // Daftar utama menyembunyikannya, ada penyaring khusus untuk melihatnya.
+      test('hapus bersifat soft di perangkat + dapat dibatalkan', () {
+        // Penandaannya diserahkan ke MasterOffline (mekanisme bersama): baris
+        // ditandai `_dihapus`, disaring dari daftar, dan pembatalannya IKUT
+        // membuang perintah hapus yang masih mengantre -- tanpa itu baris kembali
+        // tampil tetapi tetap terhapus di server begitu jaringan tersambung.
+        expect(source, contains('hapusLokal: true'));
+        expect(source, contains('MasterOffline.pulihkanLokal('));
+        expect(source, contains('MasterOffline.daftarTerhapusLokal('));
+        // Daftar utama menyembunyikannya; ada penyaring khusus untuk melihatnya.
         expect(source, contains('_terlihat'));
         expect(source, contains('_tampilkanTerhapus'));
       });
