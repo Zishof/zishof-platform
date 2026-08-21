@@ -1151,6 +1151,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     return _boleh(_hakGrup, 'create');
   }
 
+  /// Impor massal membuat DAN memperbarui baris, jadi cukup salah satu hak
+  /// untuk membukanya -- baris yang tidak diizinkan ditolak satu per satu oleh
+  /// server dan muncul di ringkasan hasil unggah.
+  bool get _bolehImporTabIni {
+    final hak = _tab.index <= 1
+        ? _hakAkun
+        : _tab.index == 2
+            ? _hakBank
+            : _tab.index == 3
+                ? _hakJenisTransaksi
+                : _hakGrup;
+    return _boleh(hak, 'create') || _boleh(hak, 'update');
+  }
+
   Future<void> _tambahTabIni() {
     if (_tab.index <= 1) return _formAkun();
     if (_tab.index == 2) return _formBank();
@@ -1221,10 +1235,16 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
               onPressed: _sibuk ? null : _unduhAkun,
               icon: const Icon(Icons.download, size: 18),
               label: Text('Download $_defJudul')),
-          OutlinedButton.icon(
-              onPressed: _sibuk ? null : _unggahAkun,
-              icon: const Icon(Icons.upload_file, size: 18),
-              label: Text('Upload $_defJudul')),
+          Tooltip(
+            message: _bolehImporTabIni
+                ? 'Unggah berkas Excel $_defJudul'
+                : 'Hak akses Anda tidak mengizinkan mengimpor $_defJudul',
+            child: OutlinedButton.icon(
+                onPressed:
+                    _sibuk || !_bolehImporTabIni ? null : _unggahAkun,
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: Text('Upload $_defJudul')),
+          ),
           if (_tab.index < 2)
             OutlinedButton.icon(
                 onPressed: _sibuk ? null : _petakanAkun,

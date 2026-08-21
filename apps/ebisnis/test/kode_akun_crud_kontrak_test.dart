@@ -88,4 +88,17 @@ void main() {
       expect(shell, contains("'$kunci'"), reason: 'sidebar $kunci');
     }
   });
+
+  test('tombol Upload ikut hak akses, bukan hanya Tambah/Ubah/Hapus', () {
+    // Impor massal sempat menjadi pintu belakang: peran yang hanya boleh
+    // MELIHAT Kode Akun tetap dapat membuat ratusan akun lewat unggah Excel.
+    // Server kini menolaknya; layar wajib ikut memadamkan tombolnya supaya
+    // penolakan itu tidak baru terasa setelah berkas telanjur diproses.
+    final layar = File('lib/screens/kode_akun_screen.dart').readAsStringSync();
+    final padat = layar.replaceAll(RegExp(r'\s+'), '');
+    expect(padat, contains('boolget_bolehImporTabIni'));
+    expect(padat, contains("_boleh(hak,'create')||_boleh(hak,'update')"));
+    expect(padat, contains('_sibuk||!_bolehImporTabIni?null:_unggahAkun'),
+        reason: 'tombol Upload harus mati saat hak tidak mengizinkan');
+  });
 }
