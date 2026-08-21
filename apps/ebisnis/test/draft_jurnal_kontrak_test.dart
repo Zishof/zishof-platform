@@ -34,6 +34,24 @@ void main() {
     expect(source.contains('url_launcher'), isFalse);
   });
 
+  test('rincian memakai aksi dan kunci payload kontrak server', () {
+    final source =
+        File('lib/screens/draft_jurnal_screen.dart').readAsStringSync();
+
+    expect(source, contains("aksi('draft_jurnal_rincian'"));
+    // Server membangun daftar dari kriteria yang sama dgn angkanya, dikenali lewat
+    // nama baris + status; ketiganya wajib ikut terkirim.
+    expect(source, contains("'nama': widget.nama"));
+    expect(source, contains("'status': widget.status"));
+    expect(source, contains("'mulai': widget.mulai"));
+    expect(source, contains("'sampai': widget.sampai"));
+
+    // Status yang dikenal server hanya tiga -- lihat DraftJurnalApiHelper.rincian.
+    for (final status in ["'draft'", "'posting'", "'closing'"]) {
+      expect(source, contains(status), reason: 'status $status hilang');
+    }
+  });
+
   test('menu Draft Jurnal terdaftar di kedua platform', () {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();

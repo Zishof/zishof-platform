@@ -276,11 +276,9 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
                 AppTableCell(
                     child: Text('${b['nama'] ?? '-'}',
                         style: const TextStyle(fontWeight: FontWeight.w600))),
-                AppTableCell(
-                    child: _angkaSel(b['draft'], AppColors.warning)),
-                AppTableCell(
-                    child: _angkaSel(b['posting'], AppColors.success)),
-                AppTableCell(child: _angkaSel(b['closing'], AppColors.info)),
+                AppTableCell(child: _angkaSel(b, 'draft', AppColors.warning)),
+                AppTableCell(child: _angkaSel(b, 'posting', AppColors.success)),
+                AppTableCell(child: _angkaSel(b, 'closing', AppColors.info)),
                 AppTableCell(
                     child: Text('${b['keterangan'] ?? ''}',
                         style: TextStyle(
@@ -291,14 +289,171 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
     );
   }
 
-  Widget _angkaSel(dynamic nilai, Color warna) {
-    final n = (nilai as num?)?.toInt() ?? 0;
-    return Text(
+  /// Angka yang bernilai > 0 dapat diketuk untuk membuka daftar dokumen di baliknya.
+  /// Angka nol sengaja tidak dibuat seperti tautan supaya tidak ada janji kosong.
+  Widget _angkaSel(Map<String, dynamic> baris, String status, Color warna) {
+    final n = (baris[status] as num?)?.toInt() ?? 0;
+    final teks = Text(
       _angka.format(n),
       textAlign: TextAlign.right,
       style: TextStyle(
         fontWeight: n > 0 ? FontWeight.w700 : FontWeight.w400,
         color: n > 0 ? warna : AppColors.textSecondaryOf(context),
+        decoration: n > 0 ? TextDecoration.underline : null,
+        decorationColor: warna,
+      ),
+    );
+    if (n == 0) return teks;
+    return InkWell(
+      onTap: () => _bukaRincian(baris, status),
+      child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4), child: teks),
+    );
+  }
+
+  Future<void> _bukaRincian(Map<String, dynamic> baris, String status) async {
+    final nama = '${baris['nama'] ?? ''}';
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _RincianDraftJurnal(
+        nama: nama,
+        status: status,
+        mulai: _tanggalIso.format(_mulai),
+        sampai: _tanggalIso.format(_sampai),
+      ),
+    );
+  }
+}
+
+/// Daftar dokumen di balik satu angka dasbor.
+///
+/// Dibangun server dari KRITERIA YANG SAMA dengan angkanya (`draft_jurnal_rincian`),
+/// jadi jumlah baris di sini tidak akan berselisih dengan angka yang barusan diketuk.
+class _RincianDraftJurnal extends StatefulWidget {
+  final String nama;
+  final String status;
+  final String mulai;
+  final String sampai;
+
+  const _RincianDraftJurnal({
+    required this.nama,
+    required this.status,
+    required this.mulai,
+    required this.sampai,
+  });
+
+  @override
+  State<_RincianDraftJurnal> createState() => _RincianDraftJurnalState();
+}
+
+class _RincianDraftJurnalState extends State<_RincianDraftJurnal>
+    with JejakGalat {
+  static final _rupiah =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  bool _memuat = true;
+  String? _pesanError;
+  List<Map<String, dynamic>> _data = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  String get _judulStatus => widget.status == 'draft'
+      ? 'Draft (belum diposting)'
+      : widget.status == 'posting'
+          ? 'Terposting'
+          : 'Closing';
+
+  Future<void> _muat() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('draft_jurnal_rincian', {
+        'nama': widget.nama,
+        'status': widget.status,
+        'mulai': widget.mulai,
+        'sampai': widget.sampai,
+        'limit': 200,
+      });
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      });
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+    } finally {
+      setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.nama,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            Text('$_judulStatus  •  ${widget.mulai} s.d. ${widget.sampai}',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context))),
+            const SizedBox(height: 12),
+            if (_pesanError != null)
+              AppInfoBanner(
+                icon: Icons.error_outline,
+                color: AppColors.danger,
+                text: _pesanError!,
+                detail: detailUntuk(_pesanError),
+              ),
+            Expanded(
+              child: _memuat
+                  ? const Center(child: CircularProgressIndicator())
+                  : _data.isEmpty && _pesanError == null
+                      ? const Center(
+                          child: Text('Tidak ada dokumen pada status ini.'))
+                      : ListView.separated(
+                          controller: scrollController,
+                          itemCount: _data.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final d = _data[i];
+                            final nilai = (d['nilai'] as num?)?.toDouble() ?? 0;
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                  '${d['uraian'] ?? ''}'.trim().isEmpty
+                                      ? '(tanpa keterangan)'
+                                      : '${d['uraian']}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                              subtitle: Text(
+                                  '${d['tanggal'] ?? '-'}   •   id ${d['id'] ?? '-'}',
+                                  style: const TextStyle(fontSize: 11)),
+                              trailing: Text(_rupiah.format(nilai),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                            );
+                          },
+                        ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Tutup'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
