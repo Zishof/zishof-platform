@@ -305,6 +305,11 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
   bool get _tunggal => widget.info['berupaPilihanTunggal'] == true;
   bool get _opsiTidakWajib => widget.info['nextTidakWajib'] == true;
   bool get _catatanWajib => widget.info['catatanWajib'] == true;
+
+  /// SOP boleh dikonfigurasi TANPA kolom catatan pada tahap awalnya (ZKoss
+  /// menyembunyikan barisnya). Server lama yang belum mengirim kunci ini
+  /// diperlakukan sebagai "boleh" -- sama dengan default entitasnya.
+  bool get _bolehCatatan => widget.info['bolehDiisiCatatan'] != false;
   String get _ref => '${widget.info['refSementara']}';
 
   @override
@@ -373,7 +378,7 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
     final terpilih = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) =>
-          _DialogCariEntitas(judul: '${f['label']}', clazz: kelas),
+          DialogCariEntitas(judul: '${f['label']}', clazz: kelas),
     );
     if (terpilih == null || !mounted) return;
     setState(() => _relasiDipilih['${f['property']}'] = terpilih);
@@ -394,7 +399,8 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
   // ── Validasi & kirim ────────────────────────────────────────────────────
 
   String? _periksa() {
-    if (_catatanWajib && _keterangan.text.trim().isEmpty) {
+    // Kewajiban catatan hanya berlaku bila kolomnya memang ditampilkan.
+    if (_bolehCatatan && _catatanWajib && _keterangan.text.trim().isEmpty) {
       return 'Catatan/keterangan harus diisi.';
     }
     if (_alurDipilih.isEmpty && !_opsiTidakWajib && _opsi.isNotEmpty) {
@@ -560,9 +566,10 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
                 ),
               ],
               const SizedBox(height: 12),
-              _kotak(
-                judul: 'Catatan',
-                isi: TextField(
+              if (_bolehCatatan)
+                _kotak(
+                  judul: 'Catatan',
+                  isi: TextField(
                   controller: _keterangan,
                   minLines: 3,
                   maxLines: 6,
@@ -914,20 +921,21 @@ class _FormPengajuanBaruState extends State<_FormPengajuanBaru> {
 // PICKER RELASI — sop_cari_entitas
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Pencarian entitas generik untuk field bertipe "relasi" pada form data
-/// dinamis. Server sengaja menyediakan SATU endpoint untuk semua jenis relasi
+/// Pencarian entitas generik. Dipakai untuk field bertipe "relasi" pada form
+/// data dinamis, DAN untuk memilih Satuan Kerja pada filter dasbor. Server sengaja menyediakan SATU endpoint untuk semua jenis relasi
 /// (divalidasi lewat metadata Hibernate, bukan dengan meng-instantiate kelas
 /// sembarangan dari input pengguna), sehingga picker ini pun cukup satu.
-class _DialogCariEntitas extends StatefulWidget {
+class DialogCariEntitas extends StatefulWidget {
   final String judul;
   final String clazz;
-  const _DialogCariEntitas({required this.judul, required this.clazz});
+  const DialogCariEntitas(
+      {super.key, required this.judul, required this.clazz});
 
   @override
-  State<_DialogCariEntitas> createState() => _DialogCariEntitasState();
+  State<DialogCariEntitas> createState() => DialogCariEntitasState();
 }
 
-class _DialogCariEntitasState extends State<_DialogCariEntitas> {
+class DialogCariEntitasState extends State<DialogCariEntitas> {
   final _cari = TextEditingController();
   bool _memuat = false;
   String? _galat;

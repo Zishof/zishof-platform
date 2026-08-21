@@ -113,6 +113,62 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
     }
   }
 
+  /// Mengubah langkah yang SUDAH diambil -- padanan tombol "Ubah" pada
+  /// TampilanAlurSopAction. Izinnya ditentukan server (`bisaUbah` per baris
+  /// riwayat) dan DITEGAKKAN ULANG saat menyimpan, jadi tombol ini hanya
+  /// tampilan.
+  Future<void> _ubahLangkah(Map<String, dynamic> r) async {
+    setStateIfMounted(() => _sibuk = true);
+    Map<String, dynamic> info;
+    try {
+      final t = await ApiClient.instance
+          .aksi('sop_ubah_info', {'disposisiAlurSopId': '${r['id']}'});
+      if (!mounted) return;
+      if (t['status'] != '00' && t['status'] != 'success') {
+        _pesan('${t['message'] ?? 'Langkah ini tidak dapat diubah.'}',
+            galat: true);
+        return;
+      }
+      info = Map<String, dynamic>.from((t['data'] as Map?) ?? const {});
+    } catch (e) {
+      if (mounted) _pesan('$e', galat: true);
+      return;
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+
+    if (!mounted) return;
+    if (info['langkahOrangLain'] == true) {
+      final lanjut = await _konfirmasi(
+          'Ubah langkah milik orang lain?',
+          'Langkah ini diambil oleh ${info['olehNama'] ?? 'pengguna lain'}. '
+              'Nama pengambil aslinya tetap dipertahankan pada catatan; '
+              'yang berubah hanya isian disposisinya.');
+      if (lanjut != true || !mounted) return;
+    }
+
+    final hasil = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogProsesTahap(tahap: info, modeUbah: true),
+    );
+    if (hasil == null || !mounted) return;
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final t = await ApiClient.instance.aksi('sop_ubah', hasil);
+      if (!mounted) return;
+      final sukses = t['status'] == '00' || t['status'] == 'success';
+      _pesan(
+          '${t['message'] ?? (sukses ? 'Perubahan tersimpan.' : 'Gagal menyimpan perubahan.')}',
+          galat: !sukses);
+      if (sukses) await _muat();
+    } catch (e) {
+      _pesan('$e', galat: true);
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
+  }
+
   Future<void> _batalkanLangkah(Map<String, dynamic> tahap) async {
     final ya = await _konfirmasi(
         'Batalkan tahap ini?',
@@ -635,6 +691,20 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
                         ),
                       ]),
                     ),
+                  if (r['bisaUbah'] == true)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 30),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        icon: const Icon(Icons.edit_outlined, size: 15),
+                        label: const Text('Ubah',
+                            style: TextStyle(fontSize: 11)),
+                        onPressed: _sibuk ? null : () => _ubahLangkah(r),
+                      ),
+                    ),
                   if (kembali)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -780,7 +850,13 @@ class _PengajuanAndaDetailScreenState extends State<PengajuanAndaDetailScreen> {
 
 class _DialogProsesTahap extends StatefulWidget {
   final Map<String, dynamic> tahap;
-  const _DialogProsesTahap({required this.tahap});
+
+  /// true = mengubah langkah yang SUDAH diambil (aksi `sop_ubah`), bukan
+  /// memproses tahap yang menunggu (`sop_proses`). Bentuk muatan `sop_ubah_info`
+  /// sengaja dibuat kompatibel dgn `tahapPending`, sehingga satu form melayani
+  /// keduanya dan tidak ada dua tempat yang harus dijaga tetap sama.
+  final bool modeUbah;
+  const _DialogProsesTahap({required this.tahap, this.modeUbah = false});
 
   @override
   State<_DialogProsesTahap> createState() => _DialogProsesTahapState();
@@ -810,6 +886,45 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
   bool get _opsiTidakWajib => widget.tahap['nextTidakWajib'] == true;
   bool get _catatanWajib => widget.tahap['catatanWajib'] == true;
 
+  /// Tahap boleh dikonfigurasi TANPA kolom catatan sama sekali (ZKoss
+  /// menyembunyikan barisnya). Server lama yang belum mengirim kunci ini
+  /// diperlakukan sebagai "boleh" -- sama dengan default entitasnya.
+  bool get _bolehCatatan => widget.tahap['bolehDiisiCatatan'] != false;
+
+  /// Hanya tahap dengan `tanggalDisposisiBolehDiubah` yang boleh mengubah waktu
+  /// disposisi; selain itu memakai waktu server.
+  bool get _tanggalBolehDiubah => widget.tahap['tanggalBolehDiubah'] == true;
+
+  /// Tahap yang membekukan dokumen tidak menerima unggahan baru.
+  bool get _bekukanDokumen => widget.tahap['bekukanDokumen'] == true;
+
+  DateTime? _waktuDisposisi;
+
+  String _dua(int n) => n < 10 ? '0$n' : '$n';
+
+  /// Format yang dibaca server: `Common.dateFormat3` = dd-MM-yyyy HH:mm:ss.
+  String _waktuServer(DateTime d) =>
+      '${_dua(d.day)}-${_dua(d.month)}-${d.year} '
+      '${_dua(d.hour)}:${_dua(d.minute)}:${_dua(d.second)}';
+
+  Future<void> _pilihWaktuDisposisi() async {
+    final kini = _waktuDisposisi ?? DateTime.now();
+    final tgl = await showDatePicker(
+      context: context,
+      initialDate: kini,
+      firstDate: DateTime(kini.year - 5),
+      lastDate: DateTime(kini.year + 5),
+    );
+    if (tgl == null || !mounted) return;
+    final jam = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(kini),
+    );
+    if (!mounted) return;
+    setState(() => _waktuDisposisi = DateTime(tgl.year, tgl.month, tgl.day,
+        jam?.hour ?? kini.hour, jam?.minute ?? kini.minute));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -817,7 +932,17 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
       _nilaiParam['${p['key']}'] =
           TextEditingController(text: '${p['nilaiDefault'] ?? ''}');
     }
+    if (widget.modeUbah) {
+      _keterangan.text = '${widget.tahap['keterangan'] ?? ''}';
+      _selesai = widget.tahap['selesai'] == true;
+      _kembali = widget.tahap['kembali'] == true;
+    }
   }
+
+  /// Rute hanya boleh diubah selama langkah ini belum melahirkan penerus --
+  /// aturan `editPilihan` pada ZKoss. Di luar mode ubah, selalu boleh.
+  bool get _bolehUbahPilihan =>
+      !widget.modeUbah || widget.tahap['bisaUbahPilihan'] == true;
 
   @override
   void dispose() {
@@ -854,10 +979,16 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
   }
 
   String? _periksa() {
-    if (_catatanWajib && _keterangan.text.trim().isEmpty) {
+    // Kewajiban catatan hanya berlaku bila kolomnya memang ditampilkan; tahap
+    // yang dikonfigurasi tanpa kolom catatan tidak boleh menuntut isiannya.
+    if (_bolehCatatan && _catatanWajib && _keterangan.text.trim().isEmpty) {
       return 'Catatan wajib diisi pada tahap ini.';
     }
-    if (!_kembali && !_selesai && _alurDipilih.isEmpty && !_opsiTidakWajib &&
+    if (_bolehUbahPilihan &&
+        !_kembali &&
+        !_selesai &&
+        _alurDipilih.isEmpty &&
+        !_opsiTidakWajib &&
         _opsi.isNotEmpty) {
       return 'Pilih tahap lanjutan, atau pilih "Setujui dan Selesai" / '
           '"Kembalikan ke tahap sebelumnya".';
@@ -872,9 +1003,11 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
         return 'Lampiran untuk "${p['label'] ?? p['nama'] ?? p['key']}" wajib diunggah.';
       }
     }
-    for (final d in _dokumen) {
-      if (d['wajib'] == true && !_berkasTerunggah.containsKey('${d['key']}')) {
-        return 'Dokumen "${d['nama'] ?? d['key']}" wajib diunggah.';
+    if (!_bekukanDokumen) {
+      for (final d in _dokumen) {
+        if (d['wajib'] == true && !_berkasTerunggah.containsKey('${d['key']}')) {
+          return 'Dokumen "${d['nama'] ?? d['key']}" wajib diunggah.';
+        }
       }
     }
     return null;
@@ -889,8 +1022,16 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
     final body = <String, dynamic>{
       'disposisiAlurSopId': '${widget.tahap['disposisiAlurSopId']}',
       'keterangan': _keterangan.text.trim(),
+      // Hanya dikirim bila tahap memang mengizinkan; server pun memeriksanya
+      // ulang, jadi klien tidak bisa memaksakan tanggal pada tahap yang tidak
+      // dikonfigurasi begitu.
+      if (_tanggalBolehDiubah && _waktuDisposisi != null)
+        'waktu': _waktuServer(_waktuDisposisi!),
     };
-    if (_kembali) {
+    if (widget.modeUbah) {
+      body['kembali'] = _kembali;
+      body['selesai'] = _selesai;
+    } else if (_kembali) {
       body['kembali'] = true;
     } else if (_selesai) {
       body['selesai'] = true;
@@ -919,7 +1060,8 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
   Widget build(BuildContext context) {
     final lebar = MediaQuery.of(context).size.width;
     return AlertDialog(
-      title: Text('Proses: ${widget.tahap['tahap'] ?? ''}',
+      title: Text(
+          '${widget.modeUbah ? 'Ubah' : 'Proses'}: ${widget.tahap['tahap'] ?? ''}',
           style: const TextStyle(fontSize: 16)),
       content: SizedBox(
         width: lebar > 620 ? 560 : lebar * 0.9,
@@ -942,17 +1084,39 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
                           fontWeight: FontWeight.w600,
                           color: AppColors.danger)),
                 ),
-              TextField(
-                controller: _keterangan,
-                minLines: 2,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  labelText:
-                      'Catatan${_catatanWajib ? ' (wajib)' : ' (opsional)'}',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+              if (_bolehCatatan)
+                TextField(
+                  controller: _keterangan,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText:
+                        'Catatan${_catatanWajib ? ' (wajib)' : ' (opsional)'}',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
-              ),
+              if (_tanggalBolehDiubah) ...[
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: _pilihWaktuDisposisi,
+                  borderRadius: BorderRadius.circular(6),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Tanggal dan Waktu Disposisi',
+                      helperText: 'Tahap ini memperbolehkan waktunya diubah',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      suffixIcon: Icon(Icons.event, size: 18),
+                    ),
+                    child: Text(
+                        _waktuDisposisi == null
+                            ? 'Sekarang (waktu server)'
+                            : _waktuServer(_waktuDisposisi!),
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
               if (widget.tahap['bisaKembali'] == true)
                 CheckboxListTile(
                   dense: true,
@@ -985,7 +1149,7 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
                     }
                   }),
                 ),
-              if (_opsi.isNotEmpty && !_kembali && !_selesai) ...[
+              if (_opsi.isNotEmpty && !_kembali && !_selesai && _bolehUbahPilihan) ...[
                 const SizedBox(height: 8),
                 Text(
                     _tunggal
@@ -1003,6 +1167,22 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
                         '${o['nama'] ?? ''}'
                         '${'${o['opsi'] ?? ''}'.isEmpty ? '' : ' — ${o['opsi']}'}',
                         style: const TextStyle(fontSize: 12)),
+                    // Pratinjau penerima -- padanan SopUtil.renderAktorTunggal /
+                    // tampilAktor di ZKoss. Tanpa ini pengguna memilih rute tanpa
+                    // tahu dokumennya pergi ke siapa.
+                    subtitle: o['kembaliKePengaju'] == true
+                        ? Text('Kembali ke pengaju',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.warning))
+                        : ('${o['aktorLabel'] ?? ''}'.isEmpty
+                            ? null
+                            : Text('Ke: ${o['aktorLabel']}',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color:
+                                        AppColors.textSecondaryOf(context)))),
                     onChanged: (v) => setState(() {
                       final id = '${o['alurSopId']}';
                       if (v == true) {
@@ -1026,7 +1206,18 @@ class _DialogProsesTahapState extends State<_DialogProsesTahap> {
                         fontSize: 12, fontWeight: FontWeight.bold)),
                 for (final p in _param) _isianParameter(p),
               ],
-              if (_dokumen.isNotEmpty) ...[
+              if (_dokumen.isNotEmpty && _bekukanDokumen)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                      'Dokumen dikunci pada tahap ini, jadi tidak dapat diunggah '
+                      'maupun diganti.',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textSecondaryOf(context))),
+                ),
+              if (_dokumen.isNotEmpty && !_bekukanDokumen) ...[
                 const SizedBox(height: 12),
                 const Text('Dokumen',
                     style: TextStyle(

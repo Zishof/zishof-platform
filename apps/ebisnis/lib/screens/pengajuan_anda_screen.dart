@@ -92,24 +92,41 @@ class FilterPengajuan {
   final DateTime? mulai;
   final DateTime? sampai;
   final String keyword;
-  const FilterPengajuan({this.mulai, this.sampai, this.keyword = ''});
+
+  /// Satuan Kerja -- penyaring KETIGA pada toolbar dasbor ZKoss. Server
+  /// mencocokkannya lewat pegawai milik pengaju maupun pengambil langkah
+  /// (padanan `DasboardSop.applyGlobalSatkerFilter`).
+  final int? satuanKerjaId;
+  final String satuanKerjaNama;
+
+  const FilterPengajuan(
+      {this.mulai,
+      this.sampai,
+      this.keyword = '',
+      this.satuanKerjaId,
+      this.satuanKerjaNama = ''});
 
   Map<String, dynamic> keBody() => {
         if (mulai != null) 'mulai': _tglServer(mulai!),
         if (sampai != null) 'sampai': _tglServer(sampai!),
         if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+        if (satuanKerjaId != null) 'satuanKerjaId': satuanKerjaId,
       };
 
   String get sidik =>
-      '${mulai?.millisecondsSinceEpoch ?? 0}_${sampai?.millisecondsSinceEpoch ?? 0}_${keyword.trim()}';
+      '${mulai?.millisecondsSinceEpoch ?? 0}_${sampai?.millisecondsSinceEpoch ?? 0}'
+      '_${keyword.trim()}_${satuanKerjaId ?? 0}';
 
   String get ringkas {
     final p = mulai == null && sampai == null
         ? 'Semua Periode'
         : '${mulai == null ? '...' : _tglTampil(mulai!)} s/d '
             '${sampai == null ? '...' : _tglTampil(sampai!)}';
+    final s = satuanKerjaId == null
+        ? 'Semua Satker'
+        : (satuanKerjaNama.isEmpty ? 'Satker terpilih' : satuanKerjaNama);
     final k = keyword.trim().isEmpty ? 'Tanpa keyword' : 'Cari: ${keyword.trim()}';
-    return '$p  •  $k';
+    return '$p  •  $s  •  $k';
   }
 }
 
@@ -367,6 +384,29 @@ class _TabDasborState extends State<_TabDasbor> {
                   (label: k.label, nilai: _n(k.kunciKpi).toDouble()),
               ],
             ),
+          ),
+          const SizedBox(height: 12),
+          // Tren bulanan -- padanan renderSopTrendBulananV13 pada dasbor ZKoss,
+          // yang sumbernya d.perBulan. Ditarik dari 12 bulan terakhir contoh alur.
+          PanelChart(
+            judul: 'Tren Alur per Bulan',
+            child: _list('perBulan').isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    child: Text('Belum ada data bulanan.',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context))),
+                  )
+                : GarisTren(
+                    data: [
+                      for (final e in _list('perBulan'))
+                        (
+                          label: '${e['label'] ?? ''}',
+                          nilai: _angka(e['jumlah']).toDouble()
+                        ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 12),
           PanelChart(
@@ -1078,6 +1118,8 @@ class _DialogFilter extends StatefulWidget {
 class _DialogFilterState extends State<_DialogFilter> {
   DateTime? _mulai;
   DateTime? _sampai;
+  int? _satkerId;
+  String _satkerNama = '';
   late final TextEditingController _cari;
 
   @override
@@ -1085,7 +1127,27 @@ class _DialogFilterState extends State<_DialogFilter> {
     super.initState();
     _mulai = widget.awal.mulai;
     _sampai = widget.awal.sampai;
+    _satkerId = widget.awal.satuanKerjaId;
+    _satkerNama = widget.awal.satuanKerjaNama;
     _cari = TextEditingController(text: widget.awal.keyword);
+  }
+
+  /// Memakai ulang picker entitas generik yang sama dengan form data dinamis --
+  /// server memvalidasi kelasnya lewat metadata Hibernate, jadi satu endpoint
+  /// melayani semua jenis relasi termasuk Satuan Kerja.
+  Future<void> _pilihSatker() async {
+    final hasil = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const DialogCariEntitas(
+          judul: 'Satuan Kerja', clazz: 'ais.database.model.rab.SatuanKerja'),
+    );
+    if (hasil == null || !mounted) return;
+    setState(() {
+      _satkerId = hasil['id'] is num
+          ? (hasil['id'] as num).toInt()
+          : int.tryParse('${hasil['id']}');
+      _satkerNama = '${hasil['nama'] ?? ''}';
+    });
   }
 
   @override
@@ -1152,6 +1214,37 @@ class _DialogFilterState extends State<_DialogFilter> {
               ],
             ),
             const SizedBox(height: 10),
+            InkWell(
+              onTap: _pilihSatker,
+              borderRadius: BorderRadius.circular(6),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Satuan Kerja',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  suffixIcon: _satkerId == null
+                      ? const Icon(Icons.search, size: 18)
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: 'Semua Satker',
+                          onPressed: () => setState(() {
+                            _satkerId = null;
+                            _satkerNama = '';
+                          }),
+                        ),
+                ),
+                child: Text(
+                    _satkerId == null
+                        ? 'Semua Satker'
+                        : (_satkerNama.isEmpty ? 'Satker terpilih' : _satkerNama),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _satkerId == null
+                            ? AppColors.textSecondaryOf(context)
+                            : AppColors.textPrimaryOf(context))),
+              ),
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _cari,
               decoration: const InputDecoration(
@@ -1179,7 +1272,11 @@ class _DialogFilterState extends State<_DialogFilter> {
           onPressed: () => Navigator.pop(
               context,
               FilterPengajuan(
-                  mulai: _mulai, sampai: _sampai, keyword: _cari.text)),
+                  mulai: _mulai,
+                  sampai: _sampai,
+                  keyword: _cari.text,
+                  satuanKerjaId: _satkerId,
+                  satuanKerjaNama: _satkerNama)),
           child: const Text('Tampilkan'),
         ),
       ],
