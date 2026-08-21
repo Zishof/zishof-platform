@@ -756,24 +756,35 @@ class _TabPenerimaanPbfState extends State<_TabPenerimaanPbf> {
     if (_baris.isEmpty) return;
     setStateIfMounted(() => _proses = true);
     try {
-      final hasil = await ApiClient.instance.aksi('apotik_terima_barang', {
-        'penyedia': _penyedia.text.trim(),
-        'no_faktur': _noFaktur.text.trim(),
-        'items': _baris
-            .map((b) => {
-                  'item_id': b.item['id'],
-                  'qty': double.tryParse(b.qty.text) ?? 0,
-                  'harga_beli':
-                      double.tryParse(b.harga.text.replaceAll(',', '.')) ?? 0,
-                  if (b.ed.text.trim().isNotEmpty)
-                    'tanggal_kadaluarsa': b.ed.text.trim(),
-                })
-            .toList(),
-      });
+      // LOKAL DULU: penerimaan ditulis ke antrean sebelum menyentuh jaringan.
+      // Aman diantre karena penerimaan hanya MENAMBAH stok -- tidak ada yang
+      // diperebutkan dgn perangkat lain. Jumlah baris/batch dihitung server,
+      // jadi saat offline angkanya baru muncul setelah antrean terkirim.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'apotik_terima_barang',
+        kunci: 'apotik_terima:baru:${DateTime.now().microsecondsSinceEpoch}',
+        body: {
+          'penyedia': _penyedia.text.trim(),
+          'no_faktur': _noFaktur.text.trim(),
+          'items': _baris
+              .map((b) => {
+                    'item_id': b.item['id'],
+                    'qty': double.tryParse(b.qty.text) ?? 0,
+                    'harga_beli':
+                        double.tryParse(b.harga.text.replaceAll(',', '.')) ?? 0,
+                    if (b.ed.text.trim().isNotEmpty)
+                      'tanggal_kadaluarsa': b.ed.text.trim(),
+                  })
+              .toList(),
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Penerimaan tercatat: ${hasil['jumlahBaris']} baris, ${hasil['jumlahBatch']} batch ED.')));
+            content: Text(hasil['offline'] == true
+                ? 'Penerimaan tersimpan di perangkat dan akan dikirim otomatis. '
+                    'Rincian batch ED muncul setelah terkirim.'
+                : 'Penerimaan tercatat: ${hasil['jumlahBaris']} baris, ${hasil['jumlahBatch']} batch ED.')));
         setStateIfMounted(() {
           for (final b in _baris) {
             b.dispose();

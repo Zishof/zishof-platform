@@ -13,6 +13,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 import '../struk_screen.dart';
 import '../../widgets/jejak_galat.dart';
@@ -853,7 +854,14 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
 
   Future<void> _layani(dynamic id) async {
     try {
-      await ApiClient.instance.aksi('layani_transaksi', {'id': id});
+      // LOKAL DULU: penanda "sudah dilayani" hanyalah bendera per baris, aman
+      // diantre dan aman terkirim ulang.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'layani_transaksi',
+        body: {'id': id},
+        kunci: 'layani_transaksi:$id',
+      );
       await _muat();
     } catch (e) {
       if (mounted) {
@@ -881,6 +889,10 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
     );
     if (konfirmasi != true) return;
     try {
+      // ONLINE-ONLY: SERVER yang memilih baris mana saja yang masuk rentang
+      // filter. Bila diantre, himpunan barisnya sudah berubah saat terkirim --
+      // yang disetujui pengguna bukan lagi yang dikerjakan. (Aksi satu-baris
+      // di atas, layani_transaksi, tetap lokal-dulu.)
       final hasil = await ApiClient.instance.aksi('layani_semua_transaksi', {
         ..._payloadRentangTanggal(),
       });

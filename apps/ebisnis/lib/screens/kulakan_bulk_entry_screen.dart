@@ -10,6 +10,7 @@ import '../api_client.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../models.dart';
 import '../parse_util.dart';
+import '../services/master_offline.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -1760,11 +1761,21 @@ class _BulkSupplierSheetState extends State<_BulkSupplierSheet> {
     if (nama.isEmpty) return;
     setStateIfMounted(() => _menyimpan = true);
     try {
-      final hasil =
-          await ApiClient.instance.aksi('penyedia_simpan', {'nama': nama});
+      // LOKAL DULU, sama seperti tambah-supplier di layar Kulakan: id SEMENTARA
+      // langsung dipakai baris entri yang sedang diketik, lalu ditukar id server
+      // saat antreannya terkirim (MasterOffline.tukarIdSementara).
+      final idLokal = MasterOffline.idSementaraBaru();
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'penyedia_simpan',
+        body: {'nama': nama},
+        kunci: 'penyedia:baru:${DateTime.now().microsecondsSinceEpoch}',
+        idLokal: idLokal,
+        entitas: 'penyedia',
+      );
       if (!mounted) return;
       Navigator.of(context).pop({
-        'id': hasil['id'],
+        'id': hasil['id'] ?? idLokal,
         'nama': hasil['nama'] ?? nama,
       });
     } catch (e) {
