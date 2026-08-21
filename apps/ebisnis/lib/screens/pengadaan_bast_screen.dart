@@ -158,6 +158,12 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
       await _backOrder((hasil['po_id'] as num).toInt(), '${hasil['po'] ?? ''}');
       return;
     }
+    // Penanda internal tidak ikut dikirim ke server: ia hanya memberi tahu
+    // layar ini bahwa sesudah menyimpan masih ada sisa pesanan yang perlu
+    // diputuskan.
+    final kurangKirim = hasil.remove('_kurang') == true;
+    final poKodeKurang = '${hasil.remove('_poKode') ?? ''}';
+
     try {
       await prosesSimpanMaster(
         context,
@@ -169,6 +175,14 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
         cacheKey: 'master:pengadaan_bast',
       );
       await _muat();
+      /* Penerimaannya sudah tersimpan; barulah sisa pesanan diputuskan.
+       * Dialog Back Order dibuka LANGSUNG tanpa konfirmasi perantara, karena
+       * dialog itu sendiri sudah menanyakan keputusannya lewat pilihan "Pesan
+       * kembali" / "Tutup sisa saja" dan menyediakan Batal. Menambah dialog ya
+       * atau tidak di depannya hanya menambah satu klik tanpa informasi baru. */
+      if (kurangKirim && mounted && hasil['po_id'] != null) {
+        await _backOrder((hasil['po_id'] as num).toInt(), poKodeKurang);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1288,8 +1302,27 @@ class _FormBastDialogState extends State<_FormBastDialog> {
         return;
       }
     }
+    /* Vendor sering mengirim KURANG dari yang dipesan. Sebelumnya kasir harus
+     * ingat sendiri untuk menekan tombol "Back Order / Pesan Kembali" setelah
+     * menyimpan, dan kalau lupa, sisa pesanan menggantung tanpa keputusan --
+     * tidak ditutup, tidak pula dipesan ulang.
+     *
+     * Kekurangannya dideteksi di sini lalu ditandai pada hasil dialog. Pemanggil
+     * menawarkan Back Order SETELAH penerimaannya tersimpan, bukan sebagai
+     * pengganti penyimpanan -- barang yang sudah diterima harus tercatat lebih
+     * dahulu, apa pun keputusan atas sisanya.
+     *
+     * Bila jumlahnya pas, tidak ada yang ditanyakan: alurnya selesai. */
+    final adaKekurangan = _poId != null &&
+        _baris.any((b) {
+          final sisa = b.sisaBoleh;
+          return sisa != null && _angka(b.diterima.text) < sisa - 1e-6;
+        });
+
     Navigator.pop(context, <String, dynamic>{
       if (!_baru) 'id': widget.awal!['id'],
+      if (adaKekurangan) '_kurang': true,
+      if (adaKekurangan) '_poKode': _poKode,
       if (_poId != null) 'po_id': _poId,
       if (_penyediaId != null) 'penyedia_id': _penyediaId,
       'keterangan': _keterangan.text.trim(),
@@ -1353,6 +1386,29 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
   final List<_BarisKurang> _baris = [];
   final _alasan = TextEditingController();
   final _batasKirim = TextEditingController();
+
+  /// Mengetik tanggal bebas mudah salah format, dan formatnya HARUS dd-MM-yyyy
+  /// karena itu yang dibaca dokumen yang sama di versi ZKoss. Kolomnya dibuat
+  /// hanya-baca dan diisi lewat pemilih tanggal, sama seperti kolom tanggal
+  /// lain pada layar penerimaan ini.
+  Future<void> _pilihBatasKirim() async {
+    DateTime awal = DateTime.now();
+    final bagian = _batasKirim.text.split('-');
+    if (bagian.length == 3) {
+      final d = int.tryParse(bagian[0]),
+          m = int.tryParse(bagian[1]),
+          y = int.tryParse(bagian[2]);
+      if (d != null && m != null && y != null) awal = DateTime(y, m, d);
+    }
+    final pilih = await showDatePicker(
+      context: context,
+      initialDate: awal,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (pilih == null) return;
+    setState(() => _batasKirim.text = DateFormat('dd-MM-yyyy').format(pilih));
+  }
   bool _pesanKembali = true;
   bool _memuat = true;
   bool _mengirim = false;
@@ -1591,8 +1647,17 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
               Expanded(
                 child: TextField(
                   controller: _batasKirim,
-                  decoration: const InputDecoration(
-                      labelText: 'Batas kirim (hh-bb-tttt)', isDense: true),
+                  readOnly: true,
+                  onTap: _pilihBatasKirim,
+                  decoration: InputDecoration(
+                      labelText: 'Batas kirim',
+                      isDense: true,
+                      hintText: 'hh-bb-tttt',
+                      suffixIcon: IconButton(
+                        tooltip: 'Pilih tanggal',
+                        icon: const Icon(Icons.event, size: 18),
+                        onPressed: _pilihBatasKirim,
+                      )),
                 ),
               ),
               const SizedBox(width: 10),
