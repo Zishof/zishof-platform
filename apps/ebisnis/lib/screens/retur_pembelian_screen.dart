@@ -12,6 +12,7 @@ import '../widgets/pencarian_produk_banbox.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/proses_simpan_master.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -97,9 +98,10 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
       // dan HAPUS retur TETAP online-only lewat ApiClient (transaksional).
-      await MasterOffline.daftarCacheDulu('retur_pembelian_list',
-          {'page': _halaman, 'page_size': _pageSize}, 'master:retur_pembelian',
-          onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'retur_pembelian_list',
+          {'page': _halaman, 'page_size': _pageSize},
+          'master:retur_pembelian', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _riwayat = _diff.terapkan(hasil);
@@ -193,17 +195,31 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
     });
     try {
       _idempotencyKey ??= 'RETUR-BELI-${DateTime.now().microsecondsSinceEpoch}';
-      await ApiClient.instance.aksi('retur_pembelian_simpan', {
-        'idempotency_key': _idempotencyKey,
-        'items': _items
-            .map((it) => {
-                  'produk_id': it.produkId,
-                  'qty': it.qty,
-                  'harga_satuan': it.harga,
-                  'alasan': it.alasan
-                })
-            .toList(),
-      });
+      // LOKAL DULU: ditulis ke antrean perangkat, baru dikirim. Aman diulang
+      // karena idempotency_key ikut terkirim, sehingga kiriman ganda tidak
+      // melahirkan retur kedua.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'retur_pembelian_simpan',
+        kunci: 'retur_pembelian:$_idempotencyKey',
+        cacheKey: 'master:retur_pembelian',
+        rowLokal: {
+          'id': -DateTime.now().millisecondsSinceEpoch,
+          'jumlahItem': _items.length,
+          'total': _items.fold<double>(0, (a, it) => a + it.qty * it.harga),
+        },
+        body: {
+          'idempotency_key': _idempotencyKey,
+          'items': _items
+              .map((it) => {
+                    'produk_id': it.produkId,
+                    'qty': it.qty,
+                    'harga_satuan': it.harga,
+                    'alasan': it.alasan
+                  })
+              .toList(),
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content:
@@ -240,8 +256,17 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       ),
     );
     if (konfirmasi != true) return;
+    if (!mounted) return;
     try {
-      await ApiClient.instance.aksi('retur_pembelian_hapus', {'id': r['id']});
+      await prosesSimpanMaster(
+        context,
+        aksi: 'retur_pembelian_hapus',
+        kunci: 'retur_pembelian:${r['id']}',
+        cacheKey: 'master:retur_pembelian',
+        rowLokal: {'id': r['id']},
+        hapusLokal: true,
+        body: {'id': r['id']},
+      );
       await _muatRiwayat();
     } catch (e) {
       if (mounted)
@@ -299,7 +324,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                         borderRadius: BorderRadius.circular(8)),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(_errorForm!,
-                        style: TextStyle(color: Colors.red.shade700)),
+                          style: TextStyle(color: Colors.red.shade700)),
                       AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
                     ]),
                   ),
@@ -467,7 +492,8 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
           else if (_errorRiwayat != null)
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                child: Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_errorRiwayat!),
                   AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
                 ])))

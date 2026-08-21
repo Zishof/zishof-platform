@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import 'struk_retur_util.dart';
 import '../widgets/jejak_galat.dart';
@@ -220,25 +221,41 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
     });
     try {
       _idempotencyKey ??= 'RETUR-JUAL-${DateTime.now().microsecondsSinceEpoch}';
-      await ApiClient.instance.aksi('retur_penjualan_simpan', {
-        'idempotency_key': _idempotencyKey,
-        'pembelian_anggota_koperasi_id': _transaksiTerpilih!['idTransaksi'],
-        'kode_transaksi_asal': _transaksiTerpilih!['nomorNota'],
-        'nama_pembeli': _transaksiTerpilih!['pembeli'],
-        'metode_pengembalian': _metodePengembalian,
-        'items': dipilih
-            .map((b) => {
-                  'produk_id': b.item['produkId'],
-                  'pembelian_id': b.item['pembelianId'],
-                  'qty': b.qty,
-                  'harga_satuan': b.hargaSatuan,
-                  'alasan': b.alasan,
-                  'kondisi_barang': b.kondisi,
-                  'kembalikan_ke_stok': b.kembalikanKeStok,
-                  'keterangan': '',
-                })
-            .toList(),
-      });
+      await prosesSimpanMaster(
+        context,
+        aksi: 'retur_penjualan_simpan',
+        kunci: 'retur_penjualan:$_idempotencyKey',
+        cacheKey: 'master:retur_penjualan',
+        rowLokal: {
+          'id': -DateTime.now().millisecondsSinceEpoch,
+          'kodeTransaksiAsal': '${_transaksiTerpilih!['nomorNota'] ?? ''}',
+          'namaPembeli': '${_transaksiTerpilih!['pembeli'] ?? ''}',
+          'namaProduk': dipilih.length == 1
+              ? '${dipilih.first.item['nama'] ?? ''}'
+              : '${dipilih.length} barang',
+          'qty': dipilih.fold<double>(0, (a, b) => a + b.qty),
+          'total': dipilih.fold<double>(0, (a, b) => a + b.subtotal),
+        },
+        body: {
+          'idempotency_key': _idempotencyKey,
+          'pembelian_anggota_koperasi_id': _transaksiTerpilih!['idTransaksi'],
+          'kode_transaksi_asal': _transaksiTerpilih!['nomorNota'],
+          'nama_pembeli': _transaksiTerpilih!['pembeli'],
+          'metode_pengembalian': _metodePengembalian,
+          'items': dipilih
+              .map((b) => {
+                    'produk_id': b.item['produkId'],
+                    'pembelian_id': b.item['pembelianId'],
+                    'qty': b.qty,
+                    'harga_satuan': b.hargaSatuan,
+                    'alasan': b.alasan,
+                    'kondisi_barang': b.kondisi,
+                    'kembalikan_ke_stok': b.kembalikanKeStok,
+                    'keterangan': '',
+                  })
+              .toList(),
+        },
+      );
       if (mounted) {
         // Data struk diambil SEBELUM form dikosongkan; setelah ini _baris sudah
         // direset sehingga tidak bisa lagi dibaca.
@@ -871,7 +888,10 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
     try {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN /
-      // UBAH / HAPUS retur TETAP online-only lewat ApiClient (transaksional).
+      // UBAH / HAPUS kini LOKAL DULU pula lewat prosesSimpanMaster: ditulis ke
+      // antrean perangkat, baru dikirim. Aman diulang karena tiap penyimpanan
+      // membawa idempotency_key, sehingga kiriman ganda tidak melahirkan retur
+      // kedua. Hapus bersifat LUNAK di sisi lokal dan dapat dipulihkan.
       await MasterOffline.daftarCacheDulu(
           'retur_penjualan_list',
           {
@@ -923,8 +943,17 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       ),
     );
     if (konfirmasi != true) return;
+    if (!mounted) return;
     try {
-      await ApiClient.instance.aksi('retur_penjualan_hapus', {'id': r['id']});
+      await prosesSimpanMaster(
+        context,
+        aksi: 'retur_penjualan_hapus',
+        kunci: 'retur_penjualan:${r['id']}',
+        cacheKey: 'master:retur_penjualan',
+        rowLokal: {'id': r['id']},
+        hapusLokal: true,
+        body: {'id': r['id']},
+      );
       await _muat();
     } catch (e) {
       if (mounted) {
@@ -1046,15 +1075,27 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       ),
     );
     if (disimpan != true) return;
+    if (!mounted) return;
     try {
-      await ApiClient.instance.aksi('retur_penjualan_ubah', {
-        'id': r['id'],
-        'qty': parseDesimal(qtyController.text) ?? r['qty'],
-        'harga_satuan': parseDesimal(hargaController.text) ?? r['hargaSatuan'],
-        'alasan': alasan,
-        'kondisi_barang': kondisi,
-        'kembalikan_ke_stok': !kondisi.toLowerCase().contains('rusak'),
-      });
+      await prosesSimpanMaster(context,
+          aksi: 'retur_penjualan_ubah',
+          kunci: 'retur_penjualan:${r['id']}',
+          cacheKey: 'master:retur_penjualan',
+          rowLokal: {
+            'id': r['id'],
+            'qty': parseDesimal(qtyController.text) ?? r['qty'],
+            'hargaSatuan':
+                parseDesimal(hargaController.text) ?? r['hargaSatuan'],
+          },
+          body: {
+            'id': r['id'],
+            'qty': parseDesimal(qtyController.text) ?? r['qty'],
+            'harga_satuan':
+                parseDesimal(hargaController.text) ?? r['hargaSatuan'],
+            'alasan': alasan,
+            'kondisi_barang': kondisi,
+            'kembalikan_ke_stok': !kondisi.toLowerCase().contains('rusak'),
+          });
       await _muat();
     } catch (e) {
       if (mounted) {

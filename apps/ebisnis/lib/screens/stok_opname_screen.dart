@@ -495,7 +495,8 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
       // per PERIODE supaya rentang 7/30/90/365 hari tidak saling menimpa.
       // "Muat Lebih Banyak" (offset >0) TETAP online -- hanya halaman pertama
       // yang punya snapshot lokal.
-      await MasterOffline.daftarCacheDulu('stok_mutasi_ledger',
+      await MasterOffline.daftarCacheDulu(
+          'stok_mutasi_ledger',
           {'hari': _hari, 'limit': 100, 'offset': 0},
           'master:stok_mutasi_ledger:$_hari', onData: (hasil) {
         if (!mounted) return;
@@ -811,16 +812,27 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('so_simpan', {
-        'produk_id': p['produkId'],
-        'stok_fisik': stokFisik,
-        'keterangan': _keteranganController.text.trim(),
-      });
-      final selisih = (hasil['selisih'] as num?)?.toDouble() ?? 0;
+      /* LOKAL DULU. Opname kerap dikerjakan di gudang yang tidak bersinyal,
+       * jadi hitungannya harus tetap tercatat. Selisih biasanya datang dari
+       * server; saat offline dihitung sendiri dari stok sistem yang memang
+       * sudah ada di layar, lalu ditegaskan ulang begitu tersinkron. */
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'so_simpan',
+        {
+          'produk_id': p['produkId'],
+          'stok_fisik': stokFisik,
+          'keterangan': _keteranganController.text.trim(),
+        },
+        kunci: 'so:${p['produkId']}',
+      );
+      final offline = hasil['offline'] == true;
+      final selisih = (hasil['selisih'] as num?)?.toDouble() ??
+          (stokFisik - ((p['stokSistem'] as num?)?.toDouble() ?? 0));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Tersimpan. Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
+              'Tersimpan${offline ? ' di perangkat, menunggu kirim' : ''}. '
+              'Selisih: ${selisih > 0 ? "+" : ""}${_formatAngka.format(selisih)}'),
         ));
       }
       setStateIfMounted(() {
@@ -1171,12 +1183,19 @@ class _TabSoByScanState extends State<_TabSoByScan>
         continue;
       }
       try {
-        await ApiClient.instance.aksi('so_simpan', {
-          'produk_id': a.produk['produkId'],
-          'stok_fisik': stok,
-          'keterangan': a.keterangan.text.trim(),
-        });
-        setStateIfMounted(() => a.statusKirim = 'ok');
+        final r = await MasterOffline.simpanAtauAntre(
+          'so_simpan',
+          {
+            'produk_id': a.produk['produkId'],
+            'stok_fisik': stok,
+            'keterangan': a.keterangan.text.trim(),
+          },
+          kunci: 'so:${a.produk['produkId']}',
+        );
+        // Baris yang baru mengantre TIDAK diakui "ok" -- statusnya dibedakan
+        // supaya petugas tahu mana yang benar-benar sudah sampai server.
+        setStateIfMounted(
+            () => a.statusKirim = r['offline'] == true ? 'antre' : 'ok');
         berhasil++;
       } catch (e) {
         setStateIfMounted(() => a.statusKirim = e.toString());
