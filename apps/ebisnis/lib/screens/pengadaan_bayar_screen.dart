@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
@@ -447,7 +448,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
         AppTableColumn('Penyedia', flex: 3),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 180),
+        AppTableColumn('Aksi', width: 220),
       ],
       rows: _daftar.map(_baris).toList(),
       pagination: _total > _pageSize
@@ -508,6 +509,15 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
       AppTableCell(
         width: 180,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
+          // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
+          // dengan versi ZKoss sehingga hasil cetaknya identik.
+          IconButton(
+              tooltip: 'Cetak / pratinjau',
+              icon: const Icon(Icons.print_outlined, size: 18),
+              onPressed: () => cetakDokumenPengadaan(context,
+                  tahap: 'dpc',
+                  id: (row['id'] as num).toInt(),
+                  kode: '${row['kode'] ?? ''}')),
           IconButton(
               tooltip: 'Lihat / ubah',
               icon: const Icon(Icons.edit_outlined, size: 18),

@@ -8,6 +8,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/indikator_sinkron_master.dart';
@@ -380,7 +381,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
         AppTableColumn('PO', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Faktur', flex: 3),
-        AppTableColumn('Aksi', width: 150),
+        AppTableColumn('Aksi', width: 190),
       ],
       rows: _daftar.map(_baris).toList(),
       pagination: _total > _pageSize
@@ -456,6 +457,15 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
       AppTableCell(
         width: 150,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
+          // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
+          // dengan versi ZKoss sehingga hasil cetaknya identik.
+          IconButton(
+              tooltip: 'Cetak / pratinjau',
+              icon: const Icon(Icons.print_outlined, size: 18),
+              onPressed: () => cetakDokumenPengadaan(context,
+                  tahap: 'tagihan',
+                  id: (row['id'] as num).toInt(),
+                  kode: '${row['kode'] ?? ''}')),
           IconButton(
               tooltip: sudah ? 'Ubah data faktur' : 'Terima tagihan',
               icon: Icon(sudah ? Icons.edit_note : Icons.receipt_long,

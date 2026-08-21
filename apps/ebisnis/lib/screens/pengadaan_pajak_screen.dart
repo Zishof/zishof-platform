@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -506,7 +507,7 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('NTPN', flex: 3),
         AppTableColumn('Tanggal setor', flex: 2),
-        AppTableColumn('Aksi', width: 90),
+        AppTableColumn('Aksi', width: 130),
       ],
       rows: _setoran.map(_barisSetoran).toList(),
     );
@@ -527,17 +528,29 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
       AppTableCell.text('${r['ntpn'] ?? '-'}', flex: 3),
       AppTableCell.text('${r['tanggalSetor'] ?? '-'}', flex: 2),
       AppTableCell(
-        width: 90,
-        child: aktif
-            ? IconButton(
+        width: 130,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          // Bukti setor pajak. Templatnya BARU -- versi ZKoss tidak punya dokumen
+          // per baris untuk pajak, hanya ekspor daftar.
+          IconButton(
+              tooltip: 'Cetak bukti setor',
+              icon: const Icon(Icons.print_outlined, size: 18),
+              onPressed: () => cetakDokumenPengadaan(context,
+                  tahap: 'pajak',
+                  id: (r['id'] as num).toInt(),
+                  kode: '${r['kode'] ?? ''}')),
+          if (aktif)
+            IconButton(
                 tooltip: 'Batalkan setoran',
                 icon: const Icon(Icons.undo, size: 18),
                 onPressed: () => _batal(r))
-            : const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('dibatalkan',
-                    style: TextStyle(fontSize: 10, color: Colors.grey)),
-              ),
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Text('dibatalkan',
+                  style: TextStyle(fontSize: 10, color: Colors.grey)),
+            ),
+        ]),
       ),
     ]);
   }

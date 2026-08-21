@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
+import 'pengadaan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
@@ -416,7 +417,7 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
         AppTableColumn('Keterangan', flex: 3),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 200),
+        AppTableColumn('Aksi', width: 240),
       ],
       rows: _daftar.map(_barisPr).toList(),
       pagination: _total > _pageSize
@@ -479,6 +480,15 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
 
   Widget _aksiPr(Map<String, dynamic> pr, String st) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
+      // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
+      // dengan versi ZKoss sehingga hasil cetaknya identik.
+      IconButton(
+          tooltip: 'Cetak / pratinjau',
+          icon: const Icon(Icons.print_outlined, size: 18),
+          onPressed: () => cetakDokumenPengadaan(context,
+              tahap: 'pr',
+              id: (pr['id'] as num).toInt(),
+              kode: '${pr['kode'] ?? ''}')),
       IconButton(
           tooltip: 'Lihat / ubah',
           icon: const Icon(Icons.edit_outlined, size: 18),
