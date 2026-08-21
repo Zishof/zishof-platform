@@ -119,7 +119,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     final hasil = kunciCari.isEmpty
         ? daftar
         : daftar
-            .where((r) => '${r['namaAnggota']}'.toLowerCase().contains(kunciCari))
+            .where(
+                (r) => '${r['namaAnggota']}'.toLowerCase().contains(kunciCari))
             .toList();
     hasil.sort((a, b) =>
         (b['saldoAkhir'] as double).compareTo(a['saldoAkhir'] as double));
@@ -136,7 +137,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
           DynamicReportColumn('masuk', 'Masuk', numeric: true),
           DynamicReportColumn('keluar', 'Keluar', numeric: true),
           DynamicReportColumn('saldoAkhir', 'Saldo Akhir', numeric: true),
-          DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi', numeric: true),
+          DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
+              numeric: true),
         ],
         rows: _saldoPerAnggota,
       );
@@ -170,10 +172,12 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
         await DynamicReportDesigner.exportPdf(data, model, '$slug.pdf');
       } else if (format == 'excel') {
         if (!mounted) return;
-        await DynamicReportDesigner.exportExcel(context, data, model, '$slug.xlsx');
+        await DynamicReportDesigner.exportExcel(
+            context, data, model, '$slug.xlsx');
       } else {
         if (!mounted) return;
-        await DynamicReportDesigner.exportWord(context, data, model, '$slug.doc');
+        await DynamicReportDesigner.exportWord(
+            context, data, model, '$slug.doc');
       }
     } catch (e) {
       if (mounted) {
@@ -219,7 +223,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
           width: 760,
           height: 440,
           child: riwayat.isEmpty
-              ? const Center(child: Text('Belum ada transaksi pada rentang ini.'))
+              ? const Center(
+                  child: Text('Belum ada transaksi pada rentang ini.'))
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -250,9 +255,10 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis))),
                               DataCell(Text(_fmtRp.format(_angka(m['masuk'])))),
-                              DataCell(Text(_fmtRp.format(_angka(m['keluar'])))),
-                              DataCell(Text(
-                                  _fmtRp.format(_angka(m['saldoPerPenabung'])))),
+                              DataCell(
+                                  Text(_fmtRp.format(_angka(m['keluar'])))),
+                              DataCell(Text(_fmtRp
+                                  .format(_angka(m['saldoPerPenabung'])))),
                             ])
                         ],
                       ),
@@ -261,7 +267,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                 ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
         ],
       ),
     );
@@ -307,8 +314,9 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
             ),
           ),
           OutlinedButton.icon(
-              onPressed:
-                  _menyiapkanLaporan ? null : () => _aturAtauPreview(preview: true),
+              onPressed: _menyiapkanLaporan
+                  ? null
+                  : () => _aturAtauPreview(preview: true),
               icon: const Icon(Icons.preview_outlined, size: 18),
               label: const Text('Preview')),
           OutlinedButton.icon(
@@ -365,7 +373,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(_galat!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
-                      FilledButton(onPressed: _muat, child: const Text('Coba lagi')),
+                      FilledButton(
+                          onPressed: _muat, child: const Text('Coba lagi')),
                     ]),
                   ))
                 : daftar.isEmpty
@@ -379,8 +388,10 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                           AppTableColumn('Anggota', flex: 4),
                           AppTableColumn('Saldo Awal',
                               flex: 2, align: TextAlign.right),
-                          AppTableColumn('Masuk', flex: 2, align: TextAlign.right),
-                          AppTableColumn('Keluar', flex: 2, align: TextAlign.right),
+                          AppTableColumn('Masuk',
+                              flex: 2, align: TextAlign.right),
+                          AppTableColumn('Keluar',
+                              flex: 2, align: TextAlign.right),
                           AppTableColumn('Saldo Akhir',
                               flex: 2, align: TextAlign.right),
                           AppTableColumn('Aksi', width: 70),
@@ -428,7 +439,6 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
   }
 }
 
-
 /// Dialog **Penyesuaian Saldo** — opname saldo voucher/deposit member.
 ///
 /// Alurnya sengaja dibuat sama dengan Stok Opname barang: pilih objeknya, sistem menampilkan
@@ -451,7 +461,8 @@ class _DialogPenyesuaianSaldo extends StatefulWidget {
   final List<Map<String, dynamic>> daftarAnggota;
 
   @override
-  State<_DialogPenyesuaianSaldo> createState() => _DialogPenyesuaianSaldoState();
+  State<_DialogPenyesuaianSaldo> createState() =>
+      _DialogPenyesuaianSaldoState();
 }
 
 class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
@@ -489,8 +500,8 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
 
   Future<void> _muatRiwayat() async {
     try {
-      final hasil =
-          await ApiClient.instance.aksi('penyesuaian_saldo_list', {'limit': 25});
+      final hasil = await ApiClient.instance
+          .aksi('penyesuaian_saldo_list', {'limit': 25});
       if (!mounted) return;
       setStateIfMounted(() => _riwayat =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
@@ -524,7 +535,9 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
   }
 
   double get _fisik =>
-      double.tryParse(_saldoFisik.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+      double.tryParse(
+          _saldoFisik.text.replaceAll('.', '').replaceAll(',', '.')) ??
+      0;
   double get _selisih => _saldoSistem == null ? 0 : _fisik - _saldoSistem!;
   bool get _siap =>
       _idAnggota != null &&
@@ -539,20 +552,31 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
       _pesan = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('penyesuaian_saldo_simpan', {
-        'id_member': '$_idAnggota',
-        'saldo_fisik': '$_fisik',
-        'keterangan': _keterangan.text.trim(),
-      });
+      // LOKAL DULU. Saat offline hasilnya {'status':'success','offline':true},
+      // jadi pemeriksaan status di bawah TIDAK boleh lagi menuntut '00' -- kalau
+      // dituntut, penyesuaian yang sah akan dilaporkan "ditolak server".
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'penyesuaian_saldo_simpan',
+        {
+          'id_member': '$_idAnggota',
+          'saldo_fisik': '$_fisik',
+          'keterangan': _keterangan.text.trim(),
+        },
+        kunci: 'penyesuaian_saldo:$_idAnggota',
+      );
       if (!mounted) return;
-      if ('${hasil['status']}' != '00') {
-        setStateIfMounted(() =>
-            _pesan = '${hasil['description'] ?? 'Penyesuaian ditolak server.'}');
+      final offline = hasil['offline'] == true;
+      final st = '${hasil['status']}';
+      if (!offline && st != '00' && st != 'success') {
+        setStateIfMounted(() => _pesan =
+            '${hasil['description'] ?? 'Penyesuaian ditolak server.'}');
         return;
       }
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${hasil['description'] ?? 'Saldo disesuaikan.'}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(offline
+              ? 'Penyesuaian tersimpan di perangkat, akan dikirim otomatis.'
+              : '${hasil['description'] ?? 'Saldo disesuaikan.'}')));
     } catch (e) {
       setStateIfMounted(() => _pesan = 'Gagal menyimpan: $e');
     } finally {
@@ -574,15 +598,17 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
         constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               const Expanded(
                   child: Text('Penyesuaian Saldo (Opname Saldo Voucher)',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700))),
               IconButton(
-                  onPressed:
-                      _menyimpan ? null : () => Navigator.of(context).pop(false),
+                  onPressed: _menyimpan
+                      ? null
+                      : () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.close)),
             ]),
             const SizedBox(height: 4),
@@ -613,7 +639,8 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                             itemCount: pilihan.length,
                             itemBuilder: (_, i) {
                               final r = pilihan[i];
-                              final terpilih = '${r['idAnggota']}' == '$_idAnggota';
+                              final terpilih =
+                                  '${r['idAnggota']}' == '$_idAnggota';
                               return ListTile(
                                 dense: true,
                                 selected: terpilih,
@@ -658,13 +685,14 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2))
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
                             : Text(
                                 _saldoSistem == null
                                     ? '-'
                                     : _fmtRp.format(_saldoSistem),
-                                style:
-                                    const TextStyle(fontWeight: FontWeight.w700)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
                       ]),
                       const SizedBox(height: 10),
                       TextField(
@@ -730,7 +758,8 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final r = _riwayat[i];
-                        final selisih = ((r['selisih'] as num?) ?? 0).toDouble();
+                        final selisih =
+                            ((r['selisih'] as num?) ?? 0).toDouble();
                         return ListTile(
                           dense: true,
                           title: Text(
@@ -752,8 +781,9 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
-                  onPressed:
-                      _menyimpan ? null : () => Navigator.of(context).pop(false),
+                  onPressed: _menyimpan
+                      ? null
+                      : () => Navigator.of(context).pop(false),
                   child: const Text('Tutup')),
               const SizedBox(width: 8),
               FilledButton.icon(

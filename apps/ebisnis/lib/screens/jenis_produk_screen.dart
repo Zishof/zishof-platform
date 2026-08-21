@@ -54,8 +54,7 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu(
-          'jenis_produk_list',
+      await MasterOffline.daftarCacheDulu('jenis_produk_list',
           {
             'keyword': _kataKunci.isEmpty ? null : _kataKunci,
             'page': _halaman,

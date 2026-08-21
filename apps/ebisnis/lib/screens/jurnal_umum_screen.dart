@@ -220,8 +220,8 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     if (setuju != true) return;
     setStateIfMounted(() => _sibuk = true);
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'jurnal_umum_posting', {'ids': draf.map((e) => e['id']).toList()});
+      final ids = draf.map((e) => e['id']).toList();
+      final hasil = await ApiClient.instance.aksi('jurnal_umum_posting', {'ids': ids});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${hasil['message'] ?? 'Selesai.'}')));

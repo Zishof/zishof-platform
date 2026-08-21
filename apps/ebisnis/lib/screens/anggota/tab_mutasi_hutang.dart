@@ -39,7 +39,8 @@ class AnggotaTabMutasiHutang extends StatefulWidget {
   State<AnggotaTabMutasiHutang> createState() => _AnggotaTabMutasiHutangState();
 }
 
-class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> with JejakGalat {
+class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
+    with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -290,7 +291,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> with Je
     if (baris.length < 2) return;
 
     setStateIfMounted(() => _mengunggah = true);
-    int berhasil = 0, gagal = 0;
+    int berhasil = 0, gagal = 0, antre = 0;
     final pesanGagal = <String>[];
     for (var i = 1; i < baris.length; i++) {
       final kolom =
@@ -314,13 +315,23 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> with Je
               .add('Baris ${i + 1}: kode "$kodeAnggota" tidak ditemukan.');
           continue;
         }
-        await ApiClient.instance.aksi('hutang_bayar_simpan', {
-          'id_member': match.first['id'],
-          'nominal': nominal,
-          'keterangan': kolom.length > 3 ? kolom[3] : '',
-          if (kolom.length > 2 && kolom[2].isNotEmpty) 'waktu': kolom[2],
-        });
-        berhasil++;
+        final r = await MasterOffline.simpanAtauAntre(
+          'hutang_bayar_simpan',
+          {
+            'id_member': match.first['id'],
+            'nominal': nominal,
+            'keterangan': kolom.length > 3 ? kolom[3] : '',
+            if (kolom.length > 2 && kolom[2].isNotEmpty) 'waktu': kolom[2],
+          },
+          kunci: 'hutang_bayar:${match.first['id']}:$i',
+        );
+        // Baris yang baru mengantre dihitung TERSENDIRI. Menghitungnya sebagai
+        // berhasil membuat petugas mengira seluruh berkas sudah sampai server.
+        if (r['offline'] == true) {
+          antre++;
+        } else {
+          berhasil++;
+        }
       } catch (e) {
         gagal++;
         pesanGagal.add('Baris ${i + 1}: $e');
@@ -329,7 +340,8 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang> with Je
     setStateIfMounted(() => _mengunggah = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Upload selesai: $berhasil berhasil, $gagal gagal.'
+          content: Text('Upload selesai: $berhasil berhasil, '
+              '${antre > 0 ? '$antre mengantre, ' : ''}$gagal gagal.'
               '${pesanGagal.isNotEmpty ? ' ${pesanGagal.take(3).join(' ')}' : ''}')));
     }
     await _muat();
