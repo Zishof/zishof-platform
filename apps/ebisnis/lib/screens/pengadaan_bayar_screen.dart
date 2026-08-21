@@ -757,6 +757,25 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
     }
   }
 
+  Future<void> _pilihTanggalRealisasi() async {
+    DateTime awal = DateTime.now();
+    final bagian = _tglRealisasi.text.trim().split('-');
+    if (bagian.length == 3) {
+      final d = int.tryParse(bagian[0]),
+          m = int.tryParse(bagian[1]),
+          y = int.tryParse(bagian[2]);
+      if (d != null && m != null && y != null) awal = DateTime(y, m, d);
+    }
+    final pilih = await showDatePicker(
+      context: context,
+      initialDate: awal,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (pilih == null) return;
+    setState(() => _tglRealisasi.text = DateFormat('dd-MM-yyyy').format(pilih));
+  }
+
   @override
   void dispose() {
     _keterangan.dispose();
@@ -930,13 +949,24 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
+                  /* Diketik manual sebelumnya, dan formatnya harus ditebak dari
+                   * petunjuk "hh-bb-tttt". Kini lewat pemilih tanggal, sehingga
+                   * tidak ada tanggal salah format yang lolos ke server. */
                   child: TextField(
                     controller: _tglRealisasi,
                     enabled: !_terkunci,
-                    decoration: const InputDecoration(
-                        labelText: 'Tanggal realisasi',
-                        hintText: 'hh-bb-tttt',
-                        isDense: true),
+                    readOnly: true,
+                    onTap: _terkunci ? null : _pilihTanggalRealisasi,
+                    decoration: InputDecoration(
+                      labelText: 'Tanggal realisasi',
+                      hintText: 'Pilih tanggal',
+                      isDense: true,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.event, size: 18),
+                        tooltip: 'Pilih tanggal realisasi',
+                        onPressed: _terkunci ? null : _pilihTanggalRealisasi,
+                      ),
+                    ),
                   ),
                 ),
               ]),
