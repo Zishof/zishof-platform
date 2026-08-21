@@ -512,6 +512,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
         AppTableColumn('Tanggal', flex: 2),
         AppTableColumn('Penyedia', flex: 3),
         AppTableColumn('Sumber', flex: 2),
+        AppTableColumn('Termin ke', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
         AppTableColumn('Aksi', width: 96),
@@ -559,6 +560,12 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
       AppTableCell.text('${bast['penyedia'] ?? '-'}', flex: 3),
       AppTableCell.text(
           bast['tanpaPemesanan'] == true ? 'Tanpa PO' : '${bast['po'] ?? '-'}',
+          flex: 2),
+      /* Pesanan bertermin diterima per termin, jadi satu baris di sini mewakili
+       * SATU termin. Tanpa kolom ini beberapa penerimaan dari pesanan yang sama
+       * tampak kembar dan tidak dapat dibedakan. */
+      AppTableCell.text(
+          '${bast['termin'] ?? ''}'.isEmpty ? '-' : '${bast['termin']}',
           flex: 2),
       AppTableCell.text(_fmtRp.format(bast['nilai'] ?? 0),
           flex: 2, align: TextAlign.right),
@@ -811,6 +818,14 @@ class _FormBastDialogState extends State<_FormBastDialog> {
   String _penyediaNama = '';
   int? _poId;
   String _poKode = '';
+
+  /* Termin pesanan yang sedang diterima. Pesanan bertermin diterima PER TERMIN:
+   * pesanan tiga termin melahirkan tiga penerimaan, masing-masing dengan
+   * fakturnya sendiri. Termin yang sudah pernah diterima tetap ditampilkan
+   * namun tidak dapat dipilih, sehingga kemajuannya terlihat tanpa membuka
+   * dokumen satu per satu. */
+  List<Map<String, dynamic>> _termin = const [];
+  String? _terminKey;
   bool _diskonPersen = false;
 
   bool get _baru => widget.awal == null;
@@ -833,6 +848,11 @@ class _FormBastDialogState extends State<_FormBastDialog> {
     _poId = (h?['po_id'] as num?)?.toInt() ??
         (widget.dariPo?['po_id'] as num?)?.toInt();
     _poKode = '${h?['po'] ?? widget.dariPo?['po_kode'] ?? ''}';
+    _termin = ((widget.dariPo?['termin'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final kunciTersimpan = '${h?['terminKey'] ?? ''}';
+    _terminKey = kunciTersimpan.isEmpty ? null : kunciTersimpan;
 
     final barisTersimpan = (widget.detailAwal?['detail'] as List?) ?? const [];
     if (barisTersimpan.isNotEmpty) {
@@ -1196,6 +1216,38 @@ class _FormBastDialogState extends State<_FormBastDialog> {
                         : _penyediaNama),
                   ),
                 ),
+              if (_termin.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: _terminKey,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Termin yang diterima *',
+                      helperText: 'Pesanan ini bertermin, jadi barangnya '
+                          'diterima per termin dan ditagih per termin pula.',
+                      isDense: true),
+                  items: _termin.map((t) {
+                    final sudah = t['sudahDiterima'] == true &&
+                        '${t['key']}' != _terminKey;
+                    return DropdownMenuItem<String>(
+                      value: '${t['key']}',
+                      enabled: !sudah,
+                      child: Text(
+                        '${t['nomor'] ?? ''} ${t['nama'] ?? ''}'.trim() +
+                            (sudah
+                                ? '  ·  sudah diterima${'${t['diterimaLewat']}'.isEmpty ? '' : ' (${t['diterimaLewat']})'}'
+                                : ''),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color:
+                                sudah ? Theme.of(context).disabledColor : null),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged:
+                      _terkunci ? null : (v) => setState(() => _terminKey = v),
+                ),
+              ],
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(
@@ -1336,6 +1388,15 @@ class _FormBastDialogState extends State<_FormBastDialog> {
         return;
       }
     }
+    /* Pesanan bertermin ditagih per termin, jadi penerimaannya harus menyebut
+     * termin mana. Server menolak yang kosong; diperiksa di sini juga supaya
+     * petugas tahu sebelum menunggu jaringan. */
+    if (_termin.isNotEmpty && (_terminKey == null || _terminKey!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pilih dahulu termin yang diterima. Pesanan ini '
+              'bertermin, jadi barangnya diterima per termin.')));
+      return;
+    }
     /* Vendor sering mengirim KURANG dari yang dipesan. Sebelumnya kasir harus
      * ingat sendiri untuk menekan tombol "Back Order / Pesan Kembali" setelah
      * menyimpan, dan kalau lupa, sisa pesanan menggantung tanpa keputusan --
@@ -1358,6 +1419,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       if (adaKekurangan) '_kurang': true,
       if (adaKekurangan) '_poKode': _poKode,
       if (_poId != null) 'po_id': _poId,
+      if (_terminKey != null) 'termin_key': _terminKey,
       if (_penyediaId != null) 'penyedia_id': _penyediaId,
       'keterangan': _keterangan.text.trim(),
       'kodeTagihan': _kodeTagihan.text.trim(),

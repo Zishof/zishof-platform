@@ -385,6 +385,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         AppTableColumn('Tanggal', flex: 2),
         AppTableColumn('Penyedia', flex: 3),
         AppTableColumn('PO', flex: 2),
+        AppTableColumn('Termin ke', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Faktur', flex: 3),
         AppTableColumn('Barang', flex: 2, align: TextAlign.center),
@@ -432,6 +433,11 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
       AppTableCell.text('${row['tanggal'] ?? '-'}', flex: 2),
       AppTableCell.text('${row['penyedia'] ?? '-'}', flex: 3),
       AppTableCell.text('${row['po'] ?? '-'}', flex: 2),
+      /* Pesanan bertermin ditagih per termin, jadi beberapa baris dapat berasal
+       * dari pesanan yang sama dan hanya kolom inilah yang membedakannya. */
+      AppTableCell.text(
+          '${row['termin'] ?? ''}'.isEmpty ? '-' : '${row['termin']}',
+          flex: 2),
       AppTableCell.text(_fmtRp.format(row['nilai'] ?? 0),
           flex: 2, align: TextAlign.right),
       AppTableCell(
