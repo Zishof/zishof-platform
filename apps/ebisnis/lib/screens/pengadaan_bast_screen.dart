@@ -181,6 +181,14 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
       }
     } catch (e) {
       if (!mounted) return;
+      /* Pesanan yang sudah ditutup lewat Back Order menolak penerimaan baru.
+       * Menampilkan pesan itu apa adanya membuat petugas buntu: ia tidak tahu
+       * keputusan Back Order mana yang menutupnya, apalagi cara mengubahnya.
+       * Dialognya dibuka langsung supaya keputusan itu dapat DIREVISI di tempat. */
+      if ('$e'.contains('ditutup lewat Back Order') && hasil['po_id'] != null) {
+        await _backOrder((hasil['po_id'] as num).toInt(), poKodeKurang);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Gagal menyimpan: $e'),
           backgroundColor: Theme.of(context).colorScheme.error));
@@ -1402,6 +1410,11 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
     setState(() => _batasKirim.text = DateFormat('dd-MM-yyyy').format(pilih));
   }
   bool _pesanKembali = true;
+
+  /// Kode pesanan susulan yang SUDAH ada dan masih hidup. Bila terisi, dialog
+  /// ini bersifat REVISI: susulan lama dibatalkan lalu diterbitkan ulang
+  /// dengan angka baru, bukan menolak permintaan karena pesanan sudah tertutup.
+  String? _susulanKode;
   bool _memuat = true;
   bool _mengirim = false;
   String _catatan = '';
@@ -1445,6 +1458,35 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
           ..addAll(((r['detail'] as List?) ?? const [])
               .map((e) => _BarisKurang(Map<String, dynamic>.from(e as Map)))
               .where((b) => b.kurang > 0));
+        // Sudah pernah di-Back Order dan susulannya masih hidup -> dialog ini
+        // menjadi REVISI: isian lama dimunculkan kembali supaya petugas
+        // memperbaiki angkanya, bukan mengetik ulang dari nol.
+        final susulan = r['susulan'];
+        if (susulan is Map) {
+          final s2 = Map<String, dynamic>.from(susulan);
+          _susulanKode = '${s2['kode'] ?? ''}';
+          final penyediaSusulan = (s2['penyedia_id'] as num?)?.toInt();
+          if (penyediaSusulan != null) {
+            _penyediaId = penyediaSusulan;
+            _penyediaNama = '${s2['penyedia'] ?? _penyediaNama}';
+          }
+          final batas = '${s2['pengirimanPalingLambat'] ?? ''}'.trim();
+          if (batas.isNotEmpty) _batasKirim.text = batas;
+          // Jumlah yang dulu dipesan ulang dikembalikan ke barisnya, dicocokkan
+          // lewat master_asset_id.
+          final peta = <String, double>{
+            for (final d in ((s2['detail'] as List?) ?? const []))
+              '${(d as Map)['master_asset_id']}':
+                  ((d['jumlah'] as num?)?.toDouble() ?? 0),
+          };
+          for (final b in _baris) {
+            final j = peta['${b.data['master_asset_id']}'];
+            if (j != null && j > 0) {
+              b.dipilih = true;
+              b.jumlah.text = j.toStringAsFixed(0);
+            }
+          }
+        }
         if (_baris.isEmpty) {
           _catatan = 'Tidak ada kekurangan pada ${widget.poKode} -- '
               'seluruh barang sudah diterima lengkap.';
@@ -1488,6 +1530,8 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
         'po_id': widget.poId,
         'alasan': _alasan.text.trim(),
         'tindakan': _pesanKembali ? 'pesan_kembali' : 'tutup_saja',
+        // Server membatalkan susulan lama lebih dulu lalu menerbitkan yang baru.
+        if (_susulanKode != null) 'revisi': true,
         if (_pesanKembali && _penyediaId != null) 'penyedia_id': _penyediaId,
         if (_pesanKembali && _batasKirim.text.trim().isNotEmpty)
           'pengirimanPalingLambat': _batasKirim.text.trim(),
@@ -1563,7 +1607,9 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Back Order - ${widget.poKode}'),
+      title: Text(_susulanKode == null
+          ? 'Back Order - ${widget.poKode}'
+          : 'Revisi Back Order - ${widget.poKode}'),
       content: SizedBox(
         width: 680,
         child: _memuat
