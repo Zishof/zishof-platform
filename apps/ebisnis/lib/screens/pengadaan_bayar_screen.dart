@@ -7,6 +7,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'pengadaan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
+import 'pengadaan_transitori_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -50,7 +51,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
   @override
   void initState() {
     super.initState();
-    _tabUtama = TabController(length: 2, vsync: this);
+    _tabUtama = TabController(length: 3, vsync: this);
     _muat();
   }
 
@@ -331,6 +332,9 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
           Tab(
               icon: Icon(Icons.list_alt_outlined, size: 18),
               text: 'Pembayaran'),
+          Tab(
+              icon: Icon(Icons.pause_circle_outline, size: 18),
+              text: 'Transitori'),
         ],
       ),
       Expanded(
@@ -339,6 +343,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
           children: [
             const PengadaanDasborTab(tahap: 'dpc'),
             isiData,
+            const PengadaanTransitoriTab(),
           ],
         ),
       ),
