@@ -622,6 +622,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       );
       if (lanjut != true) return;
       final hasil = await ApiClient.instance
+      // ONLINE-ONLY: pratinjau & komit adalah sepasang. Yang disetujui pengguna
+      // adalah hasil hitungan server barusan; menunda komitnya membuat pasangan
+      // itu bisa tidak cocok lagi.
           .aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -321,6 +321,9 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
   Future<void> _mulaiJalan() async {
     setStateIfMounted(() => _proses = true);
     try {
+      // ONLINE-ONLY: sessionId dari server dipakai SAAT ITU JUGA untuk membuka
+      // layar sesi nota. Id sementara tidak menolong -- layar tujuannya membaca
+      // data sesi milik server.
       final hasil = await ApiClient.instance
           .aksi('si_trip_start', {'spj_id': widget.spjId});
       _berubah = true;

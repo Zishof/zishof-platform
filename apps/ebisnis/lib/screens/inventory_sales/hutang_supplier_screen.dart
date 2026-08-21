@@ -457,6 +457,9 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
     );
     if (dikonfirmasi != true || alasan.text.trim().isEmpty) return;
     try {
+      // ONLINE-ONLY: pembalikan pembayaran = "reversal" pada spec 13.3.
+      // Membatalkan uang yang mungkin sudah dipakai alokasi lain tidak boleh
+      // ditunda: server harus memutuskan saat itu juga.
       await ApiClient.instance.aksi('si_payable_payment_reverse', {
         'pembayaran_id': pembayaran['id'],
         'alasan': alasan.text.trim(),

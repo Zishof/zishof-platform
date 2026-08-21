@@ -238,6 +238,8 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     required bool timpa,
   }) async {
     try {
+      // ONLINE-ONLY: pemulihan massal dijalankan SERVER di atas jejak auditnya
+      // sendiri; perangkat tidak menyimpan versi lama yang jadi bahannya.
       final res = await ApiClient.instance.aksi('revisi_pulihkan_massal', {
         ..._saringan(),
         if (id != null) 'id': id,

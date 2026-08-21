@@ -760,6 +760,7 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
     );
     if (ya != true || ctrl.text.trim().isEmpty) return;
     try {
+      // ONLINE-ONLY: pembalikan penagihan = "reversal" pada spec 13.3.
       await ApiClient.instance.aksi('si_collection_reverse', {
         'penerimaan_id': r['id'],
         'alasan': ctrl.text.trim(),

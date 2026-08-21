@@ -707,6 +707,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
 
   Future<void> _hitungUlang(Pesanan p) async {
     try {
+      // ONLINE-ONLY: yang dihitung ulang adalah harga & promo milik SERVER atas
+      // draft itu. Diantre pun perangkat tidak punya bahan hitungannya.
       final hasil = await ApiClient.instance
           .aksi('pesanan_hitung_ulang', {'draft_id': p.id});
       if (mounted) {

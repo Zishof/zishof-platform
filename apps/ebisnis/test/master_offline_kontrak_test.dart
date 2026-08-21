@@ -122,9 +122,6 @@ void main() {
   const tetapOnline = <String, List<String>>{
     'lib/screens/hak_akses_screen.dart': ["'ebisnis_role_menu_simpan'"],
     'lib/screens/kulakan_bulk_entry_screen.dart': ["'produk_simpan'"],
-    'lib/screens/mitrainap/resepsionis_hotel_screen.dart': [
-      "'hotel_tamu_simpan'"
-    ],
     // Bagan akun: spec 13.3 menempatkan "perubahan rekening/harga sensitif"
     // sebagai wajib online. Akun yang baru muncul setelah sinkronisasi akan
     // membuat jurnal mengacu ke akun tak dikenal.
@@ -133,6 +130,36 @@ void main() {
     'lib/screens/riwayat_penjualan_screen.dart': ["aksi('batalkan_transaksi'"],
     // Posting jurnal = "journal posting" pada spec 13.3.
     'lib/screens/jurnal_umum_screen.dart': ["aksi('jurnal_umum_posting'"],
+    // Pembalikan pembayaran/penagihan = "reversal" pada spec 13.3.
+    'lib/screens/inventory_sales/hutang_supplier_screen.dart': [
+      "aksi('si_payable_payment_reverse'"
+    ],
+    'lib/screens/inventory_sales/piutang_screen.dart': [
+      "aksi('si_collection_reverse'"
+    ],
+    // Koreksi sesi kas baru sah bila server mengonfirmasi status barunya;
+    // sekeluarga dgn sesi_kas_buka/tutup.
+    'lib/screens/konfigurasi/tab_sesi_kasir.dart': ["aksi('sesi_kas_koreksi'"],
+    // sessionId server dipakai saat itu juga utk membuka layar sesi nota.
+    'lib/screens/inventory_sales/spj_screen.dart': ["aksi('si_trip_start'"],
+    // ATURAN KAMAR: penempatan kamar diperebutkan, jadi diputuskan server.
+    // Check-out ikut online karena menyelesaikan UANG (folio).
+    'lib/screens/mitrainap/resepsionis_hotel_screen.dart': [
+      "'hotel_tamu_simpan'",
+      "aksi('hotel_checkin'",
+      "aksi('hotel_pindah_kamar'",
+      "aksi('hotel_checkout'",
+    ],
+    'lib/screens/mitrainap/reservasi_hotel_screen.dart': [
+      "aksi('hotel_reservasi_buat'"
+    ],
+    // Server yang memilih baris: himpunan yang disetujui pengguna bisa berubah
+    // sebelum antrean terkirim.
+    'lib/screens/ringkasan/tab_umum.dart': ["aksi('layani_semua_transaksi'"],
+    'lib/screens/riwayat_audit_screen.dart': ["aksi('revisi_pulihkan_massal'"],
+    'lib/screens/produk_screen.dart': [
+      "aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false}"
+    ],
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
     // real-time) -- entri lamanya dipindah dari daftar online-only ini.

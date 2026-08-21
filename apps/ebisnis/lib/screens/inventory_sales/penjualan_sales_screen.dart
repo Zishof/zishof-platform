@@ -327,6 +327,9 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
   Future<void> _terbitkanFaktur() async {
     setStateIfMounted(() => _proses = true);
     try {
+      // ONLINE-ONLY: penerbitan faktur piutang adalah dokumen keuangan bernomor
+      // resmi -- nomornya dijatah server dan langsung dipakai. Sekeluarga dgn
+      // "journal posting" pada spec 13.3.
       final hasil = await ApiClient.instance
           .aksi('si_sales_order_invoice', {'order_id': widget.orderId});
       _adaPerubahan = true;

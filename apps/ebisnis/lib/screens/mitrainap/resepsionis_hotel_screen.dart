@@ -151,6 +151,11 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
     );
     if (hasil == null) return;
     try {
+      // ONLINE-ONLY -- ATURAN KAMAR: penempatan kamar adalah perebutan sumber
+      // daya fisik yang hanya boleh dipegang satu tamu. Bila diantre, dua meja
+      // depan yang sedang offline bisa memberi kamar yang sama kepada dua tamu
+      // dan salah satunya baru ketahuan gagal setelah kuncinya diserahkan.
+      // Aturan yang sama berlaku pada pindah kamar dan pembuatan reservasi.
       final res = await ApiClient.instance.aksi('hotel_checkin', hasil);
       if (apiSukses(res)) {
         _info('Check-in walk-in berhasil. Folio dibuka.');
@@ -217,6 +222,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
     );
     if (ok != true || kamarId == null) return;
     try {
+      // ONLINE-ONLY: lihat ATURAN KAMAR pada check-in di atas.
       final res = await ApiClient.instance.aksi('hotel_pindah_kamar', {
         'menginap_id': stay['id'],
         'kamar_baru_id': kamarId,
@@ -276,6 +282,9 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
         body['bayar_sekarang'] = jumlah;
         body['metode_bayar'] = metode.text.trim();
       }
+      // ONLINE-ONLY: check-out adalah penyelesaian UANG -- server menghitung
+      // room charge malam berjalan dan menolak (91) selama folio bersaldo.
+      // Mengantrekannya berarti kamar dilepas sebelum tagihannya pasti.
       final res = await ApiClient.instance.aksi('hotel_checkout', body);
       if (apiSukses(res)) {
         _info('Check-out selesai. ${res['malam'] ?? ''} malam, '

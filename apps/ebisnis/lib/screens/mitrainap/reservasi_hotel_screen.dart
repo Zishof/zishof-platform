@@ -139,6 +139,10 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
     );
     if (hasil == null) return;
     try {
+      // ONLINE-ONLY: lihat ATURAN KAMAR di resepsionis_hotel_screen -- kamar
+      // yang dipesan harus dipastikan masih kosong pada detik itu. (Data TAMU
+      // dan PEMBATALAN reservasi di layar ini justru lokal-dulu: keduanya tidak
+      // memperebutkan kamar.)
       final res = await ApiClient.instance.aksi('hotel_reservasi_buat', hasil);
       if (apiSukses(res)) {
         _info('Reservasi dibuat: ${res['kode'] ?? ''}');
@@ -172,7 +176,7 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
         ],
       ),
     );
-    if (yakin != true) return;
+    if (yakin != true || !mounted) return;
     try {
       // LOKAL DULU. Ketersediaan kamar tetap diputuskan server: selama antrean
       // belum terkirim, kamar masih terpesan di sisi server.
@@ -257,6 +261,7 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
     );
     if (ok != true || kamarId == null) return;
     try {
+      // ONLINE-ONLY: lihat ATURAN KAMAR di resepsionis_hotel_screen.
       final res = await ApiClient.instance.aksi('hotel_checkin', {
         'kamar_id': kamarId,
         'reservasi_id': r['id'],

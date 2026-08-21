@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/proses_simpan_master.dart';
 
-import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/kilau_perubahan.dart';
@@ -69,8 +68,8 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris (tiket baru
       // dari kasir langsung "berpendar" di layar dapur). Cache dipisah per
-      // PROPERTI + cakupan status. Transisi status TETAP online-only lewat
-      // ApiClient -- server yang memvalidasi urutannya.
+      // PROPERTI + cakupan status. Transisi statusnya sendiri kini lokal-dulu
+      // (lihat _ubahStatus) -- server tetap yang memvalidasi urutannya.
       await MasterOffline.daftarCacheDulu(
           'hotel_kitchen_ticket_list',
           body,

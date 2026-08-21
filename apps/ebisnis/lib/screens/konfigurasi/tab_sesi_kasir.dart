@@ -687,6 +687,9 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
                 Text('Seluruh nominal harus berupa angka nol atau lebih.')));
         return;
       }
+      // ONLINE-ONLY, sekeluarga dgn buka/tutup sesi kas: koreksi ini baru sah
+      // bila server MENGONFIRMASI status barunya (lihat pemeriksaan di bawah).
+      // Konfirmasi itu mustahil didapat dari antrean.
       final hasilSimpan = await ApiClient.instance.aksi('sesi_kas_koreksi', {
         'id_sesi': row['id'],
         'status_sesi': status,
