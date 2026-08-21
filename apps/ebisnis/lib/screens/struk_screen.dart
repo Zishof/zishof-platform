@@ -45,6 +45,26 @@ class StrukScreen extends StatelessWidget {
   final double? saldo;
   final bool modeCetakUlang;
 
+  /// Total diskon OTORITATIF dari server, bila sudah diterima.
+  ///
+  /// Server selalu menghitung ulang promo saat menyimpan dan menimpa diskon
+  /// kiriman kasir, sedangkan struk dicetak dari keranjang lokal sesaat setelah
+  /// commit SQLite -- keduanya bisa berbeda (mis. `diskon_evaluasi` gagal karena
+  /// jaringan). Bila terisi, angka inilah yang dipakai pada baris Diskon dan
+  /// GRAND TOTAL, sehingga struk yang tercetak SELALU sama dengan yang tercatat.
+  final double? totalDiskonOverride;
+
+  /// Penjelasan singkat bila angka struk baru saja dikoreksi oleh server.
+  /// Ditampilkan di layar (bukan di kertas) agar kasir sadar ada perubahan.
+  final String? catatanKoreksi;
+
+  /// Penanda internal: true berarti instance ini SUDAH melewati pengambilan
+  /// angka server, jadi tidak perlu dibungkus [_KoreksiAngkaServer] lagi.
+  final bool koreksiSudahDiterapkan;
+
+  /// True selama menunggu angka otoritatif server (tombol cetak ditahan).
+  final bool menungguAngkaServer;
+
   /// Judul dokumen yang dicetak tepat di bawah identitas toko, mis.
   /// "FAKTUR RETUR PENJUALAN". Kosong = struk penjualan biasa (perilaku lama),
   /// sehingga struk kasir tidak berubah sama sekali.
@@ -67,6 +87,10 @@ class StrukScreen extends StatelessWidget {
     this.kembalian,
     this.saldo,
     this.modeCetakUlang = false,
+    this.totalDiskonOverride,
+    this.catatanKoreksi,
+    this.koreksiSudahDiterapkan = false,
+    this.menungguAngkaServer = false,
     this.jenisDokumen,
   });
 
@@ -342,6 +366,10 @@ class StrukScreen extends StatelessWidget {
   double get _totalDiskonItem =>
       item.fold<double>(0, (sum, i) => sum + _diskonBaris(i));
 
+  /// Diskon yang DICETAK: angka server bila sudah diterima, selain itu
+  /// jumlah diskon per baris hasil evaluasi keranjang (perilaku lama).
+  double get _totalDiskonCetak => totalDiskonOverride ?? _totalDiskonItem;
+
   double get _totalCashbackItem =>
       item.fold<double>(0, (sum, i) => sum + _cashbackBaris(i));
 
@@ -611,8 +639,8 @@ class StrukScreen extends StatelessWidget {
     text('-' * columns);
     text('$_jumlahItem item');
     pair('Subtotal', _formatUang(_subtotal));
-    if (_totalDiskonItem > 0) {
-      pair('Diskon', '-${_formatUang(_totalDiskonItem)}');
+    if (_totalDiskonCetak > 0) {
+      pair('Diskon', '-${_formatUang(_totalDiskonCetak)}');
     }
     if (diskonFaktur > 0) {
       pair('Potongan Faktur', '-${_formatUang(diskonFaktur)}');
@@ -839,8 +867,8 @@ class StrukScreen extends StatelessWidget {
         pw.Text('$_jumlahItem item', style: const pw.TextStyle(fontSize: 9)),
         pw.SizedBox(height: 4),
         _totalPdf('Subtotal', _formatUang(_subtotal)),
-        if (_totalDiskonItem > 0)
-          _totalPdf('Diskon', '-${_formatUang(_totalDiskonItem)}'),
+        if (_totalDiskonCetak > 0)
+          _totalPdf('Diskon', '-${_formatUang(_totalDiskonCetak)}'),
         if (diskonFaktur > 0)
           _totalPdf('Potongan Faktur', '-${_formatUang(diskonFaktur)}'),
         if (pajak > 0) _totalPdf('Pajak', _formatUang(pajak)),
@@ -1044,8 +1072,47 @@ class StrukScreen extends StatelessWidget {
     );
   }
 
+  /// Salinan dengan sebagian nilai diganti (dipakai [_KoreksiAngkaServer]).
+  StrukScreen salin({
+    double? total,
+    double? totalDiskonOverride,
+    String? catatanKoreksi,
+    bool? koreksiSudahDiterapkan,
+    bool? menungguAngkaServer,
+  }) {
+    return StrukScreen(
+      key: key,
+      kode: kode,
+      waktu: waktu,
+      item: item,
+      total: total ?? this.total,
+      metode: metode,
+      pembayaran: pembayaran,
+      pajak: pajak,
+      diskonFaktur: diskonFaktur,
+      tersinkron: tersinkron,
+      statusLabel: statusLabel,
+      pelanggan: pelanggan,
+      uangDiterima: uangDiterima,
+      kembalian: kembalian,
+      saldo: saldo,
+      modeCetakUlang: modeCetakUlang,
+      jenisDokumen: jenisDokumen,
+      totalDiskonOverride: totalDiskonOverride ?? this.totalDiskonOverride,
+      catatanKoreksi: catatanKoreksi ?? this.catatanKoreksi,
+      koreksiSudahDiterapkan:
+          koreksiSudahDiterapkan ?? this.koreksiSudahDiterapkan,
+      menungguAngkaServer: menungguAngkaServer ?? this.menungguAngkaServer,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Struk cetak-ulang membaca data yang SUDAH tersimpan, jadi tidak perlu
+    // (dan tidak boleh) menunggu balasan server transaksi baru.
+    if (!koreksiSudahDiterapkan && !modeCetakUlang) {
+      return _KoreksiAngkaServer(asli: this);
+    }
     return _StatusSinkronisasiLive(
       kode: kode,
       tersinkronAwal: tersinkron,
@@ -1078,6 +1145,7 @@ class StrukScreen extends StatelessWidget {
                       const SizedBox(height: 14),
                       _TombolStruk(
                         onCetak: _cetakStruk,
+                        menungguAngkaServer: menungguAngkaServer,
                         tampilkanTransaksiBaru: !modeCetakUlang,
                         tampilkanBukaLaci: !modeCetakUlang,
                         onTransaksiBaru: () =>
@@ -1097,6 +1165,27 @@ class StrukScreen extends StatelessWidget {
                         onKembali: () => _kembaliDariStruk(context),
                       ),
                       const SizedBox(height: 16),
+                      if (catatanKoreksi != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.info_outline,
+                                  color: Colors.orange, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(catatanKoreksi!)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       _StrukPreview(
                         kode: kode,
                         waktu: waktu,
@@ -1107,7 +1196,7 @@ class StrukScreen extends StatelessWidget {
                         pembayaran: _pembayaranEfektif,
                         tersinkron: statusSinkron == 'SYNCED',
                         subtotal: _subtotal,
-                        totalDiskon: _totalDiskonItem,
+                        totalDiskon: _totalDiskonCetak,
                         diskonFaktur: diskonFaktur,
                         totalCashback: _totalCashbackItem,
                         jumlahItem: _jumlahItem,
@@ -1132,6 +1221,134 @@ class StrukScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Mengambil angka OTORITATIF milik server sebelum struk sempat dicetak.
+///
+/// Latar belakang: checkout POS bersifat local-first -- struk dibuka segera
+/// setelah transaksi tersimpan di SQLite, TANPA menunggu balasan server. Server
+/// sendiri selalu menghitung ulang promo saat menyimpan dan tidak menganggap
+/// nilai kiriman kasir sebagai kebenaran, sehingga total tercatat bisa berbeda
+/// dari total yang tampil di keranjang (mis. `diskon_evaluasi` gagal karena
+/// jaringan, lalu server menerapkan diskon yang tidak sempat terlihat kasir).
+/// Sebelum ini selisih tersebut hilang diam-diam: struk kertas menyebut satu
+/// angka, laporan menyebut angka lain, dan laci kas tidak pernah cocok.
+///
+/// Widget ini menunggu SEBENTAR ([_batasTunggu]) sampai outbox menyimpan
+/// balasan server, lalu merender ulang struk memakai angka itu. Bila balasannya
+/// belum datang (offline), struk tetap tampil apa adanya seperti dulu -- menjual
+/// saat jaringan mati tidak boleh terhambat.
+class _KoreksiAngkaServer extends StatefulWidget {
+  final StrukScreen asli;
+
+  const _KoreksiAngkaServer({required this.asli});
+
+  @override
+  State<_KoreksiAngkaServer> createState() => _KoreksiAngkaServerState();
+}
+
+class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
+  /// Selama ini struk tetap tampil normal; hanya tombol cetak yang menahan.
+  static const _batasTunggu = Duration(seconds: 8);
+
+  Timer? _timer;
+  bool _memeriksa = false;
+  bool _selesai = false;
+  DateTime? _mulai;
+  double? _totalServer;
+  double? _totalDiskonServer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.asli.tersinkron) {
+      // Sudah tersinkron sejak awal (mis. dibuka dari riwayat): tidak ada yang
+      // perlu ditunggu.
+      _selesai = true;
+      return;
+    }
+    _mulai = DateTime.now();
+    _periksa();
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _periksa());
+  }
+
+  Future<void> _periksa() async {
+    if (_memeriksa || !mounted || _selesai) return;
+    _memeriksa = true;
+    try {
+      final row = await CoreDb.instance.transaksiLokalDenganKode(widget.asli.kode);
+      final mentah = '${row?['hasil_server_json'] ?? ''}'.trim();
+      if (mentah.isNotEmpty) {
+        final peta = jsonDecode(mentah);
+        if (peta is Map) {
+          final t = (peta['total'] as num?)?.toDouble();
+          final d = (peta['totalDiskon'] as num?)?.toDouble();
+          if (mounted) {
+            setState(() {
+              _totalServer = t;
+              _totalDiskonServer = d;
+              _selesai = true;
+            });
+          }
+          _hentikan();
+          return;
+        }
+      }
+      final mulai = _mulai;
+      if (mulai != null && DateTime.now().difference(mulai) >= _batasTunggu) {
+        // Kemungkinan besar offline. Lanjutkan dengan angka lokal; outbox tetap
+        // mengirim di background dan laporan nanti memakai angka server.
+        if (mounted) setState(() => _selesai = true);
+        _hentikan();
+      }
+    } catch (_) {
+      // Kegagalan membaca baris lokal tidak boleh menghalangi struk tampil.
+      if (mounted) setState(() => _selesai = true);
+      _hentikan();
+    } finally {
+      _memeriksa = false;
+    }
+  }
+
+  void _hentikan() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void dispose() {
+    _hentikan();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asli = widget.asli;
+    final totalServer = _totalServer;
+    if (totalServer == null) {
+      return asli.salin(
+        koreksiSudahDiterapkan: true,
+        menungguAngkaServer: !_selesai,
+      );
+    }
+    // Pembanding 1 rupiah: beda di bawah itu hanya pembulatan, bukan selisih
+    // yang perlu diberitahukan ke kasir.
+    final berbeda = (totalServer - asli.total).abs() >= 1;
+    return asli.salin(
+      koreksiSudahDiterapkan: true,
+      total: totalServer,
+      totalDiskonOverride: _totalDiskonServer,
+      catatanKoreksi: berbeda
+          ? 'Total disesuaikan server dari ${_rupiah(asli.total)} menjadi'
+              ' ${_rupiah(totalServer)}'
+              '${(_totalDiskonServer ?? 0) > 0 ? ' karena diskon ${_rupiah(_totalDiskonServer!)} baru diterapkan' : ''}.'
+              ' Pastikan pembayaran pelanggan mengikuti angka ini.'
+          : null,
+    );
+  }
+
+  static String _rupiah(double v) =>
+      'Rp ${NumberFormat('#,##0', 'id_ID').format(v)}';
 }
 
 typedef _StatusSinkronBuilder = Widget Function(
@@ -1784,8 +2001,14 @@ class _TombolStruk extends StatelessWidget {
   final bool tampilkanTransaksiBaru;
   final bool tampilkanBukaLaci;
 
+  /// True selama angka otoritatif server belum tiba. Tombol cetak ditahan
+  /// sebentar supaya kasir tidak mencetak angka yang sedetik kemudian direvisi
+  /// server -- itulah yang membuat struk kertas dan laporan pernah berselisih.
+  final bool menungguAngkaServer;
+
   const _TombolStruk({
     required this.onCetak,
+    this.menungguAngkaServer = false,
     required this.onTransaksiBaru,
     this.onKembali,
     this.tampilkanTransaksiBaru = true,
@@ -1801,9 +2024,16 @@ class _TombolStruk extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onCetak,
-                icon: const Icon(Icons.print_outlined, size: 18),
-                label: const Text('Cetak Struk'),
+                onPressed: menungguAngkaServer ? null : onCetak,
+                icon: menungguAngkaServer
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.print_outlined, size: 18),
+                label: Text(menungguAngkaServer
+                    ? 'Menyamakan dengan server...'
+                    : 'Cetak Struk'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),

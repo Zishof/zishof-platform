@@ -186,6 +186,27 @@ class TransaksiOutboxService {
           hasilBayar: hasilBayar,
           percobaanCari: 1,
         );
+        // Server menghitung ulang promo saat menyimpan dan menimpa diskon
+        // kiriman kasir, jadi total tercatat bisa BERBEDA dari total yang
+        // dipakai struk. Balasannya disimpan agar layar struk dapat memakai
+        // angka server sebelum dicetak, dan agar selisihnya tidak lagi hilang
+        // diam-diam seperti sebelumnya.
+        try {
+          await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+            'total': hasilBayar['total'],
+            'totalDiskon': hasilBayar['totalDiskon'],
+            'diskonFaktur': hasilBayar['diskonFaktur'],
+            'totalKlien': payload['total'],
+            'data': hasilBayar['data'],
+          });
+        } catch (e) {
+          // Menyimpan angka pembanding tidak boleh menggagalkan sinkronisasi:
+          // transaksinya sendiri sudah tersimpan di server.
+          await CoreDb.instance.catatErrorLog(
+              sumber: 'outbox-hasil-server',
+              tingkat: 'WARN',
+              pesan: 'Gagal menyimpan angka server utk $kodeUnik: $e');
+        }
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         berhasil++;
       } catch (e) {

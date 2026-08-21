@@ -566,9 +566,30 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         }
         _sinkronkanUangDiterima();
       });
-    } catch (_) {
+    } catch (e) {
       // Evaluasi diskon gagal (mis. offline) -- keranjang tetap bisa dibayar
       // tanpa diskon otomatis, bukan alasan memblokir transaksi.
+      //
+      // TAPI kegagalan ini TIDAK boleh senyap: server tetap menghitung ulang
+      // promo saat menyimpan dan tidak memakai nilai kasir, jadi keranjang yang
+      // tampak tanpa diskon bisa tercatat dengan diskon. Struk kertas lalu
+      // menyebut angka lebih besar daripada yang tercatat, dan pelanggan
+      // terlanjur membayar kelebihan (kasus nota AB22008202600004, 20-08-2026).
+      // Kasir diberi tahu supaya sadar angka di layar belum tentu final.
+      unawaited(CoreDb.instance.catatErrorLog(
+        sumber: 'diskon-evaluasi',
+        tingkat: 'WARN',
+        pesan: 'Evaluasi diskon otomatis gagal; keranjang memakai harga penuh.',
+        detail: '$e',
+      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          duration: Duration(seconds: 4),
+          backgroundColor: Colors.orange,
+          content: Text('Diskon otomatis belum dapat diperiksa. Total di layar'
+              ' memakai harga penuh dan masih bisa disesuaikan server.'),
+        ));
+      }
     }
     _siarkanKeranjang();
   }

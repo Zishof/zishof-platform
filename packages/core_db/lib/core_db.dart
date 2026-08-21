@@ -116,7 +116,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 11,
+        version: 12,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -409,6 +409,16 @@ class CoreDb {
         // Tabel kemungkinan sudah ada (upgrade parsial) -- aman diabaikan.
       }
     }
+    if (versiLama < 12) {
+      // Angka OTORITATIF dari server disimpan apa adanya supaya struk dapat
+      // dikoreksi setelah sinkron (lihat simpanHasilServerTransaksi).
+      try {
+        await db.execute(
+            'ALTER TABLE transaksi_pending ADD COLUMN hasil_server_json TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada (upgrade parsial) -- aman dilewati.
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -521,7 +531,8 @@ class CoreDb {
         percobaan INTEGER NOT NULL DEFAULT 0,
         terakhir_dicoba TEXT,
         disinkronkan_pada TEXT,
-        diperbarui_pada TEXT
+        diperbarui_pada TEXT,
+        hasil_server_json TEXT
       )
     ''');
     await db.execute(
@@ -987,6 +998,28 @@ class CoreDb {
     // DB utama sudah committed. Buat salinan kedua sebelum request server.
     await _cadangkanBarisTransaksi(kodeUnik);
     return id;
+  }
+
+  /// Menyimpan angka OTORITATIF balasan server untuk satu transaksi.
+  ///
+  /// Server SELALU menghitung ulang promo saat menyimpan dan menimpa diskon
+  /// kiriman kasir (lihat `terapkanEvaluasiDiskonServer` di KantinHelper), jadi
+  /// total yang tercatat bisa berbeda dari total yang dipakai struk -- struk
+  /// dicetak dari keranjang lokal sesaat setelah commit SQLite, tanpa menunggu
+  /// balasan server. Balasannya disimpan apa adanya di sini supaya layar struk
+  /// (yang sudah memantau baris ini tiap detik) dapat mengoreksi angkanya
+  /// SEBELUM dicetak, dan memperingatkan kasir bila ternyata berbeda.
+  Future<void> simpanHasilServerTransaksi(
+      String kodeUnik, Map<String, dynamic> hasil) async {
+    final database = await db;
+    await database.update(
+        'transaksi_pending',
+        {
+          'hasil_server_json': jsonEncode(hasil),
+          'diperbarui_pada': DateTime.now().toIso8601String(),
+        },
+        where: 'kode_unik = ?',
+        whereArgs: [kodeUnik]);
   }
 
   Future<void> tandaiTransaksiSinkron(String kodeUnik) async {
