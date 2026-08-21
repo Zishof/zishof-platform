@@ -79,7 +79,8 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _PanelErrorNs(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
+              ? _PanelErrorNs(
+                  pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
               : _data.isEmpty
                   ? Center(
                       child: Text(
@@ -138,8 +139,9 @@ class _NotaSalesScreenState extends State<NotaSalesScreen> with JejakGalat {
                                           MaterialPageRoute(
                                               builder: (_) =>
                                                   DetailSesiNotaSales(
-                                                      sessionId: (r['id'] as num)
-                                                          .toInt())));
+                                                      sessionId:
+                                                          (r['id'] as num)
+                                                              .toInt())));
                                       _muat();
                                     },
                                   ),
@@ -166,7 +168,8 @@ class DetailSesiNotaSales extends StatefulWidget {
   State<DetailSesiNotaSales> createState() => _DetailSesiNotaSalesState();
 }
 
-class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> with JejakGalat {
+class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales>
+    with JejakGalat {
   Map<String, dynamic>? _d;
   String? _error;
   bool _proses = false;
@@ -193,7 +196,19 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> with JejakGal
       {String? sukses}) async {
     setStateIfMounted(() => _proses = true);
     try {
-      await ApiClient.instance.aksi(namaAksi, body);
+      /* LOKAL DULU untuk seluruh mutasi layar ini. Sesi sales dikerjakan di
+       * lapangan, kerap tanpa sinyal; angka terjual/kembali harus tetap
+       * tercatat saat itu juga. Aksi baca tidak melewati pembungkus ini. */
+      final r = await MasterOffline.simpanAtauAntre(namaAksi, body,
+          kunci: '$namaAksi:${body['trip_id'] ?? body['id'] ?? ''}');
+      if (r['offline'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Tersimpan di perangkat, akan dikirim otomatis.')));
+        }
+        await _muat();
+        return;
+      }
       if (sukses != null && mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(sukses)));
@@ -868,7 +883,8 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales> with JejakGal
         ],
       ),
       body: _error != null
-          ? _PanelErrorNs(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
+          ? _PanelErrorNs(
+              pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
           : d == null
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
@@ -1120,8 +1136,7 @@ class _PanelErrorNs extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
   final String? detail;
-  const _PanelErrorNs(
-      {required this.pesan, required this.onCoba, this.detail});
+  const _PanelErrorNs({required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {

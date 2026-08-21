@@ -19,8 +19,7 @@ class ResepsionisHotelScreen extends StatefulWidget {
   const ResepsionisHotelScreen({super.key});
 
   @override
-  State<ResepsionisHotelScreen> createState() =>
-      _ResepsionisHotelScreenState();
+  State<ResepsionisHotelScreen> createState() => _ResepsionisHotelScreenState();
 }
 
 class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
@@ -46,8 +45,8 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
     });
     try {
       final data = await muatDaftarHotel('hotel_properti_list', {});
-      final id = _propertiId ??
-          (data.isNotEmpty ? idInt(data.first['id']) : null);
+      final id =
+          _propertiId ?? (data.isNotEmpty ? idInt(data.first['id']) : null);
       setStateIfMounted(() {
         _properti = data;
         _propertiId = id;
@@ -80,7 +79,8 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
       // baru di-check-in shift lain langsung berpendar). Cache dipisah per
       // PROPERTI. Jalur CHECK-IN/CHECK-OUT/FOLIO/PINDAH KAMAR TETAP online-only
       // lewat ApiClient -- server penjaga aturan uang & alokasi kamar.
-      await MasterOffline.daftarCacheDulu('hotel_menginap_list',
+      await MasterOffline.daftarCacheDulu(
+          'hotel_menginap_list',
           {'properti_id': pid, 'status': 'IN_HOUSE'},
           'master:hotel_menginap:$pid', onData: (hasil) {
         if (!mounted) return;
@@ -116,8 +116,8 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _kamarVacant() async {
-    final kamar = await muatDaftarHotel(
-        'hotel_kamar_list', {'properti_id': _propertiId});
+    final kamar =
+        await muatDaftarHotel('hotel_kamar_list', {'properti_id': _propertiId});
     return kamar
         .where((k) =>
             k['aktif'] != false &&
@@ -161,8 +161,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
         _info('Check-in walk-in berhasil. Folio dibuka.');
         _muat();
       } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}',
-            galat: true);
+        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
       }
     } catch (e) {
       _info('Gagal check-in: $e', galat: true);
@@ -231,8 +230,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
         _info('Kamar dipindahkan.');
         _muat();
       } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}',
-            galat: true);
+        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
       }
     } catch (e) {
       _info('Gagal pindah kamar: $e', galat: true);
@@ -259,8 +257,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
           ),
           TextField(
             controller: metode,
-            decoration:
-                const InputDecoration(labelText: 'Metode bayar'),
+            decoration: const InputDecoration(labelText: 'Metode bayar'),
           ),
         ]),
         actions: [
@@ -297,8 +294,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
             'Lunasi lewat tombol Folio dulu.',
             galat: true);
       } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}',
-            galat: true);
+        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
       }
     } catch (e) {
       _info('Gagal check-out: $e', galat: true);
@@ -370,8 +366,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                                 itemBuilder: (context, i) {
                                   if (i == 0) {
                                     return BannerPerubahanServer(
-                                      key: ValueKey(
-                                          'perubahan:${_diff.versi}'),
+                                      key: ValueKey('perubahan:${_diff.versi}'),
                                       baru: _diff.idBaru.length,
                                       berubah: _diff.idBerubah.length,
                                       dihapus: _diff.jumlahHapus,
@@ -381,11 +376,9 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                                   final saldo = angka(s['saldo_folio']);
                                   final kartu = Card(
                                     child: ListTile(
-                                      leading: const Icon(
-                                          Icons.hotel_outlined,
+                                      leading: const Icon(Icons.hotel_outlined,
                                           color: Colors.green),
-                                      title: Text(
-                                          '${s['tamu_nama'] ?? '-'} — '
+                                      title: Text('${s['tamu_nama'] ?? '-'} — '
                                           'Kamar ${s['kamar_nomor'] ?? '-'}'),
                                       subtitle: Text([
                                         'Masuk: ${s['checkin_pada'] ?? '-'}',
@@ -408,8 +401,8 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                                         itemBuilder: (_) => const [
                                           PopupMenuItem(
                                               value: 'folio',
-                                              child: Text(
-                                                  'Folio / Pembayaran')),
+                                              child:
+                                                  Text('Folio / Pembayaran')),
                                           PopupMenuItem(
                                               value: 'pindah',
                                               child: Text('Pindah Kamar')),
@@ -521,8 +514,7 @@ class _FormWalkInDialogState extends State<_FormWalkInDialog> {
           'hotel_tamu_list', {'properti_id': widget.propertiId});
       int? baru;
       for (final t in ulang) {
-        if ('${t['nama']}'.toLowerCase() ==
-            nama.text.trim().toLowerCase()) {
+        if ('${t['nama']}'.toLowerCase() == nama.text.trim().toLowerCase()) {
           final tid = idInt(t['id']);
           if (baru == null || (tid != null && tid > baru)) baru = tid;
         }
@@ -608,10 +600,8 @@ class _FormWalkInDialogState extends State<_FormWalkInDialog> {
         FilledButton(
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
-            final harga = double.tryParse(_harga.text
-                .trim()
-                .replaceAll('.', '')
-                .replaceAll(',', '.'));
+            final harga = double.tryParse(
+                _harga.text.trim().replaceAll('.', '').replaceAll(',', '.'));
             Navigator.of(context).pop(<String, dynamic>{
               'kamar_id': _kamarId,
               'tamu_id': _tamuId,
@@ -681,9 +671,8 @@ class _FolioDialogState extends State<_FolioDialog> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(jenis == 'PAYMENT'
-            ? 'Terima Pembayaran'
-            : 'Penyesuaian Tagihan'),
+        title: Text(
+            jenis == 'PAYMENT' ? 'Terima Pembayaran' : 'Penyesuaian Tagihan'),
         content: StatefulBuilder(
           builder: (c2, setD) =>
               Column(mainAxisSize: MainAxisSize.min, children: [
@@ -726,15 +715,22 @@ class _FolioDialogState extends State<_FolioDialog> {
       return;
     }
     try {
-      final res =
-          await ApiClient.instance.aksi('hotel_folio_transaksi_tambah', {
-        'folio_id': folioId,
-        'jenis': jenis,
-        'jumlah': nilai,
-        'keterangan': keterangan.text.trim(),
-        if (jenis == 'ADJUSTMENT') 'mengurangi': mengurangi,
-      });
-      if (!apiSukses(res)) {
+      final res = await MasterOffline.simpanAtauAntre(
+          'hotel_folio_transaksi_tambah',
+          {
+            'folio_id': folioId,
+            'jenis': jenis,
+            'jumlah': nilai,
+            'keterangan': keterangan.text.trim(),
+            if (jenis == 'ADJUSTMENT') 'mengurangi': mengurangi,
+          },
+          kunci: 'folio_transaksi:$folioId:'
+              '${DateTime.now().microsecondsSinceEpoch}');
+      // Baris folio bersifat MENAMBAH, bukan menimpa, sehingga aman diantrekan:
+      // urutannya boleh menyusul tanpa mengubah saldo akhirnya. Kuncinya memuat
+      // stempel waktu supaya dua penambahan pada folio yang sama tidak saling
+      // menggantikan di antrean.
+      if (res['offline'] != true && !apiSukses(res)) {
         throw Exception(apiPesan(res, 'Gagal menyimpan transaksi.'));
       }
       _muat();
@@ -766,8 +762,7 @@ class _FolioDialogState extends State<_FolioDialog> {
                 : Column(children: [
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(
-                          'Saldo: ${formatRupiahHotel.format(saldo)}',
+                      title: Text('Saldo: ${formatRupiahHotel.format(saldo)}',
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: saldo > 0
@@ -799,9 +794,8 @@ class _FolioDialogState extends State<_FolioDialog> {
                                             decimalDigits: 0)
                                         .format(jumlah),
                                     style: TextStyle(
-                                        color: jumlah < 0
-                                            ? Colors.green
-                                            : null),
+                                        color:
+                                            jumlah < 0 ? Colors.green : null),
                                   ),
                                 );
                               },

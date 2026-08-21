@@ -1524,14 +1524,22 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
       return;
     }
     try {
-      final hasil = await ApiClient.instance
-          .aksi('batal_pesanan', {'id': p.id, 'alasan': alasan});
+      // LOKAL DULU. Pembatalan pesanan dimiliki sepenuhnya oleh operator POS
+      // ini, jadi aman diantrekan: tidak ada pihak lain yang keputusannya dapat
+      // bertabrakan dengan pembatalan yang menyusul.
+      final hasil = await MasterOffline.simpanAtauAntre(
+        'batal_pesanan',
+        {'id': p.id, 'alasan': alasan},
+        kunci: 'batal_pesanan:${p.id}',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(hasil['description']?.toString() ??
-                (_sudahTerbayar(p)
-                    ? 'Pembelian berhasil dibatalkan.'
-                    : 'Pesanan berhasil dibatalkan.'))));
+            content: Text(hasil['offline'] == true
+                ? 'Pembatalan tersimpan di perangkat, akan dikirim otomatis.'
+                : hasil['description']?.toString() ??
+                    (_sudahTerbayar(p)
+                        ? 'Pembelian berhasil dibatalkan.'
+                        : 'Pesanan berhasil dibatalkan.'))));
       }
       await _muat();
     } catch (e) {
