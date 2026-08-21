@@ -12,6 +12,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Supplier (Penyedia)" -- CRUD penuh master data pemasok, dipakai
 /// sbg picker di Kulakan per-Faktur (`ais.database.model.library.Penyedia`).
@@ -56,11 +57,14 @@ class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('penyedia_list_admin', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:penyedia', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'penyedia_list_admin',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:penyedia', onData: (hasil) {
         if (!mounted) return;
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -74,11 +78,9 @@ class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -238,8 +240,7 @@ class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
                           const AppTableColumn('Telp', flex: 1),
                           const AppTableColumn('Email', flex: 2),
                           AppTableColumn('Aksi',
-                              width: Sesi.instance.bolehKelola ? 124 : 92,
-                              align: TextAlign.center),
+                              width: 64, align: TextAlign.center),
                         ],
                         rows: _daftar.map((s) {
                           return AppTableRowData(
@@ -263,8 +264,7 @@ class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
                                   child: Text('${s['nama'] ?? ''}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style:
-                                          const TextStyle(fontSize: 12.5)),
+                                      style: const TextStyle(fontSize: 12.5)),
                                 ),
                               ),
                               AppTableCell.text('${s['kontak'] ?? '-'}',
@@ -273,44 +273,35 @@ class _SupplierScreenState extends State<SupplierScreen> with JejakGalat {
                               AppTableCell.text('${s['email'] ?? '-'}',
                                   flex: 2),
                               AppTableCell(
-                                width: Sesi.instance.bolehKelola ? 124 : 92,
+                                width: 64,
                                 align: TextAlign.center,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (s['id'] != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip:
-                                            'Riwayat data ini (AuditTrails)',
-                                        icon: const Icon(Icons.history,
-                                            size: 18),
-                                        onPressed: () => tampilkanRiwayatData(
-                                            context,
+                                child: AksiBarisMenu(aksi: [
+                                  AksiBaris(
+                                    ikon: Icons.history,
+                                    label: 'Riwayat data ini',
+                                    onTap: s['id'] == null
+                                        ? null
+                                        : () => tampilkanRiwayatData(context,
                                             entitas: 'penyedia',
                                             id: s['id'],
                                             judul: '${s['nama'] ?? ''}'),
-                                      ),
-                                    if (Sesi.instance.bolehKelola) ...[
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.edit_outlined,
-                                            size: 18),
-                                        onPressed: () =>
-                                            _bukaForm(supplier: s),
-                                      ),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.delete_outline,
-                                            size: 18,
-                                            color: AppColors.danger),
-                                        onPressed: () => _hapus(s),
-                                      ),
-                                    ] else
-                                      const Icon(Icons.visibility_outlined,
-                                          size: 18),
-                                  ],
-                                ),
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.edit_outlined,
+                                    label: 'Ubah',
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _bukaForm(supplier: s)
+                                        : null,
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.delete_outline,
+                                    label: 'Hapus',
+                                    merusak: true,
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _hapus(s)
+                                        : null,
+                                  ),
+                                ]),
                               ),
                             ],
                           );
@@ -395,7 +386,8 @@ class _FormSupplierState extends State<_FormSupplier> with JejakGalat {
     try {
       final hasil = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 2000}, 'master:akun_list');
-      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() => _akun = data);
     } catch (e) {
       // Daftar akun opsional -- kegagalan memuat tidak boleh memblokir simpan supplier.
@@ -506,7 +498,8 @@ class _FormSupplierState extends State<_FormSupplier> with JejakGalat {
                     label: 'Akun Utang Dagang',
                     daftar: _akun,
                     nilai: _akunUtangId,
-                    helperText: 'Dipakai jurnal kulakan kredit & pembayaran hutang. '
+                    helperText:
+                        'Dipakai jurnal kulakan kredit & pembayaran hutang. '
                         'Kosongkan untuk memakai akun utang bawaan.',
                     onChanged: (v) => setStateIfMounted(() => _akunUtangId = v),
                   ),

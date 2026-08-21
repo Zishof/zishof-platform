@@ -12,6 +12,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
@@ -55,11 +56,14 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('cara_bayar_list_admin', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:cara_bayar', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'cara_bayar_list_admin',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:cara_bayar', onData: (hasil) {
         if (!mounted) return;
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -73,11 +77,9 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -242,8 +244,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                           const AppTableColumn('Status',
                               flex: 1, align: TextAlign.center),
                           AppTableColumn('Aksi',
-                              width: Sesi.instance.bolehKelola ? 124 : 92,
-                              align: TextAlign.center),
+                              width: 64, align: TextAlign.center),
                         ],
                         rows: _daftar.map((c) {
                           final aktif = c['aktif'] == true;
@@ -271,8 +272,7 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                                   child: Text('${c['nama'] ?? ''}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style:
-                                          const TextStyle(fontSize: 12.5)),
+                                      style: const TextStyle(fontSize: 12.5)),
                                 ),
                               ),
                               AppTableCell(
@@ -316,43 +316,35 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                                 ),
                               ),
                               AppTableCell(
-                                width: Sesi.instance.bolehKelola ? 124 : 92,
+                                width: 64,
                                 align: TextAlign.center,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (c['id'] != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip:
-                                            'Riwayat data ini (AuditTrails)',
-                                        icon: const Icon(Icons.history,
-                                            size: 18),
-                                        onPressed: () => tampilkanRiwayatData(
-                                            context,
+                                child: AksiBarisMenu(aksi: [
+                                  AksiBaris(
+                                    ikon: Icons.history,
+                                    label: 'Riwayat data ini',
+                                    onTap: c['id'] == null
+                                        ? null
+                                        : () => tampilkanRiwayatData(context,
                                             entitas: 'cara_bayar',
                                             id: c['id'],
                                             judul: '${c['nama'] ?? ''}'),
-                                      ),
-                                    if (Sesi.instance.bolehKelola) ...[
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.edit_outlined,
-                                            size: 18),
-                                        onPressed: () => _bukaForm(cara: c),
-                                      ),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.delete_outline,
-                                            size: 18,
-                                            color: AppColors.danger),
-                                        onPressed: () => _hapus(c),
-                                      ),
-                                    ] else
-                                      const Icon(Icons.visibility_outlined,
-                                          size: 18),
-                                  ],
-                                ),
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.edit_outlined,
+                                    label: 'Ubah',
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _bukaForm(cara: c)
+                                        : null,
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.delete_outline,
+                                    label: 'Hapus',
+                                    merusak: true,
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _hapus(c)
+                                        : null,
+                                  ),
+                                ]),
                               ),
                             ],
                           );
@@ -394,6 +386,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
   bool _online = false;
   bool _memotongDeposit = false;
   bool _masukSebagaiHutang = false;
+
   /// Akun Kas/Bank metode ini -- menempel di master Cara Pembayaran, dipakai jurnal
   /// penjualan tunai, pembayaran hutang, dan penerimaan piutang.
   int? _akunId;
@@ -492,7 +485,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
     try {
       final hasil = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 2000}, 'master:akun_list');
-      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       setStateIfMounted(() => _akun = data);
     } catch (e) {
       // Daftar akun opsional; kegagalan memuat tidak boleh memblokir simpan cara bayar.
@@ -543,7 +537,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                     label: 'Akun Kas/Bank',
                     daftar: _akun,
                     nilai: _akunId,
-                    helperText: 'Akun yang didebet/dikredit saat metode ini dipakai pada '
+                    helperText:
+                        'Akun yang didebet/dikredit saat metode ini dipakai pada '
                         'jurnal. Kosongkan untuk memakai Akun Kas/Bank pada master Toko.',
                     onChanged: (v) => setStateIfMounted(() => _akunId = v),
                   ),

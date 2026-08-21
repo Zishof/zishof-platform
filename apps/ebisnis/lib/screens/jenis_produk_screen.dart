@@ -12,6 +12,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Jenis Produk" (kategori) — padanan master ZK `JenisProdukAction` &
 /// JSP `barang/jenis_produk.jsp`. CRUD penuh + pemilihan 3 akun akuntansi per
@@ -53,12 +54,15 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('jenis_produk_list', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-        'termasuk_nonaktif': true,
-      }, 'master:jenis_produk', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'jenis_produk_list',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+            'termasuk_nonaktif': true,
+          },
+          'master:jenis_produk', onData: (hasil) {
         if (!mounted) return;
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -72,11 +76,9 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> with JejakGalat {
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -239,8 +241,7 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> with JejakGalat {
                           const AppTableColumn('Status',
                               flex: 1, align: TextAlign.center),
                           AppTableColumn('Aksi',
-                              width: Sesi.instance.bolehKelola ? 124 : 56,
-                              align: TextAlign.center),
+                              width: 64, align: TextAlign.center),
                         ],
                         rows: _daftar.map((j) {
                           final aktif = j['aktif'] == true;
@@ -292,41 +293,35 @@ class _JenisProdukScreenState extends State<JenisProdukScreen> with JejakGalat {
                                 ),
                               ),
                               AppTableCell(
-                                width: Sesi.instance.bolehKelola ? 124 : 56,
+                                width: 64,
                                 align: TextAlign.center,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (j['id'] != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip:
-                                            'Riwayat data ini (AuditTrails)',
-                                        icon: const Icon(Icons.history,
-                                            size: 18),
-                                        onPressed: () => tampilkanRiwayatData(
-                                            context,
+                                child: AksiBarisMenu(aksi: [
+                                  AksiBaris(
+                                    ikon: Icons.history,
+                                    label: 'Riwayat data ini',
+                                    onTap: j['id'] == null
+                                        ? null
+                                        : () => tampilkanRiwayatData(context,
                                             entitas: 'jenis_produk',
                                             id: j['id'],
                                             judul: '${j['nama'] ?? ''}'),
-                                      ),
-                                    if (Sesi.instance.bolehKelola) ...[
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.edit_outlined,
-                                            size: 18),
-                                        onPressed: () => _bukaForm(jenis: j),
-                                      ),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.delete_outline,
-                                            size: 18,
-                                            color: AppColors.danger),
-                                        onPressed: () => _hapus(j),
-                                      ),
-                                    ],
-                                  ],
-                                ),
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.edit_outlined,
+                                    label: 'Ubah',
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _bukaForm(jenis: j)
+                                        : null,
+                                  ),
+                                  AksiBaris(
+                                    ikon: Icons.delete_outline,
+                                    label: 'Hapus',
+                                    merusak: true,
+                                    onTap: Sesi.instance.bolehKelola
+                                        ? () => _hapus(j)
+                                        : null,
+                                  ),
+                                ]),
                               ),
                             ],
                           );
@@ -375,8 +370,10 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
   int? _akunPendapatanId;
   int? _akunPpnKeluaranId;
   int? _akunHppId;
+
   /// Akun selisih persediaan (susut/temuan) -- lawan jurnal stok opname.
   int? _akunSelisihPersediaanId;
+
   /// Akun retur penjualan (kontra-pendapatan); kosong = pakai akun pendapatan.
   int? _akunReturPenjualanId;
 
@@ -554,7 +551,8 @@ class _FormJenisProdukState extends State<_FormJenisProduk> with JejakGalat {
                       label: 'Akun Selisih Persediaan',
                       daftar: _akun,
                       nilai: _akunSelisihPersediaanId,
-                      helperText: 'Lawan jurnal saat selisih stok opname diposting '
+                      helperText:
+                          'Lawan jurnal saat selisih stok opname diposting '
                           '(susut atau temuan barang).',
                       onChanged: (v) =>
                           setStateIfMounted(() => _akunSelisihPersediaanId = v),
