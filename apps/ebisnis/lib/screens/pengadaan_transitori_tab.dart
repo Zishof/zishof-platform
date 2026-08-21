@@ -5,6 +5,8 @@ import '../api_client.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/aksi_baris_menu.dart';
+import 'pengadaan_cetak_util.dart';
 
 /// Tab Transitori pada layar Pembayaran Vendor.
 ///
@@ -263,6 +265,7 @@ class _PengadaanTransitoriTabState extends State<PengadaanTransitoriTab> {
                       const AppTableColumn('Nominal',
                           flex: 2, align: TextAlign.right),
                       const AppTableColumn('Status', flex: 2),
+                      const AppTableColumn('Aksi', width: 64),
                     ],
                     rows: _daftar.map(_baris).toList(),
                   ),
@@ -346,6 +349,23 @@ class _PengadaanTransitoriTabState extends State<PengadaanTransitoriTab> {
                 const Text('jurnal sudah diposting',
                     style: TextStyle(fontSize: 10)),
             ]),
+      ),
+      /* Yang dicetak adalah DOKUMEN PEMBAYARAN-nya, bukan transitorinya sendiri.
+       * Transitori bukan dokumen berdiri sendiri melainkan satu baris pada
+       * pembayaran vendor, dan templat cetaknya sama dengan versi ZKoss. */
+      AppTableCell(
+        width: 64,
+        child: AksiBarisMenu(aksi: [
+          AksiBaris(
+              ikon: Icons.print_outlined,
+              label: 'Cetak / pratinjau pembayaran',
+              onTap: row['bayar_id'] == null
+                  ? null
+                  : () => cetakDokumenPengadaan(context,
+                      tahap: 'dpc',
+                      id: (row['bayar_id'] as num).toInt(),
+                      kode: '${row['bayarKode'] ?? ''}')),
+        ]),
       ),
     ]);
   }

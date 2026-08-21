@@ -475,7 +475,8 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         'Editor jurnal: kepala di atas, baris debet/kredit di tengah',
         'Indikator keseimbangan di kanan bawah'
       ],
-      objekUtama: 'satu jurnal: kepala jurnal beserta baris debet dan kreditnya',
+      objekUtama:
+          'satu jurnal: kepala jurnal beserta baris debet dan kreditnya',
       hasilAkhir:
           'jurnal seimbang tersimpan, diposting, dan nilainya muncul di Buku Besar, '
           'Neraca, serta Laba Rugi',
@@ -1148,8 +1149,7 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
   // langsung menemukannya tanpa perubahan di masing-masing layar.
   'pengadaanPr': SpesifikasiBantuanMenu(
       judul: 'Permintaan Pembelian (PR)',
-      tujuan:
-          'mengajukan kebutuhan barang toko sebelum dipesan ke penyedia',
+      tujuan: 'mengajukan kebutuhan barang toko sebelum dipesan ke penyedia',
       workflow: [
         'Buat PR',
         'Pilih barang',
@@ -1174,7 +1174,6 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
         'Nilai PR dihitung ulang server dari barisnya, jadi total dokumen selalu sama dengan rinciannya',
         'PR yang sudah disetujui tidak dapat diubah; batalkan keputusannya dulu bila perlu dikoreksi',
         'Menolak wajib menyertakan alasan minimal 5 karakter supaya pembuat PR tahu apa yang harus diperbaiki'
@@ -1218,7 +1217,6 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
         'Tombol Dari PR menampilkan BARANG-nya, dikelompokkan per nomor PR; barang dari beberapa PR boleh digabung ke dalam satu pesanan',
         'Jumlah seluruh termin wajib sama dengan nilai PO; selisih lebih dari Rp 1 akan ditolak saat menyimpan',
         'DP dan termin saling meniadakan. Bila memakai termin, tuliskan uang mukanya sebagai termin pertama',
@@ -1263,7 +1261,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
+        'Pesanan bertermin diterima PER TERMIN. Pesanan dengan tiga termin melahirkan tiga penerimaan, masing-masing dengan fakturnya sendiri -- jadi tagihannya juga tiga kali',
+        'Pada pesanan bertermin, termin yang diterima WAJIB dipilih. Termin yang sudah pernah diterima tetap tampil namun tidak dapat dipilih lagi, supaya satu termin tidak tertagih dua kali',
+        'Penerimaan lama yang dibuat sebelum aturan ini berlaku tidak menyimpan terminnya, sehingga kolom Termin-nya kosong. Bila disunting, terminnya harus dipilih ulang',
         'Barang datang kurang? Simpan dahulu yang benar-benar diterima, lalu tekan Back Order / Pesan Kembali untuk menutup sisanya dan menerbitkan pesanan susulan',
         'Sisa pesanan yang sudah ditutup tidak menerima barang lagi -- kekurangannya diterima pada pesanan susulan',
         'PPN dan PPh diisi per baris dalam persen; nilainya ikut muncul di layar Bayar Pajak',
@@ -1309,7 +1309,9 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
+        'Satu baris di sini mewakili SATU penerimaan. Pesanan bertermin diterima per termin, jadi pesanan tiga termin menghasilkan tiga baris tagihan -- kolom Termin ke membedakannya',
+        'Kolom Barang menyatakan apakah penerimaannya sudah disetujui; kolom Faktur menyatakan apakah tagihannya sudah masuk. Keduanya kerap tidak sejalan karena faktur sering datang lebih dulu',
+        'Kolom Lampiran menyebut berkas yang sudah diunggah. Bila penyimpanan berkas sedang tidak terbaca, kolom itu kosong sementara daftarnya tetap tampil',
         'Invoice WAJIB diunggah dan harus berupa gambar; tagihan tidak dapat diterima sebelum lampiran itu ada',
         'Faktur Pajak, Surat Jalan, dan Kwitansi bersifat pelengkap',
         'Berkasnya tersimpan di tabel lampiran yang sama dengan versi ZKoss, jadi terbaca di kedua versi',
@@ -1346,18 +1348,28 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       istilah: [
         'Tagihan terbuka = termin yang masih menyisakan kewajiban bayar',
         'Sisa = nilai tagih dikurangi yang sudah dibayar dokumen lain',
-        'Pengajuan transfer = permintaan pencairan yang masuk antrean keuangan'
+        'Pengajuan transfer = permintaan pencairan yang masuk antrean keuangan',
+        'Transfer = uangnya langsung menuju rekening penyedia. Jurnalnya memakai akun pada Cara Transfer yang dipilih',
+        'Transitori = uangnya TIDAK langsung ke penyedia, melainkan ditampung dahulu pada akun perantara. Jurnalnya memakai Akun Transitori pada Cara Transfer, bukan akunnya yang biasa',
+        'Akun transitori = akun perantara tempat uang menunggu sebelum benar-benar dicairkan. Selama masih di sini, kewajiban ke penyedia sudah berkurang tetapi uangnya belum keluar dari kas/bank',
+        'Realisasi = mengumpulkan transitori yang menunggu menjadi satu batch lalu menyetujuinya. Ini menandai bahwa pencairannya sudah benar-benar dikerjakan',
+        'Posting jurnal = penerbitan jurnal ke buku besar. Ini LANGKAH TERPISAH dari realisasi'
       ],
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
         'Cara transfer wajib dipilih karena akun pada cara transfer itulah yang dipakai saat jurnal dibentuk',
         'Tagihan yang sudah diajukan pada dokumen lain tidak muncul lagi, supaya tidak terbayar dua kali',
         'Dokumen DRAFT belum diakui sebagai pembayaran; status pesanan baru berubah setelah DISETUJUI',
         'Nilai bayar tidak boleh melebihi sisa tagihan terminnya',
         'Pembayaran yang sudah disetujui tidak dapat diubah maupun dihapus; batalkan persetujuannya dulu',
-        'Centang ajukan transfer bank hanya bila dibayar lewat transfer. Pembayaran tunai tidak perlu masuk antrean pencairan'
+        'Centang ajukan transfer bank hanya bila dibayar lewat transfer. Pembayaran tunai tidak perlu masuk antrean pencairan',
+        'Pilihan Transfer atau Transitori ditentukan PER BARIS tagihan, bukan per dokumen. Satu pembayaran boleh memuat sebagian yang ditransfer langsung dan sebagian yang ditampung dulu',
+        'Pilihan itu bukan sekadar penanda di layar: ia menentukan akun kredit jurnalnya. Salah memilih berarti salah akun, dan koreksinya harus lewat pembatalan posting',
+        'Baris transitori TIDAK selesai dengan sendirinya. Ia harus direalisasikan lewat tab Transitori; selama belum, uangnya masih tercatat di akun perantara dan belum sampai ke penyedia',
+        'Realisasi hanya dapat dilakukan atas pembayaran yang SUDAH DISETUJUI. Dokumen draf masih bisa disunting, sehingga barisnya dapat berubah setelah uangnya dicairkan',
+        'Realisasi BUKAN posting jurnal. Realisasi menandai pencairannya sudah dikerjakan; jurnalnya diterbitkan menyusul lewat menu Posting Proses Transitori, sama seperti versi ZKoss',
+        'Pembayaran yang salah satu barisnya sudah masuk batch realisasi tidak dapat disunting lagi. Batalkan dahulu realisasinya bila memang perlu dikoreksi'
       ],
       tanyaJawabTambahan: [
         [
@@ -1367,6 +1379,30 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
         [
           'Bisakah membayar sebagian dari satu termin?',
           'Bisa. Kurangi nilai bayarnya, dan sisanya tetap muncul sebagai tagihan terbuka pada pembayaran berikutnya.'
+        ],
+        [
+          'Apa bedanya Transfer dan Transitori?',
+          'Transfer berarti uangnya langsung menuju rekening penyedia pada saat itu juga. Transitori berarti uangnya ditampung dahulu pada akun perantara dan pencairannya menyusul. Keduanya sama-sama mengurangi kewajiban Anda kepada penyedia, tetapi pada transfer uangnya sudah keluar dari kas/bank, sedangkan pada transitori belum. Bedanya nyata di jurnal: transfer memakai akun pada Cara Transfer, transitori memakai Akun Transitori pada Cara Transfer yang sama.'
+        ],
+        [
+          'Kapan sebaiknya memakai Transitori?',
+          'Ketika pembayarannya sudah disahkan tetapi pencairannya belum dapat dilakukan hari itu juga -- misalnya menunggu jadwal pencairan bank, menunggu dana masuk, atau pembayaran dikumpulkan dahulu untuk ditransfer sekaligus. Dengan transitori, tagihannya tercatat lunas terhadap penyedia sementara uangnya masih dapat ditelusuri di akun perantara.'
+        ],
+        [
+          'Saya memilih Transitori. Apa yang harus dikerjakan setelahnya?',
+          'Buka tab Transitori pada menu ini. Baris yang menunggu akan tampil di sana. Centang yang sudah benar-benar dicairkan, lalu tekan Realisasikan. Selama belum direalisasikan, uangnya masih tercatat di akun perantara.'
+        ],
+        [
+          'Setelah direalisasikan, apakah jurnalnya langsung terbit?',
+          'Belum. Realisasi dan posting jurnal adalah dua langkah terpisah, juga di versi ZKoss. Realisasi menandai pencairannya sudah dikerjakan; jurnalnya diterbitkan menyusul lewat menu Posting Proses Transitori yang membaca batch yang sudah disetujui. Pembatalan posting juga dikerjakan di sana.'
+        ],
+        [
+          'Kenapa baris transitori saya tidak bisa dicentang di tab Transitori?',
+          'Karena pembayarannya belum disetujui. Dokumen yang masih draf boleh disunting, sehingga barisnya bisa berubah setelah uangnya dicairkan. Setujui dahulu pembayarannya.'
+        ],
+        [
+          'Saya salah memilih Transitori, padahal seharusnya Transfer. Bagaimana?',
+          'Selama pembayarannya masih draf, buka dokumennya dan ubah pilihan pada barisnya. Bila sudah disetujui, batalkan dahulu persetujuannya. Bila barisnya sudah masuk batch realisasi, batalkan dahulu realisasinya -- baris yang sudah direalisasikan sudah punya arti akuntansi dan tidak dapat diubah begitu saja.'
         ],
       ]),
   'pengadaanBdp': SpesifikasiBantuanMenu(
@@ -1431,7 +1467,6 @@ const spesifikasiBantuanMenu = <String, SpesifikasiBantuanMenu>{
       catatanPenting: [
         'Setiap menu Pengadaan punya dua tab: Dasbor (ringkasan angka dan tren) dan tab data untuk pembuatan serta penyuntingan dokumen',
         'Seluruh penyimpanan dan keputusan ditulis di perangkat lebih dulu, lalu dikirim ke server; bekerja tanpa sinyal tetap aman',
-
         'Pajak datang dari dua sumber: PPN/PPh yang diketik pada penerimaan barang (lencana BAST), dan PPh termin dari pembayaran vendor (lencana BAYAR)',
         'Baris yang dokumennya belum disetujui tetap ditampilkan tetapi belum dapat disetor',
         'PPN menambah tagihan ke vendor, sedangkan PPh dipotong dari kas yang keluar. Keduanya mudah tertukar, jadi ditampilkan terpisah',
