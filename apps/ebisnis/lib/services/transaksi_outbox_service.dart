@@ -32,6 +32,8 @@ class TransaksiOutboxService {
   Future<HasilSinkronisasiTransaksi>? _prosesAktif;
   bool _sedangMemulai = false;
   int _intervalRetryMenit = intervalRetryMenitDefault;
+  bool _cadanganBerjalan = false;
+  DateTime? _cadanganTerakhir;
 
   int get intervalRetryMenit => _intervalRetryMenit;
 
@@ -147,120 +149,255 @@ class TransaksiOutboxService {
     );
     var berhasil = 0;
     for (final row in pending) {
-      final kodeUnik = '${row['kode_unik'] ?? ''}';
-      Map<String, dynamic> payload;
-      try {
-        payload = Map<String, dynamic>.from(
-            jsonDecode('${row['payload_json']}') as Map);
-      } catch (e) {
-        await CoreDb.instance.tandaiTransaksiDitolak(
-            kodeUnik, 'Payload lokal rusak dan tidak dapat dikirim: $e');
-        continue;
-      }
-
-      // Proteksi migrasi utk baris lama yang belum memiliki akun_kunci.
-      // Jangan pernah kirim transaksi milik akun/toko lain memakai token
-      // pengguna yang sedang login sekarang.
-      final kasirPayload = '${payload['kasir'] ?? ''}'.trim();
-      final tokoPayload = (payload['tokoId'] ?? payload['idToko']) as Object?;
-      final tokoPayloadInt = tokoPayload is num
-          ? tokoPayload.toInt()
-          : int.tryParse('$tokoPayload');
-      final pemulihanSupervisor =
-          payload['input_supervisor'] == true && Sesi.instance.bolehKelola;
-      if ((!pemulihanSupervisor &&
-              kasirPayload.isNotEmpty &&
-              kasirPayload != Sesi.instance.userId) ||
-          (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) ||
-          ('${payload['id_perangkat'] ?? ''}'.trim().isNotEmpty &&
-              '${payload['id_perangkat']}'.trim() !=
-                  IdentitasMesin.instance.idMesin)) {
-        continue;
-      }
-
-      try {
-        payload['pengiriman_pending'] = true;
-        final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
-        await PelayananTransaksi.tandaiJikaPerlu(
-          payload: payload,
-          hasilBayar: hasilBayar,
-          percobaanCari: 1,
-        );
-        // Server menghitung ulang promo saat menyimpan dan menimpa diskon
-        // kiriman kasir, jadi total tercatat bisa BERBEDA dari total yang
-        // dipakai struk. Balasannya disimpan agar layar struk dapat memakai
-        // angka server sebelum dicetak, dan agar selisihnya tidak lagi hilang
-        // diam-diam seperti sebelumnya.
-        try {
-          await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
-            'total': hasilBayar['total'],
-            'totalDiskon': hasilBayar['totalDiskon'],
-            'diskonFaktur': hasilBayar['diskonFaktur'],
-            'totalKlien': payload['total'],
-            'data': hasilBayar['data'],
-          });
-        } catch (e) {
-          // Menyimpan angka pembanding tidak boleh menggagalkan sinkronisasi:
-          // transaksinya sendiri sudah tersimpan di server.
-          await CoreDb.instance.catatErrorLog(
-              sumber: 'outbox-hasil-server',
-              tingkat: 'WARN',
-              pesan: 'Gagal menyimpan angka server utk $kodeUnik: $e');
-        }
-        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-        berhasil++;
-      } catch (e) {
-        final pesan = e.toString();
-        if (_transaksiSudahAdaDiServer(e)) {
-          await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-          berhasil++;
-          continue;
-        }
-        await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
-        final percobaan = (row['percobaan'] as num?)?.toInt() ?? 0;
-        if (dapatDicobaUlang(e) && percobaan < batasPercobaanOtomatis) {
-          _jadwalkanRetrySetelahJeda();
-          if (e is ApiException && e.offline) {
-            // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
-            // menghasilkan error yang sama; timer akan mencoba lagi sesuai
-            // interval yang dikonfigurasi.
-            break;
-          }
-          // Error teknis server dapat bersifat khusus pada satu payload.
-          // Biarkan tetap PENDING, lalu lanjutkan transaksi berikutnya.
-          continue;
-        }
-        // Penolakan bisnis yang pasti tidak akan membaik hanya dengan retry
-        // (mis. stok/saldo/hak akses). Simpan sebagai GAGAL untuk audit, jangan
-        // hapus, dan jangan membanjiri server setiap interval.
-        await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, pesan);
-      }
+      final vonis = await _kirimSatuBaris(row);
+      if (vonis == _VonisKirim.berhasil) berhasil++;
+      if (vonis == _VonisKirim.berhentiSementara) break;
     }
     // Setiap POS menyimpan pula transaksi kasir lain pada toko yang sama.
     // Endpoint server mengunci toko dari sesi login, sehingga payload toko
-    // palsu tidak dapat mengambil data outlet lain. Rentang tiga hari cukup
-    // untuk menutup pergantian hari/koneksi putus tanpa mengunduh seluruh
-    // histori besar pada setiap siklus 10 menit.
+    // palsu tidak dapat mengambil data outlet lain.
+    //
+    // KE-FIX (transaksi baru lama sekali berstatus "Menunggu Sinkronisasi"
+    // padahal koneksi lancar). Replikasi ini SEBELUMNYA di-await DI DALAM
+    // proses sinkronisasi, dan dijalankan pada SETIAP pemanggilan -- termasuk
+    // pemanggilan yang dipicu tiap checkout. Karena `kirimDiBackground`
+    // menunggu proses yang sedang berjalan selesai, penjualan berikutnya
+    // mengantre di belakang pemindaian 2 hari milik SELURUH toko yang bisa
+    // memakan ratusan request berurutan. Kini replikasi:
+    //   (a) dilepas dari jalur kirim -- hasil pengiriman dipulangkan lebih
+    //       dulu sehingga mutex segera terbuka untuk penjualan berikutnya;
+    //   (b) dibatasi paling sering sekali per interval retry, bukan tiap
+    //       checkout.
+    // Cakupan replikasinya sendiri tidak dikurangi sama sekali.
+    unawaited(_cadangkanBilaSudahWaktunya());
+    return HasilSinkronisasiTransaksi(
+        total: pending.length, berhasil: berhasil);
+  }
+
+  /// Mengirim SATU baris outbox. Dipakai oleh sapuan otomatis maupun tombol
+  /// kirim manual, supaya keduanya memakai aturan yang persis sama (proteksi
+  /// pemilik, idempotensi kode unik, klasifikasi kegagalan).
+  ///
+  /// PENTING soal tanggal: payload menyimpan `waktu` transaksi APA ADANYA sejak
+  /// checkout dan tidak pernah disentuh di sini. Server memakai nilai itu untuk
+  /// `tanggal_pembayaran` (lihat waktuTransaksiDariPayload di KantinHelper),
+  /// jadi transaksi yang baru terkirim berhari-hari kemudian tetap tercatat
+  /// pada tanggal kejadiannya, bukan tanggal pengiriman.
+  Future<_VonisKirim> _kirimSatuBaris(Map<String, Object?> row) async {
+    final kodeUnik = '${row['kode_unik'] ?? ''}';
+    Map<String, dynamic> payload;
+    try {
+      payload = Map<String, dynamic>.from(
+          jsonDecode('${row['payload_json']}') as Map);
+    } catch (e) {
+      await CoreDb.instance.tandaiTransaksiDitolak(
+          kodeUnik, 'Payload lokal rusak dan tidak dapat dikirim: $e');
+      return _VonisKirim.dilewati;
+    }
+
+    // Proteksi migrasi utk baris lama yang belum memiliki akun_kunci.
+    // Jangan pernah kirim transaksi milik akun/toko lain memakai token
+    // pengguna yang sedang login sekarang.
+    final kasirPayload = '${payload['kasir'] ?? ''}'.trim();
+    final tokoPayload = (payload['tokoId'] ?? payload['idToko']) as Object?;
+    final tokoPayloadInt =
+        tokoPayload is num ? tokoPayload.toInt() : int.tryParse('$tokoPayload');
+    final pemulihanSupervisor =
+        payload['input_supervisor'] == true && Sesi.instance.bolehKelola;
+    if ((!pemulihanSupervisor &&
+            kasirPayload.isNotEmpty &&
+            kasirPayload != Sesi.instance.userId) ||
+        (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) ||
+        ('${payload['id_perangkat'] ?? ''}'.trim().isNotEmpty &&
+            '${payload['id_perangkat']}'.trim() !=
+                IdentitasMesin.instance.idMesin)) {
+      return _VonisKirim.dilewati;
+    }
+
+    try {
+      payload['pengiriman_pending'] = true;
+      final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+      await PelayananTransaksi.tandaiJikaPerlu(
+        payload: payload,
+        hasilBayar: hasilBayar,
+        percobaanCari: 1,
+      );
+      // Server menghitung ulang promo saat menyimpan dan menimpa diskon
+      // kiriman kasir, jadi total tercatat bisa BERBEDA dari total yang dipakai
+      // struk. Balasannya disimpan agar layar struk dapat memakai angka server
+      // sebelum dicetak, dan agar selisihnya tidak lagi hilang diam-diam.
+      try {
+        await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+          'total': hasilBayar['total'],
+          'totalDiskon': hasilBayar['totalDiskon'],
+          'diskonFaktur': hasilBayar['diskonFaktur'],
+          'totalKlien': payload['total'],
+          'data': hasilBayar['data'],
+        });
+      } catch (e) {
+        // Menyimpan angka pembanding tidak boleh menggagalkan sinkronisasi:
+        // transaksinya sendiri sudah tersimpan di server.
+        await CoreDb.instance.catatErrorLog(
+            sumber: 'outbox-hasil-server',
+            tingkat: 'WARN',
+            pesan: 'Gagal menyimpan angka server utk $kodeUnik: $e');
+      }
+      await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+      return _VonisKirim.berhasil;
+    } catch (e) {
+      final pesan = e.toString();
+      if (_transaksiSudahAdaDiServer(e)) {
+        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+        return _VonisKirim.berhasil;
+      }
+      await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
+      final percobaan = (row['percobaan'] as num?)?.toInt() ?? 0;
+      if (dapatDicobaUlang(e) && percobaan < batasPercobaanOtomatis) {
+        _jadwalkanRetrySetelahJeda();
+        if (e is ApiException && e.offline) {
+          // Koneksi masih putus. Berhenti agar baris berikutnya tidak ikut
+          // menghasilkan error yang sama; timer akan mencoba lagi sesuai
+          // interval yang dikonfigurasi.
+          return _VonisKirim.berhentiSementara;
+        }
+        // Error teknis server dapat bersifat khusus pada satu payload.
+        // Biarkan tetap PENDING, lalu lanjutkan transaksi berikutnya.
+        return _VonisKirim.dilewati;
+      }
+      // Penolakan bisnis yang pasti tidak akan membaik hanya dengan retry
+      // (mis. stok/saldo/hak akses). Simpan sebagai GAGAL untuk audit, jangan
+      // hapus, dan jangan membanjiri server setiap interval.
+      await CoreDb.instance.tandaiTransaksiDitolak(kodeUnik, pesan);
+      return _VonisKirim.dilewati;
+    }
+  }
+
+  /// Kirim ulang SATU transaksi tertentu atas permintaan pengguna.
+  ///
+  /// Berbeda dari sapuan otomatis, jeda antar-percobaan dan status GAGAL TIDAK
+  /// menghalangi: kalau kasir menekan tombolnya, ia memang ingin mencoba
+  /// sekarang. Idempotensi tetap dijaga server lewat `kode_unik` yang sama.
+  Future<HasilKirimManual> kirimSatuManual(String kodeUnik) async {
+    final kode = kodeUnik.trim();
+    if (kode.isEmpty) {
+      return const HasilKirimManual(
+          total: 0, berhasil: 0, pesan: 'Kode transaksi tidak dikenali.');
+    }
+    if (!ApiClient.instance.sudahLogin) {
+      return const HasilKirimManual(
+          total: 1, berhasil: 0, pesan: 'Sesi login belum siap.');
+    }
+    final row = await CoreDb.instance.transaksiLokalDenganKode(kode);
+    if (row == null) {
+      return HasilKirimManual(
+          total: 0,
+          berhasil: 0,
+          pesan: 'Transaksi $kode tidak ada di perangkat ini.');
+    }
+    if ('${row['status'] ?? ''}'.toUpperCase() == 'SYNCED') {
+      return HasilKirimManual(
+          total: 0, berhasil: 0, pesan: 'Transaksi $kode sudah tersinkron.');
+    }
+    final vonis = await _kirimSatuBaris(row);
+    final berhasil = vonis == _VonisKirim.berhasil;
+    return HasilKirimManual(
+      total: 1,
+      berhasil: berhasil ? 1 : 0,
+      pesan: berhasil
+          ? 'Transaksi $kode berhasil dikirim.'
+          : 'Transaksi $kode belum berhasil dikirim. Lihat kolom Kendala Terakhir.',
+    );
+  }
+
+  /// Kirim ulang BANYAK transaksi sekaligus atas permintaan pengguna.
+  ///
+  /// [kodeUnik] kosong berarti semua yang belum tersinkron di perangkat ini,
+  /// termasuk yang berstatus GAGAL. Baris yang gagal tidak menghentikan baris
+  /// berikutnya, KECUALI koneksi terbukti putus -- meneruskan hanya akan
+  /// menghasilkan error identik berulang.
+  Future<HasilKirimManual> kirimBanyakManual([List<String>? kodeUnik]) async {
+    if (!ApiClient.instance.sudahLogin) {
+      return const HasilKirimManual(
+          total: 0, berhasil: 0, pesan: 'Sesi login belum siap.');
+    }
+    final baris = <Map<String, Object?>>[];
+    if (kodeUnik == null || kodeUnik.isEmpty) {
+      // jedaRetry nol: permintaan manual tidak tunduk pada jeda otomatis.
+      baris.addAll(await CoreDb.instance.transaksiPendingBelumSinkron(
+        akunKunci: Sesi.instance.userId,
+        tokoId: Sesi.instance.tokoId,
+        idPerangkat: IdentitasMesin.instance.idMesin,
+        jedaRetry: Duration.zero,
+      ));
+      baris.addAll(await CoreDb.instance.transaksiGagalBelumSinkron(
+        akunKunci: Sesi.instance.userId,
+        tokoId: Sesi.instance.tokoId,
+      ));
+    } else {
+      for (final kode in kodeUnik) {
+        final row = await CoreDb.instance.transaksiLokalDenganKode(kode.trim());
+        if (row != null && '${row['status'] ?? ''}'.toUpperCase() != 'SYNCED') {
+          baris.add(row);
+        }
+      }
+    }
+    if (baris.isEmpty) {
+      return const HasilKirimManual(
+          total: 0,
+          berhasil: 0,
+          pesan: 'Tidak ada transaksi yang perlu dikirim.');
+    }
+    var berhasil = 0;
+    var terhenti = false;
+    for (final row in baris) {
+      final vonis = await _kirimSatuBaris(row);
+      if (vonis == _VonisKirim.berhasil) berhasil++;
+      if (vonis == _VonisKirim.berhentiSementara) {
+        terhenti = true;
+        break;
+      }
+    }
+    return HasilKirimManual(
+      total: baris.length,
+      berhasil: berhasil,
+      pesan: terhenti
+          ? '$berhasil dari ${baris.length} terkirim; sisanya dihentikan karena koneksi terputus.'
+          : berhasil == baris.length
+              ? 'Semua $berhasil transaksi berhasil dikirim.'
+              : '$berhasil dari ${baris.length} transaksi berhasil dikirim.',
+    );
+  }
+
+  /// Menjalankan replikasi cadangan bila sudah lewat jeda, dan tidak pernah
+  /// dua kali bersamaan. Sengaja TIDAK memakai `_prosesAktif`: pengiriman
+  /// transaksi baru tidak boleh menunggu pekerjaan latar ini.
+  Future<void> _cadangkanBilaSudahWaktunya() async {
+    if (_cadanganBerjalan) return;
+    final terakhir = _cadanganTerakhir;
+    if (terakhir != null &&
+        DateTime.now().difference(terakhir) <
+            Duration(minutes: _intervalRetryMenit)) {
+      return;
+    }
+    _cadanganBerjalan = true;
     try {
       await _cadangkanTransaksiTokoTerbaru();
+      _cadanganTerakhir = DateTime.now();
     } catch (_) {
       // Replikasi cadangan bersifat best-effort dan tidak boleh mengubah hasil
       // pengiriman transaksi utama. Timer periodik akan mencoba kembali.
       _jadwalkanRetrySetelahJeda();
+    } finally {
+      _cadanganBerjalan = false;
     }
-    return HasilSinkronisasiTransaksi(
-        total: pending.length, berhasil: berhasil);
   }
 
   Future<void> _cadangkanTransaksiTokoTerbaru() async {
     final tokoId = Sesi.instance.tokoId;
     if (tokoId == null) return;
-    final lokal = await CoreDb.instance
-        .transaksiArsipLokal(tokoId: tokoId, limit: 1000000);
-    final kodeLokal = lokal
-        .map((row) => '${row['kode_unik'] ?? ''}'.trim().toLowerCase())
-        .where((kode) => kode.isNotEmpty)
-        .toSet();
+    // Hanya kolom kode_unik: versi lama memakai SELECT * dgn limit sejuta baris
+    // sehingga seluruh payload_json ikut dibaca ke memori tiap sinkronisasi.
+    final kodeLokal = await CoreDb.instance.kodeTransaksiLokalToko(tokoId);
     final sekarang = DateTime.now();
     final mulai = sekarang.subtract(const Duration(days: 2));
     var page = 1;
@@ -436,4 +573,28 @@ class HasilSinkronisasiTransaksi {
 
   const HasilSinkronisasiTransaksi(
       {required this.total, required this.berhasil});
+}
+
+/// Keputusan setelah mencoba mengirim satu baris outbox.
+enum _VonisKirim {
+  /// Server menerima (atau sudah punya) transaksi ini.
+  berhasil,
+
+  /// Baris ini tidak terkirim, tetapi baris lain masih layak dicoba.
+  dilewati,
+
+  /// Koneksi terbukti putus -- meneruskan hanya menghasilkan error identik.
+  berhentiSementara,
+}
+
+/// Hasil pengiriman yang dipicu MANUAL oleh pengguna.
+class HasilKirimManual {
+  final int total;
+  final int berhasil;
+  final String pesan;
+
+  const HasilKirimManual(
+      {required this.total, required this.berhasil, required this.pesan});
+
+  bool get semuaBerhasil => total > 0 && berhasil == total;
 }

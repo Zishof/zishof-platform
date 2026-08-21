@@ -136,6 +136,81 @@ class ApiClient {
   static bool aksiMemakaiTokoId(String namaAksi) =>
       _aksiBerTokoId.contains(namaAksi);
 
+  /// Nama field yang isinya TIDAK BOLEH ikut tercatat di log teknis.
+  ///
+  /// Log error dapat disalin dan dikirim ke pengembang lewat WhatsApp/e-mail,
+  /// jadi apa pun yang bisa dipakai masuk ke akun orang lain harus disamarkan
+  /// lebih dulu -- bukan diserahkan pada kehati-hatian penyalin.
+  static const Set<String> _fieldRahasia = {
+    'password',
+    'pass',
+    'sandi',
+    'kata_sandi',
+    'pin',
+    'pin_supervisor',
+    'token',
+    'authorization',
+    'otp',
+    'secret',
+    'api_key',
+    'apikey',
+  };
+
+  /// Menyalin payload untuk keperluan log: nilai rahasia diganti penanda, dan
+  /// nilai yang sangat panjang (mis. base64 foto/Excel) dipotong supaya satu
+  /// baris log tidak menelan seluruh berkas.
+  static Object? _samarkanUntukLog(Object? nilai, [int kedalaman = 0]) {
+    if (kedalaman > 6) return '...';
+    if (nilai is Map) {
+      final hasil = <String, Object?>{};
+      nilai.forEach((kunci, isi) {
+        final nama = '$kunci'.toLowerCase();
+        if (_fieldRahasia.contains(nama)) {
+          hasil['$kunci'] = '***disamarkan***';
+        } else {
+          hasil['$kunci'] = _samarkanUntukLog(isi, kedalaman + 1);
+        }
+      });
+      return hasil;
+    }
+    if (nilai is List) {
+      // Daftar panjang (mis. ribuan baris impor) cukup diwakili sebagian.
+      final potong = nilai.length > 50 ? nilai.take(50).toList() : nilai;
+      final hasil = potong
+          .map((e) => _samarkanUntukLog(e, kedalaman + 1))
+          .toList(growable: true);
+      if (nilai.length > 50) {
+        hasil.add('...(${nilai.length - 50} item lain tidak dicatat)');
+      }
+      return hasil;
+    }
+    if (nilai is String && nilai.length > 500) {
+      return '${nilai.substring(0, 500)}...(${nilai.length} karakter)';
+    }
+    return nilai;
+  }
+
+  /// Payload permintaan dalam bentuk siap tempel ke laporan pengembang.
+  static String _permintaanUntukLog(Map<String, dynamic> payload) {
+    try {
+      final teks = jsonEncode(_samarkanUntukLog(payload));
+      return teks.length > 4000
+          ? '${teks.substring(0, 4000)}...(${teks.length} karakter)'
+          : teks;
+    } catch (e) {
+      return '(payload tidak dapat diserialisasi: $e)';
+    }
+  }
+
+  /// Potongan badan respons; dipakai apa adanya karena justru bentuk mentahnya
+  /// (mis. halaman HTML 502 dari gateway) yang menjelaskan kegagalannya.
+  static String _responsUntukLog(String body) {
+    if (body.isEmpty) return '(kosong)';
+    return body.length > 4000
+        ? '${body.substring(0, 4000)}...(${body.length} karakter)'
+        : body;
+  }
+
   Future<Map<String, dynamic>> aksi(String namaAksi,
       [Map<String, dynamic>? body]) async {
     final payload = susunPayload(namaAksi, body);
@@ -170,6 +245,8 @@ class ApiClient {
             'Action: $namaAksi\n'
             'Batas waktu: ${batasWaktu.inSeconds} detik\n'
             'Exception: ${e.runtimeType}: $e\n'
+            'Permintaan: ${_permintaanUntukLog(payload)}\n'
+            'Respons: (tidak ada -- server tidak menjawab)\n'
             'Stack trace klien:\n$stack',
       );
       unawaited(_catatKegagalan(gagal));
@@ -190,7 +267,8 @@ class ApiClient {
         kodeReferensi: referensiPermintaan,
         teknis: 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
             'Action: $namaAksi\nHTTP ${resp.statusCode}; ${e.runtimeType}: $e\n'
-            'Response: $cuplikan\n$stack',
+            'Permintaan: ${_permintaanUntukLog(payload)}\n'
+            'Respons: $cuplikan\n$stack',
       );
       unawaited(_catatKegagalan(gagal));
       throw gagal;
@@ -214,10 +292,14 @@ class ApiClient {
         teknis: '${json['teknis'] ?? json['technical'] ?? ''}'.trim().isEmpty
             ? 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
                 'HTTP ${resp.statusCode}; action=$namaAksi; '
-                'status=${json['status']}; kode=${json['kode']}; message=${json['message']}'
+                'status=${json['status']}; kode=${json['kode']}; message=${json['message']}\n'
+                'Permintaan: ${_permintaanUntukLog(payload)}\n'
+                'Respons: ${_responsUntukLog(resp.body)}'
             : 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
                 'HTTP ${resp.statusCode}; action=$namaAksi\n'
-                '${json['teknis'] ?? json['technical']}',
+                '${json['teknis'] ?? json['technical']}\n'
+                'Permintaan: ${_permintaanUntukLog(payload)}\n'
+                'Respons: ${_responsUntukLog(resp.body)}',
       );
       unawaited(_catatKegagalan(gagal));
       throw gagal;

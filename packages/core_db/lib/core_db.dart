@@ -1172,6 +1172,29 @@ class CoreDb {
   /// Arsip transaksi milik akun/toko aktif, termasuk yang sudah tersinkron.
   /// Halaman Riwayat Penjualan memakai sumber ini untuk langsung menampilkan
   /// struk yang baru tercetak tanpa menunggu round-trip laporan server.
+  /// Hanya `kode_unik` seluruh transaksi lokal satu toko.
+  ///
+  /// Dipakai replikasi cadangan untuk memeriksa "transaksi ini sudah ada di
+  /// perangkat?". [transaksiArsipLokal] melakukan SELECT * sehingga ikut
+  /// memuat `payload_json` SETIAP transaksi -- pada toko ramai itu puluhan MB
+  /// JSON yang dibaca lalu langsung dibuang, tiap kali sinkronisasi berjalan.
+  /// Kueri ini hanya mengambil satu kolom yang benar-benar dipakai.
+  Future<Set<String>> kodeTransaksiLokalToko(int tokoId) async {
+    final database = await db;
+    final rows = await database.query(
+      'transaksi_pending',
+      columns: ['kode_unik'],
+      where: '(toko_id = ? OR toko_id IS NULL)',
+      whereArgs: [tokoId],
+    );
+    final hasil = <String>{};
+    for (final row in rows) {
+      final kode = '${row['kode_unik'] ?? ''}'.trim().toLowerCase();
+      if (kode.isNotEmpty) hasil.add(kode);
+    }
+    return hasil;
+  }
+
   Future<List<Map<String, Object?>>> transaksiArsipLokal({
     String? akunKunci,
     int? tokoId,
