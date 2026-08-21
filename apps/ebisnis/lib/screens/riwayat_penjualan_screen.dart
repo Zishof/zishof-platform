@@ -21,6 +21,7 @@ import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
 import '../services/pengaturan_koreksi_transaksi.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -944,7 +945,8 @@ class RiwayatPenjualanScreen extends StatefulWidget {
   State<RiwayatPenjualanScreen> createState() => _RiwayatPenjualanScreenState();
 }
 
-class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with JejakGalat {
+class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
+    with JejakGalat {
   final Map<String, String> _kunciPembatalan = {};
   static const _pageSize = 15;
   bool _memuat = true;
@@ -2049,13 +2051,13 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with Je
                     OutlinedButton.icon(
                       onPressed: () =>
                           Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const RiwayatAuditScreen(
-                              entitasAwal: 'transaksi',
-                              tipeAwal: 'HAPUS',
-                              menuAktif: MenuEBisnis.riwayatPenjualan,
-                              labelKembali: 'Riwayat Penjualan',
-                            ),
-                          )),
+                        builder: (_) => const RiwayatAuditScreen(
+                          entitasAwal: 'transaksi',
+                          tipeAwal: 'HAPUS',
+                          menuAktif: MenuEBisnis.riwayatPenjualan,
+                          labelKembali: 'Riwayat Penjualan',
+                        ),
+                      )),
                       icon: const Icon(Icons.history, size: 18),
                       label: const Text('History'),
                     ),
@@ -2342,7 +2344,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with Je
                   AppTableColumn('Kasir / Mesin', flex: 2),
                   AppTableColumn('Metode', flex: 2),
                   AppTableColumn('Total', flex: 2, align: TextAlign.right),
-                  AppTableColumn('Aksi', width: 110, align: TextAlign.center),
+                  AppTableColumn('Aksi', width: 64, align: TextAlign.center),
                 ],
                 rows: _data.map((row) {
                   final kasir = '${row['kasir'] ?? '-'}';
@@ -2424,34 +2426,25 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen> with Je
                         ),
                       ),
                       AppTableCell(
-                        width: 110,
+                        width: 64,
                         align: TextAlign.center,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Riwayat revisi header nota (AuditTrails/Envers)
-                            // -- hanya baris server yg punya id transaksi.
-                            if (row['idTransaksi'] != null)
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: 'Riwayat data ini (AuditTrails)',
-                                icon: const Icon(Icons.history, size: 18),
-                                onPressed: () => tampilkanRiwayatData(context,
-                                    entitas: 'transaksi',
-                                    id: row['idTransaksi'] as Object,
-                                    judul: '${row['nomorNota'] ?? ''}'),
-                              ),
-                            Tooltip(
-                              message: 'Detail transaksi',
-                              child: IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.visibility_outlined,
-                                    size: 18),
-                                onPressed: () => _lihatDetail(row),
-                              ),
-                            ),
-                          ],
-                        ),
+                        child: AksiBarisMenu(aksi: [
+                          AksiBaris(
+                              ikon: Icons.visibility_outlined,
+                              label: 'Detail transaksi',
+                              onTap: () => _lihatDetail(row)),
+                          // Riwayat revisi header nota (AuditTrails/Envers)
+                          // -- hanya baris server yg punya id transaksi.
+                          AksiBaris(
+                              ikon: Icons.history,
+                              label: 'Riwayat data ini',
+                              onTap: row['idTransaksi'] == null
+                                  ? null
+                                  : () => tampilkanRiwayatData(context,
+                                      entitas: 'transaksi',
+                                      id: row['idTransaksi'] as Object,
+                                      judul: '${row['nomorNota'] ?? ''}')),
+                        ]),
                       ),
                     ],
                   );

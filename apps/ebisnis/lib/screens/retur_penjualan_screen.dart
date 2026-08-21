@@ -12,6 +12,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import 'struk_retur_util.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -267,10 +268,10 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
         final cetak = await showDialog<bool>(
           context: context,
           builder: (c) => AlertDialog(
-            icon: const Icon(Icons.check_circle_outline, color: AppColors.success),
+            icon: const Icon(Icons.check_circle_outline,
+                color: AppColors.success),
             title: const Text('Retur berhasil disimpan'),
-            content: Text(
-                'Retur atas nota $kodeStruk sebesar '
+            content: Text('Retur atas nota $kodeStruk sebesar '
                 '${_formatRupiah.format(totalStruk)} sudah tercatat. '
                 'Cetak faktur retur untuk diserahkan kepada pembeli?'),
             actions: [
@@ -473,8 +474,7 @@ class _TabBuatReturState extends State<_TabBuatRetur> with JejakGalat {
                 color: Colors.red.shade50,
                 borderRadius: BorderRadius.circular(8)),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(_errorSimpan!,
-                style: TextStyle(color: Colors.red.shade700)),
+              Text(_errorSimpan!, style: TextStyle(color: Colors.red.shade700)),
               AppDetailGalatOpsional(detail: detailUntuk(_errorSimpan)),
             ]),
           ),
@@ -872,11 +872,14 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN /
       // UBAH / HAPUS retur TETAP online-only lewat ApiClient (transaksional).
-      await MasterOffline.daftarCacheDulu('retur_penjualan_list', {
-        if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:retur_penjualan', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'retur_penjualan_list',
+          {
+            if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:retur_penjualan', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
@@ -1191,8 +1194,7 @@ class _TabelRiwayatRetur extends StatelessWidget {
         const AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         const AppTableColumn('Kondisi', flex: 2),
         const AppTableColumn('Metode', flex: 2),
-        AppTableColumn('Aksi',
-            width: bolehKelola ? 132 : 52, align: TextAlign.center),
+        AppTableColumn('Aksi', width: 64, align: TextAlign.center),
       ],
       rows: data.map((r) {
         final totalNilai = (r['totalNilai'] as num?) ??
@@ -1227,35 +1229,25 @@ class _TabelRiwayatRetur extends StatelessWidget {
             AppTableCell.text('${r['kondisiBarang']}', flex: 2),
             AppTableCell.text('${r['metodePengembalian']}', flex: 2),
             AppTableCell(
-              width: bolehKelola ? 132 : 52,
+              width: 64,
               align: TextAlign.center,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Cetak faktur boleh untuk semua yang dapat melihat riwayat:
-                  // mencetak ulang bukti tidak mengubah data apa pun.
-                  IconButton(
-                    tooltip: 'Cetak faktur retur',
-                    icon: const Icon(Icons.print_outlined, size: 18),
-                    color: AppColors.textSecondaryOf(context),
-                    onPressed: onCetak == null ? null : () => onCetak!(r),
-                  ),
-                  if (bolehKelola)
-                    IconButton(
-                      tooltip: 'Ubah',
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      color: AppColors.primary,
-                      onPressed: () => onUbah(r),
-                    ),
-                  if (bolehKelola)
-                    IconButton(
-                      tooltip: 'Hapus',
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      color: AppColors.danger,
-                      onPressed: () => onHapus(r),
-                    ),
-                ],
-              ),
+              child: AksiBarisMenu(aksi: [
+                // Cetak faktur boleh untuk semua yang dapat melihat riwayat:
+                // mencetak ulang bukti tidak mengubah data apa pun.
+                AksiBaris(
+                    ikon: Icons.print_outlined,
+                    label: 'Cetak faktur retur',
+                    onTap: onCetak == null ? null : () => onCetak!(r)),
+                AksiBaris(
+                    ikon: Icons.edit_outlined,
+                    label: 'Ubah',
+                    onTap: bolehKelola ? () => onUbah(r) : null),
+                AksiBaris(
+                    ikon: Icons.delete_outline,
+                    label: 'Hapus',
+                    merusak: true,
+                    onTap: bolehKelola ? () => onHapus(r) : null),
+              ]),
             ),
           ],
         );

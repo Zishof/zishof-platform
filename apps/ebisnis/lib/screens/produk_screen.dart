@@ -29,6 +29,7 @@ import 'produk_mutasi_barang_tab.dart';
 import 'produk_rekonsiliasi_ledger_tab.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -441,8 +442,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                 : 'Salinan tersimpan '
                     '${DateFormat('dd/MM/yyyy HH:mm').format(_stokTanggal!.disimpanPada!)}.',
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
@@ -457,15 +457,16 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                   _stokTanggal?.disimpanPada == null
                       ? 'Salinan tersimpan'
                       : 'Salinan ${DateFormat('dd/MM HH:mm').format(_stokTanggal!.disimpanPada!)}',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.warning),
+                  style:
+                      const TextStyle(fontSize: 12, color: AppColors.warning),
                 ),
               ]),
             ),
           ),
         const SizedBox(width: 4),
         OutlinedButton.icon(
-          onPressed: sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
+          onPressed:
+              sibuk ? null : () => _aturAtauPreviewLaporan(preview: true),
           icon: const Icon(Icons.visibility_outlined, size: 18),
           label: const Text('Preview'),
         ),
@@ -785,7 +786,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
               AppTableColumn('Nama', flex: 2),
               AppTableColumn('Keterangan', flex: 3),
               AppTableColumn('Status', width: 100, align: TextAlign.center),
-              AppTableColumn('Aksi', width: 100, align: TextAlign.center),
+              AppTableColumn('Aksi', width: 64, align: TextAlign.center),
             ],
             rows: _kebijakanRetur
                 .map((k) => AppTableRowData(
@@ -798,13 +799,23 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                             k.keterangan.isEmpty ? '-' : k.keterangan,
                             flex: 3),
                         AppTableCell(
-                            width: 100,
+                            width: 64,
                             align: TextAlign.center,
-                            child: StatusPill(
-                                label: k.aktif ? 'Aktif' : 'Nonaktif',
-                                warna: k.aktif
-                                    ? AppColors.success
-                                    : AppColors.textSecondary)),
+                            child: AksiBarisMenu(aksi: [
+                              AksiBaris(
+                                  ikon: Icons.edit_outlined,
+                                  label: 'Ubah kebijakan',
+                                  onTap: Sesi.instance.bolehKelola
+                                      ? () => _bukaFormKebijakan(kebijakan: k)
+                                      : null),
+                              AksiBaris(
+                                  ikon: Icons.delete_outline,
+                                  label: 'Hapus kebijakan',
+                                  merusak: true,
+                                  onTap: Sesi.instance.bolehKelola && !k.bawaan
+                                      ? () => _hapusKebijakan(k)
+                                      : null),
+                            ])),
                         AppTableCell(
                             width: 100,
                             align: TextAlign.center,
@@ -960,7 +971,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                               const SizedBox(height: 12),
                                               Text(_pesanError!,
                                                   textAlign: TextAlign.center),
-                                              AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+                                              AppDetailGalatOpsional(
+                                                  detail:
+                                                      detailUntuk(_pesanError)),
                                               const SizedBox(height: 16),
                                               ElevatedButton(
                                                   onPressed: _muatSemua,
@@ -1108,14 +1121,12 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                     ? _TabelProduk(
                                                         produkList:
                                                             _produkHalamanIni,
-                                                        stokPerKode:
-                                                            _stokTanggal
-                                                                ?.stokPerKode,
+                                                        stokPerKode: _stokTanggal
+                                                            ?.stokPerKode,
                                                         idBaru: _idBaru,
                                                         idBerubah: _idBerubah,
-                                                        onTap: (p) =>
-                                                            _bukaFormProduk(
-                                                                produk: p),
+                                                        onTap: (p) => _bukaFormProduk(
+                                                            produk: p),
                                                         onRiwayat:
                                                             _riwayatProduk)
                                                     : Column(
@@ -1123,19 +1134,14 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                                             .map((p) => _BarisProduk(
                                                                 produk: p,
                                                                 stokTanggal:
-                                                                    _stokTanggal
-                                                                        ?.stokPerKode[
-                                                                            p.kode],
+                                                                    _stokTanggal?.stokPerKode[
+                                                                        p.kode],
                                                                 idBaru: _idBaru,
                                                                 idBerubah:
                                                                     _idBerubah,
                                                                 onTap: () =>
-                                                                    _bukaFormProduk(
-                                                                        produk:
-                                                                            p),
-                                                                onRiwayat: () =>
-                                                                    _riwayatProduk(
-                                                                        p)))
+                                                                    _bukaFormProduk(produk: p),
+                                                                onRiwayat: () => _riwayatProduk(p)))
                                                             .toList()),
                                               ),
                                             if (_totalProduk > _itemPerHalaman)
@@ -1547,7 +1553,8 @@ class _FormKebijakanRetur extends StatefulWidget {
   State<_FormKebijakanRetur> createState() => _FormKebijakanReturState();
 }
 
-class _FormKebijakanReturState extends State<_FormKebijakanRetur> with JejakGalat {
+class _FormKebijakanReturState extends State<_FormKebijakanRetur>
+    with JejakGalat {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
