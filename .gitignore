@@ -15,6 +15,13 @@
 apps/*/dist/
 apps/*/tmp/release_stage/
 apps/*/*.apk
+apps/*/release-artifacts/
+**/installer/package-staging/
+# Folder rilis bertanggal di akar repo (mis. release-petra-2026-08-20/).
+/release-*/
+# Scratch verifikasi penanda tangan di akar repo. Sengaja TIDAK memakai /tmp/
+# polos: tmp/pdfs/ berisi berkas rujukan yang memang terlacak.
+/tmp/verify-*/
 
 # Platform build outputs
 **/android/.gradle/
