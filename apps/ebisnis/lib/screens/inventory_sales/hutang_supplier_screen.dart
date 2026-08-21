@@ -14,6 +14,7 @@ import '../../services/master_offline.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/proses_simpan_master.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _fmtRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -125,12 +126,15 @@ class _TabHutangState extends State<_TabHutang> with JejakGalat {
     try {
       // Baca LOKAL DULU (MasterOffline.daftarCacheDulu) + diff utk kilau.
       // Baris faktur hutang tidak ber-'id' -> identitasnya 'fakturId'.
-      await MasterOffline.daftarCacheDulu('si_payable_list', {
-        if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
-        'tampilkan_lunas': _tampilkanLunas,
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:si_hutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
+      await MasterOffline.daftarCacheDulu(
+          'si_payable_list',
+          {
+            if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
+            'tampilkan_lunas': _tampilkanLunas,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:si_hutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
           kolomKunci: 'fakturId', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
@@ -157,7 +161,8 @@ class _TabHutangState extends State<_TabHutang> with JejakGalat {
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     }
     return RefreshIndicator(
       onRefresh: _muat,
@@ -504,7 +509,9 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
   Widget build(BuildContext context) {
     final bolehBayar = Sesi.instance.bolehAksiIs('hutang', 'create');
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: bolehBayar
@@ -696,7 +703,8 @@ class _FormPembayaranHutang extends StatefulWidget {
   State<_FormPembayaranHutang> createState() => _FormPembayaranHutangState();
 }
 
-class _FormPembayaranHutangState extends State<_FormPembayaranHutang> with JejakGalat {
+class _FormPembayaranHutangState extends State<_FormPembayaranHutang>
+    with JejakGalat {
   Map<String, dynamic>? _supplier;
   List<Map<String, dynamic>> _fakturs = [];
   final Map<int, TextEditingController> _alokasi = {};
@@ -1102,7 +1110,9 @@ class _TabAgingState extends State<_TabAging> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1307,7 +1317,9 @@ class _TabFakturState extends State<_TabFaktur> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1355,24 +1367,16 @@ class _TabFakturState extends State<_TabFaktur> with JejakGalat {
                 AppTableCell.text(_fmtRp.format(total),
                     flex: 2, align: TextAlign.right),
                 AppTableCell(
-                  flex: 2,
-                  align: TextAlign.center,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.schedule_outlined, size: 18),
-                        tooltip: 'Atur Termin / Jenis Pembayaran (Hutang)',
-                        onPressed: () => _aturTermin(f),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.print_outlined, size: 18),
-                        tooltip: 'Cetak Faktur Pembelian (PDF)',
-                        onPressed: () => _cetakFaktur(f),
-                      ),
-                    ],
-                  ),
-                ),
+                    child: AksiBarisMenu(aksi: [
+                  AksiBaris(
+                      ikon: Icons.schedule_outlined,
+                      label: 'Atur Termin / Jenis Pembayaran (Hutang)',
+                      onTap: () => _aturTermin(f)),
+                  AksiBaris(
+                      ikon: Icons.print_outlined,
+                      label: 'Cetak Faktur Pembelian (PDF)',
+                      onTap: () => _cetakFaktur(f))
+                ])),
               ]);
             }).toList(),
           ),
@@ -1543,7 +1547,8 @@ class _TabLaporanPembelian extends StatefulWidget {
   State<_TabLaporanPembelian> createState() => _TabLaporanPembelianState();
 }
 
-class _TabLaporanPembelianState extends State<_TabLaporanPembelian> with JejakGalat {
+class _TabLaporanPembelianState extends State<_TabLaporanPembelian>
+    with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1584,7 +1589,9 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian> with JejakGa
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1721,8 +1728,7 @@ class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
   final String? detail;
-  const _PanelError(
-      {required this.pesan, required this.onCoba, this.detail});
+  const _PanelError({required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {

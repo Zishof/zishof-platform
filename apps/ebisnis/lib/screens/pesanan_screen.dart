@@ -23,6 +23,7 @@ import 'kasir_screen.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -142,8 +143,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                   .toSet()
                   .toList()
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-              _ringkasan = (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ??
-                  const {};
+              _ringkasan =
+                  (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ??
+                      const {};
             }
             _memuat = false;
           });
@@ -258,7 +260,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
       }
     } catch (e) {
       if (mounted) {
-        await tampilkanKesalahan(context, e, aktivitas: 'kirim transaksi $kode');
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'kirim transaksi $kode');
       }
     } finally {
       setStateIfMounted(() => _sedangKirimBaris.remove(kode));
@@ -518,8 +521,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2))
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.cloud_upload_outlined, size: 18),
                     label: Text(_sedangSinkronPending
                         ? 'Mengirim...'
@@ -542,7 +544,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
             AppTableColumn('Percobaan', flex: 1, align: TextAlign.center),
             AppTableColumn('Status', flex: 1, align: TextAlign.center),
             AppTableColumn('Kendala Terakhir', flex: 4),
-            AppTableColumn('Aksi', width: 110, align: TextAlign.center),
+            AppTableColumn('Aksi', width: 64, align: TextAlign.center),
           ],
           rows: _transaksiPending.map((row) {
             final payload = _payloadPending(row);
@@ -1605,13 +1607,13 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
           label: 'History',
           tooltip: 'Telusuri tabel audit -- termasuk pesanan yang terhapus',
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const RiwayatAuditScreen(
-                  entitasAwal: 'pesanan',
-                  tipeAwal: 'HAPUS',
-                  menuAktif: MenuEBisnis.pesanan,
-                  labelKembali: 'Pesanan',
-                ),
-              )),
+            builder: (_) => const RiwayatAuditScreen(
+              entitasAwal: 'pesanan',
+              tipeAwal: 'HAPUS',
+              menuAktif: MenuEBisnis.pesanan,
+              labelKembali: 'Pesanan',
+            ),
+          )),
         ),
       HeaderActionButton(
           icon: Icons.refresh, label: 'Muat Ulang', onPressed: _muat),
@@ -1641,7 +1643,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                             size: 48, color: Colors.red),
                         const SizedBox(height: 12),
                         Text(_pesanError!, textAlign: TextAlign.center),
-                        AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+                        AppDetailGalatOpsional(
+                            detail: detailUntuk(_pesanError)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                             onPressed: _muat, child: const Text('Coba Lagi')),
@@ -1937,8 +1940,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                                       style: TextStyle(
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700,
-                                        color:
-                                            AppColors.textPrimaryOf(context),
+                                        color: AppColors.textPrimaryOf(context),
                                       ),
                                     ),
                                   ),
@@ -1997,29 +1999,17 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                                   ),
                                 ),
                                 AppTableCell(
-                                  width: 96,
-                                  align: TextAlign.center,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip: 'Detail',
-                                        icon: const Icon(
-                                            Icons.visibility_outlined,
-                                            size: 20),
-                                        onPressed: () => _lihatDetail(p),
-                                      ),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip: 'Aksi',
-                                        icon: const Icon(Icons.more_horiz,
-                                            size: 20),
-                                        onPressed: () => _tampilkanAksi(p),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                    width: 64,
+                                    child: AksiBarisMenu(aksi: [
+                                      AksiBaris(
+                                          ikon: Icons.visibility_outlined,
+                                          label: 'Detail',
+                                          onTap: () => _lihatDetail(p)),
+                                      AksiBaris(
+                                          ikon: Icons.more_horiz,
+                                          label: 'Aksi',
+                                          onTap: () => _tampilkanAksi(p))
+                                    ])),
                               ],
                             );
                           }).toList(),

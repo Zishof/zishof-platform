@@ -13,6 +13,7 @@ import '../widgets/pemilih_akun.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar siklus akuntansi: **Saldo Awal**, **Jurnal Penyesuaian Berkala**, dan **Tutup Buku**.
 ///
@@ -86,17 +87,18 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     try {
       // BACA LOKAL DULU: baris yang masih mengantre kirim tetap terlihat dan daftar
       // tetap terbuka saat perangkat offline; emisi server menyusul memperbarui.
-      await MasterOffline.daftarCacheDulu('saldo_awal_daftar', const {}, _cacheSaldoAwal,
-          onData: (sa) {
+      await MasterOffline.daftarCacheDulu(
+          'saldo_awal_daftar', const {}, _cacheSaldoAwal, onData: (sa) {
         if (!mounted) return;
-        setStateIfMounted(() =>
-            _saldoAwal = ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        setStateIfMounted(() => _saldoAwal =
+            ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>());
       });
       await MasterOffline.daftarCacheDulu(
-          'penyesuaian_template_daftar', const {}, _cacheTemplate, onData: (tp) {
+          'penyesuaian_template_daftar', const {}, _cacheTemplate,
+          onData: (tp) {
         if (!mounted) return;
-        setStateIfMounted(() =>
-            _template = ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        setStateIfMounted(() => _template =
+            ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>());
       });
       final ak = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
       if (!mounted) return;
@@ -150,7 +152,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     }
   }
 
-  Future<Map<String, dynamic>?> _aksi(String nama, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>?> _aksi(
+      String nama, Map<String, dynamic> body) async {
     setStateIfMounted(() {
       _sibuk = true;
       _galat = null;
@@ -179,9 +182,11 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         content: Text(isi),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(c, true), child: const Text('Lanjut')),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Lanjut')),
         ],
       ),
     );
@@ -253,9 +258,11 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
             FilledButton(
-                onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Simpan')),
           ],
         ),
       ),
@@ -296,10 +303,13 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
 
   Future<void> _unggahSaldoAwal() async {
     final picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom, allowedExtensions: const ['xlsx'], withData: true);
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        withData: true);
     if (picked == null || picked.files.isEmpty) return;
     final f = picked.files.single;
-    final raw = f.bytes ?? (f.path == null ? null : await File(f.path!).readAsBytes());
+    final raw =
+        f.bytes ?? (f.path == null ? null : await File(f.path!).readAsBytes());
     if (raw == null) {
       _pesan('Berkas Excel tidak dapat dibaca.');
       return;
@@ -320,15 +330,17 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       _pesan('Tidak ada baris berisi di berkas itu.');
       return;
     }
-    if (!await _konfirmasi('Unggah ${baris.length} baris saldo awal?',
+    if (!await _konfirmasi(
+        'Unggah ${baris.length} baris saldo awal?',
         'Baris yang belum ada akan dibuat, yang sudah ada diperbarui. Baris yang sudah '
-        'diposting dilewati. Kolom: Kode Akun, Nama, Debet, Kredit, Keterangan.')) {
+            'diposting dilewati. Kolom: Kode Akun, Nama, Debet, Kredit, Keterangan.')) {
       return;
     }
     final hasil = await _aksi('saldo_awal_impor',
         {'baris': baris, 'tanggal': _fmt.format(DateTime.now())});
     if (hasil != null) {
-      final masalah = ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
+      final masalah =
+          ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
       _pesan('${hasil['message'] ?? ''}'
           '${masalah.isEmpty ? '' : ' Contoh masalah: ${masalah.first}'}');
     }
@@ -338,7 +350,13 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   Future<void> _unduhContohSaldoAwal() async {
     final bytes = buildSimpleXlsx(
       sheetName: 'Saldo Awal',
-      headers: const ['Kode Akun', 'Nama Akun', 'Debet', 'Kredit', 'Keterangan'],
+      headers: const [
+        'Kode Akun',
+        'Nama Akun',
+        'Debet',
+        'Kredit',
+        'Keterangan'
+      ],
       rows: _saldoAwal
           .map((s) => [
                 '${s['kodeAkun'] ?? ''}',
@@ -351,7 +369,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     );
     final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan Saldo Awal',
-        fileName: 'Saldo_Awal_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+        fileName:
+            'Saldo_Awal_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
         type: FileType.custom,
         allowedExtensions: const ['xlsx'],
         bytes: bytes);
@@ -373,10 +392,11 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       _pesan('${d['alasan'] ?? 'Belum siap diposting.'}');
       return;
     }
-    if (!await _konfirmasi('Posting jurnal pembukaan?',
+    if (!await _konfirmasi(
+        'Posting jurnal pembukaan?',
         'Seluruh saldo awal yang belum diposting akan dijurnal sekali. Selisih debet-kredit '
-        'ditempatkan pada akun Modal/Ekuitas Awal. Setelah diposting, koreksi hanya lewat '
-        'jurnal penyesuaian.')) {
+            'ditempatkan pada akun Modal/Ekuitas Awal. Setelah diposting, koreksi hanya lewat '
+            'jurnal penyesuaian.')) {
       return;
     }
     final hasil = await _aksi('saldo_awal_posting', {});
@@ -396,8 +416,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     int? kreditId;
     for (final a in _akun) {
       final kode = '${a['kode'] ?? ''}';
-      if (kode == '${t?['akunDebetKode'] ?? ''}') debetId = (a['id'] as num?)?.toInt();
-      if (kode == '${t?['akunKreditKode'] ?? ''}') kreditId = (a['id'] as num?)?.toInt();
+      if (kode == '${t?['akunDebetKode'] ?? ''}')
+        debetId = (a['id'] as num?)?.toInt();
+      if (kode == '${t?['akunKreditKode'] ?? ''}')
+        kreditId = (a['id'] as num?)?.toInt();
     }
     String frekuensi = '${t?['frekuensi'] ?? 'BULANAN'}';
     bool aktif = t == null ? true : t['aktif'] != false;
@@ -406,7 +428,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
-          title: Text(t == null ? 'Tambah Template Penyesuaian' : 'Ubah Template'),
+          title:
+              Text(t == null ? 'Tambah Template Penyesuaian' : 'Ubah Template'),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
@@ -432,7 +455,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                 TextField(
                     controller: nilai,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Nilai per periode')),
+                    decoration:
+                        const InputDecoration(labelText: 'Nilai per periode')),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: frekuensi,
@@ -440,7 +464,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                   items: const [
                     DropdownMenuItem(value: 'BULANAN', child: Text('Bulanan')),
                     DropdownMenuItem(
-                        value: 'TAHUNAN', child: Text('Tahunan (diposting di Desember)')),
+                        value: 'TAHUNAN',
+                        child: Text('Tahunan (diposting di Desember)')),
                   ],
                   onChanged: (v) => setDialog(() => frekuensi = v ?? 'BULANAN'),
                 ),
@@ -459,9 +484,11 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
             FilledButton(
-                onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Simpan')),
           ],
         ),
       ),
@@ -470,8 +497,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     String kodeDebet = '';
     String kodeKredit = '';
     for (final a in _akun) {
-      if ((a['id'] as num?)?.toInt() == debetId) kodeDebet = '${a['kode'] ?? ''}';
-      if ((a['id'] as num?)?.toInt() == kreditId) kodeKredit = '${a['kode'] ?? ''}';
+      if ((a['id'] as num?)?.toInt() == debetId)
+        kodeDebet = '${a['kode'] ?? ''}';
+      if ((a['id'] as num?)?.toInt() == kreditId)
+        kodeKredit = '${a['kode'] ?? ''}';
     }
     final payload = <String, dynamic>{
       if (t != null) 'id': t['id'],
@@ -515,9 +544,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   }
 
   Future<void> _postingPenyesuaian(List<dynamic> ids) async {
-    if (!await _konfirmasi('Posting jurnal penyesuaian?',
+    if (!await _konfirmasi(
+        'Posting jurnal penyesuaian?',
         'Template yang siap akan dijurnal untuk periode ${_fmtBulan.format(_periode)}. '
-        'Satu template hanya bisa diposting sekali per periode.')) {
+            'Satu template hanya bisa diposting sekali per periode.')) {
       return;
     }
     final hasil = await _aksi('penyesuaian_posting', {
@@ -548,9 +578,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       _pesan('${d['alasan'] ?? 'Belum siap.'}');
       return;
     }
-    if (!await _konfirmasi('Tutup buku periode ini?',
+    if (!await _konfirmasi(
+        'Tutup buku periode ini?',
         'Seluruh akun pendapatan & beban pada periode ini dinolkan dan laba/rugi bersihnya '
-        'dipindahkan ke Laba Ditahan. Periode yang sudah ditutup tidak bisa ditutup lagi.')) {
+            'dipindahkan ke Laba Ditahan. Periode yang sudah ditutup tidak bisa ditutup lagi.')) {
       return;
     }
     final hasil = await _aksi('tutup_buku_posting', {
@@ -566,11 +597,15 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      TabBar(controller: _tab, isScrollable: true, tabAlignment: TabAlignment.start, tabs: const [
-        Tab(text: 'Saldo Awal'),
-        Tab(text: 'Jurnal Penyesuaian'),
-        Tab(text: 'Tutup Buku'),
-      ]),
+      TabBar(
+          controller: _tab,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: 'Saldo Awal'),
+            Tab(text: 'Jurnal Penyesuaian'),
+            Tab(text: 'Tutup Buku'),
+          ]),
       if (_galat != null)
         Padding(
           padding: const EdgeInsets.all(8),
@@ -595,7 +630,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
           ...anak,
           if (_sibuk)
             const SizedBox(
-                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
       );
 
@@ -639,7 +676,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       Expanded(
         child: AppDataTable(
           minWidth: 860,
-          emptyText: 'Belum ada saldo awal. Tambahkan per akun atau unggah dari Excel.',
+          emptyText:
+              'Belum ada saldo awal. Tambahkan per akun atau unggah dari Excel.',
           columns: const [
             AppTableColumn('Kode', flex: 2),
             AppTableColumn('Nama Akun', flex: 4),
@@ -653,11 +691,16 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
             return AppTableRowData(cells: [
               AppTableCell.text('${s['kodeAkun'] ?? ''}', flex: 2),
               AppTableCell.text('${s['namaAkun'] ?? ''}', flex: 4),
-              AppTableCell.text(_uang.format((s['debet'] as num?)?.toDouble() ?? 0),
-                  flex: 2, align: TextAlign.right),
-              AppTableCell.text(_uang.format((s['kredit'] as num?)?.toDouble() ?? 0),
-                  flex: 2, align: TextAlign.right),
-              AppTableCell.text(sudah ? 'Sudah diposting' : 'Belum diposting', flex: 2),
+              AppTableCell.text(
+                  _uang.format((s['debet'] as num?)?.toDouble() ?? 0),
+                  flex: 2,
+                  align: TextAlign.right),
+              AppTableCell.text(
+                  _uang.format((s['kredit'] as num?)?.toDouble() ?? 0),
+                  flex: 2,
+                  align: TextAlign.right),
+              AppTableCell.text(sudah ? 'Sudah diposting' : 'Belum diposting',
+                  flex: 2),
               AppTableCell(
                 flex: 2,
                 child: sudah
@@ -670,7 +713,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                         IconButton(
                             tooltip: 'Hapus',
                             icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed: _sibuk ? null : () => _hapusSaldoAwal(s)),
+                            onPressed:
+                                _sibuk ? null : () => _hapusSaldoAwal(s)),
                       ]),
               ),
             ]);
@@ -682,8 +726,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
 
   Widget _tabPenyesuaian() {
     final d = _drafPenyesuaian;
-    final rincian =
-        ((d?['rincian'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final rincian = ((d?['rincian'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     return Column(children: [
       _bar([
         FilledButton.icon(
@@ -742,27 +787,28 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                     .map((t) => AppTableRowData(cells: [
                           AppTableCell.text('${t['nama'] ?? ''}', flex: 4),
                           AppTableCell.text('${t['akunDebet'] ?? ''}', flex: 3),
-                          AppTableCell.text('${t['akunKredit'] ?? ''}', flex: 3),
+                          AppTableCell.text('${t['akunKredit'] ?? ''}',
+                              flex: 3),
                           AppTableCell.text(
-                              _uang.format((t['nilai'] as num?)?.toDouble() ?? 0),
+                              _uang.format(
+                                  (t['nilai'] as num?)?.toDouble() ?? 0),
                               flex: 2,
                               align: TextAlign.right),
                           AppTableCell.text(
                               '${t['frekuensi'] ?? ''}${t['aktif'] == false ? ' (nonaktif)' : ''}',
                               flex: 2),
                           AppTableCell(
-                            flex: 2,
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              IconButton(
-                                  tooltip: 'Ubah',
-                                  icon: const Icon(Icons.edit, size: 18),
-                                  onPressed: _sibuk ? null : () => _formTemplate(t)),
-                              IconButton(
-                                  tooltip: 'Hapus',
-                                  icon: const Icon(Icons.delete_outline, size: 18),
-                                  onPressed: _sibuk ? null : () => _hapusTemplate(t)),
-                            ]),
-                          ),
+                              child: AksiBarisMenu(aksi: [
+                            AksiBaris(
+                                ikon: Icons.edit,
+                                label: 'Ubah',
+                                onTap: _sibuk ? null : () => _formTemplate(t)),
+                            AksiBaris(
+                                ikon: Icons.delete_outline,
+                                label: 'Hapus',
+                                onTap: _sibuk ? null : () => _hapusTemplate(t),
+                                merusak: true)
+                          ])),
                         ]))
                     .toList(),
               )
@@ -783,16 +829,20 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                     AppTableCell.text('${r['nama'] ?? ''}', flex: 4),
                     AppTableCell.text('${r['debet'] ?? ''}', flex: 3),
                     AppTableCell.text('${r['kredit'] ?? ''}', flex: 3),
-                    AppTableCell.text(_uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
-                        flex: 2, align: TextAlign.right),
                     AppTableCell.text(
-                        bisa ? 'Siap diposting' : '${r['alasan'] ?? ''}', flex: 4),
+                        _uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
+                        flex: 2,
+                        align: TextAlign.right),
+                    AppTableCell.text(
+                        bisa ? 'Siap diposting' : '${r['alasan'] ?? ''}',
+                        flex: 4),
                     AppTableCell(
                       flex: 2,
                       child: bisa
                           ? TextButton(
-                              onPressed:
-                                  _sibuk ? null : () => _postingPenyesuaian([r['id']]),
+                              onPressed: _sibuk
+                                  ? null
+                                  : () => _postingPenyesuaian([r['id']]),
                               child: const Text('Posting'))
                           : const SizedBox.shrink(),
                     ),
@@ -805,8 +855,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
 
   Widget _tabTutupBuku() {
     final d = _drafTutupBuku;
-    final rincian =
-        ((d?['rincian'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final rincian = ((d?['rincian'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     return Column(children: [
       _bar([
         OutlinedButton.icon(
@@ -861,7 +912,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       Expanded(
         child: AppDataTable(
           minWidth: 760,
-          emptyText: 'Tekan "Lihat Draf" untuk melihat akun apa saja yang akan ditutup.',
+          emptyText:
+              'Tekan "Lihat Draf" untuk melihat akun apa saja yang akan ditutup.',
           columns: const [
             AppTableColumn('Kode', flex: 2),
             AppTableColumn('Nama Akun', flex: 5),
@@ -873,8 +925,10 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
                     AppTableCell.text('${r['kodeAkun'] ?? ''}', flex: 2),
                     AppTableCell.text('${r['namaAkun'] ?? ''}', flex: 5),
                     AppTableCell.text('${r['sisi'] ?? ''}', flex: 4),
-                    AppTableCell.text(_uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
-                        flex: 2, align: TextAlign.right),
+                    AppTableCell.text(
+                        _uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
+                        flex: 2,
+                        align: TextAlign.right),
                   ]))
               .toList(),
         ),

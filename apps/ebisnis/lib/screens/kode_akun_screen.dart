@@ -7,12 +7,12 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../services/simple_xlsx.dart';
-import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Konfigurasi Kode Akun untuk POS Desktop/Android -- padanan layar ZK
 /// `pages/master/akunting/akun.zul` yang dijadikan RUJUKAN bentuk datanya.
@@ -62,7 +62,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     _tab = TabController(
         length: 5,
         vsync: this,
-        initialIndex: widget.tabAwal >= 0 && widget.tabAwal <= 4 ? widget.tabAwal : 0);
+        initialIndex:
+            widget.tabAwal >= 0 && widget.tabAwal <= 4 ? widget.tabAwal : 0);
     // Label & sasaran tombol unduh/unggah mengikuti tab aktif, jadi tampilan
     // harus dibangun ulang setiap tab berpindah.
     _tab.addListener(() {
@@ -88,11 +89,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       _galat = null;
     });
     try {
-      final body = _cari.trim().isEmpty ? <String, dynamic>{} : {'cari': _cari.trim()};
+      final body =
+          _cari.trim().isEmpty ? <String, dynamic>{} : {'cari': _cari.trim()};
       // BACA LOKAL DULU: baris yang masih mengantre kirim tetap terlihat dan daftar
       // tetap terbuka saat perangkat offline; emisi server menyusul memperbarui.
-      await MasterOffline.daftarCacheDulu('kode_akun_daftar', body, _cache('akun'),
-          onData: (res) {
+      await MasterOffline.daftarCacheDulu(
+          'kode_akun_daftar', body, _cache('akun'), onData: (res) {
         if (!mounted) return;
         setStateIfMounted(() {
           _akun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -102,19 +104,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           if (n != null && n > 0 && n < 10) _panjangKodeAnak = n;
         });
       });
-      await MasterOffline.daftarCacheDulu('kode_akun_bank', body, _cache('bank'),
-          onData: (res) {
+      await MasterOffline.daftarCacheDulu(
+          'kode_akun_bank', body, _cache('bank'), onData: (res) {
         if (!mounted) return;
         setStateIfMounted(() {
           _bank = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
           if (res.containsKey('hak')) _hakBank = _bacaHak(res);
         });
       });
-      await MasterOffline.daftarCacheDulu('kode_akun_grup', const {}, _cache('grup'),
-          onData: (res) {
+      await MasterOffline.daftarCacheDulu(
+          'kode_akun_grup', const {}, _cache('grup'), onData: (res) {
         if (!mounted) return;
         setStateIfMounted(() {
-          _grupAkun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _grupAkun =
+              ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
           if (res.containsKey('hak')) _hakGrup = _bacaHak(res);
         });
       });
@@ -123,7 +126,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           onData: (res) {
         if (!mounted) return;
         setStateIfMounted(() {
-          _jenisTransaksi = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _jenisTransaksi =
+              ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
           if (res.containsKey('hak')) _hakJenisTransaksi = _bacaHak(res);
         });
       });
@@ -152,9 +156,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   // Tab 0 (Akun) dan 1 (Daftar Akun) memakai definisi sama; datanya sama,
   // hanya tampilannya yang berbeda.
 
-  String get _defJudul => _tab.index == 2
-      ? 'Bank'
-      : (_tab.index == 3 ? 'Jenis Transaksi' : 'Akun');
+  String get _defJudul =>
+      _tab.index == 2 ? 'Bank' : (_tab.index == 3 ? 'Jenis Transaksi' : 'Akun');
 
   /// Label tombol Tambah: sama dgn judul unduh/unggah, tapi tab Grup Akun juga
   /// punya namanya sendiri (tab itu tidak ikut unduh/unggah Excel).
@@ -162,7 +165,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   String get _defAksiImpor => _tab.index == 2
       ? 'kode_akun_bank_impor'
-      : (_tab.index == 3 ? 'kode_akun_jenis_transaksi_impor' : 'kode_akun_impor');
+      : (_tab.index == 3
+          ? 'kode_akun_jenis_transaksi_impor'
+          : 'kode_akun_impor');
 
   List<String> get _defKolom {
     if (_tab.index == 2) {
@@ -171,7 +176,14 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     if (_tab.index == 3) {
       return const ['Kode', 'Nama', 'Keterangan', 'Kode Akun', 'Aktif'];
     }
-    return const ['Kode', 'Nama', 'Keterangan', 'Posisi', 'Grup Akun', 'Kode Induk'];
+    return const [
+      'Kode',
+      'Nama',
+      'Keterangan',
+      'Posisi',
+      'Grup Akun',
+      'Kode Induk'
+    ];
   }
 
   List<List<String>> _defBaris() {
@@ -268,10 +280,13 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   Future<void> _unggahAkun() async {
     final picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom, allowedExtensions: const ['xlsx'], withData: true);
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        withData: true);
     if (picked == null || picked.files.isEmpty) return;
     final f = picked.files.single;
-    final raw = f.bytes ?? (f.path == null ? null : await File(f.path!).readAsBytes());
+    final raw =
+        f.bytes ?? (f.path == null ? null : await File(f.path!).readAsBytes());
     if (raw == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -288,8 +303,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     }
     if (baris.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tidak ada baris berisi di berkas itu.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Tidak ada baris berisi di berkas itu.')));
       }
       return;
     }
@@ -298,13 +313,16 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Unggah $_defJudul'),
-        content: Text('${baris.length} baris akan diproses. Data yang belum ada '
+        content: Text(
+            '${baris.length} baris akan diproses. Data yang belum ada '
             'akan DIBUAT, yang sudah ada akan DIPERBARUI. Tidak ada data yang dihapus.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(c, true), child: const Text('Proses')),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Proses')),
         ],
       ),
     );
@@ -314,7 +332,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       final hasil =
           await ApiClient.instance.aksi(_defAksiImpor, {'baris': baris});
       if (!mounted) return;
-      final masalah = ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
+      final masalah =
+          ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -323,25 +342,30 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Dibuat: ${hasil['dibuat'] ?? 0}'),
-                Text('Diperbarui: ${hasil['diperbarui'] ?? 0}'),
-                Text('Ditolak: ${hasil['ditolak'] ?? 0}'),
-                if (masalah.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  const Text('Baris yang ditolak:',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  for (final m in masalah)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text('• $m', style: const TextStyle(fontSize: 12)),
-                    ),
-                ],
-              ]),
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dibuat: ${hasil['dibuat'] ?? 0}'),
+                    Text('Diperbarui: ${hasil['diperbarui'] ?? 0}'),
+                    Text('Ditolak: ${hasil['ditolak'] ?? 0}'),
+                    if (masalah.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('Baris yang ditolak:',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      for (final m in masalah)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text('• $m',
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ]),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
+            TextButton(
+                onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
           ],
         ),
       );
@@ -391,37 +415,38 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         content: SizedBox(
           width: 620,
           height: 420,
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('$jumlah akun belum dipetakan dan akan dimasukkan ke '
-                    '${usul['jumlahKelompok'] ?? 0} kelompok berikut. Kelompok diambil '
-                    'dari nama akun induk pada bagan akun Anda. Akun yang sudah '
-                    'dipetakan tidak diubah dan tidak ada data yang dihapus.'),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: ringkas.length,
-                    itemBuilder: (_, i) {
-                      final r = ringkas[i];
-                      final baru = r['kelompokBaru'] == true;
-                      return ListTile(
-                        dense: true,
-                        title: Text('${r['kelompok'] ?? ''}'),
-                        subtitle: Text('${r['jenis'] ?? ''}'
-                            '${baru ? ' • kelompok baru' : ' • kelompok yang sudah ada'}'),
-                        trailing: Text('${r['jumlahAkun'] ?? 0} akun'),
-                      );
-                    },
-                  ),
-                ),
-              ]),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$jumlah akun belum dipetakan dan akan dimasukkan ke '
+                '${usul['jumlahKelompok'] ?? 0} kelompok berikut. Kelompok diambil '
+                'dari nama akun induk pada bagan akun Anda. Akun yang sudah '
+                'dipetakan tidak diubah dan tidak ada data yang dihapus.'),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: ringkas.length,
+                itemBuilder: (_, i) {
+                  final r = ringkas[i];
+                  final baru = r['kelompokBaru'] == true;
+                  return ListTile(
+                    dense: true,
+                    title: Text('${r['kelompok'] ?? ''}'),
+                    subtitle: Text('${r['jenis'] ?? ''}'
+                        '${baru ? ' • kelompok baru' : ' • kelompok yang sudah ada'}'),
+                    trailing: Text('${r['jumlahAkun'] ?? 0} akun'),
+                  );
+                },
+              ),
+            ),
+          ]),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(c, true), child: const Text('Terapkan')),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Terapkan')),
         ],
       ),
     );
@@ -452,8 +477,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                       for (final m in masalah)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child:
-                              Text('• $m', style: const TextStyle(fontSize: 12)),
+                          child: Text('• $m',
+                              style: const TextStyle(fontSize: 12)),
                         ),
                     ],
                   ]),
@@ -497,6 +522,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         telusuri(anak, level + 1);
       }
     }
+
     for (final a in akar) {
       telusuri(a, 0);
     }
@@ -510,7 +536,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
   Map<String, bool> _bacaHak(Map<String, dynamic> res) {
     final h = res['hak'];
-    if (h is! Map) return const {'create': true, 'update': true, 'delete': true};
+    if (h is! Map)
+      return const {'create': true, 'update': true, 'delete': true};
     return {
       'create': h['create'] != false,
       'update': h['update'] != false,
@@ -543,7 +570,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     setStateIfMounted(() => _sibuk = true);
     try {
       // Tanpa 'id' berarti baris BARU -> siapkan id sementaranya.
-      final baru = !hapusLokal && (body['id'] == null || '${body['id']}'.isEmpty);
+      final baru =
+          !hapusLokal && (body['id'] == null || '${body['id']}'.isEmpty);
       final idLokal = baru ? MasterOffline.idSementaraBaru() : null;
       final hasil = await prosesSimpanMaster(
         context,
@@ -579,8 +607,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Hapus')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Hapus')),
         ],
       ),
     );
@@ -606,7 +638,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   /// Formulir Akun. [akun] null = tambah baru; [induk] terisi = "tambah anak"
   /// (kode & sifat diwarisi dari induknya); [salin] = copy data yang ada.
   Future<void> _formAkun(
-      {Map<String, dynamic>? akun, Map<String, dynamic>? induk, bool salin = false}) async {
+      {Map<String, dynamic>? akun,
+      Map<String, dynamic>? induk,
+      bool salin = false}) async {
     final sumber = akun ?? induk;
     final anakBaru = induk != null;
     final ubah = akun != null && !salin;
@@ -614,10 +648,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         ? '${induk['kode'] ?? ''}${'0' * _panjangKodeAnak}'
         : '${sumber?['kode'] ?? ''}';
     final kode = TextEditingController(text: kodeAwal);
-    final nama = TextEditingController(text: anakBaru ? '' : '${sumber?['nama'] ?? ''}');
-    final keterangan =
-        TextEditingController(text: anakBaru ? '' : '${sumber?['keterangan'] ?? ''}');
-    final atasNama = TextEditingController(text: '${sumber?['atasNama'] ?? ''}');
+    final nama =
+        TextEditingController(text: anakBaru ? '' : '${sumber?['nama'] ?? ''}');
+    final keterangan = TextEditingController(
+        text: anakBaru ? '' : '${sumber?['keterangan'] ?? ''}');
+    final atasNama =
+        TextEditingController(text: '${sumber?['atasNama'] ?? ''}');
     final noRek = TextEditingController(text: '${sumber?['noRek'] ?? ''}');
     int? debetCredit = (sumber?['debetCredit'] as num?)?.toInt();
     int? grupAkunId = (sumber?['grupAkunId'] as num?)?.toInt();
@@ -692,10 +728,14 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                         border: OutlineInputBorder(),
                         isDense: true),
                     items: const [
-                      DropdownMenuItem(value: '', child: Text('Tanpa Aktifitas')),
-                      DropdownMenuItem(value: 'OPERASI', child: Text('OPERASI')),
-                      DropdownMenuItem(value: 'INVESTASI', child: Text('INVESTASI')),
-                      DropdownMenuItem(value: 'PENDANAAN', child: Text('PENDANAAN')),
+                      DropdownMenuItem(
+                          value: '', child: Text('Tanpa Aktifitas')),
+                      DropdownMenuItem(
+                          value: 'OPERASI', child: Text('OPERASI')),
+                      DropdownMenuItem(
+                          value: 'INVESTASI', child: Text('INVESTASI')),
+                      DropdownMenuItem(
+                          value: 'PENDANAAN', child: Text('PENDANAAN')),
                     ],
                     onChanged: (v) => setDialog(() => aktifitas = v ?? ''),
                   ),
@@ -715,16 +755,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                     value: bankId ?? 0,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                        labelText: 'Bank', border: OutlineInputBorder(), isDense: true),
+                        labelText: 'Bank',
+                        border: OutlineInputBorder(),
+                        isDense: true),
                     items: [
-                      const DropdownMenuItem(value: 0, child: Text('= Bukan Bank =')),
+                      const DropdownMenuItem(
+                          value: 0, child: Text('= Bukan Bank =')),
                       ..._bank.map((b) => DropdownMenuItem(
                             value: (b['id'] as num?)?.toInt(),
                             child: Text('${b['nama'] ?? ''}',
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
                           )),
                     ],
-                    onChanged: (v) => setDialog(() => bankId = (v ?? 0) == 0 ? null : v),
+                    onChanged: (v) =>
+                        setDialog(() => bankId = (v ?? 0) == 0 ? null : v),
                   ),
                 ),
                 // Sama seperti layar ZK: atas nama & nomor rekening hanya relevan
@@ -737,8 +781,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Simpan')),
           ],
         ),
       ),
@@ -770,15 +818,20 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       cacheKey: _cache('akun'),
       // Bentuk baris daftar: kolom tampilan diisi seadanya supaya tabel langsung
       // memperlihatkan perubahan walau server belum menjawab.
-      rowLokal: {...payload, 'posisi': (debetCredit ?? 1) == 1 ? 'Debet' : 'Credit'},
+      rowLokal: {
+        ...payload,
+        'posisi': (debetCredit ?? 1) == 1 ? 'Debet' : 'Credit'
+      },
     );
   }
 
-  Future<void> _formBank({Map<String, dynamic>? bank, bool salin = false}) async {
+  Future<void> _formBank(
+      {Map<String, dynamic>? bank, bool salin = false}) async {
     final ubah = bank != null && !salin;
     final kode = TextEditingController(text: '${bank?['kode'] ?? ''}');
     final nama = TextEditingController(text: '${bank?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${bank?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${bank?['keterangan'] ?? ''}');
     int? akunId = (bank?['akunId'] as num?)?.toInt();
     bool aktif = bank == null ? true : bank['aktif'] != false;
 
@@ -786,7 +839,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
-          title: Text(salin ? 'Salin Bank' : (ubah ? 'Ubah Bank' : 'Tambah Bank')),
+          title:
+              Text(salin ? 'Salin Bank' : (ubah ? 'Ubah Bank' : 'Tambah Bank')),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -798,7 +852,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                   label: 'Akun Kas/Bank',
                   daftar: _akun,
                   nilai: akunId,
-                  helperText: 'Akun buku besar yang dipakai saat bank ini dijurnal.',
+                  helperText:
+                      'Akun buku besar yang dipakai saat bank ini dijurnal.',
                   onChanged: (v) => setDialog(() => akunId = v),
                 ),
                 const SizedBox(height: 12),
@@ -813,8 +868,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Simpan')),
           ],
         ),
       ),
@@ -848,7 +907,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     final ubah = jenis != null && !salin;
     final kode = TextEditingController(text: '${jenis?['kode'] ?? ''}');
     final nama = TextEditingController(text: '${jenis?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${jenis?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${jenis?['keterangan'] ?? ''}');
     int? akunId = (jenis?['akunId'] as num?)?.toInt();
     bool aktif = jenis == null ? true : jenis['aktif'] != false;
 
@@ -869,7 +929,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                   label: 'Akun',
                   daftar: _akun,
                   nilai: akunId,
-                  helperText: 'Akun bawaan yang dipakai transaksi berjenis ini.',
+                  helperText:
+                      'Akun bawaan yang dipakai transaksi berjenis ini.',
                   onChanged: (v) => setDialog(() => akunId = v),
                 ),
                 const SizedBox(height: 12),
@@ -884,8 +945,12 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Simpan')),
           ],
         ),
       ),
@@ -914,28 +979,38 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     );
   }
 
-  Future<void> _formGrupAkun({Map<String, dynamic>? grup, bool salin = false}) async {
+  Future<void> _formGrupAkun(
+      {Map<String, dynamic>? grup, bool salin = false}) async {
     final ubah = grup != null && !salin;
     final nama = TextEditingController(text: '${grup?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${grup?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${grup?['keterangan'] ?? ''}');
     final simpan = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(salin ? 'Salin Grup Akun' : (ubah ? 'Ubah Grup Akun' : 'Tambah Grup Akun')),
+        title: Text(salin
+            ? 'Salin Grup Akun'
+            : (ubah ? 'Ubah Grup Akun' : 'Tambah Grup Akun')),
         content: SizedBox(
           width: 480,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               _isian('Nama Grup', nama,
                   wajib: true,
-                  bantuan: salin ? 'Nama harus diubah — nama yang sama akan ditolak.' : null),
+                  bantuan: salin
+                      ? 'Nama harus diubah — nama yang sama akan ditolak.'
+                      : null),
               _isian('Keterangan', keterangan),
             ]),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Simpan')),
         ],
       ),
     );
@@ -968,48 +1043,52 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
       return;
     }
     await _kirim(aksi, {'id': id},
-        kunci: kunci, cacheKey: cacheKey, rowLokal: {'id': id}, hapusLokal: true);
+        kunci: kunci,
+        cacheKey: cacheKey,
+        rowLokal: {'id': id},
+        hapusLokal: true);
   }
 
   /// Empat tombol aksi pada pohon akun -- urutannya mengikuti layar ZK.
   AppTableCell _aksiAkun(Map<String, dynamic> a) => AppTableCell(
-        width: 168,
-        align: TextAlign.center,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (_boleh(_hakAkun, 'create'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Tambah akun anak',
-              icon: const Icon(Icons.playlist_add, size: 18),
-              onPressed: _sibuk ? null : () => _formAkun(induk: a),
-            ),
-          if (_boleh(_hakAkun, 'create'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Salin (copy) akun ini',
-              icon: const Icon(Icons.copy_outlined, size: 18),
-              onPressed: _sibuk ? null : () => _formAkun(akun: a, salin: true),
-            ),
-          if (_boleh(_hakAkun, 'update'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Ubah akun',
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              onPressed: _sibuk ? null : () => _formAkun(akun: a),
-            ),
-          if (_boleh(_hakAkun, 'delete'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Hapus akun',
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-              onPressed: _sibuk
-                  ? null
-                  : () => _hapus('kode_akun_hapus', a['id'],
-                      '${a['kode'] ?? ''} - ${a['nama'] ?? ''}',
-                      kunci: 'kode_akun:${a['id']}', cacheKey: _cache('akun')),
-            ),
-        ]),
-      );
+      width: 64,
+      child: AksiBarisMenu(aksi: [
+        AksiBaris(
+            ikon: Icons.playlist_add,
+            label: 'Tambah akun anak',
+            onTap: _boleh(_hakAkun, 'create')
+                ? _sibuk
+                    ? null
+                    : () => _formAkun(induk: a)
+                : null),
+        AksiBaris(
+            ikon: Icons.copy_outlined,
+            label: 'Salin (copy) akun ini',
+            onTap: _boleh(_hakAkun, 'create')
+                ? _sibuk
+                    ? null
+                    : () => _formAkun(akun: a, salin: true)
+                : null),
+        AksiBaris(
+            ikon: Icons.edit_outlined,
+            label: 'Ubah akun',
+            onTap: _boleh(_hakAkun, 'update')
+                ? _sibuk
+                    ? null
+                    : () => _formAkun(akun: a)
+                : null),
+        AksiBaris(
+            ikon: Icons.delete_outline,
+            label: 'Hapus akun',
+            onTap: _boleh(_hakAkun, 'delete')
+                ? _sibuk
+                    ? null
+                    : () => _hapus('kode_akun_hapus', a['id'],
+                        '${a['kode'] ?? ''} - ${a['nama'] ?? ''}',
+                        kunci: 'kode_akun:${a['id']}', cacheKey: _cache('akun'))
+                : null,
+            merusak: true)
+      ]));
 
   /// Tiga tombol aksi untuk master sederhana (Bank, Jenis Transaksi, Grup Akun).
   AppTableCell _aksiBaris(
@@ -1018,32 +1097,34 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           required VoidCallback onUbah,
           required VoidCallback onHapus}) =>
       AppTableCell(
-        width: 132,
-        align: TextAlign.center,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (_boleh(hak, 'create'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Salin (copy) data ini',
-              icon: const Icon(Icons.copy_outlined, size: 18),
-              onPressed: _sibuk ? null : onSalin,
-            ),
-          if (_boleh(hak, 'update'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Ubah data',
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              onPressed: _sibuk ? null : onUbah,
-            ),
-          if (_boleh(hak, 'delete'))
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Hapus data',
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-              onPressed: _sibuk ? null : onHapus,
-            ),
-        ]),
-      );
+          width: 64,
+          child: AksiBarisMenu(aksi: [
+            AksiBaris(
+                ikon: Icons.copy_outlined,
+                label: 'Salin (copy) data ini',
+                onTap: _boleh(hak, 'create')
+                    ? _sibuk
+                        ? null
+                        : onSalin
+                    : null),
+            AksiBaris(
+                ikon: Icons.edit_outlined,
+                label: 'Ubah data',
+                onTap: _boleh(hak, 'update')
+                    ? _sibuk
+                        ? null
+                        : onUbah
+                    : null),
+            AksiBaris(
+                ikon: Icons.delete_outline,
+                label: 'Hapus data',
+                onTap: _boleh(hak, 'delete')
+                    ? _sibuk
+                        ? null
+                        : onHapus
+                    : null,
+                merusak: true)
+          ]));
 
   /// Tombol "Tambah" di toolbar mengikuti tab yang sedang aktif.
   bool get _bolehTambahTabIni {
@@ -1071,7 +1152,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         AppTableColumn('Keterangan', flex: 3),
         AppTableColumn('Grup Akun', flex: 3),
         AppTableColumn('Dipakai', flex: 1, align: TextAlign.right),
-        AppTableColumn('Aksi', width: 168, align: TextAlign.center),
+        AppTableColumn('Aksi', width: 64, align: TextAlign.center),
       ],
       rows: data
           .map((a) => AppTableRowData(cells: [
@@ -1130,16 +1211,22 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 label: const Text('Petakan Akun')),
           if (_sibuk)
             const SizedBox(
-                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
       ),
-      TabBar(controller: _tab, isScrollable: true, tabAlignment: TabAlignment.start, tabs: const [
-        Tab(text: 'Akun'),
-        Tab(text: 'Daftar Akun'),
-        Tab(text: 'Bank'),
-        Tab(text: 'Jenis Transaksi'),
-        Tab(text: 'Grup Akun'),
-      ]),
+      TabBar(
+          controller: _tab,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: 'Akun'),
+            Tab(text: 'Daftar Akun'),
+            Tab(text: 'Bank'),
+            Tab(text: 'Jenis Transaksi'),
+            Tab(text: 'Grup Akun'),
+          ]),
       Expanded(
         child: _memuat
             ? const Center(child: CircularProgressIndicator())
@@ -1150,7 +1237,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(_galat!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
-                      FilledButton(onPressed: _muat, child: const Text('Coba lagi')),
+                      FilledButton(
+                          onPressed: _muat, child: const Text('Coba lagi')),
                     ]),
                   ))
                 : TabBarView(controller: _tab, children: [
@@ -1165,24 +1253,31 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                         AppTableColumn('Akun Kas', flex: 4),
                         AppTableColumn('Keterangan', flex: 3),
                         AppTableColumn('Aktif', flex: 1),
-                        AppTableColumn('Aksi', width: 132, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 64, align: TextAlign.center),
                       ],
                       rows: _bank
                           .map((b) => AppTableRowData(cells: [
-                                AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
-                                AppTableCell.text('${b['nama'] ?? ''}', flex: 3),
+                                AppTableCell.text('${b['kode'] ?? ''}',
+                                    flex: 2),
+                                AppTableCell.text('${b['nama'] ?? ''}',
+                                    flex: 3),
                                 AppTableCell.text(
-                                    '${b['akunKode'] ?? ''} ${b['akunNama'] ?? ''}'.trim(),
+                                    '${b['akunKode'] ?? ''} ${b['akunNama'] ?? ''}'
+                                        .trim(),
                                     flex: 4),
-                                AppTableCell.text('${b['keterangan'] ?? ''}', flex: 3),
+                                AppTableCell.text('${b['keterangan'] ?? ''}',
+                                    flex: 3),
                                 AppTableCell.text(
-                                    b['aktif'] == true ? 'Ya' : 'Tidak', flex: 1),
+                                    b['aktif'] == true ? 'Ya' : 'Tidak',
+                                    flex: 1),
                                 _aksiBaris(
                                   hak: _hakBank,
-                                  onSalin: () => _formBank(bank: b, salin: true),
+                                  onSalin: () =>
+                                      _formBank(bank: b, salin: true),
                                   onUbah: () => _formBank(bank: b),
-                                  onHapus: () => _hapus(
-                                      'kode_akun_bank_hapus', b['id'], '${b['nama'] ?? ''}',
+                                  onHapus: () => _hapus('kode_akun_bank_hapus',
+                                      b['id'], '${b['nama'] ?? ''}',
                                       kunci: 'kode_akun_bank:${b['id']}',
                                       cacheKey: _cache('bank')),
                                 ),
@@ -1198,24 +1293,32 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                         AppTableColumn('Akun', flex: 4),
                         AppTableColumn('Keterangan', flex: 3),
                         AppTableColumn('Aktif', flex: 1),
-                        AppTableColumn('Aksi', width: 132, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 64, align: TextAlign.center),
                       ],
                       rows: _jenisTransaksi
                           .map((t) => AppTableRowData(cells: [
-                                AppTableCell.text('${t['kode'] ?? ''}', flex: 2),
-                                AppTableCell.text('${t['nama'] ?? ''}', flex: 3),
+                                AppTableCell.text('${t['kode'] ?? ''}',
+                                    flex: 2),
+                                AppTableCell.text('${t['nama'] ?? ''}',
+                                    flex: 3),
                                 AppTableCell.text(
-                                    '${t['akunKode'] ?? ''} ${t['akunNama'] ?? ''}'.trim(),
+                                    '${t['akunKode'] ?? ''} ${t['akunNama'] ?? ''}'
+                                        .trim(),
                                     flex: 4),
-                                AppTableCell.text('${t['keterangan'] ?? ''}', flex: 3),
+                                AppTableCell.text('${t['keterangan'] ?? ''}',
+                                    flex: 3),
                                 AppTableCell.text(
-                                    t['aktif'] == true ? 'Ya' : 'Tidak', flex: 1),
+                                    t['aktif'] == true ? 'Ya' : 'Tidak',
+                                    flex: 1),
                                 _aksiBaris(
                                   hak: _hakJenisTransaksi,
-                                  onSalin: () => _formJenisTransaksi(jenis: t, salin: true),
+                                  onSalin: () => _formJenisTransaksi(
+                                      jenis: t, salin: true),
                                   onUbah: () => _formJenisTransaksi(jenis: t),
                                   onHapus: () => _hapus(
-                                      'kode_akun_jenis_transaksi_hapus', t['id'],
+                                      'kode_akun_jenis_transaksi_hapus',
+                                      t['id'],
                                       '${t['nama'] ?? ''}',
                                       kunci: 'kode_akun_jt:${t['id']}',
                                       cacheKey: _cache('jenis_transaksi')),
@@ -1232,22 +1335,28 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                       columns: const [
                         AppTableColumn('Nama Grup', flex: 3),
                         AppTableColumn('Keterangan', flex: 5),
-                        AppTableColumn('Jumlah Akun', flex: 2, align: TextAlign.right),
-                        AppTableColumn('Aksi', width: 132, align: TextAlign.center),
+                        AppTableColumn('Jumlah Akun',
+                            flex: 2, align: TextAlign.right),
+                        AppTableColumn('Aksi',
+                            width: 64, align: TextAlign.center),
                       ],
                       rows: _grupAkun
                           .map((g) => AppTableRowData(cells: [
-                                AppTableCell.text('${g['nama'] ?? ''}', flex: 3),
-                                AppTableCell.text('${g['keterangan'] ?? ''}', flex: 5),
+                                AppTableCell.text('${g['nama'] ?? ''}',
+                                    flex: 3),
+                                AppTableCell.text('${g['keterangan'] ?? ''}',
+                                    flex: 5),
                                 AppTableCell.text(
                                     '${_akun.where((a) => '${a['grupAkun'] ?? ''}' == '${g['nama'] ?? ''}').length}',
-                                    flex: 2, align: TextAlign.right),
+                                    flex: 2,
+                                    align: TextAlign.right),
                                 _aksiBaris(
                                   hak: _hakGrup,
-                                  onSalin: () => _formGrupAkun(grup: g, salin: true),
+                                  onSalin: () =>
+                                      _formGrupAkun(grup: g, salin: true),
                                   onUbah: () => _formGrupAkun(grup: g),
-                                  onHapus: () => _hapus(
-                                      'kode_akun_grup_hapus', g['id'], '${g['nama'] ?? ''}',
+                                  onHapus: () => _hapus('kode_akun_grup_hapus',
+                                      g['id'], '${g['nama'] ?? ''}',
                                       kunci: 'kode_akun_grup:${g['id']}',
                                       cacheKey: _cache('grup')),
                                 ),

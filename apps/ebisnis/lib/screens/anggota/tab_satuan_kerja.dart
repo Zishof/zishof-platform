@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 /// Tab "Satuan Kerja" -- kelola satuan kerja lalu pilih member mana saja yang
 /// tergolong di dalamnya.
@@ -291,33 +292,25 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
                     ),
                   ),
                   AppTableCell(
-                    width: Sesi.instance.bolehKelola ? 150 : 96,
-                    align: TextAlign.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          tooltip: 'Atur member',
-                          icon: const Icon(Icons.group_outlined, size: 18),
-                          onPressed: () => _aturMember(sk),
-                        ),
-                        if (Sesi.instance.bolehKelola) ...[
-                          IconButton(
-                            tooltip: 'Ubah',
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            onPressed: () => _bukaForm(satuanKerja: sk),
-                          ),
-                          if (aktif)
-                            IconButton(
-                              tooltip: 'Nonaktifkan',
-                              icon: const Icon(Icons.block, size: 18),
-                              color: AppColors.danger,
-                              onPressed: () => _nonaktifkan(sk),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
+                      width: 64,
+                      child: AksiBarisMenu(aksi: [
+                        AksiBaris(
+                            ikon: Icons.group_outlined,
+                            label: 'Atur member',
+                            onTap: () => _aturMember(sk)),
+                        AksiBaris(
+                            ikon: Icons.edit_outlined,
+                            label: 'Ubah',
+                            onTap: Sesi.instance.bolehKelola
+                                ? () => _bukaForm(satuanKerja: sk)
+                                : null),
+                        AksiBaris(
+                            ikon: Icons.block,
+                            label: 'Nonaktifkan',
+                            onTap: (Sesi.instance.bolehKelola) && (aktif)
+                                ? () => _nonaktifkan(sk)
+                                : null)
+                      ])),
                 ],
               );
             }).toList(),
