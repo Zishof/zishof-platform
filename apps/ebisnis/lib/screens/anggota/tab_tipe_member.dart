@@ -11,6 +11,7 @@ import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _formatRpTipeMember =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -28,7 +29,8 @@ class AnggotaTabTipeMember extends StatefulWidget {
   State<AnggotaTabTipeMember> createState() => _AnggotaTabTipeMemberState();
 }
 
-class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> with JejakGalat {
+class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
+    with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
@@ -57,11 +59,14 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> with JejakG
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('tipe_anggota_list_admin', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:tipe_anggota', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'tipe_anggota_list_admin',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:tipe_anggota', onData: (hasil) {
         if (!mounted) return;
         final data =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -75,11 +80,9 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> with JejakG
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -228,9 +231,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> with JejakG
               const AppTableColumn('Kontak Wajib',
                   flex: 2, align: TextAlign.center),
               const AppTableColumn('Status', flex: 1, align: TextAlign.center),
-              AppTableColumn('Aksi',
-                  width: Sesi.instance.bolehKelola ? 124 : 92,
-                  align: TextAlign.center),
+              AppTableColumn('Aksi', width: 64, align: TextAlign.center),
             ],
             rows: _daftar.map((t) {
               final aktif = t['aktif'] == true;
@@ -296,37 +297,34 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember> with JejakG
                     ),
                   ),
                   AppTableCell(
-                    width: Sesi.instance.bolehKelola ? 124 : 92,
+                    width: 64,
                     align: TextAlign.center,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (t['id'] != null)
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Riwayat data ini (AuditTrails)',
-                            icon: const Icon(Icons.history, size: 18),
-                            onPressed: () => tampilkanRiwayatData(context,
+                    child: AksiBarisMenu(aksi: [
+                      AksiBaris(
+                        ikon: Icons.history,
+                        label: 'Riwayat data ini',
+                        onTap: t['id'] == null
+                            ? null
+                            : () => tampilkanRiwayatData(context,
                                 entitas: 'tipe_anggota',
                                 id: t['id'],
                                 judul: '${t['nama'] ?? ''}'),
-                          ),
-                        if (Sesi.instance.bolehKelola) ...[
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            onPressed: () => _bukaForm(tipe: t),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: AppColors.danger),
-                            onPressed: () => _hapus(t),
-                          ),
-                        ] else
-                          const Icon(Icons.visibility_outlined, size: 18),
-                      ],
-                    ),
+                      ),
+                      AksiBaris(
+                        ikon: Icons.edit_outlined,
+                        label: 'Ubah',
+                        onTap: Sesi.instance.bolehKelola
+                            ? () => _bukaForm(tipe: t)
+                            : null,
+                      ),
+                      AksiBaris(
+                        ikon: Icons.delete_outline,
+                        label: 'Hapus',
+                        merusak: true,
+                        onTap:
+                            Sesi.instance.bolehKelola ? () => _hapus(t) : null,
+                      ),
+                    ]),
                   ),
                 ],
               );

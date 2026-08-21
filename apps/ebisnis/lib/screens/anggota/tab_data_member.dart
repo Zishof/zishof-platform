@@ -16,6 +16,7 @@ import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
 
@@ -35,7 +36,8 @@ class AnggotaTabDataMember extends StatefulWidget {
   State<AnggotaTabDataMember> createState() => _AnggotaTabDataMemberState();
 }
 
-class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakGalat {
+class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
+    with JejakGalat {
   bool _memuat = true;
   bool _sinkronBerjalan = false;
   bool _memulaiDataSample = false;
@@ -111,11 +113,14 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakG
       }
       // Lalu server: emisi snapshot dilewati bila cache penuh sudah tampil
       // (snapshot hanya 1 halaman dan akan menutupi tampilan penuh).
-      await MasterOffline.daftarCacheDulu('anggota_list', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': _halaman,
-        'page_size': _pageSize
-      }, 'master:anggota', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'anggota_list',
+          {
+            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
+            'page': _halaman,
+            'page_size': _pageSize
+          },
+          'master:anggota', onData: (hasil) {
         if (!mounted) return;
         final dariServer = hasil['dariServer'] == true;
         if (!dariServer && pakaiCachePenuh) return;
@@ -135,11 +140,9 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakG
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -445,9 +448,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakG
         const AppTableColumn('Jenis / Tipe', flex: 2),
         const AppTableColumn('Kontak', flex: 3),
         const AppTableColumn('Status', flex: 2, align: TextAlign.center),
-        AppTableColumn('Aksi',
-            width: Sesi.instance.bolehKelola ? 132 : 92,
-            align: TextAlign.center),
+        AppTableColumn('Aksi', width: 64, align: TextAlign.center),
       ],
       rows: _daftar.map((a) {
         final kontak = [
@@ -541,41 +542,30 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember> with JejakG
               ),
             ),
             AppTableCell(
-              width: Sesi.instance.bolehKelola ? 132 : 92,
+              width: 64,
               align: TextAlign.center,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Riwayat data ini (AuditTrails)',
-                    icon: const Icon(Icons.history, size: 18),
-                    onPressed: () => tampilkanRiwayatData(context,
-                        entitas: 'anggota', id: a.id, judul: a.nama),
-                  ),
-                  if (Sesi.instance.bolehKelola) ...[
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Ubah member',
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      onPressed: () => _bukaFormAnggota(anggota: a),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Hapus member',
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: AppColors.danger),
-                      onPressed: () => _hapusAnggota(a),
-                    ),
-                  ] else
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Detail member',
-                      icon: const Icon(Icons.visibility_outlined, size: 18),
-                      onPressed: null,
-                    ),
-                ],
-              ),
+              child: AksiBarisMenu(aksi: [
+                AksiBaris(
+                  ikon: Icons.history,
+                  label: 'Riwayat data ini',
+                  onTap: () => tampilkanRiwayatData(context,
+                      entitas: 'anggota', id: a.id, judul: a.nama),
+                ),
+                AksiBaris(
+                  ikon: Icons.edit_outlined,
+                  label: 'Ubah member',
+                  onTap: Sesi.instance.bolehKelola
+                      ? () => _bukaFormAnggota(anggota: a)
+                      : null,
+                ),
+                AksiBaris(
+                  ikon: Icons.delete_outline,
+                  label: 'Hapus member',
+                  merusak: true,
+                  onTap:
+                      Sesi.instance.bolehKelola ? () => _hapusAnggota(a) : null,
+                ),
+              ]),
             ),
           ],
         );
@@ -932,10 +922,10 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
                     label: 'Email${_wajibEmailTipe ? ' *' : ''}',
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => _wajibEmailTipe &&
-                            (v == null || v.trim().isEmpty)
-                        ? 'Email wajib diisi untuk tipe member ini'
-                        : null,
+                    validator: (v) =>
+                        _wajibEmailTipe && (v == null || v.trim().isEmpty)
+                            ? 'Email wajib diisi untuk tipe member ini'
+                            : null,
                   ),
                   AppFormTextField(
                     label: 'Keterangan',
