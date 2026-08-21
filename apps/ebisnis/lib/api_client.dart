@@ -45,6 +45,13 @@ class ApiClient {
 
   bool get sudahLogin => _token != null;
 
+  /// Token sesi untuk permintaan yang TIDAK lewat [aksi] -- khususnya unggahan
+  /// multipart ke servlet `DoUpload`, yang menerima token sebagai FIELD form
+  /// (bukan header `Authorization`). Lihat `unggah_lampiran_sop.dart`.
+  ///
+  /// Sengaja hanya-baca: tidak ada jalan menulis token dari luar kelas ini.
+  String? get token => _token;
+
   /// Memanggil satu aksi Api_eBisnis. [body] digabung dengan {action: aksi}.
   /// Melempar [ApiException] bila status bukan "success" ATAU permintaan HTTP gagal.
   /// Aksi yang ikut disaring oleh combo filter toko di bilah atas.

@@ -13,6 +13,7 @@ import 'app_components.dart';
 import 'app_version_label.dart';
 import '../screens/akun_saya_screen.dart';
 import '../screens/bantuan_screen.dart';
+import '../screens/pengajuan_anda_screen.dart';
 import '../screens/tanya_jawab_screen.dart';
 import '../screens/kasir_screen.dart';
 import '../screens/ringkasan_screen.dart';
@@ -1411,6 +1412,16 @@ class _AppShellState extends State<AppShell> {
               foregroundColor: Colors.white,
               actions: [
                 ...aksiMobile,
+                // Padanan Android untuk tombol "Pengajuan Anda" di bilah atas
+                // Desktop -- gerbang hak aksesnya sama (Tbmrole.workflow).
+                if (Sesi.instance.bolehMenu('pengajuan_anda'))
+                  IconButton(
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const PengajuanAndaScreen())),
+                    icon: const Icon(Icons.fact_check_outlined),
+                    tooltip: 'Pengajuan Anda',
+                  ),
                 if (Sesi.instance.multiToko)
                   IconButton(
                     onPressed: () async {
@@ -2074,6 +2085,26 @@ class _AppTopbarState extends State<_AppTopbar> {
               warna: kasTerbuka
                   ? AppColors.success
                   : AppColors.textSecondaryOf(context),
+            ),
+            const SizedBox(width: 10),
+          ],
+          // Tombol "Pengajuan Anda" (Workflow / Proses SOP) -- padanan tombol
+          // bernama sama di bilah menu versi ZKoss (MainAction2.eWorkflowButton).
+          // Muncul hanya bila server memberi hak aksesnya lewat Tbmrole.workflow;
+          // gerbang sebenarnya tetap ditegakkan server di setiap aksi sop_*.
+          if (Sesi.instance.bolehMenu('pengajuan_anda')) ...[
+            Tooltip(
+              message: 'Pengajuan, persetujuan, dan alur kerja Anda',
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const PengajuanAndaScreen())),
+                borderRadius: BorderRadius.circular(20),
+                child: _chipStatus(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Pengajuan Anda',
+                  warna: AppColors.primary,
+                ),
+              ),
             ),
             const SizedBox(width: 10),
           ],

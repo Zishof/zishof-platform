@@ -87,6 +87,20 @@ Future<void> cetakDokumenPengadaan(
   }
 }
 
+/// Menampilkan pratinjau PDF pada jendela yang SAMA dengan cetak Pengadaan.
+///
+/// Dipakai juga oleh modul "Pengajuan Anda" (Workflow / Proses SOP), yang aksi
+/// cetaknya (`sop_cetak`) hanya mengembalikan URL sehingga isinya diunduh dulu.
+/// Dijadikan satu di sini supaya seluruh modul memakai pratinjau yang sama --
+/// bukan dua jendela cetak yang berbeda rasa.
+Future<void> tampilkanPratinjauPdf(BuildContext context,
+    {required String judul, required Uint8List isi}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _PratinjauCetakDialog(judul: judul, isi: isi),
+  );
+}
+
 /// Jendela pratinjau dokumen. Tombol cetak ada DI DALAM pratinjau, jadi dialog
 /// printer sistem baru muncul setelah pengguna benar-benar menekannya.
 class _PratinjauCetakDialog extends StatelessWidget {
