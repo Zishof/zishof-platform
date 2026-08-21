@@ -652,6 +652,11 @@ class _BarisBayar {
   final double sisa;
   final TextEditingController dibayar;
   bool pilih;
+
+  /// Transfer (langsung ke rekening penyedia) atau Transitori (ditampung dulu
+  /// pada akun transitori, direalisasikan menyusul). Pilihan ini menentukan akun
+  /// kredit jurnalnya di server, bukan sekadar penanda di layar.
+  bool transitori;
   _BarisBayar({
     required this.poId,
     required this.poKode,
@@ -663,6 +668,7 @@ class _BarisBayar {
     required this.sisa,
     required String dibayarAwal,
     this.pilih = false,
+    this.transitori = false,
   }) : dibayar = TextEditingController(text: dibayarAwal);
   void dispose() => dibayar.dispose();
 }
@@ -737,6 +743,7 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
         sisa: (m['sisa'] as num?)?.toDouble() ?? (nilai - lain),
         dibayarAwal: '${(m['dibayar'] as num?)?.toDouble() ?? 0}',
         pilih: true,
+        transitori: m['transitori'] == true,
       ));
     }
     for (final t in widget.tagihan) {
@@ -854,6 +861,7 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
                 'po_id': b.poId,
                 'termin_key': b.terminKey,
                 'dibayar': _angka(b.dibayar.text),
+                'transitori': b.transitori,
               })
           .toList(),
     });
@@ -1062,6 +1070,33 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                     labelText: 'Dibayar', isDense: true))),
+        const SizedBox(width: 8),
+        /* Pilihan per baris, bukan per dokumen: satu pembayaran boleh memuat
+         * sebagian tagihan yang ditransfer langsung dan sebagian lagi yang
+         * ditampung dulu sebagai transitori. Begitu pula di versi ZKoss. */
+        SizedBox(
+          width: 168,
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                  value: false,
+                  label: Text('Transfer', style: TextStyle(fontSize: 11)),
+                  icon: Icon(Icons.north_east, size: 14)),
+              ButtonSegment(
+                  value: true,
+                  label: Text('Transitori', style: TextStyle(fontSize: 11)),
+                  icon: Icon(Icons.pause_circle_outline, size: 14)),
+            ],
+            selected: {b.transitori},
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            onSelectionChanged: (_terkunci || !b.pilih)
+                ? null
+                : (v) => setState(() => b.transitori = v.first),
+          ),
+        ),
       ]),
     );
   }
