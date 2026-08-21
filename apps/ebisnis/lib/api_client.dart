@@ -55,21 +55,90 @@ class ApiClient {
   static bool _ikutFilterToko(String namaAksi) =>
       namaAksi.startsWith('dashboard_') || namaAksi.startsWith('laporan_');
 
-  Future<Map<String, dynamic>> aksi(String namaAksi,
-      [Map<String, dynamic>? body]) async {
+  /// Aksi yang menentukan tokonya lewat `toko_id` DI PAYLOAD.
+  ///
+  /// Di server, aksi-aksi ini mengambil toko dari `Tbmuser.pedagang`; kalau akun
+  /// tidak punya Pedagang -- persis kasus akun admin -- toko hanya bisa datang
+  /// dari payload. Selama ini tidak ada yang mengirimnya, sehingga layar-layar
+  /// ini menolak dengan "Toko tidak diketahui." untuk admin, betapapun jelas
+  /// satu toko terpilih di kotak toko kiri atas.
+  ///
+  /// Disisipkan di SINI, bukan di tiap layar. Daftar ini disusun dari penelusuran
+  /// handler server satu per satu, dan menambah layar baru berarti menambah satu
+  /// baris di sini -- jauh lebih sulit terlewat daripada mengingat memasang
+  /// `toko_id` di setiap pemanggilan baru.
+  ///
+  /// Untuk akun yang PUNYA Pedagang, server tetap memakai toko milik Pedagang
+  /// dan mengabaikan nilai ini, jadi penyisipan ini tidak mengubah apa pun bagi
+  /// kasir biasa.
+  ///
+  /// Sengaja TIDAK memuat `sesi_kas_*` dan `pilih_toko_aktif`: itu mengurus toko
+  /// AKTIF (tempat transaksi dicatat), bukan toko yang sedang dilihat. Menyuntik
+  /// pilihan filter ke sana berarti membuka sesi kas di toko yang salah.
+  static const _aksiBerTokoId = <String>{
+    'toko_profil_ambil',
+    'toko_profil_simpan',
+    'pedagang_list',
+    'akun_tambah',
+    'produk_simpan',
+    'produk_ekspor_excel',
+    'produk_impor_excel',
+    'produk_impor_excel_preview',
+    'produk_rekonsiliasi_ledger',
+    'so_simpan',
+    'so_ekspor_excel',
+    'so_impor_excel',
+    'kulakan_faktur_simpan',
+    'peringkat_mitra',
+    'diskon_simpan',
+    'pencairan_diskon_list',
+    'pencairan_diskon_simpan',
+    'mutasi_stok_list',
+    'mutasi_stok_produk_list',
+    'otomatis_layani_jalankan',
+  };
+
+  /// Menyusun payload akhir sebuah aksi, termasuk penyisipan toko.
+  ///
+  /// Dipisah dari [aksi] supaya aturan tokonya bisa dikunci uji tanpa jaringan --
+  /// aturan ini yang menentukan ke toko MANA sebuah simpanan mendarat, dan salah
+  /// di sini tidak memunculkan galat apa pun, hanya data di tempat yang keliru.
+  static Map<String, dynamic> susunPayload(
+      String namaAksi, Map<String, dynamic>? body) {
     final payload = <String, dynamic>{'action': namaAksi, ...?body};
+    final sudahAdaToko = payload.containsKey('tokoId') ||
+        payload.containsKey('id_toko') ||
+        payload.containsKey('idToko') ||
+        payload.containsKey('toko_id');
     // Peran berizin lintas toko: pilihan combo disisipkan di satu tempat
     // supaya tiap layar tidak perlu mengingatnya sendiri. Toko yang sudah
     // ditentukan pemanggil TIDAK ditimpa.
     if (Sesi.instance.bolehSemuaToko &&
         Sesi.instance.tokoFilter != null &&
         _ikutFilterToko(namaAksi) &&
-        !payload.containsKey('tokoId') &&
-        !payload.containsKey('id_toko') &&
-        !payload.containsKey('idToko') &&
-        !payload.containsKey('toko_id')) {
+        !sudahAdaToko) {
       payload['tokoId'] = Sesi.instance.tokoFilter;
     }
+    // Kunci `toko_id` (garis bawah) -- kontrak yang berbeda dari `tokoId` di
+    // atas, dan memang beda aksi. Nilainya toko yang TERTULIS di kotak toko,
+    // supaya yang tersimpan tidak pernah berbeda dari yang dibaca pengguna.
+    // Kalau belum ada toko terpilih, kunci ini tidak dikirim dan server tetap
+    // menolak dengan pesannya sendiri -- lebih baik ditolak daripada menebak
+    // toko lalu menulis ke tempat yang salah.
+    if (_aksiBerTokoId.contains(namaAksi) && !sudahAdaToko) {
+      final idToko = Sesi.instance.idTokoTerpilih;
+      if (idToko != null) payload['toko_id'] = idToko;
+    }
+    return payload;
+  }
+
+  /// Apakah [namaAksi] menerima `toko_id` dari sesi (lihat [_aksiBerTokoId]).
+  static bool aksiMemakaiTokoId(String namaAksi) =>
+      _aksiBerTokoId.contains(namaAksi);
+
+  Future<Map<String, dynamic>> aksi(String namaAksi,
+      [Map<String, dynamic>? body]) async {
+    final payload = susunPayload(namaAksi, body);
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
 
