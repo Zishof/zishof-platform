@@ -14,6 +14,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 import 'pengadaan_bulk_entry_screen.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Pemesanan Pembelian (PO)" -- tahap 2 modul Pengadaan POS.
 ///
@@ -447,7 +448,7 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Sisa', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 240),
+        AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_barisPo).toList(),
       pagination: _total > _pageSize
@@ -517,55 +518,65 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
                   color: _warnaStatus(st))),
         ),
       ),
-      AppTableCell(width: 200, child: _aksiPo(po, st)),
+      AppTableCell(width: 64, child: _aksiPo(po, st)),
     ]);
   }
 
+  /// Aksi baris diringkas menjadi satu tombol "...". Deretan ikon sebelumnya
+  /// memakan 240px lebar tabel, dan artinya hanya dapat ditebak karena tooltip
+  /// tidak muncul di layar sentuh. Menu ini menampilkan ikon DAN label, serta
+  /// memisahkan Hapus supaya tidak tertekan karena refleks.
   Widget _aksiPo(Map<String, dynamic> po, String st) {
     final adaBayar = ((po['dibayar'] as num?)?.toDouble() ?? 0) > 0;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
+    return AksiBarisMenu(aksi: [
       // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
       // dengan versi ZKoss sehingga hasil cetaknya identik.
-      IconButton(
-          tooltip: 'Cetak / pratinjau',
-          icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: () => cetakDokumenPengadaan(context,
-              tahap: 'po',
-              id: (po['id'] as num).toInt(),
-              kode: '${po['kode'] ?? ''}')),
-      IconButton(
-          tooltip: 'Lihat / ubah',
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          onPressed: () => _form(awal: po)),
-      if (st == 'DRAFT')
-        IconButton(
-            tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline,
-                size: 18, color: Color(0xFF2E7D32)),
-            onPressed: () => _putusan(po, 'SETUJUI')),
-      if (st == 'DRAFT')
-        IconButton(
-            tooltip: 'Tolak',
-            icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
-            onPressed: () => _putusan(po, 'TOLAK')),
-      if ((st == 'DISETUJUI' || st == 'DITOLAK') && !adaBayar)
-        IconButton(
-            tooltip: 'Batalkan keputusan',
-            icon: const Icon(Icons.undo, size: 18),
-            onPressed: () => _putusan(po, 'BATAL')),
-      if (po['id'] != null)
-        IconButton(
-            tooltip: 'Riwayat data (AuditTrails)',
-            icon: const Icon(Icons.history, size: 18),
-            onPressed: () => tampilkanRiwayatData(context,
+      AksiBaris(
+        ikon: Icons.print_outlined,
+        label: 'Cetak / pratinjau',
+        onTap: () => cetakDokumenPengadaan(context,
+            tahap: 'po',
+            id: (po['id'] as num).toInt(),
+            kode: '${po['kode'] ?? ''}'),
+      ),
+      AksiBaris(
+        ikon: Icons.edit_outlined,
+        label: 'Lihat / ubah',
+        onTap: () => _form(awal: po),
+      ),
+      AksiBaris(
+        ikon: Icons.check_circle_outline,
+        label: 'Setujui',
+        onTap: st == 'DRAFT' ? () => _putusan(po, 'SETUJUI') : null,
+      ),
+      AksiBaris(
+        ikon: Icons.cancel_outlined,
+        label: 'Tolak',
+        onTap: st == 'DRAFT' ? () => _putusan(po, 'TOLAK') : null,
+      ),
+      AksiBaris(
+        ikon: Icons.undo,
+        label: 'Batalkan keputusan',
+        onTap: (st == 'DISETUJUI' || st == 'DITOLAK') && !adaBayar
+            ? () => _putusan(po, 'BATAL')
+            : null,
+      ),
+      AksiBaris(
+        ikon: Icons.history,
+        label: 'Riwayat data',
+        onTap: po['id'] == null
+            ? null
+            : () => tampilkanRiwayatData(context,
                 entitas: 'pengadaan_po',
                 id: po['id'],
-                judul: '${po['kode'] ?? ''}')),
-      if (st == 'DRAFT' && !adaBayar)
-        IconButton(
-            tooltip: 'Hapus',
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: () => _hapus(po)),
+                judul: '${po['kode'] ?? ''}'),
+      ),
+      AksiBaris(
+        ikon: Icons.delete_outline,
+        label: 'Hapus',
+        merusak: true,
+        onTap: st == 'DRAFT' && !adaBayar ? () => _hapus(po) : null,
+      ),
     ]);
   }
 }
