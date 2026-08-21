@@ -270,6 +270,7 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
         AppTableColumn('Terposting', width: 110, align: TextAlign.right),
         AppTableColumn('Closing', width: 90, align: TextAlign.right),
         AppTableColumn('Uraian'),
+        AppTableColumn('Aksi', width: 80, align: TextAlign.center),
       ],
       rows: _baris
           .map((b) => AppTableRowData(cells: [
@@ -284,6 +285,7 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
                         style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondaryOf(context)))),
+                AppTableCell(child: _aksiBaris(b)),
               ]))
           .toList(),
     );
@@ -291,6 +293,84 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
 
   /// Angka yang bernilai > 0 dapat diketuk untuk membuka daftar dokumen di baliknya.
   /// Angka nol sengaja tidak dibuat seperti tautan supaya tidak ada janji kosong.
+  /// Tombol posting massal per modul.
+  ///
+  /// Hanya muncul bila server menyatakan modulnya memang punya mesin posting
+  /// (`bisaPosting`). Menawarkan tombol untuk modul yang ujungnya menolak sama
+  /// saja dengan menjanjikan sesuatu yang tidak ada.
+  Widget _aksiBaris(Map<String, dynamic> baris) {
+    if (baris['bisaPosting'] != true) {
+      return Tooltip(
+        message: 'Posting massal modul ini belum tersedia dari aplikasi.',
+        child: Icon(Icons.remove,
+            size: 16, color: AppColors.textSecondaryOf(context)),
+      );
+    }
+    return PopupMenuButton<String>(
+      tooltip: 'Posting / batalkan posting',
+      icon: const Icon(Icons.more_vert, size: 18),
+      onSelected: (pilihan) => _jalankanPosting(baris, pilihan == 'posting'),
+      itemBuilder: (context) => const [
+        PopupMenuItem<String>(
+          value: 'posting',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.playlist_add_check),
+            title: Text('Posting semua draft'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'batal',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.undo),
+            title: Text('Batalkan posting'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _jalankanPosting(Map<String, dynamic> baris, bool posting) async {
+    final nama = '${baris['nama'] ?? ''}';
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(posting ? 'Konfirmasi Posting' : 'Konfirmasi Batalkan Posting'),
+        content: Text(posting
+            ? 'Posting SEMUA draft jurnal "$nama" pada periode terpilih?'
+            : 'Batalkan posting jurnal "$nama"? Jurnal yang SUDAH closing tidak akan dibatalkan.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(posting ? 'Posting' : 'Batalkan')),
+        ],
+      ),
+    );
+    if (setuju != true) return;
+
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        posting ? 'draft_jurnal_posting' : 'draft_jurnal_batal_posting',
+        {
+          'nama': nama,
+          'mulai': _tanggalIso.format(_mulai),
+          'sampai': _tanggalIso.format(_sampai),
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${hasil['description'] ?? 'Selesai.'}')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) snackbarGalat(context, e, aktivitas: 'posting jurnal');
+    }
+  }
+
   Widget _angkaSel(Map<String, dynamic> baris, String status, Color warna) {
     final n = (baris[status] as num?)?.toInt() ?? 0;
     final teks = Text(

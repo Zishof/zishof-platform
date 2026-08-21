@@ -52,6 +52,24 @@ void main() {
     }
   });
 
+  test('posting massal memakai aksi kontrak dan hanya tampil bila ada mesinnya',
+      () {
+    final source =
+        File('lib/screens/draft_jurnal_screen.dart').readAsStringSync();
+
+    expect(source, contains("'draft_jurnal_posting'"));
+    expect(source, contains("'draft_jurnal_batal_posting'"));
+
+    // Tombol hanya ditawarkan bila server menyatakan modulnya punya mesin posting;
+    // tombol yang ujungnya menolak sama saja dgn janji kosong.
+    expect(source, contains("baris['bisaPosting'] != true"));
+
+    // Dua aksi ini menulis (dan menghapus) jurnal: konfirmasi wajib ada.
+    expect(source, contains('Konfirmasi Posting'));
+    expect(source, contains('Konfirmasi Batalkan Posting'));
+    expect(source, contains('SUDAH closing tidak akan dibatalkan'));
+  });
+
   test('menu Draft Jurnal terdaftar di kedua platform', () {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();
