@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -60,7 +62,12 @@ Future<void> cetakDokumenPengadaan(
   final nama = '${hasil['kode'] ?? kode ?? 'dokumen'}';
   if (b64.isNotEmpty) {
     final bytes = base64Decode(b64);
-    await Printing.layoutPdf(onLayout: (_) async => bytes, name: nama);
+    // Printing.layoutPdf() LANGSUNG membuka dialog printer sistem -- pengguna
+    // tidak sempat melihat dokumennya. Tampilkan pratinjau dulu; tombol cetak
+    // ada di dalam pratinjau, jadi mencetak tetap satu klik dari sini.
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => _PratinjauDokumen(bytes: bytes, nama: nama),
+    ));
     return;
   }
 
@@ -76,5 +83,36 @@ Future<void> cetakDokumenPengadaan(
   final terbuka = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!terbuka && context.mounted) {
     pesan.showSnackBar(SnackBar(content: Text('Tidak bisa membuka $uri')));
+  }
+}
+
+/// Halaman pratinjau dokumen Pengadaan.
+///
+/// Memakai [PdfPreview] bawaan paket `printing`: dokumen dirender di layar
+/// lebih dulu, dan tombol cetak/bagikan tersedia di bilah atasnya. Pemilihan
+/// ukuran kertas & orientasi DIMATIKAN karena templat JasperReports di server
+/// sudah menentukannya -- mengubahnya di sini hanya akan membuat hasil cetak
+/// berbeda dengan versi ZKoss.
+class _PratinjauDokumen extends StatelessWidget {
+  final Uint8List bytes;
+  final String nama;
+
+  const _PratinjauDokumen({required this.bytes, required this.nama});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Pratinjau $nama')),
+      body: PdfPreview(
+        build: (_) async => bytes,
+        pdfFileName: '$nama.pdf',
+        allowPrinting: true,
+        allowSharing: true,
+        canChangePageFormat: false,
+        canChangeOrientation: false,
+        canDebug: false,
+        initialPageFormat: PdfPageFormat.a4,
+      ),
+    );
   }
 }
