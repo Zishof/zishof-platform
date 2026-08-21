@@ -1,0 +1,4 @@
+# Hasil build dan unduhan runtime tidak masuk repositori: ukurannya ratusan MB
+# dan dapat dibuat ulang. Berkas binernya dilampirkan ke rilis GitHub.
+build/
+unduhan/

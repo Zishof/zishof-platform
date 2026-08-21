@@ -1,0 +1,4 @@
+# Skrip ini dijalankan di Linux. Tanpa penguncian ini, core.autocrlf pada mesin
+# Windows akan menuliskannya kembali dengan CRLF saat checkout, dan Linux
+# menolaknya dengan "bad interpreter: /usr/bin/env bash^M".
+*.sh text eol=lf
