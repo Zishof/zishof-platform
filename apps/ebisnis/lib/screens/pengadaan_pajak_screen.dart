@@ -9,6 +9,7 @@ import 'pengadaan_dasbor_tab.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Bayar Pajak" -- tahap penutup rantai Pengadaan POS.
 ///
@@ -37,6 +38,7 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
   String? _galat;
   List<Map<String, dynamic>> _terutang = [];
   List<Map<String, dynamic>> _setoran = [];
+
   /// Kunci gabungan sumber+id, mis. "BAST|12" atau "PEMBAYARAN|7". Pajak kini
   /// datang dari dua sumber sehingga id saja tidak lagi unik.
   final Set<String> _dipilih = {};
@@ -136,7 +138,8 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
     }
     final nilai = _totalDipilih(jenis == 'PPH' ? 'pph' : 'ppn');
     if (nilai <= 0) {
-      _pesan('Baris terpilih tidak memiliki $jenis untuk disetor.', sukses: false);
+      _pesan('Baris terpilih tidak memiliki $jenis untuk disetor.',
+          sukses: false);
       return;
     }
     final ntpn = TextEditingController();
@@ -156,8 +159,7 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
             lastDate: DateTime(2100),
           );
           if (pilih == null) return;
-          setLocal(() =>
-              tanggal.text = DateFormat('dd-MM-yyyy').format(pilih));
+          setLocal(() => tanggal.text = DateFormat('dd-MM-yyyy').format(pilih));
         }
 
         return AlertDialog(
@@ -197,7 +199,8 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
                 const SizedBox(height: 10),
                 TextField(
                   controller: namaWp,
-                  decoration: const InputDecoration(labelText: 'Nama wajib pajak'),
+                  decoration:
+                      const InputDecoration(labelText: 'Nama wajib pajak'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -243,17 +246,17 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
         cacheKey: 'master:pengadaan_pajak_terutang',
         kunci: 'pengadaan_pajak_setor:${isi['ntpn'] ?? ''}',
         body: {
-        'jenis': jenis,
-        ...isi,
-        // Baris BAST dan baris pembayaran dikirim dengan nama parameter berbeda;
-        // server membedakannya dari situ.
-        'detail': _dipilih.map((k) {
-          final bagian = k.split('|');
-          final id = int.tryParse(bagian.length > 1 ? bagian[1] : '') ?? 0;
-          return bagian.first == 'BAST'
-              ? {'bast_detail_id': id}
-              : {'detail_id': id};
-        }).toList(),
+          'jenis': jenis,
+          ...isi,
+          // Baris BAST dan baris pembayaran dikirim dengan nama parameter berbeda;
+          // server membedakannya dari situ.
+          'detail': _dipilih.map((k) {
+            final bagian = k.split('|');
+            final id = int.tryParse(bagian.length > 1 ? bagian[1] : '') ?? 0;
+            return bagian.first == 'BAST'
+                ? {'bast_detail_id': id}
+                : {'detail_id': id};
+          }).toList(),
         },
       );
       if (!mounted) return;
@@ -316,7 +319,6 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
       ]),
     );
   }
-
 
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Pajak" (daftar + CRUD). Susunannya sengaja disamakan di keenam
@@ -507,7 +509,7 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('NTPN', flex: 3),
         AppTableColumn('Tanggal setor', flex: 2),
-        AppTableColumn('Aksi', width: 130),
+        AppTableColumn('Aksi', width: 110),
       ],
       rows: _setoran.map(_barisSetoran).toList(),
     );
@@ -528,28 +530,30 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
       AppTableCell.text('${r['ntpn'] ?? '-'}', flex: 3),
       AppTableCell.text('${r['tanggalSetor'] ?? '-'}', flex: 2),
       AppTableCell(
-        width: 130,
+        width: 110,
+        /* Kolomnya tidak seramping layar lain karena penanda "dibatalkan" IKUT
+         * tinggal di sini. Tabel setoran pajak tidak punya kolom Status, jadi
+         * teks itulah satu-satunya tempat pembatalan terlihat -- meleburnya ke
+         * dalam menu akan menghilangkan keterangan itu dari layar. */
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          // Bukti setor pajak. Templatnya BARU -- versi ZKoss tidak punya dokumen
-          // per baris untuk pajak, hanya ekspor daftar.
-          IconButton(
-              tooltip: 'Cetak bukti setor',
-              icon: const Icon(Icons.print_outlined, size: 18),
-              onPressed: () => cetakDokumenPengadaan(context,
-                  tahap: 'pajak',
-                  id: (r['id'] as num).toInt(),
-                  kode: '${r['kode'] ?? ''}')),
-          if (aktif)
-            IconButton(
-                tooltip: 'Batalkan setoran',
-                icon: const Icon(Icons.undo, size: 18),
-                onPressed: () => _batal(r))
-          else
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text('dibatalkan',
-                  style: TextStyle(fontSize: 10, color: Colors.grey)),
-            ),
+          AksiBarisMenu(aksi: [
+            // Bukti setor pajak. Templatnya BARU -- versi ZKoss tidak punya dokumen
+            // per baris untuk pajak, hanya ekspor daftar.
+            AksiBaris(
+                ikon: Icons.print_outlined,
+                label: 'Cetak bukti setor',
+                onTap: () => cetakDokumenPengadaan(context,
+                    tahap: 'pajak',
+                    id: (r['id'] as num).toInt(),
+                    kode: '${r['kode'] ?? ''}')),
+            AksiBaris(
+                ikon: Icons.undo,
+                label: 'Batalkan setoran',
+                onTap: aktif ? () => _batal(r) : null),
+          ]),
+          if (!aktif)
+            const Text('dibatalkan',
+                style: TextStyle(fontSize: 10, color: Colors.grey)),
         ]),
       ),
     ]);

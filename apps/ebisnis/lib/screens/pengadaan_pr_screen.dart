@@ -14,6 +14,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 import 'pengadaan_bulk_entry_screen.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Permintaan Pembelian (PR)" -- tahap 1 modul Pengadaan POS.
 ///
@@ -30,7 +31,8 @@ class PengadaanPrScreen extends StatefulWidget {
   State<PengadaanPrScreen> createState() => _PengadaanPrScreenState();
 }
 
-class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTickerProviderStateMixin {
+class _PengadaanPrScreenState extends State<PengadaanPrScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -82,7 +84,8 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat Permintaan Pembelian.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat Permintaan Pembelian.'}';
               _memuat = false;
             });
             return;
@@ -104,7 +107,9 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
                 : {};
             _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
             if (dariServer &&
-                (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)) {
+                (_idBaru.isNotEmpty ||
+                    _idBerubah.isNotEmpty ||
+                    _jumlahHapus > 0)) {
               _versiPerubahan++;
             }
             _memuat = false;
@@ -267,18 +272,16 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
     }
   }
 
-
   /// Bulk entry mengikuti skema Kulakan: header, tempel/Excel, tabel item, review.
   Future<void> _bulkEntry() async {
     final hasil = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-          builder: (_) => const PengadaanBulkEntryScreen(
-              jenis: JenisPengadaanBulk.pr)),
+          builder: (_) =>
+              const PengadaanBulkEntryScreen(jenis: JenisPengadaanBulk.pr)),
     );
     if (hasil == true && mounted) await _muat();
   }
-
 
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Permintaan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
@@ -289,7 +292,9 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
         controller: _tabUtama,
         tabs: const [
           Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Permintaan'),
+          Tab(
+              icon: Icon(Icons.list_alt_outlined, size: 18),
+              text: 'Permintaan'),
         ],
       ),
       Expanded(
@@ -354,11 +359,13 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
               child: DropdownButtonFormField<String>(
                 value: _status,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Status', isDense: true),
+                decoration:
+                    const InputDecoration(labelText: 'Status', isDense: true),
                 items: const [
                   DropdownMenuItem(value: '', child: Text('Semua status')),
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(value: 'DISETUJUI', child: Text('Disetujui')),
+                  DropdownMenuItem(
+                      value: 'DISETUJUI', child: Text('Disetujui')),
                   DropdownMenuItem(value: 'DITOLAK', child: Text('Ditolak')),
                   DropdownMenuItem(value: 'TUTUP', child: Text('Tutup')),
                 ],
@@ -417,7 +424,7 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
         AppTableColumn('Keterangan', flex: 3),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 240),
+        AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_barisPr).toList(),
       pagination: _total > _pageSize
@@ -474,54 +481,56 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen> with SingleTicker
                   color: _warnaStatus(st))),
         ),
       ),
-      AppTableCell(width: 200, child: _aksiPr(pr, st)),
+      AppTableCell(width: 64, child: _aksiPr(pr, st)),
     ]);
   }
 
+  /// Aksi baris diringkas menjadi satu tombol "...". Setujui/Tolak/Batalkan
+  /// dahulu saling menggantikan mengikuti status; kini ketiganya selalu tampil
+  /// dan yang tidak berlaku hanya diredupkan, sehingga letak tiap aksi tetap.
   Widget _aksiPr(Map<String, dynamic> pr, String st) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
+    return AksiBarisMenu(aksi: [
       // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
       // dengan versi ZKoss sehingga hasil cetaknya identik.
-      IconButton(
-          tooltip: 'Cetak / pratinjau',
-          icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: () => cetakDokumenPengadaan(context,
+      AksiBaris(
+          ikon: Icons.print_outlined,
+          label: 'Cetak / pratinjau',
+          onTap: () => cetakDokumenPengadaan(context,
               tahap: 'pr',
               id: (pr['id'] as num).toInt(),
               kode: '${pr['kode'] ?? ''}')),
-      IconButton(
-          tooltip: 'Lihat / ubah',
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          onPressed: () => _form(awal: pr)),
-      if (st == 'DRAFT')
-        IconButton(
-            tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline,
-                size: 18, color: Color(0xFF2E7D32)),
-            onPressed: () => _putusan(pr, 'SETUJUI')),
-      if (st == 'DRAFT')
-        IconButton(
-            tooltip: 'Tolak',
-            icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
-            onPressed: () => _putusan(pr, 'TOLAK')),
-      if (st == 'DISETUJUI' || st == 'DITOLAK')
-        IconButton(
-            tooltip: 'Batalkan keputusan',
-            icon: const Icon(Icons.undo, size: 18),
-            onPressed: () => _putusan(pr, 'BATAL')),
-      if (pr['id'] != null)
-        IconButton(
-            tooltip: 'Riwayat data (AuditTrails)',
-            icon: const Icon(Icons.history, size: 18),
-            onPressed: () => tampilkanRiwayatData(context,
-                entitas: 'pengadaan_pr',
-                id: pr['id'],
-                judul: '${pr['kode'] ?? ''}')),
-      if (st == 'DRAFT')
-        IconButton(
-            tooltip: 'Hapus',
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: () => _hapus(pr)),
+      AksiBaris(
+          ikon: Icons.edit_outlined,
+          label: 'Lihat / ubah',
+          onTap: () => _form(awal: pr)),
+      AksiBaris(
+          ikon: Icons.check_circle_outline,
+          label: 'Setujui',
+          onTap: st == 'DRAFT' ? () => _putusan(pr, 'SETUJUI') : null),
+      AksiBaris(
+          ikon: Icons.cancel_outlined,
+          label: 'Tolak',
+          onTap: st == 'DRAFT' ? () => _putusan(pr, 'TOLAK') : null),
+      AksiBaris(
+          ikon: Icons.undo,
+          label: 'Batalkan keputusan',
+          onTap: (st == 'DISETUJUI' || st == 'DITOLAK')
+              ? () => _putusan(pr, 'BATAL')
+              : null),
+      AksiBaris(
+          ikon: Icons.history,
+          label: 'Riwayat data',
+          onTap: pr['id'] == null
+              ? null
+              : () => tampilkanRiwayatData(context,
+                  entitas: 'pengadaan_pr',
+                  id: pr['id'],
+                  judul: '${pr['kode'] ?? ''}')),
+      AksiBaris(
+          ikon: Icons.delete_outline,
+          label: 'Hapus',
+          merusak: true,
+          onTap: st == 'DRAFT' ? () => _hapus(pr) : null),
     ]);
   }
 }
@@ -611,7 +620,6 @@ class _FormPrDialogState extends State<_FormPrDialog> {
     super.dispose();
   }
 
-
   /// Pemilih Anggaran. Menampilkan pagu, realisasi, dan sisanya supaya kemampuan
   /// anggaran terlihat SEBELUM permintaan diajukan -- bukan setelah ditolak penyetuju.
   Future<void> _pilihAnggaran() async {
@@ -622,7 +630,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
     if (pilihan == null || !mounted) return;
     setState(() {
       _anggaranId = (pilihan['id'] as num?)?.toInt();
-      _anggaranNama = '${pilihan['kode'] ?? ''} ${pilihan['nama'] ?? ''}'.trim();
+      _anggaranNama =
+          '${pilihan['kode'] ?? ''} ${pilihan['nama'] ?? ''}'.trim();
     });
   }
 
@@ -640,8 +649,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
       builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
         Future<void> cari() async {
           try {
-            final r = await ApiClient.instance
-                .aksi('pengadaan_barang_cari', {'keyword': q.text.trim(), 'limit': 50});
+            final r = await ApiClient.instance.aksi('pengadaan_barang_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
             hasil = ((r['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -836,7 +845,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                             _fmtRp.format(
                                 _angka(b.jumlah.text) * _angka(b.harga.text)),
                             textAlign: TextAlign.right,
-                            style: const TextStyle(fontWeight: FontWeight.w600))),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600))),
                     if (!_terkunci)
                       IconButton(
                           onPressed: () {
@@ -862,7 +872,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                 child: Text(
                     'Nilai dihitung ulang oleh server dari baris di atas, sehingga total '
                     'dokumen selalu sama dengan rinciannya.',
-                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                    style:
+                        TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
               ),
             ],
           ),
@@ -870,7 +881,8 @@ class _FormPrDialogState extends State<_FormPrDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
         if (!_terkunci)
           FilledButton(
             onPressed: () {
@@ -889,9 +901,9 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                     .where((b) => b.barangId != null || b.masterAssetId != null)
                     .map((b) => {
                           if (b.barangId != null)
-                  'produk_id': b.barangId
-                else
-                  'master_asset_id': b.masterAssetId,
+                            'produk_id': b.barangId
+                          else
+                            'master_asset_id': b.masterAssetId,
                           'jumlah': _angka(b.jumlah.text),
                           'hargaBeli': _angka(b.harga.text),
                           'keterangan': b.keterangan.text.trim(),
@@ -969,8 +981,8 @@ class _PilihAnggaranDialogState extends State<_PilihAnggaranDialog> {
             decoration: InputDecoration(
                 labelText: 'Cari kode / nama anggaran',
                 isDense: true,
-                suffixIcon:
-                    IconButton(onPressed: _muat, icon: const Icon(Icons.search))),
+                suffixIcon: IconButton(
+                    onPressed: _muat, icon: const Icon(Icons.search))),
             onSubmitted: (_) => _muat(),
           ),
           const SizedBox(height: 8),
@@ -1004,7 +1016,8 @@ class _PilihAnggaranDialogState extends State<_PilihAnggaranDialog> {
                             trailing: Text(_fmtRp.format(sisa),
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: sisa <= 0 ? Colors.red : Colors.teal)),
+                                    color:
+                                        sisa <= 0 ? Colors.red : Colors.teal)),
                             onTap: () => Navigator.pop(context, a),
                           );
                         },
@@ -1014,7 +1027,8 @@ class _PilihAnggaranDialogState extends State<_PilihAnggaranDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
       ],
     );
   }

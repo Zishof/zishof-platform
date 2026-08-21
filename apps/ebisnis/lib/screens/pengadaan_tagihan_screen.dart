@@ -14,6 +14,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Terima Tagihan Vendor" -- tahap 4 modul Pengadaan POS.
 ///
@@ -29,7 +30,8 @@ class PengadaanTagihanScreen extends StatefulWidget {
   State<PengadaanTagihanScreen> createState() => _PengadaanTagihanScreenState();
 }
 
-class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with SingleTickerProviderStateMixin {
+class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -80,7 +82,8 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat daftar tagihan.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat daftar tagihan.'}';
               _memuat = false;
             });
             return;
@@ -144,7 +147,8 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
   /// jadi dialog ini meminta keduanya sekaligus.
   Future<void> _terimaTagihan(Map<String, dynamic> row) async {
     final nomor = TextEditingController(text: '${row['kodeTagihan'] ?? ''}');
-    final tanggal = TextEditingController(text: '${row['tanggalTagihan'] ?? ''}');
+    final tanggal =
+        TextEditingController(text: '${row['tanggalTagihan'] ?? ''}');
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => StatefulBuilder(builder: (c, setLocal) {
@@ -251,7 +255,6 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
     await _kirim('pengadaan_tagihan_batal', {'id': row['id']});
   }
 
-
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Tagihan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
   /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
@@ -321,8 +324,10 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
                     labelText: 'Status tagihan', isDense: true),
                 items: const [
                   DropdownMenuItem(value: '', child: Text('Semua')),
-                  DropdownMenuItem(value: 'BELUM', child: Text('Belum ditagih')),
-                  DropdownMenuItem(value: 'SUDAH', child: Text('Sudah ditagih')),
+                  DropdownMenuItem(
+                      value: 'BELUM', child: Text('Belum ditagih')),
+                  DropdownMenuItem(
+                      value: 'SUDAH', child: Text('Sudah ditagih')),
                 ],
                 onChanged: (v) {
                   setStateIfMounted(() {
@@ -381,7 +386,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
         AppTableColumn('PO', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Faktur', flex: 3),
-        AppTableColumn('Aksi', width: 190),
+        AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_baris).toList(),
       pagination: _total > _pageSize
@@ -433,17 +438,16 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${row['kodeTagihan']}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: warna)),
-                  Text('${row['tanggalTagihan']}',
-                      style: const TextStyle(fontSize: 10)),
-                ])
+                    Text('${row['kodeTagihan']}',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: warna)),
+                    Text('${row['tanggalTagihan']}',
+                        style: const TextStyle(fontSize: 10)),
+                  ])
             : Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                     color: warna.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(6)),
@@ -455,27 +459,25 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen> with Si
               ),
       ),
       AppTableCell(
-        width: 150,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
+        width: 64,
+        child: AksiBarisMenu(aksi: [
           // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
           // dengan versi ZKoss sehingga hasil cetaknya identik.
-          IconButton(
-              tooltip: 'Cetak / pratinjau',
-              icon: const Icon(Icons.print_outlined, size: 18),
-              onPressed: () => cetakDokumenPengadaan(context,
+          AksiBaris(
+              ikon: Icons.print_outlined,
+              label: 'Cetak / pratinjau',
+              onTap: () => cetakDokumenPengadaan(context,
                   tahap: 'tagihan',
                   id: (row['id'] as num).toInt(),
                   kode: '${row['kode'] ?? ''}')),
-          IconButton(
-              tooltip: sudah ? 'Ubah data faktur' : 'Terima tagihan',
-              icon: Icon(sudah ? Icons.edit_note : Icons.receipt_long,
-                  size: 18, color: const Color(0xFF2E7D32)),
-              onPressed: () => _terimaTagihan(row)),
-          if (sudah)
-            IconButton(
-                tooltip: 'Batalkan tagihan',
-                icon: const Icon(Icons.undo, size: 18),
-                onPressed: () => _batalTagihan(row)),
+          AksiBaris(
+              ikon: sudah ? Icons.edit_note : Icons.receipt_long,
+              label: sudah ? 'Ubah data faktur' : 'Terima tagihan',
+              onTap: () => _terimaTagihan(row)),
+          AksiBaris(
+              ikon: Icons.undo,
+              label: 'Batalkan tagihan',
+              onTap: sudah ? () => _batalTagihan(row) : null),
         ]),
       ),
     ]);
@@ -548,7 +550,8 @@ class _PapanLampiranState extends State<_PapanLampiran> {
       if (!mounted) return;
       if (r['status'] != '00' && r['status'] != 'success') {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r['description'] ?? 'Gagal mengunggah lampiran.'}'),
+            content:
+                Text('${r['description'] ?? 'Gagal mengunggah lampiran.'}'),
             backgroundColor: Theme.of(context).colorScheme.error));
       }
     } catch (e) {
@@ -619,7 +622,9 @@ class _PapanLampiranState extends State<_PapanLampiran> {
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Center(
             child: SizedBox(
-                width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))),
       );
     }
     return Column(
@@ -647,9 +652,7 @@ class _PapanLampiranState extends State<_PapanLampiran> {
       child: Row(children: [
         Icon(ada ? Icons.check_circle : Icons.upload_file,
             size: 16,
-            color: ada
-                ? Colors.green
-                : (wajib ? Colors.red : Colors.grey)),
+            color: ada ? Colors.green : (wajib ? Colors.red : Colors.grey)),
         const SizedBox(width: 6),
         Expanded(
           child: Column(
@@ -671,7 +674,9 @@ class _PapanLampiranState extends State<_PapanLampiran> {
         ),
         if (sibuk)
           const SizedBox(
-              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2))
         else ...[
           if (ada)
             IconButton(

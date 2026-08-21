@@ -14,6 +14,7 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 
 import 'pengadaan_bulk_entry_screen.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Penerimaan Barang/Jasa (BAST)" -- tahap 3 modul Pengadaan POS.
 ///
@@ -513,7 +514,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
         AppTableColumn('Sumber', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 230),
+        AppTableColumn('Aksi', width: 96),
       ],
       rows: _daftar.map(_barisBast).toList(),
       pagination: _total > _pageSize
@@ -573,43 +574,64 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
                   fontSize: 11, fontWeight: FontWeight.w700, color: warna)),
         ),
       ),
-      AppTableCell(width: 190, child: _aksiBast(bast, disetujui)),
+      AppTableCell(width: 96, child: _aksiBast(bast, disetujui)),
     ]);
   }
 
+  /// Aksi baris diringkas menjadi satu tombol "...".
+  ///
+  /// Penanda "sudah masuk stok" SENGAJA tetap tinggal di baris, di samping
+  /// tombolnya. Ia bukan aksi melainkan keterangan, dan tabel ini tidak punya
+  /// kolom lain yang memuatnya -- meleburnya ke dalam menu berarti petugas
+  /// harus membuka menu satu per satu hanya untuk tahu mana yang sudah masuk
+  /// stok, padahal sebelumnya cukup dilihat sekilas.
   Widget _aksiBast(Map<String, dynamic> bast, bool disetujui) {
+    final sudahSinkron = bast['sudahSinkron'] == true;
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
-      // dengan versi ZKoss sehingga hasil cetaknya identik.
-      IconButton(
-          tooltip: 'Cetak / pratinjau',
-          icon: const Icon(Icons.print_outlined, size: 18),
-          onPressed: () => cetakDokumenPengadaan(context,
-              tahap: 'bast',
-              id: (bast['id'] as num).toInt(),
-              kode: '${bast['kode'] ?? ''}')),
-      IconButton(
-          tooltip: 'Lihat / ubah',
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          onPressed: () => _form(awal: bast)),
-      if (!disetujui)
-        IconButton(
-            tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline,
-                size: 18, color: Color(0xFF2E7D32)),
-            onPressed: () => _putusan(bast, 'SETUJUI')),
-      if (disetujui)
-        IconButton(
-            tooltip: 'Batalkan persetujuan',
-            icon: const Icon(Icons.undo, size: 18),
-            onPressed: () => _putusan(bast, 'BATAL')),
-      if (disetujui && bast['sudahSinkron'] != true)
-        IconButton(
-            tooltip: 'Sinkronkan ke stok Kulakan',
-            icon:
-                const Icon(Icons.sync_alt, size: 18, color: Color(0xFF00695C)),
-            onPressed: () => _sinkronKulakan(bast)),
-      if (bast['sudahSinkron'] == true)
+      AksiBarisMenu(aksi: [
+        // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
+        // dengan versi ZKoss sehingga hasil cetaknya identik.
+        AksiBaris(
+            ikon: Icons.print_outlined,
+            label: 'Cetak / pratinjau',
+            onTap: () => cetakDokumenPengadaan(context,
+                tahap: 'bast',
+                id: (bast['id'] as num).toInt(),
+                kode: '${bast['kode'] ?? ''}')),
+        AksiBaris(
+            ikon: Icons.edit_outlined,
+            label: 'Lihat / ubah',
+            onTap: () => _form(awal: bast)),
+        AksiBaris(
+            ikon: Icons.check_circle_outline,
+            label: 'Setujui',
+            onTap: disetujui ? null : () => _putusan(bast, 'SETUJUI')),
+        AksiBaris(
+            ikon: Icons.undo,
+            label: 'Batalkan persetujuan',
+            onTap: disetujui ? () => _putusan(bast, 'BATAL') : null),
+        AksiBaris(
+            ikon: Icons.sync_alt,
+            label: 'Sinkronkan ke stok Kulakan',
+            onTap: disetujui && !sudahSinkron
+                ? () => _sinkronKulakan(bast)
+                : null),
+        AksiBaris(
+            ikon: Icons.history,
+            label: 'Riwayat data',
+            onTap: bast['id'] == null
+                ? null
+                : () => tampilkanRiwayatData(context,
+                    entitas: 'pengadaan_bast',
+                    id: bast['id'],
+                    judul: '${bast['kode'] ?? ''}')),
+        AksiBaris(
+            ikon: Icons.delete_outline,
+            label: 'Hapus',
+            merusak: true,
+            onTap: disetujui ? null : () => _hapus(bast)),
+      ]),
+      if (sudahSinkron)
         Tooltip(
           message:
               'Sudah masuk stok lewat faktur ${bast['nomorFakturKulakan'] ?? ''}',
@@ -618,19 +640,6 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
             child: Icon(Icons.check_circle, size: 18, color: Color(0xFF00695C)),
           ),
         ),
-      if (bast['id'] != null)
-        IconButton(
-            tooltip: 'Riwayat data (AuditTrails)',
-            icon: const Icon(Icons.history, size: 18),
-            onPressed: () => tampilkanRiwayatData(context,
-                entitas: 'pengadaan_bast',
-                id: bast['id'],
-                judul: '${bast['kode'] ?? ''}')),
-      if (!disetujui)
-        IconButton(
-            tooltip: 'Hapus',
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: () => _hapus(bast)),
     ]);
   }
 }

@@ -12,6 +12,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Pembayaran Vendor" -- tahap 5 modul Pengadaan POS.
 ///
@@ -26,7 +27,8 @@ class PengadaanBayarScreen extends StatefulWidget {
   State<PengadaanBayarScreen> createState() => _PengadaanBayarScreenState();
 }
 
-class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with SingleTickerProviderStateMixin {
+class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -78,7 +80,8 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat pembayaran vendor.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat pembayaran vendor.'}';
               _memuat = false;
             });
             return;
@@ -100,7 +103,9 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
                 : {};
             _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
             if (dariServer &&
-                (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)) {
+                (_idBaru.isNotEmpty ||
+                    _idBerubah.isNotEmpty ||
+                    _jumlahHapus > 0)) {
               _versiPerubahan++;
             }
             _memuat = false;
@@ -133,8 +138,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: ajukanTransfer,
-                onChanged: (v) =>
-                    setLocal(() => ajukanTransfer = v ?? false),
+                onChanged: (v) => setLocal(() => ajukanTransfer = v ?? false),
                 title: const Text('Ajukan transfer bank',
                     style: TextStyle(fontSize: 13)),
                 subtitle: const Text(
@@ -256,7 +260,8 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
 
     List<Map<String, dynamic>> tagihan = [];
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_bayar_tagihan_terbuka', {
+      final r =
+          await ApiClient.instance.aksi('pengadaan_bayar_tagihan_terbuka', {
         'penyedia_id': penyediaId,
         if (awal?['id'] != null) 'kecuali_bayar_id': awal!['id'],
       });
@@ -314,7 +319,6 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
     }
   }
 
-
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Pembayaran" (daftar + CRUD). Susunannya sengaja disamakan di keenam
   /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
@@ -324,7 +328,9 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
         controller: _tabUtama,
         tabs: const [
           Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Pembayaran'),
+          Tab(
+              icon: Icon(Icons.list_alt_outlined, size: 18),
+              text: 'Pembayaran'),
         ],
       ),
       Expanded(
@@ -390,7 +396,8 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
                 items: const [
                   DropdownMenuItem(value: '', child: Text('Semua status')),
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(value: 'DISETUJUI', child: Text('Disetujui')),
+                  DropdownMenuItem(
+                      value: 'DISETUJUI', child: Text('Disetujui')),
                 ],
                 onChanged: (v) {
                   setStateIfMounted(() {
@@ -448,7 +455,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
         AppTableColumn('Penyedia', flex: 3),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Status', flex: 2),
-        AppTableColumn('Aksi', width: 220),
+        AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_baris).toList(),
       pagination: _total > _pageSize
@@ -477,8 +484,7 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
   AppTableRowData _baris(Map<String, dynamic> row) {
     final st = '${row['status'] ?? 'DRAFT'}';
     final disetujui = st == 'DISETUJUI';
-    final warna =
-        disetujui ? const Color(0xFF2E7D32) : const Color(0xFFB8860B);
+    final warna = disetujui ? const Color(0xFF2E7D32) : const Color(0xFFB8860B);
     return AppTableRowData(cells: [
       AppTableCell(
         flex: 2,
@@ -507,45 +513,46 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen> with Single
         ),
       ),
       AppTableCell(
-        width: 180,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
+        width: 64,
+        child: AksiBarisMenu(aksi: [
           // Cetak dokumen: pratinjau lebih dulu, mencetak menyusul. Templatnya sama
           // dengan versi ZKoss sehingga hasil cetaknya identik.
-          IconButton(
-              tooltip: 'Cetak / pratinjau',
-              icon: const Icon(Icons.print_outlined, size: 18),
-              onPressed: () => cetakDokumenPengadaan(context,
+          AksiBaris(
+              ikon: Icons.print_outlined,
+              label: 'Cetak / pratinjau',
+              onTap: () => cetakDokumenPengadaan(context,
                   tahap: 'dpc',
                   id: (row['id'] as num).toInt(),
                   kode: '${row['kode'] ?? ''}')),
-          IconButton(
-              tooltip: 'Lihat / ubah',
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              onPressed: () => _bayarBaru(awal: row)),
-          if (!disetujui)
-            IconButton(
-                tooltip: 'Setujui pembayaran',
-                icon: const Icon(Icons.check_circle_outline,
-                    size: 18, color: Color(0xFF2E7D32)),
-                onPressed: () => _putusan(row, 'SETUJUI')),
-          if (disetujui)
-            IconButton(
-                tooltip: 'Batalkan persetujuan',
-                icon: const Icon(Icons.undo, size: 18),
-                onPressed: () => _putusan(row, 'BATAL')),
-          if (row['id'] != null)
-            IconButton(
-                tooltip: 'Riwayat data (AuditTrails)',
-                icon: const Icon(Icons.history, size: 18),
-                onPressed: () => tampilkanRiwayatData(context,
-                    entitas: 'pengadaan_bayar',
-                    id: row['id'],
-                    judul: '${row['kode'] ?? ''}')),
-          if (!disetujui)
-            IconButton(
-                tooltip: 'Hapus',
-                icon: const Icon(Icons.delete_outline, size: 18),
-                onPressed: () => _hapus(row)),
+          AksiBaris(
+              ikon: Icons.edit_outlined,
+              label: 'Lihat / ubah',
+              onTap: () => _bayarBaru(awal: row)),
+          // Setujui dan Batalkan dahulu saling menggantikan di layar; kini keduanya
+          // selalu tampil dan yang tidak berlaku hanya diredupkan, supaya letaknya
+          // tidak berpindah-pindah mengikuti status.
+          AksiBaris(
+              ikon: Icons.check_circle_outline,
+              label: 'Setujui pembayaran',
+              onTap: disetujui ? null : () => _putusan(row, 'SETUJUI')),
+          AksiBaris(
+              ikon: Icons.undo,
+              label: 'Batalkan persetujuan',
+              onTap: disetujui ? () => _putusan(row, 'BATAL') : null),
+          AksiBaris(
+              ikon: Icons.history,
+              label: 'Riwayat data',
+              onTap: row['id'] == null
+                  ? null
+                  : () => tampilkanRiwayatData(context,
+                      entitas: 'pengadaan_bayar',
+                      id: row['id'],
+                      judul: '${row['kode'] ?? ''}')),
+          AksiBaris(
+              ikon: Icons.delete_outline,
+              label: 'Hapus',
+              merusak: true,
+              onTap: disetujui ? null : () => _hapus(row)),
         ]),
       ),
     ]);
@@ -604,8 +611,8 @@ class _PilihVendorDialogState extends State<_PilihVendorDialog> {
             autofocus: true,
             decoration: InputDecoration(
                 labelText: 'Cari kode / nama penyedia',
-                suffixIcon:
-                    IconButton(onPressed: _muat, icon: const Icon(Icons.search))),
+                suffixIcon: IconButton(
+                    onPressed: _muat, icon: const Icon(Icons.search))),
             onSubmitted: (_) => _muat(),
           ),
           const SizedBox(height: 8),
@@ -626,7 +633,8 @@ class _PilihVendorDialogState extends State<_PilihVendorDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
       ],
     );
   }
@@ -803,7 +811,8 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
       final n = _angka(b.dibayar.text);
       if (n <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Nilai bayar ${b.poKode} harus lebih besar dari nol.')));
+            content:
+                Text('Nilai bayar ${b.poKode} harus lebih besar dari nol.')));
         return;
       }
       if (n > b.sisa + 1) {
@@ -966,7 +975,8 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
         if (!_terkunci)
           FilledButton(onPressed: _simpan, child: const Text('Simpan')),
       ],
@@ -1010,8 +1020,8 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
             width: 120,
             child: Text(_fmtRp.format(b.sisa),
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 12, color: Color(0xFF00695C)))),
+                style:
+                    const TextStyle(fontSize: 12, color: Color(0xFF00695C)))),
         const SizedBox(width: 8),
         SizedBox(
             width: 130,
