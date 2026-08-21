@@ -33,10 +33,12 @@ import '../screens/retur_penjualan_screen.dart';
 import '../screens/riwayat_penjualan_screen.dart';
 import '../screens/riwayat_sinkronisasi_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/draft_jurnal_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
+import '../screens/kas_kecil_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -712,6 +714,7 @@ class AppDrawer extends StatelessWidget {
                           icon: Icons.account_balance_outlined,
                           label: 'Akuntansi',
                           adaYangAktif: const [
+                            'Draft Jurnal',
                             'Jurnal Umum',
                             'Posting HPP',
                             'Posting Penjualan',
@@ -729,6 +732,15 @@ class AppDrawer extends StatelessWidget {
                             'Laporan-Laporan Keuangan',
                           ].contains(menuAktif),
                           anak: [
+                            if (Sesi.instance.bolehMenuVarianBaru('draft_jurnal'))
+                              _ItemMenu(
+                                icon: Icons.fact_check_outlined,
+                                label: 'Draft Jurnal',
+                                aktif: menuAktif == 'Draft Jurnal',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Draft Jurnal',
+                                    builder: (_) => const DraftJurnalScreen()),
+                              ),
                             if (Sesi.instance.bolehMenuVarianBaru('jurnal_umum'))
                               _ItemMenu(
                                 icon: Icons.edit_note,
@@ -1014,7 +1026,9 @@ class AppDrawer extends StatelessWidget {
                                 icon: Icons.receipt_long_outlined,
                                 label: 'Kas Kecil',
                                 aktif: menuAktif == 'Kas Kecil',
-                                onTap: () => _belumTersedia(context, 'Kas Kecil'),
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Kas Kecil',
+                                    builder: (_) => const KasKecilScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('penggantian_kas_kecil'))
                               _ItemMenu(

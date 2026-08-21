@@ -45,10 +45,12 @@ import '../screens/log_error_screen.dart';
 import '../screens/konfigurasi_screen.dart';
 import '../screens/layar_pelanggan_screen.dart';
 import '../screens/laporan_screen.dart';
+import '../screens/draft_jurnal_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
+import '../screens/kas_kecil_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -138,6 +140,7 @@ enum MenuEBisnis {
   laporanKeuangan,
   // Submenu grup "Akuntansi" (2026-08-20). laporanKeuangan dipertahankan sebagai
   // layar "Laporan-Laporan" di dalam grup itu supaya tautan lama tetap sah.
+  draftJurnal,
   jurnalUmum,
   postingHpp,
   postingPenjualan,
@@ -310,6 +313,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
 /// submenu keenamnya terdaftar di `EbisnisMenuKatalog` sehingga admin dapat
 /// menyalakan/mematikannya per peran lewat grid CRUD `TbmroleAction`.
 const _kunciMenuAkuntansi = <MenuEBisnis, String>{
+  MenuEBisnis.draftJurnal: 'draft_jurnal',
   MenuEBisnis.jurnalUmum: 'jurnal_umum',
   MenuEBisnis.postingHpp: 'posting_hpp',
   MenuEBisnis.postingPenjualan: 'posting_penjualan',
@@ -594,6 +598,9 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunJenisTransaksi),
   _ItemMenuShell(MenuEBisnis.bankAkun, Icons.account_balance, 'Bank',
       builder: _bangunBankAkun),
+  _ItemMenuShell(
+      MenuEBisnis.draftJurnal, Icons.fact_check_outlined, 'Draft Jurnal',
+      builder: _bangunDraftJurnal),
   _ItemMenuShell(MenuEBisnis.jurnalUmum, Icons.edit_note, 'Jurnal Umum',
       builder: _bangunJurnalUmum),
   _ItemMenuShell(
@@ -633,7 +640,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.pjKasBesar, Icons.assignment_turned_in_outlined,
       'Pertanggungjawaban Kas Besar',
       builder: _bangunPjKasBesar),
-  _ItemMenuShell(MenuEBisnis.kasKecil, Icons.receipt_long_outlined, 'Kas Kecil'),
+  _ItemMenuShell(MenuEBisnis.kasKecil, Icons.receipt_long_outlined, 'Kas Kecil',
+      builder: _bangunKasKecil),
   _ItemMenuShell(MenuEBisnis.penggantianKasKecil, Icons.autorenew,
       'Penggantian Kas Kecil (Reimbursement)'),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
@@ -761,6 +769,7 @@ const _grupMenu = <_GrupMenuShell>[
     'Akuntansi',
     [
       MenuEBisnis.laporanKeuangan,
+      MenuEBisnis.draftJurnal,
       MenuEBisnis.anggaran,
       MenuEBisnis.kodeAkun,
       MenuEBisnis.grupAkun,
@@ -849,6 +858,7 @@ Widget _bangunBankAkun(BuildContext c) => _halamanAkuntansi(
     'Bank',
     'Daftar bank beserta kode dan akun kas/bank yang dipakai jurnal',
     const KodeAkunScreen(tabAwal: 2));
+Widget _bangunDraftJurnal(BuildContext c) => const DraftJurnalScreen();
 Widget _bangunJurnalUmum(BuildContext c) => const JurnalUmumScreen();
 Widget _bangunSaldoAwalAkun(BuildContext c) => _halamanAkuntansi(
     MenuEBisnis.saldoAwalAkun,
@@ -919,6 +929,7 @@ Widget _bangunUangMuka(BuildContext c) => const UangMukaScreen();
 Widget _bangunPjUangMuka(BuildContext c) => const PjUangMukaScreen();
 Widget _bangunKasBesar(BuildContext c) => const KasBesarScreen();
 Widget _bangunPjKasBesar(BuildContext c) => const PjKasBesarScreen();
+Widget _bangunKasKecil(BuildContext c) => const KasKecilScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -1229,6 +1240,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       // Layar "Laporan-Laporan" di dalam grup Akuntansi. Labelnya dibedakan dari
       // "Laporan-Laporan" umum supaya penanda menu aktif tidak saling tertukar.
       return 'Laporan-Laporan Keuangan';
+    case MenuEBisnis.draftJurnal:
+      return 'Draft Jurnal';
     case MenuEBisnis.jurnalUmum:
       return 'Jurnal Umum';
     case MenuEBisnis.postingHpp:
@@ -1382,6 +1395,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.bankAkun;
     case 'Jurnal Umum':
       return MenuEBisnis.jurnalUmum;
+    case 'Draft Jurnal':
+      return MenuEBisnis.draftJurnal;
     case 'Posting HPP':
       return MenuEBisnis.postingHpp;
     case 'Posting Penjualan':
