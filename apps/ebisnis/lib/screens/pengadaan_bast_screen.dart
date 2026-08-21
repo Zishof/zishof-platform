@@ -32,7 +32,8 @@ class PengadaanBastScreen extends StatefulWidget {
   State<PengadaanBastScreen> createState() => _PengadaanBastScreenState();
 }
 
-class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTickerProviderStateMixin {
+class _PengadaanBastScreenState extends State<PengadaanBastScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -84,7 +85,8 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat Penerimaan Barang.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat Penerimaan Barang.'}';
               _memuat = false;
             });
             return;
@@ -106,7 +108,9 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
                 : {};
             _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
             if (dariServer &&
-                (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)) {
+                (_idBaru.isNotEmpty ||
+                    _idBerubah.isNotEmpty ||
+                    _jumlahHapus > 0)) {
               _versiPerubahan++;
             }
             _memuat = false;
@@ -122,10 +126,11 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
   }
 
   /// Buka dialog Back Order untuk sebuah PO, lalu segarkan daftar bila berhasil.
-  Future<void> _backOrder(int poId, String poKode) async {
+  Future<void> _backOrder(int poId, String poKode, {Object? bastId}) async {
     final hasil = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => _BackOrderDialog(poId: poId, poKode: poKode),
+      builder: (_) =>
+          _BackOrderDialog(poId: poId, poKode: poKode, bastId: bastId),
     );
     if (hasil == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -133,7 +138,8 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
     await _muat();
   }
 
-  Future<void> _form({Map<String, dynamic>? awal, Map<String, dynamic>? dariPo}) async {
+  Future<void> _form(
+      {Map<String, dynamic>? awal, Map<String, dynamic>? dariPo}) async {
     Map<String, dynamic>? detailAwal;
     if (awal != null && awal['id'] != null) {
       try {
@@ -161,7 +167,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
     final poKodeKurang = '${hasil.remove('_poKode') ?? ''}';
 
     try {
-      await prosesSimpanMaster(
+      final rSimpan = await prosesSimpanMaster(
         context,
         aksi: 'pengadaan_bast_simpan',
         body: hasil,
@@ -177,7 +183,12 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
        * kembali" / "Tutup sisa saja" dan menyediakan Batal. Menambah dialog ya
        * atau tidak di depannya hanya menambah satu klik tanpa informasi baru. */
       if (kurangKirim && mounted && hasil['po_id'] != null) {
-        await _backOrder((hasil['po_id'] as num).toInt(), poKodeKurang);
+        /* id penerimaan diteruskan supaya server menyetujui TEPAT dokumen ini,
+         * bukan semua draf pada pesanan yang sama. Bila penerimaannya baru dan
+         * masih mengantre offline, id-nya belum ada -- server lalu memakai
+         * cadangannya, yaitu seluruh draf pesanan itu. */
+        await _backOrder((hasil['po_id'] as num).toInt(), poKodeKurang,
+            bastId: (rSimpan['id'] ?? hasil['id']) as Object?);
       }
     } catch (e) {
       if (!mounted) return;
@@ -210,15 +221,17 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
       if (!mounted) return;
       if (r['status'] != '00' && r['status'] != 'success') {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r['description'] ?? 'Gagal menyiapkan penerimaan.'}'),
+            content:
+                Text('${r['description'] ?? 'Gagal menyiapkan penerimaan.'}'),
             backgroundColor: Theme.of(context).colorScheme.error));
         return;
       }
       final isian = (r['detail'] as List?) ?? const [];
       if (isian.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r['catatan'] ?? 'Tidak ada sisa yang perlu diterima '
-                'dari PO ini.'}')));
+            content:
+                Text('${r['catatan'] ?? 'Tidak ada sisa yang perlu diterima '
+                    'dari PO ini.'}')));
         return;
       }
       await _form(dariPo: Map<String, dynamic>.from(r));
@@ -259,7 +272,8 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Hapus Penerimaan Barang'),
-        content: Text('Hapus BAST ${bast['kode']}? Hanya dokumen berstatus DRAFT '
+        content: Text(
+            'Hapus BAST ${bast['kode']}? Hanya dokumen berstatus DRAFT '
             'yang dapat dihapus; yang sudah disetujui menjadi dasar tagihan vendor.'),
         actions: [
           TextButton(
@@ -291,18 +305,16 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
     }
   }
 
-
   /// Bulk entry mengikuti skema Kulakan: header, tempel/Excel, tabel item, review.
   Future<void> _bulkEntry() async {
     final hasil = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-          builder: (_) => const PengadaanBulkEntryScreen(
-              jenis: JenisPengadaanBulk.bast)),
+          builder: (_) =>
+              const PengadaanBulkEntryScreen(jenis: JenisPengadaanBulk.bast)),
     );
     if (hasil == true && mounted) await _muat();
   }
-
 
   /// Sinkronkan penerimaan yang sudah disetujui ke stok POS lewat Kulakan.
   /// Server menolak sinkronisasi kedua karena akan menggandakan stok, jadi
@@ -350,7 +362,6 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
     }
   }
 
-
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Penerimaan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
   /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
@@ -360,7 +371,9 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
         controller: _tabUtama,
         tabs: const [
           Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-          Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Penerimaan'),
+          Tab(
+              icon: Icon(Icons.list_alt_outlined, size: 18),
+              text: 'Penerimaan'),
         ],
       ),
       Expanded(
@@ -440,7 +453,8 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
                 items: const [
                   DropdownMenuItem(value: '', child: Text('Semua status')),
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(value: 'DISETUJUI', child: Text('Disetujui')),
+                  DropdownMenuItem(
+                      value: 'DISETUJUI', child: Text('Disetujui')),
                 ],
                 onChanged: (v) {
                   setStateIfMounted(() {
@@ -528,8 +542,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
   AppTableRowData _barisBast(Map<String, dynamic> bast) {
     final st = '${bast['status'] ?? 'DRAFT'}';
     final disetujui = st == 'DISETUJUI';
-    final warna =
-        disetujui ? const Color(0xFF2E7D32) : const Color(0xFFB8860B);
+    final warna = disetujui ? const Color(0xFF2E7D32) : const Color(0xFFB8860B);
     return AppTableRowData(cells: [
       AppTableCell(
         flex: 2,
@@ -593,11 +606,13 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
       if (disetujui && bast['sudahSinkron'] != true)
         IconButton(
             tooltip: 'Sinkronkan ke stok Kulakan',
-            icon: const Icon(Icons.sync_alt, size: 18, color: Color(0xFF00695C)),
+            icon:
+                const Icon(Icons.sync_alt, size: 18, color: Color(0xFF00695C)),
             onPressed: () => _sinkronKulakan(bast)),
       if (bast['sudahSinkron'] == true)
         Tooltip(
-          message: 'Sudah masuk stok lewat faktur ${bast['nomorFakturKulakan'] ?? ''}',
+          message:
+              'Sudah masuk stok lewat faktur ${bast['nomorFakturKulakan'] ?? ''}',
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
             child: Icon(Icons.check_circle, size: 18, color: Color(0xFF00695C)),
@@ -677,8 +692,8 @@ class _PilihPoDialogState extends State<_PilihPoDialog> {
             controller: _cari,
             decoration: InputDecoration(
                 labelText: 'Cari kode / keterangan PO',
-                suffixIcon:
-                    IconButton(onPressed: _muat, icon: const Icon(Icons.search))),
+                suffixIcon: IconButton(
+                    onPressed: _muat, icon: const Icon(Icons.search))),
             onSubmitted: (_) => _muat(),
           ),
           const SizedBox(height: 8),
@@ -691,14 +706,16 @@ class _PilihPoDialogState extends State<_PilihPoDialog> {
                 ? const Center(child: CircularProgressIndicator())
                 : _hasil.isEmpty
                     ? const Center(
-                        child: Text('Belum ada PO disetujui yang bisa diterima.'))
+                        child:
+                            Text('Belum ada PO disetujui yang bisa diterima.'))
                     : ListView.builder(
                         itemCount: _hasil.length,
                         itemBuilder: (_, i) => ListTile(
                           dense: true,
                           title: Text('${_hasil[i]['kode'] ?? '-'}'),
                           subtitle: Text('${_hasil[i]['penyedia'] ?? ''}'),
-                          trailing: Text(_fmtRp.format(_hasil[i]['nilai'] ?? 0)),
+                          trailing:
+                              Text(_fmtRp.format(_hasil[i]['nilai'] ?? 0)),
                           onTap: () => Navigator.pop(context, _hasil[i]),
                         ),
                       ),
@@ -707,7 +724,8 @@ class _PilihPoDialogState extends State<_PilihPoDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
       ],
     );
   }
@@ -802,18 +820,17 @@ class _FormBastDialogState extends State<_FormBastDialog> {
     _kurir = TextEditingController(text: '${h?['kurir'] ?? ''}');
     _penyediaId = (h?['penyedia_id'] as num?)?.toInt() ??
         (widget.dariPo?['penyedia_id'] as num?)?.toInt();
-    _penyediaNama =
-        '${h?['penyedia'] ?? widget.dariPo?['penyedia'] ?? ''}';
+    _penyediaNama = '${h?['penyedia'] ?? widget.dariPo?['penyedia'] ?? ''}';
     _poId = (h?['po_id'] as num?)?.toInt() ??
         (widget.dariPo?['po_id'] as num?)?.toInt();
     _poKode = '${h?['po'] ?? widget.dariPo?['po_kode'] ?? ''}';
 
-    final barisTersimpan =
-        (widget.detailAwal?['detail'] as List?) ?? const [];
+    final barisTersimpan = (widget.detailAwal?['detail'] as List?) ?? const [];
     if (barisTersimpan.isNotEmpty) {
       // Bentuk potongan (rupiah atau persen) disimpan per baris, tetapi ditampilkan
       // sebagai satu sakelar untuk seluruh dokumen -- ikuti baris pertama.
-      _diskonPersen = (Map<String, dynamic>.from(barisTersimpan.first as Map)['diskonPersen'] ??
+      _diskonPersen = (Map<String, dynamic>.from(
+                  barisTersimpan.first as Map)['diskonPersen'] ??
               false) ==
           true;
     }
@@ -883,8 +900,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
         Future<void> cari() async {
           try {
-            final r = await ApiClient.instance.aksi(
-                'pengadaan_penyedia_cari', {'keyword': q.text.trim(), 'limit': 50});
+            final r = await ApiClient.instance.aksi('pengadaan_penyedia_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
             hasil = ((r['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -926,7 +943,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dctx), child: const Text('Tutup'))
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Tutup'))
           ],
         );
       }),
@@ -947,8 +965,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
         Future<void> cari() async {
           try {
-            final r = await ApiClient.instance.aksi(
-                'pengadaan_barang_cari', {'keyword': q.text.trim(), 'limit': 50});
+            final r = await ApiClient.instance.aksi('pengadaan_barang_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
             hasil = ((r['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -990,7 +1008,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dctx), child: const Text('Tutup'))
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Tutup'))
           ],
         );
       }),
@@ -1064,8 +1083,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
                 enabled: !_terkunci,
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                    labelText: 'Harga', isDense: true))),
+                decoration:
+                    const InputDecoration(labelText: 'Harga', isDense: true))),
         const SizedBox(width: 6),
         SizedBox(
             width: 90,
@@ -1163,8 +1182,9 @@ class _FormBastDialogState extends State<_FormBastDialog> {
                         labelText: 'Penyedia / Vendor',
                         isDense: true,
                         suffixIcon: Icon(Icons.search, size: 18)),
-                    child: Text(
-                        _penyediaNama.isEmpty ? 'Belum dipilih' : _penyediaNama),
+                    child: Text(_penyediaNama.isEmpty
+                        ? 'Belum dipilih'
+                        : _penyediaNama),
                   ),
                 ),
               const SizedBox(height: 10),
@@ -1174,7 +1194,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
                     controller: _kodeTagihan,
                     enabled: !_terkunci,
                     decoration: const InputDecoration(
-                        labelText: 'No. tagihan / faktur vendor', isDense: true),
+                        labelText: 'No. tagihan / faktur vendor',
+                        isDense: true),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1252,7 +1273,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
                 child: Text(
                     'Total di atas hanya pratinjau; server menghitung ulang memakai '
                     'rumus yang sama dengan versi ZKoss, termasuk potongan dan PPN.',
-                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                    style:
+                        TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
               ),
             ],
           ),
@@ -1260,7 +1282,8 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
         // Tombol "Back Order / Pesan Kembali" SENGAJA dihilangkan dari sini.
         // Sejak dialog Back Order terbuka otomatis saat Simpan mendeteksi
         // jumlah diterima kurang dari yang dipesan, tombol ini tidak lagi
@@ -1277,7 +1300,9 @@ class _FormBastDialogState extends State<_FormBastDialog> {
   /// Validasi di layar hanya untuk umpan balik cepat; server tetap menegakkan
   /// aturan yang sama sehingga kanal lain berperilaku identik.
   void _simpan() {
-    if (_baris.where((b) => b.barangId != null || b.masterAssetId != null).isEmpty) {
+    if (_baris
+        .where((b) => b.barangId != null || b.masterAssetId != null)
+        .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tambahkan minimal satu baris barang.')));
       return;
@@ -1373,7 +1398,12 @@ class _BarisKurang {
 class _BackOrderDialog extends StatefulWidget {
   final int poId;
   final String poKode;
-  const _BackOrderDialog({required this.poId, required this.poKode});
+
+  /// Penerimaan yang memicu keputusan ini; null bila dipanggil dari daftar PO.
+  final Object? bastId;
+
+  const _BackOrderDialog(
+      {required this.poId, required this.poKode, this.bastId});
 
   @override
   State<_BackOrderDialog> createState() => _BackOrderDialogState();
@@ -1409,6 +1439,7 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
     if (pilih == null) return;
     setState(() => _batasKirim.text = DateFormat('dd-MM-yyyy').format(pilih));
   }
+
   bool _pesanKembali = true;
 
   /// Kode pesanan susulan yang SUDAH ada dan masih hidup. Bila terisi, dialog
@@ -1438,7 +1469,8 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
   }
 
   double _angka(String teks) =>
-      double.tryParse(teks.replaceAll('.', '').replaceAll(',', '.').trim()) ?? 0;
+      double.tryParse(teks.replaceAll('.', '').replaceAll(',', '.').trim()) ??
+      0;
 
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
@@ -1527,27 +1559,29 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
         kunci: 'pengadaan_po_back_order:${widget.poId}',
         cacheKey: 'master:pengadaan_po',
         body: {
-        'po_id': widget.poId,
-        'alasan': _alasan.text.trim(),
-        'tindakan': _pesanKembali ? 'pesan_kembali' : 'tutup_saja',
-        // Server membatalkan susulan lama lebih dulu lalu menerbitkan yang baru.
-        if (_susulanKode != null) 'revisi': true,
-        if (_pesanKembali && _penyediaId != null) 'penyedia_id': _penyediaId,
-        if (_pesanKembali && _batasKirim.text.trim().isNotEmpty)
-          'pengirimanPalingLambat': _batasKirim.text.trim(),
-        if (_pesanKembali)
-          'detail': terpilih
-              .map((b) => {
-                    'po_detail_id': b.data['po_detail_id'],
-                    'jumlah': _angka(b.jumlah.text),
-                  })
-              .toList(),
+          'po_id': widget.poId,
+          if (widget.bastId != null) 'bast_id': widget.bastId,
+          'alasan': _alasan.text.trim(),
+          'tindakan': _pesanKembali ? 'pesan_kembali' : 'tutup_saja',
+          // Server membatalkan susulan lama lebih dulu lalu menerbitkan yang baru.
+          if (_susulanKode != null) 'revisi': true,
+          if (_pesanKembali && _penyediaId != null) 'penyedia_id': _penyediaId,
+          if (_pesanKembali && _batasKirim.text.trim().isNotEmpty)
+            'pengirimanPalingLambat': _batasKirim.text.trim(),
+          if (_pesanKembali)
+            'detail': terpilih
+                .map((b) => {
+                      'po_detail_id': b.data['po_detail_id'],
+                      'jumlah': _angka(b.jumlah.text),
+                    })
+                .toList(),
         },
       );
       if (!mounted) return;
       final hasil = Map<String, dynamic>.from(r);
       if (hasil['offline'] == true) {
-        hasil['description'] = 'Back order tersimpan di perangkat, akan dikirim otomatis. Nomor pesanan susulan terbit setelah terkirim.';
+        hasil['description'] =
+            'Back order tersimpan di perangkat, akan dikirim otomatis. Nomor pesanan susulan terbit setelah terkirim.';
       }
       Navigator.pop(context, hasil);
     } catch (e) {
@@ -1597,8 +1631,7 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
         SizedBox(
           width: 110,
           child: Text(_fmtRp.format(_angka(b.jumlah.text) * b.harga),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 12)),
+              textAlign: TextAlign.right, style: const TextStyle(fontSize: 12)),
         ),
       ]),
     );
@@ -1633,7 +1666,8 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
                     height: 14,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.replay),
-            label: Text(_pesanKembali ? 'Tutup & Pesan Kembali' : 'Tutup Sisa')),
+            label:
+                Text(_pesanKembali ? 'Tutup & Pesan Kembali' : 'Tutup Sisa')),
       ],
     );
   }
@@ -1676,7 +1710,8 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
             controller: _alasan,
             decoration: const InputDecoration(
                 labelText: 'Alasan *',
-                hintText: 'mis. stok vendor habis, barang tidak sesuai spesifikasi',
+                hintText:
+                    'mis. stok vendor habis, barang tidak sesuai spesifikasi',
                 isDense: true),
           ),
           if (_pesanKembali) ...[
@@ -1701,8 +1736,8 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
               const SizedBox(width: 10),
               Expanded(
                 child: InputDecorator(
-                  decoration:
-                      const InputDecoration(labelText: 'Penyedia', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Penyedia', isDense: true),
                   child: Text(_penyediaNama.isEmpty ? '-' : _penyediaNama),
                 ),
               ),
