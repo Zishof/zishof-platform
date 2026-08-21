@@ -19,9 +19,25 @@ import '../widgets/safe_state.dart';
 /// Sisi baca memakai [MasterOffline.daftarCacheDulu] sehingga dasbor tetap
 /// menampilkan angka terakhir yang pernah diterima ketika sinyal buruk.
 class PengadaanDasborTab extends StatefulWidget {
-  /// pr, po, bast, tagihan, dpc, atau pajak.
+  /// pr, po, bast, tagihan, dpc, atau pajak. Untuk grup menu lain yang memakai
+  /// bentuk balasan yang sama, ini adalah nilai parameternya (lihat [namaParam]).
   final String tahap;
-  const PengadaanDasborTab({super.key, required this.tahap});
+
+  /// Aksi server penghasil dasbor. Grup "Keuangan" memakai `keuangan_dasbor`
+  /// dengan bentuk balasan yang SAMA (kpi/tren/komposisi/peringkat/daftar),
+  /// sehingga widget ini dipakai ulang alih-alih diduplikasi.
+  final String aksi;
+
+  /// Nama parameter pembawa [tahap] pada permintaan: `tahap` (Pengadaan) atau
+  /// `modul` (Keuangan).
+  final String namaParam;
+
+  const PengadaanDasborTab({
+    super.key,
+    required this.tahap,
+    this.aksi = 'pengadaan_dasbor',
+    this.namaParam = 'tahap',
+  });
 
   @override
   State<PengadaanDasborTab> createState() => _PengadaanDasborTabState();
@@ -49,9 +65,9 @@ class _PengadaanDasborTabState extends State<PengadaanDasborTab> {
     });
     try {
       await MasterOffline.daftarCacheDulu(
-        'pengadaan_dasbor',
-        {'tahap': widget.tahap, 'bulan': _bulan},
-        'master:pengadaan_dasbor:${widget.tahap}:$_bulan',
+        widget.aksi,
+        {widget.namaParam: widget.tahap, 'bulan': _bulan},
+        'master:${widget.aksi}:${widget.tahap}:$_bulan',
         onData: (res) {
           if (!mounted) return;
           final sukses = res['status'] == '00' || res['status'] == 'success';

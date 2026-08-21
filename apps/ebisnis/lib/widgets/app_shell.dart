@@ -48,6 +48,10 @@ import '../screens/laporan_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
+import '../screens/kas_besar_screen.dart';
+import '../screens/pj_kas_besar_screen.dart';
+import '../screens/pj_uang_muka_screen.dart';
+import '../screens/uang_muka_screen.dart';
 import '../screens/anggaran_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/login_screen.dart';
@@ -153,6 +157,14 @@ enum MenuEBisnis {
   // Anggaran/RAB bulanan (2026-08-21): rencana per bulan, revisi, realisasi, dan
   // penggunaan anggaran -- padanan empat layar ZK di paket rab.
   anggaran,
+  // Grup "Keuangan" (2026-08-21): enam modul alur kas yang selama ini hanya ada di
+  // layar ZK akunting, plus dua menu yang dipindah ke sini dari grup Pengadaan.
+  uangMuka,
+  pjUangMuka,
+  kasBesar,
+  pjKasBesar,
+  kasKecil,
+  penggantianKasKecil,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -314,6 +326,19 @@ const _kunciMenuAkuntansi = <MenuEBisnis, String>{
   MenuEBisnis.anggaran: 'anggaran',
 };
 
+/// Submenu grup "Keuangan" -> kunci `aksesMenu` server, FAIL-CLOSED seperti grup
+/// Akuntansi. Keenamnya terdaftar di `EbisnisMenuKatalog` (termasuk KUNCI_CRUD)
+/// sehingga admin dapat memberi hak Tambah/Ubah/Hapus per peran lewat
+/// grid CRUD `TbmroleAction`, bukan sekadar menampilkan/menyembunyikan menunya.
+const _kunciMenuKeuangan = <MenuEBisnis, String>{
+  MenuEBisnis.uangMuka: 'uang_muka',
+  MenuEBisnis.pjUangMuka: 'pj_uang_muka',
+  MenuEBisnis.kasBesar: 'kas_besar',
+  MenuEBisnis.pjKasBesar: 'pj_kas_besar',
+  MenuEBisnis.kasKecil: 'kas_kecil',
+  MenuEBisnis.penggantianKasKecil: 'penggantian_kas_kecil',
+};
+
 /// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
 /// boleh tampil utk aktor berperan Pemilik Sales/Inventory atau Sales
 /// Keliling (permintaan user: role lain di Inventory & Sales -- mis. staf
@@ -402,6 +427,10 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   final kunciAkuntansi = _kunciMenuAkuntansi[kunci];
   if (kunciAkuntansi != null) {
     return Sesi.instance.bolehMenuVarianBaru(kunciAkuntansi);
+  }
+  final kunciKeuangan = _kunciMenuKeuangan[kunci];
+  if (kunciKeuangan != null) {
+    return Sesi.instance.bolehMenuVarianBaru(kunciKeuangan);
   }
   final kunciServer = _kunciAksesMenu[kunci];
   return kunciServer == null || Sesi.instance.bolehMenu(kunciServer);
@@ -591,6 +620,22 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.postingTerimaPiutang, Icons.savings_outlined,
       'Posting Terima Piutang',
       builder: _bangunPostingTerimaPiutang),
+  // Grup "Keuangan". Layarnya menyusul modul demi modul; item tanpa builder
+  // memakai pesan "sedang dikerjakan" bawaan _pindahMenu, bukan halaman kosong.
+  _ItemMenuShell(MenuEBisnis.uangMuka, Icons.account_balance_wallet_outlined,
+      'Uang Muka (Cash Advance)',
+      builder: _bangunUangMuka),
+  _ItemMenuShell(MenuEBisnis.pjUangMuka, Icons.fact_check_outlined,
+      'Pertanggungjawaban Uang Muka',
+      builder: _bangunPjUangMuka),
+  _ItemMenuShell(MenuEBisnis.kasBesar, Icons.savings_outlined, 'Kas Besar',
+      builder: _bangunKasBesar),
+  _ItemMenuShell(MenuEBisnis.pjKasBesar, Icons.assignment_turned_in_outlined,
+      'Pertanggungjawaban Kas Besar',
+      builder: _bangunPjKasBesar),
+  _ItemMenuShell(MenuEBisnis.kasKecil, Icons.receipt_long_outlined, 'Kas Kecil'),
+  _ItemMenuShell(MenuEBisnis.penggantianKasKecil, Icons.autorenew,
+      'Penggantian Kas Kecil (Reimbursement)'),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -683,9 +728,24 @@ const _grupMenu = <_GrupMenuShell>[
       MenuEBisnis.pengadaanPo,
       MenuEBisnis.pengadaanBast,
       MenuEBisnis.pengadaanTagihan,
-      MenuEBisnis.pengadaanDpc,
       MenuEBisnis.pengadaanBdp,
+    ],
+  ),
+  // Pembayaran Vendor & Bayar Pajak pindah ke sini dari grup Pengadaan
+  // (permintaan pemilik produk): keduanya pekerjaan kasir keuangan, bukan
+  // pengadaan. KUNCI MENUNYA TIDAK BERUBAH (pengadaan_dpc, pengadaan_pajak)
+  // supaya hak akses peran yang sudah diatur tidak ikut ter-reset.
+  _GrupMenuShell(
+    'Keuangan',
+    [
+      MenuEBisnis.uangMuka,
+      MenuEBisnis.pjUangMuka,
+      MenuEBisnis.kasBesar,
+      MenuEBisnis.pjKasBesar,
+      MenuEBisnis.kasKecil,
+      MenuEBisnis.penggantianKasKecil,
       MenuEBisnis.pengadaanPajak,
+      MenuEBisnis.pengadaanDpc,
     ],
   ),
   _GrupMenuShell('Transaksi & Laporan', [
@@ -855,6 +915,10 @@ Widget _bangunPostingTerimaPiutang(BuildContext c) => _postingKeuangan(
     'Posting Terima Piutang',
     'Membukukan penerimaan piutang dari pelanggan toko',
     'posting_terima_piutang');
+Widget _bangunUangMuka(BuildContext c) => const UangMukaScreen();
+Widget _bangunPjUangMuka(BuildContext c) => const PjUangMukaScreen();
+Widget _bangunKasBesar(BuildContext c) => const KasBesarScreen();
+Widget _bangunPjKasBesar(BuildContext c) => const PjKasBesarScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -897,6 +961,103 @@ _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
     if (item.kunci == kunci) return item;
   }
   return null;
+}
+
+/// true bila menu ini punya saudara segrup yang boleh ditampilkan, sehingga
+/// pemilih halaman layak dipasang.
+bool _punyaDropdownGrup(MenuEBisnis kunci) {
+  final grup = _grupDariMenu(kunci);
+  if (grup == null) return false;
+  return grup.items.where(bolehTampilMenu).length >= 2;
+}
+
+/// Grup sidebar yang memuat [kunci]; null bila menu itu berdiri sendiri.
+_GrupMenuShell? _grupDariMenu(MenuEBisnis kunci) {
+  for (final grup in _grupMenu) {
+    if (grup.items.contains(kunci)) return grup;
+  }
+  return null;
+}
+
+/// Pemilih halaman satu grup, diletakkan tepat di bawah judul -- bersebelahan
+/// dengan panel menu.
+///
+/// Menggantikan deretan tab yang dulu berjajar di atas layar Akuntansi. Tab itu
+/// menyalin isi sidebar, sehingga satu halaman menampilkan dua daftar menu yang
+/// sama; begitu isinya belasan, deretnya melebar sampai memotong judul halaman.
+/// Dropdown menyampaikan hal yang sama dalam satu baris dan tetap menunjukkan
+/// halaman mana yang sedang dibuka.
+class _DropdownGrupMenu extends StatelessWidget {
+  final MenuEBisnis menuAktif;
+
+  const _DropdownGrupMenu({required this.menuAktif});
+
+  @override
+  Widget build(BuildContext context) {
+    final grup = _grupDariMenu(menuAktif);
+    if (grup == null) return const SizedBox.shrink();
+    final daftar = grup.items
+        .where(bolehTampilMenu)
+        .map(_itemMenu)
+        .whereType<_ItemMenuShell>()
+        .toList();
+    // Satu halaman saja tidak butuh pemilih.
+    if (daftar.length < 2) return const SizedBox.shrink();
+    final aktif = _itemMenu(menuAktif);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: PopupMenuButton<MenuEBisnis>(
+        tooltip: 'Pindah halaman ${grup.label}',
+        position: PopupMenuPosition.under,
+        onSelected: (kunci) {
+          final item = _itemMenu(kunci);
+          if (item != null) _pindahMenu(context, item, menuSaatIni: menuAktif);
+        },
+        itemBuilder: (context) => daftar
+            .map((item) => PopupMenuItem<MenuEBisnis>(
+                  value: item.kunci,
+                  child: Row(children: [
+                    Icon(item.icon,
+                        size: 18,
+                        color: item.kunci == menuAktif
+                            ? AppColors.primary
+                            : AppColors.textSecondaryOf(context)),
+                    const SizedBox(width: 10),
+                    Text(item.label,
+                        style: TextStyle(
+                            fontWeight: item.kunci == menuAktif
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: item.kunci == menuAktif
+                                ? AppColors.primary
+                                : AppColors.textPrimaryOf(context))),
+                  ]),
+                ))
+            .toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.primary),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.28)),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(aktif?.icon ?? Icons.account_balance_outlined,
+                size: 17, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(aktif?.label ?? grup.label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary)),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 20, color: AppColors.primary),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 _ItemMenuShell? _itemMenuDariLabel(String label) {
@@ -1094,6 +1255,18 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Posting Bayar Hutang';
     case MenuEBisnis.postingTerimaPiutang:
       return 'Posting Terima Piutang';
+    case MenuEBisnis.uangMuka:
+      return 'Uang Muka (Cash Advance)';
+    case MenuEBisnis.pjUangMuka:
+      return 'Pertanggungjawaban Uang Muka';
+    case MenuEBisnis.kasBesar:
+      return 'Kas Besar';
+    case MenuEBisnis.pjKasBesar:
+      return 'Pertanggungjawaban Kas Besar';
+    case MenuEBisnis.kasKecil:
+      return 'Kas Kecil';
+    case MenuEBisnis.penggantianKasKecil:
+      return 'Penggantian Kas Kecil (Reimbursement)';
     case MenuEBisnis.anggaran:
       return 'Anggaran (RAB Bulanan)';
     case MenuEBisnis.riwayatSinkron:
@@ -1225,6 +1398,18 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.postingBayarHutang;
     case 'Posting Terima Piutang':
       return MenuEBisnis.postingTerimaPiutang;
+    case 'Uang Muka (Cash Advance)':
+      return MenuEBisnis.uangMuka;
+    case 'Pertanggungjawaban Uang Muka':
+      return MenuEBisnis.pjUangMuka;
+    case 'Kas Besar':
+      return MenuEBisnis.kasBesar;
+    case 'Pertanggungjawaban Kas Besar':
+      return MenuEBisnis.pjKasBesar;
+    case 'Kas Kecil':
+      return MenuEBisnis.kasKecil;
+    case 'Penggantian Kas Kecil (Reimbursement)':
+      return MenuEBisnis.penggantianKasKecil;
     case 'Anggaran (RAB Bulanan)':
       return MenuEBisnis.anggaran;
     case 'Riwayat Sinkronisasi':
@@ -1455,7 +1640,21 @@ class _AppShellState extends State<AppShell> {
             },
           ),
           floatingActionButton: _fabDenganBantuan(),
-          body: widget.body,
+          // Di layar sempit judul halaman pindah ke AppBar, jadi pemilih grup
+          // dipasang tepat di atas badan halaman -- tetap satu baris, tidak
+          // kembali menjadi deretan tab yang memakan lebar.
+          body: _punyaDropdownGrup(widget.menuAktif)
+              ? Column(children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: _DropdownGrupMenu(menuAktif: widget.menuAktif),
+                    ),
+                  ),
+                  Expanded(child: widget.body),
+                ])
+              : widget.body,
           bottomNavigationBar: widget.bottomBar,
         );
       }
@@ -1500,6 +1699,9 @@ class _AppShellState extends State<AppShell> {
                                           style: TextStyle(
                                               color: AppColors.textSecondaryOf(
                                                   context)))),
+                                // Pemilih halaman segrup (mis. Akuntansi):
+                                // menggantikan deretan tab di dalam layar.
+                                _DropdownGrupMenu(menuAktif: widget.menuAktif),
                               ],
                             ),
                           ),

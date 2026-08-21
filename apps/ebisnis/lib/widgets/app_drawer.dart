@@ -22,6 +22,7 @@ import '../screens/kulakan_screen.dart';
 import '../screens/pengadaan_bast_screen.dart';
 import '../screens/pengadaan_bayar_screen.dart';
 import '../screens/pengadaan_bdp_screen.dart';
+import '../screens/pengadaan_pajak_screen.dart';
 import '../screens/pengadaan_po_screen.dart';
 import '../screens/pengadaan_pr_screen.dart';
 import '../screens/pengadaan_tagihan_screen.dart';
@@ -35,6 +36,10 @@ import '../screens/laporan_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
+import '../screens/kas_besar_screen.dart';
+import '../screens/pj_kas_besar_screen.dart';
+import '../screens/pj_uang_muka_screen.dart';
+import '../screens/uang_muka_screen.dart';
 import '../screens/anggaran_screen.dart';
 import '../screens/hak_akses_screen.dart';
 import '../screens/inventory_sales/beranda_is_screen.dart';
@@ -71,6 +76,14 @@ import 'app_version_label.dart';
 /// Layar yang belum dibangun ditandai "Segera Hadir" (dinonaktifkan) -- lihat
 /// task #182-189 utk urutan pengerjaan, jangan hapus entrinya supaya progres
 /// tetap terlihat sambil layar-layar itu menyusul satu per satu.
+/// Menu yang rangkanya sudah ada tetapi layarnya belum dibuat. Memakai kalimat
+/// yang sama dengan sidebar Desktop supaya pengguna tidak menemukan halaman kosong.
+void _belumTersedia(BuildContext context, String judul) {
+  if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$judul sedang dikerjakan, menyusul di rilis berikutnya.')));
+}
+
 /// Bungkus halaman untuk layar akuntansi yang badannya berupa Column bertab
 /// (KodeAkunScreen & SiklusAkuntansiScreen). Keduanya BUKAN halaman utuh: tanpa
 /// Scaffold, TabBar/ListTile di dalamnya gagal dengan "No Material widget found"
@@ -932,6 +945,104 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const RiwayatSinkronisasiScreen(),
                           ),
                         ),
+                      // Grup "Keuangan" (2026-08-21): enam modul alur kas dari layar ZK
+                      // akunting, plus Bayar Pajak & Pembayaran Vendor yang dipindah ke
+                      // sini dari grup Pengadaan. Kunci menu keduanya sengaja TIDAK
+                      // diubah supaya hak akses peran yang sudah ada tetap berlaku.
+                      if ([
+                        'uang_muka',
+                        'pj_uang_muka',
+                        'kas_besar',
+                        'pj_kas_besar',
+                        'kas_kecil',
+                        'penggantian_kas_kecil',
+                        'pengadaan_pajak',
+                        'pengadaan_dpc',
+                      ].any(Sesi.instance.bolehMenuVarianBaru))
+                        _GrupMenu(
+                          icon: Icons.account_balance_wallet_outlined,
+                          label: 'Keuangan',
+                          adaYangAktif: const [
+                            'Uang Muka (Cash Advance)',
+                            'Pertanggungjawaban Uang Muka',
+                            'Kas Besar',
+                            'Pertanggungjawaban Kas Besar',
+                            'Kas Kecil',
+                            'Penggantian Kas Kecil (Reimbursement)',
+                            'Bayar Pajak',
+                            'Pembayaran Vendor',
+                          ].contains(menuAktif),
+                          anak: [
+                            if (Sesi.instance.bolehMenuVarianBaru('uang_muka'))
+                              _ItemMenu(
+                                icon: Icons.account_balance_wallet_outlined,
+                                label: 'Uang Muka (Cash Advance)',
+                                aktif: menuAktif == 'Uang Muka (Cash Advance)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Uang Muka (Cash Advance)',
+                                    builder: (_) => const UangMukaScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pj_uang_muka'))
+                              _ItemMenu(
+                                icon: Icons.fact_check_outlined,
+                                label: 'Pertanggungjawaban Uang Muka',
+                                aktif: menuAktif == 'Pertanggungjawaban Uang Muka',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Pertanggungjawaban Uang Muka',
+                                    builder: (_) => const PjUangMukaScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('kas_besar'))
+                              _ItemMenu(
+                                icon: Icons.savings_outlined,
+                                label: 'Kas Besar',
+                                aktif: menuAktif == 'Kas Besar',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Kas Besar',
+                                    builder: (_) => const KasBesarScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pj_kas_besar'))
+                              _ItemMenu(
+                                icon: Icons.assignment_turned_in_outlined,
+                                label: 'Pertanggungjawaban Kas Besar',
+                                aktif: menuAktif == 'Pertanggungjawaban Kas Besar',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Pertanggungjawaban Kas Besar',
+                                    builder: (_) => const PjKasBesarScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('kas_kecil'))
+                              _ItemMenu(
+                                icon: Icons.receipt_long_outlined,
+                                label: 'Kas Kecil',
+                                aktif: menuAktif == 'Kas Kecil',
+                                onTap: () => _belumTersedia(context, 'Kas Kecil'),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('penggantian_kas_kecil'))
+                              _ItemMenu(
+                                icon: Icons.autorenew,
+                                label: 'Penggantian Kas Kecil (Reimbursement)',
+                                aktif: menuAktif == 'Penggantian Kas Kecil (Reimbursement)',
+                                onTap: () => _belumTersedia(context, 'Penggantian Kas Kecil (Reimbursement)'),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
+                              _ItemMenu(
+                                icon: Icons.account_balance,
+                                label: 'Bayar Pajak',
+                                aktif: menuAktif == 'Bayar Pajak',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Bayar Pajak',
+                                    builder: (_) => const PengadaanPajakScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc'))
+                              _ItemMenu(
+                                icon: Icons.payments_outlined,
+                                label: 'Pembayaran Vendor',
+                                aktif: menuAktif == 'Pembayaran Vendor',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Pembayaran Vendor',
+                                    builder: (_) => const PengadaanBayarScreen()),
+                              ),
+                          ],
+                        ),
                       // "Pengadaan" adalah GRUP yang bisa dibuka-tutup (bawaan: tertutup),
                       // mengikuti permintaan pemilik produk. Tiap tahap punya kunci menunya
                       // sendiri sehingga admin dapat membatasi per layar lewat grid CRUD peran.
@@ -939,7 +1050,6 @@ class AppDrawer extends StatelessWidget {
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_po') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_bast') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_tagihan') ||
-                          Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
                         _GrupMenu(
                           icon: Icons.assignment_outlined,
@@ -949,7 +1059,6 @@ class AppDrawer extends StatelessWidget {
                             'Pemesanan Pembelian (PO)',
                             'Penerimaan Barang (BAST)',
                             'Terima Tagihan Vendor',
-                            'Pembayaran Vendor',
                             'Barang Dalam Proses',
                           ].contains(menuAktif),
                           anak: [
@@ -988,15 +1097,6 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Terima Tagihan Vendor',
                                     builder: (_) => const PengadaanTagihanScreen()),
-                              ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc'))
-                              _ItemMenu(
-                                icon: Icons.payments_outlined,
-                                label: 'Pembayaran Vendor',
-                                aktif: menuAktif == 'Pembayaran Vendor',
-                                onTap: () => _pindahMenu(context,
-                                    label: 'Pembayaran Vendor',
-                                    builder: (_) => const PengadaanBayarScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
                               _ItemMenu(

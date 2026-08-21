@@ -334,9 +334,9 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
             onPressed: _muat,
             tooltip: 'Muat ulang')
       ],
-      // Saat tab pendukung tampil, badan mengurus scroll-nya sendiri (TabBarView
-      // butuh tinggi terbatas); tanpa tab, perilaku scroll lama dipertahankan.
-      scrollable: _pendukung.isEmpty,
+      // Halaman posting mengurus scroll-nya sendiri; katalog tetap memakai
+      // scroll milik shell seperti sebelumnya.
+      scrollable: _pendukungTerpilih == null,
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
@@ -344,52 +344,27 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
                 Text('Gagal memuat: $_pesanError'),
                 AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
               ]))
-              : _pendukung.isEmpty
+              : _pendukungTerpilih == null
                   ? _katalog()
-                  : _katalogBertab(),
+                  : _panelPendukung(_pendukungTerpilih!),
     );
   }
 
-  /// Tab seperti layar Kulakan: tab pertama katalog laporan, sisanya tiap layar
-  /// pendukung (Akun/Perkiraan dan enam posting) ditampilkan LANGSUNG di dalam tab.
-  Widget _katalogBertab() {
-    // Tab awal boleh id pendukung APA PUN (submenu grup "Akuntansi" memakai
-    // seluruhnya). Id yang tidak dikenal server tinggal jatuh ke tab katalog.
-    int indexAwal = 0;
+  /// Layar pendukung yang diminta submenu ini (Posting HPP, Akun/Perkiraan, dst),
+  /// atau null bila submenu ini memang katalog laporan.
+  ///
+  /// SATU SUBMENU = SATU HALAMAN. Sebelumnya seluruh layar pendukung dijejer
+  /// sebagai tab di atas halaman, padahal daftar yang sama sudah ada di panel
+  /// menu: pengguna melihat dua daftar menu sekaligus, dan begitu isinya belasan
+  /// deretan tab melebar sampai memotong judul halaman. Perpindahan antarhalaman
+  /// kini lewat dropdown grup di kepala halaman (`_DropdownGrupMenu`).
+  Map<String, dynamic>? get _pendukungTerpilih {
     final minta = widget.bukaPosting;
-    if (minta != null && minta.isNotEmpty) {
-      final idx = _pendukung.indexWhere((e) => e['id'] == minta);
-      if (idx >= 0) indexAwal = idx + 1;
+    if (minta == null || minta.isEmpty) return null;
+    for (final item in _pendukung) {
+      if (item['id'] == minta) return item;
     }
-    return DefaultTabController(
-      length: _pendukung.length + 1,
-      initialIndex: indexAwal,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondaryOf(context),
-          indicatorColor: AppColors.primary,
-          tabs: [
-            const Tab(
-                icon: Icon(Icons.folder_open_outlined),
-                text: 'Katalog Laporan'),
-            ..._pendukung.map((item) => Tab(
-                  icon: Icon(_ikonPendukung(item['id'] as String? ?? '')),
-                  text: item['judul'] as String? ?? '-',
-                )),
-          ],
-        ),
-        Expanded(
-          child: TabBarView(children: [
-            SingleChildScrollView(
-                padding: const EdgeInsets.only(top: 12), child: _katalog()),
-            ..._pendukung.map(_panelPendukung),
-          ]),
-        ),
-      ]),
-    );
+    return null;
   }
 
   Widget _katalog() {
