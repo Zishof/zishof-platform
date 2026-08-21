@@ -39,6 +39,7 @@ import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
+import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -78,14 +79,6 @@ import 'app_version_label.dart';
 /// Layar yang belum dibangun ditandai "Segera Hadir" (dinonaktifkan) -- lihat
 /// task #182-189 utk urutan pengerjaan, jangan hapus entrinya supaya progres
 /// tetap terlihat sambil layar-layar itu menyusul satu per satu.
-/// Menu yang rangkanya sudah ada tetapi layarnya belum dibuat. Memakai kalimat
-/// yang sama dengan sidebar Desktop supaya pengguna tidak menemukan halaman kosong.
-void _belumTersedia(BuildContext context, String judul) {
-  if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$judul sedang dikerjakan, menyusul di rilis berikutnya.')));
-}
-
 /// Bungkus halaman untuk layar akuntansi yang badannya berupa Column bertab
 /// (KodeAkunScreen & SiklusAkuntansiScreen). Keduanya BUKAN halaman utuh: tanpa
 /// Scaffold, TabBar/ListTile di dalamnya gagal dengan "No Material widget found"
@@ -1035,7 +1028,9 @@ class AppDrawer extends StatelessWidget {
                                 icon: Icons.autorenew,
                                 label: 'Penggantian Kas Kecil (Reimbursement)',
                                 aktif: menuAktif == 'Penggantian Kas Kecil (Reimbursement)',
-                                onTap: () => _belumTersedia(context, 'Penggantian Kas Kecil (Reimbursement)'),
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Penggantian Kas Kecil (Reimbursement)',
+                                    builder: (_) => const PenggantianKasKecilScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(

@@ -612,10 +612,44 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
     final status = '${b['statusDokumen'] ?? ''}';
     final terkunci = b['sudahDijurnal'] == true;
     return AppTableCell(
-      width: 176,
+      width: 208,
       align: TextAlign.center,
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         // Cetak memakai templat yang sama dengan layar ZK -- lihat keuangan_cetak_util.
+        // Muara dokumen keuangan: DPC (Daftar Pengajuan Transfer). Hanya dokumen
+        // yang sudah disetujui yang boleh masuk, dan sekali masuk tidak diulang --
+        // server memperlakukan penautannya sebagai idempoten.
+        if (!_tampilkanTerhapus && _boleh('approve') && status == 'Disetujui')
+          b['dpcAda'] == true
+              ? IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Sudah di daftar transfer'
+                      '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
+                  icon: const Icon(Icons.local_atm, size: 18, color: AppColors.success),
+                  onPressed: null,
+                )
+              : IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Ajukan ke proses transfer',
+                  icon: const Icon(Icons.send_outlined, size: 18),
+                  onPressed: _sibuk
+                      ? null
+                      : () async {
+                          if (await _konfirmasi('Ajukan ke proses transfer?',
+                              '${b['kode']} — ${b['nama']}\n'
+                              'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                              'Ajukan')) {
+                            await _kirimLokalDulu(
+                                'uang_muka_ajukan_transfer', {'id': b['id']},
+                                kunci: 'uang_muka-dpc:${b['id']}',
+                                rowLokal: {
+                                  ...b,
+                                  'dpcAda': true,
+                                  'dpcStatus': 'Menunggu transfer',
+                                });
+                          }
+                        },
+                ),
         IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: 'Cetak / pratinjau',
@@ -933,7 +967,8 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'
-                                    '${b['punyaLpj'] == true ? ' • ada LPJ' : ''}',
+                                    '${b['punyaLpj'] == true ? ' • ada LPJ' : ''}'
+                                    '${b['dpcAda'] == true ? ' • di daftar transfer' : ''}',
                                     flex: 2),
                                 _aksiBaris(b),
                               ]))

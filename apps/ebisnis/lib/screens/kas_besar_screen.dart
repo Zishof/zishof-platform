@@ -5,6 +5,8 @@ import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/pemilih_akun.dart';
+import '../widgets/pemilih_anggaran.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
@@ -40,6 +42,9 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
   List<Map<String, dynamic>> _data = [];
   List<Map<String, dynamic>> _jenis = [];
   List<Map<String, dynamic>> _satker = [];
+
+  /// Bagan akun untuk pemilih akun biaya pada rincian.
+  List<Map<String, dynamic>> _akun = [];
   List<String> _daftarStatus = const ['Pengajuan', 'Disetujui', 'Ditolak'];
   Map<String, bool> _hak = const {};
   double _totalNilai = 0;
@@ -87,11 +92,13 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
     });
     try {
       final opsi = await ApiClient.instance.aksi('kas_besar_opsi', {});
+      final res = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
       if (!mounted) return;
       setStateIfMounted(() {
         _jenis = ((opsi['jenisKasBesar'] as List?) ?? []).cast<Map<String, dynamic>>();
         _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
         _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
+        _akun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       });
       await _muatDaftar();
     } catch (e) {
@@ -326,12 +333,16 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
             final uraian = TextEditingController(text: '${b['uraian'] ?? ''}');
             final jumlah = TextEditingController(
                 text: b['jumlah'] == null ? '' : '${(b['jumlah'] as num).toInt()}');
+            int? akunId = (b['akun'] as num?)?.toInt();
+            String? workspaceId = b['workspace']?.toString();
+            String? anggaranNama = b['anggaranNama'] as String?;
             final ok = await showDialog<bool>(
               context: c,
-              builder: (d) => AlertDialog(
+              builder: (d) => StatefulBuilder(
+                builder: (d, setD) => AlertDialog(
                 title: Text(indeks == null ? 'Tambah Rincian Biaya' : 'Ubah Rincian Biaya'),
                 content: SizedBox(
-                  width: 440,
+                  width: 460,
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     TextField(
                         controller: uraian,
@@ -346,6 +357,35 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
                             helperText: 'Tidak boleh nol — server menolaknya.',
                             border: OutlineInputBorder(),
                             isDense: true)),
+                    const SizedBox(height: 12),
+                    // Akun biaya menentukan ke mana pengeluaran ini dijurnal.
+                    PemilihAkunField(
+                      label: 'Akun Biaya',
+                      daftar: _akun,
+                      nilai: akunId,
+                      helperText: 'Dipakai server untuk menebak anggarannya.',
+                      onChanged: (v) => setD(() => akunId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    // Anggaran per baris: inilah yang memotong pagu di
+                    // rab.penggunaan_anggaran, sama seperti banbox anggaran di ZK.
+                    PemilihAnggaranField(
+                      aksiCari: 'kas_besar_cari_anggaran',
+                      workspaceId: workspaceId,
+                      namaAnggaran: anggaranNama,
+                      tahun: tanggal?.year,
+                      onDipilih: (w) => setD(() {
+                        if (w == null) {
+                          workspaceId = null;
+                          anggaranNama = null;
+                          return;
+                        }
+                        workspaceId = '${w['idTeks'] ?? w['id']}';
+                        anggaranNama = '${w['kode'] ?? ''} — ${w['nama'] ?? ''}';
+                        final a = (w['akunId'] as num?)?.toInt();
+                        if (a != null && a > 0) akunId = a;
+                      }),
+                    ),
                   ]),
                 ),
                 actions: [
@@ -354,6 +394,7 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
                   FilledButton(
                       onPressed: () => Navigator.pop(d, true), child: const Text('Simpan')),
                 ],
+              ),
               ),
             );
             if (ok != true) return;
@@ -368,6 +409,9 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
               'key': key,
               'uraian': uraian.text.trim(),
               'jumlah': double.tryParse(jumlah.text.trim()) ?? 0,
+              if (akunId != null) 'akun': akunId,
+              if (workspaceId != null) 'workspace': workspaceId,
+              if (anggaranNama != null) 'anggaranNama': anggaranNama,
             };
             setDialog(() {
               if (indeks == null) {
@@ -670,9 +714,43 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
     final status = '${b['statusDokumen'] ?? ''}';
     final terkunci = b['sudahDijurnal'] == true;
     return AppTableCell(
-      width: 200,
+      width: 232,
       align: TextAlign.center,
       child: Row(mainAxisSize: MainAxisSize.min, children: [
+        // Muara dokumen keuangan: DPC (Daftar Pengajuan Transfer). Hanya dokumen
+        // yang sudah disetujui yang boleh masuk, dan sekali masuk tidak diulang --
+        // server memperlakukan penautannya sebagai idempoten.
+        if (!_tampilkanTerhapus && _boleh('approve') && status == 'Disetujui')
+          b['dpcAda'] == true
+              ? IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Sudah di daftar transfer'
+                      '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
+                  icon: const Icon(Icons.local_atm, size: 18, color: AppColors.success),
+                  onPressed: null,
+                )
+              : IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Ajukan ke proses transfer',
+                  icon: const Icon(Icons.send_outlined, size: 18),
+                  onPressed: _sibuk
+                      ? null
+                      : () async {
+                          if (await _konfirmasi('Ajukan ke proses transfer?',
+                              '${b['kode']} — ${b['nama']}\n'
+                              'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                              'Ajukan')) {
+                            await _kirimLokalDulu(
+                                'kas_besar_ajukan_transfer', {'id': b['id']},
+                                kunci: 'kas_besar-dpc:${b['id']}',
+                                rowLokal: {
+                                  ...b,
+                                  'dpcAda': true,
+                                  'dpcStatus': 'Menunggu transfer',
+                                });
+                          }
+                        },
+                ),
         IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: 'Cetak / pratinjau',
@@ -942,7 +1020,8 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'
-                                    '${b['punyaPj'] == true ? ' • ada PJ' : ''}',
+                                    '${b['punyaPj'] == true ? ' • ada PJ' : ''}'
+                                    '${b['dpcAda'] == true ? ' • di daftar transfer' : ''}',
                                     flex: 2),
                                 _aksiBaris(b),
                               ]))

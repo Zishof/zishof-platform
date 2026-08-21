@@ -51,6 +51,7 @@ import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
+import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -643,7 +644,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.kasKecil, Icons.receipt_long_outlined, 'Kas Kecil',
       builder: _bangunKasKecil),
   _ItemMenuShell(MenuEBisnis.penggantianKasKecil, Icons.autorenew,
-      'Penggantian Kas Kecil (Reimbursement)'),
+      'Penggantian Kas Kecil (Reimbursement)',
+      builder: _bangunPenggantianKasKecil),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -930,6 +932,8 @@ Widget _bangunPjUangMuka(BuildContext c) => const PjUangMukaScreen();
 Widget _bangunKasBesar(BuildContext c) => const KasBesarScreen();
 Widget _bangunPjKasBesar(BuildContext c) => const PjKasBesarScreen();
 Widget _bangunKasKecil(BuildContext c) => const KasKecilScreen();
+Widget _bangunPenggantianKasKecil(BuildContext c) =>
+    const PenggantianKasKecilScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();

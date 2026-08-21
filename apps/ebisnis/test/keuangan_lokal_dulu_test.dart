@@ -13,6 +13,8 @@ void main() {
     'Kas Besar': File('lib/screens/kas_besar_screen.dart').readAsStringSync(),
     'PJ Kas Besar': File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync(),
     'Kas Kecil': File('lib/screens/kas_kecil_screen.dart').readAsStringSync(),
+    'Penggantian Kas Kecil':
+        File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync(),
   };
 
   layar.forEach((nama, source) {
@@ -52,6 +54,73 @@ void main() {
         expect(source, contains("namaParam: 'modul'"));
         expect(source, contains('cetakDokumenKeuangan('));
       });
+    });
+  });
+
+  test('Penggantian Kas Kecil menunjuk DOKUMEN kas kecil, bukan jenisnya', () {
+    final src =
+        File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync();
+    // Seperti layar ZK: yang dipilih satu dokumen kas kecil yang sudah disetujui
+    // dan belum diganti; rinciannya ikut terbawa untuk disunting di sini.
+    expect(src, contains("'penggantian_kas_kecil_cari_kas_kecil'"));
+    expect(src, contains("'kasKecilId'"));
+    expect(src, contains('Kas Kecil yang Diganti'));
+    // Jenis kas kecil adalah milik dokumen induknya, bukan dokumen penggantian.
+    expect(src, isNot(contains("'jenisKasKecilId'")));
+  });
+
+  group('penggunaan anggaran', () {
+    // Pemotongan anggaran AIS dicatat PER BARIS: PenggunaanAnggaran.prosesKasKecil /
+    // prosesKasBesar melewati baris formula yang tidak membawa `workspace`. Karena itu
+    // rincian kas wajib punya pemilih anggarannya sendiri.
+    for (final nama in const [
+      'kas_kecil_screen.dart',
+      'kas_besar_screen.dart',
+      'penggantian_kas_kecil_screen.dart',
+    ]) {
+      test('$nama: rincian membawa anggaran', () {
+        final src = File('lib/screens/$nama').readAsStringSync();
+        expect(src, contains('PemilihAnggaranField('));
+        expect(src, contains("'workspace': workspaceId"));
+        expect(src, contains('_cari_anggaran'));
+        // Akun biaya ikut ditentukan anggaran, seperti banbox ZK.
+        expect(src, contains("(w['akunId'] as num?)?.toInt()"));
+      });
+    }
+
+    test('pemilih anggaran memakai satu widget bersama', () {
+      final w = File('lib/widgets/pemilih_anggaran.dart').readAsStringSync();
+      expect(w, contains('class PemilihAnggaranField'));
+      expect(w, contains('aksiCari'));
+      // Anggaran difilter per tahun dokumen, sama seperti di ZK.
+      expect(w, contains("'tahun': tahun"));
+    });
+  });
+
+  group('muara DPC (Daftar Pengajuan Transfer)', () {
+    // Kas Kecil sengaja TIDAK ada di daftar ini: pengeluaran kas kecil tidak
+    // ditransfer satu per satu, uangnya kembali lewat Penggantian Kas Kecil.
+    const modul = {
+      'uang_muka_screen.dart': 'uang_muka',
+      'pj_uang_muka_screen.dart': 'pj_uang_muka',
+      'kas_besar_screen.dart': 'kas_besar',
+      'pj_kas_besar_screen.dart': 'pj_kas_besar',
+      'penggantian_kas_kecil_screen.dart': 'penggantian_kas_kecil',
+    };
+    modul.forEach((berkas, kunci) {
+      test('$berkas: punya tombol Ajukan Transfer + status DPC', () {
+        final src = File('lib/screens/$berkas').readAsStringSync();
+        expect(src, contains("'${kunci}_ajukan_transfer'"));
+        // Hanya dokumen yang sudah disetujui yang boleh diajukan.
+        expect(src, contains("status == 'Disetujui'"));
+        // Yang sudah masuk kolam transfer tidak ditawarkan lagi.
+        expect(src, contains("b['dpcAda'] == true"));
+      });
+    });
+
+    test('Kas Kecil tidak punya pengajuan transfer', () {
+      final src = File('lib/screens/kas_kecil_screen.dart').readAsStringSync();
+      expect(src, isNot(contains('ajukan_transfer')));
     });
   });
 
