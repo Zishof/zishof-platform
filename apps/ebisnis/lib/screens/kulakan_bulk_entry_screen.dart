@@ -7,6 +7,7 @@ import '../sesi.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../models.dart';
 import '../parse_util.dart';
 import '../services/simple_xlsx.dart';
@@ -809,14 +810,34 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
             'tanggal_expired': DateFormat('yyyy-MM-dd').format(expired),
         });
       }
-      await ApiClient.instance.aksi('kulakan_faktur_simpan', {
-        'nomor_faktur': _faktur.text.trim(),
-        'tanggal_faktur': _tanggalFaktur.toIso8601String(),
-        'supplier_id': _supplier!['id'],
-        if (_totalFaktur != null) 'total_faktur_manual': _totalFaktur,
-        'keterangan': _keterangan.text.trim(),
-        'items': items,
-      });
+      // Pencarian produk di atas memakai await, jadi layar bisa saja sudah
+      // ditutup sebelum sampai ke sini.
+      if (!mounted) return;
+      // Lokal-dulu, mengikuti jalur yang sama dengan kulakan_screen: faktur
+      // ditulis ke perangkat lalu dikirim, sehingga entri massal tidak hilang
+      // ketika sinyal putus di tengah pekerjaan. Aman diantre karena id balasan
+      // server TIDAK dipakai di sini -- layarnya hanya menutup diri.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'kulakan_faktur_simpan',
+        kunci:
+            'kulakan_faktur:bulk:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:kulakan_faktur',
+        rowLokal: {
+          'nomorFaktur': _faktur.text.trim(),
+          'tanggalFaktur': _tanggalFaktur.toIso8601String(),
+          'supplierNama': '${_supplier?['nama'] ?? ''}',
+          'jumlahItem': items.length,
+        },
+        body: {
+          'nomor_faktur': _faktur.text.trim(),
+          'tanggal_faktur': _tanggalFaktur.toIso8601String(),
+          'supplier_id': _supplier!['id'],
+          if (_totalFaktur != null) 'total_faktur_manual': _totalFaktur,
+          'keterangan': _keterangan.text.trim(),
+          'items': items,
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:

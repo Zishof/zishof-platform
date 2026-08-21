@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pemilih_akun.dart';
@@ -547,13 +548,30 @@ class _EditorJurnalState extends State<_EditorJurnal> {
           'keterangan': b.keterangan.text.trim(),
         });
       }
-      final hasil = await ApiClient.instance.aksi('jurnal_umum_simpan', {
-        if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
-        'tanggal': _fmtTanggal.format(_tanggal),
-        'keterangan': _keterangan.text.trim(),
-        'jenisTransaksiId': _jenisId ?? 0,
-        'baris': baris,
-      });
+      // Lokal-dulu untuk PENYIMPANAN draf jurnal. Yang tetap wajib daring adalah
+      // POSTING-nya (jurnal_umum_posting) -- itu "journal posting" pada spec 13.3
+      // dan dikunci uji master_offline_kontrak_test. Menyimpan draf tidak memakai
+      // id balasan server, jadi aman diantre.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'jurnal_umum_simpan',
+        kunci: widget.kepala?['id'] != null
+            ? 'jurnal_umum:${widget.kepala!['id']}'
+            : 'jurnal_umum:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:jurnal_umum',
+        rowLokal: {
+          if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
+          'tanggal': _fmtTanggal.format(_tanggal),
+          'keterangan': _keterangan.text.trim(),
+        },
+        body: {
+          if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
+          'tanggal': _fmtTanggal.format(_tanggal),
+          'keterangan': _keterangan.text.trim(),
+          'jenisTransaksiId': _jenisId ?? 0,
+          'baris': baris,
+        },
+      );
       if (!mounted) return;
       if ('${hasil['status']}' != '00') {
         setStateIfMounted(
