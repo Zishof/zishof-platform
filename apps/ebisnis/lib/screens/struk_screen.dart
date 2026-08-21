@@ -1079,6 +1079,7 @@ class StrukScreen extends StatelessWidget {
     String? catatanKoreksi,
     bool? koreksiSudahDiterapkan,
     bool? menungguAngkaServer,
+    bool? tersinkron,
   }) {
     return StrukScreen(
       key: key,
@@ -1090,7 +1091,7 @@ class StrukScreen extends StatelessWidget {
       pembayaran: pembayaran,
       pajak: pajak,
       diskonFaktur: diskonFaktur,
-      tersinkron: tersinkron,
+      tersinkron: tersinkron ?? this.tersinkron,
       statusLabel: statusLabel,
       pelanggan: pelanggan,
       uangDiterima: uangDiterima,
@@ -1334,8 +1335,13 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     // Pembanding 1 rupiah: beda di bawah itu hanya pembulatan, bukan selisih
     // yang perlu diberitahukan ke kasir.
     final berbeda = (totalServer - asli.total).abs() >= 1;
+    // Angka server sudah diterima; itu berarti transaksinya SUDAH tersimpan di
+    // server. Struk yang dicetak sejak titik ini tidak boleh lagi berkata
+    // "tersimpan offline dan akan disinkronkan otomatis" -- pembeli menerima
+    // kertas yang menyebut keadaan yang sudah tidak berlaku.
     return asli.salin(
       koreksiSudahDiterapkan: true,
+      tersinkron: true,
       total: totalServer,
       totalDiskonOverride: _totalDiskonServer,
       catatanKoreksi: berbeda

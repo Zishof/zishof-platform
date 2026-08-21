@@ -218,12 +218,37 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
   /// Tanggal transaksi TIDAK berubah: payload menyimpan waktu kejadian sejak
   /// checkout dan server memakai nilai itu, jadi transaksi yang baru terkirim
   /// hari ini tetap tercatat pada tanggal transaksinya.
-  Future<void> _kirimSatuPending(Map<String, Object?> row) async {
+  Future<void> _kirimSatuPending(Map<String, Object?> row,
+      {bool paksa = false}) async {
     final kode = '${row['kode_unik'] ?? ''}'.trim();
     if (kode.isEmpty || _sedangKirimBaris.contains(kode)) return;
+    if (paksa) {
+      // Mengirim ulang yang SUDAH sukses bukan tindakan rutin; pastikan ini
+      // memang disengaja supaya tidak tertekan tanpa sadar.
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Kirim ulang transaksi yang sudah sukses?'),
+          content: Text('Transaksi $kode sudah pernah tersimpan di server.'
+              '\n\nGunakan ini hanya bila datanya terlanjur terhapus di server.'
+              ' Bila transaksinya ternyata masih ada, server menolak duplikat'
+              ' berdasarkan kode uniknya, jadi tidak akan terbentuk baris kedua.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Kirim Ulang')),
+          ],
+        ),
+      );
+      if (lanjut != true) return;
+    }
     setStateIfMounted(() => _sedangKirimBaris.add(kode));
     try {
-      final hasil = await TransaksiOutboxService.instance.kirimSatuManual(kode);
+      final hasil = await TransaksiOutboxService.instance
+          .kirimSatuManual(kode, paksa: paksa);
       await _muatTransaksiPending(aturLoading: false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -567,25 +592,30 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                         onPressed: () => _lihatDetailPending(row),
                         icon: const Icon(Icons.visibility_outlined),
                       ),
-                      // Hanya baris yang memang belum tersinkron yang boleh
-                      // dikirim ulang; baris Sukses tidak punya apa pun untuk
-                      // dikirim dan tombolnya hanya akan membingungkan.
-                      if (status != 'SYNCED')
-                        _sedangKirimBaris
-                                .contains('${row['kode_unik'] ?? ''}'.trim())
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2)),
-                              )
-                            : IconButton(
-                                tooltip: 'Coba kirim transaksi ini sekarang',
-                                onPressed: () => _kirimSatuPending(row),
-                                icon: const Icon(Icons.cloud_upload_outlined),
-                              ),
+                      // Baris Sukses pun tetap dapat dikirim ulang: transaksi
+                      // bisa saja terhapus di server sementara perangkat ini
+                      // masih menyimpan jurnalnya. Kiriman ulang aman karena
+                      // server menolak duplikat berdasarkan kode uniknya.
+                      _sedangKirimBaris
+                              .contains('${row['kode_unik'] ?? ''}'.trim())
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                            )
+                          : IconButton(
+                              tooltip: status == 'SYNCED'
+                                  ? 'Kirim ulang (bila datanya terhapus di server)'
+                                  : 'Coba kirim transaksi ini sekarang',
+                              onPressed: () => _kirimSatuPending(row,
+                                  paksa: status == 'SYNCED'),
+                              icon: Icon(status == 'SYNCED'
+                                  ? Icons.restore_outlined
+                                  : Icons.cloud_upload_outlined),
+                            ),
                     ],
                   ),
                 ),

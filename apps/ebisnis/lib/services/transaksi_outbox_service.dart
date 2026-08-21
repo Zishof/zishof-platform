@@ -299,7 +299,13 @@ class TransaksiOutboxService {
   /// Berbeda dari sapuan otomatis, jeda antar-percobaan dan status GAGAL TIDAK
   /// menghalangi: kalau kasir menekan tombolnya, ia memang ingin mencoba
   /// sekarang. Idempotensi tetap dijaga server lewat `kode_unik` yang sama.
-  Future<HasilKirimManual> kirimSatuManual(String kodeUnik) async {
+  /// [paksa] mengirim ulang walaupun barisnya sudah berstatus SYNCED.
+  /// Dipakai ketika transaksi terlanjur terhapus di server sementara
+  /// perangkat masih menyimpan jurnalnya. Aman diulang: server menolak
+  /// duplikat berdasarkan kode unik yang sama, jadi bila transaksinya
+  /// ternyata masih ada, kiriman ini tidak membuat baris kedua.
+  Future<HasilKirimManual> kirimSatuManual(String kodeUnik,
+      {bool paksa = false}) async {
     final kode = kodeUnik.trim();
     if (kode.isEmpty) {
       return const HasilKirimManual(
@@ -316,7 +322,7 @@ class TransaksiOutboxService {
           berhasil: 0,
           pesan: 'Transaksi $kode tidak ada di perangkat ini.');
     }
-    if ('${row['status'] ?? ''}'.toUpperCase() == 'SYNCED') {
+    if (!paksa && '${row['status'] ?? ''}'.toUpperCase() == 'SYNCED') {
       return HasilKirimManual(
           total: 0, berhasil: 0, pesan: 'Transaksi $kode sudah tersinkron.');
     }
