@@ -174,10 +174,17 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
     );
     if (yakin != true) return;
     try {
-      final res = await ApiClient.instance.aksi('hotel_reservasi_batalkan', {
-        'id': r['id'],
-        'alasan': alasan.text.trim(),
-      });
+      // LOKAL DULU. Ketersediaan kamar tetap diputuskan server: selama antrean
+      // belum terkirim, kamar masih terpesan di sisi server.
+      final res = await prosesSimpanMaster(
+        context,
+        aksi: 'hotel_reservasi_batalkan',
+        kunci: 'hotel_reservasi:${r['id']}',
+        body: {
+          'id': r['id'],
+          'alasan': alasan.text.trim(),
+        },
+      );
       if (apiSukses(res)) {
         _info('Reservasi dibatalkan.');
         _muat();

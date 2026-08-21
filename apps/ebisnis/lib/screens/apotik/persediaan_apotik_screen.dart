@@ -923,14 +923,27 @@ class _TabOpnameState extends State<_TabOpname> {
     if (_baris.isEmpty) return;
     setStateIfMounted(() => _proses = true);
     try {
-      final hasil = await ApiClient.instance.aksi('apotik_opname_simpan', {
-        'items': _baris
-            .map((b) => {
-                  'item_id': b.item['id'],
-                  'qty_fisik': double.tryParse(b.qty.text) ?? 0,
-                })
-            .toList(),
-      });
+      // LOKAL DULU: hasil opname ditulis ke antrean sebelum menyentuh jaringan.
+      // Selisih per item DIHITUNG SERVER, jadi saat offline tabel hasilnya belum
+      // ada -- pengguna diberi tahu bahwa rinciannya menyusul setelah terkirim.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'apotik_opname_simpan',
+        kunci: 'apotik_opname:baru:${DateTime.now().microsecondsSinceEpoch}',
+        body: {
+          'items': _baris
+              .map((b) => {
+                    'item_id': b.item['id'],
+                    'qty_fisik': double.tryParse(b.qty.text) ?? 0,
+                  })
+              .toList(),
+        },
+      );
+      if (hasil['offline'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Opname tersimpan di perangkat dan akan dikirim otomatis. '
+                'Rincian selisihnya muncul setelah terkirim.')));
+      }
       setStateIfMounted(() {
         _hasilTerakhir =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -1052,16 +1065,22 @@ class _TabReturState extends State<_TabRetur> {
     if (_baris.isEmpty) return;
     setStateIfMounted(() => _proses = true);
     try {
-      await ApiClient.instance.aksi('apotik_retur_simpan', {
-        'jenis': _jenis,
-        'keterangan': _keterangan.text.trim(),
-        'items': _baris
-            .map((b) => {
-                  'item_id': b.item['id'],
-                  'qty': double.tryParse(b.qty.text) ?? 0,
-                })
-            .toList(),
-      });
+      // LOKAL DULU: retur ditulis ke antrean lebih dulu, baru dikirim.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'apotik_retur_simpan',
+        kunci: 'apotik_retur:baru:${DateTime.now().microsecondsSinceEpoch}',
+        body: {
+          'jenis': _jenis,
+          'keterangan': _keterangan.text.trim(),
+          'items': _baris
+              .map((b) => {
+                    'item_id': b.item['id'],
+                    'qty': double.tryParse(b.qty.text) ?? 0,
+                  })
+              .toList(),
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Retur tercatat.')));

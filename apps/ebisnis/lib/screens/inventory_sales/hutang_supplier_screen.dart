@@ -797,7 +797,13 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang>
       _error = null;
     });
     try {
-      await ApiClient.instance.aksi('si_payable_payment_create', {
+      // LOKAL DULU. Aman diulang: payload membawa `kode_unik` sehingga kiriman
+      // ganda akibat retry tidak menghasilkan pembayaran dobel di server.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'si_payable_payment_create',
+        kunci: 'si_payable_payment:$_kodeUnik',
+        body: {
         'supplier_id': _supplier!['id'] ?? _supplier!['supplierId'],
         'nominal': _totalAlokasi,
         'metode': _metode,
@@ -806,8 +812,9 @@ class _FormPembayaranHutangState extends State<_FormPembayaranHutang>
         if (_tanggalBg != null) 'tanggal_bg': _fmtTgl.format(_tanggalBg!),
         'keterangan': _keterangan.text.trim(),
         'kode_unik': _kodeUnik,
-        'alokasi': alokasi,
-      });
+          'alokasi': alokasi,
+        },
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/proses_simpan_master.dart';
+
 import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
@@ -100,8 +102,15 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
 
   Future<void> _ubahStatus(Map<String, dynamic> t, String ke) async {
     try {
-      final res = await ApiClient.instance
-          .aksi('hotel_kitchen_ticket_update', {'id': t['id'], 'status': ke});
+      // LOKAL DULU. Transisi status tetap DIVALIDASI SERVER saat antrean terkirim;
+      // bila ditolak (mis. tiket sudah dipindahkan perangkat lain), barisnya
+      // terlihat gagal di indikator sinkronisasi, bukan hilang diam-diam.
+      final res = await prosesSimpanMaster(
+        context,
+        aksi: 'hotel_kitchen_ticket_update',
+        kunci: 'hotel_kitchen_ticket:${t['id']}',
+        body: {'id': t['id'], 'status': ke},
+      );
       if (!mounted) return;
       if (apiSukses(res)) {
         _muatTiket();

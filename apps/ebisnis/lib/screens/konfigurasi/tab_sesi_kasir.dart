@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/proses_simpan_master.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
@@ -212,13 +214,17 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
     };
   }
 
+  /// LOKAL DULU: koreksi rekonsiliasi ditulis ke antrean sebelum dikirim, sehingga
+  /// hasil hitung ulang tidak hilang bila jaringan sedang mati.
   Future<void> _simpanRekonsiliasiKeServer(
     Map<String, dynamic> row,
     Map<String, dynamic> laporan,
   ) async {
-    await ApiClient.instance.aksi(
-      'sesi_kas_rekonsiliasi_simpan',
-      _payloadRekonsiliasiServer(row, laporan),
+    await prosesSimpanMaster(
+      context,
+      aksi: 'sesi_kas_rekonsiliasi_simpan',
+      body: _payloadRekonsiliasiServer(row, laporan),
+      kunci: 'sesi_kas_rekonsiliasi:${row['id'] ?? row['sesiId'] ?? ''}',
     );
   }
 
