@@ -574,11 +574,33 @@ class _KasirScreenState extends State<KasirScreen> {
       if (terbuka) {
         // disinkronkan:true -- ini status ASLI dari server (sudah terkonfirmasi),
         // bukan optimistic-write, jadi tak perlu masuk antrian retry.
-        await CoreDb.instance.bukaSesiKasLokal(
-          'sesi-${Sesi.instance.tokoId}',
-          (hasil['modalAwal'] as num?)?.toDouble() ?? 0,
-          disinkronkan: true,
-        );
+        //
+        // KE-FIX (61 transaksi tertahan di Toko Al Bahjah, 21-08-2026, ditolak
+        // server dengan "Transaksi berasal dari sesi kas yang berbeda").
+        // Baris ini DAHULU menyimpan kode KARANGAN 'sesi-<tokoId>' -- kode yang
+        // tidak pernah ada di server. Setiap penjualan sesudahnya membawa
+        // kode_sesi_kas itu pada payload-nya, server mencarinya, tidak ketemu,
+        // lalu menolak seluruh transaksinya. Gejalanya baru muncul ketika status
+        // kas datang dari server (mis. aplikasi baru dibuka) dan bukan dari layar
+        // Buka Kas -- jalur Buka Kas memang sudah menyimpan kode yang benar,
+        // itulah sebabnya sebagian transaksi berhasil dan sebagian tidak.
+        //
+        // Server SUDAH mengirim kode aslinya lewat `kodeSesiKas` sejak lama;
+        // yang kurang hanyalah memakainya. Bila jawabannya tidak memuat kode itu
+        // (server lama), kode lokal yang sudah ada dipertahankan apa adanya --
+        // lebih baik daripada menimpanya dengan karangan.
+        final kodeServer = '${hasil['kodeSesiKas'] ?? ''}'.trim();
+        final kodeLokalLama =
+            '${(await CoreDb.instance.sesiKasAktif())?['kode'] ?? ''}'.trim();
+        final kodeDipakai =
+            kodeServer.isNotEmpty ? kodeServer : kodeLokalLama;
+        if (kodeDipakai.isNotEmpty) {
+          await CoreDb.instance.bukaSesiKasLokal(
+            kodeDipakai,
+            (hasil['modalAwal'] as num?)?.toDouble() ?? 0,
+            disinkronkan: true,
+          );
+        }
       } else {
         await CoreDb.instance.tutupSemuaSesiKasLokal();
       }
