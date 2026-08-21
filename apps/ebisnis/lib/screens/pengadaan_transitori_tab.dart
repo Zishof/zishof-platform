@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
 import '../theme/app_colors.dart';
@@ -135,17 +136,27 @@ class _PengadaanTransitoriTabState extends State<PengadaanTransitoriTab> {
     if (lanjut != true || !mounted) return;
     setStateIfMounted(() => _mengirim = true);
     try {
-      final r =
-          await ApiClient.instance.aksi('pengadaan_transitori_realisasi', {
-        'ids': _terpilih.toList(),
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-      });
+      // LOKAL DULU: penandaan realisasi ditulis ke antrean sebelum menyentuh
+      // jaringan. Jurnalnya sendiri tidak terbit di langkah ini, jadi yang
+      // tertunda saat offline hanya penandaan batch-nya.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'pengadaan_transitori_realisasi',
+        body: {
+          'ids': _terpilih.toList(),
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+        },
+        kunci: 'pengadaan_transitori:${_terpilih.join('-')}',
+      );
       if (!mounted) return;
-      final berhasil = r['status'] == '00' || r['status'] == 'success';
+      final berhasil = r['offline'] == true ||
+          r['status'] == '00' ||
+          r['status'] == 'success';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              '${r['description'] ?? (berhasil ? 'Transitori direalisasikan.' : 'Gagal merealisasikan.')}'),
+          content: Text(r['offline'] == true
+              ? 'Tersimpan di perangkat, akan dikirim otomatis.'
+              : '${r['description'] ?? (berhasil ? 'Transitori direalisasikan.' : 'Gagal merealisasikan.')}'),
           backgroundColor:
               berhasil ? null : Theme.of(context).colorScheme.error));
       if (berhasil) {
