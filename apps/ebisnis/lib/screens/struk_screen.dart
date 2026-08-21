@@ -771,6 +771,11 @@ class StrukScreen extends StatelessWidget {
       // Cetak ULANG sengaja TIDAK membuka laci: mencetak ulang struk lama
       // bukan penerimaan uang baru, dan membiarkannya membuka laci berarti
       // siapa pun bisa membuka laci kapan saja lewat menu riwayat.
+      //
+      // Syarat `!modeCetakUlang` ini BUKAN sekadar kerapian: ia adalah
+      // kontrol kas. Menghapusnya membuat laci dapat dibuka kapan saja oleh
+      // siapa pun cukup dengan membuka riwayat lalu menekan Cetak Ulang,
+      // tanpa ada transaksi maupun uang yang masuk.
       if (!modeCetakUlang) {
         try {
           await bukaLaciKasir(

@@ -19,6 +19,52 @@ import 'pelayanan_transaksi.dart';
 /// (stok/saldo/hak akses/payload tidak valid) ditandai GAGAL agar tidak
 /// membanjiri server. Semua retry memakai `kode_unik` asli, sehingga aman
 /// terhadap respons yang hilang setelah server sempat menyimpan transaksi.
+///
+/// ===================================================================
+/// ATURAN YANG TIDAK BOLEH DIUBAH TANPA MEMBACA SELURUH CATATAN INI
+/// ===================================================================
+///
+/// Bagian ini ditulis setelah 61 transaksi Toko Al Bahjah (19-21 Agustus
+/// 2026) tertahan berhari-hari: uang sudah diterima di kasir dan struk sudah
+/// tercetak, tetapi penjualannya tidak pernah tercatat di server. Setiap
+/// aturan di bawah ini adalah hasil penelusuran kejadian nyata, bukan
+/// preferensi gaya. Melanggarnya berarti mengulang kehilangan uang yang sama.
+///
+/// 1. PAYLOAD DIKIRIM APA ADANYA. Baris outbox menyimpan payload lengkap
+///    sejak checkout dan dikirim ulang persis seperti itu. JANGAN menyusun
+///    ulang payload saat retry, dan JANGAN menambal/menormalkan isinya
+///    (mis. mengganti `kode_sesi_kas` yang tampak salah, atau menyegarkan
+///    harga). Payload adalah bukti apa yang terjadi di kasir pada saat
+///    transaksi; begitu ia ditulis ulang, tidak ada lagi sumber kebenaran
+///    untuk merekonsiliasi uang di laci.
+///
+/// 2. `waktu` TIDAK PERNAH DISENTUH. Server memakainya untuk
+///    `tanggal_pembayaran` (lihat `waktuTransaksiDariPayload` di
+///    KantinHelper). Kalau di sini diperbarui ke waktu kirim, transaksi yang
+///    baru terkirim tiga hari kemudian akan tercatat di tanggal yang salah
+///    dan seluruh laporan harian ikut salah.
+///
+/// 3. PENJAGA KEPEMILIKAN WAJIB MENINGGALKAN JEJAK. Baris milik kasir,
+///    toko, atau perangkat lain memang dilewati -- tetapi alasannya HARUS
+///    ditulis ke baris itu. Versi lama melewatinya diam-diam, sehingga
+///    tombol kirim melaporkan "0 dari 61 berhasil" tanpa satu pun petunjuk
+///    dan berjam-jam habis untuk menebak apakah server yang menolak atau
+///    klien yang tidak mengirim. Kegagalan yang tidak terlihat jauh lebih
+///    mahal daripada kegagalan yang berisik.
+///
+/// 4. REPLIKASI CADANGAN TIDAK BOLEH BERADA DI JALUR KIRIM. Dahulu
+///    `_cadangkanTransaksiTokoTerbaru` di-await di dalam proses sinkronisasi
+///    dan dijalankan pada SETIAP checkout, sehingga penjualan berikutnya
+///    mengantre di belakang pemindaian dua hari milik seluruh toko yang bisa
+///    memakan ratusan request berurutan. Ia sekarang dilepas dari jalur kirim
+///    dan dibatasi sekali per interval. Jangan mengembalikannya ke dalam
+///    mutex hanya supaya kodenya "lebih rapi berurutan".
+///
+/// 5. IDEMPOTENSI ADA DI SERVER, BUKAN DI SINI. Server menolak duplikat
+///    berdasarkan `kode_unik`. Karena itu mengirim ulang SELALU aman, dan
+///    itulah dasar tombol kirim ulang untuk baris yang sudah Sukses (dipakai
+///    bila datanya terlanjur terhapus di server). Jangan menambah penjagaan
+///    "anti kirim ganda" di klien yang justru memblokir pemulihan itu.
 class TransaksiOutboxService {
   TransaksiOutboxService._();
 

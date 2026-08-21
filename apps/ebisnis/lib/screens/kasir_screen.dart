@@ -589,6 +589,14 @@ class _KasirScreenState extends State<KasirScreen> {
         // yang kurang hanyalah memakainya. Bila jawabannya tidak memuat kode itu
         // (server lama), kode lokal yang sudah ada dipertahankan apa adanya --
         // lebih baik daripada menimpanya dengan karangan.
+        //
+        // JANGAN PERNAH mengarang kode sesi di sini. Kode sesi yang disimpan
+        // ke basis data lokal ikut pada payload SETIAP penjualan sesudahnya
+        // sebagai `kode_sesi_kas`, dan server memakainya untuk menentukan
+        // sesi kas mana yang menampung transaksi itu. Kode yang tidak ada di
+        // server membuat SELURUH penjualan sesudahnya ditolak permanen.
+        // Satu-satunya sumber yang sah adalah `kodeSesiKas` dari server, atau
+        // kode yang memang sudah tersimpan lokal dari layar Buka Kas.
         final kodeServer = '${hasil['kodeSesiKas'] ?? ''}'.trim();
         final kodeLokalLama =
             '${(await CoreDb.instance.sesiKasAktif())?['kode'] ?? ''}'.trim();

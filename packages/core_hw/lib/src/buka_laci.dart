@@ -20,6 +20,24 @@ import 'package:win32/win32.dart';
 /// perintah ESC/POS-nya. Kalau `null`/kosong, tetap fallback ke printer
 /// default Windows spt semula (perilaku lama TIDAK berubah kalau pengguna
 /// belum pernah mengatur printer laci secara eksplisit).
+/// ===================================================================
+/// CATATAN PENTING: ADA DUA PEMANGGIL, KEDUANYA DISENGAJA
+/// ===================================================================
+///
+/// 1. Tombol "Buka Laci" di layar Kasir dan layar Struk -- pembukaan manual.
+/// 2. `StrukScreen._cetakStruk` -- pembukaan OTOMATIS setiap kali struk
+///    transaksi baru dicetak.
+///
+/// Pemanggil kedua ditambahkan setelah laporan kasir 21-08-2026: "cetak
+/// struk tidak membuka laci, biasanya otomatis". Penyebabnya aliran ESC/POS
+/// struk TIDAK pernah memuat pulsa buka laci, sehingga laci hanya terbuka
+/// lewat tombol -- tombol tesnya berfungsi, cetak struknya tidak, dan itu
+/// membingungkan karena tampak seperti kerusakan perangkat keras.
+///
+/// JANGAN memindahkan pulsa ini ke dalam `_strukEscPos`. Aliran struk dibaca
+/// juga oleh jalur pratinjau dan cetak ulang; menaruh pulsanya di sana
+/// membuat laci terbuka pada cetak ulang struk lama, dan itu celah kontrol
+/// kas -- siapa pun bisa membuka laci lewat menu riwayat.
 Future<void> bukaLaciKasir(
     {bool pinAlternatif = false, String? namaPrinter}) async {
   if (defaultTargetPlatform != TargetPlatform.windows) {
