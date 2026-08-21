@@ -748,7 +748,9 @@ class StrukScreen extends StatelessWidget {
     return tinggi < 130 ? 130 : tinggi;
   }
 
-  Future<void> _cetakStruk() async {
+  /// [konteks] hanya dipakai untuk memberi tahu kasir bila LACI gagal dibuka;
+  /// pencetakan strukmnya sendiri tidak bergantung padanya.
+  Future<void> _cetakStruk([BuildContext? konteks]) async {
     await _pastikanProfilToko();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
@@ -759,6 +761,32 @@ class StrukScreen extends StatelessWidget {
         namaPrinter: PengaturanLaci.instance.namaPrinter,
         namaDokumen: 'Struk $kode',
       );
+      // KE-FIX (laporan kasir 21-08-2026: "cetak struk tidak membuka laci,
+      // biasanya otomatis"). Aliran ESC/POS struk TIDAK pernah memuat pulsa
+      // buka laci, sehingga laci hanya terbuka lewat tombol Buka Laci yang
+      // memanggil bukaLaciKasir sendiri. Pulsa itu dikirim di sini, SETELAH
+      // struknya masuk antrean cetak, ke printer yang sama dengan struknya --
+      // laci memang menumpang port RJ11 printer tersebut.
+      //
+      // Cetak ULANG sengaja TIDAK membuka laci: mencetak ulang struk lama
+      // bukan penerimaan uang baru, dan membiarkannya membuka laci berarti
+      // siapa pun bisa membuka laci kapan saja lewat menu riwayat.
+      if (!modeCetakUlang) {
+        try {
+          await bukaLaciKasir(
+            pinAlternatif: PengaturanLaci.instance.pinAlternatif,
+            namaPrinter: PengaturanLaci.instance.namaPrinter,
+          );
+        } catch (e) {
+          // Struknya sudah tercetak; kegagalan laci tidak boleh membatalkan
+          // apa pun. Cukup beri tahu supaya kasir tahu harus membuka manual.
+          if (konteks != null && konteks.mounted) {
+            ScaffoldMessenger.of(konteks).showSnackBar(SnackBar(
+              content: Text('Struk tercetak, tetapi laci gagal dibuka: $e'),
+            ));
+          }
+        }
+      }
       return;
     }
     final logo = await _logoPdf();
@@ -1145,7 +1173,7 @@ class StrukScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       _TombolStruk(
-                        onCetak: _cetakStruk,
+                        onCetak: () => _cetakStruk(context),
                         menungguAngkaServer: menungguAngkaServer,
                         tampilkanTransaksiBaru: !modeCetakUlang,
                         tampilkanBukaLaci: !modeCetakUlang,
