@@ -695,9 +695,27 @@ class CoreDb {
 
   /// Hapus satu baris antrean -- dipakai saat server MENOLAK scr bisnis di
   /// jendela simpan (user melihat pesannya langsung, baris tak perlu tersisa).
+  /// Buang antrean PENDING milik satu kunci. Dipakai saat penghapusan lokal
+  /// DIPULIHKAN: barisnya kembali tampil, jadi perintah hapus yang masih
+  /// mengantre TIDAK boleh ikut terkirim -- kalau tetap terkirim, datanya
+  /// lenyap di server justru setelah pengguna membatalkan penghapusannya.
+  Future<int> outboxMasterHapusKunci(String kunci) async {
+    final database = await db;
+    return database.delete('outbox_master',
+        where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
+  }
+
   Future<void> outboxMasterHapus(int id) async {
     final database = await db;
     await database.delete('outbox_master', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Batalkan baris antrean berdasarkan kuncinya -- dipakai saat pengguna
+  /// MENGURUNGKAN penghapusan yang belum sempat terkirim.
+  Future<int> outboxMasterHapusKunci(String kunci) async {
+    final database = await db;
+    return database.delete('outbox_master',
+        where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
   }
 
   Future<List<Map<String, Object?>>> outboxMasterPending() async {
@@ -729,7 +747,6 @@ class CoreDb {
         ' pesan_error = ? WHERE id = ?',
         [pesan, id]);
   }
-
 
   // ======================== ID SEMENTARA (OFFLINE) ========================
   // Lihat _ddlIdSementara. Alurnya: catat() saat baris dibuat offline ->
@@ -769,7 +786,10 @@ class CoreDb {
   Future<int?> idSementaraCari(int idLokal) async {
     final database = await db;
     final hasil = await database.query('id_sementara',
-        columns: ['id_server'], where: 'id_lokal = ?', whereArgs: [idLokal], limit: 1);
+        columns: ['id_server'],
+        where: 'id_lokal = ?',
+        whereArgs: [idLokal],
+        limit: 1);
     if (hasil.isEmpty) return null;
     return (hasil.first['id_server'] as num?)?.toInt();
   }
@@ -796,11 +816,11 @@ class CoreDb {
   /// Bersihkan pemetaan lama yang sudah tidak dirujuk siapa pun.
   Future<void> idSementaraBersihkan({int simpanHari = 30}) async {
     final database = await db;
-    final batas = DateTime.now()
-        .subtract(Duration(days: simpanHari))
-        .toIso8601String();
+    final batas =
+        DateTime.now().subtract(Duration(days: simpanHari)).toIso8601String();
     await database.delete('id_sementara',
-        where: 'id_server IS NOT NULL AND dipetakan_pada < ?', whereArgs: [batas]);
+        where: 'id_server IS NOT NULL AND dipetakan_pada < ?',
+        whereArgs: [batas]);
   }
 
   Future<int> jumlahOutboxMasterPending() async {

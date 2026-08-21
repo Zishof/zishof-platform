@@ -281,7 +281,8 @@ class MasterOffline {
       if (siap == null) {
         throw ApiException(
             'Menunggu data induk yang dibuat offline selesai terkirim.',
-            offline: true, aktivitas: aksi);
+            offline: true,
+            aktivitas: aksi);
       }
       final hasil = await ApiClient.instance.aksi(aksi, siap);
       await _catatPemetaan(siap, hasil);
@@ -306,7 +307,6 @@ class MasterOffline {
       rethrow;
     }
   }
-
 
   // ==================== ID SEMENTARA UNTUK BARIS OFFLINE ====================
   //
@@ -347,7 +347,8 @@ class MasterOffline {
     Object? telusuri(String kunci, Object? nilai) {
       if (nilai is Map) {
         return {
-          for (final e in nilai.entries) '${e.key}': telusuri('${e.key}', e.value)
+          for (final e in nilai.entries)
+            '${e.key}': telusuri('${e.key}', e.value)
         };
       }
       if (nilai is List) {
@@ -430,8 +431,8 @@ class MasterOffline {
         final totalMentah = hasil['total'];
         total = total ?? (totalMentah is num ? totalMentah.toInt() : null);
         if (lapor != null) lapor(semua.length, total);
-        final habis = data.length < pageSize ||
-            (total != null && semua.length >= total);
+        final habis =
+            data.length < pageSize || (total != null && semua.length >= total);
         if (habis) break;
         page++;
       }
@@ -464,7 +465,13 @@ class MasterOffline {
       // (ditemukan saat konversi hutang/piutang 2026-08-19).
       ...?responsAsli,
       'status': '00',
-      fieldData: data,
+      /* Baris yang dihapus secara lokal disaring DI SINI, satu tempat untuk
+       * seluruh layar. Menyaringnya di tiap layar berarti setiap layar baru
+       * harus ingat melakukannya, dan yang lupa akan menampilkan baris yang
+       * menurut penggunanya sudah dihapus. Barisnya sendiri tetap tersimpan
+       * di snapshot supaya penghapusannya masih dapat dibatalkan. */
+      fieldData:
+          data.where((e) => !(e is Map && e['_dihapus'] == true)).toList(),
       'dariServer': dariServer,
       if (!dariServer) 'offline': true,
       // total server WAJIB diteruskan -- tanpanya layar jatuh ke data.length
@@ -533,8 +540,7 @@ class MasterOffline {
     if (tersimpan != null) {
       try {
         lokal = jsonDecode(tersimpan) as List;
-        onData(_hasilDaftar(lokal,
-            dariServer: false, fieldData: fieldData));
+        onData(_hasilDaftar(lokal, dariServer: false, fieldData: fieldData));
       } catch (_) {
         lokal = null; // cache rusak -- lanjut jalur server biasa.
       }
@@ -588,8 +594,7 @@ class MasterOffline {
         // Sebagian aksi memakai 'total' utk OBJEK agregat (mis.
         // pembantu_piutang_list), bukan cacah baris -- jangan di-cast paksa.
         final totalMentah = hasil['total'];
-        final totalServer =
-            totalMentah is num ? totalMentah.toInt() : null;
+        final totalServer = totalMentah is num ? totalMentah.toInt() : null;
         final benarLengkap = responsLengkap &&
             kataKunci.isEmpty &&
             (totalServer == null || data.length >= totalServer);
@@ -720,13 +725,33 @@ class MasterOffline {
   static Future<void> terapkanLokal(String cacheKey, Map<String, dynamic> row,
       {bool hapus = false, String? kunci}) async {
     final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
-    final List daftar = tersimpan == null ? [] : (jsonDecode(tersimpan) as List);
+    final List daftar =
+        tersimpan == null ? [] : (jsonDecode(tersimpan) as List);
     final id = row['id'];
     final indeks = id == null
         ? -1
         : daftar.indexWhere((e) => e is Map && '${e['id']}' == '$id');
     if (hapus) {
-      if (indeks >= 0) daftar.removeAt(indeks);
+      /* HAPUS LOKAL BERSIFAT LUNAK. Barisnya TIDAK dibuang dari snapshot,
+       * melainkan ditandai. Alasannya: penghapusan yang dikerjakan saat offline
+       * baru sampai ke server belakangan, dan sampai saat itu satu-satunya
+       * salinan datanya ada di perangkat ini. Membuangnya seketika berarti
+       * salah tekan tidak dapat dipulihkan sama sekali.
+       *
+       * Baris bertanda ini disaring di [daftarCacheDulu] sehingga tidak tampil
+       * di layar mana pun -- pengguna melihatnya seolah benar-benar terhapus --
+       * dan dibersihkan sendiri ketika daftarnya dimuat ulang dari server, yang
+       * memang tidak lagi mengirimkannya. Pemulihannya lewat [pulihkanLokal].
+       *
+       * Sisi server tidak memerlukan ini: di sana sudah ada AuditTrails. */
+      if (indeks >= 0) {
+        daftar[indeks] = {
+          ...daftar[indeks] as Map,
+          '_dihapus': true,
+          '_dihapusPada': DateTime.now().toIso8601String(),
+          if (kunci != null) '_kunci': kunci,
+        };
+      }
     } else if (indeks >= 0) {
       daftar[indeks] = {
         ...daftar[indeks] as Map,
@@ -742,6 +767,53 @@ class MasterOffline {
       });
     }
     await CoreDb.instance.simpanCacheReferensi(cacheKey, jsonEncode(daftar));
+  }
+
+  /// Batalkan penghapusan lokal sebuah baris.
+  ///
+  /// Dua hal dikerjakan sekaligus, dan keduanya wajib: tanda hapus pada snapshot
+  /// dilepas, DAN perintah hapus yang masih mengantre dibuang. Melewatkan yang
+  /// kedua berarti barisnya kembali tampil di layar tetapi tetap terhapus di
+  /// server begitu jaringan tersambung -- kegagalan yang paling membingungkan
+  /// karena tampak berhasil lebih dulu.
+  ///
+  /// Mengembalikan true bila memang ada baris yang dipulihkan.
+  static Future<bool> pulihkanLokal(String cacheKey, Object id,
+      {String? kunci}) async {
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+    if (tersimpan == null) return false;
+    final List daftar = jsonDecode(tersimpan) as List;
+    final indeks = daftar.indexWhere((e) => e is Map && '${e['id']}' == '$id');
+    if (indeks < 0) return false;
+    final baris = Map<String, dynamic>.from(daftar[indeks] as Map);
+    if (baris['_dihapus'] != true) return false;
+    baris.remove('_dihapus');
+    baris.remove('_dihapusPada');
+    daftar[indeks] = baris;
+    await CoreDb.instance.simpanCacheReferensi(cacheKey, jsonEncode(daftar));
+    final kunciAntrean = kunci ?? '${baris['_kunci'] ?? ''}';
+    if (kunciAntrean.isNotEmpty) {
+      await CoreDb.instance.outboxMasterHapusKunci(kunciAntrean);
+    }
+    await _muatUlangHitungan();
+    return true;
+  }
+
+  /// Baris yang sedang bertanda terhapus pada satu cache, terbaru lebih dahulu.
+  /// Dipakai layar pemulihan untuk menawarkan pengembalian.
+  static Future<List<Map<String, dynamic>>> daftarTerhapusLokal(
+      String cacheKey) async {
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+    if (tersimpan == null) return const [];
+    final List daftar = jsonDecode(tersimpan) as List;
+    final hasil = daftar
+        .whereType<Map>()
+        .where((e) => e['_dihapus'] == true)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    hasil.sort((a, b) =>
+        '${b['_dihapusPada'] ?? ''}'.compareTo('${a['_dihapusPada'] ?? ''}'));
+    return hasil;
   }
 
   /// Kirim ulang seluruh antrean PENDING. Aman dipanggil kapan pun; berhenti
@@ -763,7 +835,8 @@ class MasterOffline {
           body = Map<String, dynamic>.from(
               jsonDecode('${row['payload_json']}') as Map);
         } catch (e) {
-          await CoreDb.instance.outboxMasterTandaiGagal(id, 'Payload rusak: $e');
+          await CoreDb.instance
+              .outboxMasterTandaiGagal(id, 'Payload rusak: $e');
           _tandaiBarisGagal(kunci);
           continue;
         }
