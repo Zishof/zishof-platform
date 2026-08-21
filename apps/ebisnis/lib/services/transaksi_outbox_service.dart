@@ -204,13 +204,35 @@ class TransaksiOutboxService {
         tokoPayload is num ? tokoPayload.toInt() : int.tryParse('$tokoPayload');
     final pemulihanSupervisor =
         payload['input_supervisor'] == true && Sesi.instance.bolehKelola;
-    if ((!pemulihanSupervisor &&
-            kasirPayload.isNotEmpty &&
-            kasirPayload != Sesi.instance.userId) ||
-        (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) ||
-        ('${payload['id_perangkat'] ?? ''}'.trim().isNotEmpty &&
-            '${payload['id_perangkat']}'.trim() !=
-                IdentitasMesin.instance.idMesin)) {
+    final perangkatPayload = '${payload['id_perangkat'] ?? ''}'.trim();
+
+    // KE-FIX: penjaga ini SEBELUMNYA melewati baris tanpa meninggalkan jejak
+    // apa pun. Akibatnya tombol kirim melaporkan '0 dari 61 transaksi berhasil
+    // dikirim' sementara kolom Kendala Terakhir tidak berubah sedikit pun dan
+    // jumlah percobaan tidak bertambah -- operator tidak punya cara tahu bahwa
+    // baris itu tidak pernah dikirim, apalagi alasannya. Alasannya kini ditulis
+    // ke baris yang bersangkutan.
+    final alasanDilewati = <String>[];
+    if (!pemulihanSupervisor &&
+        kasirPayload.isNotEmpty &&
+        kasirPayload != Sesi.instance.userId) {
+      alasanDilewati.add(
+          'transaksi milik kasir "$kasirPayload", sedang login sebagai'
+          ' "${Sesi.instance.userId}"');
+    }
+    if (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) {
+      alasanDilewati.add('transaksi milik toko $tokoPayloadInt,'
+          ' toko aktif ${Sesi.instance.tokoId}');
+    }
+    if (perangkatPayload.isNotEmpty &&
+        perangkatPayload != IdentitasMesin.instance.idMesin) {
+      alasanDilewati.add('transaksi berasal dari perangkat lain');
+    }
+    if (alasanDilewati.isNotEmpty) {
+      final pesan = 'Belum dikirim: ${alasanDilewati.join('; ')}.'
+          ' Masuk dengan akun kasir yang bersangkutan di perangkat ini,'
+          ' atau minta supervisor memulihkannya.';
+      await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
       return _VonisKirim.dilewati;
     }
 
