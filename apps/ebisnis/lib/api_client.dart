@@ -211,6 +211,61 @@ class ApiClient {
         : body;
   }
 
+  /// Endpoint hasil redirect yang sudah terbukti, per URL asal.
+  ///
+  /// Diingat selama aplikasi berjalan supaya ongkos redirect hanya dibayar
+  /// sekali, bukan pada setiap permintaan.
+  static final Map<String, String> _endpointSetelahRedirect = {};
+
+  /// POST yang MENGIKUTI redirect 301/302/307/308.
+  ///
+  /// <b>Mengapa perlu.</b> Server produksi memasang pengalihan permanen dari
+  /// http ke https (Apache: `301 Moved Permanently`). Pustaka HTTP Dart hanya
+  /// mengikuti redirect otomatis untuk GET/HEAD -- untuk POST, badan permintaan
+  /// tidak ikut dikirim ulang, sehingga aplikasi menerima halaman HTML 301 dan
+  /// gagal mengurainya sebagai JSON. Gejalanya: 'FormatException: Unexpected
+  /// character (at character 1) <!DOCTYPE HTML...' pada aksi apa pun, termasuk
+  /// login, padahal servernya sehat dan alamatnya benar.
+  ///
+  /// <b>Batas keamanan.</b> Redirect HANYA diikuti bila host tujuannya SAMA
+  /// dengan host asal (skema boleh naik http -> https). Payload aksi ini berisi
+  /// kata sandi dan token; mengikuti pengalihan ke host lain berarti
+  /// menyerahkan kredensial pengguna ke pihak yang belum tentu tepercaya.
+  static Future<http.Response> _postIkutiRedirect(
+    String url,
+    Map<String, String> headers,
+    String body,
+    Duration batasWaktu,
+  ) async {
+    var tujuan = _endpointSetelahRedirect[url] ?? url;
+    for (var lompatan = 0; lompatan < 3; lompatan++) {
+      final resp = await http
+          .post(Uri.parse(tujuan), headers: headers, body: body)
+          .timeout(batasWaktu);
+      final kode = resp.statusCode;
+      final pindah = kode == 301 || kode == 302 || kode == 307 || kode == 308;
+      final lokasi = resp.headers['location'];
+      if (!pindah || lokasi == null || lokasi.trim().isEmpty) {
+        return resp;
+      }
+      final asal = Uri.parse(tujuan);
+      final baru = asal.resolve(lokasi.trim());
+      if (baru.host.toLowerCase() != asal.host.toLowerCase()) {
+        // Host berbeda -- jangan pernah kirim ulang kredensial ke sana.
+        return resp;
+      }
+      tujuan = baru.toString();
+      if (kode == 301 || kode == 308) {
+        // Pengalihan PERMANEN: simpan supaya permintaan berikutnya langsung.
+        _endpointSetelahRedirect[url] = tujuan;
+      }
+    }
+    // Terlalu banyak lompatan; kembalikan percobaan terakhir apa adanya.
+    return await http
+        .post(Uri.parse(tujuan), headers: headers, body: body)
+        .timeout(batasWaktu);
+  }
+
   Future<Map<String, dynamic>> aksi(String namaAksi,
       [Map<String, dynamic>? body]) async {
     final payload = susunPayload(namaAksi, body);
@@ -229,9 +284,8 @@ class ApiClient {
 
     http.Response resp;
     try {
-      resp = await http
-          .post(Uri.parse(baseUrl), headers: headers, body: jsonEncode(payload))
-          .timeout(batasWaktu);
+      resp = await _postIkutiRedirect(
+          baseUrl, headers, jsonEncode(payload), batasWaktu);
     } catch (e, stack) {
       final gagal = ApiException(
         'Aplikasi belum dapat menghubungi server.',
@@ -319,17 +373,17 @@ class ApiClient {
     // tidak memanggil dirinya sendiri tanpa akhir. Password, token, dan body
     // permintaan tidak pernah dimasukkan ke payload audit.
     try {
-      await http
-          .post(Uri.parse(baseUrl),
-              headers: const {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'action': 'client_error_log',
-                'sumber': gagal.aktivitas ?? 'unknown',
-                'pesan': info.pesan,
-                'detail': gagal.teknis,
-                'referensi': info.kodeReferensi,
-              }))
-          .timeout(const Duration(seconds: 5));
+      await _postIkutiRedirect(
+          baseUrl,
+          const {'Content-Type': 'application/json'},
+          jsonEncode({
+            'action': 'client_error_log',
+            'sumber': gagal.aktivitas ?? 'unknown',
+            'pesan': info.pesan,
+            'detail': gagal.teknis,
+            'referensi': info.kodeReferensi,
+          }),
+          const Duration(seconds: 5));
     } catch (_) {
       // Catatan lokal sudah tersimpan dan dapat disinkronkan/diperiksa nanti.
     }
