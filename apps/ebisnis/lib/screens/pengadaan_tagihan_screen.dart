@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../services/master_offline.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import 'pengadaan_cetak_util.dart';
@@ -386,6 +387,8 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         AppTableColumn('PO', flex: 2),
         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
         AppTableColumn('Faktur', flex: 3),
+        AppTableColumn('Barang', flex: 2, align: TextAlign.center),
+        AppTableColumn('Lampiran', flex: 3),
         AppTableColumn('Aksi', width: 64),
       ],
       rows: _daftar.map(_baris).toList(),
@@ -457,6 +460,62 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
                         fontWeight: FontWeight.w700,
                         color: warna)),
               ),
+      ),
+      /* Status BARANG, bukan status faktur. Kolom Faktur di sebelah kiri sudah
+       * menyatakan apakah tagihannya sudah masuk; yang belum pernah terlihat di
+       * layar ini adalah apakah barangnya sudah benar-benar diterima. Keduanya
+       * bisa berbeda: faktur kerap datang sebelum penerimaan disetujui. */
+      AppTableCell(
+        flex: 2,
+        align: TextAlign.center,
+        child: Builder(builder: (_) {
+          final diterima = '${row['statusBarang'] ?? ''}' == 'DISETUJUI';
+          final w = diterima ? AppColors.success : AppColors.warning;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+                color: w.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(6)),
+            child: Text(diterima ? 'Diterima' : 'Belum diterima',
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700, color: w)),
+          );
+        }),
+      ),
+      /* Berkas yang SUDAH diunggah, disebut namanya. Sebelumnya isi papan
+       * lampiran hanya terlihat setelah dialognya dibuka satu per satu,
+       * sehingga tidak ada cara menyapu daftar untuk mencari yang kurang.
+       * Kosong bila penyimpanan berkas sedang tidak terbaca -- server memang
+       * membiarkan kolom ini kosong daripada mematikan seluruh daftar. */
+      AppTableCell(
+        flex: 3,
+        child: Builder(builder: (_) {
+          final daftar =
+              (row['lampiran'] as List?)?.cast<Object?>() ?? const [];
+          if (daftar.isEmpty) {
+            return Text('Belum ada',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondaryOf(context)));
+          }
+          final wajibKurang = row['lampiranWajibLengkap'] == false;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(daftar.join(', '),
+                  style: const TextStyle(fontSize: 11), maxLines: 2),
+              Text(
+                  '${row['lampiranTerisi'] ?? daftar.length}'
+                  '/${row['lampiranTotal'] ?? 5} berkas'
+                  '${wajibKurang ? ' · Invoice belum ada' : ''}',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: wajibKurang
+                          ? AppColors.danger
+                          : AppColors.textSecondaryOf(context))),
+            ],
+          );
+        }),
       ),
       AppTableCell(
         width: 64,
