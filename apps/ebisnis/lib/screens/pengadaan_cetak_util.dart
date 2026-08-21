@@ -2,21 +2,23 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api_client.dart';
 
-/// Cetak satu dokumen Pengadaan, dengan PRATINJAU lebih dulu.
+/// Cetak satu dokumen Pengadaan, SELALU lewat pratinjau di dalam aplikasi.
 ///
-/// Alurnya: server merender PDF memakai templat JasperReports yang SAMA dengan
-/// versi ZKoss, lalu mengirim isinya (base64) beserta URL-nya. Isi berkas dipakai
-/// untuk membuka pratinjau bawaan `printing` -- pengguna melihat dokumennya,
-/// baru memutuskan mencetak. Bila isinya tidak ikut terkirim (dokumen sangat
-/// besar), URL-nya dibuka di peramban sebagai jalan mundur.
+/// Server merender PDF memakai templat JasperReports yang sama dengan versi ZKoss,
+/// lalu mengirim isinya (base64) beserta URL-nya.
 ///
-/// [tahap] salah satu dari: pr, po, bast, tagihan, dpc.
+/// Dokumen ditampilkan pada jendela pratinjau [PdfPreview] -- pengguna melihat
+/// halamannya lebih dulu, memperbesar, mengganti ukuran kertas, baru menekan cetak.
+/// Sengaja TIDAK memanggil `Printing.layoutPdf` secara langsung: di Windows itu
+/// melompat ke dialog "Print Setup" bawaan sistem tanpa pengguna sempat melihat
+/// dokumennya.
+///
+/// [tahap] salah satu dari: pr, po, bast, tagihan, dpc, pajak.
 Future<void> cetakDokumenPengadaan(
   BuildContext context, {
   required String tahap,
@@ -62,12 +64,11 @@ Future<void> cetakDokumenPengadaan(
   final nama = '${hasil['kode'] ?? kode ?? 'dokumen'}';
   if (b64.isNotEmpty) {
     final bytes = base64Decode(b64);
-    // Printing.layoutPdf() LANGSUNG membuka dialog printer sistem -- pengguna
-    // tidak sempat melihat dokumennya. Tampilkan pratinjau dulu; tombol cetak
-    // ada di dalam pratinjau, jadi mencetak tetap satu klik dari sini.
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _PratinjauDokumen(bytes: bytes, nama: nama),
-    ));
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _PratinjauCetakDialog(judul: nama, isi: bytes),
+    );
     return;
   }
 
@@ -86,32 +87,57 @@ Future<void> cetakDokumenPengadaan(
   }
 }
 
-/// Halaman pratinjau dokumen Pengadaan.
-///
-/// Memakai [PdfPreview] bawaan paket `printing`: dokumen dirender di layar
-/// lebih dulu, dan tombol cetak/bagikan tersedia di bilah atasnya. Pemilihan
-/// ukuran kertas & orientasi DIMATIKAN karena templat JasperReports di server
-/// sudah menentukannya -- mengubahnya di sini hanya akan membuat hasil cetak
-/// berbeda dengan versi ZKoss.
-class _PratinjauDokumen extends StatelessWidget {
-  final Uint8List bytes;
-  final String nama;
-
-  const _PratinjauDokumen({required this.bytes, required this.nama});
+/// Jendela pratinjau dokumen. Tombol cetak ada DI DALAM pratinjau, jadi dialog
+/// printer sistem baru muncul setelah pengguna benar-benar menekannya.
+class _PratinjauCetakDialog extends StatelessWidget {
+  final String judul;
+  final Uint8List isi;
+  const _PratinjauCetakDialog({required this.judul, required this.isi});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Pratinjau $nama')),
-      body: PdfPreview(
-        build: (_) async => bytes,
-        pdfFileName: '$nama.pdf',
-        allowPrinting: true,
-        allowSharing: true,
-        canChangePageFormat: false,
-        canChangeOrientation: false,
-        canDebug: false,
-        initialPageFormat: PdfPageFormat.a4,
+    final layar = MediaQuery.of(context).size;
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: layar.width * 0.9,
+        height: layar.height * 0.9,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+            child: Row(children: [
+              const Icon(Icons.description_outlined, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Pratinjau $judul',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              IconButton(
+                  tooltip: 'Tutup',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close)),
+            ]),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: PdfPreview(
+              build: (_) async => isi,
+              pdfFileName: '$judul.pdf',
+              canChangePageFormat: true,
+              canChangeOrientation: true,
+              canDebug: false,
+              allowSharing: true,
+              allowPrinting: true,
+              loadingWidget: const Center(child: CircularProgressIndicator()),
+              onPrinted: (_) {
+                if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
