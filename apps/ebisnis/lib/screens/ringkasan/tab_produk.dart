@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
+import 'muat_dashboard.dart';
 
 const _periodeOpsi = ['harian', 'mingguan', 'bulanan', 'semester', 'tahunan'];
 
@@ -22,6 +23,11 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
   static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab,
+  /// atau jawabannya tidak dapat diproses) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
   Map<String, dynamic>? _d;
   String _periode = 'bulanan';
   DateTime _tanggalAcuan =
@@ -68,19 +74,23 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
       _memuat = true;
       _error = null;
     });
-    try {
-      final hasil = await ApiClient.instance.aksi('dashboard_produk', {
+    // Salinan lokal ditampilkan lebih dahulu bila ada, lalu ditimpa angka
+    // server. Galat hanya muncul bila memang tidak ada yang bisa ditampilkan.
+    await muatTabDashboard(
+      aksi: 'dashboard_produk',
+      payload: {
         'periode': _periode,
         'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan),
-      });
-      if (!mounted) return;
-      setStateIfMounted(() => _d = hasil);
-    } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() => _error = terapkanGalat(e));
-    } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
-    }
+      },
+      masihAktif: () => mounted,
+      onData: (data, dariCache, disimpanPada) => setStateIfMounted(() {
+        _d = data;
+        _dariCache = dariCache;
+        _cacheDisimpanPada = disimpanPada;
+      }),
+      onError: (e) => setStateIfMounted(() => _error = terapkanGalat(e)),
+    );
+    if (mounted) setStateIfMounted(() => _memuat = false);
   }
 
   Color _warnaStatus(String s) {
@@ -140,7 +150,16 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
             return (label: '$jam', nilai: nilai.toDouble());
           });
 
-    return RefreshIndicator(
+    // Penanda salinan tersimpan duduk DI ATAS isi, sehingga angka di
+    // bawahnya tidak pernah terbaca sebagai data terkini. Saat tidak
+    // tampil ia menjadi SizedBox.shrink -- tata letaknya sama seperti
+    // semula.
+    return Column(
+      children: [
+        PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
@@ -456,6 +475,9 @@ class _RingkasanTabProdukState extends State<RingkasanTabProduk> with JejakGalat
           ),
         ],
       ),
+    ),
+        ),
+      ],
     );
   }
 }

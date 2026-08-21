@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
+import 'muat_dashboard.dart';
 
 /// Tab 5/9 "Peringkat Mitra" -- aksi `peringkat_mitra`. Lintas-toko utk akun
 /// admin (`semuaToko: true`), terbatas ke toko sendiri utk akun pedagang/kasir.
@@ -16,6 +17,11 @@ class RingkasanTabPeringkat extends StatefulWidget {
 class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> with JejakGalat {
   bool _memuat = true;
   String? _error;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab,
+  /// atau jawabannya tidak dapat diproses) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
   Map<String, dynamic>? _d;
 
   @override
@@ -30,16 +36,20 @@ class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> with Jeja
       _memuat = true;
       _error = null;
     });
-    try {
-      final hasil = await ApiClient.instance.aksi('peringkat_mitra');
-      if (!mounted) return;
-      setStateIfMounted(() => _d = hasil);
-    } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() => _error = terapkanGalat(e));
-    } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
-    }
+    // Salinan lokal ditampilkan lebih dahulu bila ada, lalu ditimpa angka
+    // server. Galat hanya muncul bila memang tidak ada yang bisa ditampilkan.
+    await muatTabDashboard(
+      aksi: 'peringkat_mitra',
+      payload: const <String, dynamic>{},
+      masihAktif: () => mounted,
+      onData: (data, dariCache, disimpanPada) => setStateIfMounted(() {
+        _d = data;
+        _dariCache = dariCache;
+        _cacheDisimpanPada = disimpanPada;
+      }),
+      onError: (e) => setStateIfMounted(() => _error = terapkanGalat(e)),
+    );
+    if (mounted) setStateIfMounted(() => _memuat = false);
   }
 
   Color _warnaStatus(BuildContext context, String s) {
@@ -70,7 +80,16 @@ class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> with Jeja
     final top10 = titikDariList(daftar.take(10).toList(),
         labelKey: 'nama', nilaiKey: 'omzet');
 
-    return RefreshIndicator(
+    // Penanda salinan tersimpan duduk DI ATAS isi, sehingga angka di
+    // bawahnya tidak pernah terbaca sebagai data terkini. Saat tidak
+    // tampil ia menjadi SizedBox.shrink -- tata letaknya sama seperti
+    // semula.
+    return Column(
+      children: [
+        PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
@@ -174,6 +193,9 @@ class _RingkasanTabPeringkatState extends State<RingkasanTabPeringkat> with Jeja
           ),
         ],
       ),
+    ),
+        ),
+      ],
     );
   }
 }

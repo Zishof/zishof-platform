@@ -98,7 +98,13 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> with JejakGal
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _error = terapkanGalat(e));
+      // Salinan lokal mungkin SUDAH terpancar sebelum panggilan server gagal.
+      // Bila barisnya sudah ada di layar, menimpanya dengan kotak galat justru
+      // menghilangkan satu-satunya data yang bisa dilihat pengguna. Galat hanya
+      // ditampilkan bila memang tidak ada yang tampil.
+      if (_data.isEmpty) {
+        setStateIfMounted(() => _error = terapkanGalat(e));
+      }
     } finally {
       setStateIfMounted(() => _memuat = false);
     }

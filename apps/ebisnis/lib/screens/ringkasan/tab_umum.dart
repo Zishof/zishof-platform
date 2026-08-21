@@ -460,9 +460,25 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
     } catch (e) {
       error = e;
       if (!mounted) return;
-      // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
-      // global sudah menceritakan kondisinya).
-      if (!(e is ApiException && e.offline && barisCache != null)) {
+      /* KE-FIX: penjaga ini DAHULU terlalu sempit pada dua sisi, dan akibatnya
+       * Dashboard tetap kosong walau salinan lokalnya sudah tampil.
+       *
+       * (a) `e.offline` -- galat yang sebenarnya terjadi di lapangan adalah
+       *     "Jawaban server belum dapat diproses", yaitu badan jawaban yang
+       *     bukan JSON (gateway 502, pengalihan http->https). ApiException-nya
+       *     ber-offline=false, sehingga penjaga tidak berlaku dan kotak galat
+       *     menimpa data yang sudah tampil. Bagi pengguna, server yang menjawab
+       *     dengan sesuatu yang tidak dapat diproses sama tidak bergunanya
+       *     dengan server yang tidak menjawab.
+       *
+       * (b) `barisCache != null` -- itu daftar baris TRANSAKSI, bukan penanda
+       *     bahwa salinan berhasil ditampilkan. Salinan yang sah tetapi kebetulan
+       *     tanpa baris transaksi tetap memunculkan kotak galat.
+       *
+       * Syaratnya kini satu dan tepat: galat hanya ditampilkan bila TIDAK ADA
+       * data yang bisa dilihat. Selama ada, penanda "data tersimpan" beserta
+       * waktunya sudah cukup memberi tahu bahwa angkanya bukan yang terkini. */
+      if (_d == null) {
         setStateIfMounted(() => _error = terapkanGalat(e));
       }
     } finally {

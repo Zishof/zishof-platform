@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../api_client.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
+import 'muat_dashboard.dart';
 
 /// Tab 2/9 "Keuangan & Kinerja" -- aksi `dashboard_keuangan` (semua jendela
 /// dihitung SAMPAI tanggal acuan; default hari ini). Berisi 3 sub-bagian:
@@ -19,6 +20,11 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
   static final _formatTanggalServer = DateFormat('yyyy-MM-dd');
   bool _memuat = true;
   String? _error;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab,
+  /// atau jawabannya tidak dapat diproses) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
   Map<String, dynamic>? _d;
   DateTime _tanggalAcuan =
       DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
@@ -59,17 +65,20 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
       _memuat = true;
       _error = null;
     });
-    try {
-      final hasil = await ApiClient.instance.aksi('dashboard_keuangan',
-          {'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan)});
-      if (!mounted) return;
-      setStateIfMounted(() => _d = hasil);
-    } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() => _error = terapkanGalat(e));
-    } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
-    }
+    // Salinan lokal ditampilkan lebih dahulu bila ada, lalu ditimpa angka
+    // server. Galat hanya muncul bila memang tidak ada yang bisa ditampilkan.
+    await muatTabDashboard(
+      aksi: 'dashboard_keuangan',
+      payload: {'tanggalAcuan': _formatTanggalServer.format(_tanggalAcuan)},
+      masihAktif: () => mounted,
+      onData: (data, dariCache, disimpanPada) => setStateIfMounted(() {
+        _d = data;
+        _dariCache = dariCache;
+        _cacheDisimpanPada = disimpanPada;
+      }),
+      onError: (e) => setStateIfMounted(() => _error = terapkanGalat(e)),
+    );
+    if (mounted) setStateIfMounted(() => _memuat = false);
   }
 
   @override
@@ -91,7 +100,16 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
 
     Map<String, dynamic> p(String key) => (performa[key] as Map<String, dynamic>?) ?? {};
 
-    return RefreshIndicator(
+    // Penanda salinan tersimpan duduk DI ATAS isi, sehingga angka di
+    // bawahnya tidak pernah terbaca sebagai data terkini. Saat tidak
+    // tampil ia menjadi SizedBox.shrink -- tata letaknya sama seperti
+    // semula.
+    return Column(
+      children: [
+        PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
@@ -198,6 +216,9 @@ class _RingkasanTabKeuanganState extends State<RingkasanTabKeuangan> with JejakG
             ),
         ],
       ),
+    ),
+        ),
+      ],
     );
   }
 }

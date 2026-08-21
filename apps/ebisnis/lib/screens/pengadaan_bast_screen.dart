@@ -154,10 +154,6 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen> with SingleTi
           _FormBastDialog(awal: awal, detailAwal: detailAwal, dariPo: dariPo),
     );
     if (hasil == null || !mounted) return;
-    if (hasil['_backOrder'] == true) {
-      await _backOrder((hasil['po_id'] as num).toInt(), '${hasil['po'] ?? ''}');
-      return;
-    }
     // Penanda internal tidak ikut dikirim ke server: ia hanya memberi tahu
     // layar ini bahwa sesudah menyimpan masih ada sisa pesanan yang perlu
     // diputuskan.
@@ -1257,17 +1253,13 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
-        // Barang datang kurang? Simpan dahulu apa yang benar-benar diterima,
-        // lalu putuskan sisanya lewat Back Order -- urutan yang dipakai di lapangan.
-        if (!_baru && _poId != null)
-          OutlinedButton.icon(
-              onPressed: () => Navigator.pop(context, <String, dynamic>{
-                    '_backOrder': true,
-                    'po_id': _poId,
-                    'po': _poKode,
-                  }),
-              icon: const Icon(Icons.replay, size: 16),
-              label: const Text('Back Order / Pesan Kembali')),
+        // Tombol "Back Order / Pesan Kembali" SENGAJA dihilangkan dari sini.
+        // Sejak dialog Back Order terbuka otomatis saat Simpan mendeteksi
+        // jumlah diterima kurang dari yang dipesan, tombol ini tidak lagi
+        // menambah kemampuan apa pun -- ia hanya menawarkan jalan kedua untuk
+        // hal yang sudah ditangani, dan justru mengundang pertanyaan "kapan
+        // saya harus menekannya?" pada alur yang seharusnya tidak perlu
+        // dipikirkan petugas.
         if (!_terkunci)
           FilledButton(onPressed: _simpan, child: const Text('Simpan')),
       ],

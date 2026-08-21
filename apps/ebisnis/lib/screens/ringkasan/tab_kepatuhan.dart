@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
+import 'muat_dashboard.dart';
 
 String _formatTanggalJam(dynamic raw) {
   final s = raw?.toString() ?? '';
@@ -28,6 +29,11 @@ class RingkasanTabKepatuhan extends StatefulWidget {
 class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> with JejakGalat {
   bool _memuat = true;
   String? _error;
+
+  /// Benar selama yang tampil masih salinan lokal (server belum menjawab,
+  /// atau jawabannya tidak dapat diproses) -- menyalakan PenandaDataTersimpan.
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
   Map<String, dynamic>? _d;
 
   @override
@@ -42,16 +48,20 @@ class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> with Jeja
       _memuat = true;
       _error = null;
     });
-    try {
-      final hasil = await ApiClient.instance.aksi('kepatuhan_operasional');
-      if (!mounted) return;
-      setStateIfMounted(() => _d = hasil);
-    } catch (e) {
-      if (!mounted) return;
-      setStateIfMounted(() => _error = terapkanGalat(e));
-    } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
-    }
+    // Salinan lokal ditampilkan lebih dahulu bila ada, lalu ditimpa angka
+    // server. Galat hanya muncul bila memang tidak ada yang bisa ditampilkan.
+    await muatTabDashboard(
+      aksi: 'kepatuhan_operasional',
+      payload: const <String, dynamic>{},
+      masihAktif: () => mounted,
+      onData: (data, dariCache, disimpanPada) => setStateIfMounted(() {
+        _d = data;
+        _dariCache = dariCache;
+        _cacheDisimpanPada = disimpanPada;
+      }),
+      onError: (e) => setStateIfMounted(() => _error = terapkanGalat(e)),
+    );
+    if (mounted) setStateIfMounted(() => _memuat = false);
   }
 
   Widget _tabel(String judul, List<Map<String, dynamic>> rows,
@@ -114,7 +124,16 @@ class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> with Jeja
         .cast<Map<String, dynamic>>();
     final adaTabelPembatalan = d['adaTabelPembatalan'] != false;
 
-    return RefreshIndicator(
+    // Penanda salinan tersimpan duduk DI ATAS isi, sehingga angka di
+    // bawahnya tidak pernah terbaca sebagai data terkini. Saat tidak
+    // tampil ia menjadi SizedBox.shrink -- tata letaknya sama seperti
+    // semula.
+    return Column(
+      children: [
+        PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
@@ -209,6 +228,9 @@ class _RingkasanTabKepatuhanState extends State<RingkasanTabKepatuhan> with Jeja
           ]),
         ],
       ),
+    ),
+        ),
+      ],
     );
   }
 }
