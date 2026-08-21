@@ -125,11 +125,16 @@ void main() {
     'lib/screens/diskon_screen.dart',
   ];
 
+  /// Salinan sumber tanpa spasi -- dipakai mencocokkan penanda agar pemenggalan
+  /// baris oleh `dart format` tidak menggagalkan penjaga. Yang dikunci di sini
+  /// PERILAKU (jalur mana yang dipakai), bukan gaya pemformatannya.
+  String rapat(String teks) => teks.replaceAll(RegExp(r'\s+'), '');
+
   test('layar master memakai MasterOffline + indikator sinkron', () {
     for (final entri in layarMaster.entries) {
       final source = File(entri.key).readAsStringSync();
       for (final penanda in entri.value) {
-        expect(source, contains(penanda),
+        expect(rapat(source), contains(rapat(penanda)),
             reason: '${entri.key} kehilangan penanda: $penanda');
       }
       // Mutasi master tidak boleh lagi memanggil ApiClient.aksi utk
@@ -199,14 +204,14 @@ void main() {
   test('aksi sensitif tetap online-only (tidak diantre diam-diam)', () {
     for (final entri in tetapOnline.entries) {
       final source = File(entri.key).readAsStringSync();
+      final padat = rapat(source);
       for (final aksi in entri.value) {
-        final indeks = source.indexOf(aksi);
+        final indeks = padat.indexOf(rapat(aksi));
         expect(indeks, greaterThanOrEqualTo(0),
             reason: '${entri.key} kehilangan aksi $aksi');
         // Aksi harus dipanggil lewat ApiClient.instance.aksi (bukan antrean).
-        final sebelum =
-            source.substring((indeks - 200).clamp(0, indeks), indeks);
-        expect(sebelum, contains('ApiClient.instance'),
+        final sebelum = padat.substring((indeks - 200).clamp(0, indeks), indeks);
+        expect(sebelum, contains(rapat('ApiClient.instance')),
             reason: '${entri.key}: $aksi harus tetap lewat ApiClient '
                 '(online-only sesuai spec 13.3 / aturan kredensial)');
       }
