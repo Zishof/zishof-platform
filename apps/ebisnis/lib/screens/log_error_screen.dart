@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../api_client.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 const _urlIssueBaruGithub =
     'https://github.com/Zishof/zishof-platform/issues/new';
@@ -467,12 +468,18 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
                                 AppTableCell(
                                   width: 64,
                                   align: TextAlign.center,
-                                  child: IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: const Icon(Icons.delete_outline,
-                                        size: 20),
-                                    onPressed: () => _hapus(e['id'] as int),
-                                  ),
+                                  /* Satu aksi saja, tetapi TETAP lewat menu: ikon
+                                   * tong sampah polos ini dahulu menghapus log
+                                   * seketika tanpa konfirmasi dan tanpa label.
+                                   * Menu memberinya nama dan menjadikan
+                                   * penghapusan sebuah pilihan, bukan refleks. */
+                                  child: AksiBarisMenu(aksi: [
+                                    AksiBaris(
+                                        ikon: Icons.delete_outline,
+                                        label: 'Hapus log ini',
+                                        merusak: true,
+                                        onTap: () => _hapus(e['id'] as int)),
+                                  ]),
                                 ),
                               ],
                             ))

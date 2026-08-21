@@ -6,6 +6,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pemilih_akun.dart';
 import '../widgets/safe_state.dart';
+import '../widgets/aksi_baris_menu.dart';
 
 /// Layar **Jurnal Umum** — pencatatan jurnal manual dari POS.
 ///
@@ -63,13 +64,15 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
         'cari': _cari,
         'status': _status,
       });
-      final jenis = await ApiClient.instance.aksi('jurnal_umum_jenis_transaksi', {});
+      final jenis =
+          await ApiClient.instance.aksi('jurnal_umum_jenis_transaksi', {});
       // Daftar akun dipakai pemilih akun di editor; sekali muat, dipakai semua baris.
       final akun = await ApiClient.instance.aksi('akun_list', {'limit': 5000});
       if (!mounted) return;
       setStateIfMounted(() {
         _jurnal = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _jenisTransaksi = ((jenis['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _jenisTransaksi =
+            ((jenis['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _tanggalClosing = '${hasil['tanggalClosing'] ?? ''}';
         _memuat = false;
@@ -144,13 +147,16 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     final terposting = j['terposting'] == true;
     String tanya;
     if (aksi == 'jurnal_umum_posting') {
-      tanya = 'Posting jurnal ${j['kode']} ke buku besar? Setelah diposting, jurnal '
+      tanya =
+          'Posting jurnal ${j['kode']} ke buku besar? Setelah diposting, jurnal '
           'ikut terbaca laporan keuangan dan tidak dapat diubah lagi.';
     } else if (aksi == 'jurnal_umum_batal_posting') {
-      tanya = 'Batalkan posting jurnal ${j['kode']}? Jurnal kembali menjadi draf dan '
+      tanya =
+          'Batalkan posting jurnal ${j['kode']}? Jurnal kembali menjadi draf dan '
           'ditarik keluar dari laporan keuangan.';
     } else {
-      tanya = 'Hapus jurnal ${j['kode']} beserta seluruh barisnya? Tindakan ini tidak '
+      tanya =
+          'Hapus jurnal ${j['kode']} beserta seluruh barisnya? Tindakan ini tidak '
           'dapat dibatalkan.';
     }
     if (terposting && aksi == 'jurnal_umum_hapus') return;
@@ -161,9 +167,11 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
         content: Text(tanya),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(c, true), child: const Text('Lanjut')),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Lanjut')),
         ],
       ),
     );
@@ -196,21 +204,24 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Posting Semua Draf'),
-        content: Text('${draf.length} jurnal draf akan diposting ke buku besar. '
-            'Jurnal yang tidak seimbang akan dilewati.'),
+        content:
+            Text('${draf.length} jurnal draf akan diposting ke buku besar. '
+                'Jurnal yang tidak seimbang akan dilewati.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(c, true), child: const Text('Posting')),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Posting')),
         ],
       ),
     );
     if (setuju != true) return;
     setStateIfMounted(() => _sibuk = true);
     try {
-      final hasil = await ApiClient.instance.aksi('jurnal_umum_posting',
-          {'ids': draf.map((e) => e['id']).toList()});
+      final hasil = await ApiClient.instance.aksi(
+          'jurnal_umum_posting', {'ids': draf.map((e) => e['id']).toList()});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${hasil['message'] ?? 'Selesai.'}')));
@@ -241,58 +252,66 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
         label: const Text('Jurnal Baru'),
       ),
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          OutlinedButton.icon(
-            onPressed: () => _pilihTanggal(true),
-            icon: const Icon(Icons.event, size: 18),
-            label: Text('Mulai ${_fmtTanggal.format(_mulai)}'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => _pilihTanggal(false),
-            icon: const Icon(Icons.event_available, size: 18),
-            label: Text('Sampai ${_fmtTanggal.format(_sampai)}'),
-          ),
-          SizedBox(
-            width: 240,
-            child: TextField(
-              decoration: const InputDecoration(
-                  labelText: 'Cari kode / keterangan',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true),
-              onChanged: (v) => _cari = v,
-              onSubmitted: (_) => _muat(),
-            ),
-          ),
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              value: _status,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Status', isDense: true),
-              items: const [
-                DropdownMenuItem(value: '', child: Text('Semua status')),
-                DropdownMenuItem(value: 'draf', child: Text('Draf saja')),
-                DropdownMenuItem(value: 'terposting', child: Text('Terposting saja')),
-              ],
-              onChanged: (v) {
-                setStateIfMounted(() => _status = v ?? '');
-                _muat();
-              },
-            ),
-          ),
-          FilledButton.icon(
-              onPressed: _memuat ? null : _muat,
-              icon: const Icon(Icons.filter_alt_outlined, size: 18),
-              label: const Text('Terapkan')),
-          if (draf > 0)
-            OutlinedButton.icon(
-                onPressed: _sibuk ? null : _postingSemuaDraf,
-                icon: const Icon(Icons.playlist_add_check, size: 18),
-                label: Text('Posting Semua Draf ($draf)')),
-          if (_sibuk)
-            const SizedBox(
-                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-        ]),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _pilihTanggal(true),
+                icon: const Icon(Icons.event, size: 18),
+                label: Text('Mulai ${_fmtTanggal.format(_mulai)}'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _pilihTanggal(false),
+                icon: const Icon(Icons.event_available, size: 18),
+                label: Text('Sampai ${_fmtTanggal.format(_sampai)}'),
+              ),
+              SizedBox(
+                width: 240,
+                child: TextField(
+                  decoration: const InputDecoration(
+                      labelText: 'Cari kode / keterangan',
+                      prefixIcon: Icon(Icons.search),
+                      isDense: true),
+                  onChanged: (v) => _cari = v,
+                  onSubmitted: (_) => _muat(),
+                ),
+              ),
+              SizedBox(
+                width: 190,
+                child: DropdownButtonFormField<String>(
+                  value: _status,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Status', isDense: true),
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text('Semua status')),
+                    DropdownMenuItem(value: 'draf', child: Text('Draf saja')),
+                    DropdownMenuItem(
+                        value: 'terposting', child: Text('Terposting saja')),
+                  ],
+                  onChanged: (v) {
+                    setStateIfMounted(() => _status = v ?? '');
+                    _muat();
+                  },
+                ),
+              ),
+              FilledButton.icon(
+                  onPressed: _memuat ? null : _muat,
+                  icon: const Icon(Icons.filter_alt_outlined, size: 18),
+                  label: const Text('Terapkan')),
+              if (draf > 0)
+                OutlinedButton.icon(
+                    onPressed: _sibuk ? null : _postingSemuaDraf,
+                    icon: const Icon(Icons.playlist_add_check, size: 18),
+                    label: Text('Posting Semua Draf ($draf)')),
+              if (_sibuk)
+                const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+            ]),
         const SizedBox(height: 8),
         if (_tanggalClosing.isNotEmpty)
           Padding(
@@ -316,7 +335,8 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(_galat!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
-                      FilledButton(onPressed: _muat, child: const Text('Coba lagi')),
+                      FilledButton(
+                          onPressed: _muat, child: const Text('Coba lagi')),
                     ]))
                   : AppDataTable(
                       minWidth: 980,
@@ -326,10 +346,12 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                         AppTableColumn('Kode', flex: 3),
                         AppTableColumn('Tanggal', flex: 2),
                         AppTableColumn('Keterangan', flex: 5),
-                        AppTableColumn('Debet', flex: 2, align: TextAlign.right),
-                        AppTableColumn('Kredit', flex: 2, align: TextAlign.right),
+                        AppTableColumn('Debet',
+                            flex: 2, align: TextAlign.right),
+                        AppTableColumn('Kredit',
+                            flex: 2, align: TextAlign.right),
                         AppTableColumn('Status', flex: 2),
-                        AppTableColumn('Aksi', flex: 3),
+                        AppTableColumn('Aksi', width: 64),
                       ],
                       rows: _jurnal.map((j) {
                         final terposting = j['terposting'] == true;
@@ -353,41 +375,42 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                             ),
                           ),
                           AppTableCell(
-                            flex: 3,
-                            child: Wrap(spacing: 4, children: [
-                              IconButton(
-                                tooltip: terposting ? 'Lihat' : 'Ubah',
-                                icon: Icon(terposting
-                                    ? Icons.visibility_outlined
-                                    : Icons.edit_outlined),
-                                onPressed:
-                                    _sibuk ? null : () => _bukaEditor(jurnal: j),
-                              ),
-                              if (!terposting)
-                                IconButton(
-                                  tooltip: 'Posting ke buku besar',
-                                  icon: const Icon(Icons.check_circle_outline),
-                                  onPressed: _sibuk
+                            width: 64,
+                            align: TextAlign.center,
+                            child: AksiBarisMenu(aksi: [
+                              AksiBaris(
+                                  ikon: terposting
+                                      ? Icons.visibility_outlined
+                                      : Icons.edit_outlined,
+                                  label: terposting ? 'Lihat' : 'Ubah',
+                                  onTap: _sibuk
                                       ? null
-                                      : () => _aksiJurnal(j, 'jurnal_umum_posting'),
-                                ),
-                              if (terposting)
-                                IconButton(
-                                  tooltip: 'Batalkan posting',
-                                  icon: const Icon(Icons.undo),
-                                  onPressed: _sibuk
+                                      : () => _bukaEditor(jurnal: j)),
+                              // Posting dan Batalkan posting dahulu saling
+                              // menggantikan; kini keduanya tetap tampil dan yang
+                              // tidak berlaku hanya diredupkan.
+                              AksiBaris(
+                                  ikon: Icons.check_circle_outline,
+                                  label: 'Posting ke buku besar',
+                                  onTap: _sibuk || terposting
+                                      ? null
+                                      : () => _aksiJurnal(
+                                          j, 'jurnal_umum_posting')),
+                              AksiBaris(
+                                  ikon: Icons.undo,
+                                  label: 'Batalkan posting',
+                                  onTap: _sibuk || !terposting
+                                      ? null
+                                      : () => _aksiJurnal(
+                                          j, 'jurnal_umum_batal_posting')),
+                              AksiBaris(
+                                  ikon: Icons.delete_outline,
+                                  label: 'Hapus',
+                                  merusak: true,
+                                  onTap: _sibuk || terposting
                                       ? null
                                       : () =>
-                                          _aksiJurnal(j, 'jurnal_umum_batal_posting'),
-                                ),
-                              if (!terposting)
-                                IconButton(
-                                  tooltip: 'Hapus',
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: _sibuk
-                                      ? null
-                                      : () => _aksiJurnal(j, 'jurnal_umum_hapus'),
-                                ),
+                                          _aksiJurnal(j, 'jurnal_umum_hapus')),
                             ]),
                           ),
                         ]);
@@ -493,14 +516,15 @@ class _EditorJurnalState extends State<_EditorJurnal> {
   }
 
   double _angka(TextEditingController c) {
-    final t = c.text.replaceAll(RegExp(r'[^0-9,.-]'), '').replaceAll('.', '').replaceAll(',', '.');
+    final t = c.text
+        .replaceAll(RegExp(r'[^0-9,.-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
     return double.tryParse(t) ?? 0;
   }
 
-  double get _totalDebet =>
-      _baris.fold(0.0, (a, b) => a + _angka(b.debet));
-  double get _totalKredit =>
-      _baris.fold(0.0, (a, b) => a + _angka(b.kredit));
+  double get _totalDebet => _baris.fold(0.0, (a, b) => a + _angka(b.debet));
+  double get _totalKredit => _baris.fold(0.0, (a, b) => a + _angka(b.kredit));
   double get _selisih => _totalDebet - _totalKredit;
   bool get _seimbang => _selisih.abs() < 0.005 && _totalDebet > 0;
 
@@ -514,7 +538,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
       for (final b in _baris) {
         final d = _angka(b.debet);
         final k = _angka(b.kredit);
-        if (b.akunId == null && d == 0 && k == 0) continue; // baris kosong diabaikan
+        if (b.akunId == null && d == 0 && k == 0)
+          continue; // baris kosong diabaikan
         baris.add({
           'akunId': b.akunId ?? 0,
           'debet': d,
@@ -531,7 +556,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
       });
       if (!mounted) return;
       if ('${hasil['status']}' != '00') {
-        setStateIfMounted(() => _pesan = '${hasil['message'] ?? 'Gagal menyimpan.'}');
+        setStateIfMounted(
+            () => _pesan = '${hasil['message'] ?? 'Gagal menyimpan.'}');
         return;
       }
       Navigator.of(context).pop(true);
@@ -553,7 +579,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
         constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Expanded(
                 child: Text(
@@ -562,58 +589,68 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                         : widget.kepala == null
                             ? 'Jurnal Umum Baru'
                             : 'Ubah Jurnal ${widget.kepala?['kode'] ?? ''}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
               ),
               IconButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.close)),
             ]),
             const SizedBox(height: 8),
-            Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              OutlinedButton.icon(
-                onPressed: _terkunci
-                    ? null
-                    : () async {
-                        final p = await showDatePicker(
-                            context: context,
-                            initialDate: _tanggal,
-                            firstDate: DateTime(2015),
-                            lastDate: DateTime(2100));
-                        if (p != null) setStateIfMounted(() => _tanggal = p);
-                      },
-                icon: const Icon(Icons.event, size: 18),
-                label: Text('Tanggal ${_fmtTanggal.format(_tanggal)}'),
-              ),
-              SizedBox(
-                width: 280,
-                child: DropdownButtonFormField<int?>(
-                  value: _jenisId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Jenis Transaksi (penomoran)', isDense: true),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                        value: null, child: Text('-- Otomatis (JU) --')),
-                    ...widget.jenisTransaksi.map((j) => DropdownMenuItem<int?>(
-                          value: (j['id'] as num?)?.toInt(),
-                          child: Text('${j['kode'] ?? ''} ${j['nama'] ?? ''}',
-                              overflow: TextOverflow.ellipsis),
-                        )),
-                  ],
-                  onChanged:
-                      _terkunci ? null : (v) => setStateIfMounted(() => _jenisId = v),
-                ),
-              ),
-              SizedBox(
-                width: 340,
-                child: TextField(
-                  controller: _keterangan,
-                  readOnly: _terkunci,
-                  decoration: const InputDecoration(
-                      labelText: 'Keterangan jurnal *', isDense: true),
-                ),
-              ),
-            ]),
+            Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _terkunci
+                        ? null
+                        : () async {
+                            final p = await showDatePicker(
+                                context: context,
+                                initialDate: _tanggal,
+                                firstDate: DateTime(2015),
+                                lastDate: DateTime(2100));
+                            if (p != null)
+                              setStateIfMounted(() => _tanggal = p);
+                          },
+                    icon: const Icon(Icons.event, size: 18),
+                    label: Text('Tanggal ${_fmtTanggal.format(_tanggal)}'),
+                  ),
+                  SizedBox(
+                    width: 280,
+                    child: DropdownButtonFormField<int?>(
+                      value: _jenisId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Jenis Transaksi (penomoran)',
+                          isDense: true),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('-- Otomatis (JU) --')),
+                        ...widget.jenisTransaksi
+                            .map((j) => DropdownMenuItem<int?>(
+                                  value: (j['id'] as num?)?.toInt(),
+                                  child: Text(
+                                      '${j['kode'] ?? ''} ${j['nama'] ?? ''}',
+                                      overflow: TextOverflow.ellipsis),
+                                )),
+                      ],
+                      onChanged: _terkunci
+                          ? null
+                          : (v) => setStateIfMounted(() => _jenisId = v),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 340,
+                    child: TextField(
+                      controller: _keterangan,
+                      readOnly: _terkunci,
+                      decoration: const InputDecoration(
+                          labelText: 'Keterangan jurnal *', isDense: true),
+                    ),
+                  ),
+                ]),
             const SizedBox(height: 12),
             Expanded(
               child: ListView.separated(
@@ -621,60 +658,64 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
                   final b = _baris[i];
-                  return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(
-                      flex: 5,
-                      child: PemilihAkunField(
-                        label: 'Akun baris ${i + 1}',
-                        daftar: widget.akun,
-                        nilai: b.akunId,
-                        onChanged: _terkunci
-                            ? (_) {}
-                            : (v) => setStateIfMounted(() => b.akunId = v),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 3,
-                      child: TextField(
-                        controller: b.debet,
-                        readOnly: _terkunci,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.right,
-                        decoration: const InputDecoration(labelText: 'Debet', isDense: true),
-                        onChanged: (_) => setStateIfMounted(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 3,
-                      child: TextField(
-                        controller: b.kredit,
-                        readOnly: _terkunci,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.right,
-                        decoration: const InputDecoration(labelText: 'Kredit', isDense: true),
-                        onChanged: (_) => setStateIfMounted(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 4,
-                      child: TextField(
-                        controller: b.keterangan,
-                        readOnly: _terkunci,
-                        decoration: const InputDecoration(
-                            labelText: 'Keterangan baris', isDense: true),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Hapus baris',
-                      onPressed: _terkunci || _baris.length <= 2
-                          ? null
-                          : () => _hapusBaris(i),
-                      icon: const Icon(Icons.remove_circle_outline),
-                    ),
-                  ]);
+                  return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: PemilihAkunField(
+                            label: 'Akun baris ${i + 1}',
+                            daftar: widget.akun,
+                            nilai: b.akunId,
+                            onChanged: _terkunci
+                                ? (_) {}
+                                : (v) => setStateIfMounted(() => b.akunId = v),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: b.debet,
+                            readOnly: _terkunci,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                                labelText: 'Debet', isDense: true),
+                            onChanged: (_) => setStateIfMounted(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: b.kredit,
+                            readOnly: _terkunci,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                                labelText: 'Kredit', isDense: true),
+                            onChanged: (_) => setStateIfMounted(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: TextField(
+                            controller: b.keterangan,
+                            readOnly: _terkunci,
+                            decoration: const InputDecoration(
+                                labelText: 'Keterangan baris', isDense: true),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Hapus baris',
+                          onPressed: _terkunci || _baris.length <= 2
+                              ? null
+                              : () => _hapusBaris(i),
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                      ]);
                 },
               ),
             ),
@@ -690,18 +731,19 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               Chip(
                 visualDensity: VisualDensity.compact,
-                avatar: Icon(_seimbang ? Icons.check_circle : Icons.error_outline,
+                avatar: Icon(
+                    _seimbang ? Icons.check_circle : Icons.error_outline,
                     size: 16),
-                label: Text(_seimbang
-                    ? 'Seimbang'
-                    : 'Selisih ${_rp(_selisih.abs())}'),
+                label: Text(
+                    _seimbang ? 'Seimbang' : 'Selisih ${_rp(_selisih.abs())}'),
               ),
             ]),
             if (_pesan != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(_pesan!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
               ),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [

@@ -19,6 +19,7 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/proses_simpan_master.dart';
+import '../../widgets/aksi_baris_menu.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -535,7 +536,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
               const AppTableColumn('Nominal', flex: 2, align: TextAlign.right),
               const AppTableColumn('Metode / Ket.', flex: 3),
               AppTableColumn('Aksi',
-                  width: bolehEdit ? 88 : 24, align: TextAlign.center),
+                  width: bolehEdit ? 64 : 24, align: TextAlign.center),
             ],
             rows: _daftar.map((d) {
               final expired = d['tanggalExpired'] != null;
@@ -590,26 +591,20 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                     maxLines: 2,
                   ),
                   AppTableCell(
-                    width: bolehEdit ? 88 : 24,
+                    width: bolehEdit ? 64 : 24,
                     align: TextAlign.center,
-                    child: bolehEdit
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                onPressed: () => _bukaForm(deposit: d),
-                              ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.delete_outline,
-                                    size: 18, color: AppColors.danger),
-                                onPressed: () => _hapus(d),
-                              ),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
+                    child: AksiBarisMenu(aksi: [
+                      AksiBaris(
+                          ikon: Icons.edit_outlined,
+                          label: 'Ubah topup',
+                          onTap:
+                              bolehEdit ? () => _bukaForm(deposit: d) : null),
+                      AksiBaris(
+                          ikon: Icons.delete_outline,
+                          label: 'Hapus topup',
+                          merusak: true,
+                          onTap: bolehEdit ? () => _hapus(d) : null),
+                    ]),
                   ),
                 ],
               );
