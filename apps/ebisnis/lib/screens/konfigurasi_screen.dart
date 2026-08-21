@@ -888,7 +888,22 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
     });
     try {
       await PengaturanStruk.instance.muat();
-      final hasil = await ApiClient.instance.aksi('toko_profil_ambil');
+      // Akun admin tidak terikat ke satu toko (tidak punya Pedagang), jadi
+      // server TIDAK bisa menyimpulkan toko mana yang dimaksud -- toko harus
+      // ikut dikirim. Selama ini tidak dikirim sama sekali, sehingga tab ini
+      // selalu gagal untuk akun admin.
+      final idToko = Sesi.instance.idTokoTerpilih;
+      if (idToko == null) {
+        throw Exception(
+            'Belum ada toko yang dipilih. Pilih satu toko lewat kotak toko di '
+            'kiri atas (sekarang masih "Semua Toko"), lalu buka tab ini lagi.');
+      }
+      // Dicatat SEBELUM permintaan dikirim, bukan sesudah. Kalau dicatat setelah
+      // berhasil, permintaan yang gagal membuat penjaga di build() menganggap
+      // toko masih belum termuat dan memanggil ulang tanpa henti.
+      _idTokoDimuat = idToko;
+      final hasil = await ApiClient.instance
+          .aksi('toko_profil_ambil', {'toko_id': idToko});
       final d = (hasil['data'] as Map<String, dynamic>?) ?? {};
       _kode.text = '${d['kode'] ?? ''}';
       _nama.text = '${d['nama'] ?? ''}';
@@ -1053,9 +1068,20 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
       _error = null;
     });
     try {
+      // Toko WAJIB ikut, dengan alasan yang sama seperti saat memuat: akun
+      // admin tidak terikat ke satu toko. Yang dikirim persis toko yang tertera
+      // di kotak toko kiri atas, supaya yang tersimpan tidak pernah berbeda
+      // dari yang dibaca pengguna sesaat sebelum menekan Simpan.
+      final idToko = Sesi.instance.idTokoTerpilih;
+      if (idToko == null) {
+        throw Exception(
+            'Belum ada toko yang dipilih. Pilih satu toko lewat kotak toko di '
+            'kiri atas, lalu simpan lagi.');
+      }
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
       // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
       await prosesSimpanMaster(context, aksi: 'toko_profil_simpan', body: {
+        'toko_id': idToko,
         'nama': _nama.text.trim(),
         'alamat': _alamat.text.trim(),
         'kota': _kota.text.trim(),
@@ -1426,8 +1452,21 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
     );
   }
 
+  /// Toko yang isian di layar ini berasal darinya.
+  int? _idTokoDimuat;
+
   @override
   Widget build(BuildContext context) {
+    // Kotak toko di kiri atas bisa diganti kapan saja, termasuk sewaktu tab ini
+    // sedang terbuka. Tanpa pemeriksaan ini layar tetap menampilkan profil toko
+    // LAMA di bawah nama toko BARU, dan tombol Simpan akan menuliskan isian lama
+    // itu ke toko yang baru -- salah tulis yang tidak memunculkan galat apa pun.
+    final idKini = Sesi.instance.idTokoTerpilih;
+    if (!_memuat && idKini != null && idKini != _idTokoDimuat) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _muat();
+      });
+    }
     if (_memuat) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
@@ -1446,6 +1485,18 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Formulir ini menulis ke SATU toko tertentu. Namanya ditulis di sini,
+        // bukan hanya di kotak toko pojok kiri atas, supaya tidak ada keraguan
+        // profil toko mana yang sedang disunting saat menekan Simpan.
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: AppInfoBanner(
+            icon: Icons.storefront_outlined,
+            color: AppColors.info,
+            text: 'Profil toko: '
+                '${Sesi.instance.bolehSemuaToko ? Sesi.instance.namaTokoFilter : Sesi.instance.tokoNama}',
+          ),
+        ),
         if (!_bolehUbah)
           const Padding(
             padding: EdgeInsets.only(bottom: 16),

@@ -369,7 +369,14 @@ class StrukScreen extends StatelessWidget {
       return;
     }
     try {
-      final hasil = await ApiClient.instance.aksi('toko_profil_ambil');
+      // Toko ikut dikirim: akun admin tidak terikat ke satu toko, jadi server
+      // tidak bisa menyimpulkannya sendiri. Kalau memang belum ada toko yang
+      // dipilih, struk cukup dicetak tanpa kop -- bukan alasan menggagalkan
+      // pencetakan yang sedang ditunggu pelanggan di depan kasir.
+      final idToko = Sesi.instance.idTokoTerpilih;
+      if (idToko == null) return;
+      final hasil = await ApiClient.instance
+          .aksi('toko_profil_ambil', {'toko_id': idToko});
       final data = (hasil['data'] as Map<String, dynamic>?) ?? {};
       final nama = '${data['nama'] ?? ''}'.trim();
       final alamat = '${data['alamat'] ?? ''}'.trim();

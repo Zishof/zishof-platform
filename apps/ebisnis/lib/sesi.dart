@@ -59,6 +59,18 @@ class Sesi {
     }
     return tokoNama;
   }
+
+  /// Toko yang sedang DITUJU oleh layar yang mengurus SATU toko (mis. Profil
+  /// Toko), berbeda dari [tokoFilter] yang hanya menyempitkan laporan.
+  ///
+  /// Urutannya penting. Kotak toko di kiri atas menampilkan [namaTokoFilter]
+  /// bagi pengguna berizin lintas toko, jadi toko yang TERBACA di layar adalah
+  /// [tokoFilter]. Kalau layar diam-diam memakai [tokoId], yang tersunting
+  /// bukan toko yang tertulis di depan mata pengguna -- kesalahan yang paling
+  /// mahal justru karena tidak memunculkan galat apa pun. [tokoId] dipakai
+  /// sebagai cadangan untuk akun yang memang terikat ke satu toko.
+  int? get idTokoTerpilih => tokoFilter ?? tokoId;
+
   List<Map<String, dynamic>> daftarToko = [];
 
   /// Flag per-menu dari `konfigurasi.aksesMenu` (server, Tbmrole.ebisnisMenu) --
