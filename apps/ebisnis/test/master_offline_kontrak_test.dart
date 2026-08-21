@@ -10,6 +10,25 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const layarMaster = <String, List<String>>{
     // file : penanda wajib ada di source-nya
+    // Tiga layar berikut dikonversi 2026-08-21 atas permintaan pemilik produk.
+    // Semuanya menyentuh stok/uang, jadi penandanya dikunci di sini supaya tidak
+    // diam-diam kembali menjadi kirim-langsung.
+    'lib/screens/kulakan_screen.dart': [
+      "daftarCacheDulu('kulakan_faktur_list'",
+      "'master:kulakan_faktur'",
+      "aksi: 'kulakan_faktur_simpan'",
+      "aksi: 'kulakan_faktur_batal'",
+      // Supplier baru dibuat offline memakai id sementara supaya faktur yang
+      // diketik menyusul bisa langsung menunjuknya.
+      'MasterOffline.idSementaraBaru()',
+    ],
+    'lib/screens/mutasi_antar_outlet_screen.dart': [
+      "daftarCacheDulu('mutasi_stok_list'",
+      "aksi: 'mutasi_stok_simpan'",
+    ],
+    'lib/screens/anggota/tab_mutasi_hutang.dart': [
+      "aksi: 'hutang_bayar_simpan'",
+    ],
     'lib/screens/jenis_produk_screen.dart': [
       "daftarCacheDulu('jenis_produk_list'",
       "'jenis_produk_hapus'",

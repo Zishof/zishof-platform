@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/proses_simpan_master.dart';
 import '../../services/simple_xlsx.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -658,12 +659,21 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
       _pesanError = null;
     });
     try {
-      await ApiClient.instance.aksi('hutang_bayar_simpan', {
-        'id_member': _idAnggota,
-        'nominal': double.tryParse(_nominal.text.trim()) ?? 0,
-        'keterangan': _keterangan.text.trim(),
-        'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),
-      });
+      // LOKAL DULU: pembayaran ditulis ke antrean sebelum menyentuh jaringan, lalu
+      // dikirim. Tanpa cacheKey: kunci cache daftar mutasi bergantung penyaring
+      // tanggal milik layar INDUK, sehingga menebaknya dari lembar ini justru
+      // berisiko menulis ke cache yang salah. Barisnya muncul setelah tersinkron.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'hutang_bayar_simpan',
+        body: {
+          'id_member': _idAnggota,
+          'nominal': double.tryParse(_nominal.text.trim()) ?? 0,
+          'keterangan': _keterangan.text.trim(),
+          'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(_waktu),
+        },
+        kunci: 'hutang_bayar:baru:${DateTime.now().microsecondsSinceEpoch}',
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));

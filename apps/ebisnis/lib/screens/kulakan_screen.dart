@@ -19,6 +19,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
@@ -374,7 +375,21 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       _errorForm = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('kulakan_faktur_simpan', {
+      // LOKAL DULU: faktur ditulis ke antrean + snapshot riwayat sebelum menyentuh
+      // jaringan, baru dikirim. Supplier yang baru dibuat offline dirujuk lewat id
+      // sementara dan ditukar otomatis saat antreannya terkirim.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'kulakan_faktur_simpan',
+        kunci: 'kulakan_faktur:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:kulakan_faktur',
+        rowLokal: {
+          'nomorFaktur': nomorFaktur,
+          'tanggalFaktur': _tanggalFaktur.toIso8601String(),
+          'supplierNama': '${_supplierTerpilih?['nama'] ?? ''}',
+          'jumlahItem': _itemsFaktur.length,
+        },
+        body: {
         'nomor_faktur': nomorFaktur,
         'tanggal_faktur': _tanggalFaktur.toIso8601String(),
         if (_supplierTerpilih != null) 'supplier_id': _supplierTerpilih!['id'],
@@ -394,13 +409,17 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                         DateFormat('yyyy-MM-dd').format(it.tanggalExpired!),
                 })
             .toList(),
-      });
+        },
+      );
       final diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(diskon > 0
-                ? 'Faktur tersimpan (${_itemsFaktur.length} item). Diskon/potongan: ${_formatRupiah.format(diskon)}.'
-                : 'Faktur tersimpan (${_itemsFaktur.length} item).')));
+            content: Text(hasil['offline'] == true
+                ? 'Faktur tersimpan di perangkat (${_itemsFaktur.length} item) dan akan '
+                    'dikirim otomatis. Stok baru bertambah setelah terkirim.'
+                : diskon > 0
+                    ? 'Faktur tersimpan (${_itemsFaktur.length} item). Diskon/potongan: ${_formatRupiah.format(diskon)}.'
+                    : 'Faktur tersimpan (${_itemsFaktur.length} item).')));
       }
       if (!mounted) return;
       _setStateEntri(() {
@@ -728,8 +747,14 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
 
   /// Batalkan faktur (aksi `kulakan_faktur_batal`): stok & batch yang diterima
   /// faktur ini DIBALIKKAN server lalu baris + header dihapus ber-audit Envers
-  /// (jejak tetap ada di Riwayat Data sbg revisi HAPUS). SENGAJA online-only --
-  /// pembatalan mengubah stok, terlalu berisiko diantre diam-diam saat offline.
+  /// (jejak tetap ada di Riwayat Data sbg revisi HAPUS).
+  ///
+  /// Sejak 2026-08-21 pembatalan ikut ditulis LOKAL DULU atas permintaan pemilik
+  /// produk. Risikonya tetap nyata dan tidak disembunyikan: selama antreannya belum
+  /// terkirim, stok di server MASIH berisi barang faktur ini, sehingga angka stok
+  /// dua sisi berbeda sementara. Karena itu pesan offline-nya menyebut hal tersebut,
+  /// dan barisnya hanya ditandai terhapus di perangkat (bisa diurungkan) sampai
+  /// server mengonfirmasi.
   Future<void> _batalkanFaktur(
       Map<String, dynamic> f, Map<String, dynamic> header) async {
     final yakin = await showDialog<bool>(
@@ -754,14 +779,24 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     );
     if (yakin != true || !mounted) return;
     try {
-      final res = await ApiClient.instance
-          .aksi('kulakan_faktur_batal', {'faktur_id': f['fakturId']});
+      final res = await prosesSimpanMaster(
+        context,
+        aksi: 'kulakan_faktur_batal',
+        body: {'faktur_id': f['fakturId']},
+        kunci: 'kulakan_faktur:${f['fakturId']}',
+        cacheKey: 'master:kulakan_faktur',
+        rowLokal: {'id': f['fakturId'], 'fakturId': f['fakturId']},
+        hapusLokal: true,
+      );
       final sukses = res['status'] == '00' || res['status'] == 'success';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(sukses
-              ? '${res['description'] ?? 'Faktur dibatalkan.'}'
-              : 'Gagal: ${res['description'] ?? res['status']}')));
+          content: Text(res['offline'] == true
+              ? 'Pembatalan tersimpan di perangkat dan akan dikirim otomatis. '
+                  'Stok di server baru dibalikkan setelah terkirim.'
+              : sukses
+                  ? '${res['description'] ?? 'Faktur dibatalkan.'}'
+                  : 'Gagal: ${res['description'] ?? res['status']}')));
       if (sukses) {
         Navigator.of(context).pop(); // tutup dialog detail faktur.
         await _muatRiwayat();
@@ -812,9 +847,22 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     if (setuju != true) return;
 
     try {
-      final res = await ApiClient.instance
-          .aksi('kulakan_faktur_batal', {'faktur_id': f['fakturId']});
-      if ('${res['status']}' != '00') {
+      // Alur "Edit Faktur" = batalkan lama lalu entri ulang. Keduanya kini lokal-dulu
+      // dan antrean bersifat urut, jadi server menerima pembatalan SEBELUM faktur
+      // penggantinya. Yang tetap perlu diketahui pengguna: bila pembatalan akhirnya
+      // DITOLAK server (mis. stoknya sudah terpakai), faktur pengganti tetap terkirim
+      // sehingga bisa muncul dua faktur -- baris antrean yang gagal terlihat di
+      // indikator sinkronisasi supaya bisa ditindak.
+      final res = await prosesSimpanMaster(
+        context,
+        aksi: 'kulakan_faktur_batal',
+        body: {'faktur_id': f['fakturId']},
+        kunci: 'kulakan_faktur:${f['fakturId']}',
+        cacheKey: 'master:kulakan_faktur',
+        rowLokal: {'id': f['fakturId'], 'fakturId': f['fakturId']},
+        hapusLokal: true,
+      );
+      if (res['offline'] != true && '${res['status']}' != '00') {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
@@ -1703,10 +1751,23 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
     if (nama.isEmpty) return;
     setStateIfMounted(() => _menyimpanBaru = true);
     try {
-      final hasil =
-          await ApiClient.instance.aksi('penyedia_simpan', {'nama': nama});
+      // Supplier baru boleh dibuat offline: id SEMENTARA-nya langsung dapat dipakai
+      // faktur yang diketik menyusul, dan ditukar dengan id server saat antreannya
+      // terkirim (lihat MasterOffline.tukarIdSementara).
+      final idLokal = MasterOffline.idSementaraBaru();
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'penyedia_simpan',
+        body: {'nama': nama},
+        kunci: 'penyedia:baru:${DateTime.now().microsecondsSinceEpoch}',
+        idLokal: idLokal,
+        entitas: 'penyedia',
+      );
       if (mounted) {
-        Navigator.of(context).pop({'id': hasil['id'], 'nama': hasil['nama']});
+        Navigator.of(context).pop({
+          'id': hasil['id'] ?? idLokal,
+          'nama': hasil['nama'] ?? nama,
+        });
       }
     } catch (e) {
       if (mounted) {

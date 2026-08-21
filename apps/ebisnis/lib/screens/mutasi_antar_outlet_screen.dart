@@ -4,6 +4,7 @@ import '../api_client.dart';
 import '../parse_util.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../sesi.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_components.dart';
@@ -178,14 +179,39 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
       _errorForm = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('mutasi_stok_simpan', {
+      final payload = <String, dynamic>{
         'toko_id': tokoAsalId,
         'produk_asal_id': produkAsalId,
         'toko_tujuan_id': tokoTujuanId,
         'qty': qty,
         'keterangan': _keteranganController.text.trim(),
         if (_produkTujuanManualTerpilih != null) 'produk_tujuan_id': _produkTujuanManualTerpilih!['id'],
-      });
+      };
+      // LOKAL DULU: kiriman ditulis ke antrean + snapshot daftar sebelum menyentuh
+      // jaringan, lalu dikirim. Offline tidak menahan pengguna.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'mutasi_stok_simpan',
+        body: payload,
+        kunci: 'mutasi_stok:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:mutasi_stok:$tokoAsalId',
+        rowLokal: {
+          ...payload,
+          'waktu': DateTime.now().toIso8601String(),
+          'produkAsalNama': '${_produkAsalTerpilih?['nama'] ?? ''}',
+          'produkTujuanNama': '${_produkTujuanManualTerpilih?['nama'] ?? ''}',
+        },
+      );
+      if (hasil['offline'] == true && mounted) {
+        // Pencocokan produk tujuan diputuskan SERVER; saat offline pertanyaan itu
+        // baru bisa muncul setelah antreannya terkirim. Disebut apa adanya supaya
+        // pengguna tidak menganggap perpindahan stok sudah pasti selesai.
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Kiriman tersimpan di perangkat dan akan dikirim otomatis. '
+                'Bila produk tujuan perlu dipilih manual, pertanyaannya muncul setelah terkirim.')));
+        setStateIfMounted(() => _qtyController.clear());
+        return;
+      }
       // Gap-closure: server memetakan "00" DAN "92" (butuh pilih manual) ke status HTTP "success"
       // (bukan cuma "00") supaya ApiClient.aksi tidak melempar ApiException dan membuang body
       // (butuhPilihManual/kandidat) -- lihat komentar di PosApi.java dispatch mutasi_stok_simpan.
