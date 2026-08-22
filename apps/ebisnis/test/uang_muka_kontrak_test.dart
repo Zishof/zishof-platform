@@ -60,6 +60,40 @@ void main() {
     }
   });
 
+  group('diambil dari Permintaan Pengadaan (PR)', () {
+    test('penandanya benar-benar memilih baris PR, bukan sekadar dicentang', () {
+      // Sebelumnya penanda ini hanya boolean dan rinciannya harus dipilih di layar ZK.
+      expect(source, contains("'uang_muka_cari_pr'"));
+      expect(source, contains('_pilihBarisPr('));
+      expect(source, contains("'prDetailIds'"));
+      expect(source, isNot(contains('Rincian PR-nya dipilih di layar ZK')));
+    });
+
+    test('nilai pengajuan mengikuti jumlah baris PR terpilih', () {
+      // Layar ZK mengisi kolom Nilai begitu PR dipilih; layar ini menyalinnya.
+      expect(source, contains("nilai.text = t == 0 ? '' : "));
+    });
+
+    test('baris PR yang terkunci tidak bisa dicentang', () {
+      // Baris yang barangnya sudah diterima penuh dikirim server dgn bolehPilih=false.
+      expect(source, contains("b['bolehPilih'] == true"));
+      expect(source, contains("b['alasanTerkunci']"));
+      // Baris milik uang muka lain diberi peringatan, bukan dilarang -- sama dgn ZK.
+      expect(source, contains("b['uangMukaKode']"));
+    });
+
+    test('anggaran & akun tidak diminta pada pengajuan berbasis PR', () {
+      // Di ZK baris Anggaran hanya tampil bila bukan tanpaAnggaran DAN bukan dari PR,
+      // sedangkan baris Akun hanya bila tanpaAnggaran DAN bukan dari PR.
+      expect(source, contains('if (!tanpaAnggaran && !ambilDariPr) ...['));
+      expect(source, contains('if (!ambilDariPr) ...['));
+    });
+
+    test('dokumen lama memuat ulang baris PR-nya saat disunting', () {
+      expect(source, contains("b['milikDokumenIni'] == true"));
+    });
+  });
+
   test('menu Uang Muka membuka layarnya di kedua platform', () {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();

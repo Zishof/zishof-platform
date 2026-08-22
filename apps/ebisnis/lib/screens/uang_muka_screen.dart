@@ -297,6 +297,186 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
     );
   }
 
+
+  /// Pemilih baris **Permintaan Pengadaan (PR)** untuk uang muka berbasis PR.
+  ///
+  /// Menyalin aturan layar ZK (`AmbilDataPermintaanPengadaanMasterAssetBanyak`):
+  /// hanya PR yang aktif, belum ditutup, dan sudah disetujui yang tampil; baris yang
+  /// barangnya sudah diterima penuh tidak dapat dicentang. Baris yang sudah tertaut ke
+  /// uang muka lain tetap bisa dipilih -- sama seperti ZK -- tetapi diberi peringatan
+  /// karena memilihnya berarti memindahkan tautannya.
+  Future<List<Map<String, dynamic>>?> _pilihBarisPr({
+    required int? satkerId,
+    required int? idDokumen,
+    required List<Map<String, dynamic>> terpilihAwal,
+  }) async {
+    final cari = TextEditingController();
+    final terpilih = <int, Map<String, dynamic>>{
+      for (final b in terpilihAwal) (b['id'] as num).toInt(): b,
+    };
+    List<Map<String, dynamic>> daftarPr = [];
+    bool memuat = false;
+    String galat = '';
+    bool sudahMuat = false;
+
+    return showDialog<List<Map<String, dynamic>>>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) {
+          Future<void> jalankan() async {
+            setD(() {
+              memuat = true;
+              galat = '';
+            });
+            try {
+              final res = await ApiClient.instance.aksi('uang_muka_cari_pr', {
+                'cari': cari.text.trim(),
+                if (satkerId != null) 'satuanKerjaId': satkerId,
+                if (idDokumen != null) 'id': idDokumen,
+              });
+              daftarPr = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            } catch (e) {
+              galat = '$e';
+            } finally {
+              setD(() => memuat = false);
+            }
+          }
+
+          if (!sudahMuat) {
+            sudahMuat = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) => jalankan());
+          }
+
+          double totalTerpilih = 0;
+          for (final b in terpilih.values) {
+            totalTerpilih += (b['total'] as num?)?.toDouble() ?? 0;
+          }
+
+          return AlertDialog(
+            title: const Text('Pilih Baris Permintaan Pengadaan'),
+            content: SizedBox(
+              width: 720,
+              height: 480,
+              child: Column(children: [
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: cari,
+                      decoration: const InputDecoration(
+                          labelText: 'Cari kode / keterangan PR',
+                          border: OutlineInputBorder(),
+                          isDense: true),
+                      onSubmitted: (_) => jalankan(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(onPressed: jalankan, child: const Text('Cari')),
+                ]),
+                const SizedBox(height: 6),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      'Hanya PR yang sudah disetujui dan belum ditutup yang tampil.',
+                      style: TextStyle(fontSize: 12)),
+                ),
+                if (galat.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(galat,
+                        style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+                  ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: memuat
+                      ? const Center(child: CircularProgressIndicator())
+                      : daftarPr.isEmpty
+                          ? const Center(
+                              child: Text('Tidak ada permintaan pengadaan yang cocok.'))
+                          : ListView.builder(
+                              itemCount: daftarPr.length,
+                              itemBuilder: (_, i) {
+                                final pr = daftarPr[i];
+                                final baris = ((pr['baris'] as List?) ?? [])
+                                    .cast<Map<String, dynamic>>();
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      ListTile(
+                                        dense: true,
+                                        title: Text('${pr['kode'] ?? ''} — ${pr['keterangan'] ?? ''}'),
+                                        subtitle: Text(
+                                            '${pr['satuanKerja'] ?? '-'}'
+                                            '${(pr['anggaran'] ?? '').toString().isEmpty ? '' : ' • anggaran ${pr['anggaran']}'}'),
+                                      ),
+                                      ...baris.map((b) {
+                                        final id = (b['id'] as num).toInt();
+                                        final boleh = b['bolehPilih'] == true;
+                                        final umLain =
+                                            '${b['uangMukaKode'] ?? ''}'.isNotEmpty &&
+                                                b['milikDokumenIni'] != true;
+                                        return CheckboxListTile(
+                                          dense: true,
+                                          controlAffinity:
+                                              ListTileControlAffinity.leading,
+                                          value: terpilih.containsKey(id),
+                                          onChanged: boleh
+                                              ? (v) => setD(() {
+                                                    if (v == true) {
+                                                      terpilih[id] = {
+                                                        ...b,
+                                                        'prKode': pr['kode'],
+                                                      };
+                                                    } else {
+                                                      terpilih.remove(id);
+                                                    }
+                                                  })
+                                              : null,
+                                          title: Text(
+                                              '${b['kodeAsset'] ?? ''} ${b['namaAsset'] ?? ''}'.trim()),
+                                          subtitle: Text(
+                                            '${_uang.format((b['jumlah'] as num?) ?? 0)}'
+                                            ' x ${_uang.format((b['hargaBeli'] as num?) ?? 0)}'
+                                            ' = ${_uang.format((b['total'] as num?) ?? 0)}'
+                                            '${boleh ? '' : ' • ${b['alasanTerkunci']}'}'
+                                            '${umLain ? ' • sudah tertaut ke ${b['uangMukaKode']}, memilihnya akan memindahkan tautan' : ''}',
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                color: !boleh || umLain
+                                                    ? AppColors.danger
+                                                    : null),
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+                const Divider(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                      '${terpilih.length} baris dipilih • total ${_uang.format(totalTerpilih)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+              FilledButton(
+                onPressed: () => Navigator.pop(c, terpilih.values.toList()),
+                child: const Text('Pakai'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   // ------------------------------------------------------------- formulir
 
   Future<void> _form([Map<String, dynamic>? baris]) async {
@@ -309,6 +489,9 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
             : '${((baris?['nilai'] as num?) ?? 0).toInt()}');
     bool tanpaAnggaran = baris?['tanpaAnggaran'] == true;
     bool ambilDariPr = baris?['ambilDariPr'] == true;
+    // Baris PR yang menjadi sumber dokumen ini. Pada dokumen lama isinya dimuat dari
+    // server supaya formulir menampilkan pilihan yang sama seperti saat dibuat.
+    List<Map<String, dynamic>> prTerpilih = [];
     int? satkerId = (baris?['satuanKerjaId'] as num?)?.toInt();
     int? jenisId = (baris?['jenisUangMukaId'] as num?)?.toInt();
     int? akunId = (baris?['akunId'] as num?)?.toInt();
@@ -319,6 +502,22 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
     DateTime? sampai = _tgl(baris?['sampai']);
     DateTime? selesai = _tgl(baris?['selesai']);
     double? sisaSaldo;
+
+    if (ubah && ambilDariPr) {
+      try {
+        final res = await ApiClient.instance.aksi('uang_muka_cari_pr', {'id': baris['id']});
+        for (final pr in ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>()) {
+          for (final b in ((pr['baris'] as List?) ?? []).cast<Map<String, dynamic>>()) {
+            if (b['milikDokumenIni'] == true) {
+              prTerpilih.add({...b, 'prKode': pr['kode']});
+            }
+          }
+        }
+      } catch (_) {
+        // Gagal memuat bukan alasan menolak membuka formulir; pengguna dapat
+        // memilih ulang barisnya, dan server tetap memegang data yang tersimpan.
+      }
+    }
 
     // Akun dipilih dari bagan akun yang sama dengan modul Akuntansi.
     List<Map<String, dynamic>> daftarAkun = [];
@@ -398,10 +597,14 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Diambil dari Permintaan Pengadaan (PR)'),
                     subtitle: const Text(
-                        'Rincian PR-nya dipilih di layar ZK; di sini cukup penandanya.'),
+                        'Nilainya dihitung dari baris PR yang dipilih; anggaran tidak '
+                        'dipotong lagi karena PR-nya sudah memotong.'),
                     value: ambilDariPr,
                     onChanged: (v) {
-                      setDialog(() => ambilDariPr = v);
+                      setDialog(() {
+                        ambilDariPr = v;
+                        if (!v) prTerpilih = [];
+                      });
                       hitungSisa();
                     },
                   ),
@@ -412,6 +615,62 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
                     opsi: _satker,
                     onChanged: (v) => setDialog(() => satkerId = v),
                   ),
+                  if (ambilDariPr) ...[
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Baris Permintaan Pengadaan *',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        helperText: satkerId == null
+                            ? 'Pilih Satuan Kerja dulu agar daftar PR-nya menyempit.'
+                            : null,
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(prTerpilih.isEmpty
+                              ? 'Belum ada baris PR yang dipilih'
+                              : '${prTerpilih.length} baris dipilih'),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final hasil = await _pilihBarisPr(
+                              satkerId: satkerId,
+                              idDokumen: ubah ? baris['id'] as int? : null,
+                              terpilihAwal: prTerpilih,
+                            );
+                            if (hasil == null) return;
+                            setDialog(() {
+                              prTerpilih = hasil;
+                              // Nilai mengikuti baris PR, sama seperti layar ZK yang
+                              // mengisi kolom Nilai begitu PR-nya dipilih.
+                              double t = 0;
+                              for (final b in hasil) {
+                                t += (b['total'] as num?)?.toDouble() ?? 0;
+                              }
+                              nilai.text = t == 0 ? '' : '${t.toInt()}';
+                            });
+                          },
+                          child: const Text('Pilih'),
+                        ),
+                      ]),
+                    ),
+                    if (prTerpilih.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: prTerpilih
+                              .map((b) => Text(
+                                    '• ${b['prKode'] ?? ''} — '
+                                    '${b['kodeAsset'] ?? ''} ${b['namaAsset'] ?? ''} '
+                                    '(${_uang.format((b['total'] as num?) ?? 0)})',
+                                    style: const TextStyle(fontSize: 12),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                  ],
                   if (!tanpaAnggaran && !ambilDariPr) ...[
                     const SizedBox(height: 12),
                     InputDecorator(
@@ -459,16 +718,20 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
                         ),
                       ),
                   ],
-                  const SizedBox(height: 12),
-                  PemilihAkunField(
-                    label: 'Akun',
-                    daftar: daftarAkun,
-                    nilai: akunId,
-                    helperText: tanpaAnggaran
-                        ? 'Wajib diisi untuk pengajuan tanpa anggaran.'
-                        : 'Opsional bila pengajuan membebani anggaran.',
-                    onChanged: (v) => setDialog(() => akunId = v),
-                  ),
+                  // Akun tidak dipakai pada pengajuan berbasis PR -- di layar ZK pun
+                  // barisnya hanya muncul ketika "tanpa anggaran" DAN bukan dari PR.
+                  if (!ambilDariPr) ...[
+                    const SizedBox(height: 12),
+                    PemilihAkunField(
+                      label: 'Akun',
+                      daftar: daftarAkun,
+                      nilai: akunId,
+                      helperText: tanpaAnggaran
+                          ? 'Wajib diisi untuk pengajuan tanpa anggaran.'
+                          : 'Opsional bila pengajuan membebani anggaran.',
+                      onChanged: (v) => setDialog(() => akunId = v),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _dropdownInt(
                     label: 'Jenis Uang Muka (Akun Penerima)',
@@ -514,6 +777,8 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
       'keterangan': keterangan.text.trim(),
       'tanpaAnggaran': tanpaAnggaran,
       'ambilDariPr': ambilDariPr,
+      if (ambilDariPr)
+        'prDetailIds': prTerpilih.map((b) => (b['id'] as num).toInt()).toList(),
       'satuanKerjaId': satkerId ?? 0,
       'akunId': akunId ?? 0,
       'workspaceId': workspaceId ?? 0,
@@ -538,6 +803,7 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
         'statusDokumen': statusDokumen,
         'tanpaAnggaran': tanpaAnggaran,
         'ambilDariPr': ambilDariPr,
+        'prDetailIds': prTerpilih.map((b) => (b['id'] as num).toInt()).toList(),
         'satuanKerjaId': satkerId,
         'workspaceId': workspaceId,
         'workspaceNama': workspaceNama,
