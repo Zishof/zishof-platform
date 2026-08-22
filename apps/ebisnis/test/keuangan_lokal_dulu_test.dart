@@ -15,6 +15,7 @@ void main() {
     'Kas Kecil': File('lib/screens/kas_kecil_screen.dart').readAsStringSync(),
     'Penggantian Kas Kecil':
         File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync(),
+    'Dana Talangan': File('lib/screens/dana_talangan_screen.dart').readAsStringSync(),
   };
 
   layar.forEach((nama, source) {
@@ -121,6 +122,33 @@ void main() {
     test('Kas Kecil tidak punya pengajuan transfer', () {
       final src = File('lib/screens/kas_kecil_screen.dart').readAsStringSync();
       expect(src, isNot(contains('ajukan_transfer')));
+    });
+  });
+
+  test('Dana Talangan menunjuk uang muka yang transfernya sudah terealisasi', () {
+    final src = File('lib/screens/dana_talangan_screen.dart').readAsStringSync();
+    expect(src, contains("'dana_talangan_cari_uang_muka'"));
+    expect(src, contains("'uangMukaId'"));
+    expect(src, contains('Uang Muka yang Ditalangi'));
+    // Sumber dana menentukan akun kredit jurnalnya; baru wajib saat disetujui.
+    expect(src, contains('Sumber Dana Talangan'));
+    // Dokumen ini bernilai tunggal -- tidak ada mesin rincian seperti kas kecil.
+    expect(src, isNot(contains('Rincian Biaya')));
+  });
+
+  test('kunci antrean luring unik per modul, tidak menumpang Kas Besar', () {
+    // Pernah salah: layar Kas Kecil, Penggantian, dan Dana Talangan memakai
+    // "kas_besar:<id>" saat menyunting, sehingga suntingan luring dokumen ber-id
+    // sama menempati slot antrean yang sama dan saling menimpa.
+    const pasangan = {
+      'kas_kecil_screen.dart': 'kas_kecil',
+      'penggantian_kas_kecil_screen.dart': 'penggantian_kas_kecil',
+      'dana_talangan_screen.dart': 'dana_talangan',
+      'kas_besar_screen.dart': 'kas_besar',
+    };
+    pasangan.forEach((berkas, kunci) {
+      final src = File('lib/screens/$berkas').readAsStringSync();
+      expect(src, contains("kunci: ubah ? '$kunci:"), reason: berkas);
     });
   });
 

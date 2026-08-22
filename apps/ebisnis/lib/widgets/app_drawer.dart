@@ -39,6 +39,7 @@ import '../screens/kode_akun_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
+import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
@@ -1031,6 +1032,15 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Penggantian Kas Kecil (Reimbursement)',
                                     builder: (_) => const PenggantianKasKecilScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('dana_talangan'))
+                              _ItemMenu(
+                                icon: Icons.handshake_outlined,
+                                label: 'Dana Talangan',
+                                aktif: menuAktif == 'Dana Talangan',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Dana Talangan',
+                                    builder: (_) => const DanaTalanganScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(

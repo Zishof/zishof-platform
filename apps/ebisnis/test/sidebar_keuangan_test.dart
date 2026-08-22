@@ -107,10 +107,17 @@ void main() {
   });
 
   test('grup Pengadaan tidak lagi memuat kedua menu itu', () {
-    final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
-    final pengadaan = shell.substring(
-        shell.indexOf("_GrupMenuShell(\n    'Pengadaan'"),
-        shell.indexOf("'Keuangan'"));
+    // Akhiran baris dinormalkan dulu: di Windows berkas dapat ter-checkout sebagai
+    // CRLF (core.autocrlf), sehingga pola ber-newline tidak akan pernah cocok dan
+    // substring() melempar RangeError alih-alih menguji apa pun.
+    final shell = File('lib/widgets/app_shell.dart')
+        .readAsStringSync()
+        .replaceAll('\r\n', '\n');
+    final awal = shell.indexOf("_GrupMenuShell(\n    'Pengadaan'");
+    final akhir = shell.indexOf("'Keuangan'");
+    expect(awal, isNonNegative, reason: 'grup Pengadaan tidak ditemukan di app_shell');
+    expect(akhir, greaterThan(awal), reason: 'grup Keuangan tidak ditemukan sesudahnya');
+    final pengadaan = shell.substring(awal, akhir);
     expect(pengadaan, isNot(contains('pengadaanDpc')));
     expect(pengadaan, isNot(contains('pengadaanPajak')));
   });

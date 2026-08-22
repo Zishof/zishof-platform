@@ -573,7 +573,7 @@ class _PenggantianKasKecilScreenState extends State<PenggantianKasKecilScreen> {
         'rincian': rincian,
         'statusDokumen': statusDokumen,
       },
-      kunci: ubah ? 'kas_besar:${baris['id']}' : 'penggantian_kas_kecil:baru:$idLokal',
+      kunci: ubah ? 'penggantian_kas_kecil:${baris['id']}' : 'penggantian_kas_kecil:baru:$idLokal',
       idLokal: idLokal,
       rowLokal: {
         ...(baris ?? const <String, dynamic>{}),

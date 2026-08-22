@@ -13,38 +13,37 @@ import '../widgets/safe_state.dart';
 import 'keuangan_cetak_util.dart';
 import 'pengadaan_dasbor_tab.dart';
 
-/// Layar **Kas Kecil** -- padanan layar ZK
-/// `ais.action.master.akunting.KasKecilAction`.
+/// Layar **Dana Talangan** -- padanan layar ZK
+/// `ais.action.master.akunting.DanaTalanganAction`.
 ///
 /// Nilai dokumen DIHITUNG DARI RINCIAN oleh server (hanya baris biaya yang
 /// dijumlahkan, dan baris biaya tidak boleh bernilai nol), sehingga angkanya
 /// tidak pernah berbeda antara kanal ini dan layar ZK. Seperti layar Keuangan
 /// lainnya: dua tab (Dasbor & data), tombol cetak dgn templat yang sama, tulis
 /// lokal-dulu, dan penghapusan yang di perangkat hanya menandai barisnya.
-class KasKecilScreen extends StatefulWidget {
-  const KasKecilScreen({super.key});
+class DanaTalanganScreen extends StatefulWidget {
+  const DanaTalanganScreen({super.key});
 
   @override
-  State<KasKecilScreen> createState() => _KasKecilScreenState();
+  State<DanaTalanganScreen> createState() => _DanaTalanganScreenState();
 }
 
-class _KasKecilScreenState extends State<KasKecilScreen> {
+class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
   static final DateFormat _fmt = DateFormat('yyyy-MM-dd');
   static final NumberFormat _uang = NumberFormat.decimalPattern('id');
 
   /// Kunci salinan lokal daftar ini.
-  static const String _cacheKey = 'master:kas_kecil';
+  static const String _cacheKey = 'master:dana_talangan';
 
   bool _memuat = true;
   bool _sibuk = false;
   String? _galat;
 
   List<Map<String, dynamic>> _data = [];
-  List<Map<String, dynamic>> _jenis = [];
   List<Map<String, dynamic>> _satker = [];
 
-  /// Bagan akun untuk pemilih akun biaya pada rincian.
-  List<Map<String, dynamic>> _akun = [];
+  /// Sumber dana talangan (jenis uang muka) -- menentukan akun kredit jurnalnya.
+  List<Map<String, dynamic>> _jenis = [];
   List<String> _daftarStatus = const ['Pengajuan', 'Disetujui', 'Ditolak'];
   Map<String, bool> _hak = const {};
   double _totalNilai = 0;
@@ -52,10 +51,8 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
   final _cari = TextEditingController();
   String _statusFilter = '';
   int? _satkerFilter;
-  int? _jenisFilter;
   DateTime? _dari;
   DateTime? _sampai;
-  bool _belumDiganti = false;
 
   /// Baris yang dihapus di perangkat ini: TIDAK dibuang dari salinan lokal,
   /// hanya ditandai, supaya penghapusannya masih dapat dibatalkan selama belum
@@ -91,14 +88,12 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('kas_kecil_opsi', {});
-      final res = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final opsi = await ApiClient.instance.aksi('dana_talangan_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _jenis = ((opsi['jenisKasKecil'] as List?) ?? []).cast<Map<String, dynamic>>();
         _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
         _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
-        _akun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _jenis = ((opsi['jenisUangMuka'] as List?) ?? []).cast<Map<String, dynamic>>();
       });
       await _muatDaftar();
     } catch (e) {
@@ -117,15 +112,13 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     try {
       // Baca SALINAN LOKAL dulu: daftar tetap terbuka saat jaringan mati.
       await MasterOffline.daftarCacheDulu(
-        'kas_kecil_daftar',
+        'dana_talangan_daftar',
         {
           if (_cari.text.trim().isNotEmpty) 'cari': _cari.text.trim(),
           if (_statusFilter.isNotEmpty) 'statusFilter': _statusFilter,
           if (_satkerFilter != null) 'satuanKerjaId': _satkerFilter,
-          if (_jenisFilter != null) 'jenisKasKecilId': _jenisFilter,
           if (_dari != null) 'dari': _fmt.format(_dari!),
           if (_sampai != null) 'sampai': _fmt.format(_sampai!),
-          if (_belumDiganti) 'belumDiganti': true,
         },
         _cacheKey,
         kolomKunci: 'id',
@@ -184,7 +177,7 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
         rowLokal: rowLokal,
         hapusLokal: hapusLokal,
         idLokal: idLokal,
-        entitas: 'kas_kecil',
+        entitas: 'dana_talangan',
       );
       if (hasil['offline'] == true) {
         _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
@@ -216,6 +209,103 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     return ya == true;
   }
 
+  /// Pemilih DOKUMEN kas kecil yang akan diganti: hanya yang sudah disetujui dan
+  /// belum punya penggantian. Rinciannya ikut terbawa untuk disunting di sini --
+  /// perilaku yang sama dengan layar ZK.
+  /// Pemilih UANG MUKA yang boleh ditalangi: hanya yang sudah disetujui dan
+  /// transfernya benar-benar direalisasikan. Aturannya sama dengan banbox ZK --
+  /// menalangi uang muka yang uangnya belum cair sama saja mencatat utang yang
+  /// belum ada.
+  Future<Map<String, dynamic>?> _pilihUangMuka(int? idDokumen) async {
+    final cari = TextEditingController();
+    List<Map<String, dynamic>> hasil = [];
+    bool memuat = false;
+    bool sudahMuat = false;
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialog) {
+          Future<void> jalankan() async {
+            setDialog(() => memuat = true);
+            try {
+              final res = await ApiClient.instance.aksi('dana_talangan_cari_uang_muka', {
+                'cari': cari.text.trim(),
+                if (idDokumen != null) 'id': idDokumen,
+              });
+              hasil = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            } catch (e) {
+              _pesan('$e');
+            } finally {
+              setDialog(() => memuat = false);
+            }
+          }
+
+          if (!sudahMuat) {
+            sudahMuat = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) => jalankan());
+          }
+
+          return AlertDialog(
+            title: const Text('Pilih Uang Muka yang Ditalangi'),
+            content: SizedBox(
+              width: 640,
+              height: 420,
+              child: Column(children: [
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: cari,
+                      decoration: const InputDecoration(
+                          labelText: 'Cari kode / judul uang muka',
+                          border: OutlineInputBorder(),
+                          isDense: true),
+                      onSubmitted: (_) => jalankan(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(onPressed: jalankan, child: const Text('Cari')),
+                ]),
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      'Hanya uang muka disetujui yang transfernya sudah direalisasikan yang tampil.',
+                      style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: memuat
+                      ? const Center(child: CircularProgressIndicator())
+                      : hasil.isEmpty
+                          ? const Center(
+                              child: Text('Belum ada uang muka yang transfernya terealisasi.'))
+                          : ListView.builder(
+                              itemCount: hasil.length,
+                              itemBuilder: (_, i) {
+                                final k = hasil[i];
+                                return ListTile(
+                                  dense: true,
+                                  title: Text('${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}'),
+                                  subtitle: Text(
+                                      'Nilai ${_uang.format((k['nilai'] as num?) ?? 0)}'
+                                      ' \u2022 ${k['anggaran'] ?? '-'}'
+                                      ' \u2022 ${k['satuanKerja'] ?? '-'}'),
+                                  onTap: () => Navigator.pop(c, k),
+                                );
+                              },
+                            ),
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   // ------------------------------------------------------------- formulir
 
   Future<void> _form([Map<String, dynamic>? baris]) async {
@@ -223,152 +313,23 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
     final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     int? satkerId = (baris?['satuanKerjaId'] as num?)?.toInt();
-    int? jenisId = (baris?['jenisKasKecilId'] as num?)?.toInt();
-    DateTime? tanggal = _tgl(baris?['tanggal']);
+    int? uangMukaId = (baris?['uangMukaId'] as num?)?.toInt();
+    String uangMukaLabel = ubah
+        ? '${baris['uangMukaKode'] ?? ''} \u2014 ${baris['uangMukaNama'] ?? ''}'
+        : '';
+    int? jenisId = (baris?['jenisUangMukaId'] as num?)?.toInt();
+    final nilai = TextEditingController(
+        text: ((baris?['nilai'] as num?)?.toDouble() ?? 0) == 0
+            ? ''
+            : '${((baris?['nilai'] as num?) ?? 0).toInt()}');
     String statusDokumen = '${baris?['statusDokumen'] ?? 'Pengajuan'}';
-    final rincian = <Map<String, dynamic>>[
-      ...(((baris?['rincian'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)))
-    ];
-    double nilaiHitung = (baris?['nilai'] as num?)?.toDouble() ?? 0;
-    String masalahRincian = '';
-    double? saldoKasKecil = (baris?['saldo'] as num?)?.toDouble();
 
     final simpan = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
-          Future<void> hitung() async {
-            try {
-              final res =
-                  await ApiClient.instance.aksi('kas_kecil_hitung', {'rincian': rincian});
-              setDialog(() {
-                nilaiHitung = (res['nilai'] as num?)?.toDouble() ?? 0;
-                masalahRincian = '${res['masalah'] ?? ''}';
-              });
-            } catch (_) {
-              // Biarkan angka lama; server tetap menghitung ulang saat menyimpan.
-            }
-          }
-
-          /// Saldo kas kecil pada tanggal laporan -- server yang menghitung, memakai
-          /// rumus yang sama dengan layar ZK.
-          Future<void> muatSaldo() async {
-            if (jenisId == null) {
-              setDialog(() => saldoKasKecil = null);
-              return;
-            }
-            try {
-              final res = await ApiClient.instance.aksi('kas_kecil_saldo', {
-                'jenisKasKecilId': jenisId,
-                if (ubah) 'id': baris['id'],
-                if (tanggal != null) 'tanggal': _fmt.format(tanggal!),
-              });
-              setDialog(() => saldoKasKecil = (res['saldo'] as num?)?.toDouble());
-            } catch (_) {
-              setDialog(() => saldoKasKecil = null);
-            }
-          }
-
-          Future<void> formBaris([int? indeks]) async {
-            final b = indeks == null ? <String, dynamic>{} : rincian[indeks];
-            final uraian = TextEditingController(text: '${b['uraian'] ?? ''}');
-            final jumlah = TextEditingController(
-                text: b['jumlah'] == null ? '' : '${(b['jumlah'] as num).toInt()}');
-            int? akunId = (b['akun'] as num?)?.toInt();
-            String? workspaceId = b['workspace']?.toString();
-            String? anggaranNama = b['anggaranNama'] as String?;
-            final ok = await showDialog<bool>(
-              context: c,
-              builder: (d) => StatefulBuilder(
-                builder: (d, setD) => AlertDialog(
-                title: Text(indeks == null ? 'Tambah Rincian Biaya' : 'Ubah Rincian Biaya'),
-                content: SizedBox(
-                  width: 460,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextField(
-                        controller: uraian,
-                        decoration: const InputDecoration(
-                            labelText: 'Uraian', border: OutlineInputBorder(), isDense: true)),
-                    const SizedBox(height: 12),
-                    TextField(
-                        controller: jumlah,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                            labelText: 'Jumlah *',
-                            helperText: 'Tidak boleh nol — server menolaknya.',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
-                    const SizedBox(height: 12),
-                    // Akun biaya WAJIB: tanpa akun, pengeluaran kas kecil tidak dapat
-                    // dijurnal ke buku besar -- server menolaknya.
-                    PemilihAkunField(
-                      label: 'Akun Biaya',
-                      daftar: _akun,
-                      nilai: akunId,
-                      helperText: 'Wajib dipilih.',
-                      onChanged: (v) => setD(() => akunId = v),
-                    ),
-                    const SizedBox(height: 12),
-                    // Anggaran per baris: inilah yang benar-benar memotong pagu di
-                    // rab.penggunaan_anggaran. Boleh dikosongkan -- server menebaknya
-                    // dari akun biaya, sama seperti layar ZK.
-                    PemilihAnggaranField(
-                      aksiCari: 'kas_kecil_cari_anggaran',
-                      workspaceId: workspaceId,
-                      namaAnggaran: anggaranNama,
-                      tahun: tanggal?.year,
-                      onDipilih: (w) => setD(() {
-                        if (w == null) {
-                          workspaceId = null;
-                          anggaranNama = null;
-                          return;
-                        }
-                        workspaceId = '${w['idTeks'] ?? w['id']}';
-                        anggaranNama = '${w['kode'] ?? ''} — ${w['nama'] ?? ''}';
-                        // Anggaran menentukan akun biayanya, sama seperti banbox ZK.
-                        final a = (w['akunId'] as num?)?.toInt();
-                        if (a != null && a > 0) akunId = a;
-                      }),
-                    ),
-                  ]),
-                ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(d, false), child: const Text('Batal')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(d, true), child: const Text('Simpan')),
-                ],
-              ),
-              ),
-            );
-            if (ok != true) return;
-            // 'key' menandai baris BIAYA (yang ikut dijumlahkan server); baris tanpa
-            // key pada layar ZK hanya pengelompok tampilan.
-            final key = b['key'] ??
-                (rincian.fold<int>(0, (m, e) => ((e['key'] as num?)?.toInt() ?? 0) > m
-                    ? (e['key'] as num).toInt()
-                    : m) +
-                    1);
-            final data = <String, dynamic>{
-              'key': key,
-              'uraian': uraian.text.trim(),
-              'jumlah': double.tryParse(jumlah.text.trim()) ?? 0,
-              if (akunId != null) 'akun': akunId,
-              if (workspaceId != null) 'workspace': workspaceId,
-              if (anggaranNama != null) 'anggaranNama': anggaranNama,
-            };
-            setDialog(() {
-              if (indeks == null) {
-                rincian.add(data);
-              } else {
-                rincian[indeks] = data;
-              }
-            });
-            await hitung();
-          }
-
           return AlertDialog(
-            title: Text(ubah ? 'Ubah Pengeluaran Kas Kecil' : 'Pengeluaran Kas Kecil Baru'),
+            title: Text(ubah ? 'Ubah Dana Talangan' : 'Pengajuan Dana Talangan Baru'),
             content: SizedBox(
               width: 660,
               child: SingleChildScrollView(
@@ -380,100 +341,49 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                     onChanged: (v) => setDialog(() => satkerId = v),
                   ),
                   const SizedBox(height: 12),
-                  _isian('Judul Pengeluaran', nama, wajib: true),
+                  _isian('Judul Pengajuan', nama, wajib: true),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                        labelText: 'Uang Muka yang Ditalangi *',
+                        border: OutlineInputBorder(),
+                        isDense: true),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(uangMukaLabel.isEmpty ? 'Belum dipilih' : uangMukaLabel,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final k = await _pilihUangMuka(ubah ? baris['id'] as int? : null);
+                          if (k == null) return;
+                          setDialog(() {
+                            uangMukaId = (k['id'] as num?)?.toInt();
+                            uangMukaLabel = '${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}';
+                          });
+                        },
+                        child: const Text('Pilih'),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  _isian('Nilai Talangan', nilai, wajib: true, angka: true),
+                  // Sumber dana menentukan akun kredit jurnalnya, jadi baru wajib saat
+                  // dokumen disetujui -- draf boleh disimpan tanpa menentukannya.
                   _dropdownInt(
-                    label: 'Jenis Kas Kecil *',
+                    label: 'Sumber Dana Talangan',
                     nilai: jenisId,
                     opsi: _jenis,
-                    onChanged: (v) {
-                      setDialog(() => jenisId = v);
-                      muatSaldo();
-                    },
+                    onChanged: (v) => setDialog(() => jenisId = v),
                   ),
-                  const SizedBox(height: 12),
-                  // Saldo kas kecil pada tanggal laporan -- batas atas pengeluaran ini.
-                  if (saldoKasKecil != null)
-                    Align(
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6, bottom: 6),
+                    child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Saldo kas kecil ${_uang.format(saldoKasKecil)} — '
-                        'pengeluaran tidak boleh melebihi angka ini.',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textSecondaryOf(context)),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  _tombolTanggal('Tanggal Laporan *', tanggal, () async {
-                    final t = await showDatePicker(
-                        context: c,
-                        initialDate: tanggal ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100));
-                    if (t == null) return;
-                    setDialog(() => tanggal = t);
-                    await muatSaldo();
-                  }),
-                  Row(children: [
-                    const Expanded(
-                        child: Text('Rincian Biaya',
-                            style: TextStyle(fontWeight: FontWeight.bold))),
-                    TextButton.icon(
-                      onPressed: () => formBaris(),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Tambah Baris'),
-                    ),
-                  ]),
-                  if (rincian.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('Belum ada rincian. Nilai dokumen dihitung dari rincian ini.'),
-                    )
-                  else
-                    ...rincian.asMap().entries.map((e) {
-                      final b = e.value;
-                      // Merah bila belum layak dijurnal: nilainya nol ATAU akunnya kosong.
-                      final nol = ((b['jumlah'] as num?)?.toDouble() ?? 0) == 0 ||
-                          b['akun'] == null;
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text('${b['uraian'] ?? '(tanpa uraian)'}'),
-                        subtitle: Text(
-                          '${_uang.format((b['jumlah'] as num?) ?? 0)}'
-                          '${b['anggaranNama'] == null ? '' : ' • ${b['anggaranNama']}'}',
-                          style: TextStyle(color: nol ? AppColors.danger : null),
-                        ),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            onPressed: () => formBaris(e.key),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: AppColors.danger),
-                            onPressed: () async {
-                              setDialog(() => rincian.removeAt(e.key));
-                              await hitung();
-                            },
-                          ),
-                        ]),
-                      );
-                    }),
-                  const Divider(),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      masalahRincian.isNotEmpty
-                          ? masalahRincian
-                          : 'Nilai dokumen ${_uang.format(nilaiHitung)}',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: masalahRincian.isNotEmpty ? AppColors.danger : null),
+                      child: Text('Wajib dipilih sebelum pengajuan dapat disetujui.',
+                          style: TextStyle(fontSize: 12)),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   _isian('Keterangan', keterangan),
                   DropdownButtonFormField<String>(
                     value: _daftarStatus.contains(statusDokumen)
@@ -501,30 +411,29 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
 
     final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
     await _kirimLokalDulu(
-      'kas_kecil_simpan',
+      'dana_talangan_simpan',
       {
         if (ubah) 'id': baris['id'],
         'satuanKerjaId': satkerId ?? 0,
         'nama': nama.text.trim(),
-        'jenisKasKecilId': jenisId ?? 0,
-        if (tanggal != null) 'tanggal': _fmt.format(tanggal!),
+        'uangMukaId': uangMukaId ?? 0,
+        'jenisUangMukaId': jenisId ?? 0,
+        'nilai': double.tryParse(nilai.text.trim()) ?? 0,
         'keterangan': keterangan.text.trim(),
-        'rincian': rincian,
         'statusDokumen': statusDokumen,
       },
-      kunci: ubah ? 'kas_kecil:${baris['id']}' : 'kas_kecil:baru:$idLokal',
+      kunci: ubah ? 'dana_talangan:${baris['id']}' : 'dana_talangan:baru:$idLokal',
       idLokal: idLokal,
       rowLokal: {
         ...(baris ?? const <String, dynamic>{}),
         'id': ubah ? baris['id'] : idLokal,
         'nama': nama.text.trim(),
         'keterangan': keterangan.text.trim(),
-        'nilai': nilaiHitung,
+        'nilai': double.tryParse(nilai.text.trim()) ?? 0,
         'statusDokumen': statusDokumen,
         'satuanKerjaId': satkerId,
-        'jenisKasKecilId': jenisId,
-        'rincian': rincian,
-        if (tanggal != null) 'tanggal': _fmt.format(tanggal!),
+        'uangMukaId': uangMukaId,
+        'jenisUangMukaId': jenisId,
       },
     );
   }
@@ -543,9 +452,9 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     // + `_dihapusPada`, lalu menyaringnya dari daftar). Sisi SERVER menerima
     // hapus BIASA; jejaknya sudah ditangani audit Hibernate di sana.
     await _kirimLokalDulu(
-      'kas_kecil_hapus',
+      'dana_talangan_hapus',
       {'id': b['id']},
-      kunci: 'kas_kecil:${b['id']}',
+      kunci: 'dana_talangan:${b['id']}',
       rowLokal: {'id': b['id']},
       hapusLokal: true,
     );
@@ -571,7 +480,7 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     setStateIfMounted(() => _sibuk = true);
     try {
       final berhasil = await MasterOffline.pulihkanLokal(
-          _cacheKey, b['id'], kunci: 'kas_kecil:${b['id']}');
+          _cacheKey, b['id'], kunci: 'dana_talangan:${b['id']}');
       _pesan(berhasil
           ? 'Penghapusan dibatalkan.'
           : 'Tidak dapat dibatalkan: penghapusannya sudah terkirim ke server. '
@@ -580,12 +489,6 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     } finally {
       if (mounted) setStateIfMounted(() => _sibuk = false);
     }
-  }
-
-  static DateTime? _tgl(Object? v) {
-    final s = '${v ?? ''}'.trim();
-    if (s.isEmpty) return null;
-    return DateTime.tryParse(s);
   }
 
   Widget _isian(String label, TextEditingController c,
@@ -626,25 +529,47 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
     );
   }
 
-  Widget _tombolTanggal(String label, DateTime? nilai, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: onTap,
-            icon: const Icon(Icons.event, size: 18),
-            label: Text('$label: ${nilai == null ? '-' : _fmt.format(nilai)}'),
-          ),
-        ),
-      );
-
   AppTableCell _aksiBaris(Map<String, dynamic> b) {
     final status = '${b['statusDokumen'] ?? ''}';
     final terkunci = b['sudahDijurnal'] == true;
     return AppTableCell(
-      width: 200,
+      width: 232,
       align: TextAlign.center,
       child: Row(mainAxisSize: MainAxisSize.min, children: [
+        // Muara dokumen keuangan: DPC (Daftar Pengajuan Transfer). Hanya dokumen
+        // yang sudah disetujui yang boleh masuk, dan sekali masuk tidak diulang --
+        // server memperlakukan penautannya sebagai idempoten.
+        if (!_tampilkanTerhapus && _boleh('approve') && status == 'Disetujui')
+          b['dpcAda'] == true
+              ? IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Sudah di daftar transfer'
+                      '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
+                  icon: const Icon(Icons.local_atm, size: 18, color: AppColors.success),
+                  onPressed: null,
+                )
+              : IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Ajukan ke proses transfer',
+                  icon: const Icon(Icons.send_outlined, size: 18),
+                  onPressed: _sibuk
+                      ? null
+                      : () async {
+                          if (await _konfirmasi('Ajukan ke proses transfer?',
+                              '${b['kode']} — ${b['nama']}\n'
+                              'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                              'Ajukan')) {
+                            await _kirimLokalDulu(
+                                'dana_talangan_ajukan_transfer', {'id': b['id']},
+                                kunci: 'dana_talangan-dpc:${b['id']}',
+                                rowLokal: {
+                                  ...b,
+                                  'dpcAda': true,
+                                  'dpcStatus': 'Menunggu transfer',
+                                });
+                          }
+                        },
+                ),
         IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: 'Cetak / pratinjau',
@@ -652,7 +577,7 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
           onPressed: _sibuk || _tampilkanTerhapus
               ? null
               : () => cetakDokumenKeuangan(context,
-                  modul: 'kas_kecil',
+                  modul: 'dana_talangan',
                   id: (b['id'] as num).toInt(),
                   kode: '${b['kode'] ?? ''}'),
         ),
@@ -681,8 +606,8 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                     if (await _konfirmasi('Setujui pengeluaran?',
                         '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
                         'Setujui')) {
-                      await _kirimLokalDulu('kas_kecil_setujui', {'id': b['id']},
-                          kunci: 'kas_kecil:${b['id']}',
+                      await _kirimLokalDulu('dana_talangan_setujui', {'id': b['id']},
+                          kunci: 'dana_talangan:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Disetujui'});
                     }
                   },
@@ -697,8 +622,8 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                 : () async {
                     if (await _konfirmasi(
                         'Tolak pengeluaran?', '${b['kode']} — ${b['nama']}', 'Tolak')) {
-                      await _kirimLokalDulu('kas_kecil_tolak', {'id': b['id']},
-                          kunci: 'kas_kecil:${b['id']}',
+                      await _kirimLokalDulu('dana_talangan_tolak', {'id': b['id']},
+                          kunci: 'dana_talangan:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Ditolak'});
                     }
                   },
@@ -720,12 +645,12 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
         child: Column(children: [
           const TabBar(tabs: [
             Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-            Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Pengeluaran'),
+            Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Talangan'),
           ]),
           Expanded(
             child: TabBarView(children: [
               const PengadaanDasborTab(
-                  tahap: 'kas_kecil', aksi: 'keuangan_dasbor', namaParam: 'modul'),
+                  tahap: 'penggantian_kas_kecil', aksi: 'keuangan_dasbor', namaParam: 'modul'),
               isiData,
             ]),
           ),
@@ -766,23 +691,6 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
               SizedBox(
                 width: 210,
                 child: DropdownButtonFormField<int>(
-                  value: _jenisFilter,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Jenis Kas Kecil', isDense: true),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Semua jenis')),
-                    ..._jenis.map((e) => DropdownMenuItem(
-                          value: (e['id'] as num?)?.toInt(),
-                          child: Text('${e['nama'] ?? ''}',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                        )),
-                  ],
-                  onChanged: (v) => setStateIfMounted(() => _jenisFilter = v),
-                ),
-              ),
-              SizedBox(
-                width: 210,
-                child: DropdownButtonFormField<int>(
                   value: _satkerFilter,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Satuan Kerja', isDense: true),
@@ -815,13 +723,8 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                 },
                 icon: const Icon(Icons.date_range, size: 18),
                 label: Text(_dari == null
-                    ? 'Rentang Tanggal Laporan'
+                    ? 'Rentang Tanggal Dibuat'
                     : '${_fmt.format(_dari!)} s/d ${_fmt.format(_sampai!)}'),
-              ),
-              FilterChip(
-                label: const Text('Belum diganti'),
-                selected: _belumDiganti,
-                onSelected: (v) => setStateIfMounted(() => _belumDiganti = v),
               ),
               FilterChip(
                 label: Text(
@@ -838,7 +741,7 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                 FilledButton.icon(
                   onPressed: _sibuk ? null : () => _form(),
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Pengeluaran Baru'),
+                  label: const Text('Talangan Baru'),
                 ),
               if (_sibuk)
                 const SizedBox(
@@ -849,9 +752,9 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      menuAktif: MenuEBisnis.kasKecil,
-      judul: 'Kas Kecil',
-      subjudul: 'Pengeluaran kas kecil beserta saldo dan persetujuannya',
+      menuAktif: MenuEBisnis.danaTalangan,
+      judul: 'Dana Talangan',
+      subjudul: 'Talangan atas uang muka yang transfernya sudah terealisasi',
       scrollable: false,
       aksiHeader: IconButton(
           icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
@@ -891,14 +794,14 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                       minWidth: 1140,
                       emptyText: _tampilkanTerhapus
                           ? 'Tidak ada penghapusan yang masih menunggu kirim di perangkat ini.'
-                          : 'Belum ada pengeluaran kas kecil untuk penyaring ini.',
+                          : 'Belum ada dana talangan untuk penyaring ini.',
                       columns: const [
                         AppTableColumn('Kode', flex: 2),
                         AppTableColumn('Judul', flex: 4),
-                        AppTableColumn('Jenis', flex: 3),
+                        AppTableColumn('Uang Muka', flex: 3),
                         AppTableColumn('Satuan Kerja', flex: 3),
                         AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
-                        AppTableColumn('Tanggal', flex: 2),
+                        AppTableColumn('Dibuat', flex: 2),
                         AppTableColumn('Status', flex: 2),
                         AppTableColumn('Aksi', width: 200, align: TextAlign.center),
                       ],
@@ -906,15 +809,18 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
                           .map((b) => AppTableRowData(cells: [
                                 AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
                                 AppTableCell.text('${b['nama'] ?? ''}', flex: 4),
-                                AppTableCell.text('${b['jenisKasKecilNama'] ?? ''}', flex: 3),
+                                AppTableCell.text(
+                                    '${b['uangMukaKode'] ?? ''} ${b['uangMukaNama'] ?? ''}'.trim(),
+                                    flex: 3),
                                 AppTableCell.text('${b['satuanKerjaNama'] ?? ''}', flex: 3),
                                 AppTableCell.text(_uang.format((b['nilai'] as num?) ?? 0),
                                     flex: 2, align: TextAlign.right),
-                                AppTableCell.text('${b['tanggal'] ?? ''}', flex: 2),
+                                AppTableCell.text('${b['tanggalPembuatan'] ?? ''}', flex: 2),
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'
-                                    '${b['sudahDiganti'] == true ? ' • sudah diganti' : ''}',
+                                    '${b['sudahDiganti'] == true ? ' • sudah diganti' : ''}'
+                                    '${b['dpcAda'] == true ? ' • di daftar transfer' : ''}',
                                     flex: 2),
                                 _aksiBaris(b),
                               ]))
