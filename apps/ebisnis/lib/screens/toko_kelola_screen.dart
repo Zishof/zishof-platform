@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api_client.dart';
 import '../services/master_offline.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
@@ -243,17 +244,21 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kelola Toko / Outlet'),
-        actions: [
-          const IndikatorSinkronMaster(),
-          IconButton(
-              onPressed: _muat,
-              tooltip: 'Muat ulang',
-              icon: const Icon(Icons.refresh)),
-        ],
-      ),
+    // Memakai AppShell, BUKAN Scaffold telanjang. Scaffold sendiri membawa
+    // AppBar-nya dan menimpa seluruh area, sehingga menu ini terlihat membuka
+    // "window baru" alih-alih mengisi frame konten seperti menu lainnya.
+    // Seluruh menu lain memakai pola ini (lihat hak_akses_screen).
+    return AppShell(
+      menuAktif: MenuEBisnis.tokoKelola,
+      judul: 'Kelola Toko / Outlet',
+      scrollable: false,
+      actionsAppBar: [
+        const IndikatorSinkronMaster(),
+        IconButton(
+            onPressed: _muat,
+            tooltip: 'Muat ulang',
+            icon: const Icon(Icons.refresh)),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _simpan(null),
         icon: const Icon(Icons.add_business_outlined),
