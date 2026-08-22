@@ -41,6 +41,7 @@ import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
 import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
+import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -1041,6 +1042,15 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Dana Talangan',
                                     builder: (_) => const DanaTalanganScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('reimbursement'))
+                              _ItemMenu(
+                                icon: Icons.receipt_outlined,
+                                label: 'Reimbursement Pegawai',
+                                aktif: menuAktif == 'Reimbursement Pegawai',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Reimbursement Pegawai',
+                                    builder: (_) => const ReimbursementScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(

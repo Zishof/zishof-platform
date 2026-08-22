@@ -53,6 +53,7 @@ import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
 import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
+import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
 import '../screens/uang_muka_screen.dart';
@@ -171,6 +172,7 @@ enum MenuEBisnis {
   kasKecil,
   penggantianKasKecil,
   danaTalangan,
+  reimbursement,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -345,6 +347,7 @@ const _kunciMenuKeuangan = <MenuEBisnis, String>{
   MenuEBisnis.kasKecil: 'kas_kecil',
   MenuEBisnis.penggantianKasKecil: 'penggantian_kas_kecil',
   MenuEBisnis.danaTalangan: 'dana_talangan',
+  MenuEBisnis.reimbursement: 'reimbursement',
 };
 
 /// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
@@ -651,6 +654,8 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunPenggantianKasKecil),
   _ItemMenuShell(MenuEBisnis.danaTalangan, Icons.handshake_outlined, 'Dana Talangan',
       builder: _bangunDanaTalangan),
+  _ItemMenuShell(MenuEBisnis.reimbursement, Icons.receipt_outlined, 'Reimbursement Pegawai',
+      builder: _bangunReimbursement),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -760,6 +765,7 @@ const _grupMenu = <_GrupMenuShell>[
       MenuEBisnis.kasKecil,
       MenuEBisnis.penggantianKasKecil,
       MenuEBisnis.danaTalangan,
+      MenuEBisnis.reimbursement,
       MenuEBisnis.pengadaanPajak,
       MenuEBisnis.pengadaanDpc,
     ],
@@ -941,6 +947,7 @@ Widget _bangunKasKecil(BuildContext c) => const KasKecilScreen();
 Widget _bangunPenggantianKasKecil(BuildContext c) =>
     const PenggantianKasKecilScreen();
 Widget _bangunDanaTalangan(BuildContext c) => const DanaTalanganScreen();
+Widget _bangunReimbursement(BuildContext c) => const ReimbursementScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -1293,6 +1300,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Penggantian Kas Kecil (Reimbursement)';
     case MenuEBisnis.danaTalangan:
       return 'Dana Talangan';
+    case MenuEBisnis.reimbursement:
+      return 'Reimbursement Pegawai';
     case MenuEBisnis.anggaran:
       return 'Anggaran (RAB Bulanan)';
     case MenuEBisnis.riwayatSinkron:

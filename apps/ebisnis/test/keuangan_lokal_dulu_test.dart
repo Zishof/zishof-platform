@@ -16,6 +16,7 @@ void main() {
     'Penggantian Kas Kecil':
         File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync(),
     'Dana Talangan': File('lib/screens/dana_talangan_screen.dart').readAsStringSync(),
+    'Reimbursement': File('lib/screens/reimbursement_screen.dart').readAsStringSync(),
   };
 
   layar.forEach((nama, source) {
@@ -149,6 +150,40 @@ void main() {
     pasangan.forEach((berkas, kunci) {
       final src = File('lib/screens/$berkas').readAsStringSync();
       expect(src, contains("kunci: ubah ? '$kunci:"), reason: berkas);
+    });
+  });
+
+  group('Reimbursement Pegawai', () {
+    final src = File('lib/screens/reimbursement_screen.dart').readAsStringSync();
+
+    test('keputusan tiga arah, bukan hanya setuju/tolak', () {
+      // "Minta Revisi" mengembalikan pengajuan kepada pengaju; itu yang membedakan
+      // modul ini dari modul Keuangan lain.
+      expect(src, contains("'reimbursement_setujui'"));
+      expect(src, contains("'reimbursement_revisi'"));
+      expect(src, contains("'reimbursement_tolak'"));
+    });
+
+    test('penolakan & revisi menuntut catatan atasan', () {
+      expect(src, contains('_mintaCatatan('));
+      expect(src, contains("'catatanAtasan'"));
+    });
+
+    test('akun baris diturunkan dari Jenis Pengeluaran, bukan dipilih langsung', () {
+      expect(src, contains("'jenisPengeluaran'"));
+      expect(src, contains('Jenis Pengeluaran *'));
+      // Jenis yang akunnya belum dipetakan tetap tampil, dengan peringatan.
+      expect(src, contains('belum dipetakan administrator'));
+    });
+
+    test('anggaran hanya diminta bila jenisnya memakai anggaran', () {
+      expect(src, contains('_pakaiAnggaran('));
+      expect(src, contains("e['menggunakanAnggaran'] == true"));
+    });
+
+    test('pegawai penerima dipilih dari daftar', () {
+      expect(src, contains("'reimbursement_cari_pegawai'"));
+      expect(src, contains('Pegawai Penerima'));
     });
   });
 
