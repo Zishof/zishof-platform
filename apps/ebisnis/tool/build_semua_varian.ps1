@@ -47,7 +47,23 @@ $variants = @(
     @{ Kode='petra';           Flavor='petra';          Target='lib/main_petra.dart';              Define='petra';           Iss='installer/petra.iss';           Apk='app-petra-release.apk';          Setup="eKantin-Petra-Setup-$versi.exe" },
     @{ Kode='mitrainap';       Flavor='mitrainap';      Target='lib/main_mitrainap.dart';          Define='mitrainap';       Iss='';                              Apk='app-mitrainap-release.apk';      Setup='' }
 )
-if ($Hanya) { $variants = $variants | Where-Object { $Hanya -contains $_.Kode } }
+if ($Hanya) {
+    # "powershell -File skrip.ps1 -Hanya ebisnis,albahjah" TIDAK menghasilkan array:
+    # dengan -File, PowerShell menyerahkan argumennya sebagai satu string mentah,
+    # sehingga $Hanya berisi satu elemen "ebisnis,albahjah" dan tidak cocok dgn kode
+    # varian mana pun. Dipecah di sini supaya kedua cara pemanggilan sama-sama sah.
+    $Hanya = $Hanya | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } |
+             Where-Object { $_ }
+    $dikenal = $variants | ForEach-Object { $_.Kode }
+    $asing = $Hanya | Where-Object { $dikenal -notcontains $_ }
+    if ($asing) { throw "Kode varian tidak dikenal: $($asing -join ', '). Yang ada: $($dikenal -join ', ')." }
+    $variants = $variants | Where-Object { $Hanya -contains $_.Kode }
+}
+# Daftar kosong berarti TIDAK ADA yang dibangun. Tanpa penjagaan ini skrip berjalan
+# mulus, tidak menghasilkan apa-apa, lalu mencetak "SEMUA VARIAN BERHASIL" -- dan rilis
+# kosong itu baru ketahuan setelah diunggah. Sudah pernah terjadi.
+if (-not $variants -or @($variants).Count -eq 0) { throw 'Tidak ada varian yang terpilih untuk dibangun.' }
+if ($SkipAndroid -and $SkipWindows) { throw 'SkipAndroid dan SkipWindows sekaligus: tidak ada yang dibangun.' }
 
 $mulai = Get-Date
 $gagal = @()
@@ -103,4 +119,6 @@ if ($gagal.Count -gt 0) {
     Write-Host "GAGAL: $($gagal -join ', ')"
     exit 1
 }
-Write-Host "SEMUA VARIAN BERHASIL"
+$jumlahArtefak = @(Get-ChildItem -LiteralPath $artifactDir -File | Where-Object { $_.Name -notlike '*.sha256.txt' }).Count
+if ($jumlahArtefak -eq 0) { throw 'Selesai tanpa satu pun artefak -- jangan perlakukan ini sbg berhasil.' }
+Write-Host "SEMUA VARIAN BERHASIL ($jumlahArtefak artefak)"
