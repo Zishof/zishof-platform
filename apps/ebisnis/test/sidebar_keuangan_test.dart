@@ -114,6 +114,7 @@ void main() {
       'Dana Talangan',
       'Reimbursement Pegawai',
       'Master Data Keuangan',
+      'Proses Transfer',
     ]) {
       expect(shell, contains("case '$label':"), reason: label);
     }
@@ -140,7 +141,8 @@ void main() {
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();
     // Menu yang menyusul setelah keenam modul awal ikut diperiksa di sini
     // supaya tidak ada satu pun yang lolos tanpa gerbang hak akses.
-    for (final k in [...kunciKeuangan, 'dana_talangan', 'reimbursement', 'master_keuangan']) {
+    for (final k in [...kunciKeuangan, 'dana_talangan', 'reimbursement',
+      'master_keuangan', 'proses_transfer']) {
       expect(shell, contains("'$k'"), reason: 'sidebar $k');
       expect(drawer, contains("bolehMenuVarianBaru('$k')"), reason: 'drawer $k');
     }

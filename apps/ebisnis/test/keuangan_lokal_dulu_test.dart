@@ -197,6 +197,49 @@ void main() {
     expect(tab, contains('widget.namaParam'));
   });
 
+  group('Proses Transfer (pencairan DPC)', () {
+    final src = File('lib/screens/proses_transfer_screen.dart').readAsStringSync();
+
+    test('empat tahap alurnya lengkap', () {
+      // Tanpa salah satu aksi ini, dokumen Keuangan berhenti sebelum bisa dijurnal.
+      for (final aksi in [
+        'proses_transfer_kandidat',
+        'proses_transfer_simpan',
+        'proses_transfer_setujui',
+        'proses_transfer_tandai',
+        'proses_transfer_realisasikan',
+      ]) {
+        expect(src, contains("'$aksi'"), reason: aksi);
+      }
+    });
+
+    test('pembatalan tersedia untuk kedua tahap yang mengunci', () {
+      expect(src, contains("'proses_transfer_batal_setuju'"));
+      expect(src, contains("'proses_transfer_batal_realisasi'"));
+    });
+
+    test('tanda Transfer/Transitori dijelaskan sebagai penentu akun kredit', () {
+      // Kalau tandanya diperlakukan sebagai label kosmetik, pengguna tidak akan
+      // tahu mengapa dokumennya tidak terjurnal.
+      expect(src, contains('akun kredit'));
+      expect(src, contains('belum bertanda'));
+    });
+
+    test('aksi baris mengikuti status dokumen, bukan selalu tersedia', () {
+      expect(src, contains("final draft = status == 'Draft';"));
+      expect(src, contains("final disetujui = status == 'Disetujui';"));
+      expect(src, contains("final cair = status == 'Terealisasi';"));
+    });
+
+    test('kategori Lainnya ikut ditawarkan sebagai jaring pengaman', () {
+      // Penyaring kategori di layar ZK berpola daftar putih per kolom sumber,
+      // sehingga sumber yang belum punya cabangnya tidak pernah tampil. Di sini
+      // kategorinya datang dari server dan memuat "Lainnya".
+      expect(src, contains('kategoriAktif'));
+      expect(src, contains('_kategori'));
+    });
+  });
+
   group('Master Data Keuangan', () {
     final src = File('lib/screens/master_keuangan_screen.dart').readAsStringSync();
 
