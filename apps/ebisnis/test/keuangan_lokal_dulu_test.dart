@@ -197,6 +197,46 @@ void main() {
     expect(tab, contains('widget.namaParam'));
   });
 
+  group('Proses Transitori', () {
+    final src = File('lib/screens/proses_transitori_screen.dart').readAsStringSync();
+
+    test('alur batch lengkap', () {
+      for (final aksi in [
+        'proses_transitori_kandidat',
+        'proses_transitori_simpan',
+        'proses_transitori_setujui',
+        'proses_transitori_batal_setuju',
+        'proses_transitori_hapus',
+      ]) {
+        expect(src, contains("'$aksi'"), reason: aksi);
+      }
+    });
+
+    test('kandidat belum siap TAMPIL beserta alasannya, tidak disembunyikan', () {
+      // Menyembunyikannya membuat pengguna mencari sesuatu yang tidak akan muncul.
+      // Menyembunyikan atas permintaan tetap boleh -- itulah chip "Hanya yang siap".
+      expect(src, contains("b['siap'] == true"));
+      expect(src, contains("b['alasan']"));
+      expect(src, contains('Hanya yang siap'));
+      expect(src, contains('belumSiap'));
+    });
+
+    test('baris yang belum siap tidak dapat dicentang', () {
+      // Server juga menolaknya; ini hanya mencegah kejutan setelah menekan Simpan.
+      expect(src, contains("onChanged: siap"));
+    });
+
+    test('akun transitori ditampilkan, dan yang belum dipetakan diperingatkan', () {
+      expect(src, contains("b['akunTransitori']"));
+      expect(src, contains("b['peringatan']"));
+    });
+
+    test('aksi baris mengikuti status dokumen', () {
+      expect(src, contains("final draft = status == 'Draft';"));
+      expect(src, contains("final disetujui = status == 'Disetujui';"));
+    });
+  });
+
   group('Proses Transfer (pencairan DPC)', () {
     final src = File('lib/screens/proses_transfer_screen.dart').readAsStringSync();
 

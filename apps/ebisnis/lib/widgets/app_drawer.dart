@@ -43,6 +43,7 @@ import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/master_keuangan_screen.dart';
 import '../screens/proses_transfer_screen.dart';
+import '../screens/proses_transitori_screen.dart';
 import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
@@ -1071,6 +1072,15 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Proses Transfer',
                                     builder: (_) => const ProsesTransferScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('proses_transitori'))
+                              _ItemMenu(
+                                icon: Icons.swap_horiz_outlined,
+                                label: 'Proses Transitori',
+                                aktif: menuAktif == 'Proses Transitori',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Proses Transitori',
+                                    builder: (_) => const ProsesTransitoriScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(
