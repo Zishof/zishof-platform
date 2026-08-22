@@ -197,6 +197,51 @@ void main() {
     expect(tab, contains('widget.namaParam'));
   });
 
+  group('Master Data Keuangan', () {
+    final src = File('lib/screens/master_keuangan_screen.dart').readAsStringSync();
+
+    test('keenam tipe dilayani satu formulir yang digerakkan metadata server', () {
+      // Yang berbeda antar tipe hanya LABEL medan akunnya; kuncinya posisional
+      // dan sama untuk semuanya, sehingga tidak ada cabang per tipe di layar ini.
+      for (final aksi in [
+        'master_keuangan_opsi',
+        'master_keuangan_daftar',
+        'master_keuangan_simpan',
+        'master_keuangan_hapus',
+      ]) {
+        expect(src, contains("'$aksi'"), reason: aksi);
+      }
+      expect(src, contains('medanAkun'));
+      expect(src, contains('punyaKode'));
+      expect(src, contains('punyaAnggaran'));
+      expect(src, contains('punyaSatuanKerja'));
+      // Tidak boleh ada cabang berdasarkan nama tipe di sisi layar.
+      expect(src, isNot(contains("== 'jenis_kas_besar'")));
+      expect(src, isNot(contains("== 'jenis_uang_muka'")));
+    });
+
+    test('antrean luring dan cache dipisah per tipe', () {
+      // Enam tipe berbagi satu layar tetapi id-nya berasal dari tabel berbeda:
+      // tanpa nama tipe pada kuncinya, dua master ber-id sama akan bertabrakan
+      // di antrean luring maupun di cache.
+      expect(src, contains(r"'master_keuangan:$tipe'"));
+      expect(src, contains(r"kunci: 'master_keuangan:${meta['tipe']}:"));
+    });
+
+    test('akun yang belum lengkap diperingatkan, bukan didiamkan', () {
+      // Dokumen yang jenisnya belum berakun tetap bisa diajukan tetapi DILEWATI
+      // mesin posting tanpa pesan galat -- itulah yang diperingatkan di sini.
+      expect(src, contains('belumLengkap'));
+      expect(src, contains('akunLengkap'));
+      expect(src, contains('tidak akan terjurnal'));
+    });
+
+    test('jenis yang sudah dipakai dokumen tidak ditawarkan untuk dihapus', () {
+      expect(src, contains("b['dipakai']"));
+      expect(src, contains('Nonaktifkan saja bila tidak dipakai lagi.'));
+    });
+  });
+
   test('cetak Keuangan memakai jendela pratinjau yang sama dengan Pengadaan', () {
     final util = File('lib/screens/keuangan_cetak_util.dart').readAsStringSync();
     expect(util, contains("'keuangan_cetak'"));

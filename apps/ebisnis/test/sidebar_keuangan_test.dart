@@ -106,6 +106,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('setiap label menu Keuangan dapat dipetakan balik ke enumnya', () {
+    // Tanpa baris pada _menuDariLabel, membuka menu lewat drawer (mode sempit)
+    // tidak menyorot menu yang sama di sidebar (mode lebar).
+    final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
+    for (final label in [
+      'Dana Talangan',
+      'Reimbursement Pegawai',
+      'Master Data Keuangan',
+    ]) {
+      expect(shell, contains("case '$label':"), reason: label);
+    }
+  });
+
   test('grup Pengadaan tidak lagi memuat kedua menu itu', () {
     // Akhiran baris dinormalkan dulu: di Windows berkas dapat ter-checkout sebagai
     // CRLF (core.autocrlf), sehingga pola ber-newline tidak akan pernah cocok dan
@@ -122,10 +135,12 @@ void main() {
     expect(pengadaan, isNot(contains('pengadaanPajak')));
   });
 
-  test('keenam kunci menu digerbangi fail-closed di kedua platform', () {
+  test('kunci menu grup Keuangan digerbangi fail-closed di kedua platform', () {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();
-    for (final k in kunciKeuangan) {
+    // Menu yang menyusul setelah keenam modul awal ikut diperiksa di sini
+    // supaya tidak ada satu pun yang lolos tanpa gerbang hak akses.
+    for (final k in [...kunciKeuangan, 'dana_talangan', 'reimbursement', 'master_keuangan']) {
       expect(shell, contains("'$k'"), reason: 'sidebar $k');
       expect(drawer, contains("bolehMenuVarianBaru('$k')"), reason: 'drawer $k');
     }
