@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +50,10 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
   Set<String> _idBaru = {};
   Set<String> _idBerubah = {};
   int _versiPerubahan = 0;
+
+  /// Lampiran yang sedang diunduh; dipakai menandai keripiknya saja,
+  /// sehingga baris lain tetap dapat diklik selama unduhan berjalan.
+  int? _unduhLampiranId;
 
   @override
   void initState() {
@@ -416,6 +421,54 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
     );
   }
 
+  /// Satu berkas lampiran sebagai keripik yang dapat diklik untuk mengunduh.
+  Widget _keripikLampiran(Map<String, dynamic> item) {
+    final id = (item['lampiran_id'] as num?)?.toInt();
+    final nama = '${item['nama'] ?? 'Berkas'}';
+    final namaFile = '${item['namaFile'] ?? ''}'.trim();
+    final sedang = id != null && _unduhLampiranId == id;
+    // Hanya satu unduhan pada satu waktu: dialog simpan bawaan sistem bersifat
+    // modal, jadi dua unduhan serentak akan saling menutupi dialognya.
+    final aktif = id != null && _unduhLampiranId == null;
+    return Tooltip(
+      message: namaFile.isEmpty ? 'Unduh $nama' : 'Unduh $namaFile',
+      child: InkWell(
+        onTap: aktif ? () => _unduhLampiran(item) : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(6)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            sedang
+                ? const SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(strokeWidth: 1.6))
+                : Icon(Icons.download_outlined,
+                    size: 12, color: AppColors.primary),
+            const SizedBox(width: 3),
+            Text(nama,
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  /// Mengunduh satu lampiran langsung dari barisnya, tanpa membuka dialog ubah.
+  Future<void> _unduhLampiran(Map<String, dynamic> item) async {
+    final id = (item['lampiran_id'] as num?)?.toInt();
+    if (id == null) return;
+    setStateIfMounted(() => _unduhLampiranId = id);
+    await _simpanLampiran(context, item);
+    setStateIfMounted(() => _unduhLampiranId = null);
+  }
+
   AppTableRowData _baris(Map<String, dynamic> row) {
     final sudah = '${row['status'] ?? 'BELUM'}' == 'SUDAH';
     final warna = sudah ? const Color(0xFF2E7D32) : const Color(0xFFB8860B);
@@ -498,7 +551,12 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         child: Builder(builder: (_) {
           final daftar =
               (row['lampiran'] as List?)?.cast<Object?>() ?? const [];
-          if (daftar.isEmpty) {
+          final rinci = (row['lampiranRinci'] as List?)
+                  ?.whereType<Map>()
+                  .map((e) => e.cast<String, dynamic>())
+                  .toList() ??
+              const <Map<String, dynamic>>[];
+          if (daftar.isEmpty && rinci.isEmpty) {
             return Text('Belum ada',
                 style: TextStyle(
                     fontSize: 11, color: AppColors.textSecondaryOf(context)));
@@ -508,8 +566,16 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(daftar.join(', '),
-                  style: const TextStyle(fontSize: 11), maxLines: 2),
+              // Tiap berkas dapat diunduh di tempat. Server versi lama yang belum
+              // mengirim lampiranRinci tetap menampilkan daftar namanya saja.
+              if (rinci.isEmpty)
+                Text(daftar.join(', '),
+                    style: const TextStyle(fontSize: 11), maxLines: 2)
+              else
+                Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: rinci.map(_keripikLampiran).toList()),
               Text(
                   '${row['lampiranTerisi'] ?? daftar.length}'
                   '/${row['lampiranTotal'] ?? 5} berkas'
@@ -558,6 +624,61 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
 /// Slot yang ditandai wajib -- Invoice -- harus terisi sebelum tagihan dapat
 /// diterima. Pagarnya ada di server, jadi Desktop, Android, dan JSP berlaku sama;
 /// papan ini hanya memberi tahu lebih awal.
+/// Nama berkas simpanan: pakai nama asli dari server bila ada.
+///
+/// Bila kosong, namanya dibentuk dari nama slot ditambah akhiran yang diturunkan
+/// dari tipe MIME -- tanpa akhiran, berkasnya tidak dapat dibuka dengan klik
+/// ganda di Windows.
+String _namaBerkasLampiran(Map<String, dynamic> item, Map<String, dynamic> r) {
+  final dariServer = '${r['namaFile'] ?? item['namaFile'] ?? ''}'.trim();
+  if (dariServer.isNotEmpty) return dariServer;
+  final tipe = '${r['tipe'] ?? item['tipe'] ?? ''}';
+  final akhiran =
+      tipe.contains('/') ? tipe.split('/').last.split(';').first.trim() : 'bin';
+  final slot = '${item['nama'] ?? 'lampiran'}'.replaceAll(' ', '_');
+  return '$slot.${akhiran.isEmpty ? 'bin' : akhiran}';
+}
+
+/// Mengunduh satu lampiran lalu menyimpannya lewat dialog simpan bawaan sistem.
+///
+/// Dipakai dua tempat -- keripik pada kolom Lampiran di daftar, dan tombol unduh
+/// di papan lampiran -- sehingga aturan penamaan berkas dan penjaga content://
+/// hanya punya satu salinan. Penanda sibuk sengaja TIDAK diurus di sini; tiap
+/// pemanggil menandai bagiannya sendiri.
+Future<void> _simpanLampiran(
+    BuildContext context, Map<String, dynamic> item) async {
+  final id = (item['lampiran_id'] as num?)?.toInt();
+  if (id == null) return;
+  try {
+    final r = await ApiClient.instance
+        .aksi('pengadaan_lampiran_unduh', {'lampiran_id': id});
+    final b64 = '${r['fileBase64'] ?? ''}';
+    if (b64.isEmpty) {
+      throw 'Isi berkas tidak terbaca dari penyimpanan.';
+    }
+    final bytes = base64Decode(b64);
+    final namaFile = _namaBerkasLampiran(item, r);
+    final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan ${item['nama'] ?? 'lampiran'}',
+        fileName: namaFile,
+        bytes: bytes);
+    if (path == null) return;
+    // Jalur content:// milik Android SAF sudah ditulisi oleh saveFile dan BUKAN
+    // jalur berkas biasa; menulisinya lagi lewat File() akan gagal.
+    if (!path.startsWith('content://')) {
+      await File(path).writeAsBytes(bytes);
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lampiran disimpan: $namaFile')));
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengunduh lampiran: $e')));
+    }
+  }
+}
+
 class _PapanLampiran extends StatefulWidget {
   final int bastId;
   const _PapanLampiran({required this.bastId});
@@ -646,6 +767,16 @@ class _PapanLampiranState extends State<_PapanLampiran> {
     await _muat();
   }
 
+  /// Menyimpan berkas slot ini ke perangkat, tanpa pratinjau lebih dulu.
+  ///
+  /// Berbeda dengan [_lihat] yang hanya sanggup menampilkan gambar, tombol ini
+  /// melayani semua jenis berkas -- faktur pajak PDF pun ikut terlayani.
+  Future<void> _unduh(Map<String, dynamic> slot) async {
+    setStateIfMounted(() => _sibuk = '${slot['kunci']}');
+    await _simpanLampiran(context, slot);
+    setStateIfMounted(() => _sibuk = null);
+  }
+
   Future<void> _lihat(Map<String, dynamic> slot) async {
     setStateIfMounted(() => _sibuk = '${slot['kunci']}');
     Map<String, dynamic>? r;
@@ -663,7 +794,8 @@ class _PapanLampiranState extends State<_PapanLampiran> {
     if (!tipe.startsWith('image/')) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${r['namaFile'] ?? 'Berkas'} bertipe $tipe -- '
-              'pratinjau hanya tersedia untuk gambar.')));
+              'pratinjau hanya tersedia untuk gambar. Pakai tombol '
+              'unduh untuk menyimpannya.')));
       return;
     }
     await showDialog<void>(
@@ -749,6 +881,12 @@ class _PapanLampiranState extends State<_PapanLampiran> {
                 iconSize: 18,
                 onPressed: () => _lihat(slot),
                 icon: const Icon(Icons.visibility)),
+          if (ada)
+            IconButton(
+                tooltip: 'Unduh berkas',
+                iconSize: 18,
+                onPressed: () => _unduh(slot),
+                icon: const Icon(Icons.download_outlined)),
           IconButton(
               tooltip: ada ? 'Ganti berkas' : 'Unggah',
               iconSize: 18,
