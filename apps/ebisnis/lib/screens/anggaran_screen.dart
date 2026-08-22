@@ -725,7 +725,10 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       ),
     );
     if (simpan != true) return;
-    if (nama.text.trim().isEmpty || (workspaceId ?? 0) <= 0) {
+    // Id anggaran pada basis data warisan SELALU negatif (19 digit), jadi "belum
+    // dipilih" berarti TEPAT nol. Memakai <= 0 di sini membuat setiap item yang sah
+    // ditolak dan formulir tidak pernah bisa disimpan.
+    if (nama.text.trim().isEmpty || (workspaceId ?? 0) == 0) {
       _pesan('Item anggaran dan uraian wajib diisi.');
       return;
     }

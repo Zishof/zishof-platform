@@ -117,6 +117,17 @@ void main() {
     }
   });
 
+  test('id anggaran negatif tidak boleh dinilai "belum dipilih"', () {
+    // Seluruh id rab.workspace pada basis data warisan negatif 19 digit (dibuktikan di
+    // UAT: 37 dari 37 baris, min -9123372834534775782). Penjaga bergaya `<= 0` menolak
+    // setiap item yang sah -- formulir penggunaan tidak pernah bisa disimpan.
+    final padat = layar.replaceAll(RegExp(r'\s+'), '');
+    expect(padat, contains('(workspaceId??0)==0'),
+        reason: 'nol berarti belum dipilih; negatif adalah id yang sah');
+    expect(padat, isNot(contains('(workspaceId??0)<=0')),
+        reason: 'penjaga lama akan menolak seluruh anggaran warisan');
+  });
+
   test('menu Anggaran terpasang fail-closed di kedua platform', () {
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
