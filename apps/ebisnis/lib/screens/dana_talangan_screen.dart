@@ -648,7 +648,7 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
           Expanded(
             child: TabBarView(children: [
               const PengadaanDasborTab(
-                  tahap: 'penggantian_kas_kecil', aksi: 'keuangan_dasbor', namaParam: 'modul'),
+                  tahap: 'dana_talangan', aksi: 'keuangan_dasbor', namaParam: 'modul'),
               isiData,
             ]),
           ),

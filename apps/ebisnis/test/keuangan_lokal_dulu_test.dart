@@ -285,6 +285,29 @@ void main() {
     });
   });
 
+  test('tiap layar meminta dasbor MODULNYA SENDIRI', () {
+    // Pernah salah: layar Dana Talangan meminta dasbor "penggantian_kas_kecil"
+    // (sisa salin-tempel), sehingga tabnya menampilkan angka modul lain tanpa
+    // satu pun pesan galat. Nilai `tahap` di sini WAJIB sama dengan nama modul
+    // yang dikenali KeuanganApiHelper.
+    const modulLayar = {
+      'uang_muka_screen.dart': 'uang_muka',
+      'pj_uang_muka_screen.dart': 'pj_uang_muka',
+      'kas_besar_screen.dart': 'kas_besar',
+      'pj_kas_besar_screen.dart': 'pj_kas_besar',
+      'kas_kecil_screen.dart': 'kas_kecil',
+      'penggantian_kas_kecil_screen.dart': 'penggantian_kas_kecil',
+      'dana_talangan_screen.dart': 'dana_talangan',
+      'reimbursement_screen.dart': 'reimbursement',
+    };
+    modulLayar.forEach((berkas, modul) {
+      final src = File('lib/screens/$berkas').readAsStringSync();
+      expect(src, contains("keuangan_dasbor"), reason: berkas);
+      expect(src, contains("tahap: '$modul'"),
+          reason: '$berkas harus meminta dasbor $modul, bukan modul lain');
+    });
+  });
+
   test('cetak Keuangan memakai jendela pratinjau yang sama dengan Pengadaan', () {
     final util = File('lib/screens/keuangan_cetak_util.dart').readAsStringSync();
     expect(util, contains("'keuangan_cetak'"));
