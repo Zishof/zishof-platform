@@ -194,7 +194,7 @@ tertinggal dalam keadaan setengah terautentikasi.
 | `lanjut` | perangkat sudah terikat tenant yang sama, atau baru diikat | ya |
 | `dialihkan` | tenant lain, antrean kosong, data lama diarsipkan | ya, dengan pemberitahuan |
 | `tertahanAntrean` | tenant lain, antrean **belum terkirim** | **tidak** |
-| `pilihTenant` | punya lebih dari satu tenant, klien belum punya pemilihnya | **tidak** |
+| `pilihTenant` | punya lebih dari satu tenant | **pemilih muncul** |
 
 **`tanpaTenant` adalah keadaan seluruh pengguna hari ini**, dan itulah sebabnya penyambungan
 ini tidak mengubah apa pun bagi mereka.
@@ -208,6 +208,42 @@ servernya.
 
 Yang **tidak** gagal terbuka adalah `tertahanAntrean`: itu keputusan berdasarkan data lokal
 yang pasti, bukan berdasarkan jawaban server yang bisa tidak sampai.
+
+### Pemilih usaha
+
+Muncul **hanya** bila server menjawab `TENANT_SELECTION_REQUIRED`. Pengguna dengan satu
+usaha tidak pernah melihatnya — tenantnya dipilih otomatis oleh server (§7.1 butir 3).
+
+**Tidak dapat ditutup begitu saja.** `barrierDismissible: false` dan `PopScope(canPop: false)`;
+satu-satunya jalan keluar adalah tombol **Keluar**, yang membatalkan login dan menghapus
+token. Menebak salah satu usaha berarti pengguna bekerja pada perusahaan yang keliru tanpa
+pernah tahu — dan tidak ada galat apa pun yang akan memberitahunya, karena datanya benar,
+perusahaannya yang salah.
+
+**Usaha yang sedang tidak dapat dipakai tetap ditampilkan**, berikut alasannya, hanya tidak
+dapat dipilih:
+
+| Status | Yang dilihat pengguna |
+|---|---|
+| `ACTIVE` / `READY` | dapat dipilih |
+| `SUSPENDED` | "Sedang dihentikan sementara — hubungi admin." |
+| `PROVISIONING` | "Sedang disiapkan — coba lagi beberapa saat lagi." |
+| lainnya | statusnya ditampilkan apa adanya, supaya dapat dilacak |
+
+Kode dan peran ikut tampil di bawah namanya — dua usaha bernama mirip harus dapat dibedakan.
+
+### Pilihan pengguna bukan kewenangan
+
+Tenant yang dipilih dikirim ulang ke server lewat `tenant_context`, dan **server yang tetap
+memvalidasi** keanggotaan, status, serta modulnya. Klien hanya menyebut yang mana.
+
+Dan di sini gagal-terbuka **tidak berlaku**: kalau pilihan eksplisit ditolak server —
+suspended, modul mati, bukan miliknya — alasannya dilemparkan ke pengguna, bukan dijatuhkan
+diam-diam ke schema existing. Jatuh diam-diam berarti ia bekerja pada data yang sama sekali
+bukan yang dipilihnya.
+
+Bedanya dengan login tanpa pilihan: di sana gagal-terbuka memang benar, karena pengguna tidak
+pernah meminta tenant apa pun.
 
 ### `X-Tenant-Id` dikirim otomatis
 

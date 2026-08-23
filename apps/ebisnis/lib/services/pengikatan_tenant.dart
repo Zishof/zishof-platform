@@ -3,6 +3,58 @@ import 'package:core_db/core_db.dart';
 
 import '../api_client.dart';
 
+/// Satu baris pada daftar tenant milik pengguna.
+class RingkasanTenant {
+  const RingkasanTenant({
+    required this.id,
+    required this.kode,
+    required this.nama,
+    required this.peran,
+    required this.status,
+    required this.modul,
+  });
+
+  final int id;
+  final String kode;
+  final String nama;
+  final String peran;
+  final String status;
+  final List<String> modul;
+
+  /// Hanya tenant ACTIVE atau READY yang dapat dipakai.
+  ///
+  /// Yang lain **tetap ditampilkan** berikut alasannya — daftar yang
+  /// menyembunyikannya tampak seperti kehilangan data, dan pengguna tidak akan
+  /// tahu harus menunggu atau menghubungi admin.
+  bool get dapatDipakai => status == 'ACTIVE' || status == 'READY';
+
+  String get alasanTidakDapat {
+    switch (status) {
+      case 'SUSPENDED':
+        return 'Sedang dihentikan sementara — hubungi admin.';
+      case 'PROVISIONING':
+        return 'Sedang disiapkan — coba lagi beberapa saat lagi.';
+      default:
+        return 'Belum dapat dipakai ($status).';
+    }
+  }
+
+  static RingkasanTenant? dariJson(Object? j) {
+    if (j is! Map) return null;
+    final id = j['tenantId'];
+    if (id is! int || id <= 0) return null;
+    final m = j['modules'];
+    return RingkasanTenant(
+      id: id,
+      kode: '${j['tenantCode'] ?? ''}',
+      nama: '${j['nama'] ?? ''}',
+      peran: '${j['role'] ?? ''}',
+      status: '${j['status'] ?? ''}',
+      modul: m is List ? m.map((e) => '$e').toList() : const <String>[],
+    );
+  }
+}
+
 /// Keputusan yang dihasilkan [PengikatanTenant.periksa].
 enum KeputusanPengikatan {
   /// Perangkat sudah terikat pada tenant yang sama, atau baru saja diikat.
@@ -165,29 +217,67 @@ class PengikatanTenant {
   /// Pengguna tanpa tenant -- akun legacy dan admin pusat, yaitu semua orang
   /// hari ini -- ditolak server dengan `TENANT_ACCESS_DENIED`. Itu **bukan**
   /// kegagalan login: jalurnya memang schema existing.
-  static Future<HasilPengikatan> periksaSetelahLogin() async {
+  /// Daftar tenant milik pengguna, untuk pemilih.
+  ///
+  /// Mengembalikan daftar kosong bila pengguna tidak punya tenant — itu bukan
+  /// galat.
+  static Future<List<RingkasanTenant>> daftarTenant() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('tenant_list', const {});
+      final data = hasil['data'];
+      if (data is! List) return const <RingkasanTenant>[];
+      final keluar = <RingkasanTenant>[];
+      for (final baris in data) {
+        final r = RingkasanTenant.dariJson(baris);
+        if (r != null) keluar.add(r);
+      }
+      return keluar;
+    } catch (_) {
+      return const <RingkasanTenant>[];
+    }
+  }
+
+  static Future<HasilPengikatan> periksaSetelahLogin({int? tenantIdPilihan}) async {
     Map<String, dynamic> data;
     try {
-      final hasil = await ApiClient.instance.aksi('tenant_context', const {});
+      // Tenant yang DIPILIH pengguna dikirim di body; server tetap yang
+      // memvalidasi keanggotaan, status, dan modulnya. Pilihan klien tidak
+      // pernah menjadi kewenangan -- ia hanya menyebut yang mana.
+      final hasil = await ApiClient.instance.aksi(
+          'tenant_context',
+          tenantIdPilihan == null
+              ? const <String, dynamic>{}
+              : <String, dynamic>{'tenantId': '$tenantIdPilihan'});
       final d = hasil['data'];
       if (d is! Map) {
         return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
       }
       data = Map<String, dynamic>.from(d);
     } on ApiException catch (e) {
-      switch (e.kode) {
-        case 'TENANT_ACCESS_DENIED':
-          // Tidak bernaung pada tenant mana pun -> jalur existing.
-          return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
-        case 'TENANT_SELECTION_REQUIRED':
-          return const HasilPengikatan(KeputusanPengikatan.pilihTenant);
-        default:
-          // Aksi tenant_context belum ada di server lama, atau tenant sedang
-          // suspended/belum siap. Keduanya TIDAK boleh menggagalkan login POS
-          // yang selama ini berjalan; jalur existing tetap terbuka.
-          return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+      if (e.kode == 'TENANT_SELECTION_REQUIRED') {
+        return const HasilPengikatan(KeputusanPengikatan.pilihTenant);
       }
+      if (e.kode == 'TENANT_ACCESS_DENIED' && tenantIdPilihan == null) {
+        // Tidak bernaung pada tenant mana pun -> jalur existing.
+        return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+      }
+      // PILIHAN EKSPLISIT TIDAK BOLEH GAGAL TERBUKA.
+      //
+      // Bila pengguna sudah memilih satu tenant dan server menolaknya --
+      // suspended, modul mati, bukan miliknya -- jatuh diam-diam ke schema
+      // existing berarti ia bekerja pada data yang sama sekali bukan yang
+      // dipilihnya, tanpa pernah diberi tahu. Alasannya harus sampai.
+      if (tenantIdPilihan != null) {
+        rethrow;
+      }
+      // Tanpa pilihan: aksi tenant_context belum ada di server lama, jaringan
+      // putus, atau tenant belum siap. Login POS yang selama ini berjalan TIDAK
+      // boleh gagal karena lapisan tenant belum siap di servernya.
+      return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
     } catch (_) {
+      if (tenantIdPilihan != null) {
+        rethrow;
+      }
       return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
     }
 

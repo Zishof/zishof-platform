@@ -10,6 +10,7 @@ import '../widgets/app_error_info.dart';
 import '../widgets/app_version_label.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/pengikatan_tenant.dart';
+import '../widgets/pemilih_tenant.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,7 +52,37 @@ class _LoginScreenState extends State<LoginScreen> {
       // penyiram antrean dinyalakan, dan sebelum cache dimuat. Berhenti
       // setelahnya berarti perangkat sudah terlanjur menyimpan jejak identitas
       // baru padahal pemiliknya belum boleh masuk.
-      final ikat = await PengikatanTenant.periksaSetelahLogin();
+      var ikat = await PengikatanTenant.periksaSetelahLogin();
+
+      if (ikat.keputusan == KeputusanPengikatan.pilihTenant) {
+        final daftar = await PengikatanTenant.daftarTenant();
+        if (!mounted) return;
+        if (daftar.isEmpty) {
+          // Server bilang harus memilih tetapi daftarnya kosong -- keadaan yang
+          // tidak masuk akal. Jangan menebak; hentikan dengan jujur.
+          await ApiClient.instance.hapusToken();
+          setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
+              'Daftar usaha tidak dapat dimuat. Coba lagi, atau hubungi admin.',
+              aktivitas: 'login'));
+          return;
+        }
+        final dipilih = await PemilihTenant.pilih(context, daftar);
+        if (dipilih == null) {
+          // Membatalkan pemilihan berarti membatalkan login: pengguna dengan
+          // beberapa usaha tidak boleh masuk tanpa menyebut yang mana.
+          await ApiClient.instance.hapusToken();
+          setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
+              'Anda belum memilih usaha, jadi belum masuk.',
+              aktivitas: 'login'));
+          return;
+        }
+        // Pilihan dikirim ulang ke server, yang tetap memvalidasi keanggotaan,
+        // status, dan modulnya. Pilihan klien menyebut yang mana, bukan memberi
+        // kewenangan.
+        ikat = await PengikatanTenant.periksaSetelahLogin(
+            tenantIdPilihan: dipilih);
+      }
+
       if (!ikat.bolehLanjut) {
         await ApiClient.instance.hapusToken();
         setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
