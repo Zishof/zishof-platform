@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
@@ -17,6 +18,7 @@ import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/kompresi_gambar.dart';
 
 /// Layar "Terima Tagihan Vendor" -- tahap 4 modul Pengadaan POS.
 ///
@@ -723,8 +725,30 @@ class _PapanLampiranState extends State<_PapanLampiran> {
     );
     if (hasil == null || hasil.files.isEmpty) return;
     final berkas = hasil.files.single;
-    final bytes = berkas.bytes;
-    if (bytes == null || !mounted) return;
+    final bytesAsal = berkas.bytes;
+    if (bytesAsal == null || !mounted) return;
+
+    // Gambar dikecilkan ke bawah 500 KB SEBELUM dikirim; server tidak
+    // mengompresi apa pun. Slot ber-`harusGambar` menolak berkas yang bukan
+    // gambar -- diperiksa dari ISI berkasnya, sebab penyaring ekstensi
+    // FilePicker hanya melihat namanya.
+    //
+    // Dijalankan lewat compute(): decode+encode foto kamera resolusi tinggi
+    // berat dan akan menjank UI bila berjalan di isolate utama.
+    Uint8List bytes;
+    try {
+      bytes = await compute(
+          harusGambar ? siapkanLampiranGambar : siapkanLampiranCampuran,
+          bytesAsal);
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.message),
+          backgroundColor: Theme.of(context).colorScheme.error));
+      return;
+    }
+    if (!mounted) return;
+
     setStateIfMounted(() => _sibuk = '${slot['kunci']}');
     try {
       final r = await ApiClient.instance.aksi('pengadaan_lampiran_unggah', {

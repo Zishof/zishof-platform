@@ -57,3 +57,81 @@ Uint8List kompresGambar(Uint8List asal, {required int maksBytes}) {
 
   return hasil;
 }
+
+// ===========================================================================
+// GERBANG LAMPIRAN GAMBAR
+// ===========================================================================
+
+/// Ambang tunggal untuk SELURUH lampiran gambar di aplikasi ini.
+///
+/// Satu tempat, bukan angka yang diulang di tiap layar — ambang yang tersebar
+/// akan berbeda-beda begitu ada yang lupa mengubah salah satunya.
+const int maksLampiranGambarBytes = 500 * 1024;
+
+/// Tanda pengenal format gambar yang dikenali, dibaca dari byte awal berkas.
+///
+/// Diperiksa dari **isinya**, bukan dari ekstensi namanya. Berkas bernama
+/// `.jpg` yang isinya PDF akan lolos pemeriksaan ekstensi dan baru gagal jauh
+/// di hilir — atau lebih buruk, tersimpan sebagai gambar yang tidak pernah
+/// dapat ditampilkan.
+bool tampaknyaGambar(Uint8List b) {
+  if (b.length < 12) return false;
+  // JPEG: FF D8 FF
+  if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return true;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 &&
+      b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) {
+    return true;
+  }
+  // GIF: "GIF8"
+  if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38) return true;
+  // BMP: "BM"
+  if (b[0] == 0x42 && b[1] == 0x4D) return true;
+  // WEBP: "RIFF" .... "WEBP"
+  if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+      b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+    return true;
+  }
+  return false;
+}
+
+/// Siapkan lampiran yang **wajib** berupa gambar.
+///
+/// Melempar [FormatException] bila bukan gambar, dan mengecilkannya ke bawah
+/// [maksLampiranGambarBytes] bila kebesaran. Gambar yang sudah cukup kecil
+/// dikembalikan **apa adanya** — mengubahnya menjadi JPEG akan membuang
+/// transparansi PNG tanpa memberi manfaat apa pun.
+///
+/// Fungsi top-level dan murni supaya dapat dijalankan lewat `compute()`:
+/// decode+encode foto kamera resolusi tinggi berat dan akan menjank UI bila
+/// berjalan di isolate utama.
+Uint8List siapkanLampiranGambar(Uint8List asal) {
+  if (!tampaknyaGambar(asal)) {
+    throw const FormatException(
+        'Lampiran harus berupa gambar (JPG, PNG, GIF, BMP, atau WEBP).');
+  }
+  if (asal.length <= maksLampiranGambarBytes) {
+    // Tetap didekode untuk memastikan isinya benar-benar utuh: tanda pengenal
+    // yang benar tidak menjamin badan berkasnya tidak rusak.
+    if (img.decodeImage(asal) == null) {
+      throw const FormatException('Berkas gambar rusak dan tidak dapat dibaca.');
+    }
+    return asal;
+  }
+  return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
+}
+
+/// Siapkan lampiran yang **boleh** bukan gambar — faktur PDF, misalnya.
+///
+/// Gambar dikecilkan ke bawah ambang; yang bukan gambar dilewatkan apa adanya.
+/// Dipakai pada lampiran serba-guna, sedangkan medan yang memang menuntut
+/// gambar memakai [siapkanLampiranGambar].
+Uint8List siapkanLampiranCampuran(Uint8List asal) {
+  if (!tampaknyaGambar(asal)) {
+    return asal;
+  }
+  if (asal.length <= maksLampiranGambarBytes) {
+    return asal;
+  }
+  return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
+}

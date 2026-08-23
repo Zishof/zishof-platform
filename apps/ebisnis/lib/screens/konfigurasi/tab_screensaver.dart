@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:core_device/core_device.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../sesi.dart';
@@ -11,6 +12,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../services/kompresi_gambar.dart';
 
 const _opsiMode = [
   ('FULLSCREEN', 'Layar Penuh', Icons.fullscreen),
@@ -251,7 +253,15 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
           gagal++;
           continue;
         }
-        final bytes = await File(path).readAsBytes();
+        // Slide layar pelanggan WAJIB gambar, dan dikecilkan ke bawah 500 KB
+        // sebelum dikirim. Satu toko dapat mengunggah puluhan slide sekaligus;
+        // tanpa ini, foto kamera mentah membengkakkan basis data dan membuat
+        // layar pelanggan tersendat saat memuatnya.
+        //
+        // Berkas yang bukan gambar dihitung gagal, bukan dikirim mentah --
+        // penyaring ekstensi picker hanya melihat nama, bukan isi.
+        final bytesAsal = await File(path).readAsBytes();
+        final bytes = await compute(siapkanLampiranGambar, bytesAsal);
         await ApiClient.instance.aksi('layar_pelanggan_slide_upload', {
           'toko_id': Sesi.instance.tokoId,
           'gambar_base64': base64Encode(bytes),

@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import '../api_client.dart';
 import 'server_config.dart';
+import 'package:flutter/foundation.dart';
+import 'kompresi_gambar.dart';
 
 /// Unggahan lampiran untuk satu tahap SOP.
 ///
@@ -46,6 +48,23 @@ class UnggahLampiranSop {
     if (token == null || token.isEmpty) {
       return 'Sesi sudah berakhir. Masuk ulang lalu coba lagi.';
     }
+
+    // Lampiran SOP boleh berupa apa saja (foto bukti, PDF surat). Yang berupa
+    // GAMBAR dikecilkan ke bawah 500 KB di sini -- satu tempat, sehingga
+    // seluruh pemanggil ikut terlindungi tanpa harus mengingatnya. Yang bukan
+    // gambar dilewatkan apa adanya.
+    List<int> muatan = isi;
+    try {
+      muatan = await compute(
+          siapkanLampiranCampuran,
+          isi is Uint8List ? isi : Uint8List.fromList(isi));
+    } catch (_) {
+      // Kompresi gagal (mis. gambar rusak) -- kirim aslinya. Menggagalkan
+      // unggahan karena kompresi gagal akan menghalangi pekerjaan yang sah;
+      // batas ukurannya ditegakkan server.
+      muatan = isi;
+    }
+
     try {
       final permintaan =
           http.MultipartRequest('POST', Uri.parse(_urlDoUpload))
@@ -54,7 +73,7 @@ class UnggahLampiranSop {
             ..fields['id'] = ref
             ..fields['jenis'] = kunci
             ..fields['nama'] = namaBerkas
-            ..files.add(http.MultipartFile.fromBytes('file', isi,
+            ..files.add(http.MultipartFile.fromBytes('file', muatan,
                 filename: namaBerkas));
 
       final balasan = await http.Response.fromStream(
