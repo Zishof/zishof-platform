@@ -71,24 +71,46 @@ Akibatnya: mutasi master yang mengantre milik tenant A dapat **terkirim memakai
 token tenant B** saat penyiram latar (tiap 5 menit, `MasterOffline.intervalFlush`)
 berjalan sesudah perpindahan. Data tenant A masuk ke tenant B tanpa gejala.
 
-## 4. Sasaran
+## 4. Keputusan: satu perangkat satu tenant, satu tenant banyak perangkat
 
-1. **Namespace memuat tenant** — `<varian>_<slug-tenant>`, dipasang **sesudah**
-   login mengembalikan tenant, bukan saat bootstrap. Dengan sendirinya ini
-   memisahkan berkas DB, cadangan JSONL, dan folder cadangan sekaligus.
-2. **Perpindahan tenant menutup basis data**, lalu membukanya kembali pada
-   namespace baru; B-2 berubah dari pemblokir menjadi penjaga yang benar.
-3. **Kunci prefs diberi awalan** `<ns>.` — termasuk `token` dan terutama
-   `auth_luring_*`.
-4. **`outbox_master` dan `outbox_is` diberi kolom pemilik**, mengikuti pola
-   `transaksi_pending` yang sudah terbukti; penyiram menyaring berdasarkan
-   tenant aktif. Butuh kenaikan versi skema (kini `version: 12`).
-5. **Antrean wajib kosong sebelum berpindah tenant**, atau perpindahan ditolak
-   dengan pesan yang jelas. Membiarkan antrean menyeberang adalah B-4.
+Ditetapkan 2026-08-23. **Setiap perangkat terikat pada tepat satu tenant**, dan
+**satu tenant boleh memakai banyak perangkat**.
+
+Ini memperkecil pekerjaan secara besar-besaran. Tidak ada perpindahan tenant saat
+aplikasi berjalan, sehingga B-2 berubah dari pemblokir menjadi **perilaku yang
+memang benar**: `configureStorage` yang menolak perubahan namespace sesudah DB
+terbuka justru menjadi penjaganya.
+
+### Yang tetap harus dikerjakan
+
+| | Pekerjaan |
+|---|---|
+| B-1 | Namespace memuat tenant: `<varian>_<slug-tenant>`, dipasang sesudah login. Tetap perlu — dua tenant pada satu mesin (mis. perangkat contoh atau uji) akan berbagi berkas DB tanpa ini. |
+| B-3 | Awalan `<ns>.` pada kunci prefs, **terutama `auth_luring_hash`/`auth_luring_garam`**. Tetap perlu: perangkat dapat dialihkan ke tenant lain, dan kredensial luring tenant lama tidak boleh ikut. |
+| B-4 | **Tidak perlu kolom pemilik pada outbox.** Karena satu perangkat hanya melayani satu tenant, antreannya tidak akan pernah bercampur. Cukup **penjagaan pengikatan**. Skema SQLite tetap di `version: 12` — tanpa migrasi. |
+
+### Penjagaan pengikatan tenant
+
+Satu-satunya jalur bahaya yang tersisa adalah **perangkat dialihkan ke tenant lain**
+(pegawai pindah cabang, perangkat dipakai ulang). Penjagaannya:
+
+1. Simpan identitas tenant yang terikat pada perangkat ini.
+2. Saat login, bandingkan tenant dari server dengan yang terikat.
+3. Bila berbeda dan **antrean masih berisi** → tolak dengan jumlah antrean yang
+   tertunda. Membiarkannya berarti mutasi tenant lama terkirim memakai token
+   tenant baru.
+4. Bila berbeda dan antrean kosong → hapus data lokal (DB, cadangan JSONL, kunci
+   `auth_luring_*`), lalu ikat ke tenant baru.
+
+### Banyak perangkat per tenant
+
+`transaksi_pending` sudah membawa `id_perangkat`, dan antrean master sudah membawa
+`client_mutation_id` yang didedup server lewat `MutasiIdempotenEBisnisUtil`. Jadi
+beberapa perangkat menyiram ke tenant yang sama **sudah** aman dari penggandaan.
+Yang perlu diperiksa saat P6/P7 hanyalah bahwa `id_perangkat` benar-benar unik per
+pemasangan, bukan per model perangkat.
 
 ## 5. Yang belum diputuskan
 
-- Apakah satu pemasangan memang perlu berpindah tenant saat berjalan, atau satu
-  perangkat cukup melayani satu tenant? Bila cukup satu, B-2 dan B-4 selesai
-  hanya dengan penjagaan, tanpa perubahan skema.
-- Nasib data lokal tenant lama saat berpindah: disimpan atau dihapus.
+- Nasib data lokal tenant lama saat perangkat dialihkan: dihapus (usulan di atas)
+  atau diarsipkan dulu.
