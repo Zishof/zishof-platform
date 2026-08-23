@@ -22,7 +22,15 @@ import '../widgets/aksi_baris_menu.dart';
 /// PemesananPengadaanMasterAsset.hitungDibayar hanya menjumlahkan dokumen yang sudah
 /// disetujui. Karena itu dokumen draf sengaja belum mengubah status PO.
 class PengadaanBayarScreen extends StatefulWidget {
-  const PengadaanBayarScreen({super.key});
+  /// Dipasang di dalam layar Proses Transfer sebagai salah satu tab.
+  ///
+  /// Mode tersemat melepas [AppShell] dan deret tab miliknya sendiri -- kerangka
+  /// dan tab itu sudah disediakan tuan rumahnya. Yang tersisa hanyalah penyaring,
+  /// tabel, dan tombol "Bayar Vendor", sehingga TIDAK ADA satu pun kemampuan yang
+  /// hilang karena penggabungan menu.
+  final bool tersemat;
+
+  const PengadaanBayarScreen({super.key, this.tersemat = false});
 
   @override
   State<PengadaanBayarScreen> createState() => _PengadaanBayarScreenState();
@@ -353,6 +361,20 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
   @override
   Widget build(BuildContext context) {
     final totalHalaman = (_total / _pageSize).ceil().clamp(1, 9999);
+    if (widget.tersemat) {
+      // Scaffold transparan dipakai semata-mata agar tombol "Bayar Vendor"
+      // tetap mengambang di sudut tab, sama seperti saat layar ini berdiri
+      // sendiri. Latarnya transparan supaya warna tuan rumah yang terlihat.
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _bayarBaru(),
+          icon: const Icon(Icons.payments_outlined),
+          label: const Text('Bayar Vendor'),
+        ),
+        body: _isi(totalHalaman),
+      );
+    }
     return AppShell(
       menuAktif: MenuEBisnis.pengadaanDpc,
       judul: 'Pembayaran Vendor',
@@ -371,7 +393,14 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
         icon: const Icon(Icons.payments_outlined),
         label: const Text('Bayar Vendor'),
       ),
-      body: _bungkusTab(Column(children: [
+      body: _bungkusTab(_isi(totalHalaman)),
+    );
+  }
+
+  /// Isi layar tanpa kerangka: penyaring, banner perubahan server, dan tabel.
+  /// Dipakai bersama oleh mode berdiri sendiri dan mode tersemat.
+  Widget _isi(int totalHalaman) {
+    return Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -424,9 +453,8 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
             dihapus: _jumlahHapus,
           ),
         ),
-        Expanded(child: _isiTabel(totalHalaman)),
-      ])),
-    );
+      Expanded(child: _isiTabel(totalHalaman)),
+    ]);
   }
 
   Widget _isiTabel(int totalHalaman) {

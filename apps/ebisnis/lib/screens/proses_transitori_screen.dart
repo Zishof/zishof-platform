@@ -25,7 +25,13 @@ import 'pengadaan_dasbor_tab.dart';
 /// tidak punya arti. Kandidat yang belum siap tetap **ditampilkan beserta alasannya**,
 /// tidak disembunyikan, supaya penggunanya tahu apa yang harus diselesaikan lebih dulu.
 class ProsesTransitoriScreen extends StatefulWidget {
-  const ProsesTransitoriScreen({super.key});
+  /// Dipasang di dalam layar Proses Transfer sebagai salah satu tab.
+  ///
+  /// Mode tersemat melepas [AppShell] dan deret tab miliknya sendiri; isinya --
+  /// penyaring, tabel, dan seluruh aksinya -- tetap utuh.
+  final bool tersemat;
+
+  const ProsesTransitoriScreen({super.key, this.tersemat = false});
 
   @override
   State<ProsesTransitoriScreen> createState() => _ProsesTransitoriScreenState();
@@ -284,14 +290,10 @@ class _ProsesTransitoriScreenState extends State<ProsesTransitoriScreen> {
                 const SizedBox(height: 4),
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cariKandidat,
-                      decoration: const InputDecoration(
-                          hintText: 'Cari kode / judul / kode transfer…',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => muatKandidat(),
+                      hintText: 'Cari kode / judul / kode transfer…',
+                      onChanged: (_) => muatKandidat(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -528,6 +530,9 @@ class _ProsesTransitoriScreenState extends State<ProsesTransitoriScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.tersemat) {
+      return _isi();
+    }
     return AppShell(
       menuAktif: MenuEBisnis.prosesTransitori,
       judul: 'Proses Transitori',
@@ -537,28 +542,33 @@ class _ProsesTransitoriScreenState extends State<ProsesTransitoriScreen> {
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
-      body: _bungkusTab(
-        _galat != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_galat!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
-                  ]),
-                ),
-              )
-            : Column(children: [
-                _penyaring(),
-                Expanded(
-                  child: _memuat
-                      ? const Center(child: CircularProgressIndicator())
-                      : _tabel(),
-                ),
-              ]),
-      ),
+      body: _bungkusTab(_isi()),
     );
+  }
+
+  /// Isi layar tanpa kerangka -- dipakai bersama oleh mode berdiri sendiri
+  /// (di dalam [_bungkusTab]) dan mode tersemat.
+  Widget _isi() {
+    if (_galat != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_galat!, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+          ]),
+        ),
+      );
+    }
+    return Column(children: [
+      _penyaring(),
+      Expanded(
+        child: _memuat
+            ? const Center(child: CircularProgressIndicator())
+            : _tabel(),
+      ),
+    ]);
   }
 
   Widget _bungkusTab(Widget isiData) => DefaultTabController(
@@ -595,13 +605,10 @@ class _ProsesTransitoriScreenState extends State<ProsesTransitoriScreen> {
           Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SizedBox(
               width: 260,
-              child: TextField(
+              child: AppSearchField(
                 controller: _cari,
-                decoration: const InputDecoration(
-                    labelText: 'Cari judul / keterangan',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true),
-                onSubmitted: (_) => _muatDaftar(),
+                hintText: 'Cari judul / keterangan',
+                onChanged: (_) => _muatDaftar(),
               ),
             ),
             SizedBox(

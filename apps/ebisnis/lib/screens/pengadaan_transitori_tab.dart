@@ -199,6 +199,11 @@ class _PengadaanTransitoriTabState extends State<PengadaanTransitoriTab> {
             child: DropdownButtonFormField<String>(
               value: _status,
               isDense: true,
+              // Tanpa ini, label terpanjang ("Direalisasikan") memaksa lebar
+              // alaminya 250 px di dalam SizedBox 190 px -- RenderFlex meluap
+              // 60 px dan pengguna melihat garis kuning-hitam. Dropdown sejenis
+              // di layar Keuangan lain sudah memakai isExpanded.
+              isExpanded: true,
               decoration:
                   const InputDecoration(labelText: 'Status', isDense: true),
               items: const [

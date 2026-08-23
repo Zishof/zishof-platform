@@ -20,7 +20,6 @@ import '../screens/ringkasan_screen.dart';
 import '../screens/diskon_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/pengadaan_bast_screen.dart';
-import '../screens/pengadaan_bayar_screen.dart';
 import '../screens/pengadaan_bdp_screen.dart';
 import '../screens/pengadaan_pajak_screen.dart';
 import '../screens/pengadaan_po_screen.dart';
@@ -44,7 +43,6 @@ import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/master_keuangan_screen.dart';
 import '../screens/proses_transfer_screen.dart';
 import '../screens/nomor_surat_keuangan_screen.dart';
-import '../screens/proses_transitori_screen.dart';
 import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
 import '../screens/pj_uang_muka_screen.dart';
@@ -981,7 +979,6 @@ class AppDrawer extends StatelessWidget {
                             'Kas Kecil',
                             'Penggantian Kas Kecil (Reimbursement)',
                             'Bayar Pajak',
-                            'Pembayaran Vendor',
                           ].contains(menuAktif),
                           anak: [
                             if (Sesi.instance.bolehMenuVarianBaru('uang_muka'))
@@ -1065,6 +1062,11 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Master Data Keuangan',
                                     builder: (_) => const MasterKeuanganScreen()),
                               ),
+                            // Satu menu untuk seluruh rangkaian pencairan:
+                            // Pembayaran Vendor & Proses Transitori kini menjadi
+                            // TAB di dalam layar ini, bukan menu sendiri. Kunci
+                            // hak aksesnya tetap dipakai, hanya pindah tempat
+                            // penegakannya ke deret tab.
                             if (Sesi.instance.bolehMenuVarianBaru('proses_transfer'))
                               _ItemMenu(
                                 icon: Icons.account_balance_wallet_outlined,
@@ -1073,15 +1075,6 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Proses Transfer',
                                     builder: (_) => const ProsesTransferScreen()),
-                              ),
-                            if (Sesi.instance.bolehMenuVarianBaru('proses_transitori'))
-                              _ItemMenu(
-                                icon: Icons.swap_horiz_outlined,
-                                label: 'Proses Transitori',
-                                aktif: menuAktif == 'Proses Transitori',
-                                onTap: () => _pindahMenu(context,
-                                    label: 'Proses Transitori',
-                                    builder: (_) => const ProsesTransitoriScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('nomor_surat_keuangan'))
                               _ItemMenu(
@@ -1100,15 +1093,6 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Bayar Pajak',
                                     builder: (_) => const PengadaanPajakScreen()),
-                              ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_dpc'))
-                              _ItemMenu(
-                                icon: Icons.payments_outlined,
-                                label: 'Pembayaran Vendor',
-                                aktif: menuAktif == 'Pembayaran Vendor',
-                                onTap: () => _pindahMenu(context,
-                                    label: 'Pembayaran Vendor',
-                                    builder: (_) => const PengadaanBayarScreen()),
                               ),
                           ],
                         ),

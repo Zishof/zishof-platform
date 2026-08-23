@@ -3,13 +3,17 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../services/master_offline.dart';
+import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
+import 'pengadaan_bayar_screen.dart';
 import 'pengadaan_dasbor_tab.dart';
+import 'pengadaan_transitori_tab.dart';
+import 'proses_transitori_screen.dart';
 
 /// Proses Transfer — **pencairan** baris DPC. Padanan layar ZK
 /// `ais.action.master.akunting.ProsesTransferAction`.
@@ -652,36 +656,66 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     );
   }
 
-  /// Dua tab: Dasbor & data — susunan yang sama dengan modul Keuangan lainnya.
-  Widget _bungkusTab(Widget isiData) => DefaultTabController(
-        length: 2,
-        child: Column(children: [
-          const TabBar(tabs: [
-            Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-            Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Proses Transfer'),
-          ]),
-          Expanded(
-            child: TabBarView(children: [
-              const PengadaanDasborTab(
-                  tahap: 'proses_transfer',
-                  aksi: 'proses_transfer_dasbor',
-                  namaParam: 'modul'),
-              isiData,
-            ]),
-          ),
-        ]),
-      );
+  /// SATU menu untuk seluruh rangkaian pencairan.
+  ///
+  /// Proses Transfer, Pembayaran Vendor, dan Proses Transitori dulunya tiga menu
+  /// terpisah di grup Keuangan padahal ketiganya satu rangkaian atas dokumen yang
+  /// sama: baris DPC dicairkan (transfer), tagihan penyedianya dibayar, dan yang
+  /// singgah di rekening perantara direalisasikan. Berdiri sendiri-sendiri,
+  /// pengguna harus menebak menu mana yang memuat pekerjaan yang dicarinya.
+  ///
+  /// <b>Hak akses tidak ikut digabung.</b> Tiap tab tetap bergantung pada kunci
+  /// menunya sendiri (`pengadaan_dpc`, `proses_transitori`). Menyatukan menu tidak
+  /// boleh diam-diam membuka isi modul yang memang tidak boleh dilihat peran ini.
+  Widget _bungkusTab(Widget isiData) {
+    final bolehBayarVendor = Sesi.instance.bolehMenu('pengadaan_dpc');
+    final bolehTransitori = Sesi.instance.bolehMenu('proses_transitori');
+
+    final tabs = <Tab>[
+      const Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
+      const Tab(
+          icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Proses Transfer'),
+      if (bolehBayarVendor)
+        const Tab(
+            icon: Icon(Icons.payments_outlined, size: 18),
+            text: 'Pembayaran Vendor'),
+      if (bolehBayarVendor)
+        const Tab(
+            icon: Icon(Icons.pause_circle_outline, size: 18),
+            text: 'Transitori Menunggu'),
+      if (bolehTransitori)
+        const Tab(
+            icon: Icon(Icons.swap_horiz_outlined, size: 18),
+            text: 'Proses Transitori'),
+    ];
+    final halaman = <Widget>[
+      _DasborPencairan(
+          bolehBayarVendor: bolehBayarVendor, bolehTransitori: bolehTransitori),
+      isiData,
+      if (bolehBayarVendor) const PengadaanBayarScreen(tersemat: true),
+      if (bolehBayarVendor) const PengadaanTransitoriTab(),
+      if (bolehTransitori) const ProsesTransitoriScreen(tersemat: true),
+    ];
+
+    return DefaultTabController(
+      length: tabs.length,
+      child: Column(children: [
+        // Dapat digulir: lima tab tidak muat pada jendela kasir yang sempit.
+        TabBar(isScrollable: true, tabs: tabs),
+        Expanded(child: TabBarView(children: halaman)),
+      ]),
+    );
+  }
 
   Widget _penyaring() => Padding(
         padding: const EdgeInsets.all(12),
         child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SizedBox(
             width: 240,
-            child: TextField(
+            child: AppSearchField(
               controller: _cari,
-              decoration: const InputDecoration(
-                  labelText: 'Cari kode / judul', prefixIcon: Icon(Icons.search), isDense: true),
-              onSubmitted: (_) => _muatDaftar(),
+              hintText: 'Cari kode / judul',
+              onChanged: (_) => _muatDaftar(),
             ),
           ),
           SizedBox(
@@ -852,4 +886,69 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
           ]);
         }).toList(),
       );
+}
+
+/// Tab "Dasbor" layar Proses Transfer -- satu tab, tiga modul.
+///
+/// Sebelum penggabungan, masing-masing menu membawa dasbornya sendiri. Menyatukan
+/// menunya tidak boleh membuang dua dasbor itu, jadi ketiganya tetap ada dan
+/// dipilih lewat satu pemilih di atas. Yang ditawarkan hanya modul yang memang
+/// boleh dilihat peran ini.
+class _DasborPencairan extends StatefulWidget {
+  final bool bolehBayarVendor;
+  final bool bolehTransitori;
+
+  const _DasborPencairan(
+      {required this.bolehBayarVendor, required this.bolehTransitori});
+
+  @override
+  State<_DasborPencairan> createState() => _DasborPencairanState();
+}
+
+class _DasborPencairanState extends State<_DasborPencairan> {
+  /// (label, tahap, aksi, namaParam)
+  late final List<List<String>> _modul = [
+    ['Proses Transfer', 'proses_transfer', 'proses_transfer_dasbor', 'modul'],
+    if (widget.bolehBayarVendor)
+      ['Pembayaran Vendor', 'dpc', 'pengadaan_dasbor', 'tahap'],
+    if (widget.bolehTransitori)
+      [
+        'Proses Transitori',
+        'proses_transitori',
+        'proses_transitori_dasbor',
+        'modul'
+      ],
+  ];
+
+  int _terpilih = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = _modul[_terpilih.clamp(0, _modul.length - 1)];
+    return Column(children: [
+      if (_modul.length > 1)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(children: [
+            const Text('Dasbor modul: '),
+            const SizedBox(width: 8),
+            DropdownButton<int>(
+              value: _terpilih,
+              items: [
+                for (var i = 0; i < _modul.length; i++)
+                  DropdownMenuItem<int>(value: i, child: Text(_modul[i][0])),
+              ],
+              onChanged: (v) => setStateIfMounted(() => _terpilih = v ?? 0),
+            ),
+          ]),
+        ),
+      Expanded(
+        child: PengadaanDasborTab(
+            key: ValueKey('dasbor-pencairan-${m[1]}'),
+            tahap: m[1],
+            aksi: m[2],
+            namaParam: m[3]),
+      ),
+    ]);
+  }
 }

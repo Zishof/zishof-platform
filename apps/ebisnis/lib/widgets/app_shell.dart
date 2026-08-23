@@ -791,11 +791,16 @@ const _grupMenu = <_GrupMenuShell>[
       MenuEBisnis.danaTalangan,
       MenuEBisnis.reimbursement,
       MenuEBisnis.masterKeuangan,
+      // Proses Transfer memuat SELURUH rangkaian pencairan: transfer,
+      // Pembayaran Vendor, dan Transitori. Ketiganya dulu berdiri sebagai menu
+      // sendiri-sendiri padahal mengerjakan dokumen yang sama, sehingga
+      // pengguna harus menebak menu mana yang memuat pekerjaannya (permintaan
+      // pemilik produk). Kunci menu `pengadaan_dpc` dan `proses_transitori`
+      // TIDAK dihapus -- keduanya kini menentukan muncul-tidaknya TAB di dalam
+      // Proses Transfer, jadi hak akses peran yang sudah diatur tetap berlaku.
       MenuEBisnis.prosesTransfer,
-      MenuEBisnis.prosesTransitori,
       MenuEBisnis.nomorSuratKeuangan,
       MenuEBisnis.pengadaanPajak,
-      MenuEBisnis.pengadaanDpc,
     ],
   ),
   _GrupMenuShell('Transaksi & Laporan', [

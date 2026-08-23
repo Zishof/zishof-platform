@@ -85,7 +85,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Bayar Pajak & Pembayaran Vendor pindah ke grup Keuangan',
+  testWidgets('Bayar Pajak pindah ke grup Keuangan; Pembayaran Vendor menjadi tab',
       (tester) async {
     await pakaiDesktop(tester);
     // Kunci menunya sengaja TIDAK berubah supaya hak akses peran yang sudah
@@ -98,11 +98,14 @@ void main() {
     await tester.pumpWidget(aplikasi());
     await tester.pumpAndSettle();
     await bukaGrup(tester, 'KEUANGAN');
-    for (final label in ['Bayar Pajak', 'Pembayaran Vendor']) {
-      await tester.scrollUntilVisible(find.text(label), 200,
-          scrollable: find.byType(Scrollable).first);
-      expect(find.text(label), findsOneWidget);
-    }
+    await tester.scrollUntilVisible(find.text('Bayar Pajak'), 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('Bayar Pajak'), findsOneWidget);
+    // Pembayaran Vendor & Proses Transitori TIDAK lagi berdiri sebagai menu:
+    // keduanya kini tab di dalam layar Proses Transfer (permintaan pemilik
+    // produk, lihat _bungkusTab pada proses_transfer_screen.dart).
+    expect(find.text('Pembayaran Vendor'), findsNothing);
+    expect(find.text('Proses Transitori'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -144,10 +147,19 @@ void main() {
     // Menu yang menyusul setelah keenam modul awal ikut diperiksa di sini
     // supaya tidak ada satu pun yang lolos tanpa gerbang hak akses.
     for (final k in [...kunciKeuangan, 'dana_talangan', 'reimbursement',
-      'master_keuangan', 'proses_transfer', 'proses_transitori',
-      'nomor_surat_keuangan']) {
+      'master_keuangan', 'proses_transfer', 'nomor_surat_keuangan']) {
       expect(shell, contains("'$k'"), reason: 'sidebar $k');
       expect(drawer, contains("bolehMenuVarianBaru('$k')"), reason: 'drawer $k');
+    }
+
+    // Pembayaran Vendor & Proses Transitori tidak lagi punya baris menu, jadi
+    // gerbangnya pindah -- bukan hilang. Penegakannya kini ada di deret tab
+    // layar Proses Transfer, dan itulah yang dikunci di sini supaya
+    // penggabungan menu tidak diam-diam membuka modul yang tidak boleh dilihat.
+    final gabungan =
+        File('lib/screens/proses_transfer_screen.dart').readAsStringSync();
+    for (final k in ['pengadaan_dpc', 'proses_transitori']) {
+      expect(gabungan, contains("bolehMenu('$k')"), reason: 'tab $k');
     }
   });
 }
