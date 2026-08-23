@@ -328,14 +328,14 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                 const SizedBox(height: 4),
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    // Kotak cari standar aplikasi: ikon cari, tombol bersihkan,
+                    // dan jeda 220 ms. Sebelumnya TextField biasa yang baru
+                    // mencari ketika Enter ditekan, sehingga kotaknya terlihat
+                    // tidak bereaksi saat diketik.
+                    child: AppSearchField(
                       controller: cariKandidat,
-                      decoration: const InputDecoration(
-                          hintText: 'Cari kode / judul DPC…',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => muatKandidat(),
+                      hintText: 'Cari kode / judul DPC…',
+                      onChanged: (_) => muatKandidat(),
                     ),
                   ),
                   const SizedBox(width: 8),
