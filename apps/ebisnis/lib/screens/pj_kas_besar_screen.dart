@@ -451,11 +451,31 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                         onPressed: () async {
                           final u = await _pilihKasBesar(ubah ? baris['id'] as int? : null);
                           if (u == null) return;
+                          // Rincian kas besarnya menjadi titik awal rincian LPJ: LPJ
+                          // melaporkan pemakaian atas rencana yang sudah tertulis di
+                          // sana. Yang SUDAH diketik tidak ditimpa diam-diam.
+                          final bawaan = ((u['rincian'] as List?) ?? [])
+                              .map((e) => Map<String, dynamic>.from(e as Map))
+                              .toList();
+                          var salin = bawaan.isNotEmpty;
+                          if (salin && rincian.isNotEmpty) {
+                            salin = await _konfirmasi(
+                              'Ganti rincian dengan milik kas besar ini?',
+                              'Rincian yang sudah Anda isi (${rincian.length} baris) akan '
+                              'diganti oleh ${bawaan.length} baris dari kas besarnya.',
+                              'Ganti');
+                          }
                           setDialog(() {
                             kasBesarId = (u['id'] as num?)?.toInt();
                             kasBesarLabel = '${u['kode'] ?? ''} — ${u['nama'] ?? ''}';
                             kasBesarNilai = (u['nilai'] as num?)?.toDouble() ?? 0;
+                            if (salin) {
+                              rincian
+                                ..clear()
+                                ..addAll(bawaan);
+                            }
                           });
+                          if (salin) await hitung();
                         },
                         child: const Text('Pilih'),
                       ),

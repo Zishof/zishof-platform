@@ -197,6 +197,72 @@ void main() {
     expect(tab, contains('widget.namaParam'));
   });
 
+  group('Rincian ikut termuat dari dokumen sumbernya', () {
+    // LPJ melaporkan pemakaian atas rencana yang sudah tertulis di dokumen
+    // sumbernya, dan Penggantian Kas Kecil memang menyunting rincian kas kecilnya.
+    // Mengetik ulang barisnya membuang waktu dan membuka peluang salah ketik.
+
+    test('LPJ Kas Besar menyalin rincian kas besar yang dipilih', () {
+      final src = File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
+      expect(src, contains("u['rincian']"));
+      expect(src, contains('..addAll(bawaan)'));
+    });
+
+    test('rincian yang sudah diketik tidak ditimpa diam-diam', () {
+      final src = File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
+      // Bila kotaknya sudah berisi, penggunanya ditanya lebih dulu.
+      expect(src, contains('if (salin && rincian.isNotEmpty)'));
+      expect(src, contains('Ganti rincian dengan milik kas besar ini?'));
+    });
+
+    test('Penggantian Kas Kecil menyalin rincian kas kecil yang dipilih', () {
+      final src =
+          File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync();
+      expect(src, contains("k['rincian']"));
+    });
+  });
+
+  group('Penomoran Dokumen Keuangan', () {
+    final src = File('lib/screens/nomor_surat_keuangan_screen.dart').readAsStringSync();
+
+    test('memasang templat dan menyusunnya, keduanya tersedia', () {
+      for (final aksi in [
+        'nomor_surat_keuangan_daftar',
+        'nomor_surat_keuangan_pasang',
+        'nomor_surat_keuangan_templat_simpan',
+        'nomor_surat_keuangan_templat_hapus',
+        'nomor_surat_keuangan_pratinjau',
+      ]) {
+        expect(src, contains("'$aksi'"), reason: aksi);
+      }
+    });
+
+    test('akibat alur tanpa templat dinyatakan apa adanya', () {
+      // Inilah keadaan yang membuat dokumen terbit berkode barcode tanpa seorang pun
+      // menyadarinya; menyebutnya dengan jelas lebih berguna daripada label netral.
+      expect(src, contains('pakaiBarcode'));
+      expect(src, contains('kode barcode'));
+      expect(src, contains('belumDipasang'));
+    });
+
+    test('pratinjau dinyatakan tidak menghabiskan nomor', () {
+      expect(src, contains('tidak memakai nomor'));
+    });
+
+    test('templat tanpa segmen Nomor Urut ditolak di layar juga', () {
+      // Server menolaknya; layar menolak lebih dulu supaya tidak bolak-balik.
+      expect(src, contains("'Nomor Urut'"));
+      expect(src, contains('nomor yang sama persis'));
+    });
+
+    test('Kata Statis dijelaskan berbeda dari pemisah', () {
+      // Pada Kata Statis, kolom "tanda" adalah ISI-nya, bukan pemisah -- perbedaan
+      // yang mudah salah tangkap.
+      expect(src, contains('Isi teksnya'));
+      expect(src, contains('Pemisah sesudahnya'));
+    });
+  });
+
   group('Proses Transitori', () {
     final src = File('lib/screens/proses_transitori_screen.dart').readAsStringSync();
 

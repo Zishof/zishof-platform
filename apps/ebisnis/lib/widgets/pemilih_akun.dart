@@ -102,33 +102,96 @@ class _DialogCariAkun extends StatefulWidget {
 class _DialogCariAkunState extends State<_DialogCariAkun> {
   final TextEditingController _cari = TextEditingController();
 
+  /// id induk -> daftar anaknya, dan daftar akar. Dibangun sekali dari daftar
+  /// yang dikirim server (`parentId`).
+  late final Map<int, List<Map<String, dynamic>>> _anak;
+  late final List<Map<String, dynamic>> _akar;
+  late final Map<int, Map<String, dynamic>> _perId;
+
+  @override
+  void initState() {
+    super.initState();
+    _perId = <int, Map<String, dynamic>>{};
+    for (final a in widget.daftar) {
+      final id = (a['id'] as num?)?.toInt();
+      if (id != null) _perId[id] = a;
+    }
+    _anak = <int, List<Map<String, dynamic>>>{};
+    _akar = <Map<String, dynamic>>[];
+    for (final a in widget.daftar) {
+      final induk = (a['parentId'] as num?)?.toInt();
+      // Induk yang tidak ikut terkirim (mis. karena limit) diperlakukan sebagai
+      // akar, supaya akunnya tetap terlihat alih-alih hilang dari pohon.
+      if (induk == null || !_perId.containsKey(induk)) {
+        _akar.add(a);
+      } else {
+        _anak.putIfAbsent(induk, () => <Map<String, dynamic>>[]).add(a);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _cari.dispose();
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get _hasil {
+  /// Akun daun = tidak punya anak. Server mengirimnya lewat `leaf`; bila field itu
+  /// tidak ada (server lama), disimpulkan dari ada-tidaknya anak.
+  bool _daun(Map<String, dynamic> a) {
+    if (a['leaf'] is bool) return a['leaf'] as bool;
+    final id = (a['id'] as num?)?.toInt();
+    return id == null || !(_anak[id]?.isNotEmpty ?? false);
+  }
+
+  bool _cocok(Map<String, dynamic> a, List<String> bagian) {
+    final teks = '${a['kode'] ?? ''} ${a['nama'] ?? ''} ${a['label'] ?? ''}'.toLowerCase();
+    for (final b in bagian) {
+      if (!teks.contains(b)) return false;
+    }
+    return true;
+  }
+
+  /// Baris yang dirender: pohon yang diratakan, masing-masing membawa kedalamannya.
+  ///
+  /// Saat mencari, sebuah simpul ikut ditampilkan bila ia sendiri cocok ATAU salah
+  /// satu keturunannya cocok -- sehingga hasil pencarian tetap muncul lengkap dengan
+  /// jalur induknya, bukan sebagai potongan tanpa konteks.
+  List<_BarisAkun> get _baris {
     final kata = _cari.text.trim().toLowerCase();
-    if (kata.isEmpty) return widget.daftar;
-    // Semua kata harus cocok, boleh tersebar di kode maupun nama, sehingga
-    // "411 penjualan" tetap ketemu walau urutannya tidak persis.
-    final bagian = kata.split(RegExp(r'\s+'));
-    return widget.daftar.where((a) {
-      final teks = '${a['kode'] ?? ''} ${a['nama'] ?? ''} ${a['label'] ?? ''}'
-          .toLowerCase();
-      for (final b in bagian) {
-        if (!teks.contains(b)) return false;
+    final bagian = kata.isEmpty ? const <String>[] : kata.split(RegExp(r'\s+'));
+    final hasil = <_BarisAkun>[];
+
+    bool tambah(Map<String, dynamic> a, int dalam) {
+      final id = (a['id'] as num?)?.toInt();
+      final anak = id == null ? const <Map<String, dynamic>>[] : (_anak[id] ?? const []);
+      final sendiriCocok = bagian.isEmpty || _cocok(a, bagian);
+      final posisi = hasil.length;
+      hasil.add(_BarisAkun(a, dalam, _daun(a)));
+      var adaKeturunanCocok = false;
+      for (final c in anak) {
+        if (tambah(c, dalam + 1)) adaKeturunanCocok = true;
+      }
+      if (!sendiriCocok && !adaKeturunanCocok) {
+        hasil.removeRange(posisi, hasil.length);
+        return false;
       }
       return true;
-    }).toList();
+    }
+
+    for (final a in _akar) {
+      tambah(a, 0);
+    }
+    return hasil;
   }
 
   void _pilih(int? id) => Navigator.of(context).pop(PilihanAkun(id));
 
   @override
   Widget build(BuildContext context) {
-    final hasil = _hasil;
+    final baris = _baris;
+    final jumlahDaun = baris.where((b) => b.daun).length;
+    final warnaInduk = Theme.of(context).hintColor;
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),
@@ -141,8 +204,7 @@ class _DialogCariAkunState extends State<_DialogCariAkun> {
               Row(children: [
                 Expanded(
                     child: Text(widget.judul,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w700))),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
                 IconButton(
                     tooltip: 'Tutup',
                     onPressed: () => Navigator.of(context).pop(),
@@ -159,26 +221,30 @@ class _DialogCariAkunState extends State<_DialogCariAkun> {
                   hintText: 'Cari kode atau nama akun...',
                 ),
                 onChanged: (_) => setStateIfMounted(() {}),
-                // Enter langsung mengambil hasil teratas -- membantu entri cepat
-                // di Desktop saat kode akun sudah diketik lengkap.
+                // Enter mengambil DAUN teratas -- akun induk tidak pernah menjadi
+                // jawaban, jadi tidak boleh terpilih hanya karena kebetulan di atas.
                 onSubmitted: (_) {
-                  if (hasil.isNotEmpty) {
-                    _pilih((hasil.first['id'] as num?)?.toInt());
+                  for (final b in baris) {
+                    if (b.daun) {
+                      _pilih((b.akun['id'] as num?)?.toInt());
+                      return;
+                    }
                   }
                 },
               ),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('${hasil.length} akun',
+                child: Text(
+                    '$jumlahDaun akun dapat dipilih · akun induk hanya penunjuk susunan',
                     style: Theme.of(context).textTheme.bodySmall),
               ),
               const SizedBox(height: 4),
               Expanded(
-                child: hasil.isEmpty
+                child: baris.isEmpty
                     ? const Center(child: Text('Akun tidak ditemukan.'))
                     : ListView.builder(
-                        itemCount: hasil.length + 1,
+                        itemCount: baris.length + 1,
                         itemBuilder: (context, i) {
                           if (i == 0) {
                             return ListTile(
@@ -189,24 +255,35 @@ class _DialogCariAkunState extends State<_DialogCariAkun> {
                               onTap: () => _pilih(null),
                             );
                           }
-                          final a = hasil[i - 1];
+                          final b = baris[i - 1];
+                          final a = b.akun;
                           final id = (a['id'] as num?)?.toInt();
                           final kode = '${a['kode'] ?? ''}'.trim();
                           return ListTile(
                             dense: true,
+                            // Indentasi mengikuti kedalamannya; induk dibuat redup dan
+                            // TIDAK dapat ditekan (onTap null) supaya jelas ia bukan
+                            // pilihan, bukan sekadar pilihan yang kebetulan salah.
+                            contentPadding:
+                                EdgeInsets.only(left: 8.0 + b.dalam * 16.0, right: 8),
                             leading: kode.isEmpty
                                 ? null
                                 : SizedBox(
                                     width: 84,
                                     child: Text(kode,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w600))),
+                                        style: TextStyle(
+                                            fontWeight:
+                                                b.daun ? FontWeight.w600 : FontWeight.w400,
+                                            color: b.daun ? null : warnaInduk))),
                             title: Text(
-                                '${a['nama'] ?? PemilihAkunField.teksAkun(a)}',
-                                overflow: TextOverflow.ellipsis),
-                            selected: id == widget.terpilih,
-                            onTap: () => _pilih(id),
+                              '${a['nama'] ?? PemilihAkunField.teksAkun(a)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: b.daun ? null : TextStyle(color: warnaInduk),
+                            ),
+                            selected: b.daun && id == widget.terpilih,
+                            enabled: b.daun,
+                            onTap: b.daun ? () => _pilih(id) : null,
                           );
                         },
                       ),
@@ -217,4 +294,12 @@ class _DialogCariAkunState extends State<_DialogCariAkun> {
       ),
     );
   }
+}
+
+/// Satu baris pohon akun: akunnya, kedalamannya, dan apakah ia dapat dipilih.
+class _BarisAkun {
+  const _BarisAkun(this.akun, this.dalam, this.daun);
+  final Map<String, dynamic> akun;
+  final int dalam;
+  final bool daun;
 }

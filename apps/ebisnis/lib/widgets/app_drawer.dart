@@ -43,6 +43,7 @@ import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/master_keuangan_screen.dart';
 import '../screens/proses_transfer_screen.dart';
+import '../screens/nomor_surat_keuangan_screen.dart';
 import '../screens/proses_transitori_screen.dart';
 import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
@@ -1081,6 +1082,15 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _pindahMenu(context,
                                     label: 'Proses Transitori',
                                     builder: (_) => const ProsesTransitoriScreen()),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru('nomor_surat_keuangan'))
+                              _ItemMenu(
+                                icon: Icons.numbers_outlined,
+                                label: 'Penomoran Dokumen Keuangan',
+                                aktif: menuAktif == 'Penomoran Dokumen Keuangan',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Penomoran Dokumen Keuangan',
+                                    builder: (_) => const NomorSuratKeuanganScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(

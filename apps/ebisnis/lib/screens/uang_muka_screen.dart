@@ -770,6 +770,21 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
     );
     if (simpan != true) return;
 
+    // Diperiksa di sini supaya penggunanya tidak menunggu perjalanan ke server hanya
+    // untuk diberi tahu satu kolom kosong. Server TETAP memeriksanya ulang -- ini
+    // hanya mempercepat pesannya, bukan memindahkan aturannya ke layar.
+    if (nama.text.trim().isEmpty) {
+      _pesan('Judul Pengajuan belum diisi.');
+      return;
+    }
+    final nilaiAngka = double.tryParse(nilai.text.trim().replaceAll('.', '')) ?? 0;
+    // Pada pengajuan berbasis PR nilainya datang dari baris PR yang dipilih, jadi
+    // kolomnya memang boleh kosong -- sama seperti aturan di server.
+    if (!ambilDariPr && nilaiAngka <= 0) {
+      _pesan('Nilai Pengajuan belum diisi.');
+      return;
+    }
+
     final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
     final payload = <String, dynamic>{
       if (ubah) 'id': baris['id'],
@@ -783,7 +798,7 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
       'akunId': akunId ?? 0,
       'workspaceId': workspaceId ?? 0,
       'jenisUangMukaId': jenisId ?? 0,
-      'nilai': double.tryParse(nilai.text.trim().replaceAll('.', '')) ?? 0,
+      'nilai': nilaiAngka,
       if (mulai != null) 'mulai': _fmt.format(mulai!),
       if (sampai != null) 'sampai': _fmt.format(sampai!),
       if (selesai != null) 'selesai': _fmt.format(selesai!),
@@ -799,7 +814,7 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
         'id': ubah ? baris['id'] : idLokal,
         'nama': nama.text.trim(),
         'keterangan': keterangan.text.trim(),
-        'nilai': double.tryParse(nilai.text.trim().replaceAll('.', '')) ?? 0,
+        'nilai': nilaiAngka,
         'statusDokumen': statusDokumen,
         'tanpaAnggaran': tanpaAnggaran,
         'ambilDariPr': ambilDariPr,
