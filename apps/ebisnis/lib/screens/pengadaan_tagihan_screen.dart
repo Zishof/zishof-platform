@@ -734,8 +734,14 @@ class _PapanLampiranState extends State<_PapanLampiran> {
     // berat dan akan menjank UI bila berjalan di isolate utama.
     Uint8List bytes;
     try {
+      // Ambang DOKUMEN (2 MB), bukan 500 KB milik foto produk: lampiran di sini
+      // adalah faktur vendor yang dibaca ANGKANYA -- nomor faktur dan nominal --
+      // dan kini dapat diunduh kembali dari daftar ini untuk diperiksa. Mutu yang
+      // hilang saat dikecilkan bersifat permanen; tidak ada salinan aslinya.
       bytes = await compute(
-          harusGambar ? siapkanLampiranGambar : siapkanLampiranCampuran,
+          harusGambar
+              ? siapkanLampiranDokumenGambar
+              : siapkanLampiranDokumenCampuran,
           bytesAsal);
     } on FormatException catch (e) {
       if (!mounted) return;

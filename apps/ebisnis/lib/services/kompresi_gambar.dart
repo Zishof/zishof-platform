@@ -77,6 +77,18 @@ Uint8List kompresGambar(Uint8List asal, {required int maksBytes}) {
 /// akan berbeda-beda begitu ada yang lupa mengubah salah satunya.
 const int maksLampiranGambarBytes = 500 * 1024;
 
+/// Ambang untuk lampiran **dokumen** — faktur vendor, bukti bayar, berkas
+/// pengajuan SOP.
+///
+/// Sengaja berbeda dari [maksLampiranGambarBytes]. Foto produk dipakai sebagai
+/// katalog, jadi 500 KB memadai. Dokumen dibaca ANGKANYA — nomor faktur dan
+/// nominal — dan kerugian mutunya PERMANEN: berkas dikecilkan di perangkat
+/// sebelum dikirim, sehingga tidak ada salinan asli di mana pun, sementara
+/// faktur itu dapat diunduh kembali dari daftar Terima Tagihan Vendor untuk
+/// diperiksa. Angka 2 MB masih jauh di bawah pagar 5 MB milik server
+/// (`MAKS_BYTE_LAMPIRAN`), jadi hanya klien yang perlu tahu soal ambang ini.
+const int maksLampiranDokumenBytes = 2 * 1024 * 1024;
+
 /// Batas **masukan** untuk gambar, sebelum dikecilkan.
 ///
 /// Berbeda peran dengan [maksLampiranGambarBytes]: yang itu batas KIRIMAN
@@ -141,13 +153,23 @@ bool tampaknyaGambar(Uint8List b) {
 /// Fungsi top-level dan murni supaya dapat dijalankan lewat `compute()`:
 /// decode+encode foto kamera resolusi tinggi berat dan akan menjank UI bila
 /// berjalan di isolate utama.
-Uint8List siapkanLampiranGambar(Uint8List asal) {
+Uint8List siapkanLampiranGambar(Uint8List asal) =>
+    _siapkanGambar(asal, maksLampiranGambarBytes);
+
+/// Sama dengan [siapkanLampiranGambar], tetapi memakai ambang DOKUMEN.
+///
+/// Fungsi terpisah (bukan parameter) karena pemanggilnya menjalankan ini lewat
+/// `compute()`, yang hanya menerima fungsi top-level bersatu argumen.
+Uint8List siapkanLampiranDokumenGambar(Uint8List asal) =>
+    _siapkanGambar(asal, maksLampiranDokumenBytes);
+
+Uint8List _siapkanGambar(Uint8List asal, int maksBytes) {
   if (!tampaknyaGambar(asal)) {
     throw const FormatException(
         'Lampiran harus berupa gambar (JPG, PNG, GIF, BMP, atau WEBP).');
   }
   tolakBilaGambarTerlaluBesar(asal);
-  if (asal.length <= maksLampiranGambarBytes) {
+  if (asal.length <= maksBytes) {
     // Tetap didekode untuk memastikan isinya benar-benar utuh: tanda pengenal
     // yang benar tidak menjamin badan berkasnya tidak rusak.
     if (img.decodeImage(asal) == null) {
@@ -155,7 +177,7 @@ Uint8List siapkanLampiranGambar(Uint8List asal) {
     }
     return asal;
   }
-  return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
+  return kompresGambar(asal, maksBytes: maksBytes);
 }
 
 /// Siapkan lampiran yang **boleh** bukan gambar — faktur PDF, misalnya.
@@ -163,13 +185,20 @@ Uint8List siapkanLampiranGambar(Uint8List asal) {
 /// Gambar dikecilkan ke bawah ambang; yang bukan gambar dilewatkan apa adanya.
 /// Dipakai pada lampiran serba-guna, sedangkan medan yang memang menuntut
 /// gambar memakai [siapkanLampiranGambar].
-Uint8List siapkanLampiranCampuran(Uint8List asal) {
+Uint8List siapkanLampiranCampuran(Uint8List asal) =>
+    _siapkanCampuran(asal, maksLampiranGambarBytes);
+
+/// Sama dengan [siapkanLampiranCampuran], tetapi memakai ambang DOKUMEN.
+Uint8List siapkanLampiranDokumenCampuran(Uint8List asal) =>
+    _siapkanCampuran(asal, maksLampiranDokumenBytes);
+
+Uint8List _siapkanCampuran(Uint8List asal, int maksBytes) {
   if (!tampaknyaGambar(asal)) {
     return asal;
   }
   tolakBilaGambarTerlaluBesar(asal);
-  if (asal.length <= maksLampiranGambarBytes) {
+  if (asal.length <= maksBytes) {
     return asal;
   }
-  return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
+  return kompresGambar(asal, maksBytes: maksBytes);
 }

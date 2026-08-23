@@ -102,6 +102,30 @@ void main() {
     expect(() => tolakBilaGambarTerlaluBesar(lewat), throwsFormatException);
   });
 
+  test('lampiran DOKUMEN memakai ambang sendiri, bukan 500 KB', () {
+    // Foto produk dipakai sebagai katalog sehingga 500 KB memadai. Dokumen --
+    // faktur vendor, bukti bayar, berkas pengajuan -- dibaca ANGKANYA, dan
+    // kerugian mutunya permanen karena dikecilkan di perangkat sebelum dikirim.
+    expect(maksLampiranDokumenBytes, 2 * 1024 * 1024);
+    expect(maksLampiranDokumenBytes, greaterThan(maksLampiranGambarBytes));
+    expect(maksLampiranDokumenBytes, lessThan(maksGambarAsalBytes),
+        reason: 'harus tetap di bawah pagar 5 MB milik server');
+  });
+
+  test('gambar 1 MB dilewatkan utuh oleh jalur dokumen, dikecilkan oleh jalur foto',
+      () {
+    final asal = fotoBesar(sisi: 500);
+    expect(asal.length, greaterThan(maksLampiranGambarBytes));
+    expect(asal.length, lessThan(maksLampiranDokumenBytes),
+        reason: 'ukuran contoh harus jatuh di antara kedua ambang');
+    // Jalur dokumen: dikembalikan APA ADANYA, tidak dikode ulang.
+    expect(siapkanLampiranDokumenGambar(asal).length, asal.length);
+    expect(siapkanLampiranDokumenCampuran(asal).length, asal.length);
+    // Jalur foto produk: tetap dikecilkan seperti semula.
+    expect(siapkanLampiranGambar(asal).length,
+        lessThanOrEqualTo(maksLampiranGambarBytes));
+  });
+
   test('ambangnya tepat 500 KB, satu tempat untuk seluruh aplikasi', () {
     expect(maksLampiranGambarBytes, 500 * 1024);
   });

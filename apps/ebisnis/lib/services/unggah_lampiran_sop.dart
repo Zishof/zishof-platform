@@ -69,7 +69,9 @@ class UnggahLampiranSop {
 
     List<int> muatan = isi;
     try {
-      muatan = await compute(siapkanLampiranCampuran, bytesAsal);
+      // Ambang DOKUMEN (2 MB): berkas pengajuan SOP berupa surat, kuitansi, dan
+      // bukti -- dibaca isinya, bukan sekadar dilihat sepintas seperti katalog.
+      muatan = await compute(siapkanLampiranDokumenCampuran, bytesAsal);
     } catch (_) {
       // Kompresi gagal (mis. gambar rusak) -- kirim aslinya. Menggagalkan
       // unggahan karena kompresi gagal akan menghalangi pekerjaan yang sah;
