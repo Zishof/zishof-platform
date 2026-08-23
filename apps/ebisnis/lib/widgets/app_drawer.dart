@@ -77,6 +77,8 @@ import '../screens/mitrainap/kontrak_pemilik_screen.dart';
 import '../screens/mitrainap/laporan_pemilik_screen.dart';
 import '../product_profile.dart';
 import 'app_version_label.dart';
+import '../screens/riwayat_audit_screen.dart';
+import 'app_shell.dart';
 
 /// Menu navigasi utama -- padanan sidebar kiri versi Electron (Kasir/Ringkasan/
 /// Pesanan/Customer-Anggota/Produk/Stok Opname/Kulakan/Aturan Diskon/Laporan
@@ -676,6 +678,24 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Riwayat Penjualan',
                             builder: (_) => const RiwayatPenjualanScreen(),
+                          ),
+                        ),
+                      // Riwayat Audit menampilkan data TERHAPUS lintas toko dan
+                      // dapat memulihkannya; server membatasinya ke administrator,
+                      // dan menu ini mengikuti gerbang yang sama supaya tidak
+                      // menawarkan sesuatu yang akan ditolak.
+                      if (Sesi.instance.isAdmin)
+                        _ItemMenu(
+                          icon: Icons.manage_search,
+                          label: 'Riwayat Audit',
+                          aktif: menuAktif == 'Riwayat Audit',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Riwayat Audit',
+                            builder: (_) => const RiwayatAuditScreen(
+                              menuAktif: MenuEBisnis.riwayatAudit,
+                              labelKembali: 'Kembali',
+                            ),
                           ),
                         ),
                       if (Sesi.instance.bolehMenu('laporantransaksi'))

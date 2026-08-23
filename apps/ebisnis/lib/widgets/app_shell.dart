@@ -94,6 +94,7 @@ import '../product_profile.dart';
 import 'safe_state.dart';
 import 'bantuan_fab.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../screens/riwayat_audit_screen.dart';
 
 /// Ambang lebar layar dianggap "desktop" (sidebar+topbar persisten spt
 /// referensi) vs "mobile" (drawer+app bar ringkas, pola Material yang sudah
@@ -185,6 +186,7 @@ enum MenuEBisnis {
   closing,
   riwayatSinkron,
   logError,
+  riwayatAudit,
   konfigurasi,
   layarPelanggan,
   hakAkses,
@@ -317,6 +319,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.laporanKeuangan: 'laporankeuangan',
   MenuEBisnis.riwayatSinkron: 'riwayatsinkronisasi',
   MenuEBisnis.logError: 'logerror',
+  MenuEBisnis.riwayatAudit: 'riwayataudit',
   MenuEBisnis.konfigurasi: 'konfigurasi',
 };
 
@@ -380,6 +383,10 @@ const _menuSalesSaja = <MenuEBisnis>{
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
+  // Riwayat Audit menampilkan data TERHAPUS dari seluruh toko dan dapat
+  // memulihkannya. Server sudah membatasinya ke ADMINISTRATOR; menu ini
+  // mengikuti gerbang yang sama supaya tidak menawarkan yang akan ditolak.
+  if (kunci == MenuEBisnis.riwayatAudit) return Sesi.instance.isAdmin;
   // Kelola Toko: admin-only, padanan gate isAdmin JSP / TokoApiHelper server.
   if (kunci == MenuEBisnis.tokoKelola) return Sesi.instance.isAdmin;
   // Menu khusus varian "eBisnis Inventory & Sales" -- gerbang level VARIAN
@@ -690,6 +697,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
       builder: _bangunLogError),
   _ItemMenuShell(
+      MenuEBisnis.riwayatAudit, Icons.manage_search, 'Riwayat Audit',
+      builder: _bangunRiwayatAudit),
+  _ItemMenuShell(
       MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi',
       builder: _bangunKonfigurasi),
   _ItemMenuShell(MenuEBisnis.layarPelanggan, Icons.desktop_windows_outlined,
@@ -848,6 +858,7 @@ const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Sistem', [
     MenuEBisnis.riwayatSinkron,
     MenuEBisnis.logError,
+    MenuEBisnis.riwayatAudit,
     MenuEBisnis.konfigurasi,
     MenuEBisnis.hakAkses,
     MenuEBisnis.tokoKelola,
@@ -1001,6 +1012,10 @@ Widget _bangunClosing(BuildContext c) => const ClosingScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
+Widget _bangunRiwayatAudit(BuildContext c) => const RiwayatAuditScreen(
+      menuAktif: MenuEBisnis.riwayatAudit,
+      labelKembali: 'Kembali',
+    );
 Widget _bangunKonfigurasi(BuildContext c) => const KonfigurasiScreen();
 Widget _bangunLayarPelanggan(BuildContext c) => const LayarPelangganScreen();
 Widget _bangunHakAkses(BuildContext c) => const HakAksesScreen();
@@ -1368,6 +1383,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Riwayat Sinkronisasi';
     case MenuEBisnis.logError:
       return 'Log Error';
+    case MenuEBisnis.riwayatAudit:
+      return 'Riwayat Audit';
     case MenuEBisnis.konfigurasi:
       return 'Konfigurasi';
     case MenuEBisnis.layarPelanggan:
@@ -2354,6 +2371,25 @@ class _AppTopbarState extends State<_AppTopbar> {
       ),
       child: Row(
         children: [
+          // Usaha (tenant) yang sedang dipakai perangkat ini. Muncul HANYA bila
+          // ada tenantnya -- pengguna tanpa tenant, yaitu semua orang hari ini,
+          // tidak melihat apa pun berubah.
+          //
+          // Diletakkan di KIRI chip toko karena tenant menaungi toko: urutan
+          // bacanya usaha, lalu cabangnya.
+          if (Sesi.instance.tenantNama.isNotEmpty) ...[
+            Tooltip(
+              message: Sesi.instance.tenantKode.isEmpty
+                  ? 'Usaha aktif'
+                  : 'Usaha aktif — ${Sesi.instance.tenantKode}',
+              child: _chipStatus(
+                icon: Icons.business_outlined,
+                label: Sesi.instance.tenantNama,
+                warna: AppColors.textSecondaryOf(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           Material(
             color: Colors.transparent,
             child: InkWell(

@@ -485,7 +485,9 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           '${widget.payloadFilter['tglMulai'] ?? ''}'.isNotEmpty &&
               '${widget.payloadFilter['tglSampai'] ?? ''}'.isNotEmpty;
       final dimensi =
-          adaRentang ? _dimensiBaris(kolom, baris) : const <String, dynamic>{};
+          adaRentang
+              ? _dimensiBaris(kolom, baris, widget.idLaporan)
+              : const <String, dynamic>{};
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
@@ -1104,8 +1106,15 @@ class _SelAngkaRincian extends StatelessWidget {
 /// menyaring transaksi (mis. laporan stok atau baris total) -- pemanggil lalu
 /// menampilkan asal-usul baris apa adanya spt sebelumnya.
 Map<String, dynamic> _dimensiBaris(
-    List<Map<String, dynamic>> kolom, List<dynamic> baris) {
+    List<Map<String, dynamic>> kolom, List<dynamic> baris, String idLaporan) {
   final hasil = <String, dynamic>{};
+  // Laporan saldo piutang menampilkan SISA, bukan seluruh transaksi. Tanpa
+  // penyaring ini, drill-down-nya memunculkan semua nota pelanggan tsb --
+  // termasuk yang sudah lunas -- sehingga jumlahnya tidak pernah cocok dengan
+  // angka yang barusan diklik.
+  if (idLaporan == 'ar_saldo') {
+    hasil['hanyaBelumLunas'] = true;
+  }
   for (var i = 0; i < kolom.length && i < baris.length; i++) {
     final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
     final tipe = '${kolom[i]['t'] ?? 'text'}';
@@ -1129,8 +1138,19 @@ Map<String, dynamic> _dimensiBaris(
     } else if ((label.contains('pelanggan') ||
             label.contains('anggota') ||
             label.contains('member')) &&
-        !hasil.containsKey('pelanggan')) {
-      hasil['pelanggan'] = nilai;
+        !hasil.containsKey('pelanggan') &&
+        !hasil.containsKey('pelangganKosong')) {
+      // "Umum / Non-Anggota" BUKAN nama seseorang -- itu label yang dipasang
+      // laporan untuk transaksi tanpa anggota. Mencarinya sebagai nama tidak
+      // akan pernah cocok, dan drill-down baris itu selalu kosong; padahal
+      // justru baris itu yang paling perlu ditelusuri. Dicocokkan pada
+      // "non-anggota" saja, bukan "umum", supaya pelanggan yang benar-benar
+      // bernama "Umum" tetap diperlakukan sebagai nama.
+      if (nilai.toLowerCase().contains('non-anggota')) {
+        hasil['pelangganKosong'] = true;
+      } else {
+        hasil['pelanggan'] = nilai;
+      }
     }
   }
   return hasil;

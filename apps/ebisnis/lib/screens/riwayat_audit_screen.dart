@@ -361,6 +361,109 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     }
   }
 
+  /// <h3>Perbaikan susulan nota yang tercatat bayar Rp 0.</h3>
+  ///
+  /// Bukan bagian dari audit, tetapi tinggal di layar yang sama karena
+  /// penontonnya sama: administrator yang sedang membereskan data. Aturannya
+  /// dijalankan SERVER dengan method yang sama dengan penjaga saat menyimpan,
+  /// jadi layar ini tidak punya versi aturannya sendiri yang bisa menyimpang.
+  ///
+  /// Sama seperti restore massal: dihitung dulu tanpa menulis apa pun, hasil
+  /// hitungan ditampilkan, baru dimintakan persetujuan.
+  Future<void> _perbaikiNilaiBayar() async {
+    setStateIfMounted(() => _memulihkan = true);
+    try {
+      Map<String, dynamic> minta(bool simulasi) => {
+            'dari': _fTanggal.format(_dari),
+            'sampai': _fTanggal.format(_sampai),
+            if (_toko != null) 'toko': _toko,
+            'simulasi': simulasi,
+            'batas': 500,
+          };
+
+      Map<String, dynamic>? hitung;
+      try {
+        final res =
+            await ApiClient.instance.aksi('perbaiki_nilai_bayar', minta(true));
+        if (res['status'] != '00') {
+          throw Exception(res['description'] ?? 'Perhitungan ditolak server.');
+        }
+        hitung = res;
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(terapkanGalat(e))));
+        }
+        return;
+      }
+      if (!mounted) return;
+
+      final akan = (hitung['diperbaiki'] as num?)?.toInt() ?? 0;
+      final dilewati = (hitung['dilewati'] as num?)?.toInt() ?? 0;
+      if (akan == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Tidak ada nota yang perlu diperbaiki pada rentang '
+                'itu${dilewati > 0 ? ' ($dilewati dilewati karena piutangnya sah).' : '.'}')));
+        return;
+      }
+
+      final setuju = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Perbaiki nilai bayar yang kosong?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${_fTampil.format(_dari)} s/d ${_fTampil.format(_sampai)}'
+                  '${_toko == null ? ' · semua toko' : ' · toko #$_toko'}'),
+              const SizedBox(height: 10),
+              Text('$akan nota akan diisi nilai bayarnya sesuai metode '
+                  'pembayarannya sendiri.',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              if (dilewati > 0)
+                Text('$dilewati nota dilewati karena piutangnya SAH '
+                    '(metode bertanda hutang) atau tanpa metode bayar.',
+                    style: const TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+              const Text(
+                'Nota yang dibayar sebagian dan nota yang sudah benar tidak '
+                'tersentuh. Perubahan ini tidak dapat dibatalkan, tetapi '
+                'terekam di riwayat audit tiap nota.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Perbaiki')),
+          ],
+        ),
+      );
+      if (setuju != true || !mounted) return;
+
+      try {
+        final res =
+            await ApiClient.instance.aksi('perbaiki_nilai_bayar', minta(false));
+        if (res['status'] != '00') {
+          throw Exception(res['description'] ?? 'Perbaikan ditolak server.');
+        }
+        if (mounted) await _tampilkanLaporan(res);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(terapkanGalat(e))));
+        }
+      }
+    } finally {
+      setStateIfMounted(() => _memulihkan = false);
+    }
+  }
+
   Future<void> _tampilkanLaporan(Map<String, dynamic> hasil) async {
     final rincian = (hasil['rincian'] as List?) ?? const [];
     final gagal = (hasil['gagal'] as num?)?.toInt() ?? 0;
@@ -637,6 +740,15 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                 style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.danger),
               ),
+            // Tidak bergantung pada hasil pencarian audit: yang diperbaiki adalah
+            // nota bernilai bayar kosong pada rentang tanggal, bukan baris audit
+            // yang sedang tampil.
+            OutlinedButton.icon(
+              onPressed: sibuk ? null : _perbaikiNilaiBayar,
+              icon: const Icon(Icons.healing_outlined, size: 18),
+              label: const Text('Perbaiki Nilai Bayar Kosong'),
+              style: OutlinedButton.styleFrom(foregroundColor: AppColors.info),
+            ),
             if (sibuk)
               const SizedBox(
                   width: 18,
