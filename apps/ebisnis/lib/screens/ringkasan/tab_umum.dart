@@ -269,6 +269,15 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
   String _cariPembeli = '';
   String _kodeTransaksi = '';
   String? _metodeBayar;
+
+  /// Label metode pembayaran yang PERNAH terlihat pada hasil dashboard.
+  ///
+  /// Sengaja menumpuk, bukan dibaca ulang dari hasil terakhir: begitu satu metode
+  /// dipilih, komposisi pembayaran menyusut menjadi metode itu saja -- kalau daftar
+  /// combo ikut menyusut, pengguna terkurung pada pilihannya sendiri dan hanya bisa
+  /// keluar lewat "Semua". Labelnya diambil dari server, bukan dikarang klien,
+  /// supaya nilainya persis yang dikenali penyaring di sisi server.
+  final Set<String> _metodeTerlihat = <String>{};
   final _pembeliController = TextEditingController();
   final _kodeTransaksiController = TextEditingController();
   int _halaman = 1;
@@ -404,6 +413,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
         final stempel = DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
         setStateIfMounted(() {
           _d = lokal;
+          _kumpulkanMetode(_d);
           _dariCache = true;
           _cacheDisimpanPada = stempel;
           // Snapshot lokal belum punya pembanding server -> tanpa kilau.
@@ -443,6 +453,7 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
       }
       setStateIfMounted(() {
         _d = hasil;
+        _kumpulkanMetode(_d);
         // Angka server sudah terpasang -> penanda salinan tersimpan padam.
         _dariCache = false;
         _cacheDisimpanPada = null;
@@ -669,6 +680,25 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
       _metodeBayar = null;
     });
     await _terapkan();
+  }
+
+  void _kumpulkanMetode(Map<String, dynamic>? data) {
+    final daftar = (data?['metodeBayar'] as List?) ?? const [];
+    for (final e in daftar) {
+      if (e is Map) {
+        final label = '${e['label'] ?? ''}'.trim();
+        if (label.isNotEmpty) _metodeTerlihat.add(label);
+      }
+    }
+  }
+
+  /// Pilihan combo: gabungan metode yang pernah terlihat + yang sedang dipilih.
+  List<String> _pilihanMetode() {
+    final set = <String>{..._metodeTerlihat};
+    final dipilih = _metodeBayar;
+    if (dipilih != null && dipilih.isNotEmpty) set.add(dipilih);
+    final hasil = set.toList()..sort();
+    return hasil;
   }
 
   Future<void> _pilihMetodeBayar(String metode) async {
@@ -1354,6 +1384,12 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                     ),
                     SizedBox(
                       width: constraints.maxWidth,
+                      child: _comboMetodePembayaran(
+                        warnaBorder: warnaBorder,
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
                       child: _tombolLayaniSemuaPembelian(
                         warnaTeks: warnaTeks,
                       ),
@@ -1382,6 +1418,13 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _fieldCariKodeTransaksi(
+                      warnaBorder: warnaBorder,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 190,
+                    child: _comboMetodePembayaran(
                       warnaBorder: warnaBorder,
                     ),
                   ),
@@ -1429,6 +1472,60 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
       hintText: 'Cari Pembeli',
       icon: Icons.search,
       warnaBorder: warnaBorder,
+    );
+  }
+
+  /// Combo penyaring Metode Pembayaran untuk tabel Data Pembelian.
+  ///
+  /// Nilainya dikirim ke server lewat kunci payload yang SAMA dengan penyaring
+  /// lewat kartu "Komposisi Pembayaran" (`metodeBayar`), jadi kedua jalan masuk
+  /// itu tidak mungkin berbeda arti -- memilih di combo dan mengeklik kartunya
+  /// menghasilkan daftar yang sama persis.
+  Widget _comboMetodePembayaran({
+    required Color warnaBorder,
+  }) {
+    final pilihan = _pilihanMetode();
+    return SizedBox(
+      height: 38,
+      child: DropdownButtonFormField<String?>(
+        value: _metodeBayar,
+        isExpanded: true,
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.credit_card_outlined, size: 18),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: warnaBorder),
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: warnaBorder),
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ),
+        hint: const Text('Semua Metode', style: TextStyle(fontSize: 13)),
+        items: <DropdownMenuItem<String?>>[
+          const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('Semua Metode', style: TextStyle(fontSize: 13))),
+          ...pilihan.map((m) => DropdownMenuItem<String?>(
+                value: m,
+                child: Text(m,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13)),
+              )),
+        ],
+        onChanged: (v) {
+          if (v == _metodeBayar) return;
+          setStateIfMounted(() {
+            _metodeBayar = v;
+            _halaman = 1; // hasil menyusut -- halaman lama bisa jadi kosong
+          });
+          _muat();
+        },
+      ),
     );
   }
 
