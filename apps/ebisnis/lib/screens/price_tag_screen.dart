@@ -2253,15 +2253,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       children: [
         Padding(
           padding: const EdgeInsets.all(12),
-          child: TextField(
+          child: AppSearchField(
             controller: _controllerCari,
+            hintText: 'Cari nama/kode/barcode produk...',
             focusNode: _fokusCari,
-            decoration: const InputDecoration(
-              hintText: 'Cari nama/kode/barcode produk...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
+            debounce: Duration.zero,
             onChanged: (_) => setStateIfMounted(() {}),
             onSubmitted: _submitCariProduk,
           ),

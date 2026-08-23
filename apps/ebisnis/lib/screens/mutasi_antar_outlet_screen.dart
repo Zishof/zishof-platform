@@ -565,10 +565,11 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
           children: [
             Text(widget.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
-            TextField(
+            AppSearchField(
               controller: _cariController,
-              decoration: AppFormStyle.fieldDecoration(context, labelText: 'Cari nama/kode produk...', prefixIcon: const Icon(Icons.search)),
-              onSubmitted: _cari,
+              labelText: 'Cari nama/kode produk...',
+              gayaForm: true,
+              onChanged: _cari,
             ),
             const SizedBox(height: 8),
             Expanded(

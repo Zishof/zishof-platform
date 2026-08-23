@@ -92,9 +92,44 @@ class HeaderActionSurface extends StatelessWidget {
 class AppSearchField extends StatefulWidget {
   final String hintText;
   final String initialValue;
-  final ValueChanged<String> onChanged;
+
+  /// Dipanggil sambil mengetik, sesudah [debounce].
+  ///
+  /// Boleh null: sebagian kotak cari nilainya dibaca saat tombol ditekan, bukan
+  /// sambil diketik. Kotak seperti itu tetap pantas memakai widget ini demi
+  /// ikon, tombol bersihkan, dan rupa yang sama.
+  final ValueChanged<String>? onChanged;
   final Duration debounce;
   final TextEditingController? controller;
+
+  /// Label yang mengambang di atas medan.
+  ///
+  /// Terpisah dari [hintText] karena sebagian kotak memakai KEDUANYA dengan isi
+  /// berbeda -- label menyebut apa yang dicari, hint memberi contohnya.
+  final String? labelText;
+
+  /// Teks bantuan di bawah medan, untuk menerangkan apa saja yang tercakup.
+  final String? helperText;
+
+  /// Batas baris [helperText]; perlu bila teksnya menjalar lebih dari satu baris.
+  final int? helperMaxLines;
+
+  final FocusNode? focusNode;
+
+  /// Dipanggil saat Enter ditekan.
+  ///
+  /// Sebagian kotak memberi Enter arti TERSENDIRI -- mis. memilih hasil teratas
+  /// -- yang berbeda dari sekadar menyaring. Tanpa ini, arti itu hilang saat
+  /// kotaknya diseragamkan.
+  final ValueChanged<String>? onSubmitted;
+
+  final TextInputAction? textInputAction;
+
+  /// Memakai [AppFormStyle.fieldDecoration], bukan tema bawaan.
+  ///
+  /// Isian, padding, dan border fokusnya berbeda dari tema. Layar yang sudah
+  /// memakai gaya form itu akan berubah rupa bila dikonversi tanpa pilihan ini.
+  final bool gayaForm;
 
   /// Menaruh kursor di kotak cari begitu ia tampil.
   ///
@@ -105,11 +140,19 @@ class AppSearchField extends StatefulWidget {
 
   const AppSearchField({
     super.key,
-    required this.hintText,
-    required this.onChanged,
+    // Boleh kosong: sebagian kotak hanya berlabel, tanpa contoh isian.
+    this.hintText = '',
+    this.onChanged,
     this.initialValue = '',
     this.debounce = const Duration(milliseconds: 220),
     this.controller,
+    this.labelText,
+    this.helperText,
+    this.helperMaxLines,
+    this.focusNode,
+    this.onSubmitted,
+    this.textInputAction,
+    this.gayaForm = false,
     this.autofocus = false,
   });
 
@@ -138,30 +181,50 @@ class _AppSearchFieldState extends State<AppSearchField> {
   void _ubah(String value) {
     setStateIfMounted(() {});
     _timer?.cancel();
-    _timer = Timer(widget.debounce, () => widget.onChanged(value));
+    final cb = widget.onChanged;
+    if (cb == null) return;
+    _timer = Timer(widget.debounce, () => cb(value));
   }
 
   @override
   Widget build(BuildContext context) {
+    final bersihkan = _controller.text.isEmpty
+        ? null
+        : IconButton(
+            tooltip: 'Bersihkan',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () {
+              _controller.clear();
+              _ubah('');
+              setStateIfMounted(() {});
+            },
+          );
     return TextField(
       controller: _controller,
+      focusNode: widget.focusNode,
       autofocus: widget.autofocus,
+      textInputAction: widget.textInputAction,
       onChanged: _ubah,
-      decoration: InputDecoration(
-        hintText: widget.hintText,
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: _controller.text.isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Bersihkan',
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () {
-                  _controller.clear();
-                  _ubah('');
-                  setStateIfMounted(() {});
-                },
-              ),
-      ),
+      onSubmitted: widget.onSubmitted,
+      decoration: widget.gayaForm
+          ? AppFormStyle.fieldDecoration(
+              context,
+              labelText: widget.labelText ?? widget.hintText,
+              hintText: widget.labelText == null ? null : widget.hintText,
+              helperText: widget.helperText,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: bersihkan,
+              isDense: true,
+              showLabel: widget.labelText != null,
+            )
+          : InputDecoration(
+              labelText: widget.labelText,
+              hintText: widget.hintText,
+              helperText: widget.helperText,
+              helperMaxLines: widget.helperMaxLines,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: bersihkan,
+            ),
     );
   }
 }

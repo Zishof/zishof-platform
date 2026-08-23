@@ -1566,13 +1566,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            decoration: AppFormStyle.fieldDecoration(context,
-                labelText: 'Cari Riwayat',
-                hintText: 'Cari nomor faktur/nama supplier...',
-                prefixIcon: const Icon(Icons.search),
-                isDense: true),
-            onSubmitted: (v) {
+          AppSearchField(
+            labelText: 'Cari Riwayat',
+            hintText: 'Cari nomor faktur/nama supplier...',
+            gayaForm: true,
+            onChanged: (v) {
               _kataKunciRiwayat = v;
               _halaman = 1;
               _muatRiwayat();
@@ -1794,12 +1792,11 @@ class _SheetPilihSupplierState extends State<_SheetPilihSupplier> {
             const Text('Pilih Supplier',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
-            TextField(
+            AppSearchField(
               controller: _cariController,
-              decoration: AppFormStyle.fieldDecoration(context,
-                  labelText: 'Cari nama supplier...',
-                  prefixIcon: const Icon(Icons.search)),
-              onSubmitted: _cari,
+              labelText: 'Cari nama supplier...',
+              gayaForm: true,
+              onChanged: _cari,
             ),
             const SizedBox(height: 8),
             Expanded(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/app_components.dart';
 import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_shell.dart';
@@ -268,21 +269,10 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: TextField(
+            child: AppSearchField(
               controller: _cari,
-              decoration: InputDecoration(
-                labelText: 'Cari nama/kode toko',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _cari.clear();
-                      _muat();
-                    }),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              onSubmitted: (_) => _muat(),
+              labelText: 'Cari nama/kode toko',
+              onChanged: (_) => _muat(),
             ),
           ),
           Padding(

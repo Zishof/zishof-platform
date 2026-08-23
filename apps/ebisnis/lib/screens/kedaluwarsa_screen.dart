@@ -368,13 +368,11 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
           const SizedBox(height: 14),
           LayoutBuilder(builder: (context, constraints) {
             final sempit = constraints.maxWidth < 650;
-            final cari = TextField(
+            final cari = AppSearchField(
               controller: _cari,
-              decoration: AppFormStyle.fieldDecoration(context,
-                  labelText: 'Cari produk / kode / batch',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true),
-              onSubmitted: (_) {
+              labelText: 'Cari produk / kode / batch',
+              gayaForm: true,
+              onChanged: (_) {
                 _halaman = 1;
                 _muat();
               },

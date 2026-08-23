@@ -211,15 +211,14 @@ class _DialogCariAkunState extends State<_DialogCariAkun> {
                     icon: const Icon(Icons.close)),
               ]),
               const SizedBox(height: 8),
-              TextField(
+              AppSearchField(
                 controller: _cari,
+                hintText: 'Cari kode atau nama akun...',
                 autofocus: true,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Cari kode atau nama akun...',
-                ),
+                // Penyaringannya murni lokal (setState), jadi menundanya
+                // 220 ms hanya membuat daftar terasa lamban tanpa menghemat
+                // panggilan apa pun.
+                debounce: Duration.zero,
                 onChanged: (_) => setStateIfMounted(() {}),
                 // Enter mengambil DAUN teratas -- akun induk tidak pernah menjadi
                 // jawaban, jadi tidak boleh terpilih hanya karena kebetulan di atas.

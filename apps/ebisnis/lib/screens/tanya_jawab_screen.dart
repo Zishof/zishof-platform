@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import 'bantuan_content.dart';
 import 'bantuan_kontekstual.dart';
@@ -139,16 +140,12 @@ class _TanyaJawabScreenState extends State<TanyaJawabScreen> {
                         '${jumlahKataTanyaJawab(semua)} kata.',
                       ),
                       const SizedBox(height: 14),
-                      TextField(
+                      AppSearchField(
                         controller: _cari,
+                        labelText: 'Cari pertanyaan atau jawaban',
+                        hintText: 'Contoh: gagal simpan, hak akses, stok, sesi kas',
+                        debounce: Duration.zero,
                         onChanged: (nilai) => setState(() => _kata = nilai),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          labelText: 'Cari pertanyaan atau jawaban',
-                          hintText:
-                              'Contoh: gagal simpan, hak akses, stok, sesi kas',
-                          border: OutlineInputBorder(),
-                        ),
                       ),
                     ],
                   ),

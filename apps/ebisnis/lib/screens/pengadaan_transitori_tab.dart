@@ -180,17 +180,10 @@ class _PengadaanTransitoriTabState extends State<PengadaanTransitoriTab> {
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
         child: Row(children: [
           Expanded(
-            child: TextField(
+            child: AppSearchField(
               controller: _cari,
-              onSubmitted: (_) => _muat(),
-              decoration: InputDecoration(
-                hintText: 'Cari kode pembayaran / uraian...',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                isDense: true,
-                suffixIcon: IconButton(
-                    icon: const Icon(Icons.arrow_forward, size: 18),
-                    onPressed: _muat),
-              ),
+              hintText: 'Cari kode pembayaran / uraian...',
+              onChanged: (_) => _muat(),
             ),
           ),
           const SizedBox(width: 10),

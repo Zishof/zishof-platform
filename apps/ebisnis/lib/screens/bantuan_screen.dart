@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/app_components.dart';
 import '../theme/app_colors.dart';
 import 'bantuan_content.dart';
 import 'bantuan_kontekstual.dart';
@@ -195,15 +196,11 @@ class _IsiArtikel extends StatelessWidget {
           Text(artikel.ringkasan,
               style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 18),
-          TextField(
+          AppSearchField(
             controller: controllerCari,
+            hintText: 'Cari topik, misalnya offline, retur, atau printer',
+            debounce: Duration.zero,
             onChanged: onCari,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: 'Cari topik, misalnya offline, retur, atau printer',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
           ),
           const SizedBox(height: 20),
           _WorkflowDiagram(langkahKonteks: artikel.workflow),

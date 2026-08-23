@@ -2675,15 +2675,12 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
             child: const Text('Batal'))
       ],
       children: [
-        TextField(
+        AppSearchField(
+          labelText: 'Cari Produk',
+          hintText: 'Cari produk...',
+          gayaForm: true,
           autofocus: true,
-          decoration: AppFormStyle.fieldDecoration(
-            context,
-            labelText: 'Cari Produk',
-            hintText: 'Cari produk...',
-            prefixIcon: const Icon(Icons.search),
-            isDense: true,
-          ),
+          debounce: Duration.zero,
           onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
         ),
         const SizedBox(height: 12),

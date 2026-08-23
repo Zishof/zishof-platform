@@ -1331,11 +1331,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         child: Wrap(spacing: 8, runSpacing: 8, children: [
           SizedBox(
             width: 260,
-            child: TextField(
-              decoration: const InputDecoration(
-                  labelText: 'Cari kode / nama',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true),
+            child: AppSearchField(
+              labelText: 'Cari kode / nama',
+              debounce: Duration.zero,
               onChanged: (v) => _cari = v,
               onSubmitted: (_) => _muat(),
             ),

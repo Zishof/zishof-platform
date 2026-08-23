@@ -784,20 +784,13 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
                 ],
               ),
               const SizedBox(height: 12),
-              TextField(
+              AppSearchField(
                 controller: _cariController,
+                labelText: 'Cari Sesi Kasir',
+                hintText: 'Cari ID sesi, kasir, user, perangkat, waktu, atau keterangan...',
+                gayaForm: true,
                 focusNode: _cariFocus,
-                enabled: true,
-                readOnly: false,
                 textInputAction: TextInputAction.search,
-                decoration: AppFormStyle.fieldDecoration(
-                  context,
-                  labelText: 'Cari Sesi Kasir',
-                  hintText:
-                      'Cari ID sesi, kasir, user, perangkat, waktu, atau keterangan...',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                ),
               ),
               if (!_bolehKoreksi) ...[
                 const SizedBox(height: 10),

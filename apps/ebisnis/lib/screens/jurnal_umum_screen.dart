@@ -270,11 +270,9 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
               ),
               SizedBox(
                 width: 240,
-                child: TextField(
-                  decoration: const InputDecoration(
-                      labelText: 'Cari kode / keterangan',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true),
+                child: AppSearchField(
+                  labelText: 'Cari kode / keterangan',
+                  debounce: Duration.zero,
                   onChanged: (v) => _cari = v,
                   onSubmitted: (_) => _muat(),
                 ),

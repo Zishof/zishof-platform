@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/app_components.dart';
 import '../api_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets/dashboard_charts.dart';
@@ -1245,16 +1246,11 @@ class _DialogFilterState extends State<_DialogFilter> {
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            AppSearchField(
               controller: _cari,
-              decoration: const InputDecoration(
-                labelText: 'Cari',
-                helperText:
-                    'Nama SOP, properti, keyword, tahap, petugas, catatan, atau pengaju',
-                helperMaxLines: 2,
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              labelText: 'Cari',
+              helperText: 'Nama SOP, properti, keyword, tahap, petugas, catatan, atau pengaju',
+              helperMaxLines: 2,
             ),
           ],
         ),
