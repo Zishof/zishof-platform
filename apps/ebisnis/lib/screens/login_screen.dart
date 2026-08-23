@@ -9,6 +9,7 @@ import '../widgets/safe_state.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_version_label.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../services/pengikatan_tenant.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,12 +42,37 @@ class _LoginScreenState extends State<LoginScreen> {
         'labelPerangkat': AppVariant.labelPerangkat,
       });
       await ApiClient.instance.simpanToken(hasil['token'] as String);
+
+      // Pengikatan tenant DIPERIKSA SEBELUM apa pun yang lain (P6/P7).
+      //
+      // Satu perangkat melayani satu tenant. Bila perangkat ini ternyata
+      // memuat data usaha lain dan antreannya belum terkirim, login harus
+      // BERHENTI di sini -- sebelum bukti kata sandi luring ditulis, sebelum
+      // penyiram antrean dinyalakan, dan sebelum cache dimuat. Berhenti
+      // setelahnya berarti perangkat sudah terlanjur menyimpan jejak identitas
+      // baru padahal pemiliknya belum boleh masuk.
+      final ikat = await PengikatanTenant.periksaSetelahLogin();
+      if (!ikat.bolehLanjut) {
+        await ApiClient.instance.hapusToken();
+        setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
+            PengikatanTenant.pesan(ikat),
+            aktivitas: 'login'));
+        return;
+      }
+      await ApiClient.instance.simpanTenantId(ikat.tenantAktifId);
+
       // Bukti kata sandi disimpan HANYA sesudah server menerimanya, supaya
       // jalur luring tidak pernah lebih longgar daripada keputusan server.
       // Dipakai LayarKunciScreen saat sesi terkunci dan server tak terjangkau.
       await VerifikatorSandiLokal.instance
           .simpan(_userCtrl.text.trim(), _passCtrl.text);
       TransaksiOutboxService.instance.mulai();
+      if (ikat.keputusan == KeputusanPengikatan.dialihkan && mounted) {
+        // Bukan galat, tetapi pengguna berhak tahu kenapa datanya kosong.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(PengikatanTenant.pesan(ikat))),
+        );
+      }
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

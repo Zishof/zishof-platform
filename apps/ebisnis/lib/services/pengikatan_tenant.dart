@@ -1,11 +1,23 @@
 import 'package:core_auth/core_auth.dart';
 import 'package:core_db/core_db.dart';
 
+import '../api_client.dart';
+
 /// Keputusan yang dihasilkan [PengikatanTenant.periksa].
 enum KeputusanPengikatan {
   /// Perangkat sudah terikat pada tenant yang sama, atau baru saja diikat.
   /// Jalan terus.
   lanjut,
+
+  /// Pengguna tidak bernaung pada tenant mana pun -- akun legacy atau admin
+  /// pusat. Jalan terus pada schema existing, persis seperti sebelum ada
+  /// multi-tenant. Ini keadaan SELURUH pengguna hari ini.
+  tanpaTenant,
+
+  /// Pengguna punya lebih dari satu tenant dan harus memilih. Klien belum
+  /// punya pemilihnya, jadi keadaan ini ditampilkan apa adanya alih-alih
+  /// menebak salah satu.
+  pilihTenant,
 
   /// Perangkat terikat pada tenant LAIN dan antreannya masih berisi.
   /// **Jangan** lanjutkan: kirim dulu antreannya dari akun tenant lama.
@@ -22,6 +34,7 @@ class HasilPengikatan {
     this.keputusan, {
     this.antreanTertunda = 0,
     this.tenantLamaId,
+    this.tenantAktifId,
     this.arsip,
   });
 
@@ -37,7 +50,14 @@ class HasilPengikatan {
   /// Jalur berkas basis data lama yang diarsipkan, bila ada.
   final String? arsip;
 
-  bool get bolehLanjut => keputusan != KeputusanPengikatan.tertahanAntrean;
+  /// Tenant yang akhirnya aktif pada perangkat ini, atau {@code null} bila
+  /// jalurnya schema existing. Dipakai pemanggil untuk menyetel
+  /// `ApiClient.simpanTenantId`.
+  final int? tenantAktifId;
+
+  bool get bolehLanjut =>
+      keputusan != KeputusanPengikatan.tertahanAntrean &&
+      keputusan != KeputusanPengikatan.pilihTenant;
 }
 
 /// Menjaga agar satu perangkat hanya memuat data satu tenant.
@@ -78,7 +98,7 @@ class PengikatanTenant {
     final status = await db.periksaPengikatan(tenantId);
 
     if (status == StatusPengikatan.cocok) {
-      return const HasilPengikatan(KeputusanPengikatan.lanjut);
+      return HasilPengikatan(KeputusanPengikatan.lanjut, tenantAktifId: tenantId);
     }
 
     if (status == StatusPengikatan.belumTerikat) {
@@ -100,7 +120,7 @@ class PengikatanTenant {
         serverSidik: serverSidik,
         akunSidik: akunSidik,
       );
-      return const HasilPengikatan(KeputusanPengikatan.lanjut);
+      return HasilPengikatan(KeputusanPengikatan.lanjut, tenantAktifId: tenantId);
     }
 
     // status == beda: perangkat memuat data tenant LAIN.
@@ -130,13 +150,66 @@ class PengikatanTenant {
     return HasilPengikatan(
       KeputusanPengikatan.dialihkan,
       tenantLamaId: tenantLamaId,
+      tenantAktifId: tenantId,
       arsip: arsip,
+    );
+  }
+
+  /// Tanyakan tenant aktif ke server, lalu jalankan [periksa].
+  ///
+  /// Dipanggil **sesudah** token tersimpan (aksinya butuh autentikasi) tetapi
+  /// **sebelum** bukti kata sandi luring disimpan dan sebelum cache dimuat.
+  /// Urutan itu penting: bila pengikatan ditolak, perangkat tidak boleh
+  /// meninggalkan jejak identitas baru sama sekali.
+  ///
+  /// Pengguna tanpa tenant -- akun legacy dan admin pusat, yaitu semua orang
+  /// hari ini -- ditolak server dengan `TENANT_ACCESS_DENIED`. Itu **bukan**
+  /// kegagalan login: jalurnya memang schema existing.
+  static Future<HasilPengikatan> periksaSetelahLogin() async {
+    Map<String, dynamic> data;
+    try {
+      final hasil = await ApiClient.instance.aksi('tenant_context', const {});
+      final d = hasil['data'];
+      if (d is! Map) {
+        return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+      }
+      data = Map<String, dynamic>.from(d);
+    } on ApiException catch (e) {
+      switch (e.kode) {
+        case 'TENANT_ACCESS_DENIED':
+          // Tidak bernaung pada tenant mana pun -> jalur existing.
+          return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+        case 'TENANT_SELECTION_REQUIRED':
+          return const HasilPengikatan(KeputusanPengikatan.pilihTenant);
+        default:
+          // Aksi tenant_context belum ada di server lama, atau tenant sedang
+          // suspended/belum siap. Keduanya TIDAK boleh menggagalkan login POS
+          // yang selama ini berjalan; jalur existing tetap terbuka.
+          return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+      }
+    } catch (_) {
+      return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+    }
+
+    final tenantId = data['tenant_id'];
+    if (tenantId is! int || tenantId <= 0) {
+      return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
+    }
+    return periksa(
+      tenantId: tenantId,
+      tenantKode: data['tenant_code'] as String?,
     );
   }
 
   /// Pesan siap tampil untuk keadaan yang menahan pengguna.
   static String pesan(HasilPengikatan hasil) {
     switch (hasil.keputusan) {
+      case KeputusanPengikatan.pilihTenant:
+        return 'Akun Anda terdaftar pada lebih dari satu usaha. Versi aplikasi '
+            'ini belum dapat memilihnya. Hubungi admin untuk menentukan usaha '
+            'mana yang dipakai pada perangkat ini.';
+      case KeputusanPengikatan.tanpaTenant:
+        return '';
       case KeputusanPengikatan.tertahanAntrean:
         return 'Perangkat ini masih menyimpan ${hasil.antreanTertunda} data '
             'yang belum terkirim ke server. Masuk kembali dengan akun '

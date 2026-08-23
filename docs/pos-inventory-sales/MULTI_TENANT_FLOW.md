@@ -165,11 +165,57 @@ MD §15.2 mengarah ke pemberian namespace pada kunci `SharedPreferences`. Untuk
 di disk; menghapusnya tidak menyisakan rahasia sama sekali. Karena satu perangkat hanya
 melayani satu tenant, tidak ada yang hilang.
 
-## 6. Yang belum
+## 6. Tersambung ke layar login
 
-- **Belum dipanggil dari layar login.** `PengikatanTenant.periksa` siap, tetapi klien belum
-  memanggil `tenant_context` sehingga tenant aktif belum diketahui saat login. Itu pekerjaan
-  berikutnya di sisi klien.
+`PengikatanTenant.periksaSetelahLogin()` dipanggil di `login_screen.dart`, **sesudah** token
+tersimpan tetapi **sebelum** apa pun yang lain.
+
+### Urutannya menentukan, bukan sekadar rapi
+
+```
+login → simpan token → PERIKSA PENGIKATAN → simpan sandi luring → mulai outbox → masuk
+                              ↓ ditahan
+                        hapus token, tampilkan alasan, BERHENTI
+```
+
+Pemeriksaan diletakkan **sebelum** `VerifikatorSandiLokal.simpan` dan sebelum penyiram
+antrean dinyalakan. Kalau diletakkan sesudahnya, perangkat sudah terlanjur menyimpan bukti
+kata sandi pengguna baru padahal ia belum boleh masuk — dan penyiram sudah sempat mengirim
+antrean tenant lama memakai token tenant baru.
+
+Ketika ditahan, token yang baru saja disimpan **dihapus kembali**. Pengguna tidak boleh
+tertinggal dalam keadaan setengah terautentikasi.
+
+### Lima keadaan, dan hanya dua yang menahan
+
+| Keadaan | Sebab | Lanjut? |
+|---|---|---|
+| `tanpaTenant` | server menjawab `TENANT_ACCESS_DENIED` — pengguna tidak bernaung pada pendaftar mana pun | **ya**, jalur existing |
+| `lanjut` | perangkat sudah terikat tenant yang sama, atau baru diikat | ya |
+| `dialihkan` | tenant lain, antrean kosong, data lama diarsipkan | ya, dengan pemberitahuan |
+| `tertahanAntrean` | tenant lain, antrean **belum terkirim** | **tidak** |
+| `pilihTenant` | punya lebih dari satu tenant, klien belum punya pemilihnya | **tidak** |
+
+**`tanpaTenant` adalah keadaan seluruh pengguna hari ini**, dan itulah sebabnya penyambungan
+ini tidak mengubah apa pun bagi mereka.
+
+### Gagal terbuka, dengan sengaja
+
+Bila `tenant_context` mengembalikan kode lain — aksinya belum ada di server lama, tenant
+sedang suspended, jaringan putus — hasilnya `tanpaTenant`, bukan galat. Login POS yang
+selama ini berjalan **tidak boleh** gagal hanya karena lapisan tenant belum siap di
+servernya.
+
+Yang **tidak** gagal terbuka adalah `tertahanAntrean`: itu keputusan berdasarkan data lokal
+yang pasti, bukan berdasarkan jawaban server yang bisa tidak sampai.
+
+### `X-Tenant-Id` dikirim otomatis
+
+`ApiClient` menyimpan `tenantId` di `SharedPreferences` dan menyertakannya sebagai header
+pada **setiap** permintaan. Klien tidak pernah mengirim nama schema — hanya id ini (§4.7).
+Nilainya ikut terhapus bersama `hapusToken()`.
+
+## 7. Yang belum
 - **`token` dan `server_host` masih global** pada `SharedPreferences`. Keduanya kurang
   berbahaya daripada hash luring — token kedaluwarsa sendiri dan server dipilih sadar oleh
   pengguna — tetapi tetap perlu dibereskan.
@@ -177,7 +223,7 @@ melayani satu tenant, tidak ada yang hilang.
   basis data sudah menutup risikonya; pemisahan berkas per §15.2 baru diperlukan bila kelak
   satu perangkat harus memuat dua tenant sekaligus.
 
-## 7. Yang belum diputuskan
+## 8. Yang belum diputuskan
 
 - Nasib data lokal tenant lama saat perangkat dialihkan: dihapus (usulan di atas)
   atau diarsipkan dulu.

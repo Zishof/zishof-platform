@@ -25,9 +25,32 @@ class ApiClient {
 
   String? _token;
 
+  /// Tenant aktif perangkat ini. Dikirim sebagai header `X-Tenant-Id` pada
+  /// setiap permintaan.
+  ///
+  /// Satu perangkat melayani satu tenant, jadi nilainya diikat sekali saat
+  /// login dan bertahan sampai perangkat dialihkan. Klien **tidak pernah**
+  /// mengirim nama schema — hanya id ini; server yang menerjemahkannya sesudah
+  /// keanggotaan tervalidasi.
+  int? _tenantId;
+
+  int? get tenantId => _tenantId;
+
   Future<void> muatTokenTersimpan() async {
     final sp = await SharedPreferences.getInstance();
     _token = sp.getString('token');
+    final t = sp.getInt('tenant_id');
+    _tenantId = (t != null && t > 0) ? t : null;
+  }
+
+  Future<void> simpanTenantId(int? tenantId) async {
+    _tenantId = (tenantId != null && tenantId > 0) ? tenantId : null;
+    final sp = await SharedPreferences.getInstance();
+    if (_tenantId == null) {
+      await sp.remove('tenant_id');
+    } else {
+      await sp.setInt('tenant_id', _tenantId!);
+    }
   }
 
   Future<void> simpanToken(String token) async {
@@ -46,6 +69,10 @@ class ApiClient {
     await sp.remove('token');
     await PengaturanSesiLokal.instance.hapusCatatanAktif();
     await VerifikatorSandiLokal.instance.hapus();
+    // Tenant aktif ikut dibuang: identitas yang tidak lagi dipakai di perangkat
+    // ini tidak boleh menyisakan tenant aktifnya untuk pengguna berikutnya.
+    _tenantId = null;
+    await sp.remove('tenant_id');
   }
 
   bool get sudahLogin => _token != null;
@@ -283,6 +310,9 @@ class ApiClient {
     final payload = susunPayload(namaAksi, body);
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
+    // Kontrak §7.1: klien hanya menyebut tenantId, tidak pernah nama schema.
+    // Server menolak dengan TENANT_CONTEXT_MISMATCH bila header dan body beda.
+    if (_tenantId != null) headers['X-Tenant-Id'] = '$_tenantId';
 
     final mulai = DateTime.now();
     final referensiPermintaan =
