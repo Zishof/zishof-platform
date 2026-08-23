@@ -14,6 +14,7 @@ import '../widgets/app_components.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/dialog_analisis_data.dart';
 
 /// Jalankan+tampilkan SATU laporan dari katalog (spec §Laporan-Laporan) --
 /// form filter dibangun murni dari metadata katalog (`produk`/`pelanggan`/
@@ -186,6 +187,28 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
   /// beberapa file XML (OOXML) -- `archive` package yang SUDAH ada cukup utk
   /// nge-zip-nya, tak perlu dependency baru. Data dari `_hasil` yg sudah
   /// dimuat lewat "Tampilkan" (kolom/baris SAMA persis dgn `_TabelLaporan`).
+  /// Membuka popup rekap. Memakai `kolom`/`baris` yang SAMA dengan tabel dan
+  /// dengan ekspor Excel -- bukan memanggil ulang server -- supaya angka di
+  /// popup tidak mungkin berbeda dari angka yang sedang dilihat pengguna.
+  void _bukaAnalisis() {
+    final hasil = _hasil;
+    if (hasil == null) return;
+    final kolom = ((hasil['kolom'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final baris = ((hasil['baris'] as List?) ?? [])
+        .map((e) => List<dynamic>.from(e as List))
+        .toList();
+    if (kolom.isEmpty) return;
+    tampilkanAnalisisData(
+      context,
+      judul: '${widget.item['judul'] ?? 'Laporan'}',
+      subjudul: '${hasil['catatan'] ?? widget.item['ket'] ?? ''}',
+      kolom: kolom,
+      baris: baris,
+    );
+  }
+
   Future<void> _eksporExcel() async {
     final hasil = _hasil;
     if (hasil == null) return;
@@ -339,6 +362,12 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                         onPressed: _hasil == null ? null : _eksporExcel,
                         icon: const Icon(Icons.grid_on_outlined),
                         label: const Text('Excel'),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: _hasil == null ? null : _bukaAnalisis,
+                        icon: const Icon(Icons.insights_outlined),
+                        label: const Text('Analisis Data'),
                       ),
                     ],
                   ),
