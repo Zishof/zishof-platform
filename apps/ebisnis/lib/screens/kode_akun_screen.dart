@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../sesi.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/app_components.dart';
 import '../services/master_offline.dart';
@@ -177,13 +178,23 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     if (_tab.index == 3) {
       return const ['Kode', 'Nama', 'Keterangan', 'Kode Akun', 'Aktif'];
     }
+    // Tab Akun & Daftar Akun memakai susunan kolom berkas Accurate apa adanya
+    // (permintaan pemilik produk, contoh: "akun-perkiraan.xlsx"), supaya bagan
+    // akun dapat bolak-balik antara Accurate dan aplikasi ini tanpa disusun
+    // ulang. Urutan dan tulisan judulnya SENGAJA sama persis -- itulah yang
+    // dicocokkan pengguna saat menempel berkas dari Accurate.
     return const [
-      'Kode',
+      'No. ',
+      'Tipe Akun',
+      'Kode Perkiraan',
       'Nama',
-      'Keterangan',
-      'Posisi',
-      'Grup Akun',
-      'Kode Induk'
+      'Akun Induk',
+      'Mata Uang',
+      'Saldo Awal',
+      'per Tgl',
+      'Kurs Saldo (Jika Asing)',
+      'Cabang Saldo',
+      'Catatan'
     ];
   }
 
@@ -211,16 +222,30 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           .toList();
     }
     final peta = _kodeById;
-    return _akun
-        .map((a) => [
-              '${a['kode'] ?? ''}',
-              '${a['nama'] ?? ''}',
-              '${a['keterangan'] ?? ''}',
-              '${a['posisi'] ?? ''}',
-              '${a['grupAkun'] ?? ''}',
-              a['parentId'] == null ? '' : (peta['${a['parentId']}'] ?? ''),
-            ])
-        .toList();
+    var nomor = 0;
+    return _akun.map((a) {
+      nomor++;
+      return [
+        '$nomor',
+        // Tipe Accurate disimpan sejak diunggah. Akun yang tidak berasal dari
+        // Accurate belum punya tipe; kolomnya dibiarkan KOSONG alih-alih ditebak
+        // dari posisi debet/kredit -- BANK dan OCAS sama-sama debet, jadi
+        // tebakannya pasti salah untuk sebagian akun.
+        '${a['tipeAkun'] ?? ''}',
+        '${a['kode'] ?? ''}',
+        '${a['nama'] ?? ''}',
+        a['parentId'] == null ? '' : (peta['${a['parentId']}'] ?? ''),
+        'IDR',
+        // Saldo awal & tanggalnya adalah wewenang layar "Saldo Awal (Neraca
+        // Awal)"; kolomnya disediakan agar berkasnya tetap berbentuk Accurate,
+        // tetapi tidak diisi dari sini supaya tidak ada dua sumber angka.
+        '',
+        '',
+        '1',
+        '',
+        '${a['keterangan'] ?? ''}',
+      ];
+    }).toList();
   }
 
   Map<String, dynamic> _defKeBaris(List<String> r) {
@@ -243,14 +268,111 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         'aktif': k(4)
       };
     }
+    // Susunan Accurate: No. | Tipe Akun | Kode Perkiraan | Nama | Akun Induk |
+    // Mata Uang | Saldo Awal | per Tgl | Kurs | Cabang Saldo | Catatan.
+    //
+    // Kolom Saldo Awal, per Tgl, Kurs, dan Cabang Saldo SENGAJA tidak dikirim:
+    // saldo awal dibukukan lewat layar "Saldo Awal (Neraca Awal)" yang
+    // menjurnalnya dengan benar. Memasukkannya diam-diam dari berkas bagan akun
+    // akan membuat dua sumber angka untuk hal yang sama.
     return {
-      'kode': k(0),
-      'nama': k(1),
-      'keterangan': k(2),
-      'posisi': k(3),
-      'grupAkun': k(4),
-      'kodeParent': k(5)
+      'tipeAkun': k(1),
+      'kode': k(2),
+      'nama': k(3),
+      'kodeParent': k(4),
+      'keterangan': k(10),
     };
+  }
+
+  /// Sapu akun yang belum dipakai jurnal dan tidak punya turunan.
+  ///
+  /// Selalu dua langkah: pratinjau dulu (server tidak menghapus apa pun),
+  /// tampilkan jumlah beserta contohnya, baru hapus setelah pengguna setuju.
+  /// Menghapus banyak akun sekaligus tidak boleh terjadi karena salah klik.
+  Future<void> _bersihkanAkun() async {
+    setStateIfMounted(() => _sibuk = true);
+    Map<String, dynamic> pratinjau;
+    try {
+      pratinjau = await ApiClient.instance
+          .aksi('kode_akun_bersihkan', {'praTinjau': true});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memeriksa akun: $e')));
+      }
+      setStateIfMounted(() => _sibuk = false);
+      return;
+    }
+    setStateIfMounted(() => _sibuk = false);
+
+    final jumlah = (pratinjau['kandidat'] as num?)?.toInt() ?? 0;
+    final contoh = (pratinjau['data'] as List?) ?? const [];
+    if (!mounted) return;
+    if (jumlah == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${pratinjau['message'] ?? 'Tidak ada akun yang dapat dibersihkan.'}')));
+      return;
+    }
+
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Bersihkan Akun'),
+        content: SizedBox(
+          width: 460,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$jumlah akun belum dipakai jurnal dan tidak punya turunan, '
+                'sehingga akan DIHAPUS.'),
+            const SizedBox(height: 8),
+            const Text(
+                'Akun yang sudah dipakai jurnal, punya turunan, atau masih '
+                'dirujuk data lain tidak akan tersentuh.',
+                style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: SingleChildScrollView(
+                child: Text(
+                  contoh
+                      .take(50)
+                      .map((e) => '${(e as Map)['kode'] ?? ''} - ${e['nama'] ?? ''}')
+                      .join('\n'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+            if (contoh.length > 50)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('… dan ${contoh.length - 50} akun lainnya.',
+                    style: const TextStyle(fontSize: 12)),
+              ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (setuju != true) return;
+
+    setStateIfMounted(() => _sibuk = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('kode_akun_bersihkan', {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${hasil['message'] ?? 'Selesai.'}')));
+      }
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal membersihkan: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _sibuk = false);
+    }
   }
 
   Future<void> _unduhAkun() async {
@@ -1250,6 +1372,15 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 onPressed: _sibuk ? null : _petakanAkun,
                 icon: const Icon(Icons.account_tree_outlined, size: 18),
                 label: const Text('Petakan Akun')),
+          // Menyapu akun sisa percobaan unggah bukan pekerjaan harian, jadi
+          // tombolnya hanya untuk administrator (Sesi.isAdmin berasal dari
+          // Common.getApakahAdminLain di server). Gerbang sesungguhnya tetap di
+          // server -- ini hanya menyembunyikan tombolnya.
+          if (_tab.index < 2 && Sesi.instance.isAdmin)
+            OutlinedButton.icon(
+                onPressed: _sibuk ? null : _bersihkanAkun,
+                icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                label: const Text('Bersihkan Akun')),
           if (_sibuk)
             const SizedBox(
                 width: 20,
