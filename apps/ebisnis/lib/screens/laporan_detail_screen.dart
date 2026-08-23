@@ -301,21 +301,17 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                   ),
                   if (_adaFilterProduk) ...[
                     const SizedBox(height: 12),
-                    TextField(
-                        controller: _controllerProduk,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari Produk',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
+                    AppSearchField(
+                      controller: _controllerProduk,
+                      labelText: 'Cari Produk',
+                    ),
                   ],
                   if (_adaFilterPelanggan) ...[
                     const SizedBox(height: 12),
-                    TextField(
-                        controller: _controllerPelanggan,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari Pelanggan',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
+                    AppSearchField(
+                      controller: _controllerPelanggan,
+                      labelText: 'Cari Pelanggan',
+                    ),
                   ],
                   if (_adaFilterPerToko)
                     CheckboxListTile(
