@@ -222,6 +222,44 @@ void main() {
     });
   });
 
+  group('Jurnal Umum: satu baris satu sisi', () {
+    final src = File('lib/screens/jurnal_umum_screen.dart').readAsStringSync();
+
+    test('mengisi Debet mengosongkan Kredit pada baris yang sama', () {
+      // Keluhan "belum bisa input" berawal dari satu baris berisi Debet DAN
+      // Kredit sama besar; server menolaknya, tetapi layar sempat membiarkannya.
+      expect(src, contains("if (_angka(b.debet) > 0) {"));
+      expect(src, contains("b.kredit.clear();"));
+      expect(src, contains("if (_angka(b.kredit) > 0) {"));
+      expect(src, contains("b.debet.clear();"));
+    });
+
+    test('label saldo tidak lagi menyebut Seimbang untuk jurnal yang pasti ditolak', () {
+      // Dulu hanya membandingkan dua jumlah kolom, sehingga satu baris bersisi
+      // ganda menghasilkan selisih nol dan tampak "Seimbang".
+      expect(src, contains("_adaDuaSisi"));
+      expect(src, contains("_barisSah >= 2"));
+      expect(src, contains('Ada baris berisi dua sisi'));
+      expect(src, contains('Perlu minimal 2 baris'));
+    });
+
+    test('alasan diperiksa di layar sebelum dikirim', () {
+      expect(src, contains("_alasanBelumBisaSimpan"));
+      // Kalimatnya sama dengan yang dipakai server.
+      expect(src, contains('satu baris hanya boleh diisi debet ATAU kredit'));
+      expect(src, contains('Jurnal minimal 2 baris'));
+    });
+
+    test('menawarkan sisi penyeimbang, bukan membiarkan pengguna menghitung', () {
+      expect(src, contains("_seimbangkan(b)"));
+      expect(src, contains('Isikan sisi penyeimbang'));
+    });
+
+    test('aturannya dijelaskan di layar, bukan hanya di pesan galat', () {
+      expect(src, contains('Tiap baris diisi SALAH SATU'));
+    });
+  });
+
   group('Closing (penutupan periode)', () {
     final src = File('lib/screens/closing_screen.dart').readAsStringSync();
 

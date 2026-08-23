@@ -527,9 +527,88 @@ class _EditorJurnalState extends State<_EditorJurnal> {
   double get _totalDebet => _baris.fold(0.0, (a, b) => a + _angka(b.debet));
   double get _totalKredit => _baris.fold(0.0, (a, b) => a + _angka(b.kredit));
   double get _selisih => _totalDebet - _totalKredit;
-  bool get _seimbang => _selisih.abs() < 0.005 && _totalDebet > 0;
+
+  /// Baris yang terisi Debet DAN Kredit sekaligus. Satu baris hanya boleh
+  /// mewakili satu sisi; server menolaknya, dan menjumlahkan kedua kolomnya
+  /// membuat selisihnya nol sehingga layar sempat menyebutnya "Seimbang".
+  bool _duaSisi(_BarisJurnal b) => _angka(b.debet) > 0 && _angka(b.kredit) > 0;
+
+  /// Baris yang benar-benar dapat dikirim: berakun dan terisi tepat satu sisi.
+  int get _barisSah => _baris
+      .where((b) =>
+          b.akunId != null &&
+          !_duaSisi(b) &&
+          (_angka(b.debet) > 0 || _angka(b.kredit) > 0))
+      .length;
+
+  bool get _adaDuaSisi => _baris.any(_duaSisi);
+
+  /// "Seimbang" hanya boleh muncul bila jurnalnya memang dapat disimpan:
+  /// minimal dua baris sah, tidak ada baris bersisi ganda, dan selisihnya nol.
+  bool get _seimbang =>
+      _selisih.abs() < 0.005 &&
+      _totalDebet > 0 &&
+      !_adaDuaSisi &&
+      _barisSah >= 2;
+
+  /// Alasan jurnal belum dapat disimpan, kalimatnya SAMA dengan yang dipakai
+  /// server -- diperiksa di sini supaya penggunanya tidak menunggu perjalanan
+  /// ke server hanya untuk diberi tahu. Server tetap memeriksanya ulang.
+  String? get _alasanBelumBisaSimpan {
+    if (_keterangan.text.trim().isEmpty) {
+      return 'Keterangan jurnal wajib diisi supaya mudah ditelusuri di buku besar.';
+    }
+    for (var i = 0; i < _baris.length; i++) {
+      final b = _baris[i];
+      final d = _angka(b.debet);
+      final k = _angka(b.kredit);
+      if (b.akunId == null && d == 0 && k == 0) continue; // baris kosong
+      if (b.akunId == null) {
+        return 'Baris ke-${i + 1}: akun belum dipilih.';
+      }
+      if (d > 0 && k > 0) {
+        return 'Baris ke-${i + 1}: satu baris hanya boleh diisi debet ATAU kredit.';
+      }
+      if (d == 0 && k == 0) {
+        return 'Baris ke-${i + 1}: nilainya masih nol.';
+      }
+    }
+    if (_barisSah < 2) {
+      return 'Jurnal minimal 2 baris: satu sisi debet dan satu sisi kredit.';
+    }
+    if (_selisih.abs() >= 0.005) {
+      return 'Jurnal belum seimbang. Selisihnya ${_rp(_selisih.abs())}.';
+    }
+    return null;
+  }
+
+  /// Teks tooltip tombol penyeimbang: menyebut angkanya, bukan sekadar "seimbangkan".
+  String _rpSelisihTooltip() =>
+      _selisih.abs() < 0.005 ? 'sudah seimbang' : _rp(_selisih.abs());
+
+  /// Mengisi sisi penyeimbang pada baris ini sebesar selisih yang tersisa.
+  void _seimbangkan(_BarisJurnal b) {
+    final kurangKredit = _selisih; // debet lebih besar -> butuh kredit
+    setStateIfMounted(() {
+      if (kurangKredit > 0) {
+        b.debet.text = '';
+        b.kredit.text = kurangKredit.round().toString();
+      } else if (kurangKredit < 0) {
+        b.kredit.text = '';
+        b.debet.text = (-kurangKredit).round().toString();
+      }
+    });
+  }
 
   Future<void> _simpan() async {
+    // Diperiksa di layar lebih dulu supaya penggunanya menerima alasan yang
+    // TEPAT seketika. Sebelumnya penolakan server sempat tersamar menjadi pesan
+    // generik, dan itulah yang membuat pengguna mengira jurnal tidak bisa diinput.
+    final alasan = _alasanBelumBisaSimpan;
+    if (alasan != null) {
+      setStateIfMounted(() => _pesan = alasan);
+      return;
+    }
     setStateIfMounted(() {
       _menyimpan = true;
       _pesan = null;
@@ -698,9 +777,18 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                             readOnly: _terkunci,
                             keyboardType: TextInputType.number,
                             textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                                labelText: 'Debet', isDense: true),
-                            onChanged: (_) => setStateIfMounted(() {}),
+                            decoration: InputDecoration(
+                                labelText: 'Debet',
+                                isDense: true,
+                                errorText: _duaSisi(b) ? 'pilih salah satu' : null),
+                            // Satu baris hanya mewakili SATU sisi. Mengisi Debet mengosongkan
+                            // Kredit pada baris yang sama, supaya keadaan yang ditolak server
+                            // tidak mungkin terbentuk lewat layar.
+                            onChanged: (v) => setStateIfMounted(() {
+                              if (_angka(b.debet) > 0) {
+                            b.kredit.clear();
+                          }
+                            }),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -711,9 +799,15 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                             readOnly: _terkunci,
                             keyboardType: TextInputType.number,
                             textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                                labelText: 'Kredit', isDense: true),
-                            onChanged: (_) => setStateIfMounted(() {}),
+                            decoration: InputDecoration(
+                                labelText: 'Kredit',
+                                isDense: true,
+                                errorText: _duaSisi(b) ? 'pilih salah satu' : null),
+                            onChanged: (v) => setStateIfMounted(() {
+                              if (_angka(b.kredit) > 0) {
+                            b.debet.clear();
+                          }
+                            }),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -725,6 +819,19 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                             decoration: const InputDecoration(
                                 labelText: 'Keterangan baris', isDense: true),
                           ),
+                        ),
+                        // Menawarkan sisi penyeimbang sebesar selisih yang tersisa. Inilah
+                        // langkah yang paling sering dilewatkan: jurnal butuh lawan baris,
+                        // bukan dua kolom pada baris yang sama.
+                        IconButton(
+                          tooltip: 'Isikan sisi penyeimbang (${_rpSelisihTooltip()})',
+                          onPressed: _terkunci ||
+                                  _selisih.abs() < 0.005 ||
+                                  _angka(b.debet) > 0 ||
+                                  _angka(b.kredit) > 0
+                              ? null
+                              : () => _seimbangkan(b),
+                          icon: const Icon(Icons.balance, size: 20),
                         ),
                         IconButton(
                           tooltip: 'Hapus baris',
@@ -738,6 +845,23 @@ class _EditorJurnalState extends State<_EditorJurnal> {
               ),
             ),
             const SizedBox(height: 8),
+            if (!_terkunci)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  const Icon(Icons.info_outline, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                        'Tiap baris diisi SALAH SATU: Debet atau Kredit. Jurnal perlu '
+                        'minimal dua baris yang saling melawan, dan totalnya harus sama.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).hintColor),
+                    ),
+                  ),
+                ]),
+              ),
             Row(children: [
               if (!_terkunci)
                 OutlinedButton.icon(
@@ -747,13 +871,21 @@ class _EditorJurnalState extends State<_EditorJurnal> {
               const Spacer(),
               Text('Debet ${_rp(_totalDebet)}   Kredit ${_rp(_totalKredit)}   ',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
+              // Label ini dulu hanya membandingkan dua jumlah kolom, sehingga satu
+              // baris berisi Debet DAN Kredit sama besar tampak "Seimbang" padahal
+              // pasti ditolak server. Kini ia menyebut ALASAN yang sesungguhnya.
               Chip(
                 visualDensity: VisualDensity.compact,
                 avatar: Icon(
                     _seimbang ? Icons.check_circle : Icons.error_outline,
                     size: 16),
-                label: Text(
-                    _seimbang ? 'Seimbang' : 'Selisih ${_rp(_selisih.abs())}'),
+                label: Text(_seimbang
+                    ? 'Siap disimpan'
+                    : _adaDuaSisi
+                        ? 'Ada baris berisi dua sisi'
+                        : _barisSah < 2
+                            ? 'Perlu minimal 2 baris'
+                            : 'Selisih ${_rp(_selisih.abs())}'),
               ),
             ]),
             if (_pesan != null)
