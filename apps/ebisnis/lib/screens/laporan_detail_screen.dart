@@ -452,6 +452,127 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     if (!identical(oldWidget.hasil, widget.hasil)) _halaman = 1;
   }
 
+  /// Popup untuk angka SUBTOTAL / GRAND TOTAL: memperlihatkan baris-baris yang
+  /// dijumlahkan menjadi angka itu, lengkap dgn totalnya sendiri. Padanan
+  /// `tabelPenyusun()` pada versi JSP -- pertanyaannya sama ("angka ini dari
+  /// mana"), jadi jawabannya harus sama pula di semua kanal.
+  Future<void> _bukaPenyusun(
+    BuildContext context,
+    List<Map<String, dynamic>> kolom,
+    List<List<dynamic>> penyusun,
+    int kolomKe,
+    String judul,
+    String keterangan,
+  ) async {
+    double total = 0;
+    for (final r in penyusun) {
+      if (kolomKe < r.length) {
+        total += (r[kolomKe] as num?)?.toDouble() ?? 0;
+      }
+    }
+    final labelKolom = '${kolom[kolomKe]['l'] ?? ''}';
+    final hitung = _isHitungKolom(labelKolom);
+
+    Widget sel(String teks, {required bool angka, required bool tebal}) {
+      return SizedBox(
+        width: 150,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+          child: Text(
+            teks,
+            textAlign: angka ? TextAlign.right : TextAlign.left,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontFamily: angka ? 'monospace' : null,
+              fontWeight: tebal ? FontWeight.w800 : FontWeight.w400,
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget barisSel(List<dynamic> r, {bool tebal = false}) {
+      return Row(
+        children: List.generate(kolom.length, (i) {
+          final angka = '${kolom[i]['t'] ?? 'text'}' == 'num';
+          final isi = i < r.length
+              ? _fmtSel(r[i], '${kolom[i]['t'] ?? 'text'}', '${kolom[i]['l'] ?? ''}')
+              : '';
+          // Kolom yang angkanya sedang ditelusuri ditebalkan supaya pengguna
+          // tahu deret mana yang benar-benar dijumlahkan.
+          return sel(isi, angka: angka, tebal: tebal || i == kolomKe);
+        }),
+      );
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Asal Angka: $judul'),
+        content: SizedBox(
+          width: 860,
+          height: 460,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(keterangan, style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: List.generate(
+                            kolom.length,
+                            (i) => sel('${kolom[i]['l'] ?? ''}',
+                                angka: '${kolom[i]['t'] ?? 'text'}' == 'num',
+                                tebal: true),
+                          ),
+                        ),
+                        const Divider(height: 8),
+                        for (final r in penyusun) barisSel(r),
+                        const Divider(height: 8),
+                        Row(children: [
+                          sel('TOTAL ($labelKolom)', angka: false, tebal: true),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: Text(
+                                _fmtNum(total, hitung),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text('${penyusun.length} baris penyusun.',
+                  style: const TextStyle(fontSize: 11)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(c).pop(),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
   /// Popup "data penghitungan" saat angka laporan diklik. Bila baris ini terdaftar
   /// punya laporan RINCIAN di server (mis. HPP Laba Rugi), rincian itu diambil dgn
   /// filter yang sama; selain itu ditampilkan asal-usul baris (seluruh kolomnya).
@@ -777,6 +898,12 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     }
 
     void tambahBarisSubtotal(String key, Map<int, double> sums) {
+      // Baris penyusun subtotal ini: anggota grup yang sama, dikumpulkan sekali
+      // supaya popup tidak perlu menyaring ulang tiap kali dibuka.
+      final anggotaGrup = <List<dynamic>>[];
+      for (final r in baris) {
+        if ((r[grup]?.toString() ?? '') == key) anggotaGrup.add(r);
+      }
       semuaBaris.add(AppTableRowData(
         cells: List.generate(kolom.length, (i) {
           String teks = '';
@@ -787,16 +914,31 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                 sums[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
           final isNum = kolom[i]['t'] == 'num';
+          final gayaTotal = TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimaryOf(context),
+          );
+          // ANGKA SUBTOTAL IKUT DAPAT DIKLIK -- padanan data-grup versi JSP.
+          if (isNum && teks.isNotEmpty) {
+            return AppTableCell(
+              width: _lebarKolom,
+              align: TextAlign.right,
+              child: _SelAngkaRincian(
+                teks: teks,
+                gaya: gayaTotal,
+                onTap: () => _bukaPenyusun(context, kolom, anggotaGrup, i,
+                    'Subtotal $key',
+                    'Baris yang dijumlahkan menjadi subtotal grup ini.'),
+              ),
+            );
+          }
           return AppTableCell.text(
             teks,
             width: _lebarKolom,
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimaryOf(context),
-            ),
+            style: gayaTotal,
           );
         }),
       ));
@@ -850,16 +992,35 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                 total[i], _isHitungKolom(kolom[i]['l'] as String? ?? ''));
           }
           final isNum = kolom[i]['t'] == 'num';
+          final gayaGrand = TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w900,
+            color: _warnaBiruGelap(context),
+          );
+          // ANGKA GRAND TOTAL IKUT DAPAT DIKLIK -- padanan data-total versi JSP.
+          if (isNum && teks.isNotEmpty) {
+            return AppTableCell(
+              width: _lebarKolom,
+              align: TextAlign.right,
+              child: _SelAngkaRincian(
+                teks: teks,
+                gaya: gayaGrand,
+                onTap: () => _bukaPenyusun(
+                    context,
+                    kolom,
+                    baris,
+                    i,
+                    'Grand Total ${kolom[i]['l'] ?? ''}',
+                    'Seluruh baris yang dijumlahkan menjadi angka ini.'),
+              ),
+            );
+          }
           return AppTableCell.text(
             teks,
             width: _lebarKolom,
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w900,
-              color: _warnaBiruGelap(context),
-            ),
+            style: gayaGrand,
           );
         }),
       ));
