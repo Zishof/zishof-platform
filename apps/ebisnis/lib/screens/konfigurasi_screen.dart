@@ -84,7 +84,7 @@ class _KonfigurasiScreenState extends State<KonfigurasiScreen>
   }
 
   Future<void> _logout() async {
-    await ApiClient.instance.hapusToken();
+    await ApiClient.instance.hapusToken(tutupBasisData: true);
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),

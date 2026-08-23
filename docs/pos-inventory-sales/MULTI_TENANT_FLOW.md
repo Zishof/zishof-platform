@@ -251,6 +251,38 @@ pernah meminta tenant apa pun.
 pada **setiap** permintaan. Klien tidak pernah mengirim nama schema — hanya id ini (§4.7).
 Nilainya ikut terhapus bersama `hapusToken()`.
 
+### Bilah atas menampilkan usaha aktif
+
+Chip bernama usaha muncul di **kiri** chip toko — tenant menaungi toko, jadi urutan bacanya
+usaha lalu cabangnya. Tooltipnya menyebut kode tenant.
+
+Muncul **hanya** bila `Sesi.instance.tenantNama` terisi. Pengguna tanpa tenant — yaitu semua
+orang hari ini — tidak melihat apa pun berubah.
+
+Nama dan kodenya dibaca dari `Sesi`, bukan dari `SharedPreferences`: satu sumber di memori,
+supaya tidak ada layar yang menampilkan nilai basi. `ApiClient` mengisinya saat login dan
+memuatnya kembali saat bootstrap.
+
+**Nama schema tidak pernah sampai ke sini** (§4.7) — hanya id, kode, dan nama.
+
+### Keluar akun menutup basis data tenant
+
+`ApiClient.hapusToken(tutupBasisData: true)` kini juga membuang jejak tenant dari
+`SharedPreferences` dan dari `Sesi`, lalu menutup `CoreDb`.
+
+**Berkasnya tetap di tempatnya.** Keluar akun bukan pengalihan tenant: antrean yang belum
+terkirim harus tetap ada ketika pemiliknya masuk kembali. Yang dilepas hanyalah pegangan di
+memori; pembukaan berikutnya terjadi dengan sendirinya pada akses pertama.
+
+**Jalur 401 sengaja TIDAK menutup basis data.** Metode yang sama dipanggil lewat `unawaited`
+ketika server menolak token, dan di sana kueri lain bisa sedang berjalan — menutup di
+tengahnya membuat operasi yang sah gagal. Data lokalnya pun tidak menjadi lebih aman karena
+ditutup: ia tetap di disk, dan yang menjaga pengguna berikutnya adalah pengikatan tenant saat
+login.
+
+Tiga jalur keluar yang disengaja meminta penutupan: `kasir_screen`, `konfigurasi_screen`, dan
+`layar_kunci_screen`.
+
 ## 7. Yang belum
 - **`token` dan `server_host` masih global** pada `SharedPreferences`. Keduanya kurang
   berbahaya daripada hash luring — token kedaluwarsa sendiri dan server dipilih sadar oleh

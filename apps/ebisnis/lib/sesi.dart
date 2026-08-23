@@ -7,6 +7,22 @@ class Sesi {
   Sesi._();
   static final Sesi instance = Sesi._();
 
+  /// Tenant (usaha) aktif pada perangkat ini — bagian PUBLIKNYA saja.
+  ///
+  /// Kosong bila pengguna tidak bernaung pada tenant mana pun; itu keadaan
+  /// seluruh pengguna hari ini, dan bilah atas tidak menampilkan apa-apa untuk
+  /// mereka. Nama schema TIDAK pernah sampai ke sini (§4.7).
+  int? tenantId;
+  String tenantKode = '';
+  String tenantNama = '';
+
+  /// Buang jejak tenant dari memori — dipanggil saat keluar akun.
+  void bersihkanTenant() {
+    tenantId = null;
+    tenantKode = '';
+    tenantNama = '';
+  }
+
   String tokoNama = '';
   String tokoAlamat = '';
   String tokoTelp = '';

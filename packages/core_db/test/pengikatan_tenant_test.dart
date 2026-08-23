@@ -89,4 +89,32 @@ void main() {
     expect(await db.hitungAntreanTertunda(), 0,
         reason: 'antrean tenant lama tidak boleh ikut ke basis data baru');
   });
+
+  test('tutup() melepas pegangan TANPA menghapus data -- keluar akun bukan pengalihan',
+      () async {
+    final db = CoreDb.instance;
+    await db.ikatTenant(tenantId: 99, tenantKode: 'TEN-99');
+    await db.outboxMasterTambah('produk_simpan', 'produk:7', '{}');
+    expect(await db.hitungAntreanTertunda(), greaterThan(0));
+
+    final database = await db.db;
+    final path = database.path;
+    expect(File(path).existsSync(), isTrue);
+
+    await db.tutup();
+    expect(File(path).existsSync(), isTrue,
+        reason: 'keluar akun TIDAK boleh menghapus atau memindah berkasnya -- '
+            'antrean yang belum terkirim harus tetap ada saat pemiliknya masuk lagi');
+
+    // Akses berikutnya membuka ulang dengan sendirinya, dan isinya utuh.
+    expect(await db.periksaPengikatan(99), StatusPengikatan.cocok,
+        reason: 'pengikatan harus bertahan melewati tutup()');
+    expect(await db.hitungAntreanTertunda(), greaterThan(0),
+        reason: 'antrean harus bertahan melewati tutup()');
+
+    // Menutup dua kali tidak boleh melempar.
+    await db.tutup();
+    await db.tutup();
+    expect(await db.periksaPengikatan(99), StatusPengikatan.cocok);
+  });
 }

@@ -41,16 +41,34 @@ class ApiClient {
     _token = sp.getString('token');
     final t = sp.getInt('tenant_id');
     _tenantId = (t != null && t > 0) ? t : null;
+    if (_tenantId != null) {
+      Sesi.instance.tenantId = _tenantId;
+      Sesi.instance.tenantKode = sp.getString('tenant_kode') ?? '';
+      Sesi.instance.tenantNama = sp.getString('tenant_nama') ?? '';
+    } else {
+      Sesi.instance.bersihkanTenant();
+    }
   }
 
-  Future<void> simpanTenantId(int? tenantId) async {
+  Future<void> simpanTenantId(int? tenantId,
+      {String? tenantKode, String? tenantNama}) async {
     _tenantId = (tenantId != null && tenantId > 0) ? tenantId : null;
     final sp = await SharedPreferences.getInstance();
     if (_tenantId == null) {
       await sp.remove('tenant_id');
-    } else {
-      await sp.setInt('tenant_id', _tenantId!);
+      await sp.remove('tenant_kode');
+      await sp.remove('tenant_nama');
+      Sesi.instance.bersihkanTenant();
+      return;
     }
+    await sp.setInt('tenant_id', _tenantId!);
+    await sp.setString('tenant_kode', tenantKode ?? '');
+    await sp.setString('tenant_nama', tenantNama ?? '');
+    // Bilah atas membaca dari Sesi, bukan dari SharedPreferences -- satu sumber
+    // di memori, supaya tidak ada layar yang menampilkan nilai basi.
+    Sesi.instance.tenantId = _tenantId;
+    Sesi.instance.tenantKode = tenantKode ?? '';
+    Sesi.instance.tenantNama = tenantNama ?? '';
   }
 
   Future<void> simpanToken(String token) async {
@@ -63,7 +81,7 @@ class ApiClient {
   /// Buang sesi perangkat SELURUHNYA: token, catatan aktif, dan bukti kata
   /// sandi luring. Ketiganya satu paket -- identitas yang tidak lagi dipakai di
   /// perangkat ini tidak boleh menyisakan jalan masuk luring.
-  Future<void> hapusToken() async {
+  Future<void> hapusToken({bool tutupBasisData = false}) async {
     _token = null;
     final sp = await SharedPreferences.getInstance();
     await sp.remove('token');
@@ -73,6 +91,20 @@ class ApiClient {
     // ini tidak boleh menyisakan tenant aktifnya untuk pengguna berikutnya.
     _tenantId = null;
     await sp.remove('tenant_id');
+    await sp.remove('tenant_kode');
+    await sp.remove('tenant_nama');
+    Sesi.instance.bersihkanTenant();
+
+    // Basis data tenant ditutup HANYA pada keluar akun yang disengaja.
+    //
+    // Metode ini juga dipanggil dari jalur 401 (token ditolak server) lewat
+    // `unawaited`, dan di sana kueri lain bisa sedang berjalan -- menutup
+    // basis data di tengahnya membuat operasi yang sah gagal. Data lokalnya
+    // pun tidak menjadi lebih aman karena ditutup: ia tetap ada di disk, dan
+    // yang menjaga pengguna berikutnya adalah pengikatan tenant saat login.
+    if (tutupBasisData) {
+      await CoreDb.instance.tutup();
+    }
   }
 
   bool get sudahLogin => _token != null;

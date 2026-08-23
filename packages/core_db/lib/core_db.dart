@@ -714,6 +714,27 @@ class CoreDb {
     return jumlah;
   }
 
+  /// Tutup basis data tanpa mengarsipkan apa pun — dipakai saat keluar akun.
+  ///
+  /// Berbeda dari [lepaskanDanArsipkan]: berkasnya **tetap di tempatnya**. Keluar akun bukan
+  /// pengalihan tenant; antrean yang belum terkirim harus tetap ada ketika pemiliknya masuk
+  /// kembali. Yang dilepas hanyalah pegangan di memori.
+  ///
+  /// Pembukaan berikutnya terjadi dengan sendirinya pada akses pertama.
+  Future<void> tutup() async {
+    final terbuka = _db;
+    _db = null;
+    _openingDb = null;
+    if (terbuka != null && terbuka.isOpen) {
+      try {
+        await terbuka.close();
+      } catch (_) {
+        // Gagal menutup (mis. masih ada operasi berjalan) tidak boleh menggagalkan keluar
+        // akun. Pegangannya sudah dilepas; sisanya urusan garbage collector.
+      }
+    }
+  }
+
   /// Tutup basis data tenant lama, arsipkan berkasnya dengan cap waktu, lalu
   /// biarkan pembukaan berikutnya membuatnya dari nol.
   ///

@@ -165,7 +165,7 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
     );
     if (ya != true) return;
     // hapusToken() sudah sekaligus membuang catatan aktif dan bukti sandi.
-    await ApiClient.instance.hapusToken();
+    await ApiClient.instance.hapusToken(tutupBasisData: true);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const LoginScreen()),

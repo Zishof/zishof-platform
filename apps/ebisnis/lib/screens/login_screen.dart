@@ -90,7 +90,8 @@ class _LoginScreenState extends State<LoginScreen> {
             aktivitas: 'login'));
         return;
       }
-      await ApiClient.instance.simpanTenantId(ikat.tenantAktifId);
+      await ApiClient.instance.simpanTenantId(ikat.tenantAktifId,
+          tenantKode: ikat.tenantKode, tenantNama: ikat.tenantNama);
 
       // Bukti kata sandi disimpan HANYA sesudah server menerimanya, supaya
       // jalur luring tidak pernah lebih longgar daripada keputusan server.

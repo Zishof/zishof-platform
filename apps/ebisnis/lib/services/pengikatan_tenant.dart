@@ -87,6 +87,8 @@ class HasilPengikatan {
     this.antreanTertunda = 0,
     this.tenantLamaId,
     this.tenantAktifId,
+    this.tenantKode,
+    this.tenantNama,
     this.arsip,
   });
 
@@ -106,6 +108,10 @@ class HasilPengikatan {
   /// jalurnya schema existing. Dipakai pemanggil untuk menyetel
   /// `ApiClient.simpanTenantId`.
   final int? tenantAktifId;
+
+  /// Kode dan nama tenant untuk ditampilkan di bilah atas. Bagian publik saja.
+  final String? tenantKode;
+  final String? tenantNama;
 
   bool get bolehLanjut =>
       keputusan != KeputusanPengikatan.tertahanAntrean &&
@@ -285,9 +291,21 @@ class PengikatanTenant {
     if (tenantId is! int || tenantId <= 0) {
       return const HasilPengikatan(KeputusanPengikatan.tanpaTenant);
     }
-    return periksa(
+    final hasil = await periksa(
       tenantId: tenantId,
       tenantKode: data['tenant_code'] as String?,
+    );
+    // Nama tenant hanya diketahui di sini (dari respons server), sedangkan
+    // periksa() murni bekerja pada basis data lokal. Disalin ke hasilnya supaya
+    // pemanggil tidak perlu memanggil server dua kali.
+    return HasilPengikatan(
+      hasil.keputusan,
+      antreanTertunda: hasil.antreanTertunda,
+      tenantLamaId: hasil.tenantLamaId,
+      tenantAktifId: hasil.tenantAktifId,
+      tenantKode: data['tenant_code'] as String?,
+      tenantNama: data['tenant_name'] as String?,
+      arsip: hasil.arsip,
     );
   }
 

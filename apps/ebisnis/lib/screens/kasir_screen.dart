@@ -1264,7 +1264,7 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   Future<void> _logout() async {
-    await ApiClient.instance.hapusToken();
+    await ApiClient.instance.hapusToken(tutupBasisData: true);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const LoginScreen()));

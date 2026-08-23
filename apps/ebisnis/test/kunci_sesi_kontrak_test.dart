@@ -42,14 +42,35 @@ void main() {
     final source = File('lib/api_client.dart').readAsStringSync();
     expect(source, contains('resp.statusCode == 401'),
         reason: 'penolakan token oleh server harus membuang sesi perangkat');
-    // hapusToken membuang SATU PAKET: token, catatan aktif, dan bukti luring.
-    final mulai = source.indexOf('Future<void> hapusToken()');
+    // hapusToken membuang SATU PAKET: token, catatan aktif, bukti luring, dan
+    // tenant aktif.
+    //
+    // Dicocokkan pada 'hapusToken(' TANPA kurung tutup: mencocokkan tanda
+    // tangan lengkap membuat uji ini patah setiap kali ada parameter baru,
+    // padahal kontrak yang dijaga -- apa yang dibuang -- tidak berubah.
+    final mulai = source.indexOf('Future<void> hapusToken(');
     expect(mulai, greaterThan(-1));
-    final blok = source.substring(mulai, (mulai + 500).clamp(0, source.length));
+    final blok = source.substring(mulai, (mulai + 1600).clamp(0, source.length));
     expect(blok, contains("sp.remove('token')"));
     expect(blok, contains('hapusCatatanAktif'));
     expect(blok, contains('VerifikatorSandiLokal.instance.hapus'),
         reason: 'identitas yang dibuang tidak boleh menyisakan jalan luring');
+    expect(blok, contains("sp.remove('tenant_id')"),
+        reason: 'tenant aktif tidak boleh tersisa untuk pengguna berikutnya');
+    expect(blok, contains('bersihkanTenant'),
+        reason: 'jejak tenant di memori ikut dibuang, bukan hanya di prefs');
+
+    // Basis data ditutup HANYA pada keluar akun yang disengaja -- jalur 401
+    // memanggil hapusToken() lewat unawaited saat kueri lain bisa berjalan.
+    expect(blok, contains('if (tutupBasisData)'),
+        reason: 'penutupan basis data harus bersyarat, bukan selalu');
+    final jalur401 = source.indexOf('unawaited(hapusToken(');
+    expect(jalur401, greaterThan(-1));
+    expect(source.substring(jalur401, jalur401 + 40),
+        contains('unawaited(hapusToken())'),
+        reason: 'jalur 401 TIDAK boleh menutup basis data: kueri lain bisa '
+            'sedang berjalan, dan menutup di tengahnya menggagalkan operasi '
+            'yang sah');
   });
 
   test('bukti sandi lokal HANYA disimpan sesudah server menerima login', () {
