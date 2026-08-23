@@ -85,7 +85,7 @@ terbuka justru menjadi penjaganya.
 
 | | Pekerjaan |
 |---|---|
-| B-1 | Namespace memuat tenant: `<varian>_<slug-tenant>`, dipasang sesudah login. Tetap perlu — dua tenant pada satu mesin (mis. perangkat contoh atau uji) akan berbagi berkas DB tanpa ini. |
+| B-1 | Namespace memuat tenant. **Bukan slug perusahaan** — dokumen master §15.2 melarang nama perusahaan pada nama berkas, dan slug diturunkan dari nama itu. Pola yang diminta: `inventory_sales_<serverHash>_<tenantId>_<userHash>.db` untuk data tenant, dan `app_inventory_sales.db` untuk konfigurasi server/tema/daftar tenant terakhir. Cadangan JSONL mengikuti: `transaksi-pos-inventory_sales-<serverHash>-<tenantId>-backup.jsonl`. |
 | B-3 | Awalan `<ns>.` pada kunci prefs, **terutama `auth_luring_hash`/`auth_luring_garam`**. Tetap perlu: perangkat dapat dialihkan ke tenant lain, dan kredensial luring tenant lama tidak boleh ikut. |
 | B-4 | **Tidak perlu kolom pemilik pada outbox.** Karena satu perangkat hanya melayani satu tenant, antreannya tidak akan pernah bercampur. Cukup **penjagaan pengikatan**. Skema SQLite tetap di `version: 12` — tanpa migrasi. |
 
@@ -109,6 +109,21 @@ Satu-satunya jalur bahaya yang tersisa adalah **perangkat dialihkan ke tenant la
 beberapa perangkat menyiram ke tenant yang sama **sudah** aman dari penggandaan.
 Yang perlu diperiksa saat P6/P7 hanyalah bahwa `id_perangkat` benar-benar unik per
 pemasangan, bukan per model perangkat.
+
+### Yang gugur karena keputusan ini
+
+Dokumen master §14.3 meminta **tenant switcher UI** dan §15.3 meminta **daur hidup perpindahan
+11 langkah** (blokir UI → hentikan worker → tunggu operasi → flush → tutup DB → reset cache →
+buka DB baru → validasi penanda → muat cache → mulai worker → aktifkan UI), berikut
+`tenantEpoch` supaya callback tenant lama tidak mencemari tenant baru. §25.3 bahkan
+mencantumkan tenant switcher sebagai butir Definition of Done.
+
+**Semuanya gugur** bila satu perangkat hanya melayani satu tenant. Yang tersisa dari §15 hanya
+pemisahan berkas (§15.2) dan penanganan basis data lama tanpa penanda tenant (§15.4) — yang
+justru menjadi penting, sebab perangkat yang dialihkan akan menemui DB lama tanpa penanda.
+
+Butir DoD §25.3 "Tenant switcher tersedia" karena itu **sengaja dikesampingkan** atas keputusan
+pengguna, bukan terlewat.
 
 ## 5. Yang belum diputuskan
 
