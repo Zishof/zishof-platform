@@ -241,13 +241,9 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        decoration: const InputDecoration(
-                            hintText: 'Cari nama aturan...',
-                            prefixIcon: Icon(Icons.search),
-                            border: OutlineInputBorder(),
-                            isDense: true),
-                        onSubmitted: _cariUlang,
+                      AppSearchField(
+                        hintText: 'Cari nama aturan...',
+                        onChanged: _cariUlang,
                       ),
                       const SizedBox(height: 12),
                       BannerPerubahanServer(

@@ -363,12 +363,9 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(
               width: 280,
-              child: TextField(
-                decoration: const InputDecoration(
-                    labelText: 'Cari kode / keterangan / no. invoice',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari kode / keterangan / no. invoice',
+                onChanged: (v) {
                   setStateIfMounted(() {
                     _cari = v.trim();
                     _halaman = 1;
@@ -831,14 +828,10 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
         width: 760,
         height: 480,
         child: Column(children: [
-          TextField(
+          AppSearchField(
             controller: _cari,
-            decoration: InputDecoration(
-                labelText: 'Cari kode PR / keterangan',
-                isDense: true,
-                suffixIcon: IconButton(
-                    onPressed: _muat, icon: const Icon(Icons.search))),
-            onSubmitted: (_) => _muat(),
+            hintText: 'Cari kode PR / keterangan',
+            onChanged: (_) => _muat(),
           ),
           const SizedBox(height: 6),
           const Align(
@@ -1102,14 +1095,11 @@ class _FormPoDialogState extends State<_FormPoDialog> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode / nama penyedia',
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: 'Cari kode / nama penyedia',
-                    suffixIcon: IconButton(
-                        onPressed: cari, icon: const Icon(Icons.search))),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -1166,14 +1156,11 @@ class _FormPoDialogState extends State<_FormPoDialog> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode / nama barang',
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: 'Cari kode / nama barang',
-                    suffixIcon: IconButton(
-                        onPressed: cari, icon: const Icon(Icons.search))),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(

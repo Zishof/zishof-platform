@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../widgets/app_components.dart';
 import '../api_client.dart';
 
 /// Field pemilih **anggaran** (Workspace/RAB) untuk satu baris rincian biaya.
@@ -121,13 +122,10 @@ class PemilihAnggaranField extends StatelessWidget {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: kata,
-                      decoration: const InputDecoration(
-                          labelText: 'Cari kode / nama anggaran',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => jalankan(),
+                      hintText: 'Cari kode / nama anggaran',
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),

@@ -149,13 +149,9 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
           children: [
-            TextField(
-              decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Cari nama grup diskon...',
-                  border: OutlineInputBorder(),
-                  isDense: true),
-              onSubmitted: (v) {
+            AppSearchField(
+              hintText: 'Cari nama grup diskon...',
+              onChanged: (v) {
                 _keyword = v.trim();
                 _page = 1;
                 _load();

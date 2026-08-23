@@ -124,12 +124,10 @@ class _ProdukRekonsiliasiLedgerTabState
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
-              child: TextField(
+              child: AppSearchField(
                 controller: _cari,
-                decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Cari nama, kode, atau barcode'),
-                onSubmitted: (_) {
+                hintText: 'Cari nama, kode, atau barcode',
+                onChanged: (_) {
                   _page = 1;
                   _muat();
                 },

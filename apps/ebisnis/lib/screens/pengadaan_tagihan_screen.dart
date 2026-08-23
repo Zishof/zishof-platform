@@ -309,12 +309,9 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(
               width: 280,
-              child: TextField(
-                decoration: const InputDecoration(
-                    labelText: 'Cari kode BAST / keterangan / no. faktur',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari kode BAST / keterangan / no. faktur',
+                onChanged: (v) {
                   setStateIfMounted(() {
                     _cari = v.trim();
                     _halaman = 1;

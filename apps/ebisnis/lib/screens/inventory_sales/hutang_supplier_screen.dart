@@ -171,13 +171,9 @@ class _TabHutangState extends State<_TabHutang> with JejakGalat {
         children: [
           Row(children: [
             Expanded(
-              child: TextField(
-                decoration: const InputDecoration(
-                    hintText: 'Cari supplier / no. faktur...',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari supplier / no. faktur...',
+                onChanged: (v) {
                   _kataKunci = v.trim();
                   _halaman = 1;
                   _muat();
@@ -1034,13 +1030,10 @@ class _SheetPilihSupplierHutangState extends State<_SheetPilihSupplierHutang> {
           const Text('Pilih Supplier',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-          TextField(
+          AppSearchField(
+            hintText: 'Cari kode / nama supplier...',
             autofocus: true,
-            decoration: const InputDecoration(
-                hintText: 'Cari kode / nama supplier...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true),
+            debounce: Duration.zero,
             onChanged: _cari,
           ),
           const SizedBox(height: 8),
@@ -1335,13 +1328,9 @@ class _TabFakturState extends State<_TabFaktur> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          TextField(
-            decoration: const InputDecoration(
-                hintText: 'Cari no. faktur / supplier...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true),
-            onSubmitted: (v) {
+          AppSearchField(
+            hintText: 'Cari no. faktur / supplier...',
+            onChanged: (v) {
               _kataKunci = v.trim();
               _halaman = 1;
               _muat();

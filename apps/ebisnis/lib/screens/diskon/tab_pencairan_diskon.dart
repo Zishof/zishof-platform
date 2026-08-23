@@ -210,14 +210,9 @@ class _TabPencairanDiskonState extends State<TabPencairanDiskon> with JejakGalat
                       Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              decoration: const InputDecoration(
-                                hintText: 'Cari no. referensi / nama member...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              onSubmitted: _cariUlang,
+                            child: AppSearchField(
+                              hintText: 'Cari no. referensi / nama member...',
+                              onChanged: _cariUlang,
                             ),
                           ),
                           const SizedBox(width: 8),

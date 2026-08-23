@@ -338,13 +338,10 @@ class _AnggotaTabPembantuPiutangState extends State<AnggotaTabPembantuPiutang> w
           Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(
               width: 280,
-              child: TextField(
+              child: AppSearchField(
                 controller: _cari,
-                decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Cari ID / nama pelanggan...',
-                    isDense: true),
-                onSubmitted: (_) => _muat(halaman: 1),
+                hintText: 'Cari ID / nama pelanggan...',
+                onChanged: (_) => _muat(halaman: 1),
               ),
             ),
             OutlinedButton.icon(

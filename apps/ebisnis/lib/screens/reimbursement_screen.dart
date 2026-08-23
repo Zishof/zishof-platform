@@ -265,13 +265,10 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cari,
-                      decoration: const InputDecoration(
-                          labelText: 'Cari nama pegawai',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => jalankan(),
+                      hintText: 'Cari nama pegawai',
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -901,13 +898,10 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
             children: [
               SizedBox(
                 width: 240,
-                child: TextField(
+                child: AppSearchField(
                   controller: _cari,
-                  decoration: const InputDecoration(
-                      labelText: 'Cari kode / judul',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true),
-                  onSubmitted: (_) => _muatDaftar(),
+                  hintText: 'Cari kode / judul',
+                  onChanged: (_) => _muatDaftar(),
                 ),
               ),
               SizedBox(

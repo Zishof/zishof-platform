@@ -906,12 +906,11 @@ class _DialogCariCustomerState extends State<_DialogCariCustomer> {
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama/wilayah...',
-                  prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama/wilayah...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(
@@ -974,12 +973,11 @@ class _DialogCariSalesState extends State<_DialogCariSales> {
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama/area...',
-                  prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama/area...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(
@@ -1042,12 +1040,11 @@ class _DialogCariProdukState extends State<_DialogCariProduk> {
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama produk...',
-                  prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama produk...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(

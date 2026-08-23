@@ -284,13 +284,9 @@ class _PersediaanScreenState extends State<PersediaanScreen> with JejakGalat {
                         children: [
                           SizedBox(
                             width: 260,
-                            child: TextField(
-                              decoration: const InputDecoration(
-                                  hintText: 'Cari kode / nama / barcode...',
-                                  prefixIcon: Icon(Icons.search),
-                                  border: OutlineInputBorder(),
-                                  isDense: true),
-                              onSubmitted: (v) {
+                            child: AppSearchField(
+                              hintText: 'Cari kode / nama / barcode...',
+                              onChanged: (v) {
                                 _kataKunci = v.trim();
                                 _halaman = 1;
                                 _muat();

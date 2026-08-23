@@ -345,14 +345,11 @@ class _SheetCariItemState extends State<_SheetCariItem> {
       builder: (context, sc) => Column(children: [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: TextField(
+          child: AppSearchField(
             controller: _cari,
+            hintText: 'Cari obat: kode / barcode / nama...',
             autofocus: true,
-            decoration: const InputDecoration(
-                hintText: 'Cari obat: kode / barcode / nama...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true),
+            debounce: Duration.zero,
             onChanged: _berubah,
           ),
         ),
@@ -528,14 +525,10 @@ class _TabFormulariumState extends State<_TabFormularium> {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(children: [
-        TextField(
+        AppSearchField(
           controller: _cari,
-          decoration: const InputDecoration(
-              hintText: 'Cari obat...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-              isDense: true),
-          onSubmitted: (_) => _muat(),
+          hintText: 'Cari obat...',
+          onChanged: (_) => _muat(),
         ),
         const SizedBox(height: 8),
         BannerPerubahanServer(

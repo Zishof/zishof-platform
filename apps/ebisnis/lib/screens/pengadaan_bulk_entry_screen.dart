@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../widgets/app_components.dart';
 import '../api_client.dart';
 import '../services/simple_xlsx.dart';
 import '../widgets/proses_simpan_master.dart';
@@ -349,14 +350,11 @@ class _PengadaanBulkEntryScreenState extends State<PengadaanBulkEntryScreen> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode / nama penyedia',
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: 'Cari kode / nama penyedia',
-                    suffixIcon: IconButton(
-                        onPressed: cari, icon: const Icon(Icons.search))),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(

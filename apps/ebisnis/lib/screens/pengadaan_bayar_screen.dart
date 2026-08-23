@@ -406,12 +406,9 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(
               width: 280,
-              child: TextField(
-                decoration: const InputDecoration(
-                    labelText: 'Cari kode / keterangan',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari kode / keterangan',
+                onChanged: (v) {
                   setStateIfMounted(() {
                     _cari = v.trim();
                     _halaman = 1;
@@ -639,14 +636,11 @@ class _PilihVendorDialogState extends State<_PilihVendorDialog> {
         width: 520,
         height: 420,
         child: Column(children: [
-          TextField(
+          AppSearchField(
             controller: _cari,
+            hintText: 'Cari kode / nama penyedia',
             autofocus: true,
-            decoration: InputDecoration(
-                labelText: 'Cari kode / nama penyedia',
-                suffixIcon: IconButton(
-                    onPressed: _muat, icon: const Icon(Icons.search))),
-            onSubmitted: (_) => _muat(),
+            onChanged: (_) => _muat(),
           ),
           const SizedBox(height: 8),
           Expanded(

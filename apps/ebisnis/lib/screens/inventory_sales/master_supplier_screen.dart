@@ -264,13 +264,9 @@ class _MasterSupplierScreenState extends State<MasterSupplierScreen> with JejakG
                     children: [
                       Row(children: [
                         Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                                hintText: 'Cari kode, nama, alamat, wilayah...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                                isDense: true),
-                            onSubmitted: (v) {
+                          child: AppSearchField(
+                            hintText: 'Cari kode, nama, alamat, wilayah...',
+                            onChanged: (v) {
                               _kataKunci = v.trim();
                               _halaman = 1;
                               _muat();

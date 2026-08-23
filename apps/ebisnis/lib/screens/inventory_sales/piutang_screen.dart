@@ -1427,12 +1427,11 @@ class _DialogCariCustomerPiutangState
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama/wilayah...',
-                  prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama/wilayah...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(

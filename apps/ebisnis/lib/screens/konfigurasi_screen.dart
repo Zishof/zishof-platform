@@ -1681,13 +1681,9 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
                 if (_daftarHakAkses.length > 8)
                   Padding(
                     padding: const EdgeInsets.only(top: 4, bottom: 4),
-                    child: TextField(
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        hintText: 'Cari hak akses...',
-                        border: OutlineInputBorder(),
-                      ),
+                    child: AppSearchField(
+                      hintText: 'Cari hak akses...',
+                      debounce: Duration.zero,
                       onChanged: (v) => setStateIfMounted(
                           () => _cariHakAkses = v.trim().toLowerCase()),
                     ),

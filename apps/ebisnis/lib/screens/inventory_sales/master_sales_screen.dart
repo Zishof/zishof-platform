@@ -228,13 +228,9 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> with JejakGalat {
                     children: [
                       Row(children: [
                         Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                                hintText: 'Cari kode, nama, area...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                                isDense: true),
-                            onSubmitted: (v) {
+                          child: AppSearchField(
+                            hintText: 'Cari kode, nama, area...',
+                            onChanged: (v) {
                               _kataKunci = v.trim();
                               _halaman = 1;
                               _muat();

@@ -152,19 +152,19 @@ class _RingkasanTabSesiKasState extends State<RingkasanTabSesiKas> with JejakGal
             children: [
               SizedBox(
                   width: 300,
-                  child: TextField(
-                      controller: _cari,
-                      decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          labelText: 'Cari kasir / perangkat'),
-                      onChanged: (_) {
+                  child: AppSearchField(
+                    controller: _cari,
+                    hintText: 'Cari kasir / perangkat',
+                    debounce: Duration.zero,
+                    onChanged: (_) {
                         _debounce?.cancel();
                         _debounce =
                             Timer(const Duration(milliseconds: 400), () {
                           _halaman = 1;
                           _muat();
                         });
-                      })),
+                      },
+                  )),
               OutlinedButton.icon(
                   onPressed: () => _pilihTanggal(true),
                   icon: const Icon(Icons.date_range),

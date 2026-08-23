@@ -412,13 +412,10 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
                                   _halaman = 1;
                                 }),
                               );
-                              final pencarian = TextField(
+                              final pencarian = AppSearchField(
                                 controller: _controllerCari,
-                                decoration: const InputDecoration(
-                                    hintText: 'Cari laporan...',
-                                    prefixIcon: Icon(Icons.search),
-                                    border: OutlineInputBorder(),
-                                    isDense: true),
+                                hintText: 'Cari laporan...',
+                                debounce: Duration.zero,
                                 onChanged: (_) =>
                                     setStateIfMounted(() => _halaman = 1),
                               );
@@ -641,13 +638,11 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
               const Text(
                   'Bagan akun ditampilkan langsung tanpa berpindah halaman.'),
               const SizedBox(height: 12),
-              TextField(
+              AppSearchField(
                 controller: _cari,
+                hintText: 'Cari kode atau nama akun...',
+                debounce: Duration.zero,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Cari kode atau nama akun...',
-                    border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               Expanded(

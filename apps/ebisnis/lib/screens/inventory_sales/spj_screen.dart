@@ -922,11 +922,11 @@ class _DialogCariSalesSpjState extends State<_DialogCariSalesSpj> {
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama...', prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(
@@ -984,12 +984,11 @@ class _DialogCariProdukSpjState extends State<_DialogCariProdukSpj> {
         width: 420,
         height: 420,
         child: Column(children: [
-          TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari kode/nama produk...',
-                  prefixIcon: Icon(Icons.search)),
-              onSubmitted: _cari),
+          AppSearchField(
+            hintText: 'Cari kode/nama produk...',
+            autofocus: true,
+            onChanged: _cari,
+          ),
           const SizedBox(height: 8),
           if (_memuat) const LinearProgressIndicator(),
           Expanded(

@@ -457,13 +457,10 @@ class _ClosingScreenState extends State<ClosingScreen> {
                     ),
                   Row(children: [
                     Expanded(
-                      child: TextField(
+                      child: AppSearchField(
                         controller: _cari,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari nama / keterangan periode',
-                            prefixIcon: Icon(Icons.search),
-                            isDense: true),
-                        onSubmitted: (_) => _muatDaftar(),
+                        hintText: 'Cari nama / keterangan periode',
+                        onChanged: (_) => _muatDaftar(),
                       ),
                     ),
                     const SizedBox(width: 8),

@@ -1101,14 +1101,10 @@ class _AnggaranScreenState extends State<AnggaranScreen>
             ),
             SizedBox(
               width: 220,
-              child: TextField(
+              child: AppSearchField(
                 controller: _cari,
-                decoration: const InputDecoration(
-                    labelText: 'Cari kode / nama',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                    isDense: true),
-                onSubmitted: (_) => _muatTabAktif(),
+                hintText: 'Cari kode / nama',
+                onChanged: (_) => _muatTabAktif(),
               ),
             ),
             FilledButton.icon(

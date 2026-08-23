@@ -430,12 +430,9 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(
               width: 280,
-              child: TextField(
-                decoration: const InputDecoration(
-                    labelText: 'Cari kode / keterangan / no. tagihan',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari kode / keterangan / no. tagihan',
+                onChanged: (v) {
                   setStateIfMounted(() {
                     _cari = v.trim();
                     _halaman = 1;
@@ -704,13 +701,10 @@ class _PilihPoDialogState extends State<_PilihPoDialog> {
         width: 560,
         height: 440,
         child: Column(children: [
-          TextField(
+          AppSearchField(
             controller: _cari,
-            decoration: InputDecoration(
-                labelText: 'Cari kode / keterangan PO',
-                suffixIcon: IconButton(
-                    onPressed: _muat, icon: const Icon(Icons.search))),
-            onSubmitted: (_) => _muat(),
+            hintText: 'Cari kode / keterangan PO',
+            onChanged: (_) => _muat(),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -947,14 +941,11 @@ class _FormBastDialogState extends State<_FormBastDialog> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode / nama penyedia',
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: 'Cari kode / nama penyedia',
-                    suffixIcon: IconButton(
-                        onPressed: cari, icon: const Icon(Icons.search))),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -1011,14 +1002,11 @@ class _FormBastDialogState extends State<_FormBastDialog> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode / nama barang',
                 autofocus: true,
-                decoration: InputDecoration(
-                    labelText: 'Cari kode / nama barang',
-                    suffixIcon: IconButton(
-                        onPressed: cari, icon: const Icon(Icons.search))),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(

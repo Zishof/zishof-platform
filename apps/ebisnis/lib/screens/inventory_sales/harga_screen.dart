@@ -263,13 +263,9 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
         children: [
           Row(children: [
             Expanded(
-              child: TextField(
-                decoration: const InputDecoration(
-                    hintText: 'Cari kode / nama barang...',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                    isDense: true),
-                onSubmitted: (v) {
+              child: AppSearchField(
+                hintText: 'Cari kode / nama barang...',
+                onChanged: (v) {
                   _kataKunci = v.trim();
                   _halaman = 1;
                   _muat();

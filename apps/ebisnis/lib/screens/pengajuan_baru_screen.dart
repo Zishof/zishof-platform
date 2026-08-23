@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/app_components.dart';
 import '../api_client.dart';
 import '../services/unggah_lampiran_sop.dart';
 import '../theme/app_colors.dart';
@@ -134,13 +135,9 @@ class _PengajuanBaruScreenState extends State<PengajuanBaruScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-                child: TextField(
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    hintText: 'Cari jenis SOP',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+                child: AppSearchField(
+                  hintText: 'Cari jenis SOP',
+                  debounce: Duration.zero,
                   onChanged: (v) => setState(() => _cari = v),
                 ),
               ),

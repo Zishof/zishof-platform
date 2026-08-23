@@ -295,13 +295,10 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       child: Column(children: [
         Row(children: [
           Expanded(
-            child: TextField(
+            child: AppSearchField(
               controller: _cari,
-              decoration: const InputDecoration(
-                  hintText: 'Cari obat: kode / barcode / nama...',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                  isDense: true),
+              hintText: 'Cari obat: kode / barcode / nama...',
+              debounce: Duration.zero,
               onChanged: _cariBerubah,
             ),
           ),
@@ -702,14 +699,10 @@ class _SheetPilihResepState extends State<_SheetPilihResep> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
+          child: AppSearchField(
             controller: _cari,
-            decoration: const InputDecoration(
-                hintText: 'Cari kode resep...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true),
-            onSubmitted: (_) => _muat(),
+            hintText: 'Cari kode resep...',
+            onChanged: (_) => _muat(),
           ),
         ),
         const SizedBox(height: 8),

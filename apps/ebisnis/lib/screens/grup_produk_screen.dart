@@ -539,15 +539,11 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
             width: 520,
             height: 420,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                 controller: q,
+                hintText: 'Cari kode/barcode/nama (semua toko)',
                 autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Cari kode/barcode/nama (semua toko)',
-                  suffixIcon: IconButton(
-                      onPressed: cari, icon: const Icon(Icons.search)),
-                ),
-                onSubmitted: (_) => cari(),
+                onChanged: (_) => cari(),
               ),
               const SizedBox(height: 8),
               Expanded(

@@ -423,13 +423,9 @@ class _LogErrorScreenState extends State<LogErrorScreen> with JejakGalat {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    decoration: const InputDecoration(
-                        hintText: 'Cari pesan...',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                        isDense: true),
-                    onSubmitted: (v) {
+                  AppSearchField(
+                    hintText: 'Cari pesan...',
+                    onChanged: (v) {
                       _kataKunci = v;
                       _terapkanFilter();
                     },

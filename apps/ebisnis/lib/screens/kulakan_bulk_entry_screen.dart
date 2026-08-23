@@ -1816,14 +1816,10 @@ class _BulkSupplierSheetState extends State<_BulkSupplierSheet> {
               ),
             ]),
             const SizedBox(height: 10),
-            TextField(
+            AppSearchField(
               controller: _cari,
-              decoration: const InputDecoration(
-                labelText: 'Cari supplier',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: _muat,
+              hintText: 'Cari supplier',
+              onChanged: _muat,
             ),
             if (_tambahBaru) ...[
               const SizedBox(height: 10),

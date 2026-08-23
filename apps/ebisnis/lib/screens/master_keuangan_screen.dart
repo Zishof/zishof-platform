@@ -484,14 +484,10 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: Row(children: [
                       Expanded(
-                        child: TextField(
+                        child: AppSearchField(
                           controller: _cari,
-                          decoration: const InputDecoration(
-                              hintText: 'Cari nama atau keterangan…',
-                              prefixIcon: Icon(Icons.search),
-                              border: OutlineInputBorder(),
-                              isDense: true),
-                          onSubmitted: (_) => _muatDaftar(),
+                          hintText: 'Cari nama atau keterangan…',
+                          onChanged: (_) => _muatDaftar(),
                         ),
                       ),
                       const SizedBox(width: 8),

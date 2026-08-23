@@ -975,11 +975,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               width: 420,
               height: 380,
               child: Column(children: [
-                TextField(
+                AppSearchField(
+                  hintText: 'Cari nama tamu / nomor kamar',
                   autofocus: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Cari nama tamu / nomor kamar',
-                      isDense: true),
+                  debounce: Duration.zero,
                   onChanged: (v) =>
                       setD(() => filter = v.trim().toLowerCase()),
                 ),
@@ -3049,12 +3048,11 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
         height: 420,
         child: Column(
           children: [
-            TextField(
+            AppSearchField(
               controller: _controller,
+              hintText: 'Cari nama/kode/telepon/email...',
               autofocus: true,
-              decoration: const InputDecoration(
-                  hintText: 'Cari nama/kode/telepon/email...',
-                  prefixIcon: Icon(Icons.search)),
+              debounce: Duration.zero,
               onChanged: _onBerubah,
             ),
             if (_modeOffline)

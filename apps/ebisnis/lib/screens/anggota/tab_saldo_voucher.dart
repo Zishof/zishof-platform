@@ -305,11 +305,9 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
                   '${_fmtTglTampil.format(_dari)} - ${_fmtTglTampil.format(_sampai)}')),
           SizedBox(
             width: 240,
-            child: TextField(
-              decoration: const InputDecoration(
-                  labelText: 'Cari anggota',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true),
+            child: AppSearchField(
+              hintText: 'Cari anggota',
+              debounce: Duration.zero,
               onChanged: (v) => setStateIfMounted(() => _cari = v),
             ),
           ),
@@ -622,12 +620,10 @@ class _DialogPenyesuaianSaldoState extends State<_DialogPenyesuaianSaldo> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TextField(
+                      AppSearchField(
                         controller: _cariAnggota,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari anggota',
-                            prefixIcon: Icon(Icons.search),
-                            isDense: true),
+                        hintText: 'Cari anggota',
+                        debounce: Duration.zero,
                         onChanged: (_) => setStateIfMounted(() {}),
                       ),
                       const SizedBox(height: 8),
