@@ -125,7 +125,59 @@ justru menjadi penting, sebab perangkat yang dialihkan akan menemui DB lama tanp
 Butir DoD §25.3 "Tenant switcher tersedia" karena itu **sengaja dikesampingkan** atas keputusan
 pengguna, bukan terlewat.
 
-## 5. Yang belum diputuskan
+## 5. Yang sudah dibangun (P6/P7 tahap pertama)
+
+| | |
+|---|---|
+| Skema SQLite | naik ke **v13** — tabel `pengikatan_tenant` |
+| Deteksi | `CoreDb.periksaPengikatan` → `belumTerikat` / `cocok` / `beda` |
+| Penjagaan | `CoreDb.hitungAntreanTertunda` atas tiga sumber antrean |
+| Pelepasan | `CoreDb.lepaskanDanArsipkan` — berkas **diarsipkan, bukan dihapus** |
+| Keputusan | `PengikatanTenant.periksa` di `apps/ebisnis/lib/services/` |
+| Uji | `packages/core_db/test/pengikatan_tenant_test.dart` |
+
+### Antrean lebih dulu, selalu
+
+Bila perangkat dialihkan ke tenant lain dan **masih ada pekerjaan yang belum terkirim**,
+pengalihan **ditolak** — bukan dilanjutkan dengan membuang antreannya. Pekerjaan kasir yang
+belum sampai ke server adalah uang yang belum tercatat; pemiliknya harus mengirimkannya lebih
+dulu dari akun lama.
+
+Baru ketika antreannya kosong: kredensial luring dibuang, basis data lama diarsipkan dengan
+cap waktu, lalu perangkat diikat ke tenant baru.
+
+**Urutannya disengaja.** Kredensial luring dibuang **lebih dulu**. Bila pengarsipan gagal di
+tengah jalan, yang tertinggal adalah perangkat tanpa jalan masuk luring — bukan perangkat
+yang masih menerima kata sandi tenant lama.
+
+### Basis data lama tidak diadopsi diam-diam
+
+Basis data yang naik dari versi sebelum v13 tidak punya penanda tenant. Tabelnya sengaja
+dibiarkan **kosong**, bukan diisi tebakan bahwa isinya milik tenant yang pertama kali login.
+Bila basis data tanpa penanda itu masih menyimpan antrean, pengikatan ditahan — persis
+seperti kasus tenant berbeda. §15.4 melarang menebak.
+
+### Kredensial luring: dibuang, bukan diberi awalan
+
+MD §15.2 mengarah ke pemberian namespace pada kunci `SharedPreferences`. Untuk
+`auth_luring_hash`/`auth_luring_garam` yang dipilih adalah **menghapusnya** lewat
+`VerifikatorSandiLokal.hapus()` yang memang sudah ada. Awalan hanya menyembunyikan hash lama
+di disk; menghapusnya tidak menyisakan rahasia sama sekali. Karena satu perangkat hanya
+melayani satu tenant, tidak ada yang hilang.
+
+## 6. Yang belum
+
+- **Belum dipanggil dari layar login.** `PengikatanTenant.periksa` siap, tetapi klien belum
+  memanggil `tenant_context` sehingga tenant aktif belum diketahui saat login. Itu pekerjaan
+  berikutnya di sisi klien.
+- **`token` dan `server_host` masih global** pada `SharedPreferences`. Keduanya kurang
+  berbahaya daripada hash luring — token kedaluwarsa sendiri dan server dipilih sadar oleh
+  pengguna — tetapi tetap perlu dibereskan.
+- **Nama berkas belum memuat tenant.** Di bawah satu-perangkat-satu-tenant, penanda di dalam
+  basis data sudah menutup risikonya; pemisahan berkas per §15.2 baru diperlukan bila kelak
+  satu perangkat harus memuat dua tenant sekaligus.
+
+## 7. Yang belum diputuskan
 
 - Nasib data lokal tenant lama saat perangkat dialihkan: dihapus (usulan di atas)
   atau diarsipkan dulu.

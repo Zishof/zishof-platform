@@ -56,6 +56,7 @@ class CoreDb {
   final ValueNotifier<int> sesiKasVersi = ValueNotifier<int>(0);
 
   Database? _db;
+  String? _pathDb;
   Future<Database>? _openingDb;
   Future<void> _errorLogTail = Future.value();
   String? _lastErrorLogKey;
@@ -89,10 +90,12 @@ class CoreDb {
       factory = databaseFactoryFfi;
       final dir = await getApplicationSupportDirectory();
       path = p.join(dir.path, 'ebisnis_${_storageNamespace}.db');
+      _pathDb = path;
     } else {
       factory = databaseFactory;
       path =
           p.join(await getDatabasesPath(), 'ebisnis_${_storageNamespace}.db');
+      _pathDb = path;
     }
     try {
       return await _bukaDanVerifikasi(factory, path);
@@ -116,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 12,
+        version: 13,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -419,6 +422,17 @@ class CoreDb {
         // Kolom kemungkinan sudah ada (upgrade parsial) -- aman dilewati.
       }
     }
+    if (versiLama < 13) {
+      // Pengikatan tenant (P6/P7). Basis data lama TIDAK ditandai tenant apa pun
+      // -- tabelnya sengaja dibiarkan KOSONG, bukan diisi tebakan. Menebak bahwa
+      // data lama milik tenant yang pertama kali login akan mengadopsi diam-diam
+      // data yang mungkin bukan miliknya; dokumen master 15.4 melarangnya.
+      try {
+        await db.execute(_ddlPengikatanTenant);
+      } catch (_) {
+        // Tabel kemungkinan sudah ada (upgrade parsial) -- aman dilewati.
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -474,6 +488,24 @@ class CoreDb {
         akun_kunci TEXT PRIMARY KEY,
         toko_id INTEGER NOT NULL,
         diperbarui_pada TEXT NOT NULL
+      )
+    ''';
+
+  /// Penanda tenant yang MEMILIKI data lokal pada perangkat ini.
+  ///
+  /// Satu perangkat melayani satu tenant (keputusan 2026-08-23), jadi tabel ini
+  /// selalu berisi paling banyak satu baris -- dipaksa lewat `CHECK (id = 1)`.
+  /// Gunanya bukan memilih tenant, melainkan MENOLAK percampuran: perangkat yang
+  /// dialihkan ke tenant lain akan ketahuan di sini sebelum satu baris pun
+  /// tertulis atau terkirim atas nama tenant yang keliru.
+  static const _ddlPengikatanTenant = '''
+      CREATE TABLE pengikatan_tenant (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        tenant_id INTEGER NOT NULL,
+        tenant_kode TEXT,
+        server_sidik TEXT,
+        akun_sidik TEXT,
+        terikat_pada TEXT NOT NULL
       )
     ''';
 
@@ -577,6 +609,7 @@ class CoreDb {
     await db.execute(_ddlTokoAktifAkun);
     await db.execute(_ddlOutboxMaster);
     await db.execute(_ddlIdSementara);
+    await db.execute(_ddlPengikatanTenant);
   }
 
   /// Pilihan toko terakhir per kombinasi server+akun. Penyimpanan ini sengaja
@@ -609,6 +642,108 @@ class CoreDb {
     final database = await db;
     await database.delete('toko_aktif_akun',
         where: 'akun_kunci = ?', whereArgs: [akunKunci]);
+  }
+
+  // ============================== PENGIKATAN TENANT (P6/P7) ==============================
+  // Satu perangkat melayani SATU tenant. Tidak ada perpindahan tenant saat
+  // aplikasi berjalan -- yang dijaga di sini adalah perangkat yang DIALIHKAN:
+  // pegawai pindah cabang, perangkat dipakai ulang, atau salah login. Tanpa
+  // penjagaan, antrean milik tenant lama akan terkirim memakai token tenant
+  // baru, dan cache lama tampil sebagai data tenant baru.
+
+  /// Keadaan pengikatan perangkat terhadap tenant yang sedang login.
+  Future<StatusPengikatan> periksaPengikatan(int tenantId) async {
+    final sekarang = await pengikatanSekarang();
+    if (sekarang == null) return StatusPengikatan.belumTerikat;
+    final terikat = sekarang['tenant_id'];
+    if (terikat is int && terikat == tenantId) return StatusPengikatan.cocok;
+    return StatusPengikatan.beda;
+  }
+
+  /// Baris pengikatan, atau null bila perangkat belum pernah diikat.
+  Future<Map<String, Object?>?> pengikatanSekarang() async {
+    final database = await db;
+    final rows = await database.query('pengikatan_tenant', limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Ikat perangkat ini pada satu tenant. Menimpa pengikatan lama bila ada —
+  /// pemanggil WAJIB memastikan antreannya kosong lebih dulu lewat
+  /// [hitungAntreanTertunda], sebab data lama tidak dibersihkan oleh metode ini.
+  Future<void> ikatTenant({
+    required int tenantId,
+    String? tenantKode,
+    String? serverSidik,
+    String? akunSidik,
+  }) async {
+    final database = await db;
+    await database.insert(
+      'pengikatan_tenant',
+      {
+        'id': 1,
+        'tenant_id': tenantId,
+        'tenant_kode': tenantKode,
+        'server_sidik': serverSidik,
+        'akun_sidik': akunSidik,
+        'terikat_pada': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Jumlah pekerjaan yang BELUM sampai ke server: antrean master, antrean
+  /// Inventory & Sales, dan transaksi kasir.
+  ///
+  /// Dipakai sebagai syarat sebelum perangkat dialihkan ke tenant lain.
+  /// Melepaskan pengikatan saat antrean masih berisi berarti membuang pekerjaan
+  /// yang belum terkirim — atau lebih buruk, mengirimkannya atas nama tenant
+  /// yang salah.
+  Future<int> hitungAntreanTertunda() async {
+    final database = await db;
+    var jumlah = 0;
+    for (final tabel in const ['outbox_master', 'outbox_is', 'transaksi_pending']) {
+      try {
+        final r = await database.rawQuery(
+            'SELECT COUNT(*) AS n FROM $tabel WHERE status = ?', ['PENDING']);
+        final n = r.isEmpty ? null : r.first['n'];
+        if (n is int) jumlah += n;
+      } catch (_) {
+        // Tabel belum ada pada basis data yang sangat lama -- hitung nol.
+      }
+    }
+    return jumlah;
+  }
+
+  /// Tutup basis data tenant lama, arsipkan berkasnya dengan cap waktu, lalu
+  /// biarkan pembukaan berikutnya membuatnya dari nol.
+  ///
+  /// Berkasnya **diarsipkan, bukan dihapus** (dokumen master §15.4): kalau
+  /// ternyata ada yang salah, datanya masih dapat diperiksa. Mengembalikan
+  /// jalur arsipnya, atau null bila tidak ada yang perlu diarsipkan.
+  Future<String?> lepaskanDanArsipkan() async {
+    final path = _pathDb;
+    final terbuka = _db;
+    if (terbuka != null && terbuka.isOpen) {
+      await terbuka.close();
+    }
+    _db = null;
+    _openingDb = null;
+    if (path == null) return null;
+    final cap = DateTime.now().millisecondsSinceEpoch;
+    String? arsip;
+    for (final akhiran in const ['', '-wal', '-shm', '-journal']) {
+      final file = File('$path$akhiran');
+      if (!file.existsSync()) continue;
+      final tujuan = '$path$akhiran.tenant-$cap';
+      try {
+        file.renameSync(tujuan);
+        if (akhiran.isEmpty) arsip = tujuan;
+      } catch (_) {
+        // Rename gagal (berkas terkunci) -- jangan hapus. Lebih baik gagal
+        // terang-terangan daripada menghilangkan data tenant lama diam-diam.
+      }
+    }
+    return arsip;
   }
 
   // ============================== OUTBOX INVENTORY & SALES (P7) ==============================
@@ -1572,4 +1707,18 @@ class CoreDb {
     );
     if (jumlah > 0) sesiKasVersi.value++;
   }
+}
+
+/// Hasil pemeriksaan pengikatan perangkat terhadap tenant.
+enum StatusPengikatan {
+  /// Perangkat belum pernah diikat -- pemasangan baru, atau basis data lama
+  /// yang naik dari versi sebelum v13.
+  belumTerikat,
+
+  /// Perangkat sudah terikat pada tenant yang sama. Jalan terus.
+  cocok,
+
+  /// Perangkat terikat pada tenant LAIN. Data lokalnya bukan milik tenant yang
+  /// sedang login, dan antreannya tidak boleh terkirim atas namanya.
+  beda,
 }
