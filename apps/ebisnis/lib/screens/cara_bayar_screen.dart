@@ -239,6 +239,8 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                               flex: 1, align: TextAlign.center),
                           const AppTableColumn('Hutang',
                               flex: 1, align: TextAlign.center),
+                          const AppTableColumn('Wajib Member',
+                              flex: 1, align: TextAlign.center),
                           const AppTableColumn('Kembalian',
                               flex: 1, align: TextAlign.center),
                           const AppTableColumn('Status',
@@ -251,6 +253,12 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                           final memotong = c['memotongDeposit'] == true;
                           final hutang = c['masukSebagaiHutang'] == true;
                           final kembalian = c['adaKembalian'] == true;
+                          // Nilai EFEKTIF dari server: aturan yang benar-benar
+                          // berlaku, bukan hanya yang disetel admin. Tanda bintang
+                          // menandai yang masih ikut bawaan, supaya admin dapat
+                          // membedakan "belum pernah disetel" dari "sengaja mati".
+                          final wajibMember = c['wajibPilihMemberEfektif'] == true;
+                          final wajibDisetel = c['wajibPilihMember'] != null;
                           return AppTableRowData(
                             onTap: Sesi.instance.bolehKelola
                                 ? () => _bukaForm(cara: c)
@@ -292,6 +300,17 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                                   label: hutang ? 'Ya' : 'Tidak',
                                   warna: hutang
                                       ? AppColors.danger
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                              AppTableCell(
+                                flex: 1,
+                                align: TextAlign.center,
+                                child: StatusPill(
+                                  label: (wajibMember ? 'Ya' : 'Tidak') +
+                                      (wajibDisetel ? '' : ' *'),
+                                  warna: wajibMember
+                                      ? AppColors.warning
                                       : AppColors.textSecondary,
                                 ),
                               ),
@@ -386,6 +405,10 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
   bool _online = false;
   bool _memotongDeposit = false;
   bool _masukSebagaiHutang = false;
+  /// null = ikut aturan bawaan (hutang / potong saldo). Sengaja TIDAK disamakan
+  /// dengan false: metode yang belum pernah disentuh admin harus tetap mengikuti
+  /// sifatnya sendiri, bukan terkunci pada jawaban yang kebetulan berlaku hari ini.
+  bool? _wajibPilihMember;
 
   /// Akun Kas/Bank metode ini -- menempel di master Cara Pembayaran, dipakai jurnal
   /// penjualan tunai, pembayaran hutang, dan penerimaan piutang.
@@ -412,6 +435,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
     _online = c?['online'] == true;
     _memotongDeposit = c?['memotongDeposit'] == true;
     _masukSebagaiHutang = c?['masukSebagaiHutang'] == true;
+    _wajibPilihMember =
+        c == null || c['wajibPilihMember'] == null ? null : c['wajibPilihMember'] == true;
     _akunId = (c?['akunId'] as num?)?.toInt();
     _muatAkun();
     if (c == null) {
@@ -458,6 +483,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'online': _online,
         'memotongDeposit': _memotongDeposit,
         'masukSebagaiHutang': _masukSebagaiHutang,
+        'wajibPilihMember': _wajibPilihMember,
         'akunId': _akunId ?? 0,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
@@ -576,6 +602,47 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                     value: _masukSebagaiHutang,
                     onChanged: (v) =>
                         setStateIfMounted(() => _masukSebagaiHutang = v),
+                  ),
+                ],
+              ),
+              AppFormSection(
+                judul: 'Pelanggan',
+                deskripsi:
+                    'Metode yang meninggalkan tagihan (kasbon, bon, piutang) sebaiknya '
+                    'menuntut nama pelanggan. Tanpa nama, tagihannya masuk laporan '
+                    'sebagai "Umum / Non-Anggota" dan tidak dapat ditagih siapa pun.',
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text('Ikut bawaan ('
+                            '${(_masukSebagaiHutang || _memotongDeposit) ? 'wajib' : 'tidak wajib'})'),
+                        selected: _wajibPilihMember == null,
+                        onSelected: (_) =>
+                            setStateIfMounted(() => _wajibPilihMember = null),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Wajib pilih member'),
+                        selected: _wajibPilihMember == true,
+                        onSelected: (_) =>
+                            setStateIfMounted(() => _wajibPilihMember = true),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Tidak wajib'),
+                        selected: _wajibPilihMember == false,
+                        onSelected: (_) =>
+                            setStateIfMounted(() => _wajibPilihMember = false),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    (_wajibPilihMember ?? (_masukSebagaiHutang || _memotongDeposit))
+                        ? 'Berlaku sekarang: kasir WAJIB memilih pelanggan.'
+                        : 'Berlaku sekarang: kasir boleh menyelesaikan tanpa pelanggan.',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),

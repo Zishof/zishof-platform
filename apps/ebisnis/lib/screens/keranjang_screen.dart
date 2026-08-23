@@ -1283,13 +1283,29 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
+  /// Nama metode yang MEMICU keharusan memilih pelanggan. Pada split bayar
+  /// pemicunya belum tentu slot 1, dan menyebut metode yang salah di dialog
+  /// membuat kasir mencari-cari kesalahan di tempat yang keliru.
+  String _namaMetodeWajibMember() {
+    if (_caraBayarTerpilih?.wajibPilihMember == true) {
+      return _caraBayarTerpilih!.nama;
+    }
+    for (final s in _splitBayar) {
+      if (s.caraBayar.wajibPilihMember && s.nominal > 0) return s.caraBayar.nama;
+    }
+    return _caraBayarTerpilih?.nama ?? '';
+  }
+
   /// True bila metode bayar terpilih (slot 1 atau slot split mana pun) berjenis
   /// piutang SEDANGKAN pelanggan belum dipilih.
   bool get _perluPelangganUntukPiutang {
     if (_memberTerpilih != null) return false;
-    if (_caraBayarTerpilih?.masukSebagaiHutang == true) return true;
+    // Memakai wajibPilihMember, BUKAN masukSebagaiHutang: metode kasbon yang
+    // tidak ditandai hutang pun menyisakan tagihan tanpa pemilik. Itulah yang
+    // melahirkan 541 nota "Umum / Non-Anggota" di satu toko.
+    if (_caraBayarTerpilih?.wajibPilihMember == true) return true;
     for (final s in _splitBayar) {
-      if (s.caraBayar.masukSebagaiHutang && s.nominal > 0) return true;
+      if (s.caraBayar.wajibPilihMember && s.nominal > 0) return true;
     }
     return false;
   }
@@ -1317,8 +1333,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         builder: (c) => AlertDialog(
           title: const Text('Pilih Nama Pelanggan'),
           content: Text(
-              'Metode "${_caraBayarTerpilih!.nama}" dicatat sebagai piutang. '
-              'Pilih nama pelanggan dahulu agar tagihan ini dapat ditagih oleh tim keuangan.'),
+              'Metode "${_namaMetodeWajibMember()}" meninggalkan tagihan yang harus '
+              'ditagih belakangan. Pilih nama pelanggan dahulu, agar tagihannya tidak '
+              'berakhir sebagai piutang tanpa pemilik.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(c, false),

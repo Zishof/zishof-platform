@@ -192,13 +192,23 @@ class CaraBayar {
   /// memilih nama pelanggan -- server menolak piutang tanpa pemilik karena
   /// tagihannya tidak dapat ditelusuri tim keuangan.
   final bool masukSebagaiHutang;
+
+  /// Metode ini menuntut nama pelanggan dipilih sebelum transaksi ditulis
+  /// (`cara_pembayaran_koperasi.wajib_pilih_member`, nilai EFEKTIF dari server).
+  ///
+  /// Lebih luas daripada [masukSebagaiHutang]: metode kasbon yang tidak ditandai
+  /// hutang pun menyisakan tagihan, dan tanpa pemilik tagihan itu berakhir sebagai
+  /// piutang "Umum / Non-Anggota" yang tidak dapat ditelusuri siapa pun.
+  final bool wajibPilihMember;
   CaraBayar({
     required this.id,
     required this.nama,
     required this.manual,
     this.memotongDeposit = false,
     this.masukSebagaiHutang = false,
-  });
+    bool? wajibPilihMember,
+  }) : wajibPilihMember =
+            wajibPilihMember ?? (masukSebagaiHutang || memotongDeposit);
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();
@@ -208,6 +218,12 @@ class CaraBayar {
       manual: j['manual'] == true,
       masukSebagaiHutang:
           j['masukSebagaiHutang'] == true || j['masuk_sebagai_hutang'] == true,
+      // Server lama tidak mengirim kunci ini sama sekali; null di sini membuat
+      // konstruktor jatuh ke aturan bawaan (hutang / potong saldo), sehingga
+      // klien baru + server lama tetap berperilaku seperti sebelumnya.
+      wajibPilihMember: (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
+          ? null
+          : (j['wajibPilihMember'] == true || j['wajib_pilih_member'] == true),
       memotongDeposit: j['memotongDeposit'] == true ||
           j['memotong_deposit'] == true ||
           j['potongSaldo'] == true ||
