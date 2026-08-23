@@ -33,26 +33,21 @@ void main() {
     return Uint8List.fromList(img.encodePng(g));
   }
 
-  /// Gambar yang MELEBIHI batas masukan 5 MB.
+  /// Contoh yang melewati batas masukan 5 MB, dibuat MURAH.
   ///
-  /// Dibuat dari derau dengan kualitas maksimum: gambar rata warna sebesar apa
-  /// pun akan menyusut jauh di bawah 5 MB saat dikodekan, sehingga tidak dapat
-  /// menguji pagarnya sama sekali.
-  Uint8List fotoLewatBatas() {
-    var sisi = 3000;
-    while (sisi < 12000) {
-      final g = img.Image(width: sisi, height: sisi, numChannels: 3);
-      final buf = g.toUint8List();
-      var benih = 987654321;
-      for (var i = 0; i < buf.length; i++) {
-        benih = (benih * 1103515245 + 12345) & 0x7FFFFFFF;
-        buf[i] = (benih >> 16) & 0xFF;
-      }
-      final b = Uint8List.fromList(img.encodeJpg(g, quality: 100));
-      if (b.length > maksGambarAsalBytes) return b;
-      sisi = (sisi * 1.5).round();
-    }
-    throw StateError('gagal membuat contoh di atas 5 MB');
+  /// Pagarnya hanya memeriksa panjang bita dan berjalan SEBELUM berkas
+  /// didekode, jadi contohnya tidak perlu gambar sungguhan yang besar.
+  /// Membangkitkan derau 3000x3000 lalu menyandikannya JPEG kualitas 100
+  /// berulang-ulang membuat suite penuh melewati sepuluh menit tanpa menguji
+  /// apa pun yang tidak diuji cara ini.
+  Uint8List besarLewatBatas() {
+    final b = Uint8List(maksGambarAsalBytes + 1);
+    // Tanda pengenal JPEG yang sah, supaya tampaknyaGambar() meloloskannya dan
+    // pemeriksaan yang benar-benar diuji (pagarnya) yang menolak.
+    b[0] = 0xFF;
+    b[1] = 0xD8;
+    b[2] = 0xFF;
+    return b;
   }
 
   test('batas masukan 5 MB sama dengan batas lampiran di server', () {
@@ -64,17 +59,31 @@ void main() {
             'kalau tidak tidak ada yang bisa dikecilkan');
   });
 
-  test('gambar di atas 5 MB DITOLAK, bukan dikecilkan diam-diam', () {
-    final asal = fotoLewatBatas();
+  test('lampiran gambar di atas 5 MB DITOLAK, bukan dikecilkan diam-diam', () {
+    final asal = besarLewatBatas();
     expect(asal.length, greaterThan(maksGambarAsalBytes));
 
     expect(() => siapkanLampiranGambar(asal), throwsFormatException);
     expect(() => siapkanLampiranCampuran(asal), throwsFormatException);
-    expect(() => kompresGambarKeBawah500Kb(asal), throwsFormatException);
+  });
+
+  test('foto produk kamera BEBAS dari pagar 5 MB', () {
+    // Keputusan pengguna: ponsel 12 MP menghasilkan JPEG 3-6 MB secara rutin,
+    // dan foto produk memang selalu dikecilkan ke bawah 500 KB sebelum
+    // dikirim. Menolaknya akan menghalangi pekerjaan yang sah.
+    final asal = besarLewatBatas();
+    try {
+      kompresGambarKeBawah500Kb(asal);
+    } on FormatException catch (e) {
+      // Contoh murah ini bukan gambar sungguhan, jadi ia memang gagal saat
+      // DIDEKODE. Yang dijaga uji ini: kegagalannya bukan berasal dari pagar.
+      expect(e.message, isNot(contains('melebihi batas')),
+          reason: 'pagar 5 MB tidak boleh ikut menjaga jalur foto produk');
+    }
   });
 
   test('pesan penolakan menyebut ukuran sebenarnya, bukan sekadar besar', () {
-    final asal = fotoLewatBatas();
+    final asal = besarLewatBatas();
     try {
       siapkanLampiranGambar(asal);
       fail('seharusnya ditolak');

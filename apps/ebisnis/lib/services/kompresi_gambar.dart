@@ -10,7 +10,14 @@ import 'package:image/image.dart' as img;
 /// kamera resolusi tinggi bisa berat & menjank UI kalau dijalankan langsung
 /// di main isolate.
 Uint8List kompresGambarKeBawah500Kb(Uint8List asal) {
-  tolakBilaGambarTerlaluBesar(asal);
+  // SENGAJA tanpa [tolakBilaGambarTerlaluBesar]: foto produk dari kamera
+  // dibebaskan dari pagar 5 MB. Ponsel 12 MP menghasilkan JPEG 3-6 MB secara
+  // rutin, jadi pagar itu akan menolak foto yang sepenuhnya sah -- sementara
+  // foto produk memang SELALU dikecilkan ke bawah 500 KB sebelum dikirim,
+  // sehingga ukuran masukannya tidak pernah sampai ke server.
+  //
+  // Pagar 5 MB tetap berlaku untuk LAMPIRAN, yang angkanya menyamai batas
+  // server dan yang berkasnya boleh bukan gambar.
   return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
 }
 

@@ -53,11 +53,23 @@ class UnggahLampiranSop {
     // GAMBAR dikecilkan ke bawah 500 KB di sini -- satu tempat, sehingga
     // seluruh pemanggil ikut terlindungi tanpa harus mengingatnya. Yang bukan
     // gambar dilewatkan apa adanya.
+    // Pagar 5 MB diperiksa SEBELUM blok maaf di bawah: blok itu sengaja
+    // memaafkan kompresi yang gagal dan mengirim berkas aslinya, dan tanpa
+    // pemeriksaan terpisah ia akan ikut memaafkan berkas yang justru harus
+    // ditolak -- lalu mengirimkannya mentah.
+    final Uint8List bytesAsal =
+        isi is Uint8List ? isi : Uint8List.fromList(isi);
+    if (tampaknyaGambar(bytesAsal)) {
+      try {
+        tolakBilaGambarTerlaluBesar(bytesAsal);
+      } on FormatException catch (e) {
+        return e.message;
+      }
+    }
+
     List<int> muatan = isi;
     try {
-      muatan = await compute(
-          siapkanLampiranCampuran,
-          isi is Uint8List ? isi : Uint8List.fromList(isi));
+      muatan = await compute(siapkanLampiranCampuran, bytesAsal);
     } catch (_) {
       // Kompresi gagal (mis. gambar rusak) -- kirim aslinya. Menggagalkan
       // unggahan karena kompresi gagal akan menghalangi pekerjaan yang sah;
