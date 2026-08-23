@@ -33,6 +33,66 @@ void main() {
     return Uint8List.fromList(img.encodePng(g));
   }
 
+  /// Gambar yang MELEBIHI batas masukan 5 MB.
+  ///
+  /// Dibuat dari derau dengan kualitas maksimum: gambar rata warna sebesar apa
+  /// pun akan menyusut jauh di bawah 5 MB saat dikodekan, sehingga tidak dapat
+  /// menguji pagarnya sama sekali.
+  Uint8List fotoLewatBatas() {
+    var sisi = 3000;
+    while (sisi < 12000) {
+      final g = img.Image(width: sisi, height: sisi, numChannels: 3);
+      final buf = g.toUint8List();
+      var benih = 987654321;
+      for (var i = 0; i < buf.length; i++) {
+        benih = (benih * 1103515245 + 12345) & 0x7FFFFFFF;
+        buf[i] = (benih >> 16) & 0xFF;
+      }
+      final b = Uint8List.fromList(img.encodeJpg(g, quality: 100));
+      if (b.length > maksGambarAsalBytes) return b;
+      sisi = (sisi * 1.5).round();
+    }
+    throw StateError('gagal membuat contoh di atas 5 MB');
+  }
+
+  test('batas masukan 5 MB sama dengan batas lampiran di server', () {
+    expect(maksGambarAsalBytes, 5 * 1024 * 1024,
+        reason: 'MAKS_BYTE_LAMPIRAN di PengadaanPosApiHelper juga 5 MB; dua '
+            'pendapat berbeda tentang berkas yang sama akan menyesatkan');
+    expect(maksGambarAsalBytes, greaterThan(maksLampiranGambarBytes),
+        reason: 'batas masukan harus lebih longgar daripada batas kiriman, '
+            'kalau tidak tidak ada yang bisa dikecilkan');
+  });
+
+  test('gambar di atas 5 MB DITOLAK, bukan dikecilkan diam-diam', () {
+    final asal = fotoLewatBatas();
+    expect(asal.length, greaterThan(maksGambarAsalBytes));
+
+    expect(() => siapkanLampiranGambar(asal), throwsFormatException);
+    expect(() => siapkanLampiranCampuran(asal), throwsFormatException);
+    expect(() => kompresGambarKeBawah500Kb(asal), throwsFormatException);
+  });
+
+  test('pesan penolakan menyebut ukuran sebenarnya, bukan sekadar besar', () {
+    final asal = fotoLewatBatas();
+    try {
+      siapkanLampiranGambar(asal);
+      fail('seharusnya ditolak');
+    } on FormatException catch (e) {
+      expect(e.message, contains('MB'),
+          reason: 'pengguna perlu tahu seberapa jauh selisihnya');
+      expect(e.message, contains('5 MB'));
+    }
+  });
+
+  test('gambar TEPAT di batas 5 MB masih diterima', () {
+    // Batasnya inklusif: yang ditolak adalah yang MELEBIHI, bukan yang sama.
+    final pas = Uint8List(maksGambarAsalBytes);
+    expect(() => tolakBilaGambarTerlaluBesar(pas), returnsNormally);
+    final lewat = Uint8List(maksGambarAsalBytes + 1);
+    expect(() => tolakBilaGambarTerlaluBesar(lewat), throwsFormatException);
+  });
+
   test('ambangnya tepat 500 KB, satu tempat untuk seluruh aplikasi', () {
     expect(maksLampiranGambarBytes, 500 * 1024);
   });

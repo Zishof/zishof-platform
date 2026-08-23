@@ -2,15 +2,17 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-/// Kompresi gambar produk ke bawah [maksBytes] (spesifikasi user: "di bawah
-/// 500 Kb") sebelum diunggah -- server (`KantinHelper.produkFotoUpload`)
+/// Kompresi gambar produk ke bawah [maksLampiranGambarBytes] (spesifikasi
+/// user: "di bawah 500 Kb", masukannya maksimal 5 MB) sebelum diunggah -- server (`KantinHelper.produkFotoUpload`)
 /// TIDAK melakukan kompresi apa pun, klien WAJIB mengirim berkas yang sudah
 /// kecil. Fungsi murni/sinkron -- pemanggil (`produk_screen.dart`) menjalankan
 /// ini lewat `compute()` di isolate terpisah krn decode+encode JPEG foto
 /// kamera resolusi tinggi bisa berat & menjank UI kalau dijalankan langsung
 /// di main isolate.
-Uint8List kompresGambarKeBawah500Kb(Uint8List asal) =>
-    kompresGambar(asal, maksBytes: 500 * 1024);
+Uint8List kompresGambarKeBawah500Kb(Uint8List asal) {
+  tolakBilaGambarTerlaluBesar(asal);
+  return kompresGambar(asal, maksBytes: maksLampiranGambarBytes);
+}
 
 /// Versi umum [kompresGambarKeBawah500Kb] dgn batas ukuran bisa diatur --
 /// dipisah supaya gampang diuji dgn ambang berbeda tanpa mengubah nama fungsi
@@ -68,6 +70,33 @@ Uint8List kompresGambar(Uint8List asal, {required int maksBytes}) {
 /// akan berbeda-beda begitu ada yang lupa mengubah salah satunya.
 const int maksLampiranGambarBytes = 500 * 1024;
 
+/// Batas **masukan** untuk gambar, sebelum dikecilkan.
+///
+/// Berbeda peran dengan [maksLampiranGambarBytes]: yang itu batas KIRIMAN
+/// (hasil akhir setelah dikecilkan), yang ini batas apa yang boleh diterima
+/// sejak awal. Tanpa batas atas, berkas puluhan megabita tetap didekode penuh
+/// lebih dulu — berat, dan pada perangkat kasir bermemori kecil bisa mematikan
+/// aplikasi sebelum sempat mengecilkannya.
+///
+/// Angkanya sengaja sama dengan `MAKS_BYTE_LAMPIRAN` di
+/// `PengadaanPosApiHelper` sisi server, supaya klien dan server tidak punya dua
+/// pendapat tentang berkas yang sama.
+const int maksGambarAsalBytes = 5 * 1024 * 1024;
+
+/// Menolak gambar yang melebihi [maksGambarAsalBytes].
+///
+/// Pesannya menyebut ukuran sebenarnya, bukan sekadar "terlalu besar" —
+/// pengguna perlu tahu seberapa jauh selisihnya untuk memutuskan langkah
+/// berikutnya.
+void tolakBilaGambarTerlaluBesar(Uint8List asal) {
+  if (asal.length <= maksGambarAsalBytes) return;
+  final mb = (asal.length / (1024 * 1024)).toStringAsFixed(1);
+  const batas = maksGambarAsalBytes ~/ (1024 * 1024);
+  throw FormatException(
+      'Gambar berukuran $mb MB, melebihi batas $batas MB. '
+      'Perkecil atau potret ulang dengan resolusi lebih rendah.');
+}
+
 /// Tanda pengenal format gambar yang dikenali, dibaca dari byte awal berkas.
 ///
 /// Diperiksa dari **isinya**, bukan dari ekstensi namanya. Berkas bernama
@@ -110,6 +139,7 @@ Uint8List siapkanLampiranGambar(Uint8List asal) {
     throw const FormatException(
         'Lampiran harus berupa gambar (JPG, PNG, GIF, BMP, atau WEBP).');
   }
+  tolakBilaGambarTerlaluBesar(asal);
   if (asal.length <= maksLampiranGambarBytes) {
     // Tetap didekode untuk memastikan isinya benar-benar utuh: tanda pengenal
     // yang benar tidak menjamin badan berkasnya tidak rusak.
@@ -130,6 +160,7 @@ Uint8List siapkanLampiranCampuran(Uint8List asal) {
   if (!tampaknyaGambar(asal)) {
     return asal;
   }
+  tolakBilaGambarTerlaluBesar(asal);
   if (asal.length <= maksLampiranGambarBytes) {
     return asal;
   }
