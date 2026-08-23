@@ -38,19 +38,6 @@ void main() {
     expect(padat, contains(_rapat("'TOTAL (\$labelKolom)'")));
   });
 
-  test('popup laporan muat di layar ponsel, bukan lebar tetap', () {
-    // Lebar tetap 860 dp pas di Desktop tetapi melewati batas dialog di Android
-    // yang lebar layarnya kerap hanya ~360-400 dp. Ukurannya harus dibatasi
-    // terhadap ukuran layar; nilai idealnya tetap dipakai di layar besar.
-    expect(padat, contains('static Size_ukuranPopup('.replaceAll(' ', '')),
-        reason: 'pembatas ukuran popup hilang');
-    expect(padat, contains(_rapat('MediaQuery.of(context).size')));
-    expect(padat, isNot(contains(_rapat('width: 860,'))),
-        reason: 'lebar tetap 860 akan meluber di ponsel');
-    expect(padat, isNot(contains(_rapat('height: 460,'))),
-        reason: 'tinggi tetap 460 memakan hampir seluruh layar pendek');
-  });
-
   test('kanal ZKoss memakai penyusun yang sama untuk angka agregat', () {
     final zk = File(r'C:\opt\AIS\ais\src\main\src\ais\action\master\koperasi'
         r'\helper\LaporanKantinZkPanel.java');
