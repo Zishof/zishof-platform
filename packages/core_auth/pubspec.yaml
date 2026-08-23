@@ -10,6 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # HMAC-SHA256 sebagai bahan PBKDF2 (VerifikatorSandiLokal). Versi disamakan
+  # dengan core_update yang sudah memakainya di repo ini.
+  crypto: ^3.0.6
+  shared_preferences: ^2.3.3
 
 dev_dependencies:
   flutter_test:

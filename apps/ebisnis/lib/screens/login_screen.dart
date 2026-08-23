@@ -1,3 +1,4 @@
+import 'package:core_auth/core_auth.dart';
 import 'package:flutter/material.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
@@ -40,6 +41,11 @@ class _LoginScreenState extends State<LoginScreen> {
         'labelPerangkat': AppVariant.labelPerangkat,
       });
       await ApiClient.instance.simpanToken(hasil['token'] as String);
+      // Bukti kata sandi disimpan HANYA sesudah server menerimanya, supaya
+      // jalur luring tidak pernah lebih longgar daripada keputusan server.
+      // Dipakai LayarKunciScreen saat sesi terkunci dan server tak terjangkau.
+      await VerifikatorSandiLokal.instance
+          .simpan(_userCtrl.text.trim(), _passCtrl.text);
       TransaksiOutboxService.instance.mulai();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

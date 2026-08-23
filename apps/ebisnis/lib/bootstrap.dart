@@ -14,6 +14,7 @@ import 'api_client.dart';
 import 'app_variant.dart';
 import 'product_profile.dart';
 import 'screens/layar_pelanggan_screen.dart';
+import 'screens/layar_kunci_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/master_offline.dart';
@@ -216,6 +217,10 @@ class _GerbangAwal extends StatefulWidget {
 class _GerbangAwalState extends State<_GerbangAwal> {
   bool _memeriksa = true;
   bool _perluSetupServer = false;
+
+  /// Token masih ada tetapi sesi terkunci karena aplikasi lama tidak dipakai --
+  /// lihat [LayarKunciScreen].
+  bool _terkunci = false;
   InfoUpdate? _infoUpdate;
 
   @override
@@ -237,9 +242,15 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     }
     await ApiClient.instance.muatTokenTersimpan();
     if (ApiClient.instance.sudahLogin) {
+      // Batas waktu lokal MENGUNCI, tidak menghapus token. Token perangkat
+      // berlaku 30 hari di server (PosDeviceAuthApi.MASA_BERLAKU_HARI);
+      // membuangnya karena aplikasi lama tidak dibuka memaksa login daring
+      // pada saat yang paling buruk -- pagi hari saat server belum hidup --
+      // padahal seluruh jalur luring (katalog, antrean transaksi) siap. Token
+      // hanya dibuang bila pengguna keluar akun atau server menolaknya.
       final kedaluwarsa = await PengaturanSesiLokal.instance.sudahKedaluwarsa();
       if (kedaluwarsa) {
-        await ApiClient.instance.hapusToken();
+        setStateIfMounted(() => _terkunci = true);
       } else {
         await PengaturanSesiLokal.instance.catatAktifSekarang();
         TransaksiOutboxService.instance.mulai();
@@ -298,9 +309,11 @@ class _GerbangAwalState extends State<_GerbangAwal> {
     if (_memeriksa) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final layar = ApiClient.instance.sudahLogin
-        ? AppProductProfile.aktif.buatLayarAwal()
-        : const LoginScreen();
+    final layar = !ApiClient.instance.sudahLogin
+        ? const LoginScreen()
+        : _terkunci
+            ? const LayarKunciScreen()
+            : AppProductProfile.aktif.buatLayarAwal();
     if (_infoUpdate == null) return layar;
     return Stack(
       children: [

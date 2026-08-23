@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:core_auth/core_auth.dart';
 import 'package:core_db/core_db.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,11 +37,15 @@ class ApiClient {
     await PengaturanSesiLokal.instance.catatAktifSekarang();
   }
 
+  /// Buang sesi perangkat SELURUHNYA: token, catatan aktif, dan bukti kata
+  /// sandi luring. Ketiganya satu paket -- identitas yang tidak lagi dipakai di
+  /// perangkat ini tidak boleh menyisakan jalan masuk luring.
   Future<void> hapusToken() async {
     _token = null;
     final sp = await SharedPreferences.getInstance();
     await sp.remove('token');
     await PengaturanSesiLokal.instance.hapusCatatanAktif();
+    await VerifikatorSandiLokal.instance.hapus();
   }
 
   bool get sudahLogin => _token != null;
@@ -333,6 +338,13 @@ class ApiClient {
       );
       unawaited(_catatKegagalan(gagal));
       throw gagal;
+    }
+
+    if (resp.statusCode == 401) {
+      // Server MENOLAK token: dicabut, kedaluwarsa, atau tidak dikenal. Ini
+      // satu-satunya alasan sah membuang sesi perangkat -- batas waktu lokal
+      // hanya mengunci layar (lihat LayarKunciScreen).
+      unawaited(hapusToken());
     }
 
     if (json['status'] != 'success') {
