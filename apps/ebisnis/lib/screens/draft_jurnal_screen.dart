@@ -367,7 +367,12 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
         },
       );
       if (mounted) {
+        // Bila ada dokumen yang dilewati, jawabannya menyebut alasannya dan
+        // kalimatnya jadi panjang. Diberi waktu baca lebih lama supaya keterangan
+        // itu tidak lewat begitu saja -- justru di situlah yang perlu ditindaklanjuti.
+        final dilewati = (hasil['dilewati'] as num?)?.toInt() ?? 0;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: Duration(seconds: dilewati > 0 ? 9 : 4),
             content: Text('${hasil['description'] ?? 'Selesai.'}')));
       }
       await _muat();
