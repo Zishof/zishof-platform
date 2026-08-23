@@ -120,6 +120,7 @@ void main() {
       'Proses Transfer',
       'Proses Transitori',
       'Penomoran Dokumen Keuangan',
+      'Closing',
     ]) {
       expect(shell, contains("case '$label':"), reason: label);
     }
@@ -147,7 +148,7 @@ void main() {
     // Menu yang menyusul setelah keenam modul awal ikut diperiksa di sini
     // supaya tidak ada satu pun yang lolos tanpa gerbang hak akses.
     for (final k in [...kunciKeuangan, 'dana_talangan', 'reimbursement',
-      'master_keuangan', 'proses_transfer', 'nomor_surat_keuangan']) {
+      'master_keuangan', 'proses_transfer', 'nomor_surat_keuangan', 'closing']) {
       expect(shell, contains("'$k'"), reason: 'sidebar $k');
       expect(drawer, contains("bolehMenuVarianBaru('$k')"), reason: 'drawer $k');
     }

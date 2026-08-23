@@ -55,6 +55,7 @@ import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/master_keuangan_screen.dart';
 import '../screens/proses_transfer_screen.dart';
+import '../screens/closing_screen.dart';
 import '../screens/nomor_surat_keuangan_screen.dart';
 import '../screens/proses_transitori_screen.dart';
 import '../screens/reimbursement_screen.dart';
@@ -181,6 +182,7 @@ enum MenuEBisnis {
   prosesTransfer,
   prosesTransitori,
   nomorSuratKeuangan,
+  closing,
   riwayatSinkron,
   logError,
   konfigurasi,
@@ -360,6 +362,7 @@ const _kunciMenuKeuangan = <MenuEBisnis, String>{
   MenuEBisnis.prosesTransfer: 'proses_transfer',
   MenuEBisnis.prosesTransitori: 'proses_transitori',
   MenuEBisnis.nomorSuratKeuangan: 'nomor_surat_keuangan',
+  MenuEBisnis.closing: 'closing',
 };
 
 /// Menu "Sales" murni -- selain gerbang CRUD generik [_kunciMenuIs], HANYA
@@ -680,6 +683,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.nomorSuratKeuangan, Icons.numbers_outlined,
       'Penomoran Dokumen Keuangan',
       builder: _bangunNomorSuratKeuangan),
+  _ItemMenuShell(MenuEBisnis.closing, Icons.event_available_outlined, 'Closing',
+      builder: _bangunClosing),
   _ItemMenuShell(MenuEBisnis.riwayatSinkron, Icons.sync, 'Riwayat Sinkronisasi',
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
@@ -830,6 +835,7 @@ const _grupMenu = <_GrupMenuShell>[
       MenuEBisnis.saldoAwalAkun,
       MenuEBisnis.jurnalPenyesuaian,
       MenuEBisnis.tutupBuku,
+      MenuEBisnis.closing,
       // Di luar deret tab ZK: rujukan dan laporan.
       MenuEBisnis.laporanKeuangan,
       MenuEBisnis.anggaran,
@@ -991,6 +997,7 @@ Widget _bangunMasterKeuangan(BuildContext c) => const MasterKeuanganScreen();
 Widget _bangunProsesTransfer(BuildContext c) => const ProsesTransferScreen();
 Widget _bangunProsesTransitori(BuildContext c) => const ProsesTransitoriScreen();
 Widget _bangunNomorSuratKeuangan(BuildContext c) => const NomorSuratKeuanganScreen();
+Widget _bangunClosing(BuildContext c) => const ClosingScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
 Widget _bangunLogError(BuildContext c) => const LogErrorScreen();
@@ -1353,6 +1360,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Proses Transitori';
     case MenuEBisnis.nomorSuratKeuangan:
       return 'Penomoran Dokumen Keuangan';
+    case MenuEBisnis.closing:
+      return 'Closing';
     case MenuEBisnis.anggaran:
       return 'Anggaran (RAB Bulanan)';
     case MenuEBisnis.riwayatSinkron:
@@ -1510,6 +1519,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.prosesTransitori;
     case 'Penomoran Dokumen Keuangan':
       return MenuEBisnis.nomorSuratKeuangan;
+    case 'Closing':
+      return MenuEBisnis.closing;
     case 'Anggaran (RAB Bulanan)':
       return MenuEBisnis.anggaran;
     case 'Riwayat Sinkronisasi':

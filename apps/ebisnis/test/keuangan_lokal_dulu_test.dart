@@ -222,6 +222,50 @@ void main() {
     });
   });
 
+  group('Closing (penutupan periode)', () {
+    final src = File('lib/screens/closing_screen.dart').readAsStringSync();
+
+    test('alur closing lengkap', () {
+      for (final aksi in [
+        'closing_daftar',
+        'closing_periksa',
+        'closing_simpan',
+        'closing_kunci',
+        'closing_buka',
+        'closing_hapus',
+        'closing_jurnal',
+      ]) {
+        expect(src, contains("'$aksi'"), reason: aksi);
+      }
+    });
+
+    test('kesiapan diperiksa SEBELUM Simpan ditekan', () {
+      // Penolakan yang baru muncul sesudah menekan tombol membuat orang mengira
+      // dirinya salah tekan, bukan salah tanggal.
+      expect(src, contains('jalankanPeriksa'));
+      expect(src, contains('adaTidakBalance'));
+      expect(src, contains('tanggalTerpakai'));
+      // Tombol Simpan dimatikan bila sudah jelas akan ditolak.
+      expect(src, contains('(timpang || bentrok) ? null'));
+    });
+
+    test('akibat menghapus closing dinyatakan apa adanya', () {
+      expect(src, contains('periode itu terbuka kembali'));
+      expect(src, contains('DILEPAS'));
+    });
+
+    test('yang terkunci tidak menawarkan ubah maupun hapus', () {
+      expect(src, contains("!terkunci && _boleh('update')"));
+      expect(src, contains("!terkunci && _boleh('delete')"));
+    });
+
+    test('jurnal timpang yang terlanjur tertutup tetap ditandai', () {
+      // Menyembunyikannya di balik total yang rapi justru menutupi masalahnya.
+      expect(src, contains("j['seimbang'] == true"));
+      expect(src, contains('TIDAK SEIMBANG'));
+    });
+  });
+
   group('Penomoran Dokumen Keuangan', () {
     final src = File('lib/screens/nomor_surat_keuangan_screen.dart').readAsStringSync();
 

@@ -42,6 +42,7 @@ import '../screens/dana_talangan_screen.dart';
 import '../screens/penggantian_kas_kecil_screen.dart';
 import '../screens/master_keuangan_screen.dart';
 import '../screens/proses_transfer_screen.dart';
+import '../screens/closing_screen.dart';
 import '../screens/nomor_surat_keuangan_screen.dart';
 import '../screens/reimbursement_screen.dart';
 import '../screens/pj_kas_besar_screen.dart';
@@ -849,6 +850,15 @@ class AppDrawer extends StatelessWidget {
                                   builder: (_) => _halamanSiklus(
                                       'Jurnal Penyesuaian Berkala', 1)),
                             ),
+                            if (Sesi.instance.bolehMenuVarianBaru('closing'))
+                              _ItemMenu(
+                                icon: Icons.event_available_outlined,
+                                label: 'Closing',
+                                aktif: menuAktif == 'Closing',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Closing',
+                                    builder: (_) => const ClosingScreen()),
+                              ),
                             if (Sesi.instance.bolehMenuVarianBaru('tutup_buku'))
                             _ItemMenu(
                               icon: Icons.lock_outline,
