@@ -106,6 +106,11 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
             onPressed: _muat,
             tooltip: 'Muat ulang')
       ],
+      // Badannya SUDAH menggulir sendiri (ListView). Tanpa baris ini AppShell
+      // membungkusnya lagi dengan SingleChildScrollView, sehingga ListView-nya
+      // menerima tinggi tak terbatas -- Flutter melempar galat tata letak dan
+      // seluruh badan layar tidak tergambar sama sekali (tampak kosong).
+      scrollable: false,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
