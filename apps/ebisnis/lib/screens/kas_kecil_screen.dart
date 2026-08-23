@@ -741,13 +741,10 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
             children: [
               SizedBox(
                 width: 240,
-                child: TextField(
+                child: AppSearchField(
                   controller: _cari,
-                  decoration: const InputDecoration(
-                      labelText: 'Cari kode / judul',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true),
-                  onSubmitted: (_) => _muatDaftar(),
+                  hintText: 'Cari kode / judul',
+                  onChanged: (_) => _muatDaftar(),
                 ),
               ),
               SizedBox(

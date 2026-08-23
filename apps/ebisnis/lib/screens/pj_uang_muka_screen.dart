@@ -248,14 +248,11 @@ class _PjUangMukaScreenState extends State<PjUangMukaScreen> {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cari,
+                      hintText: 'Cari kode / judul uang muka',
                       autofocus: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Cari kode / judul uang muka',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => jalankan(),
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -837,13 +834,10 @@ class _PjUangMukaScreenState extends State<PjUangMukaScreen> {
             children: [
               SizedBox(
                 width: 260,
-                child: TextField(
+                child: AppSearchField(
                   controller: _cari,
-                  decoration: const InputDecoration(
-                      labelText: 'Cari kode LPJ / judul / kode uang muka',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true),
-                  onSubmitted: (_) => _muatDaftar(),
+                  hintText: 'Cari kode LPJ / judul / kode uang muka',
+                  onChanged: (_) => _muatDaftar(),
                 ),
               ),
               SizedBox(

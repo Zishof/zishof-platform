@@ -96,6 +96,13 @@ class AppSearchField extends StatefulWidget {
   final Duration debounce;
   final TextEditingController? controller;
 
+  /// Menaruh kursor di kotak cari begitu ia tampil.
+  ///
+  /// Dipakai kotak cari di dalam dialog pemilih dokumen: dialognya dibuka
+  /// justru untuk mencari, jadi memaksa pengguna mengklik dulu hanya
+  /// menambah satu langkah tanpa guna.
+  final bool autofocus;
+
   const AppSearchField({
     super.key,
     required this.hintText,
@@ -103,6 +110,7 @@ class AppSearchField extends StatefulWidget {
     this.initialValue = '',
     this.debounce = const Duration(milliseconds: 220),
     this.controller,
+    this.autofocus = false,
   });
 
   @override
@@ -137,6 +145,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _controller,
+      autofocus: widget.autofocus,
       onChanged: _ubah,
       decoration: InputDecoration(
         hintText: widget.hintText,

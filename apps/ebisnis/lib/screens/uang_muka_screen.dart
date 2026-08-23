@@ -251,15 +251,11 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cari,
+                      hintText: 'Cari kode / nama anggaran',
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Cari kode / nama anggaran',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onSubmitted: (_) => jalankan(),
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -360,13 +356,10 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cari,
-                      decoration: const InputDecoration(
-                          labelText: 'Cari kode / keterangan PR',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => jalankan(),
+                      hintText: 'Cari kode / keterangan PR',
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1082,13 +1075,10 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
         child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SizedBox(
             width: 240,
-            child: TextField(
+            child: AppSearchField(
               controller: _cari,
-              decoration: const InputDecoration(
-                  labelText: 'Cari kode / judul',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true),
-              onSubmitted: (_) => _muatDaftar(),
+              hintText: 'Cari kode / judul',
+              onChanged: (_) => _muatDaftar(),
             ),
           ),
           SizedBox(

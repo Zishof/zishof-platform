@@ -246,14 +246,11 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
               child: Column(children: [
                 Row(children: [
                   Expanded(
-                    child: TextField(
+                    child: AppSearchField(
                       controller: cari,
+                      hintText: 'Cari kode / judul kas kecil',
                       autofocus: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Cari kode / judul kas kecil',
-                          border: OutlineInputBorder(),
-                          isDense: true),
-                      onSubmitted: (_) => jalankan(),
+                      onChanged: (_) => jalankan(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -847,13 +844,10 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
             children: [
               SizedBox(
                 width: 240,
-                child: TextField(
+                child: AppSearchField(
                   controller: _cari,
-                  decoration: const InputDecoration(
-                      labelText: 'Cari kode / judul',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true),
-                  onSubmitted: (_) => _muatDaftar(),
+                  hintText: 'Cari kode / judul',
+                  onChanged: (_) => _muatDaftar(),
                 ),
               ),
               SizedBox(
