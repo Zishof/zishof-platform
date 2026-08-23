@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -301,21 +302,17 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                   ),
                   if (_adaFilterProduk) ...[
                     const SizedBox(height: 12),
-                    TextField(
-                        controller: _controllerProduk,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari Produk',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
+                    AppSearchField(
+                      controller: _controllerProduk,
+                      labelText: 'Cari Produk',
+                    ),
                   ],
                   if (_adaFilterPelanggan) ...[
                     const SizedBox(height: 12),
-                    TextField(
-                        controller: _controllerPelanggan,
-                        decoration: const InputDecoration(
-                            labelText: 'Cari Pelanggan',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
+                    AppSearchField(
+                      controller: _controllerPelanggan,
+                      labelText: 'Cari Pelanggan',
+                    ),
                   ],
                   if (_adaFilterPerToko)
                     CheckboxListTile(
@@ -452,6 +449,15 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     if (!identical(oldWidget.hasil, widget.hasil)) _halaman = 1;
   }
 
+  /// Lebar/tinggi popup yang aman di semua ukuran layar. Nilai idealnya dipakai
+  /// apa adanya di Desktop; di ponsel dibatasi terhadap ukuran layar supaya isinya
+  /// tidak melewati batas dialog.
+  static Size _ukuranPopup(BuildContext context, double lebarIdeal, double tinggiIdeal) {
+    final layar = MediaQuery.of(context).size;
+    return Size(math.min(lebarIdeal, layar.width * 0.92),
+        math.min(tinggiIdeal, layar.height * 0.62));
+  }
+
   /// Popup untuk angka SUBTOTAL / GRAND TOTAL: memperlihatkan baris-baris yang
   /// dijumlahkan menjadi angka itu, lengkap dgn totalnya sendiri. Padanan
   /// `tabelPenyusun()` pada versi JSP -- pertanyaannya sama ("angka ini dari
@@ -507,13 +513,14 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       );
     }
 
+    final ukuran = _ukuranPopup(context, 860, 460);
     await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Asal Angka: $judul'),
         content: SizedBox(
-          width: 860,
-          height: 460,
+          width: ukuran.width,
+          height: ukuran.height,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -614,8 +621,9 @@ class _TabelLaporanState extends State<_TabelLaporan> {
         builder: (c) => AlertDialog(
           title: Text('Asal Angka: $judul'),
           content: SizedBox(
-            width: dimensi.isEmpty ? 460 : 860,
-            height: dimensi.isEmpty ? null : 460,
+            width: _ukuranPopup(context, dimensi.isEmpty ? 460 : 860, 460).width,
+            height:
+                dimensi.isEmpty ? null : _ukuranPopup(context, 860, 460).height,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 for (var i = 0; i < kolom.length; i++)
