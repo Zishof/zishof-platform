@@ -812,25 +812,31 @@ const _grupMenu = <_GrupMenuShell>[
   // Urutannya mengikuti urutan tab pada layar Laporan Keuangan supaya pengguna
   // lama menemukan menu di tempat yang sama. Dapat dilipat spt grup Pengadaan:
   // isinya panjang dan tidak dibuka tiap hari.
+  // Urutannya mengikuti deret tab layar ZK "Posting Jurnal"
+  // (ais.action.master.akunting.PostingJurnalAction), supaya pengguna lama
+  // menemukan halaman pada posisi yang sama -- itulah daftar yang dipakai
+  // sehari-hari. Menu rujukan yang TIDAK punya padanan tab di sana (bagan akun,
+  // katalog laporan, anggaran) diletakkan sesudahnya, bukan disisipkan di tengah.
   _GrupMenuShell(
     'Akuntansi',
     [
-      MenuEBisnis.laporanKeuangan,
       MenuEBisnis.draftJurnal,
+      MenuEBisnis.jurnalUmum,
+      MenuEBisnis.postingHpp,
+      MenuEBisnis.postingPenjualan,
+      MenuEBisnis.postingKulakan,
+      MenuEBisnis.postingBayarHutang,
+      MenuEBisnis.postingTerimaPiutang,
+      MenuEBisnis.saldoAwalAkun,
+      MenuEBisnis.jurnalPenyesuaian,
+      MenuEBisnis.tutupBuku,
+      // Di luar deret tab ZK: rujukan dan laporan.
+      MenuEBisnis.laporanKeuangan,
       MenuEBisnis.anggaran,
       MenuEBisnis.kodeAkun,
       MenuEBisnis.grupAkun,
       MenuEBisnis.jenisTransaksi,
       MenuEBisnis.bankAkun,
-      MenuEBisnis.jurnalUmum,
-      MenuEBisnis.postingHpp,
-      MenuEBisnis.postingPenjualan,
-      MenuEBisnis.saldoAwalAkun,
-      MenuEBisnis.jurnalPenyesuaian,
-      MenuEBisnis.tutupBuku,
-      MenuEBisnis.postingKulakan,
-      MenuEBisnis.postingBayarHutang,
-      MenuEBisnis.postingTerimaPiutang,
     ],
   ),
   _GrupMenuShell('Sistem', [
