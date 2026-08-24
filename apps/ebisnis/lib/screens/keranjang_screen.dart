@@ -240,14 +240,31 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // lebih dari satu, pertahankan pilihan lama hanya jika masih diizinkan.
       if (pilihan == null && daftar.length == 1) pilihan = daftar.first;
 
+      final metodeMenurutId = <int, CaraBayar>{
+        for (final cara in daftar) cara.id: cara,
+      };
+      final splitMasihDiizinkan = _splitBayar.isNotEmpty &&
+          _splitBayar
+              .every((slot) => metodeMenurutId.containsKey(slot.caraBayar.id));
+      final splitTersegar = splitMasihDiizinkan
+          ? _splitBayar
+              .map((slot) =>
+                  _SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
+              .toList()
+          : <_SlotBayar>[];
+
       setStateIfMounted(() {
         _caraBayarTersedia = daftar;
         _caraBayarTerpilih = pilihan;
         _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
-        // Daftar metode berganti (member baru punya izin metode berbeda) --
-        // split lama bisa memuat metode yg kini tak berlaku, reset drpd
-        // membawa entri tak valid ke payload checkout.
-        _splitBayar = [];
+        // Refresh ketika picker dibuka tidak boleh menghapus split yang masih
+        // sah. Bila member/config berubah dan salah satu metode tak lagi
+        // diizinkan, barulah seluruh split dibatalkan agar payload tidak
+        // membawa metode lama.
+        _splitBayar = splitTersegar;
+        if (_splitBayar.isNotEmpty) {
+          _caraBayarTerpilih = _splitBayar.first.caraBayar;
+        }
         _memuatCaraBayar = false;
         _sinkronkanUangDiterima();
       });
@@ -1296,7 +1313,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return _caraBayarTerpilih!.nama;
     }
     for (final s in _splitBayar) {
-      if (s.caraBayar.wajibPilihMember && s.nominal > 0) return s.caraBayar.nama;
+      if (s.caraBayar.wajibPilihMember && s.nominal > 0) {
+        return s.caraBayar.nama;
+      }
     }
     return _caraBayarTerpilih?.nama ?? '';
   }
@@ -1482,7 +1501,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// yang sudah ada, cukup ditampilkan sbg bottom sheet supaya tetap ada
   /// TARGET nyata utk pintasan F4 (bukan sekadar fokus ke dropdown).
   Future<void> _pilihMetode() async {
-    if (_memuatCaraBayar || _caraBayarTersedia.isEmpty) return;
+    if (_memuatCaraBayar) return;
+
+    // Jangan mengandalkan snapshot konfigurasi saat login. Metode pembayaran
+    // dapat diubah admin ketika aplikasi Kasir 2/3 tetap terbuka; muat ulang
+    // persis sebelum dialog ditampilkan supaya seluruh perangkat pada toko
+    // yang sama melihat izin member/metode terbaru tanpa harus logout.
+    await _muatCaraBayarUntukMember(_memberTerpilih?.id);
+    if (!mounted || _caraBayarTersedia.isEmpty) return;
     final awal = _splitBayar.isNotEmpty
         ? _splitBayar
         : (_caraBayarTerpilih != null
@@ -2179,9 +2205,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             _labelBagian('Pilih metode pembayaran'),
             const SizedBox(height: 8),
             InkWell(
-              onTap: _memuatCaraBayar || _caraBayarTersedia.isEmpty
-                  ? null
-                  : _pilihMetode,
+              // Tetap dapat diketuk ketika snapshot kosong: _pilihMetode akan
+              // meminta daftar terbaru ke server. Hanya permintaan yang sedang
+              // berjalan yang mencegah ketukan ganda.
+              onTap: _memuatCaraBayar ? null : _pilihMetode,
               borderRadius: BorderRadius.circular(10),
               child: InputDecorator(
                 decoration: const InputDecoration(
