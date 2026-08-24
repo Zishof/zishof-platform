@@ -12,6 +12,34 @@ import '../widgets/riwayat_data_dialog.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/pemilih_akun.dart';
 
+/// Normalisasi kontrak lintas versi server. Versi lama mengirim daftar kode
+/// sebagai String, sedangkan versi baru mengirim objek {kode,label}. UI tidak
+/// boleh melakukan cast Map langsung karena cache lokal juga dapat menyimpan
+/// salah satu dari kedua bentuk tersebut.
+List<Map<String, String>> normalisasiUnitUsahaToko(dynamic mentah) {
+  final hasil = <Map<String, String>>[];
+  if (mentah is! List) return hasil;
+  for (final item in mentah) {
+    String kode = '';
+    String label = '';
+    if (item is Map) {
+      kode =
+          '${item['kode'] ?? item['code'] ?? item['label'] ?? item['nama'] ?? ''}'
+              .trim();
+      label =
+          '${item['label'] ?? item['nama'] ?? item['kode'] ?? item['code'] ?? ''}'
+              .trim();
+    } else if (item != null) {
+      kode = '$item'.trim();
+      label = kode;
+    }
+    if (kode.isNotEmpty && !hasil.any((e) => e['kode'] == kode)) {
+      hasil.add({'kode': kode, 'label': label.isEmpty ? kode : label});
+    }
+  }
+  return hasil;
+}
+
 /// Kelola Toko/Outlet (admin-only) -- padanan layar ZK TokoAction & JSP toko.jsp.
 ///
 /// CRUD toko lewat aksi `toko_kelola_*` + pemilihan multi Unit Usaha per toko
@@ -73,8 +101,8 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('toko_kelola_list',
-          {'cari': _cari.text.trim()}, 'master:toko_kelola',
+      await MasterOffline.daftarCacheDulu(
+          'toko_kelola_list', {'cari': _cari.text.trim()}, 'master:toko_kelola',
           // Tanpa kata kunci respons = SELURUH toko (boleh deteksi hapus);
           // saat mencari respons parsial -> merge saja, lokal dipertahankan.
           responsLengkap: _cari.text.trim().isEmpty, onData: (res) {
@@ -203,8 +231,8 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       _snack('$e', galat: true);
       return;
     }
-    final terpilihAwal = ((t['unit_usaha'] as List?) ?? [])
-        .map((e) => (e as Map)['kode'].toString())
+    final terpilihAwal = normalisasiUnitUsahaToko(t['unit_usaha'])
+        .map((e) => e['kode']!)
         .toSet();
     if (!mounted) return;
     final pilihan = await showDialog<Map<String, dynamic>>(
@@ -323,8 +351,8 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
   Widget _kartuToko(Map<String, dynamic> t) {
     final aktif = t['aktif'] == true;
     final demo = t['toko_demo'] == true;
-    final unit = ((t['unit_usaha'] as List?) ?? [])
-        .map((e) => (e as Map)['label'].toString())
+    final unit = normalisasiUnitUsahaToko(t['unit_usaha'])
+        .map((e) => e['label']!)
         .toList();
     return Card(
       child: ListTile(
@@ -365,7 +393,9 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
               IconButton(
                   tooltip: 'Riwayat data ini (AuditTrails)',
                   onPressed: () => tampilkanRiwayatData(context,
-                      entitas: 'toko', id: t['id'], judul: '${t['nama'] ?? ''}'),
+                      entitas: 'toko',
+                      id: t['id'],
+                      judul: '${t['nama'] ?? ''}'),
                   icon: const Icon(Icons.history)),
             if (demo)
               IconButton(
@@ -405,8 +435,8 @@ class _PilihanUnitUsaha extends StatelessWidget {
         grupAktif = grup;
         anak.add(Padding(
           padding: const EdgeInsets.only(top: 10, bottom: 2),
-          child: Text(grup,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          child:
+              Text(grup, style: const TextStyle(fontWeight: FontWeight.bold)),
         ));
       }
       final kode = '${e['kode']}';
@@ -419,8 +449,7 @@ class _PilihanUnitUsaha extends StatelessWidget {
         onChanged: (_) => onToggle(kode),
       ));
     }
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: anak);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: anak);
   }
 }
 
@@ -461,8 +490,8 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
     _bolehLihatTokoLain = a?['boleh_melihat_toko_lain'] == true;
     _bolehStokHabis = a?['boleh_transaksi_stok_habis'] == true;
     _tokoDemo = a?['toko_demo'] == true;
-    _unit = ((a?['unit_usaha'] as List?) ?? [])
-        .map((e) => (e as Map)['kode'].toString())
+    _unit = normalisasiUnitUsahaToko(a?['unit_usaha'])
+        .map((e) => e['kode']!)
         .toSet();
     _akunKasId = (a?['akun_kas_id'] as num?)?.toInt();
     _akunPiutangId = (a?['akun_piutang_id'] as num?)?.toInt();
@@ -475,7 +504,8 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
     try {
       final hasil = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 2000}, 'master:akun_list');
-      final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (mounted) setState(() => _akun = data);
     } catch (e) {
       // Daftar akun opsional -- kegagalan memuat tidak boleh memblokir simpan toko.
