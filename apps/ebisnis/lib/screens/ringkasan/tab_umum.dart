@@ -900,13 +900,50 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
     }
   }
 
+  /// Daftar penyaring yang SEDANG aktif, dieja untuk dialog konfirmasi.
+  ///
+  /// Dialognya dulu hanya berbunyi "pada rentang filter ini" -- kalimat yang
+  /// tidak dapat diperiksa pengguna. Aksi ini menandai banyak baris sekaligus
+  /// dan tidak ada tombol batal sesudahnya, jadi cakupannya harus terbaca utuh
+  /// sebelum disetujui.
+  List<String> _ringkasanPenyaringAktif() {
+    final daftar = <String>[];
+    final rentang = _payloadRentangTanggal();
+    final mulai = rentang['tglMulai'];
+    final sampai = rentang['tglSampai'];
+    if ((mulai ?? '').isNotEmpty || (sampai ?? '').isNotEmpty) {
+      daftar.add('Tanggal: ${mulai ?? '-'} s/d ${sampai ?? '-'}');
+    }
+    if (_cariPembeli.isNotEmpty) daftar.add('Pembeli: $_cariPembeli');
+    if (_kodeTransaksi.isNotEmpty) daftar.add('Kode: $_kodeTransaksi');
+    if ((_metodeBayar ?? '').isNotEmpty) {
+      daftar.add('Jenis pembayaran: $_metodeBayar');
+    }
+    return daftar;
+  }
+
   Future<void> _layaniSemua() async {
+    final penyaring = _ringkasanPenyaringAktif();
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Layani Semua?'),
-        content: const Text(
-            'Semua transaksi pada rentang filter ini akan ditandai terlayani.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(penyaring.isEmpty
+                ? 'SELURUH transaksi yang belum terlayani akan ditandai '
+                    'terlayani. Tidak ada penyaring yang aktif.'
+                : 'Transaksi belum terlayani yang cocok dengan penyaring '
+                    'berikut akan ditandai terlayani:'),
+            for (final p in penyaring)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('• $p'),
+              ),
+          ],
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -923,8 +960,20 @@ class _RingkasanTabUmumState extends State<RingkasanTabUmum> with JejakGalat {
       // filter. Bila diantre, himpunan barisnya sudah berubah saat terkirim --
       // yang disetujui pengguna bukan lagi yang dikerjakan. (Aksi satu-baris
       // di atas, layani_transaksi, tetap lokal-dulu.)
+      // Kirim SELURUH penyaring yang sedang terlihat, bukan rentang tanggal saja.
+      // Tombol ini menandai terlayani secara massal; bila penyaringnya tidak ikut,
+      // yang dikerjakan bukan yang dilihat pengguna -- menyaring "QRIS BMT" lalu
+      // menekan tombol ini akan ikut menandai transaksi Tunai yang tak pernah
+      // tampil. Kuncinya sama persis dengan tabel Data Pembelian.
       final hasil = await ApiClient.instance.aksi('layani_semua_transaksi', {
         ..._payloadRentangTanggal(),
+        if (_cariPembeli.isNotEmpty) 'cariPembeli': _cariPembeli,
+        if (_kodeTransaksi.isNotEmpty) ...{
+          'kodeTransaksi': _kodeTransaksi,
+          'kode': _kodeTransaksi,
+        },
+        if (_metodeBayar != null && _metodeBayar!.isNotEmpty)
+          'metodeBayar': _metodeBayar,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
