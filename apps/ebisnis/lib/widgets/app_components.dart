@@ -1271,12 +1271,31 @@ class AppTablePagination {
   });
 }
 
-class AppDataTable extends StatelessWidget {
+/// Jumlah baris per halaman untuk tabel yang TIDAK mengurus pagingnya sendiri.
+///
+/// Dipasang di satu tempat, bukan di tiap layar: sebelum ini 44 dari 73 tabel
+/// merender seluruh barisnya sekaligus, sehingga daftar 200-an baris membuat
+/// pemuatan pertama terasa berat dan -- pada tab tanpa area gulir sendiri --
+/// barisnya bahkan tidak dapat dicapai sama sekali.
+const int kBarisPerHalamanTabel = 15;
+
+class AppDataTable extends StatefulWidget {
   final List<AppTableColumn> columns;
   final List<AppTableRowData> rows;
+
+  /// Paging yang diurus PEMANGGIL (biasanya paging sisi server). Bila diisi,
+  /// tabel ini tidak memotong apa pun -- barisnya sudah sepotong halaman.
   final AppTablePagination? pagination;
   final String emptyText;
   final double minWidth;
+
+  /// Setel false untuk tabel yang memang harus tampil utuh sekaligus, mis.
+  /// ringkasan tiga baris di dalam dialog, di mana bilah halaman justru
+  /// mengganggu. Tabel panjang tidak boleh memakai ini.
+  final bool pagingOtomatis;
+
+  /// Label satuan baris pada bilah halaman ("204 anggota", "18 produk").
+  final String labelData;
 
   const AppDataTable({
     super.key,
@@ -1285,10 +1304,70 @@ class AppDataTable extends StatelessWidget {
     this.pagination,
     this.emptyText = 'Tidak ada data.',
     this.minWidth = 760,
+    this.pagingOtomatis = true,
+    this.labelData = 'data',
   });
 
   @override
+  State<AppDataTable> createState() => _AppDataTableState();
+}
+
+class _AppDataTableState extends State<AppDataTable> {
+  int _halaman = 1;
+
+  bool get _pagingSendiri =>
+      widget.pagination == null &&
+      widget.pagingOtomatis &&
+      widget.rows.length > kBarisPerHalamanTabel;
+
+  int get _totalHalaman =>
+      (widget.rows.length / kBarisPerHalamanTabel).ceil().clamp(1, 1 << 30);
+
+  @override
+  void didUpdateWidget(covariant AppDataTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Daftar menyusut (mis. pengguna menyaring) bisa membuat halaman yang
+    // sedang dibuka tidak ada lagi. Tanpa penjepitan ini tabel tampak KOSONG
+    // padahal datanya ada -- kegagalan yang mudah disalahartikan sebagai
+    // "datanya hilang".
+    if (widget.rows.length != oldWidget.rows.length && _halaman > _totalHalaman) {
+      _halaman = _totalHalaman;
+    }
+  }
+
+  List<AppTableRowData> get _barisTampil {
+    if (!_pagingSendiri) return widget.rows;
+    final mulai = (_halaman - 1) * kBarisPerHalamanTabel;
+    if (mulai >= widget.rows.length) return const [];
+    final sampai =
+        (mulai + kBarisPerHalamanTabel).clamp(0, widget.rows.length).toInt();
+    return widget.rows.sublist(mulai, sampai);
+  }
+
+  void _keHalaman(int h) {
+    final tujuan = h.clamp(1, _totalHalaman);
+    if (tujuan == _halaman) return;
+    setState(() => _halaman = tujuan);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final baris = _barisTampil;
+    final pagingTampil = widget.pagination ??
+        (_pagingSendiri
+            ? AppTablePagination(
+                halaman: _halaman,
+                totalHalaman: _totalHalaman,
+                totalData: widget.rows.length,
+                labelData: widget.labelData,
+                onSebelumnya:
+                    _halaman > 1 ? () => _keHalaman(_halaman - 1) : null,
+                onBerikutnya: _halaman < _totalHalaman
+                    ? () => _keHalaman(_halaman + 1)
+                    : null,
+              )
+            : null);
+
     return AppSectionCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
@@ -1299,12 +1378,12 @@ class AppDataTable extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) {
                 final bounded = constraints.hasBoundedWidth;
-                final lebarTabel = bounded ? constraints.maxWidth : minWidth;
+                final lebarTabel = bounded ? constraints.maxWidth : widget.minWidth;
                 if (bounded && lebarTabel < 720) {
                   return _AppCompactTable(
-                    columns: columns,
-                    rows: rows,
-                    emptyText: emptyText,
+                    columns: widget.columns,
+                    rows: baris,
+                    emptyText: widget.emptyText,
                   );
                 }
                 // Pada desktop/tablet semua kolom mengikuti lebar konten.
@@ -1315,14 +1394,14 @@ class AppDataTable extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _AppTableHeader(columns: columns),
-                      if (rows.isEmpty)
+                      _AppTableHeader(columns: widget.columns),
+                      if (baris.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 36),
                           child: Center(
                             child: Text(
-                              emptyText,
+                              widget.emptyText,
                               style: TextStyle(
                                   color: AppColors.textSecondaryOf(context),
                                   fontSize: 13),
@@ -1330,13 +1409,13 @@ class AppDataTable extends StatelessWidget {
                           ),
                         )
                       else
-                        ...rows.map((row) => _AppTableRow(row: row)),
+                        ...baris.map((row) => _AppTableRow(row: row)),
                     ],
                   ),
                 );
               },
             ),
-            if (pagination != null) _AppTableFooter(pagination: pagination!),
+            if (pagingTampil != null) _AppTableFooter(pagination: pagingTampil),
           ],
         ),
       ),
