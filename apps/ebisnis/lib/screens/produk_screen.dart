@@ -151,6 +151,16 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
             if (_kataKunci.trim().isNotEmpty) 'keyword': _kataKunci.trim(),
             if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
             if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
+            // LINGKUP TOKO dinyatakan eksplisit. Tanpa ini, admin yang tidak
+            // terikat toko mendapat daftar KOSONG walau katalognya berisi:
+            // PriceTagUtil.listProduk berhenti lebih dulu pada
+            // `tokoId == null && !(semuaToko && adminGlobal)`, sehingga maksud
+            // "seluruh toko" (yang di sisi peladen berbentuk tokoId null) tidak
+            // pernah diakui. Kartu KPI memakai aksi lain sehingga tetap berisi --
+            // itulah kenapa gejalanya "angka ada, daftar kosong".
+            if (Sesi.instance.idTokoTerpilih != null)
+              'toko_id': Sesi.instance.idTokoTerpilih,
+            if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
           },
           'master:produk_list', onData: (katalog) {
         if (!mounted) return;
