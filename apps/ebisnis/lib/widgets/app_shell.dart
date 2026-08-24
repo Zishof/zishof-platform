@@ -2407,15 +2407,20 @@ class _AppTopbarState extends State<_AppTopbar> {
                   Icon(Icons.storefront_outlined,
                       color: AppColors.textSecondaryOf(context), size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                      Sesi.instance.bolehSemuaToko
-                          ? Sesi.instance.namaTokoFilter
-                          : (Sesi.instance.tokoNama.isEmpty
-                              ? AppVariant.namaAplikasi
-                              : Sesi.instance.tokoNama),
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryOf(context))),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 200),
+                    child: Text(
+                        Sesi.instance.bolehSemuaToko
+                            ? Sesi.instance.namaTokoFilter
+                            : (Sesi.instance.tokoNama.isEmpty
+                                ? AppVariant.namaAplikasi
+                                : Sesi.instance.tokoNama),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimaryOf(context))),
+                  ),
                   if (Sesi.instance.multiToko ||
                       Sesi.instance.bolehSemuaToko) ...[
                     const SizedBox(width: 4),
@@ -2543,10 +2548,15 @@ class _AppTopbarState extends State<_AppTopbar> {
                         style: const TextStyle(
                             color: Colors.white, fontSize: 13))),
                 const SizedBox(width: 8),
-                Text(Sesi.instance.userId,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimaryOf(context))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: Text(Sesi.instance.userId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryOf(context))),
+                ),
                 Icon(Icons.keyboard_arrow_down,
                     color: AppColors.textSecondaryOf(context), size: 18),
               ],
@@ -2569,9 +2579,14 @@ class _AppTopbarState extends State<_AppTopbar> {
         children: [
           Icon(icon, size: 14, color: warna),
           const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: warna)),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: warna)),
+          ),
         ],
       ),
     );

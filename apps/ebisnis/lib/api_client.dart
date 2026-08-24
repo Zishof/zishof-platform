@@ -167,6 +167,8 @@ class ApiClient {
     'mutasi_stok_list',
     'mutasi_stok_produk_list',
     'otomatis_layani_jalankan',
+    'layani_transaksi',
+    'detail_transaksi',
   };
 
   /// Menyusun payload akhir sebuah aksi, termasuk penyisipan toko.
@@ -424,7 +426,7 @@ class ApiClient {
       unawaited(hapusToken());
     }
 
-    if (json['status'] != 'success') {
+    if (!statusResponsSukses(json['status'])) {
       final gagal = ApiException(
         '${json['message'] ?? json['description'] ?? 'Permintaan belum berhasil.'}',
         aktivitas: namaAksi,
@@ -451,11 +453,18 @@ class ApiClient {
                 'Permintaan: ${_permintaanUntukLog(payload)}\n'
                 'Respons: ${_responsUntukLog(resp.body)}',
       );
-      unawaited(_catatKegagalan(gagal));
+      if (!_kegagalanYangDiharapkan(gagal)) {
+        unawaited(_catatKegagalan(gagal));
+      }
       throw gagal;
     }
     return json;
   }
+
+  /// Server eBisnis lama memakai `00`, sedangkan endpoint POS baru memakai
+  /// `success`. Keduanya merupakan kontrak sukses yang sah.
+  static bool statusResponsSukses(Object? status) =>
+      status == 'success' || status == '00';
 
   Future<void> _catatKegagalan(ApiException gagal) async {
     final info = gagal.info;
@@ -483,6 +492,14 @@ class ApiClient {
     } catch (_) {
       // Catatan lokal sudah tersimpan dan dapat disinkronkan/diperiksa nanti.
     }
+  }
+
+  bool _kegagalanYangDiharapkan(ApiException gagal) {
+    // Instalasi lama boleh belum memakai tenant. PengikatanTenant menangani
+    // respons ini sebagai mode legacy/tanpa tenant, sehingga bukan error yang
+    // perlu memenuhi Log Error dan endpoint client_error_log.
+    return gagal.aktivitas == 'tenant_context' &&
+        gagal.kode == 'TENANT_ACCESS_DENIED';
   }
 
   /// Dipakai penangkap error global dan operasi lokal/non-HTTP agar seluruh

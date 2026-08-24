@@ -6,6 +6,19 @@ import 'package:flutter_test/flutter_test.dart';
 /// simpanan mendarat -- salah di sini tidak memunculkan galat apa pun, hanya
 /// data yang duduk di tempat yang keliru sampai ada yang menyadarinya.
 void main() {
+  group('kontrak status respons server', () {
+    test('menerima status baru dan status legacy', () {
+      expect(ApiClient.statusResponsSukses('success'), isTrue);
+      expect(ApiClient.statusResponsSukses('00'), isTrue);
+    });
+
+    test('tetap menolak status kegagalan', () {
+      expect(ApiClient.statusResponsSukses('99'), isFalse);
+      expect(ApiClient.statusResponsSukses('error'), isFalse);
+      expect(ApiClient.statusResponsSukses(null), isFalse);
+    });
+  });
+
   setUp(() {
     Sesi.instance
       ..tokoId = null
@@ -140,8 +153,35 @@ void main() {
       'so_impor_excel',
       'kulakan_faktur_simpan',
       'peringkat_mitra',
+      'layani_transaksi',
+      'detail_transaksi',
     ]) {
       expect(ApiClient.aksiMemakaiTokoId(aksi), isTrue, reason: aksi);
     }
+  });
+
+  group('aksi transaksi dari layar agregat', () {
+    test('pilihan toko dikirim bila tersedia', () {
+      Sesi.instance
+        ..bolehSemuaToko = true
+        ..tokoFilter = 22;
+      expect(
+          ApiClient.susunPayload('layani_transaksi', {'id': 200019})['toko_id'],
+          22);
+      expect(
+          ApiClient.susunPayload('detail_transaksi', {'id': 200019})['toko_id'],
+          22);
+    });
+
+    test('tanpa pilihan toko, ID tetap dikirim untuk resolusi aman di server',
+        () {
+      Sesi.instance
+        ..bolehSemuaToko = true
+        ..tokoFilter = null
+        ..tokoId = null;
+      final p = ApiClient.susunPayload('layani_transaksi', {'id': 200019});
+      expect(p['id'], 200019);
+      expect(p.containsKey('toko_id'), isFalse);
+    });
   });
 }
