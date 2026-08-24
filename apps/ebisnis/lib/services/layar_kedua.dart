@@ -9,6 +9,42 @@ import 'package:win32/win32.dart';
 import '../sesi.dart';
 
 int? _hwndLayarPelanggan;
+final List<int> _hwndLayarFarmasi = [];
+
+Future<int> jumlahMonitorTersedia() async {
+  final displays = await screenRetriever.getAllDisplays();
+  return displays.isEmpty ? 1 : displays.length;
+}
+
+/// Selalu membuat jendela baru: layar gabungan, obat jadi, dan racikan dapat
+/// dibuka bersamaan pada monitor yang sama maupun monitor berbeda.
+Future<void> bukaLayarFarmasiJendelaBaru({
+  required String mode,
+  required int monitorIndex,
+}) async {
+  final hwndPetugas = GetForegroundWindow();
+  final argumen = jsonEncode({
+    'jenisJendela': 'antrean_farmasi',
+    'mode': mode,
+    'monitorIndex': monitorIndex,
+    'tokoId': Sesi.instance.tokoId,
+    'tokoNama': Sesi.instance.tokoNama,
+  });
+  final sebelum = _semuaHwndProsesIni();
+  final controller = await WindowController.create(
+      WindowConfiguration(arguments: argumen, hiddenAtLaunch: true));
+  await Future.delayed(const Duration(milliseconds: 400));
+  final sesudah = _semuaHwndProsesIni();
+  final baru = sesudah.where((h) => !sebelum.contains(h)).toList();
+  if (baru.isNotEmpty) {
+    _hwndLayarFarmasi.removeWhere((h) => IsWindow(h) == 0);
+    _hwndLayarFarmasi.add(baru.first);
+    await _posisikanFullscreenTanpaFrame(baru.first,
+        monitorIndex: monitorIndex);
+  }
+  await controller.show();
+  if (hwndPetugas != 0) SetForegroundWindow(hwndPetugas);
+}
 
 /// Buka Layar Pelanggan sbg jendela desktop KEDUA sungguhan (padanan
 /// `new BrowserWindow` + `screen.getAllDisplays()` di main.js Electron) --
@@ -84,11 +120,16 @@ bool tutupLayarPelangganJendelaKedua() {
   return true;
 }
 
-Future<void> _posisikanFullscreenTanpaFrame(int hwnd) async {
+Future<void> _posisikanFullscreenTanpaFrame(int hwnd,
+    {int? monitorIndex}) async {
   final displays = await screenRetriever.getAllDisplays();
   final primary = await screenRetriever.getPrimaryDisplay();
   final sekunder = displays.where((d) => d.id != primary.id).toList();
-  final target = sekunder.isNotEmpty ? sekunder.first : primary;
+  final urut = [primary, ...sekunder];
+  final index = monitorIndex == null
+      ? (sekunder.isNotEmpty ? 1 : 0)
+      : monitorIndex.clamp(0, urut.length - 1);
+  final target = urut[index];
 
   // Borderless fullscreen: hilangkan title bar, border, resize handle, dan
   // caption Windows. Window tetap milik proses yang sama, hanya framenya

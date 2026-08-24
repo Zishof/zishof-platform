@@ -9,6 +9,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'kasir_apotik_screen.dart';
+import 'antrean_farmasi_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
@@ -30,7 +31,8 @@ class BerandaApotikScreen extends StatefulWidget {
   State<BerandaApotikScreen> createState() => _BerandaApotikScreenState();
 }
 
-class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGalat {
+class _BerandaApotikScreenState extends State<BerandaApotikScreen>
+    with JejakGalat {
   bool _memuat = true;
   bool _provisionBerjalan = false;
   String? _error;
@@ -206,6 +208,12 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGal
                               '(Grup Pengguna). Menu apotek fail-closed: kunci yang belum '
                               'diaktifkan tidak pernah terbuka sendiri.',
                         ),
+                      if (s.bolehMenuVarianBaru('apotik_kasir') ||
+                          s.bolehMenuVarianBaru('apotik_resep') ||
+                          s.bolehMenuVarianBaru('apotik_racikan')) ...[
+                        const SizedBox(height: 12),
+                        _kartuLayarFarmasi(context),
+                      ],
                       _grupMenu(context, 'Operasional Apotik', _menuApotik),
                       if (AppProductProfile.aktif.isEmedik) ...[
                         const SizedBox(height: 12),
@@ -214,6 +222,68 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> with JejakGal
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _kartuLayarFarmasi(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+            colors: [Color(0xFF075985), Color(0xFF0F766E)]),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: LayoutBuilder(builder: (context, box) {
+        final tombol = FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF075985)),
+          onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AntreanFarmasiScreen())),
+          icon: const Icon(Icons.arrow_forward),
+          label: const Text('Buka Konsol'),
+        );
+        final info = Row(children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .16),
+                borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.connected_tv_outlined,
+                color: Colors.white, size: 30),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Antrean & Layar Farmasi',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900)),
+              SizedBox(height: 4),
+              Text(
+                  'Tampilkan obat jadi dan racikan, panggil pasien, serta buka beberapa layar publik pada monitor berbeda.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+            ]),
+          ),
+        ]);
+        if (box.maxWidth < 650) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                info,
+                const SizedBox(height: 14),
+                tombol,
+              ]);
+        }
+        return Row(children: [
+          Expanded(child: info),
+          const SizedBox(width: 12),
+          tombol
+        ]);
+      }),
     );
   }
 

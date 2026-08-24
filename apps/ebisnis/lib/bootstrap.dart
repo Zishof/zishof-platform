@@ -15,6 +15,7 @@ import 'api_client.dart';
 import 'app_variant.dart';
 import 'product_profile.dart';
 import 'screens/layar_pelanggan_screen.dart';
+import 'screens/apotik/layar_antrean_farmasi_screen.dart';
 import 'screens/layar_kunci_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
@@ -164,13 +165,21 @@ class _LayarPelangganWindowAppState extends State<_LayarPelangganWindowApp> {
           ? const Scaffold(
               backgroundColor: Color(0xFF0F1C2E),
               body: Center(child: CircularProgressIndicator()))
-          : LayarPelangganScreen(
-              jendelaKedua: true,
-              tokoIdOverride: widget.argumen['tokoId'] as int?,
-              tokoNamaOverride: widget.argumen['tokoNama'] as String?,
-              pesanTerimaKasihOverride:
-                  widget.argumen['pesanTerimaKasih'] as String?,
-            ),
+          : widget.argumen['jenisJendela'] == 'antrean_farmasi'
+              ? LayarAntreanFarmasiScreen(
+                  jendelaKedua: true,
+                  tokoIdOverride: widget.argumen['tokoId'] as int?,
+                  tokoNamaOverride: widget.argumen['tokoNama'] as String?,
+                  mode:
+                      ModeLayarFarmasiX.dari(widget.argumen['mode'] as String?),
+                )
+              : LayarPelangganScreen(
+                  jendelaKedua: true,
+                  tokoIdOverride: widget.argumen['tokoId'] as int?,
+                  tokoNamaOverride: widget.argumen['tokoNama'] as String?,
+                  pesanTerimaKasihOverride:
+                      widget.argumen['pesanTerimaKasih'] as String?,
+                ),
     );
   }
 }

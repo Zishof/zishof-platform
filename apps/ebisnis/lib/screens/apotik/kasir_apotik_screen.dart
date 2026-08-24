@@ -9,6 +9,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'pos_help.dart';
+import 'antrean_farmasi_screen.dart';
 
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -283,7 +284,15 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       subjudul: 'Penjualan obat, tebus resep, FEFO, LASA, dan obat terkendali',
       scrollable: false,
       actionsAppBar: [PosHelp.button(context, 'apotik_kasir', compact: true)],
-      aksiHeader: PosHelp.button(context, 'apotik_kasir'),
+      aksiHeader: Wrap(spacing: 8, runSpacing: 8, children: [
+        PosHelp.button(context, 'apotik_kasir'),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AntreanFarmasiScreen())),
+          icon: const Icon(Icons.connected_tv_outlined, size: 18),
+          label: const Text('Antrean & Layar Farmasi'),
+        ),
+      ]),
       body: desktop
           ? Row(children: [
               Expanded(flex: 3, child: panelCari),

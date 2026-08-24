@@ -78,6 +78,23 @@ $narasiPanduanOperasionalUmum
 
 class PosHelpCatalog {
   static const specs = <String, PosHelpSpec>{
+    'apotik_antrean_farmasi': PosHelpSpec(
+        'apotik_antrean_farmasi',
+        'Antrean & Layar Farmasi',
+        'mengelola antrean penyiapan obat jadi dan racikan serta menyampaikan status yang aman kepada pasien atau keluarga pasien melalui satu atau beberapa layar publik',
+        [
+          'Verifikasi identitas pasien',
+          'Muat resep atau isi obat',
+          'Tentukan jenis antrean',
+          'Siapkan obat',
+          'Panggil ke loket',
+          'Konfirmasi penyerahan'
+        ],
+        'identitas pasien, nomor rekam medis, resep, daftar obat yang boleh ditampilkan, jenis obat jadi atau racikan, dan loket penyerahan',
+        'Sistem menyimpan urutan pelayanan, menyamarkan nama serta nomor rekam medis pada layar publik, memisahkan obat jadi dan racikan, memperbarui status secara berkala, dan menyiarkan informasi ke beberapa monitor',
+        'antrean terurut dengan status Menunggu, Sedang Disiapkan, Siap Diambil, atau Selesai serta tampilan publik yang tidak memuat diagnosis maupun data kontak',
+        'verifikasi pasien dan resep, penyamaran identitas, pembatasan informasi klinis, pemeriksaan ganda sebelum status Siap, serta konfirmasi langsung saat obat diserahkan',
+        'Petugas memilih resep pasien, memeriksa nama dan nomor rekam medis dari dokumen sumber, memastikan daftar obat jadi dan racikan benar, menempatkan antrean pada tahap Menunggu, mengubahnya menjadi Sedang Disiapkan setelah pengerjaan dimulai, meminta farmasis memeriksa hasil, memilih loket penyerahan, lalu menekan Panggil agar kode antrean tampil mencolok. Saat pasien datang, petugas meminta pasien menyebutkan identitas lengkap tanpa membacakan data tersebut lebih dahulu, mencocokkan obat dan etiket, memberi konseling, menyerahkan obat, lalu menandai antrean Selesai'),
     'apotik_kasir': PosHelpSpec(
         'apotik_kasir',
         'Kasir Apotik',
