@@ -146,6 +146,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// `caraBayarTambahan`. Lihat `_SheetPilihMetodeSplit`.
   List<_SlotBayar> _splitBayar = [];
   bool _memuatCaraBayar = false;
+  bool _izinCaraBayarMemberTidakDisetel = false;
   int _versiPermintaanCaraBayar = 0;
   bool _memproses = false;
   Anggota? _memberTerpilih;
@@ -219,6 +220,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     try {
       final hasil = await ApiClient.instance
           .aksi('cara_bayar_list', {'id_member': memberId});
+      final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
       final daftar = ((hasil['caraBayar'] as List?) ?? const [])
           .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -241,6 +243,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _caraBayarTersedia = daftar;
         _caraBayarTerpilih = pilihan;
+        _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
         // Daftar metode berganti (member baru punya izin metode berbeda) --
         // split lama bisa memuat metode yg kini tak berlaku, reset drpd
         // membawa entri tak valid ke payload checkout.
@@ -251,7 +254,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     } catch (_) {
       if (!mounted || versi != _versiPermintaanCaraBayar) return;
       // Gagal jaringan: pertahankan snapshot terakhir untuk mode offline.
-      setStateIfMounted(() => _memuatCaraBayar = false);
+      setStateIfMounted(() {
+        _memuatCaraBayar = false;
+        _izinCaraBayarMemberTidakDisetel = false;
+      });
     }
   }
 
@@ -2210,6 +2216,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ),
               ),
             ),
+            if (_izinCaraBayarMemberTidakDisetel) ...[
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Izin metode pembayaran untuk jenis member ini belum '
+                  'disetel. Sementara semua metode aktif dapat dipilih; '
+                  'mohon admin melengkapi konfigurasinya.',
+                  style: TextStyle(fontSize: 11, color: Colors.orange),
+                ),
+              ),
+            ],
             if (AppProductProfile.aktif.isMitraInap) ...[
               const SizedBox(height: 8),
               _pemilihRoomCharge(),
