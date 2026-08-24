@@ -302,6 +302,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
             tooltip: 'Muat ulang',
             icon: const Icon(Icons.refresh)),
       ],
+      tampilkanBantuanHeader: false,
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       body: _bungkusTab(Column(children: [
         Padding(
@@ -668,8 +669,8 @@ Future<void> _simpanLampiran(
       await File(path).writeAsBytes(bytes);
     }
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lampiran disimpan: $namaFile')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Lampiran disimpan: $namaFile')));
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

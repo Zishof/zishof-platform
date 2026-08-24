@@ -83,10 +83,14 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
       final opsi = await ApiClient.instance.aksi('proses_transfer_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _cara = ((opsi['caraPembayaran'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _kategori = ((opsi['kategori'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
+        _cara = ((opsi['caraPembayaran'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
+        _satker =
+            ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _kategori =
+            ((opsi['kategori'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _daftarStatus =
+            ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
       });
       await _muatDaftar();
     } catch (e) {
@@ -115,12 +119,19 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         onData: (hasil) {
           if (!mounted) return;
           setStateIfMounted(() {
-            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _data =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _totalNilai = (hasil['totalNilai'] as num?)?.toDouble() ?? 0;
             final h = hasil['hak'];
             _hak = h is Map
                 ? {
-                    for (final k in ['create', 'update', 'delete', 'approve', 'reject'])
+                    for (final k in [
+                      'create',
+                      'update',
+                      'delete',
+                      'approve',
+                      'reject'
+                    ])
                       k: h[k] != false
                   }
                 : const {};
@@ -165,7 +176,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         entitas: 'proses_transfer',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -186,8 +198,11 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -203,9 +218,11 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
   Future<void> _form([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     int? caraId;
-    DateTime? tanggal = DateTime.tryParse('${baris?['tanggalPembuatan'] ?? ''}');
+    DateTime? tanggal =
+        DateTime.tryParse('${baris?['tanggalPembuatan'] ?? ''}');
     final terpilih = <int, double>{};
     List<Map<String, dynamic>> kandidat = [];
     final kategoriAktif = <String>{};
@@ -219,8 +236,10 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
         final d = await ApiClient.instance
             .aksi('proses_transfer_detail', {'id': baris['id']});
         caraId = ((d['header'] as Map?)?['caraPembayaranId'] as num?)?.toInt();
-        for (final e in ((d['item'] as List?) ?? []).cast<Map<String, dynamic>>()) {
-          terpilih[(e['id'] as num).toInt()] = (e['nominal'] as num?)?.toDouble() ?? 0;
+        for (final e
+            in ((d['item'] as List?) ?? []).cast<Map<String, dynamic>>()) {
+          terpilih[(e['id'] as num).toInt()] =
+              (e['nominal'] as num?)?.toDouble() ?? 0;
         }
       } catch (e) {
         _pesan('$e');
@@ -242,12 +261,16 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
           Future<void> muatKandidat() async {
             setDialog(() => memuatKandidat = true);
             try {
-              final res = await ApiClient.instance.aksi('proses_transfer_kandidat', {
-                if (cariKandidat.text.trim().isNotEmpty) 'cari': cariKandidat.text.trim(),
+              final res =
+                  await ApiClient.instance.aksi('proses_transfer_kandidat', {
+                if (cariKandidat.text.trim().isNotEmpty)
+                  'cari': cariKandidat.text.trim(),
                 if (satkerId != null) 'satuanKerjaId': satkerId,
-                if (kategoriAktif.isNotEmpty) 'kategori': kategoriAktif.toList(),
+                if (kategoriAktif.isNotEmpty)
+                  'kategori': kategoriAktif.toList(),
               });
-              kandidat = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              kandidat =
+                  ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             } catch (e) {
               _pesan('$e');
             } finally {
@@ -290,7 +313,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                           border: OutlineInputBorder(),
                           isDense: true),
                       items: [
-                        const DropdownMenuItem<int?>(value: null, child: Text('(belum dipilih)')),
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('(belum dipilih)')),
                         ..._cara.map((e) => DropdownMenuItem<int?>(
                               value: (e['id'] as num?)?.toInt(),
                               child: Text('${e['nama'] ?? ''}'
@@ -301,10 +325,11 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 150,
-                    child: OutlinedButton(
-                      onPressed: () async {
+                  Expanded(
+                    flex: 2,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () async {
                         final t = await showDatePicker(
                           context: c,
                           initialDate: tanggal ?? DateTime.now(),
@@ -313,7 +338,19 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                         );
                         if (t != null) setDialog(() => tanggal = t);
                       },
-                      child: Text(tanggal == null ? 'Tanggal' : _fmt.format(tanggal!)),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Tanggal',
+                          helperText: 'Tanggal proses transfer.',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon:
+                              Icon(Icons.calendar_today_outlined, size: 18),
+                        ),
+                        child: Text(tanggal == null
+                            ? 'Pilih tanggal'
+                            : _fmt.format(tanggal!)),
+                      ),
                     ),
                   ),
                 ]),
@@ -321,7 +358,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                 TextField(
                   controller: keterangan,
                   decoration: const InputDecoration(
-                      labelText: 'Keterangan', border: OutlineInputBorder(), isDense: true),
+                      labelText: 'Keterangan',
+                      border: OutlineInputBorder(),
+                      isDense: true),
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -353,7 +392,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                           border: OutlineInputBorder(),
                           isDense: true),
                       items: [
-                        const DropdownMenuItem<int?>(value: null, child: Text('(semua)')),
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('(semua)')),
                         ..._satker.map((s) => DropdownMenuItem<int?>(
                             value: (s['id'] as num?)?.toInt(),
                             child: Text('${s['nama'] ?? ''}'))),
@@ -400,7 +440,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                       ? const Center(child: CircularProgressIndicator())
                       : (kandidat.isEmpty && terpilih.isEmpty)
                           ? const Center(
-                              child: Text('Tidak ada baris DPC yang menunggu diproses.'))
+                              child: Text(
+                                  'Tidak ada baris DPC yang menunggu diproses.'))
                           : ListView.builder(
                               itemCount: kandidat.length,
                               itemBuilder: (_, i) {
@@ -409,7 +450,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                 return CheckboxListTile(
                                   dense: true,
                                   value: terpilih.containsKey(id),
-                                  title: Text('${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
+                                  title: Text(
+                                      '${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
                                       style: const TextStyle(fontSize: 12.5)),
                                   subtitle: Text(
                                       '${b['sumber'] ?? ''} · ${b['satuanKerja'] ?? '-'} · '
@@ -417,7 +459,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                       style: const TextStyle(fontSize: 11.5)),
                                   onChanged: (v) => setDialog(() {
                                     if (v == true) {
-                                      terpilih[id] = (b['nominal'] as num?)?.toDouble() ?? 0;
+                                      terpilih[id] =
+                                          (b['nominal'] as num?)?.toDouble() ??
+                                              0;
                                     } else {
                                       terpilih.remove(id);
                                     }
@@ -429,16 +473,22 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                 const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    Text('${terpilih.length} baris dipilih · Total Rp ${_rupiah(total)}',
+                  child:
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    Text(
+                        '${terpilih.length} baris dipilih · Total Rp ${_rupiah(total)}',
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                   ]),
                 ),
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(c, true),
+                  child: const Text('Simpan')),
             ],
           );
         },
@@ -545,10 +595,13 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                             final b = item[i];
                             final mode = b['transitori'] == true
                                 ? 'transitori'
-                                : (b['transfer'] == true ? 'transfer' : 'kosong');
+                                : (b['transfer'] == true
+                                    ? 'transfer'
+                                    : 'kosong');
                             return ListTile(
                               dense: true,
-                              title: Text('${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
+                              title: Text(
+                                  '${b['kode'] ?? ''} — ${b['nama'] ?? ''}',
                                   style: const TextStyle(fontSize: 12.5)),
                               subtitle: Text(
                                   '${b['sumber'] ?? ''} · ${b['satuanKerja'] ?? '-'} · '
@@ -560,24 +613,33 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                       style: const ButtonStyle(
                                           visualDensity: VisualDensity.compact),
                                       segments: const [
-                                        ButtonSegment(value: 'transfer', label: Text('Transfer')),
                                         ButtonSegment(
-                                            value: 'transitori', label: Text('Transitori')),
+                                            value: 'transfer',
+                                            label: Text('Transfer')),
+                                        ButtonSegment(
+                                            value: 'transitori',
+                                            label: Text('Transitori')),
                                       ],
-                                      selected: mode == 'kosong' ? <String>{} : {mode},
+                                      selected: mode == 'kosong'
+                                          ? <String>{}
+                                          : {mode},
                                       emptySelectionAllowed: true,
                                       onSelectionChanged: (s) async {
-                                        final pilih = s.isEmpty ? 'kosong' : s.first;
+                                        final pilih =
+                                            s.isEmpty ? 'kosong' : s.first;
                                         await _kirimLokalDulu(
                                           'proses_transfer_tandai',
                                           {'dptId': b['id'], 'mode': pilih},
-                                          kunci: 'proses_transfer_item:${b['id']}',
+                                          kunci:
+                                              'proses_transfer_item:${b['id']}',
                                         );
                                         setDialog(() => memuat = true);
                                       },
                                     )
                                   : Text(
-                                      mode == 'kosong' ? 'belum bertanda' : mode,
+                                      mode == 'kosong'
+                                          ? 'belum bertanda'
+                                          : mode,
                                       style: TextStyle(
                                           fontSize: 11.5,
                                           color: mode == 'kosong'
@@ -591,7 +653,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                     ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Tutup')),
             ],
           );
         },
@@ -631,7 +695,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
       actionsAppBar: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+      aksiHeader:
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       body: _bungkusTab(
         _galat != null
             ? Center(
@@ -640,7 +705,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Text(_galat!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                    FilledButton(
+                        onPressed: _muatSemua, child: const Text('Coba lagi')),
                   ]),
                 ),
               )
@@ -674,7 +740,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     final tabs = <Tab>[
       const Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
       const Tab(
-          icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Proses Transfer'),
+          icon: Icon(Icons.list_alt_outlined, size: 18),
+          text: 'Proses Transfer'),
       if (bolehBayarVendor)
         const Tab(
             icon: Icon(Icons.payments_outlined, size: 18),
@@ -709,57 +776,67 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
 
   Widget _penyaring() => Padding(
         padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(
-            width: 240,
-            child: AppSearchField(
-              controller: _cari,
-              hintText: 'Cari kode / judul',
-              onChanged: (_) => _muatDaftar(),
-            ),
-          ),
-          SizedBox(
-            width: 180,
-            child: DropdownButtonFormField<String>(
-              value: _statusFilter.isEmpty ? null : _statusFilter,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Status', isDense: true),
-              items: [
-                const DropdownMenuItem<String>(value: null, child: Text('(semua status)')),
-                ..._daftarStatus.map((s) => DropdownMenuItem<String>(value: s, child: Text(s))),
-              ],
-              onChanged: (v) {
-                _statusFilter = v ?? '';
-                _muatDaftar();
-              },
-            ),
-          ),
-          SizedBox(
-            width: 220,
-            child: DropdownButtonFormField<int?>(
-              value: _caraFilter,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Cara Pembayaran', isDense: true),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('(semua)')),
-                ..._cara.map((e) => DropdownMenuItem<int?>(
-                    value: (e['id'] as num?)?.toInt(), child: Text('${e['nama'] ?? ''}'))),
-              ],
-              onChanged: (v) {
-                _caraFilter = v;
-                _muatDaftar();
-              },
-            ),
-          ),
-          if (_boleh('create'))
-            FilledButton.icon(
-              onPressed: _sibuk ? null : () => _form(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Proses Transfer Baru'),
-            ),
-          Text('Total Rp ${_rupiah(_totalNilai)}',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-        ]),
+        child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 240,
+                child: AppSearchField(
+                  controller: _cari,
+                  hintText: 'Cari kode / judul',
+                  onChanged: (_) => _muatDaftar(),
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: DropdownButtonFormField<String>(
+                  value: _statusFilter.isEmpty ? null : _statusFilter,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Status', isDense: true),
+                  items: [
+                    const DropdownMenuItem<String>(
+                        value: null, child: Text('(semua status)')),
+                    ..._daftarStatus.map((s) =>
+                        DropdownMenuItem<String>(value: s, child: Text(s))),
+                  ],
+                  onChanged: (v) {
+                    _statusFilter = v ?? '';
+                    _muatDaftar();
+                  },
+                ),
+              ),
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<int?>(
+                  value: _caraFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Cara Pembayaran', isDense: true),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                        value: null, child: Text('(semua)')),
+                    ..._cara.map((e) => DropdownMenuItem<int?>(
+                        value: (e['id'] as num?)?.toInt(),
+                        child: Text('${e['nama'] ?? ''}'))),
+                  ],
+                  onChanged: (v) {
+                    _caraFilter = v;
+                    _muatDaftar();
+                  },
+                ),
+              ),
+              if (_boleh('create'))
+                FilledButton.icon(
+                  onPressed: _sibuk ? null : () => _form(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Proses Transfer Baru'),
+                ),
+              Text('Total Rp ${_rupiah(_totalNilai)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ]),
       );
 
   Widget _tabel() => AppDataTable(
@@ -775,17 +852,22 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
           AppTableColumn('Aksi', width: 64, align: TextAlign.center),
         ],
         rows: _data.map((b) {
-          final status = '${b['statusDokumen'] ?? ''}';
+          final status = '${b['statusDokumen'] ?? ''}'.trim();
+          final statusNormal = status.toLowerCase();
           final draft = status == 'Draft';
           final disetujui = status == 'Disetujui';
           final cair = status == 'Terealisasi';
+          final sudahCair = cair ||
+              statusNormal == 'realisasi' ||
+              '${b['realisasikanOleh'] ?? ''}'.trim().isNotEmpty;
           return AppTableRowData(cells: [
             AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
             AppTableCell.text('${b['nama'] ?? ''}', flex: 3),
             AppTableCell.text('${b['caraPembayaran'] ?? ''}', flex: 2),
             AppTableCell.text('${(b['jumlahItem'] as num?)?.toInt() ?? 0}',
                 flex: 1, align: TextAlign.center),
-            AppTableCell.text('Rp ${_rupiah(b['nilai'])}', flex: 2, align: TextAlign.right),
+            AppTableCell.text('Rp ${_rupiah(b['nilai'])}',
+                flex: 2, align: TextAlign.right),
             AppTableCell(
               flex: 2,
               align: TextAlign.center,
@@ -794,7 +876,7 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: cair
+                        color: sudahCair
                             ? AppColors.success
                             : (disetujui ? AppColors.primary : null))),
               ),
@@ -811,7 +893,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                   AksiBaris(
                       ikon: Icons.edit_outlined,
                       label: 'Ubah',
-                      onTap: draft && _boleh('update') && !_sibuk ? () => _form(b) : null),
+                      onTap: draft && _boleh('update') && !_sibuk
+                          ? () => _form(b)
+                          : null),
                   AksiBaris(
                       ikon: Icons.check_circle_outline,
                       label: 'Setujui',
@@ -822,24 +906,34 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                 await _kirimLokalDulu(
                                     'proses_transfer_setujui', {'id': b['id']},
                                     kunci: 'proses_transfer:${b['id']}',
-                                    rowLokal: {...b, 'statusDokumen': 'Disetujui'});
+                                    rowLokal: {
+                                      ...b,
+                                      'statusDokumen': 'Disetujui'
+                                    });
                               }
                             }
                           : null),
                   AksiBaris(
                       ikon: Icons.payments_outlined,
                       label: 'Realisasikan (dana cair)',
-                      onTap: disetujui && _boleh('approve') && !_sibuk
+                      onTap: disetujui &&
+                              !sudahCair &&
+                              _boleh('approve') &&
+                              !_sibuk
                           ? () async {
                               if (await _konfirmasi(
                                   'Tandai dana sudah cair?',
                                   '${b['kode']} — ${b['nama']}\n\n'
-                                      'Setelah ini dokumen sumbernya siap diposting dari Draft Jurnal.',
+                                      'Setelah ini jurnal umum dibuat otomatis.',
                                   'Realisasikan')) {
                                 await _kirimLokalDulu(
-                                    'proses_transfer_realisasikan', {'id': b['id']},
+                                    'proses_transfer_realisasikan',
+                                    {'id': b['id']},
                                     kunci: 'proses_transfer:${b['id']}',
-                                    rowLokal: {...b, 'statusDokumen': 'Terealisasi'});
+                                    rowLokal: {
+                                      ...b,
+                                      'statusDokumen': 'Terealisasi'
+                                    });
                               }
                             }
                           : null),
@@ -851,9 +945,13 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                               if (await _konfirmasi('Batalkan realisasi?',
                                   '${b['kode']} — ${b['nama']}', 'Batalkan')) {
                                 await _kirimLokalDulu(
-                                    'proses_transfer_batal_realisasi', {'id': b['id']},
+                                    'proses_transfer_batal_realisasi',
+                                    {'id': b['id']},
                                     kunci: 'proses_transfer:${b['id']}',
-                                    rowLokal: {...b, 'statusDokumen': 'Disetujui'});
+                                    rowLokal: {
+                                      ...b,
+                                      'statusDokumen': 'Disetujui'
+                                    });
                               }
                             }
                           : null),
@@ -869,7 +967,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                                       'di status sudah diajukan.',
                                   'Batalkan')) {
                                 await _kirimLokalDulu(
-                                    'proses_transfer_batal_setuju', {'id': b['id']},
+                                    'proses_transfer_batal_setuju',
+                                    {'id': b['id']},
                                     kunci: 'proses_transfer:${b['id']}',
                                     rowLokal: {...b, 'statusDokumen': 'Draft'});
                               }
@@ -879,7 +978,9 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                       ikon: Icons.delete_outline,
                       label: 'Hapus',
                       merusak: true,
-                      onTap: draft && _boleh('delete') && !_sibuk ? () => _hapusBaris(b) : null),
+                      onTap: draft && _boleh('delete') && !_sibuk
+                          ? () => _hapusBaris(b)
+                          : null),
                 ],
               ),
             ),

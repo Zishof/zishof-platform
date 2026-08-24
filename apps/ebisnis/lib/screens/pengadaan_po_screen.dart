@@ -33,7 +33,8 @@ class PengadaanPoScreen extends StatefulWidget {
   State<PengadaanPoScreen> createState() => _PengadaanPoScreenState();
 }
 
-class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTickerProviderStateMixin {
+class _PengadaanPoScreenState extends State<PengadaanPoScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -85,7 +86,8 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
           final sukses = res['status'] == '00' || res['status'] == 'success';
           if (!sukses) {
             setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat Pemesanan Pembelian.'}';
+              _galat =
+                  '${res['description'] ?? 'Gagal memuat Pemesanan Pembelian.'}';
               _memuat = false;
             });
             return;
@@ -107,7 +109,9 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
                 : {};
             _jumlahHapus = dariServer ? (res['jumlahHapus'] as int? ?? 0) : 0;
             if (dariServer &&
-                (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)) {
+                (_idBaru.isNotEmpty ||
+                    _idBerubah.isNotEmpty ||
+                    _jumlahHapus > 0)) {
               _versiPerubahan++;
             }
             _memuat = false;
@@ -135,7 +139,8 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
     }
   }
 
-  Future<void> _form({Map<String, dynamic>? awal, Map<String, dynamic>? dariPr}) async {
+  Future<void> _form(
+      {Map<String, dynamic>? awal, Map<String, dynamic>? dariPr}) async {
     Map<String, dynamic>? detailAwal;
     if (awal != null && awal['id'] != null) {
       try {
@@ -253,8 +258,9 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Hapus Pemesanan Pembelian'),
-        content: Text('Hapus PO ${po['kode']}? Hanya PO berstatus DRAFT dan belum '
-            'menerima pembayaran yang dapat dihapus.'),
+        content:
+            Text('Hapus PO ${po['kode']}? Hanya PO berstatus DRAFT dan belum '
+                'menerima pembayaran yang dapat dihapus.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c, false),
@@ -285,18 +291,16 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
     }
   }
 
-
   /// Bulk entry mengikuti skema Kulakan: header, tempel/Excel, tabel item, review.
   Future<void> _bulkEntry() async {
     final hasil = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-          builder: (_) => const PengadaanBulkEntryScreen(
-              jenis: JenisPengadaanBulk.po)),
+          builder: (_) =>
+              const PengadaanBulkEntryScreen(jenis: JenisPengadaanBulk.po)),
     );
     if (hasil == true && mounted) await _muat();
   }
-
 
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Pesanan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
@@ -341,20 +345,22 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
             tooltip: 'Muat ulang',
             icon: const Icon(Icons.refresh)),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      floatingActionButton: Row(mainAxisSize: MainAxisSize.min, children: [
-        FloatingActionButton.extended(
-          heroTag: 'po_dari_pr',
+      tampilkanBantuanHeader: false,
+      aksiHeader: Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
           onPressed: _dariPr,
           icon: const Icon(Icons.playlist_add_check),
           label: const Text('Dari PR'),
         ),
-        const SizedBox(width: 10),
-        FloatingActionButton.extended(
-          heroTag: 'po_baru',
+        FilledButton.icon(
           onPressed: () => _form(),
           icon: const Icon(Icons.add),
           label: const Text('Buat PO'),
+        ),
+        IconButton(
+          tooltip: 'Muat ulang',
+          icon: const Icon(Icons.refresh),
+          onPressed: _muat,
         ),
       ]),
       body: _bungkusTab(Column(children: [
@@ -384,7 +390,8 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen> with SingleTicker
                 items: const [
                   DropdownMenuItem(value: '', child: Text('Semua status')),
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(value: 'DISETUJUI', child: Text('Disetujui')),
+                  DropdownMenuItem(
+                      value: 'DISETUJUI', child: Text('Disetujui')),
                   DropdownMenuItem(value: 'DITOLAK', child: Text('Ditolak')),
                   DropdownMenuItem(value: 'LUNAS', child: Text('Lunas')),
                 ],
@@ -584,7 +591,8 @@ class _BarangPr {
   final TextEditingController jumlah;
   bool dipilih = false;
   _BarangPr(this.data)
-      : jumlah = TextEditingController(text: '${data['sisa'] ?? data['jumlah'] ?? 0}');
+      : jumlah = TextEditingController(
+            text: '${data['sisa'] ?? data['jumlah'] ?? 0}');
   void dispose() => jumlah.dispose();
 
   double get sisa => ((data['sisa'] ?? 0) as num).toDouble();
@@ -636,7 +644,8 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
   }
 
   double _angka(String teks) =>
-      double.tryParse(teks.replaceAll('.', '').replaceAll(',', '.').trim()) ?? 0;
+      double.tryParse(teks.replaceAll('.', '').replaceAll(',', '.').trim()) ??
+      0;
 
   Future<void> _muat() async {
     setStateIfMounted(() => _memuat = true);
@@ -687,8 +696,8 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
     final semuaDipilih = daftar.isNotEmpty && daftar.every((b) => b.dipilih);
     final sebagian = daftar.any((b) => b.dipilih) && !semuaDipilih;
     return InkWell(
-      onTap: () => setState(() =>
-          _terbuka.contains(id) ? _terbuka.remove(id) : _terbuka.add(id)),
+      onTap: () => setState(
+          () => _terbuka.contains(id) ? _terbuka.remove(id) : _terbuka.add(id)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(children: [
@@ -721,7 +730,8 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
               ],
             ),
           ),
-          Text('${daftar.length} barang · ${_fmtRp.format(g['nilaiSisa'] ?? 0)}',
+          Text(
+              '${daftar.length} barang · ${_fmtRp.format(g['nilaiSisa'] ?? 0)}',
               style: const TextStyle(fontSize: 11)),
         ]),
       ),
@@ -764,24 +774,23 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
             keyboardType: TextInputType.number,
             enabled: b.dipilih,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-                labelText: 'Jumlah', isDense: true),
+            decoration:
+                const InputDecoration(labelText: 'Jumlah', isDense: true),
           ),
         ),
         const SizedBox(width: 8),
         SizedBox(
           width: 100,
           child: Text(_fmtRp.format(b.harga),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 11)),
+              textAlign: TextAlign.right, style: const TextStyle(fontSize: 11)),
         ),
         const SizedBox(width: 8),
         SizedBox(
           width: 110,
           child: Text(_fmtRp.format(_angka(b.jumlah.text) * b.harga),
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600)),
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -887,7 +896,8 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
         FilledButton.icon(
             onPressed: _jumlahDipilih == 0 ? null : _ambil,
             icon: const Icon(Icons.playlist_add_check),
@@ -997,7 +1007,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
         text: '${h?['keterangan'] ?? widget.dariPr?['keterangan'] ?? ''}');
     _kodeInvoice = TextEditingController(text: '${h?['kodeInvoice'] ?? ''}');
     _catatan = TextEditingController(text: '${h?['catatanKesepakatan'] ?? ''}');
-    _kirim = TextEditingController(text: '${h?['pengirimanPalingLambat'] ?? ''}');
+    _kirim =
+        TextEditingController(text: '${h?['pengirimanPalingLambat'] ?? ''}');
     _dp = TextEditingController(text: '${(h?['dp'] as num?)?.toDouble() ?? 0}');
     _penyediaId = (h?['penyedia_id'] as num?)?.toInt();
     _penyediaNama = '${h?['penyedia'] ?? ''}';
@@ -1077,8 +1088,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
       builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
         Future<void> cari() async {
           try {
-            final r = await ApiClient.instance.aksi(
-                'pengadaan_penyedia_cari', {'keyword': q.text.trim(), 'limit': 50});
+            final r = await ApiClient.instance.aksi('pengadaan_penyedia_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
             hasil = ((r['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -1118,7 +1129,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dctx), child: const Text('Tutup'))
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Tutup'))
           ],
         );
       }),
@@ -1139,8 +1151,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
       builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
         Future<void> cari() async {
           try {
-            final r = await ApiClient.instance.aksi(
-                'pengadaan_barang_cari', {'keyword': q.text.trim(), 'limit': 50});
+            final r = await ApiClient.instance.aksi('pengadaan_barang_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
             hasil = ((r['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -1179,7 +1191,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dctx), child: const Text('Tutup'))
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Tutup'))
           ],
         );
       }),
@@ -1196,7 +1209,9 @@ class _FormPoDialogState extends State<_FormPoDialog> {
     DateTime awal = DateTime.now();
     final bagian = c.text.split('-');
     if (bagian.length == 3) {
-      final d = int.tryParse(bagian[0]), m = int.tryParse(bagian[1]), y = int.tryParse(bagian[2]);
+      final d = int.tryParse(bagian[0]),
+          m = int.tryParse(bagian[1]),
+          y = int.tryParse(bagian[2]);
       if (d != null && m != null && y != null) awal = DateTime(y, m, d);
     }
     final pilih = await showDatePicker(
@@ -1265,8 +1280,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
                 label: const Text('Bagi Rata')),
           if (!_terkunci)
             TextButton.icon(
-                onPressed: () => setState(() => _termin.add(_BarisTermin(
-                    namaAwal: 'Termin ${_termin.length + 1}'))),
+                onPressed: () => setState(() => _termin.add(
+                    _BarisTermin(namaAwal: 'Termin ${_termin.length + 1}'))),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Tambah Termin')),
         ]),
@@ -1471,7 +1486,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
                               if (b.prDetailId != null)
                                 const Text('dari PR',
                                     style: TextStyle(
-                                        fontSize: 10, color: Color(0xFF00695C))),
+                                        fontSize: 10,
+                                        color: Color(0xFF00695C))),
                             ])),
                     const SizedBox(width: 6),
                     SizedBox(
@@ -1544,7 +1560,8 @@ class _FormPoDialogState extends State<_FormPoDialog> {
                 child: Text(
                     'Nilai dihitung ulang oleh server dari baris di atas, sehingga total '
                     'dokumen selalu sama dengan rinciannya.',
-                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                    style:
+                        TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
               ),
             ],
           ),
@@ -1552,8 +1569,10 @@ class _FormPoDialogState extends State<_FormPoDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
-        if (!_terkunci) FilledButton(onPressed: _simpan, child: const Text('Simpan')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup')),
+        if (!_terkunci)
+          FilledButton(onPressed: _simpan, child: const Text('Simpan')),
       ],
     );
   }
@@ -1566,7 +1585,9 @@ class _FormPoDialogState extends State<_FormPoDialog> {
           content: Text('Pilih penyedia/vendor terlebih dahulu.')));
       return;
     }
-    if (_baris.where((b) => b.barangId != null || b.masterAssetId != null).isEmpty) {
+    if (_baris
+        .where((b) => b.barangId != null || b.masterAssetId != null)
+        .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tambahkan minimal satu baris barang.')));
       return;

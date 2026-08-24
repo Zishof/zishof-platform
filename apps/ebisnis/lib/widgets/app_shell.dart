@@ -674,15 +674,17 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.penggantianKasKecil, Icons.autorenew,
       'Penggantian Kas Kecil (Reimbursement)',
       builder: _bangunPenggantianKasKecil),
-  _ItemMenuShell(MenuEBisnis.danaTalangan, Icons.handshake_outlined, 'Dana Talangan',
+  _ItemMenuShell(
+      MenuEBisnis.danaTalangan, Icons.handshake_outlined, 'Dana Talangan',
       builder: _bangunDanaTalangan),
-  _ItemMenuShell(MenuEBisnis.reimbursement, Icons.receipt_outlined, 'Reimbursement Pegawai',
+  _ItemMenuShell(MenuEBisnis.reimbursement, Icons.receipt_outlined,
+      'Reimbursement Pegawai',
       builder: _bangunReimbursement),
-  _ItemMenuShell(MenuEBisnis.masterKeuangan, Icons.tune_outlined,
-      'Master Data Keuangan',
+  _ItemMenuShell(
+      MenuEBisnis.masterKeuangan, Icons.tune_outlined, 'Master Data Keuangan',
       builder: _bangunMasterKeuangan),
-  _ItemMenuShell(MenuEBisnis.prosesTransfer, Icons.account_balance_wallet_outlined,
-      'Proses Transfer',
+  _ItemMenuShell(MenuEBisnis.prosesTransfer,
+      Icons.account_balance_wallet_outlined, 'Proses Transfer',
       builder: _bangunProsesTransfer),
   _ItemMenuShell(MenuEBisnis.prosesTransitori, Icons.swap_horiz_outlined,
       'Proses Transitori',
@@ -696,8 +698,7 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
       builder: _bangunLogError),
-  _ItemMenuShell(
-      MenuEBisnis.riwayatAudit, Icons.manage_search, 'Riwayat Audit',
+  _ItemMenuShell(MenuEBisnis.riwayatAudit, Icons.manage_search, 'Riwayat Audit',
       builder: _bangunRiwayatAudit),
   _ItemMenuShell(
       MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi',
@@ -1006,8 +1007,10 @@ Widget _bangunDanaTalangan(BuildContext c) => const DanaTalanganScreen();
 Widget _bangunReimbursement(BuildContext c) => const ReimbursementScreen();
 Widget _bangunMasterKeuangan(BuildContext c) => const MasterKeuanganScreen();
 Widget _bangunProsesTransfer(BuildContext c) => const ProsesTransferScreen();
-Widget _bangunProsesTransitori(BuildContext c) => const ProsesTransitoriScreen();
-Widget _bangunNomorSuratKeuangan(BuildContext c) => const NomorSuratKeuanganScreen();
+Widget _bangunProsesTransitori(BuildContext c) =>
+    const ProsesTransitoriScreen();
+Widget _bangunNomorSuratKeuangan(BuildContext c) =>
+    const NomorSuratKeuanganScreen();
 Widget _bangunClosing(BuildContext c) => const ClosingScreen();
 Widget _bangunRiwayatSinkron(BuildContext c) =>
     const RiwayatSinkronisasiScreen();
@@ -1133,7 +1136,8 @@ class _DropdownGrupMenu extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.latarLembut(AppColors.primary),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.28)),
+            border:
+                Border.all(color: AppColors.primary.withValues(alpha: 0.28)),
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1622,6 +1626,7 @@ class AppShell extends StatefulWidget {
   final Widget? aksiHeader;
   final Widget body;
   final Widget? floatingActionButton;
+  final bool tampilkanBantuanHeader;
 
   /// Kalau false, [body] mengurus scroll-nya sendiri (dibungkus Expanded,
   /// BUKAN SingleChildScrollView) -- wajib dipakai layar dgn TabBarView
@@ -1649,6 +1654,7 @@ class AppShell extends StatefulWidget {
     this.aksiHeader,
     required this.body,
     this.floatingActionButton,
+    this.tampilkanBantuanHeader = true,
     this.scrollable = true,
     this.bottomBar,
     this.tampilkanJudul = true,
@@ -1842,20 +1848,22 @@ class _AppShellState extends State<AppShell> {
                               children: [
                                 if (widget.aksiHeader != null)
                                   widget.aksiHeader!,
-                                OutlinedButton.icon(
-                                  key: const Key('tombol-qa-halaman-desktop'),
-                                  onPressed: () => _bukaTanyaJawab(context),
-                                  icon: const Icon(
-                                      Icons.question_answer_outlined,
-                                      size: 18),
-                                  label: const Text('Tanya Jawab'),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: () => _bukaBantuan(context),
-                                  icon:
-                                      const Icon(Icons.help_outline, size: 18),
-                                  label: const Text('Bantuan'),
-                                ),
+                                if (widget.tampilkanBantuanHeader)
+                                  OutlinedButton.icon(
+                                    key: const Key('tombol-qa-halaman-desktop'),
+                                    onPressed: () => _bukaTanyaJawab(context),
+                                    icon: const Icon(
+                                        Icons.question_answer_outlined,
+                                        size: 18),
+                                    label: const Text('Tanya Jawab'),
+                                  ),
+                                if (widget.tampilkanBantuanHeader)
+                                  OutlinedButton.icon(
+                                    onPressed: () => _bukaBantuan(context),
+                                    icon: const Icon(Icons.help_outline,
+                                        size: 18),
+                                    label: const Text('Bantuan'),
+                                  ),
                               ],
                             ),
                           ),
@@ -1878,18 +1886,20 @@ class _AppShellState extends State<AppShell> {
                           runSpacing: 8,
                           children: [
                             if (widget.aksiHeader != null) widget.aksiHeader!,
-                            OutlinedButton.icon(
-                              key: const Key('tombol-qa-halaman-desktop'),
-                              onPressed: () => _bukaTanyaJawab(context),
-                              icon: const Icon(Icons.question_answer_outlined,
-                                  size: 18),
-                              label: const Text('Tanya Jawab'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => _bukaBantuan(context),
-                              icon: const Icon(Icons.help_outline, size: 18),
-                              label: const Text('Bantuan'),
-                            ),
+                            if (widget.tampilkanBantuanHeader)
+                              OutlinedButton.icon(
+                                key: const Key('tombol-qa-halaman-desktop'),
+                                onPressed: () => _bukaTanyaJawab(context),
+                                icon: const Icon(Icons.question_answer_outlined,
+                                    size: 18),
+                                label: const Text('Tanya Jawab'),
+                              ),
+                            if (widget.tampilkanBantuanHeader)
+                              OutlinedButton.icon(
+                                onPressed: () => _bukaBantuan(context),
+                                icon: const Icon(Icons.help_outline, size: 18),
+                                label: const Text('Bantuan'),
+                              ),
                           ],
                         ),
                       ),
