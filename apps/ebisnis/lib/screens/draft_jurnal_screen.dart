@@ -381,23 +381,67 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
     }
   }
 
+  /// Angka pada satu kolom status.
+  ///
+  /// Garis bawah di sini adalah JANJI: angka ini dapat diketuk untuk melihat
+  /// dokumen di baliknya. Tidak semua baris dapat menepatinya -- "Posting HPP"
+  /// diposting per periode, bukan per dokumen, sehingga tidak ada daftar yang
+  /// jujur bisa ditampilkan. Server sudah menyebutkan itu lewat `bisaRincian`,
+  /// tetapi layar ini dulu mengabaikannya dan tetap menggarisbawahi angkanya:
+  /// pengguna mengetuk, lalu menerima lembar merah berisi penolakan.
+  ///
+  /// Sekarang baris tanpa rincian tampil TANPA garis bawah, dan ketukannya
+  /// menerangkan sebabnya secara lokal -- tanpa memanggil server untuk sesuatu
+  /// yang sudah pasti ditolak.
   Widget _angkaSel(Map<String, dynamic> baris, String status, Color warna) {
     final n = (baris[status] as num?)?.toInt() ?? 0;
+    // Bawaan `true`: peladen lama belum mengirim bendera ini, dan memadamkan
+    // seluruh rincian karena benderanya absen jauh lebih merugikan daripada
+    // sesekali menawarkan ketukan yang ditolak.
+    final bisaRincian = baris['bisaRincian'] != false;
     final teks = Text(
       _angka.format(n),
       textAlign: TextAlign.right,
       style: TextStyle(
         fontWeight: n > 0 ? FontWeight.w700 : FontWeight.w400,
         color: n > 0 ? warna : AppColors.textSecondaryOf(context),
-        decoration: n > 0 ? TextDecoration.underline : null,
+        decoration:
+            n > 0 && bisaRincian ? TextDecoration.underline : null,
         decorationColor: warna,
       ),
     );
     if (n == 0) return teks;
     return InkWell(
-      onTap: () => _bukaRincian(baris, status),
+      onTap: bisaRincian
+          ? () => _bukaRincian(baris, status)
+          : () => _terangkanTanpaRincian(baris),
       child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4), child: teks),
+    );
+  }
+
+  /// Menerangkan kenapa satu baris tidak punya daftar dokumen.
+  ///
+  /// Kalimatnya datang dari server (`alasanTanpaRincian`) supaya sama persis
+  /// dengan pesan penolakan `draft_jurnal_rincian` -- dua penjelasan berbeda
+  /// untuk hal yang sama justru membuat pengguna ragu mana yang benar. Kalimat
+  /// cadangan hanya dipakai bila peladennya belum mengirimkannya.
+  Future<void> _terangkanTanpaRincian(Map<String, dynamic> baris) async {
+    final nama = '${baris['nama'] ?? ''}';
+    final alasan = '${baris['alasanTanpaRincian'] ?? ''}'.trim();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(nama),
+        content: Text(alasan.isNotEmpty
+            ? alasan
+            : '"$nama" tidak memiliki daftar dokumen yang dapat dirinci.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Mengerti')),
+        ],
+      ),
     );
   }
 

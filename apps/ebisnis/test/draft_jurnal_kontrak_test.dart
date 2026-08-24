@@ -70,6 +70,38 @@ void main() {
     expect(source, contains('SUDAH closing tidak akan dibatalkan'));
   });
 
+  test('angka tanpa rincian tidak menawarkan ketukan yang pasti ditolak', () {
+    final source =
+        File('lib/screens/draft_jurnal_screen.dart').readAsStringSync();
+
+    // Laporan produksi API-MT6LWJLG: pengguna mengetuk angka "Posting HPP" dan
+    // menerima penolakan. Servernya benar -- Posting HPP diposting per periode,
+    // bukan per dokumen -- dan sudah lama mengirim benderanya; layar inilah yang
+    // mengabaikannya. Garis bawah pada angka adalah janji bahwa ia dapat dibuka.
+    expect(source, contains("baris['bisaRincian'] != false"),
+        reason: 'bendera bisaRincian dari server harus dibaca');
+
+    final mulai = source.indexOf('Widget _angkaSel(');
+    expect(mulai, greaterThan(-1));
+    final blok = source.substring(mulai, source.indexOf('Future<void> _terangkanTanpaRincian('));
+
+    expect(blok, contains('n > 0 && bisaRincian ? TextDecoration.underline'),
+        reason: 'garis bawah hanya untuk angka yang benar-benar dapat dibuka');
+    expect(blok, contains('_terangkanTanpaRincian(baris)'),
+        reason: 'ketukan pada baris tanpa rincian menerangkan sebabnya, '
+            'bukan memanggil server untuk sesuatu yang pasti ditolak');
+
+    // Bawaan saat benderanya TIDAK ADA harus `true`: peladen lama belum
+    // mengirimnya, dan memadamkan seluruh rincian jauh lebih merugikan.
+    expect(source.contains("baris['bisaRincian'] == true"), isFalse,
+        reason: 'bendera absen harus dianggap "bisa", bukan "tidak bisa"');
+
+    // Kalimat alasannya milik server, supaya sama persis dgn pesan penolakan
+    // draft_jurnal_rincian -- dua penjelasan berbeda utk hal yang sama membuat
+    // pengguna ragu mana yang benar.
+    expect(source, contains("baris['alasanTanpaRincian']"));
+  });
+
   test('menu Draft Jurnal terdaftar di kedua platform', () {
     final shell = File('lib/widgets/app_shell.dart').readAsStringSync();
     final drawer = File('lib/widgets/app_drawer.dart').readAsStringSync();
