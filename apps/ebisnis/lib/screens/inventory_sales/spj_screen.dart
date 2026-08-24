@@ -13,7 +13,8 @@ import '../../widgets/safe_state.dart';
 import 'nota_sales_screen.dart';
 import '../../widgets/jejak_galat.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
 /// <h3>Surat Perintah Sales Jalan / SPJ (layar legacy 39).</h3>
@@ -30,8 +31,15 @@ class SpjScreen extends StatefulWidget {
 }
 
 const _statusSpj = [
-  'SEMUA', 'DRAFT', 'SUBMITTED', 'APPROVED', 'ACTIVE', 'RETURNED',
-  'RECONCILING', 'CLOSED', 'CANCELLED'
+  'SEMUA',
+  'DRAFT',
+  'SUBMITTED',
+  'APPROVED',
+  'ACTIVE',
+  'RETURNED',
+  'RECONCILING',
+  'CLOSED',
+  'CANCELLED'
 ];
 
 Color _warnaStatusSpj(String s) {
@@ -78,9 +86,13 @@ class _SpjScreenState extends State<SpjScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
       // tampil seketika, hasil server menyusul + diff utk kilau baris.
-      await MasterOffline.daftarCacheDulu('si_spj_list', {
-        if (_filterStatus != 'SEMUA') 'status': _filterStatus,
-      }, 'master:si_spj:$_filterStatus', fieldData: 'rows', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'si_spj_list',
+          {
+            if (_filterStatus != 'SEMUA') 'status': _filterStatus,
+          },
+          'master:si_spj:$_filterStatus',
+          fieldData: 'rows', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil, fieldData: 'rows');
@@ -94,8 +106,8 @@ class _SpjScreenState extends State<SpjScreen> with JejakGalat {
   }
 
   Future<void> _bukaForm({int? spjId}) async {
-    final ok = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => _FormSpj(spjId: spjId)));
+    final ok = await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(builder: (_) => _FormSpj(spjId: spjId)));
     if (ok == true) _muat();
   }
 
@@ -120,7 +132,8 @@ class _SpjScreenState extends State<SpjScreen> with JejakGalat {
               onPressed: () => _bukaForm(),
               backgroundColor: AppColors.primary,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('SPJ Baru', style: TextStyle(color: Colors.white)),
+              label:
+                  const Text('SPJ Baru', style: TextStyle(color: Colors.white)),
             )
           : null,
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -159,7 +172,10 @@ class _SpjScreenState extends State<SpjScreen> with JejakGalat {
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
+                  ? _PanelError(
+                      pesan: _error!,
+                      detail: detailUntuk(_error),
+                      onCoba: _muat)
                   : _data.isEmpty
                       ? Center(
                           child: Text('Belum ada SPJ.',
@@ -180,65 +196,65 @@ class _SpjScreenState extends State<SpjScreen> with JejakGalat {
                                 idBaru: _diff.idBaru,
                                 idBerubah: _diff.idBerubah,
                                 child: Card(
-                                margin: EdgeInsets.zero,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
+                                  margin: EdgeInsets.zero,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(
+                                          color:
+                                              Theme.of(context).dividerColor)),
+                                  child: InkWell(
                                     borderRadius: BorderRadius.circular(10),
-                                    side: BorderSide(
-                                        color:
-                                            Theme.of(context).dividerColor)),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(10),
-                                  onTap: () =>
-                                      _bukaDetail((r['id'] as num).toInt()),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text('${r['nomor']}',
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.w700,
-                                                    fontSize: 13.5)),
-                                            Text(
-                                                'Sales: ${r['salesNama']} · ${r['jumlahBarang']} barang · ${r['jumlahNota']} nota',
-                                                style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: AppColors
-                                                        .textSecondaryOf(
-                                                            context))),
-                                            Text(
-                                                'Berangkat: ${'${r['tanggalBerangkat']}'.split('.').first} · Uang muka ${_fmtRp.format(r['uangMuka'] ?? 0)}',
-                                                style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: AppColors
-                                                        .textSecondaryOf(
-                                                            context))),
-                                          ],
+                                    onTap: () =>
+                                        _bukaDetail((r['id'] as num).toInt()),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Row(children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text('${r['nomor']}',
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 13.5)),
+                                              Text(
+                                                  'Sales: ${r['salesNama']} · ${r['jumlahBarang']} barang · ${r['jumlahNota']} nota',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: AppColors
+                                                          .textSecondaryOf(
+                                                              context))),
+                                              Text(
+                                                  'Berangkat: ${'${r['tanggalBerangkat']}'.split('.').first} · Uang muka ${_fmtRp.format(r['uangMuka'] ?? 0)}',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors
+                                                          .textSecondaryOf(
+                                                              context))),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                            color: _warnaStatusSpj(status)
-                                                .withValues(alpha: 0.12),
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        child: Text(status,
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color:
-                                                    _warnaStatusSpj(status))),
-                                      ),
-                                    ]),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                              color: _warnaStatusSpj(status)
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                          child: Text(status,
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color:
+                                                      _warnaStatusSpj(status))),
+                                        ),
+                                      ]),
+                                    ),
                                   ),
-                                ),
                                 ),
                               );
                             },
@@ -276,8 +292,8 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
 
   Future<void> _muat() async {
     try {
-      final hasil =
-          await ApiClient.instance.aksi('si_spj_detail', {'spj_id': widget.spjId});
+      final hasil = await ApiClient.instance
+          .aksi('si_spj_detail', {'spj_id': widget.spjId});
       setStateIfMounted(
           () => _d = Map<String, dynamic>.from(hasil['data'] as Map));
     } catch (e) {
@@ -351,11 +367,12 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
     return Scaffold(
       appBar: AppBar(
         title: Text(d == null ? 'Detail SPJ' : '${d['nomor']}'),
-        leading: BackButton(
-            onPressed: () => Navigator.of(context).pop(_berubah)),
+        leading:
+            BackButton(onPressed: () => Navigator.of(context).pop(_berubah)),
       ),
       body: _error != null
-          ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
+          ? _PanelError(
+              pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
           : d == null
               ? const Center(child: CircularProgressIndicator())
               : ListView(padding: const EdgeInsets.all(16), children: [
@@ -378,7 +395,8 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                     ),
                   ]),
                   const SizedBox(height: 6),
-                  Text('Berangkat: ${'${d['tanggalBerangkat']}'.split('.').first}'),
+                  Text(
+                      'Berangkat: ${'${d['tanggalBerangkat']}'.split('.').first}'),
                   if ('${d['rute']}'.isNotEmpty) Text('Rute: ${d['rute']}'),
                   if ('${d['kendaraan']}'.isNotEmpty)
                     Text('Kendaraan: ${d['kendaraan']}'),
@@ -397,16 +415,21 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                     emptyText: 'Belum ada barang.',
                     columns: const [
                       AppTableColumn('Produk', flex: 3),
-                      AppTableColumn('Rencana', flex: 1, align: TextAlign.right),
+                      AppTableColumn('Rencana',
+                          flex: 1, align: TextAlign.right),
                       AppTableColumn('Dimuat', flex: 1, align: TextAlign.right),
-                      AppTableColumn('Terjual', flex: 1, align: TextAlign.right),
-                      AppTableColumn('Kembali', flex: 1, align: TextAlign.right),
-                      AppTableColumn('Harga Jual', flex: 2, align: TextAlign.right),
+                      AppTableColumn('Terjual',
+                          flex: 1, align: TextAlign.right),
+                      AppTableColumn('Kembali',
+                          flex: 1, align: TextAlign.right),
+                      AppTableColumn('Harga Jual',
+                          flex: 2, align: TextAlign.right),
                     ],
                     rows: [
                       for (final b in (d['barang'] as List))
                         AppTableRowData(cells: [
-                          AppTableCell.text('${(b as Map)['namaProduk']}', flex: 3),
+                          AppTableCell.text('${(b as Map)['namaProduk']}',
+                              flex: 3),
                           AppTableCell.text('${b['qtyRencana']}',
                               flex: 1, align: TextAlign.right),
                           AppTableCell.text('${b['qtyDimuat']}',
@@ -430,21 +453,26 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                     columns: const [
                       AppTableColumn('Faktur', flex: 2),
                       AppTableColumn('Customer', flex: 3),
-                      AppTableColumn('Saldo Dibawa', flex: 2, align: TextAlign.right),
-                      AppTableColumn('Tertagih', flex: 2, align: TextAlign.right),
+                      AppTableColumn('Saldo Dibawa',
+                          flex: 2, align: TextAlign.right),
+                      AppTableColumn('Tertagih',
+                          flex: 2, align: TextAlign.right),
                       AppTableColumn('Status', flex: 2),
                     ],
                     rows: [
                       for (final n in (d['nota'] as List))
                         AppTableRowData(cells: [
-                          AppTableCell.text('${(n as Map)['fakturNomor']}', flex: 2),
+                          AppTableCell.text('${(n as Map)['fakturNomor']}',
+                              flex: 2),
                           AppTableCell.text('${n['customerNama']}', flex: 3),
                           AppTableCell.text(
                               _fmtRp.format(n['saldoSaatAssign'] ?? 0),
                               flex: 2,
                               align: TextAlign.right),
-                          AppTableCell.text(_fmtRp.format(n['nilaiTertagih'] ?? 0),
-                              flex: 2, align: TextAlign.right),
+                          AppTableCell.text(
+                              _fmtRp.format(n['nilaiTertagih'] ?? 0),
+                              flex: 2,
+                              align: TextAlign.right),
                           AppTableCell.text('${n['status']}', flex: 2),
                         ]),
                     ],
@@ -482,8 +510,10 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                             label: const Text('Atur Nota Dibawa')),
                       if ('${d['status']}' == 'DRAFT')
                         ElevatedButton(
-                            onPressed: () => _aksi('si_spj_status',
-                                {'spj_id': widget.spjId, 'status': 'SUBMITTED'}),
+                            onPressed: () => _aksi('si_spj_status', {
+                                  'spj_id': widget.spjId,
+                                  'status': 'SUBMITTED'
+                                }),
                             child: const Text('Ajukan (SUBMIT)')),
                       if ('${d['status']}' == 'SUBMITTED' && pemilik)
                         ElevatedButton(
@@ -507,13 +537,12 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                               await Navigator.of(context).push(
                                   MaterialPageRoute(
                                       builder: (_) => DetailSesiNotaSales(
-                                          sessionId:
-                                              (d['sessionId'] as num).toInt())));
+                                          sessionId: (d['sessionId'] as num)
+                                              .toInt())));
                               _muat();
                             },
                             icon: const Icon(Icons.route_outlined, size: 18),
-                            label: Text(
-                                'Buka Sesi (${d['sessionStatus']})')),
+                            label: Text('Buka Sesi (${d['sessionStatus']})')),
                       if ('${d['status']}' == 'DRAFT' ||
                           '${d['status']}' == 'SUBMITTED' ||
                           '${d['status']}' == 'APPROVED')
@@ -616,8 +645,10 @@ class _FormSpjState extends State<_FormSpj> with JejakGalat {
         _barang.clear();
         for (final b in (d['barang'] as List? ?? [])) {
           final m = Map<String, dynamic>.from(b as Map);
-          _barang.add(_BarisBarang((m['produkId'] as num).toInt(),
-              '${m['namaProduk']}', (m['qtyRencana'] as num?)?.toDouble() ?? 0));
+          _barang.add(_BarisBarang(
+              (m['produkId'] as num).toInt(),
+              '${m['namaProduk']}',
+              (m['qtyRencana'] as num?)?.toDouble() ?? 0));
         }
       });
     } catch (e) {
@@ -642,8 +673,8 @@ class _FormSpjState extends State<_FormSpj> with JejakGalat {
     final pilihan = await showDialog<Map<String, dynamic>>(
         context: context, builder: (_) => const _DialogCariProdukSpj());
     if (pilihan == null) return;
-    setStateIfMounted(() => _barang.add(_BarisBarang(
-        (pilihan['id'] as num).toInt(), '${pilihan['nama']}', 1)));
+    setStateIfMounted(() => _barang.add(
+        _BarisBarang((pilihan['id'] as num).toInt(), '${pilihan['nama']}', 1)));
   }
 
   Future<void> _simpan() async {
@@ -684,8 +715,8 @@ class _FormSpjState extends State<_FormSpj> with JejakGalat {
     final tampilkanSales =
         !Sesi.instance.isSalesKeliling && widget.spjId == null;
     return Scaffold(
-      appBar: AppBar(
-          title: Text(widget.spjId == null ? 'SPJ Baru' : 'Ubah SPJ')),
+      appBar:
+          AppBar(title: Text(widget.spjId == null ? 'SPJ Baru' : 'Ubah SPJ')),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : ListView(padding: const EdgeInsets.all(16), children: [
@@ -726,8 +757,8 @@ class _FormSpjState extends State<_FormSpj> with JejakGalat {
                         labelText: 'Rute / wilayah tujuan')),
                 TextField(
                     controller: _kendaraan,
-                    decoration:
-                        const InputDecoration(labelText: 'Kendaraan (opsional)')),
+                    decoration: const InputDecoration(
+                        labelText: 'Kendaraan (opsional)')),
                 TextField(
                     controller: _uangMuka,
                     keyboardType: TextInputType.number,
@@ -764,10 +795,9 @@ class _FormSpjState extends State<_FormSpj> with JejakGalat {
                               ? '${_barang[i].qty.round()}'
                               : '${_barang[i].qty}',
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: 'Qty'),
-                          onChanged: (v) => setStateIfMounted(() =>
-                              _barang[i].qty = double.tryParse(v) ?? 0),
+                          decoration: const InputDecoration(labelText: 'Qty'),
+                          onChanged: (v) => setStateIfMounted(
+                              () => _barang[i].qty = double.tryParse(v) ?? 0),
                         ),
                       ),
                       IconButton(
@@ -954,19 +984,25 @@ class _DialogCariProdukSpj extends StatefulWidget {
 class _DialogCariProdukSpjState extends State<_DialogCariProdukSpj> {
   List<Map<String, dynamic>> _rows = [];
   bool _memuat = false;
+  int _generasiCari = 0;
 
   Future<void> _cari(String q) async {
+    final generasi = ++_generasiCari;
     setStateIfMounted(() => _memuat = true);
     try {
       final hasil = await ApiClient.instance
           .aksi('katalog', {if (q.isNotEmpty) 'keyword': q});
-      setStateIfMounted(() => _rows = ((hasil['produk'] as List?) ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .take(30)
-          .toList());
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() => _rows = ((hasil['produk'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .take(30)
+            .toList());
+      }
     } catch (_) {
     } finally {
-      setStateIfMounted(() => _memuat = false);
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() => _memuat = false);
+      }
     }
   }
 
@@ -1014,8 +1050,7 @@ class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
   final String? detail;
-  const _PanelError(
-      {required this.pesan, required this.onCoba, this.detail});
+  const _PanelError({required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {

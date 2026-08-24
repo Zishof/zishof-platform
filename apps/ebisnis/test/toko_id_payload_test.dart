@@ -11,6 +11,7 @@ void main() {
       ..tokoId = null
       ..tokoFilter = null
       ..bolehSemuaToko = false
+      ..isAdmin = false
       ..daftarTokoFilter = const [];
   });
 
@@ -92,8 +93,34 @@ void main() {
       Sesi.instance
         ..bolehSemuaToko = false
         ..tokoFilter = 22;
-      expect(ApiClient.susunPayload('dashboard_ringkasan', null)
-          .containsKey('tokoId'), isFalse);
+      expect(
+          ApiClient.susunPayload('dashboard_ringkasan', null)
+              .containsKey('tokoId'),
+          isFalse);
+    });
+  });
+
+  group('lingkup katalog dipusatkan', () {
+    test('akun satu toko selalu membawa toko_id', () {
+      Sesi.instance.tokoId = 7;
+      expect(ApiClient.susunPayload('katalog', null)['toko_id'], 7);
+    });
+
+    test('admin lintas toko tanpa pilihan menyatakan semuaToko', () {
+      Sesi.instance
+        ..isAdmin = true
+        ..tokoId = null
+        ..tokoFilter = null;
+      expect(ApiClient.susunPayload('katalog', null)['semuaToko'], isTrue);
+    });
+
+    test('lingkup eksplisit dari layar tidak ditimpa', () {
+      Sesi.instance
+        ..isAdmin = true
+        ..tokoId = 7;
+      final p = ApiClient.susunPayload('katalog', {'semuaToko': true});
+      expect(p['semuaToko'], isTrue);
+      expect(p.containsKey('toko_id'), isFalse);
     });
   });
 

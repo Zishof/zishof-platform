@@ -12,7 +12,8 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// <h3>Penjualan Sales / Sales Order (layar legacy 30-31).</h3>
 ///
@@ -30,7 +31,14 @@ class PenjualanSalesScreen extends StatefulWidget {
 }
 
 const _semuaStatus = [
-  'SEMUA', 'DRAFT', 'PESAN', 'SIAP_KIRIM', 'TERKIRIM', 'SIAP_TAGIH', 'LUNAS', 'BATAL'
+  'SEMUA',
+  'DRAFT',
+  'PESAN',
+  'SIAP_KIRIM',
+  'TERKIRIM',
+  'SIAP_TAGIH',
+  'LUNAS',
+  'BATAL'
 ];
 
 Color _warnaStatus(String s) {
@@ -53,7 +61,8 @@ Color _warnaStatus(String s) {
   return Colors.grey;
 }
 
-class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakGalat {
+class _PenjualanSalesScreenState extends State<PenjualanSalesScreen>
+    with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -77,13 +86,16 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakG
     try {
       // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
       // tampil seketika, hasil server menyusul + diff utk kilau baris.
-      await MasterOffline.daftarCacheDulu('si_sales_order_list', {
-        if (_filterStatus != 'SEMUA') 'status': _filterStatus,
-        if (_kataKunci.isNotEmpty) 'q': _kataKunci,
-        'page': _halaman,
-        'page_size': 30,
-      }, 'master:si_sales_order:$_filterStatus', fieldData: 'rows',
-          onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'si_sales_order_list',
+          {
+            if (_filterStatus != 'SEMUA') 'status': _filterStatus,
+            if (_kataKunci.isNotEmpty) 'q': _kataKunci,
+            'page': _halaman,
+            'page_size': 30,
+          },
+          'master:si_sales_order:$_filterStatus',
+          fieldData: 'rows', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil, fieldData: 'rows');
@@ -125,7 +137,8 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakG
               onPressed: () => _bukaForm(),
               backgroundColor: AppColors.primary,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Order Baru', style: TextStyle(color: Colors.white)),
+              label: const Text('Order Baru',
+                  style: TextStyle(color: Colors.white)),
             )
           : null,
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -186,7 +199,10 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakG
           child: _memuat
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat)
+                  ? _PanelError(
+                      pesan: _error!,
+                      detail: detailUntuk(_error),
+                      onCoba: _muat)
                   : _data.isEmpty
                       ? Center(
                           child: Text(
@@ -199,7 +215,8 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakG
                           child: ListView.separated(
                             padding: const EdgeInsets.fromLTRB(4, 0, 4, 80),
                             itemCount: _data.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 6),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 6),
                             itemBuilder: (_, i) {
                               final r = _data[i];
                               final status = '${r['status']}';
@@ -208,57 +225,65 @@ class _PenjualanSalesScreenState extends State<PenjualanSalesScreen> with JejakG
                                 idBaru: _diff.idBaru,
                                 idBerubah: _diff.idBerubah,
                                 child: _KartuOrder(
-                                onTap: () => _bukaDetail(r),
-                                child: Row(children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                  onTap: () => _bukaDetail(r),
+                                  child: Row(children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${r['nomor']}',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13.5)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                              '${r['customerNama']}'
+                                              '${'${r['salesNama']}'.isNotEmpty ? ' · Sales: ${r['salesNama']}' : ''}',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color:
+                                                      AppColors.textSecondaryOf(
+                                                          context))),
+                                          Text(
+                                              '${r['tanggal']}'
+                                                  .split('.')
+                                                  .first,
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color:
+                                                      AppColors.textSecondaryOf(
+                                                          context))),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
-                                        Text('${r['nomor']}',
+                                        Text(_fmtRp.format(r['total'] ?? 0),
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.w700,
-                                                fontSize: 13.5)),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                            '${r['customerNama']}'
-                                            '${'${r['salesNama']}'.isNotEmpty ? ' · Sales: ${r['salesNama']}' : ''}',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: AppColors
-                                                    .textSecondaryOf(context))),
-                                        Text('${r['tanggal']}'.split('.').first,
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors
-                                                    .textSecondaryOf(context))),
+                                                fontSize: 13)),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                              color: _warnaStatus(status)
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                          child: Text(
+                                              status.replaceAll('_', ' '),
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: _warnaStatus(status))),
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(_fmtRp.format(r['total'] ?? 0),
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13)),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                            color: _warnaStatus(status)
-                                                .withValues(alpha: 0.12),
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        child: Text(status.replaceAll('_', ' '),
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: _warnaStatus(status))),
-                                      ),
-                                    ],
-                                  ),
-                                ]),
+                                  ]),
                                 ),
                               );
                             },
@@ -356,8 +381,8 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
         title: const Text('Batalkan Order?'),
         content: TextField(
             controller: ctrl,
-            decoration: const InputDecoration(
-                labelText: 'Alasan pembatalan (wajib)')),
+            decoration:
+                const InputDecoration(labelText: 'Alasan pembatalan (wajib)')),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(c).pop(false),
@@ -384,7 +409,8 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
         maxChildSize: 0.95,
         builder: (_, scroll) {
           if (_error != null) {
-            return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+            return _PanelError(
+                pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
           }
           final d = _d;
           if (d == null) {
@@ -394,7 +420,8 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
           final items = ((d['items'] as List?) ?? [])
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
-          final bolehUbah = Sesi.instance.bolehAksiIs('penjualan_sales', 'update');
+          final bolehUbah =
+              Sesi.instance.bolehAksiIs('penjualan_sales', 'update');
           return ListView(
             controller: scroll,
             padding: const EdgeInsets.all(16),
@@ -419,7 +446,8 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
               ]),
               const SizedBox(height: 8),
               Text('Customer: ${d['customerNama']}'),
-              if ('${d['salesNama']}'.isNotEmpty) Text('Sales: ${d['salesNama']}'),
+              if ('${d['salesNama']}'.isNotEmpty)
+                Text('Sales: ${d['salesNama']}'),
               Text('Tanggal: ${'${d['tanggal']}'.split('.').first}'),
               if ('${d['keterangan']}'.isNotEmpty)
                 Text('Catatan: ${d['keterangan']}'),
@@ -515,8 +543,7 @@ class _DetailOrderSheetState extends State<_DetailOrderSheet> with JejakGalat {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                    onPressed: () =>
-                        Navigator.of(context).pop(_adaPerubahan),
+                    onPressed: () => Navigator.of(context).pop(_adaPerubahan),
                     child: const Text('Tutup')),
               ),
             ],
@@ -601,8 +628,7 @@ class _FormOrderState extends State<_FormOrder> with JejakGalat {
 
   Future<void> _pilihCustomer() async {
     final pilihan = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (_) => const _DialogCariCustomer());
+        context: context, builder: (_) => const _DialogCariCustomer());
     if (pilihan != null) {
       setStateIfMounted(() {
         _customerId = (pilihan['anggotaId'] as num).toInt();
@@ -658,21 +684,25 @@ class _FormOrderState extends State<_FormOrder> with JejakGalat {
     });
     try {
       await ApiClient.instance.aksi(
-          widget.orderId == null ? 'si_sales_order_create' : 'si_sales_order_update', {
-        if (widget.orderId != null) 'order_id': widget.orderId,
-        if (widget.orderId == null) 'customer_id': _customerId,
-        if (widget.orderId == null && _salesId != null) 'sales_id': _salesId,
-        if (widget.orderId == null) 'kode_unik': _kodeUnik,
-        'keterangan': _keterangan.text.trim(),
-        'items': [
-          for (final it in _items)
-            {
-              'produk_id': it.produkId,
-              'jumlah': it.jumlah,
-              'harga': it.harga,
-            }
-        ],
-      });
+          widget.orderId == null
+              ? 'si_sales_order_create'
+              : 'si_sales_order_update',
+          {
+            if (widget.orderId != null) 'order_id': widget.orderId,
+            if (widget.orderId == null) 'customer_id': _customerId,
+            if (widget.orderId == null && _salesId != null)
+              'sales_id': _salesId,
+            if (widget.orderId == null) 'kode_unik': _kodeUnik,
+            'keterangan': _keterangan.text.trim(),
+            'items': [
+              for (final it in _items)
+                {
+                  'produk_id': it.produkId,
+                  'jumlah': it.jumlah,
+                  'harga': it.harga,
+                }
+            ],
+          });
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
@@ -843,8 +873,7 @@ class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
   final String? detail;
-  const _PanelError(
-      {required this.pesan, required this.onCoba, this.detail});
+  const _PanelError({required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -1007,8 +1036,10 @@ class _DialogCariProduk extends StatefulWidget {
 class _DialogCariProdukState extends State<_DialogCariProduk> {
   List<Map<String, dynamic>> _rows = [];
   bool _memuat = false;
+  int _generasiCari = 0;
 
   Future<void> _cari(String q) async {
+    final generasi = ++_generasiCari;
     setStateIfMounted(() => _memuat = true);
     try {
       // Reuse aksi 'katalog' POS existing (id/kode/nama/hargaJual/stok) --
@@ -1016,13 +1047,17 @@ class _DialogCariProdukState extends State<_DialogCariProduk> {
       final hasil = await ApiClient.instance.aksi('katalog', {
         if (q.isNotEmpty) 'keyword': q,
       });
-      setStateIfMounted(() => _rows = ((hasil['produk'] as List?) ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .take(30)
-          .toList());
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() => _rows = ((hasil['produk'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .take(30)
+            .toList());
+      }
     } catch (_) {
     } finally {
-      setStateIfMounted(() => _memuat = false);
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() => _memuat = false);
+      }
     }
   }
 

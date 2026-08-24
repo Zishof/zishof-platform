@@ -103,6 +103,7 @@ class _KasirScreenState extends State<KasirScreen> {
   Map<int, double> _cashbackKatalog = {};
   Timer? _debounceHargaCoret;
   Timer? _debounceCariProduk;
+  int _generasiCariProduk = 0;
 
   static const _batasProdukAwal = 80;
   static const _batasHasilPencarian = 100;
@@ -490,13 +491,22 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
-  Future<void> _muatKatalogLazy({String keyword = ''}) async {
+  Future<void> _muatKatalogLazy({
+    String keyword = '',
+    int? generasiCari,
+  }) async {
     final kataPermintaan = keyword.trim();
     final katalog = await ApiClient.instance.aksi('katalog', {
       'page': 1,
       'page_size':
           kataPermintaan.isEmpty ? _batasProdukAwal : _batasHasilPencarian,
       if (kataPermintaan.isNotEmpty) 'keyword': kataPermintaan,
+      // Nyatakan lingkup secara eksplisit. Admin yang tidak terikat satu toko
+      // akan mendapat 0 produk dari peladen bila `semuaToko` tidak dikirim.
+      if (Sesi.instance.idTokoTerpilih != null)
+        'toko_id': Sesi.instance.idTokoTerpilih,
+      if (Sesi.instance.idTokoTerpilih == null && Sesi.instance.isAdmin)
+        'semuaToko': true,
     });
     final produkJson = (katalog['produk'] as List?) ?? [];
     final produk = produkJson
@@ -513,7 +523,11 @@ class _KasirScreenState extends State<KasirScreen> {
 
     // Respons HTTP dapat datang tidak berurutan. Jangan biarkan hasil kata
     // lama menimpa hasil kata yang sedang terlihat di kotak pencarian.
-    if (mounted && _kataKunciController.text.trim() == kataPermintaan) {
+    final generasiMasihAktif =
+        generasiCari == null || generasiCari == _generasiCariProduk;
+    if (mounted &&
+        generasiMasihAktif &&
+        _kataKunciController.text.trim() == kataPermintaan) {
       setStateIfMounted(() {
         _semuaProduk = produk;
         _kategori = kategori;
@@ -522,9 +536,13 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
-  Future<void> _muatKatalogPencarianAman(String keyword) async {
+  Future<void> _muatKatalogPencarianAman(
+      String keyword, int generasiCari) async {
     try {
-      await _muatKatalogLazy(keyword: keyword);
+      await _muatKatalogLazy(
+        keyword: keyword,
+        generasiCari: generasiCari,
+      );
     } catch (_) {
       // Hasil cache lokal tetap dapat dipakai ketika jaringan putus. Error
       // jaringan pencarian tidak boleh menutup dropdown atau mengunci POS.
@@ -532,6 +550,10 @@ class _KasirScreenState extends State<KasirScreen> {
   }
 
   void _cariProdukLazy(String nilai) {
+    // Naikkan sebelum debounce. Dengan begitu respons yang SUDAH berjalan
+    // langsung dianggap usang saat pengguna mengetik lagi, termasuk ketika
+    // kata akhirnya sama (mis. ketik c, hapus, lalu c kembali).
+    final generasiCari = ++_generasiCariProduk;
     setStateIfMounted(() => _kataKunci = nilai);
     _debounceCariProduk?.cancel();
     _debounceCariProduk = Timer(const Duration(milliseconds: 250), () async {
@@ -541,13 +563,17 @@ class _KasirScreenState extends State<KasirScreen> {
           keyword: kata,
           limit: kata.isEmpty ? _batasProdukAwal : _batasHasilPencarian,
         );
-        if (!mounted || _kataKunciController.text.trim() != kata) return;
+        if (!mounted ||
+            generasiCari != _generasiCariProduk ||
+            _kataKunciController.text.trim() != kata) {
+          return;
+        }
         setStateIfMounted(
             () => _semuaProduk = cache.map(_produkDariCache).toList());
         _jadwalkanEvaluasiHargaCoret();
         // Cari ke server di belakang agar produk baru yang belum ada di cache
         // tetap ditemukan; hasil dibatasi, bukan seluruh katalog.
-        unawaited(_muatKatalogPencarianAman(kata));
+        unawaited(_muatKatalogPencarianAman(kata, generasiCari));
       } catch (_) {}
     });
   }
@@ -600,8 +626,7 @@ class _KasirScreenState extends State<KasirScreen> {
         final kodeServer = '${hasil['kodeSesiKas'] ?? ''}'.trim();
         final kodeLokalLama =
             '${(await CoreDb.instance.sesiKasAktif())?['kode'] ?? ''}'.trim();
-        final kodeDipakai =
-            kodeServer.isNotEmpty ? kodeServer : kodeLokalLama;
+        final kodeDipakai = kodeServer.isNotEmpty ? kodeServer : kodeLokalLama;
         if (kodeDipakai.isNotEmpty) {
           await CoreDb.instance.bukaSesiKasLokal(
             kodeDipakai,

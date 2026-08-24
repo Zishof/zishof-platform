@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ebisnis/models.dart';
 import 'package:ebisnis/screens/kasir_screen.dart';
 import 'package:flutter/material.dart';
@@ -38,5 +40,16 @@ void main() {
     expect(produkCocokKataKunci(produk, 'ab-123'), isTrue);
     expect(produkCocokKataKunci(produk, '8991002003004'), isTrue);
     expect(produkCocokKataKunci(produk, 'produk tidak ada'), isFalse);
+  });
+
+  test('pencarian POS mengirim lingkup toko dan menolak respons usang', () {
+    final sumber = File('lib/screens/kasir_screen.dart').readAsStringSync();
+    final rapat = sumber.replaceAll(RegExp(r'\s+'), '');
+
+    expect(rapat, contains("'toko_id':Sesi.instance.idTokoTerpilih"));
+    expect(rapat, contains("'semuaToko':true"));
+    expect(rapat, contains('finalgenerasiCari=++_generasiCariProduk'));
+    expect(rapat, contains('generasiCari!=_generasiCariProduk'));
+    expect(rapat, contains('generasiCari==_generasiCariProduk'));
   });
 }

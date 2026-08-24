@@ -181,6 +181,8 @@ class ApiClient {
         payload.containsKey('id_toko') ||
         payload.containsKey('idToko') ||
         payload.containsKey('toko_id');
+    final sudahAdaLingkupKatalog =
+        sudahAdaToko || payload.containsKey('semuaToko');
     // Peran berizin lintas toko: pilihan combo disisipkan di satu tempat
     // supaya tiap layar tidak perlu mengingatnya sendiri. Toko yang sudah
     // ditentukan pemanggil TIDAK ditimpa.
@@ -199,6 +201,19 @@ class ApiClient {
     if (_aksiBerTokoId.contains(namaAksi) && !sudahAdaToko) {
       final idToko = Sesi.instance.idTokoTerpilih;
       if (idToko != null) payload['toko_id'] = idToko;
+    }
+    // `katalog` memiliki kontrak khusus di peladen: admin tanpa toko terikat
+    // hanya memperoleh daftar bila menyatakan `semuaToko=true`. Beberapa
+    // layar mencari produk langsung (Kasir, Kulakan, SPJ, Riwayat), sehingga
+    // pengaman ini dipusatkan agar satu pemanggil yang lupa tidak menampilkan
+    // cache sesaat lalu menimpanya dengan respons server kosong.
+    if (namaAksi == 'katalog' && !sudahAdaLingkupKatalog) {
+      final idToko = Sesi.instance.idTokoTerpilih;
+      if (idToko != null) {
+        payload['toko_id'] = idToko;
+      } else if (Sesi.instance.isAdmin) {
+        payload['semuaToko'] = true;
+      }
     }
     return payload;
   }

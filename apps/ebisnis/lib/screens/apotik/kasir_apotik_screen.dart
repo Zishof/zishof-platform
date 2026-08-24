@@ -53,6 +53,7 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   final _alamatPembeli = TextEditingController();
   final _namaDokter = TextEditingController();
   Timer? _debounce;
+  int _generasiCari = 0;
   bool _mencari = false;
   List<Map<String, dynamic>> _hasilCari = [];
   final List<_BarisKeranjang> _keranjang = [];
@@ -73,29 +74,39 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   }
 
   void _cariBerubah(String v) {
+    final generasi = ++_generasiCari;
     _debounce?.cancel();
-    _debounce =
-        Timer(const Duration(milliseconds: 350), () => _jalankanCari(v));
+    _debounce = Timer(
+        const Duration(milliseconds: 350), () => _jalankanCari(v, generasi));
   }
 
-  Future<void> _jalankanCari(String v) async {
+  Future<void> _jalankanCari(String v, int generasi) async {
     if (v.trim().isEmpty) {
-      setStateIfMounted(() => _hasilCari = []);
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() {
+          _hasilCari = [];
+          _mencari = false;
+        });
+      }
       return;
     }
     setStateIfMounted(() => _mencari = true);
     try {
       final hasil = await ApiClient.instance
           .aksi('apotik_item_cari', {'keyword': v.trim(), 'page_size': 20});
-      setStateIfMounted(() => _hasilCari =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      if (generasi == _generasiCari && _cari.text.trim() == v.trim()) {
+        setStateIfMounted(() => _hasilCari =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generasi == _generasiCari) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal cari: $e')));
       }
     } finally {
-      setStateIfMounted(() => _mencari = false);
+      if (generasi == _generasiCari) {
+        setStateIfMounted(() => _mencari = false);
+      }
     }
   }
 
