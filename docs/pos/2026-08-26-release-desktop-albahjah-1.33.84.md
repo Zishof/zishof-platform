@@ -49,11 +49,21 @@ lokal secara teoritis dapat dipakai melewati masa berlaku token perangkat.
 - Seluruh suite aplikasi: **358/358 lulus**.
 - `git diff --check`: lulus.
 
-Build installer, ukuran, checksum, commit, tag, dan tautan GitHub Release diisi
-setelah pipeline rilis selesai.
+## Hasil build
+
+- Skrip: `tool/build_semua_varian.ps1 -SkipAndroid -Hanya albahjah`.
+- Flutter Windows release dan kompilasi installer Inno Setup: **berhasil**.
+- Executable internal: `ebisnis_albahjah.exe`.
+- Product/File version: `1.33.84+142`.
+- Commit implementasi yang sudah didorong: `e3fce4e`.
+- Authenticode: `NotSigned` karena pipeline lokal belum mempunyai sertifikat.
 
 ## Artefak
 
 | Berkas | Ukuran | SHA-256 |
 |---|---:|---|
-| `Al-Bahjah-POS-Setup-1.33.84.exe` | _menunggu build_ | _menunggu build_ |
+| `Al-Bahjah-POS-Setup-1.33.84.exe` | 46.165.150 byte | `A2DC3068EDF4FA1BF2E585F153B3D0D1239C73B0879F6FD92E1472516A1AFFFB` |
+
+Manifest `.sha256.txt` hasil build telah dibandingkan dengan perhitungan ulang dan
+cocok. Publikasi memakai tag `v1.33.84-build142` pada repository
+`Zishof/zishof-platform`.
