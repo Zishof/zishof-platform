@@ -105,8 +105,8 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
       }
       await _bukaLuring();
     } catch (e) {
-      setStateIfMounted(() =>
-          _pesanError = AppErrorInfo.dari(e, aktivitas: 'buka kunci'));
+      setStateIfMounted(
+          () => _pesanError = AppErrorInfo.dari(e, aktivitas: 'buka kunci'));
     } finally {
       if (mounted) setStateIfMounted(() => _memproses = false);
     }
@@ -118,6 +118,16 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
           'Server belum dapat dihubungi, dan perangkat ini belum pernah '
           'menyimpan bukti kata sandi Anda. Buka kunci pertama kali memang '
           'harus tersambung ke server.',
+          aktivitas: 'buka kunci'));
+      return;
+    }
+    final masihBerlaku =
+        await VerifikatorSandiLokal.instance.bolehDipakaiLuring();
+    if (!masihBerlaku) {
+      setStateIfMounted(() => _pesanError = AppErrorInfo.dari(
+          'Bukti masuk luring di perangkat ini sudah melewati batas 30 hari '
+          'atau waktu perangkat tidak valid. Sambungkan perangkat ke server '
+          'untuk memeriksa kembali status akun Anda.',
           aktivitas: 'buka kunci'));
       return;
     }
@@ -139,7 +149,8 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
     TransaksiOutboxService.instance.mulai();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => AppProductProfile.aktif.buatLayarAwal()),
+      MaterialPageRoute(
+          builder: (_) => AppProductProfile.aktif.buatLayarAwal()),
     );
   }
 
@@ -176,8 +187,12 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
     final t = _terakhirDaring;
     if (t == null) return '';
     final selisih = DateTime.now().difference(t);
-    if (selisih.inMinutes < 60) return 'Terhubung server ${selisih.inMinutes} menit lalu';
-    if (selisih.inHours < 24) return 'Terhubung server ${selisih.inHours} jam lalu';
+    if (selisih.inMinutes < 60) {
+      return 'Terhubung server ${selisih.inMinutes} menit lalu';
+    }
+    if (selisih.inHours < 24) {
+      return 'Terhubung server ${selisih.inHours} jam lalu';
+    }
     return 'Terhubung server ${selisih.inDays} hari lalu';
   }
 
@@ -192,8 +207,8 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
             constraints: const BoxConstraints(maxWidth: 420),
             child: Card(
               elevation: 3,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(28),
                 child: Column(
@@ -218,8 +233,7 @@ class _LayarKunciScreenState extends State<LayarKunciScreen> {
                       const SizedBox(height: 4),
                       Text(_keteranganDaring,
                           textAlign: TextAlign.center,
-                          style:
-                              TextStyle(color: teksSekunder, fontSize: 12)),
+                          style: TextStyle(color: teksSekunder, fontSize: 12)),
                     ],
                     const SizedBox(height: 20),
                     TextField(

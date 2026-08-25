@@ -9,14 +9,19 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final layar = {
     'Uang Muka': File('lib/screens/uang_muka_screen.dart').readAsStringSync(),
-    'PJ Uang Muka': File('lib/screens/pj_uang_muka_screen.dart').readAsStringSync(),
+    'PJ Uang Muka':
+        File('lib/screens/pj_uang_muka_screen.dart').readAsStringSync(),
     'Kas Besar': File('lib/screens/kas_besar_screen.dart').readAsStringSync(),
-    'PJ Kas Besar': File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync(),
+    'PJ Kas Besar':
+        File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync(),
     'Kas Kecil': File('lib/screens/kas_kecil_screen.dart').readAsStringSync(),
     'Penggantian Kas Kecil':
-        File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync(),
-    'Dana Talangan': File('lib/screens/dana_talangan_screen.dart').readAsStringSync(),
-    'Reimbursement': File('lib/screens/reimbursement_screen.dart').readAsStringSync(),
+        File('lib/screens/penggantian_kas_kecil_screen.dart')
+            .readAsStringSync(),
+    'Dana Talangan':
+        File('lib/screens/dana_talangan_screen.dart').readAsStringSync(),
+    'Reimbursement':
+        File('lib/screens/reimbursement_screen.dart').readAsStringSync(),
   };
 
   layar.forEach((nama, source) {
@@ -26,12 +31,19 @@ void main() {
         expect(source, contains('_cacheKey'));
       });
 
-      test('create/edit/hapus ditulis lokal dulu, bukan langsung ke server', () {
+      test('create/edit/hapus ditulis lokal dulu, bukan langsung ke server',
+          () {
         expect(source, contains('prosesSimpanMaster('));
         expect(source, contains('_kirimLokalDulu('));
         // Tidak boleh ada lagi jalur tulis yang menembak server langsung.
-        expect(source, isNot(contains('await ApiClient.instance.aksi(\'uang_muka_simpan')));
-        expect(source, isNot(contains('await ApiClient.instance.aksi(\'pj_uang_muka_simpan')));
+        expect(
+            source,
+            isNot(
+                contains('await ApiClient.instance.aksi(\'uang_muka_simpan')));
+        expect(
+            source,
+            isNot(contains(
+                'await ApiClient.instance.aksi(\'pj_uang_muka_simpan')));
         // Baris baru yang dibuat offline membawa id sementaranya sendiri.
         expect(source, contains('MasterOffline.idSementaraBaru()'));
         expect(source, contains('idLokal:'));
@@ -60,8 +72,8 @@ void main() {
   });
 
   test('Penggantian Kas Kecil menunjuk DOKUMEN kas kecil, bukan jenisnya', () {
-    final src =
-        File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync();
+    final src = File('lib/screens/penggantian_kas_kecil_screen.dart')
+        .readAsStringSync();
     // Seperti layar ZK: yang dipilih satu dokumen kas kecil yang sudah disetujui
     // dan belum diganti; rinciannya ikut terbawa untuk disunting di sini.
     expect(src, contains("'penggantian_kas_kecil_cari_kas_kecil'"));
@@ -126,8 +138,10 @@ void main() {
     });
   });
 
-  test('Dana Talangan menunjuk uang muka yang transfernya sudah terealisasi', () {
-    final src = File('lib/screens/dana_talangan_screen.dart').readAsStringSync();
+  test('Dana Talangan menunjuk uang muka yang transfernya sudah terealisasi',
+      () {
+    final src =
+        File('lib/screens/dana_talangan_screen.dart').readAsStringSync();
     expect(src, contains("'dana_talangan_cari_uang_muka'"));
     expect(src, contains("'uangMukaId'"));
     expect(src, contains('Uang Muka yang Ditalangi'));
@@ -149,12 +163,14 @@ void main() {
     };
     pasangan.forEach((berkas, kunci) {
       final src = File('lib/screens/$berkas').readAsStringSync();
-      expect(src, contains("kunci: ubah ? '$kunci:"), reason: berkas);
+      expect(src, matches(RegExp("kunci:\\s*ubah\\s*\\?\\s*'$kunci:")),
+          reason: berkas);
     });
   });
 
   group('Reimbursement Pegawai', () {
-    final src = File('lib/screens/reimbursement_screen.dart').readAsStringSync();
+    final src =
+        File('lib/screens/reimbursement_screen.dart').readAsStringSync();
 
     test('keputusan tiga arah, bukan hanya setuju/tolak', () {
       // "Minta Revisi" mengembalikan pengajuan kepada pengaju; itu yang membedakan
@@ -169,7 +185,8 @@ void main() {
       expect(src, contains("'catatanAtasan'"));
     });
 
-    test('akun baris diturunkan dari Jenis Pengeluaran, bukan dipilih langsung', () {
+    test('akun baris diturunkan dari Jenis Pengeluaran, bukan dipilih langsung',
+        () {
       expect(src, contains("'jenisPengeluaran'"));
       expect(src, contains('Jenis Pengeluaran *'));
       // Jenis yang akunnya belum dipetakan tetap tampil, dengan peringatan.
@@ -188,7 +205,8 @@ void main() {
   });
 
   test('widget dasbor dipakai ulang, bukan diduplikasi', () {
-    final tab = File('lib/screens/pengadaan_dasbor_tab.dart').readAsStringSync();
+    final tab =
+        File('lib/screens/pengadaan_dasbor_tab.dart').readAsStringSync();
     // Aksi & nama parameternya kini dapat diatur, sehingga grup menu lain memakai
     // widget yang sama persis dengan Pengadaan.
     expect(tab, contains('this.aksi ='));
@@ -203,21 +221,23 @@ void main() {
     // Mengetik ulang barisnya membuang waktu dan membuka peluang salah ketik.
 
     test('LPJ Kas Besar menyalin rincian kas besar yang dipilih', () {
-      final src = File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
+      final src =
+          File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
       expect(src, contains("u['rincian']"));
       expect(src, contains('..addAll(bawaan)'));
     });
 
     test('rincian yang sudah diketik tidak ditimpa diam-diam', () {
-      final src = File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
+      final src =
+          File('lib/screens/pj_kas_besar_screen.dart').readAsStringSync();
       // Bila kotaknya sudah berisi, penggunanya ditanya lebih dulu.
       expect(src, contains('if (salin && rincian.isNotEmpty)'));
       expect(src, contains('Ganti rincian dengan milik kas besar ini?'));
     });
 
     test('Penggantian Kas Kecil menyalin rincian kas kecil yang dipilih', () {
-      final src =
-          File('lib/screens/penggantian_kas_kecil_screen.dart').readAsStringSync();
+      final src = File('lib/screens/penggantian_kas_kecil_screen.dart')
+          .readAsStringSync();
       expect(src, contains("k['rincian']"));
     });
   });
@@ -234,7 +254,9 @@ void main() {
       expect(src, contains("b.debet.clear();"));
     });
 
-    test('label saldo tidak lagi menyebut Seimbang untuk jurnal yang pasti ditolak', () {
+    test(
+        'label saldo tidak lagi menyebut Seimbang untuk jurnal yang pasti ditolak',
+        () {
       // Dulu hanya membandingkan dua jumlah kolom, sehingga satu baris bersisi
       // ganda menghasilkan selisih nol dan tampak "Seimbang".
       expect(src, contains("_adaDuaSisi"));
@@ -250,7 +272,8 @@ void main() {
       expect(src, contains('Jurnal minimal 2 baris'));
     });
 
-    test('menawarkan sisi penyeimbang, bukan membiarkan pengguna menghitung', () {
+    test('menawarkan sisi penyeimbang, bukan membiarkan pengguna menghitung',
+        () {
       expect(src, contains("_seimbangkan(b)"));
       expect(src, contains('Isikan sisi penyeimbang'));
     });
@@ -284,7 +307,7 @@ void main() {
       expect(src, contains('adaTidakBalance'));
       expect(src, contains('tanggalTerpakai'));
       // Tombol Simpan dimatikan bila sudah jelas akan ditolak.
-      expect(src, contains('(timpang || bentrok) ? null'));
+      expect(src, contains('enabled: !(timpang || bentrok)'));
     });
 
     test('akibat menghapus closing dinyatakan apa adanya', () {
@@ -305,7 +328,8 @@ void main() {
   });
 
   group('Penomoran Dokumen Keuangan', () {
-    final src = File('lib/screens/nomor_surat_keuangan_screen.dart').readAsStringSync();
+    final src =
+        File('lib/screens/nomor_surat_keuangan_screen.dart').readAsStringSync();
 
     test('memasang templat dan menyusunnya, keduanya tersedia', () {
       for (final aksi in [
@@ -346,7 +370,8 @@ void main() {
   });
 
   group('Proses Transitori', () {
-    final src = File('lib/screens/proses_transitori_screen.dart').readAsStringSync();
+    final src =
+        File('lib/screens/proses_transitori_screen.dart').readAsStringSync();
 
     test('alur batch lengkap', () {
       for (final aksi in [
@@ -360,7 +385,8 @@ void main() {
       }
     });
 
-    test('kandidat belum siap TAMPIL beserta alasannya, tidak disembunyikan', () {
+    test('kandidat belum siap TAMPIL beserta alasannya, tidak disembunyikan',
+        () {
       // Menyembunyikannya membuat pengguna mencari sesuatu yang tidak akan muncul.
       // Menyembunyikan atas permintaan tetap boleh -- itulah chip "Hanya yang siap".
       expect(src, contains("b['siap'] == true"));
@@ -374,7 +400,8 @@ void main() {
       expect(src, contains("onChanged: siap"));
     });
 
-    test('akun transitori ditampilkan, dan yang belum dipetakan diperingatkan', () {
+    test('akun transitori ditampilkan, dan yang belum dipetakan diperingatkan',
+        () {
       expect(src, contains("b['akunTransitori']"));
       expect(src, contains("b['peringatan']"));
     });
@@ -386,7 +413,8 @@ void main() {
   });
 
   group('Proses Transfer (pencairan DPC)', () {
-    final src = File('lib/screens/proses_transfer_screen.dart').readAsStringSync();
+    final src =
+        File('lib/screens/proses_transfer_screen.dart').readAsStringSync();
 
     test('empat tahap alurnya lengkap', () {
       // Tanpa salah satu aksi ini, dokumen Keuangan berhenti sebelum bisa dijurnal.
@@ -406,7 +434,8 @@ void main() {
       expect(src, contains("'proses_transfer_batal_realisasi'"));
     });
 
-    test('tanda Transfer/Transitori dijelaskan sebagai penentu akun kredit', () {
+    test('tanda Transfer/Transitori dijelaskan sebagai penentu akun kredit',
+        () {
       // Kalau tandanya diperlakukan sebagai label kosmetik, pengguna tidak akan
       // tahu mengapa dokumennya tidak terjurnal.
       expect(src, contains('akun kredit'));
@@ -429,9 +458,11 @@ void main() {
   });
 
   group('Master Data Keuangan', () {
-    final src = File('lib/screens/master_keuangan_screen.dart').readAsStringSync();
+    final src =
+        File('lib/screens/master_keuangan_screen.dart').readAsStringSync();
 
-    test('keenam tipe dilayani satu formulir yang digerakkan metadata server', () {
+    test('keenam tipe dilayani satu formulir yang digerakkan metadata server',
+        () {
       // Yang berbeda antar tipe hanya LABEL medan akunnya; kuncinya posisional
       // dan sama untuk semuanya, sehingga tidak ada cabang per tipe di layar ini.
       for (final aksi in [
@@ -496,8 +527,10 @@ void main() {
     });
   });
 
-  test('cetak Keuangan memakai jendela pratinjau yang sama dengan Pengadaan', () {
-    final util = File('lib/screens/keuangan_cetak_util.dart').readAsStringSync();
+  test('cetak Keuangan memakai jendela pratinjau yang sama dengan Pengadaan',
+      () {
+    final util =
+        File('lib/screens/keuangan_cetak_util.dart').readAsStringSync();
     expect(util, contains("'keuangan_cetak'"));
     expect(util, contains('tampilkanPratinjauPdf('));
   });

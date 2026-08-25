@@ -1694,6 +1694,7 @@ class _AppTableFooter extends StatelessWidget {
 /// memperbaiki dan mencoba kembali.
 class AppCrudDialogActions extends StatefulWidget {
   final Future<bool> Function() onSubmit;
+  final bool enabled;
   final String submitLabel;
   final String cancelLabel;
   final String failureMessage;
@@ -1701,6 +1702,7 @@ class AppCrudDialogActions extends StatefulWidget {
   const AppCrudDialogActions({
     super.key,
     required this.onSubmit,
+    this.enabled = true,
     this.submitLabel = 'Simpan',
     this.cancelLabel = 'Batal',
     this.failureMessage =
@@ -1779,7 +1781,7 @@ class _AppCrudDialogActionsState extends State<AppCrudDialogActions> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: _menyimpan ? null : _simpan,
+                onPressed: _menyimpan || !widget.enabled ? null : _simpan,
                 child: _menyimpan
                     ? const Row(
                         mainAxisSize: MainAxisSize.min,

@@ -47,6 +47,11 @@ class VerifikatorSandiLokal {
   /// Dijalankan di isolate terpisah ([compute]) supaya layar tidak membeku.
   static const int iterasiBawaan = 100000;
 
+  /// Bukti lokal tidak boleh hidup lebih lama daripada token perangkat yang
+  /// diterbitkan server. Setelah batas ini, perangkat wajib terhubung kembali
+  /// agar status akun, perubahan sandi, dan pencabutan akses diperiksa ulang.
+  static const Duration batasLuringBawaan = Duration(days: 30);
+
   static const int _panjangGaram = 16;
   static const int _panjangKunci = 32;
 
@@ -102,6 +107,22 @@ class VerifikatorSandiLokal {
     final sp = await SharedPreferences.getInstance();
     final ms = sp.getInt(_kDaring);
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  /// Apakah bukti masih cukup baru untuk dipakai membuka kunci tanpa server.
+  ///
+  /// Timestamp masa depan ditolak. Selain menjaga clock rollback, ini membuat
+  /// data preferensi yang rusak tidak dapat memperpanjang akses luring.
+  Future<bool> bolehDipakaiLuring({
+    DateTime? sekarang,
+    Duration batas = batasLuringBawaan,
+  }) async {
+    if (batas <= Duration.zero) return false;
+    final daring = await terakhirDaring();
+    if (daring == null) return false;
+    final umur = (sekarang ?? DateTime.now()).difference(daring);
+    if (umur.isNegative) return false;
+    return umur <= batas;
   }
 
   /// Benar bila [username] + [password] cocok dengan bukti tersimpan.

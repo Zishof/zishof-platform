@@ -321,7 +321,12 @@ class _ClosingScreenState extends State<ClosingScreen> {
                 ],
               ]),
             ),
-            actions: [AppCrudDialogActions(onSubmit: simpanData)],
+            actions: [
+              AppCrudDialogActions(
+                onSubmit: simpanData,
+                enabled: !(timpang || bentrok),
+              ),
+            ],
           );
         },
       ),

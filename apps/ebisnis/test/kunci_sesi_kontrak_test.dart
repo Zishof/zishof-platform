@@ -25,8 +25,8 @@ void main() {
 
       // Potongan keputusan: dari pemeriksaan kedaluwarsa sampai beberapa baris
       // sesudahnya -- di situlah dulu hapusToken() dipanggil.
-      final potongan = source.substring(
-          mulai, (mulai + 400).clamp(0, source.length));
+      final potongan =
+          source.substring(mulai, (mulai + 400).clamp(0, source.length));
       expect(potongan.contains('hapusToken'), isFalse,
           reason: '$nama: token TIDAK boleh dihapus karena batas waktu lokal; '
               'batas waktu lokal hanya mengunci layar (LayarKunciScreen)');
@@ -50,7 +50,8 @@ void main() {
     // padahal kontrak yang dijaga -- apa yang dibuang -- tidak berubah.
     final mulai = source.indexOf('Future<void> hapusToken(');
     expect(mulai, greaterThan(-1));
-    final blok = source.substring(mulai, (mulai + 1600).clamp(0, source.length));
+    final blok =
+        source.substring(mulai, (mulai + 1600).clamp(0, source.length));
     expect(blok, contains("sp.remove('token')"));
     expect(blok, contains('hapusCatatanAktif'));
     expect(blok, contains('VerifikatorSandiLokal.instance.hapus'),
@@ -94,6 +95,12 @@ void main() {
     expect(source, contains('_bukaLuring()'));
     // Pemeriksaan lokal wajib lewat verifikator, bukan sekadar "lanjut saja".
     expect(source, contains('VerifikatorSandiLokal.instance.cocok'));
+    expect(
+        source, contains('VerifikatorSandiLokal.instance.bolehDipakaiLuring'),
+        reason: 'bukti lokal kedaluwarsa tidak boleh membuka sesi selamanya');
+    expect(source, contains('batas 30 hari'),
+        reason:
+            'pengguna harus diberi alasan saat verifikasi daring diwajibkan');
     // Tanpa bukti lokal, buka kunci luring harus DITOLAK.
     expect(source, contains('if (!_adaBuktiLokal)'));
   });

@@ -15,11 +15,12 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('belum ada bukti: tidak tersedia dan tidak pernah mencocokkan', () async {
+  test('belum ada bukti: tidak tersedia dan tidak pernah mencocokkan',
+      () async {
     expect(await VerifikatorSandiLokal.instance.tersedia(), isFalse);
     expect(await VerifikatorSandiLokal.instance.usernameTersimpan(), isNull);
-    expect(
-        await VerifikatorSandiLokal.instance.cocok('rizal', 'rahasia'), isFalse);
+    expect(await VerifikatorSandiLokal.instance.cocok('rizal', 'rahasia'),
+        isFalse);
   });
 
   test('sandi yang benar cocok, yang salah tidak', () async {
@@ -95,5 +96,32 @@ void main() {
     await VerifikatorSandiLokal.instance.catatVerifikasiDaring();
     final kedua = await VerifikatorSandiLokal.instance.terakhirDaring();
     expect(kedua!.isBefore(pertama!), isFalse);
+  });
+
+  test('bukti luring hanya berlaku sampai umur token server', () async {
+    await VerifikatorSandiLokal.instance.simpan('rizal', 'rahasia123');
+    final daring = await VerifikatorSandiLokal.instance.terakhirDaring();
+
+    expect(
+        await VerifikatorSandiLokal.instance.bolehDipakaiLuring(
+            sekarang: daring!.add(const Duration(days: 29))),
+        isTrue);
+    expect(
+        await VerifikatorSandiLokal.instance.bolehDipakaiLuring(
+            sekarang: daring.add(const Duration(days: 30, seconds: 1))),
+        isFalse,
+        reason: 'akses luring tidak boleh melampaui umur token server');
+  });
+
+  test(
+      'timestamp daring masa depan ditolak agar clock rollback tidak membuka akses',
+      () async {
+    await VerifikatorSandiLokal.instance.simpan('rizal', 'rahasia123');
+    final daring = await VerifikatorSandiLokal.instance.terakhirDaring();
+
+    expect(
+        await VerifikatorSandiLokal.instance.bolehDipakaiLuring(
+            sekarang: daring!.subtract(const Duration(minutes: 1))),
+        isFalse);
   });
 }
