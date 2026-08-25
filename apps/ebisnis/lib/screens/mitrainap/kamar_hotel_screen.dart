@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/master_offline.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/riwayat_data_dialog.dart';
@@ -144,44 +145,52 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
   /// Putus jaringan tidak menahan pengguna -- pengiriman ulang berjalan di
   /// latar tiap [MasterOffline.intervalFlush] dan berhenti sendiri saat
   /// terkirim.
-  Future<void> _kirim(
+  Future<bool> _kirim(
       String aksi, Map<String, dynamic> body, String pesanSukses,
       {required String kunci}) async {
     try {
       final res = await prosesSimpanMaster(context,
           aksi: aksi, body: body, kunci: kunci);
       final sukses = apiSukses(res);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(res['offline'] == true
-            ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
-            : sukses
-                ? apiPesan(res, pesanSukses)
-                : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
-        backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
-      ));
-      if (sukses && res['offline'] != true) _muatIsi();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(res['offline'] == true
+              ? 'Tersimpan lokal — akan dikirim otomatis saat online.'
+              : sukses
+                  ? apiPesan(res, pesanSukses)
+                  : 'Gagal: ${apiPesan(res, res['status'].toString())}'),
+          backgroundColor: sukses ? null : Theme.of(context).colorScheme.error,
+        ));
+        if (sukses && res['offline'] != true) _muatIsi();
+      }
+      return sukses;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Gagal menyimpan: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error));
+      }
+      return false;
     }
   }
 
   Future<void> _simpanTipe(Map<String, dynamic>? awal) async {
     final pid = _propertiId;
     if (pid == null) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormTipeKamarDialog(awal: awal),
+      builder: (_) => _FormTipeKamarDialog(
+        awal: awal,
+        onSubmit: (hasil) {
+          hasil['properti_id'] = pid;
+          return _kirim(
+              'hotel_tipe_kamar_simpan', hasil, 'Tipe kamar tersimpan.',
+              kunci: hasil['id'] != null
+                  ? 'hotel_tipe_kamar:${hasil['id']}'
+                  : 'hotel_tipe_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
+        },
+      ),
     );
-    if (hasil == null) return;
-    hasil['properti_id'] = pid;
-    await _kirim('hotel_tipe_kamar_simpan', hasil, 'Tipe kamar tersimpan.',
-        kunci: hasil['id'] != null
-            ? 'hotel_tipe_kamar:${hasil['id']}'
-            : 'hotel_tipe_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
   }
 
   Future<void> _simpanKamar(Map<String, dynamic>? awal) async {
@@ -192,16 +201,20 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
           content: Text('Buat Tipe Kamar dulu sebelum menambah kamar.')));
       return;
     }
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormKamarDialog(awal: awal, daftarTipe: _tipe),
+      builder: (_) => _FormKamarDialog(
+        awal: awal,
+        daftarTipe: _tipe,
+        onSubmit: (hasil) {
+          hasil['properti_id'] = pid;
+          return _kirim('hotel_kamar_simpan', hasil, 'Kamar tersimpan.',
+              kunci: hasil['id'] != null
+                  ? 'hotel_kamar:${hasil['id']}'
+                  : 'hotel_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
+        },
+      ),
     );
-    if (hasil == null) return;
-    hasil['properti_id'] = pid;
-    await _kirim('hotel_kamar_simpan', hasil, 'Kamar tersimpan.',
-        kunci: hasil['id'] != null
-            ? 'hotel_kamar:${hasil['id']}'
-            : 'hotel_kamar:baru:${DateTime.now().microsecondsSinceEpoch}');
   }
 
   Widget _daftarTipe() {
@@ -423,7 +436,8 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
 
 class _FormTipeKamarDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
-  const _FormTipeKamarDialog({this.awal});
+  final Future<bool> Function(Map<String, dynamic>) onSubmit;
+  const _FormTipeKamarDialog({this.awal, required this.onSubmit});
 
   @override
   State<_FormTipeKamarDialog> createState() => _FormTipeKamarDialogState();
@@ -461,6 +475,20 @@ class _FormTipeKamarDialogState extends State<_FormTipeKamarDialog> {
     _kapasitas.dispose();
     _keterangan.dispose();
     super.dispose();
+  }
+
+  Future<bool> _simpan() async {
+    if (!_formKey.currentState!.validate()) return false;
+    return widget.onSubmit(<String, dynamic>{
+      if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
+      'nama': _nama.text.trim(),
+      'kode': _kode.text.trim(),
+      'harga_dasar': double.tryParse(
+          _harga.text.trim().replaceAll('.', '').replaceAll(',', '.')),
+      'kapasitas': int.tryParse(_kapasitas.text.trim()),
+      'keterangan': _keterangan.text.trim(),
+      'aktif': _aktif,
+    });
   }
 
   @override
@@ -512,27 +540,7 @@ class _FormTipeKamarDialogState extends State<_FormTipeKamarDialog> {
           ),
         ),
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.of(context).pop(<String, dynamic>{
-              if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
-              'nama': _nama.text.trim(),
-              'kode': _kode.text.trim(),
-              'harga_dasar': double.tryParse(
-                  _harga.text.trim().replaceAll('.', '').replaceAll(',', '.')),
-              'kapasitas': int.tryParse(_kapasitas.text.trim()),
-              'keterangan': _keterangan.text.trim(),
-              'aktif': _aktif,
-            });
-          },
-          child: const Text('Simpan'),
-        ),
-      ],
+      actions: [AppCrudDialogActions(onSubmit: _simpan)],
     );
   }
 }
@@ -540,7 +548,9 @@ class _FormTipeKamarDialogState extends State<_FormTipeKamarDialog> {
 class _FormKamarDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
   final List<Map<String, dynamic>> daftarTipe;
-  const _FormKamarDialog({this.awal, required this.daftarTipe});
+  final Future<bool> Function(Map<String, dynamic>) onSubmit;
+  const _FormKamarDialog(
+      {this.awal, required this.daftarTipe, required this.onSubmit});
 
   @override
   State<_FormKamarDialog> createState() => _FormKamarDialogState();
@@ -574,6 +584,18 @@ class _FormKamarDialogState extends State<_FormKamarDialog> {
     _lantai.dispose();
     _keterangan.dispose();
     super.dispose();
+  }
+
+  Future<bool> _simpan() async {
+    if (!_formKey.currentState!.validate()) return false;
+    return widget.onSubmit(<String, dynamic>{
+      if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
+      'nomor': _nomor.text.trim(),
+      'tipe_kamar_id': _tipeId,
+      'lantai': int.tryParse(_lantai.text.trim()),
+      'keterangan': _keterangan.text.trim(),
+      'aktif': _aktif,
+    });
   }
 
   @override
@@ -626,25 +648,7 @@ class _FormKamarDialogState extends State<_FormKamarDialog> {
           ),
         ),
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.of(context).pop(<String, dynamic>{
-              if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
-              'nomor': _nomor.text.trim(),
-              'tipe_kamar_id': _tipeId,
-              'lantai': int.tryParse(_lantai.text.trim()),
-              'keterangan': _keterangan.text.trim(),
-              'aktif': _aktif,
-            });
-          },
-          child: const Text('Simpan'),
-        ),
-      ],
+      actions: [AppCrudDialogActions(onSubmit: _simpan)],
     );
   }
 }

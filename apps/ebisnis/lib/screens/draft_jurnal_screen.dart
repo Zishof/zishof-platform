@@ -1,7 +1,11 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -28,11 +32,37 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
   static final _angka = NumberFormat.decimalPattern('id_ID');
 
   bool _memuat = true;
+  bool _mengunduh = false;
   String? _pesanError;
   List<Map<String, dynamic>> _baris = [];
   int _draft = 0;
   int _posting = 0;
   int _closing = 0;
+  String _kategoriAktif = 'semua';
+
+  static const List<Map<String, String>> _kategoriPilihan = [
+    {'id': 'semua', 'nama': 'Draft Jurnal'},
+    {'id': 'jurnal_umum', 'nama': 'Jurnal Umum'},
+    {'id': 'uang_muka_kas', 'nama': 'Uang Muka dan Kas'},
+    {'id': 'pajak', 'nama': 'Pajak'},
+    {'id': 'transaksi_vendor', 'nama': 'Transaksi Vendor'},
+    {'id': 'gaji', 'nama': 'Gaji'},
+    {'id': 'siswa_mahasiswa', 'nama': 'Siswa dan Mahasiswa'},
+    {'id': 'fixed_asset', 'nama': 'Fixed Asset & Penyusutan'},
+    {'id': 'pengajuan_transfer', 'nama': 'Pengajuan Transfer'},
+    {'id': 'transitori', 'nama': 'Transitori'},
+    {'id': 'closing', 'nama': 'Closing'},
+    {'id': 'posting_penjualan', 'nama': 'Posting Penjualan'},
+  ];
+
+  String get _namaKategoriAktif {
+    for (final kategori in _kategoriPilihan) {
+      if (kategori['id'] == _kategoriAktif) {
+        return kategori['nama']!;
+      }
+    }
+    return 'Draft Jurnal';
+  }
 
   /// Rentang bawaan menyalin layar ZK: enam bulan ke belakang sampai besok, supaya
   /// jurnal yang baru dicatat hari ini pasti ikut terlihat.
@@ -70,6 +100,69 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
     }
   }
 
+  Future<void> _unduhExcel() async {
+    final data = _barisTerfilter;
+    if (data.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada data yang dapat diunduh.')),
+      );
+      return;
+    }
+
+    setStateIfMounted(() => _mengunduh = true);
+    try {
+      final bytes = buildSimpleXlsx(
+        sheetName: _namaKategoriAktif,
+        headers: const [
+          'Nama Jurnal',
+          'Kategori',
+          'Draft',
+          'Terposting',
+          'Closing',
+          'Uraian',
+        ],
+        rows: data.map((baris) {
+          return <dynamic>[
+            '${baris['nama'] ?? '-'}',
+            '${baris['kategoriNama'] ?? _namaKategoriAktif}',
+            (baris['draft'] as num?)?.toInt() ?? 0,
+            (baris['posting'] as num?)?.toInt() ?? 0,
+            (baris['closing'] as num?)?.toInt() ?? 0,
+            '${baris['uraian'] ?? '-'}',
+          ];
+        }).toList(growable: false),
+      );
+      final namaBerkas =
+          'draft_jurnal_${_tanggalIso.format(_mulai).replaceAll('-', '')}'
+          '_${_tanggalIso.format(_sampai).replaceAll('-', '')}.xlsx';
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan $_namaKategoriAktif',
+        fileName: namaBerkas,
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Data tersimpan di $path')),
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        snackbarGalat(
+          context,
+          error,
+          aktivitas: 'Mengunduh data draft jurnal',
+        );
+      }
+    } finally {
+      setStateIfMounted(() => _mengunduh = false);
+    }
+  }
+
   Future<void> _pilihTanggal({required bool awal}) async {
     final hasil = await showDatePicker(
       context: context,
@@ -88,7 +181,71 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
     await _muat();
   }
 
-  int get _total => _draft + _posting + _closing;
+  String _kategoriBaris(Map<String, dynamic> baris) {
+    final kategori = '${baris['kategori'] ?? ''}'.trim();
+    if (kategori.isNotEmpty) return kategori;
+
+    // Kompatibilitas dengan server lama yang belum mengirim field kategori.
+    final kunci = '${baris['kunci'] ?? ''}'.trim().toLowerCase();
+    if (kunci == 'jurnal_umum') return 'jurnal_umum';
+    if (<String>{
+      'uang_muka',
+      'pj_uang_muka',
+      'kas_kecil',
+      'kas_besar',
+      'pj_kas_besar',
+      'penggantian_kas_kecil',
+      'dana_talangan',
+    }.contains(kunci)) {
+      return 'uang_muka_kas';
+    }
+    if (kunci == 'pajak') return 'pajak';
+    if (<String>{
+      'penerimaan_tagihan_vendor',
+      'pekerjaan_vendor',
+      'dp_vendor',
+      'dp_pekerjaan_vendor',
+      'jurnal_balik_dp_pekerjaan',
+    }.contains(kunci)) {
+      return 'transaksi_vendor';
+    }
+    if (kunci == 'gaji') return 'gaji';
+    if (kunci == 'mahasiswa' || kunci == 'siswa') {
+      return 'siswa_mahasiswa';
+    }
+    if (kunci == 'penyusutan') return 'fixed_asset';
+    if (kunci == 'pengajuan_transfer') return 'pengajuan_transfer';
+    if (kunci == 'transitori') return 'transitori';
+    if (kunci == 'closing') return 'closing';
+    if (kunci == 'posting_hpp') return 'posting_penjualan';
+    return 'semua';
+  }
+
+  List<Map<String, dynamic>> get _barisTerfilter {
+    if (_kategoriAktif == 'semua') return _baris;
+    return _baris
+        .where((baris) => _kategoriBaris(baris) == _kategoriAktif)
+        .toList(growable: false);
+  }
+
+  int _jumlahStatus(String status) {
+    if (_kategoriAktif == 'semua') {
+      if (status == 'draft') return _draft;
+      if (status == 'posting') return _posting;
+      return _closing;
+    }
+    var jumlah = 0;
+    for (final baris in _barisTerfilter) {
+      jumlah += (baris[status] as num?)?.toInt() ?? 0;
+    }
+    return jumlah;
+  }
+
+  int get _draftTerfilter => _jumlahStatus('draft');
+  int get _postingTerfilter => _jumlahStatus('posting');
+  int get _closingTerfilter => _jumlahStatus('closing');
+  int get _totalTerfilter =>
+      _draftTerfilter + _postingTerfilter + _closingTerfilter;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +271,8 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
+          _navigasiKategori(),
+          const SizedBox(height: 12),
           _filter(),
           const SizedBox(height: 12),
           if (_pesanError != null) ...[
@@ -151,7 +310,8 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const Text('Tanggal', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('Tanggal',
+                style: TextStyle(fontWeight: FontWeight.w600)),
             OutlinedButton.icon(
               onPressed: () => _pilihTanggal(awal: true),
               icon: const Icon(Icons.calendar_today, size: 16),
@@ -168,7 +328,44 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
               icon: const Icon(Icons.search, size: 18),
               label: const Text('Tampilkan'),
             ),
+            OutlinedButton.icon(
+              onPressed: _memuat || _mengunduh ? null : _unduhExcel,
+              icon: _mengunduh
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download, size: 18),
+              label: Text(_mengunduh ? 'Menyiapkan...' : 'Download'),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navigasiKategori() {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: _kategoriPilihan.map((kategori) {
+            final id = kategori['id']!;
+            final dipilih = id == _kategoriAktif;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                selected: dipilih,
+                label: Text(kategori['nama']!),
+                onSelected: (_) => setStateIfMounted(() {
+                  _kategoriAktif = id;
+                }),
+              ),
+            );
+          }).toList(growable: false),
         ),
       ),
     );
@@ -183,10 +380,13 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
               : 1;
       final lebar = (batas.maxWidth - ((kolom - 1) * 10)) / kolom;
       final kartu = <Widget>[
-        _kartu('Draft', _draft, 'Belum diposting', AppColors.warning),
-        _kartu('Terposting', _posting, 'Sudah menjadi jurnal', AppColors.success),
-        _kartu('Closing', _closing, 'Sudah dikunci periode', AppColors.info),
-        _kartu('Total Aktivitas', _total, 'Semua status', AppColors.primary),
+        _kartu('Draft', _draftTerfilter, 'Belum diposting', AppColors.warning),
+        _kartu('Terposting', _postingTerfilter, 'Sudah menjadi jurnal',
+            AppColors.success),
+        _kartu('Closing', _closingTerfilter, 'Sudah dikunci periode',
+            AppColors.info),
+        _kartu('Total Aktivitas', _totalTerfilter, 'Semua status',
+            AppColors.primary),
       ];
       return Wrap(
         spacing: 10,
@@ -224,7 +424,8 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
   }
 
   Widget _kesiapanClosing() {
-    final rasio = _total == 0 ? 0.0 : _closing / _total;
+    final rasio =
+        _totalTerfilter == 0 ? 0.0 : _closingTerfilter / _totalTerfilter;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -248,7 +449,8 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
               ),
             ),
             const SizedBox(height: 6),
-            Text('${(rasio * 100).toStringAsFixed(0)}% aktivitas berada pada status closing.',
+            Text(
+                '${(rasio * 100).toStringAsFixed(0)}% aktivitas berada pada status closing.',
                 style: TextStyle(
                     fontSize: 11, color: AppColors.textSecondaryOf(context))),
           ],
@@ -258,12 +460,15 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
   }
 
   Widget _tabel() {
-    if (_baris.isEmpty) {
-      return const Card(
+    final barisTerfilter = _barisTerfilter;
+    if (barisTerfilter.isEmpty) {
+      return Card(
         margin: EdgeInsets.zero,
-        child: Padding(
+        child: const Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
-          child: Center(child: Text('Belum ada aktivitas jurnal pada rentang ini.')),
+          child: Center(
+              child: Text(
+                  'Belum ada aktivitas jurnal pada kelompok dan rentang ini.')),
         ),
       );
     }
@@ -277,7 +482,7 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
         AppTableColumn('Uraian'),
         AppTableColumn('Aksi', width: 80, align: TextAlign.center),
       ],
-      rows: _baris
+      rows: barisTerfilter
           .map((b) => AppTableRowData(cells: [
                 AppTableCell(
                     child: Text('${b['nama'] ?? '-'}',
@@ -336,12 +541,14 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
     );
   }
 
-  Future<void> _jalankanPosting(Map<String, dynamic> baris, bool posting) async {
+  Future<void> _jalankanPosting(
+      Map<String, dynamic> baris, bool posting) async {
     final nama = '${baris['nama'] ?? ''}';
     final setuju = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(posting ? 'Konfirmasi Posting' : 'Konfirmasi Batalkan Posting'),
+        title: Text(
+            posting ? 'Konfirmasi Posting' : 'Konfirmasi Batalkan Posting'),
         content: Text(posting
             ? 'Posting SEMUA draft jurnal "$nama" pada periode terpilih?'
             : 'Batalkan posting jurnal "$nama"? Jurnal yang SUDAH closing tidak akan dibatalkan.'),
@@ -405,8 +612,7 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
       style: TextStyle(
         fontWeight: n > 0 ? FontWeight.w700 : FontWeight.w400,
         color: n > 0 ? warna : AppColors.textSecondaryOf(context),
-        decoration:
-            n > 0 && bisaRincian ? TextDecoration.underline : null,
+        decoration: n > 0 && bisaRincian ? TextDecoration.underline : null,
         decorationColor: warna,
       ),
     );
@@ -502,6 +708,181 @@ class _RincianDraftJurnalState extends State<_RincianDraftJurnal>
           ? 'Terposting'
           : 'Closing';
 
+  double _angka(dynamic nilai) =>
+      nilai is num ? nilai.toDouble() : double.tryParse('${nilai ?? ''}') ?? 0;
+
+  List<Map<String, dynamic>> _barisJurnal(Map<String, dynamic> dokumen) =>
+      ((dokumen['jurnal'] as List?) ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+  Widget _nilaiJurnal(double nilai, {bool tebal = false}) => SizedBox(
+        width: 112,
+        child: Text(
+          nilai == 0 ? '-' : _rupiah.format(nilai),
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: tebal ? FontWeight.w800 : FontWeight.w500,
+          ),
+        ),
+      );
+
+  Widget _kartuJurnal(Map<String, dynamic> dokumen) {
+    final jurnal = _barisJurnal(dokumen);
+    final totalDebet = _angka(dokumen['totalDebet']);
+    final totalKredit = _angka(dokumen['totalKredit']);
+    final seimbang = dokumen['jurnalSeimbang'] == true && jurnal.isNotEmpty;
+    final uraian = '${dokumen['uraian'] ?? ''}'.trim();
+    final pesan = '${dokumen['pesanJurnal'] ?? ''}'.trim();
+    final warnaGaris = Theme.of(context).dividerColor;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: warnaGaris),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        uraian.isEmpty ? '(tanpa keterangan)' : uraian,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${dokumen['tanggal'] ?? '-'}  •  Referensi ${dokumen['id'] ?? '-'}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondaryOf(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _rupiah.format(_angka(dokumen['nilai'])),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (jurnal.isEmpty)
+              AppInfoBanner(
+                icon: Icons.account_balance_outlined,
+                color: AppColors.warning,
+                text: pesan.isEmpty
+                    ? 'Preview jurnal belum tersedia untuk dokumen ini.'
+                    : pesan,
+              )
+            else ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text('AKUN',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(
+                      width: 112,
+                      child: Text('DEBET',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(
+                      width: 112,
+                      child: Text('KREDIT',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
+              ),
+              for (final baris in jurnal)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          [
+                            '${baris['kodeAkun'] ?? ''}'.trim(),
+                            '${baris['namaAkun'] ?? ''}'.trim(),
+                          ].where((e) => e.isNotEmpty).join(' — '),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      _nilaiJurnal(_angka(baris['debet'])),
+                      _nilaiJurnal(_angka(baris['kredit'])),
+                    ],
+                  ),
+                ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            seimbang ? Icons.check_circle : Icons.error_outline,
+                            size: 16,
+                            color:
+                                seimbang ? AppColors.success : AppColors.danger,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            seimbang
+                                ? 'Jurnal seimbang'
+                                : 'Jurnal tidak seimbang',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: seimbang
+                                  ? AppColors.success
+                                  : AppColors.danger,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _nilaiJurnal(totalDebet, tebal: true),
+                    _nilaiJurnal(totalKredit, tebal: true),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _muat() async {
     try {
       final hasil = await ApiClient.instance.aksi('draft_jurnal_rincian', {
@@ -535,7 +916,8 @@ class _RincianDraftJurnalState extends State<_RincianDraftJurnal>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(widget.nama,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             Text('$_judulStatus  •  ${widget.mulai} s.d. ${widget.sampai}',
                 style: TextStyle(
                     fontSize: 12, color: AppColors.textSecondaryOf(context))),
@@ -553,29 +935,10 @@ class _RincianDraftJurnalState extends State<_RincianDraftJurnal>
                   : _data.isEmpty && _pesanError == null
                       ? const Center(
                           child: Text('Tidak ada dokumen pada status ini.'))
-                      : ListView.separated(
+                      : ListView.builder(
                           controller: scrollController,
                           itemCount: _data.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final d = _data[i];
-                            final nilai = (d['nilai'] as num?)?.toDouble() ?? 0;
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                  '${d['uraian'] ?? ''}'.trim().isEmpty
-                                      ? '(tanpa keterangan)'
-                                      : '${d['uraian']}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis),
-                              subtitle: Text(
-                                  '${d['tanggal'] ?? '-'}   •   id ${d['id'] ?? '-'}',
-                                  style: const TextStyle(fontSize: 11)),
-                              trailing: Text(_rupiah.format(nilai),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
-                            );
-                          },
+                          itemBuilder: (context, i) => _kartuJurnal(_data[i]),
                         ),
             ),
             const SizedBox(height: 8),

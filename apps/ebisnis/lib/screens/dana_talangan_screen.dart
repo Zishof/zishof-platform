@@ -89,9 +89,12 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
       final opsi = await ApiClient.instance.aksi('dana_talangan_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
-        _jenis = ((opsi['jenisUangMuka'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _satker =
+            ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _daftarStatus =
+            ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
+        _jenis = ((opsi['jenisUangMuka'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
       });
       await _muatDaftar();
     } catch (e) {
@@ -127,12 +130,19 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
           }();
           if (!mounted) return;
           setStateIfMounted(() {
-            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _data =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _totalNilai = (hasil['totalNilai'] as num?)?.toDouble() ?? 0;
             final h = hasil['hak'];
             _hak = h is Map
                 ? {
-                    for (final k in ['create', 'update', 'delete', 'approve', 'reject'])
+                    for (final k in [
+                      'create',
+                      'update',
+                      'delete',
+                      'approve',
+                      'reject'
+                    ])
                       k: h[k] != false
                   }
                 : const {};
@@ -178,7 +188,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
         entitas: 'dana_talangan',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -199,8 +210,11 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -226,11 +240,13 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
           Future<void> jalankan() async {
             setDialog(() => memuat = true);
             try {
-              final res = await ApiClient.instance.aksi('dana_talangan_cari_uang_muka', {
+              final res = await ApiClient.instance
+                  .aksi('dana_talangan_cari_uang_muka', {
                 'cari': cari.text.trim(),
                 if (idDokumen != null) 'id': idDokumen,
               });
-              hasil = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              hasil =
+                  ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             } catch (e) {
               _pesan('$e');
             } finally {
@@ -273,14 +289,16 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                       ? const Center(child: CircularProgressIndicator())
                       : hasil.isEmpty
                           ? const Center(
-                              child: Text('Belum ada uang muka yang transfernya terealisasi.'))
+                              child: Text(
+                                  'Belum ada uang muka yang transfernya terealisasi.'))
                           : ListView.builder(
                               itemCount: hasil.length,
                               itemBuilder: (_, i) {
                                 final k = hasil[i];
                                 return ListTile(
                                   dense: true,
-                                  title: Text('${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}'),
+                                  title: Text(
+                                      '${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}'),
                                   subtitle: Text(
                                       'Nilai ${_uang.format((k['nilai'] as num?) ?? 0)}'
                                       ' \u2022 ${k['anggaran'] ?? '-'}'
@@ -293,7 +311,9 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Batal')),
             ],
           );
         },
@@ -306,7 +326,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
   Future<void> _form([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     int? satkerId = (baris?['satuanKerjaId'] as num?)?.toInt();
     int? uangMukaId = (baris?['uangMukaId'] as num?)?.toInt();
     String uangMukaLabel = ubah
@@ -319,12 +340,45 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
             : '${((baris?['nilai'] as num?) ?? 0).toInt()}');
     String statusDokumen = '${baris?['statusDokumen'] ?? 'Pengajuan'}';
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
+      return _kirimLokalDulu(
+        'dana_talangan_simpan',
+        {
+          if (ubah) 'id': baris['id'],
+          'satuanKerjaId': satkerId ?? 0,
+          'nama': nama.text.trim(),
+          'uangMukaId': uangMukaId ?? 0,
+          'jenisUangMukaId': jenisId ?? 0,
+          'nilai': double.tryParse(nilai.text.trim()) ?? 0,
+          'keterangan': keterangan.text.trim(),
+          'statusDokumen': statusDokumen,
+        },
+        kunci: ubah
+            ? 'dana_talangan:${baris['id']}'
+            : 'dana_talangan:baru:$idLokal',
+        idLokal: idLokal,
+        rowLokal: {
+          ...(baris ?? const <String, dynamic>{}),
+          'id': ubah ? baris['id'] : idLokal,
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'nilai': double.tryParse(nilai.text.trim()) ?? 0,
+          'statusDokumen': statusDokumen,
+          'satuanKerjaId': satkerId,
+          'uangMukaId': uangMukaId,
+          'jenisUangMukaId': jenisId,
+        },
+      );
+    }
+
+    await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
           return AlertDialog(
-            title: Text(ubah ? 'Ubah Dana Talangan' : 'Pengajuan Dana Talangan Baru'),
+            title: Text(
+                ubah ? 'Ubah Dana Talangan' : 'Pengajuan Dana Talangan Baru'),
             content: SizedBox(
               width: 660,
               child: SingleChildScrollView(
@@ -344,16 +398,22 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                         isDense: true),
                     child: Row(children: [
                       Expanded(
-                        child: Text(uangMukaLabel.isEmpty ? 'Belum dipilih' : uangMukaLabel,
-                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                            uangMukaLabel.isEmpty
+                                ? 'Belum dipilih'
+                                : uangMukaLabel,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
                       ),
                       TextButton(
                         onPressed: () async {
-                          final k = await _pilihUangMuka(ubah ? baris['id'] as int? : null);
+                          final k = await _pilihUangMuka(
+                              ubah ? baris['id'] as int? : null);
                           if (k == null) return;
                           setDialog(() {
                             uangMukaId = (k['id'] as num?)?.toInt();
-                            uangMukaLabel = '${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}';
+                            uangMukaLabel =
+                                '${k['kode'] ?? ''} \u2014 ${k['nama'] ?? ''}';
                           });
                         },
                         child: const Text('Pilih'),
@@ -374,7 +434,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                     padding: EdgeInsets.only(top: 6, bottom: 6),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Wajib dipilih sebelum pengajuan dapat disetujui.',
+                      child: Text(
+                          'Wajib dipilih sebelum pengajuan dapat disetujui.',
                           style: TextStyle(fontSize: 12)),
                     ),
                   ),
@@ -385,51 +446,22 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                         ? statusDokumen
                         : _daftarStatus.first,
                     decoration: const InputDecoration(
-                        labelText: 'Status', border: OutlineInputBorder(), isDense: true),
+                        labelText: 'Status',
+                        border: OutlineInputBorder(),
+                        isDense: true),
                     items: _daftarStatus
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setDialog(() => statusDokumen = v ?? 'Pengajuan'),
+                    onChanged: (v) =>
+                        setDialog(() => statusDokumen = v ?? 'Pengajuan'),
                   ),
                 ]),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-
-    final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
-    await _kirimLokalDulu(
-      'dana_talangan_simpan',
-      {
-        if (ubah) 'id': baris['id'],
-        'satuanKerjaId': satkerId ?? 0,
-        'nama': nama.text.trim(),
-        'uangMukaId': uangMukaId ?? 0,
-        'jenisUangMukaId': jenisId ?? 0,
-        'nilai': double.tryParse(nilai.text.trim()) ?? 0,
-        'keterangan': keterangan.text.trim(),
-        'statusDokumen': statusDokumen,
-      },
-      kunci: ubah ? 'dana_talangan:${baris['id']}' : 'dana_talangan:baru:$idLokal',
-      idLokal: idLokal,
-      rowLokal: {
-        ...(baris ?? const <String, dynamic>{}),
-        'id': ubah ? baris['id'] : idLokal,
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'nilai': double.tryParse(nilai.text.trim()) ?? 0,
-        'statusDokumen': statusDokumen,
-        'satuanKerjaId': satkerId,
-        'uangMukaId': uangMukaId,
-        'jenisUangMukaId': jenisId,
-      },
     );
   }
 
@@ -474,8 +506,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
     }
     setStateIfMounted(() => _sibuk = true);
     try {
-      final berhasil = await MasterOffline.pulihkanLokal(
-          _cacheKey, b['id'], kunci: 'dana_talangan:${b['id']}');
+      final berhasil = await MasterOffline.pulihkanLokal(_cacheKey, b['id'],
+          kunci: 'dana_talangan:${b['id']}');
       _pesan(berhasil
           ? 'Penghapusan dibatalkan.'
           : 'Tidak dapat dibatalkan: penghapusannya sudah terkirim ke server. '
@@ -540,7 +572,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Sudah di daftar transfer'
                       '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
-                  icon: const Icon(Icons.local_atm, size: 18, color: AppColors.success),
+                  icon: const Icon(Icons.local_atm,
+                      size: 18, color: AppColors.success),
                   onPressed: null,
                 )
               : IconButton(
@@ -550,12 +583,14 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                   onPressed: _sibuk
                       ? null
                       : () async {
-                          if (await _konfirmasi('Ajukan ke proses transfer?',
+                          if (await _konfirmasi(
+                              'Ajukan ke proses transfer?',
                               '${b['kode']} — ${b['nama']}\n'
-                              'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                                  'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
                               'Ajukan')) {
                             await _kirimLokalDulu(
-                                'dana_talangan_ajukan_transfer', {'id': b['id']},
+                                'dana_talangan_ajukan_transfer',
+                                {'id': b['id']},
                                 kunci: 'dana_talangan-dpc:${b['id']}',
                                 rowLokal: {
                                   ...b,
@@ -590,24 +625,33 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
             icon: const Icon(Icons.edit_outlined, size: 18),
             onPressed: _sibuk ? null : () => _form(b),
           ),
-        if (!_tampilkanTerhapus && _boleh('approve') && !terkunci && status != 'Disetujui')
+        if (!_tampilkanTerhapus &&
+            _boleh('approve') &&
+            !terkunci &&
+            status != 'Disetujui')
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+            icon: const Icon(Icons.check_circle_outline,
+                size: 18, color: AppColors.success),
             onPressed: _sibuk
                 ? null
                 : () async {
-                    if (await _konfirmasi('Setujui pengeluaran?',
+                    if (await _konfirmasi(
+                        'Setujui pengeluaran?',
                         '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
                         'Setujui')) {
-                      await _kirimLokalDulu('dana_talangan_setujui', {'id': b['id']},
+                      await _kirimLokalDulu(
+                          'dana_talangan_setujui', {'id': b['id']},
                           kunci: 'dana_talangan:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Disetujui'});
                     }
                   },
           ),
-        if (!_tampilkanTerhapus && _boleh('reject') && !terkunci && status != 'Ditolak')
+        if (!_tampilkanTerhapus &&
+            _boleh('reject') &&
+            !terkunci &&
+            status != 'Ditolak')
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Tolak',
@@ -615,9 +659,10 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
             onPressed: _sibuk
                 ? null
                 : () async {
-                    if (await _konfirmasi(
-                        'Tolak pengeluaran?', '${b['kode']} — ${b['nama']}', 'Tolak')) {
-                      await _kirimLokalDulu('dana_talangan_tolak', {'id': b['id']},
+                    if (await _konfirmasi('Tolak pengeluaran?',
+                        '${b['kode']} — ${b['nama']}', 'Tolak')) {
+                      await _kirimLokalDulu(
+                          'dana_talangan_tolak', {'id': b['id']},
                           kunci: 'dana_talangan:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Ditolak'});
                     }
@@ -627,7 +672,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Hapus dokumen',
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: AppColors.danger),
             onPressed: _sibuk ? null : () => _hapusBaris(b),
           ),
       ]),
@@ -640,12 +686,16 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
         child: Column(children: [
           const TabBar(tabs: [
             Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-            Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Talangan'),
+            Tab(
+                icon: Icon(Icons.list_alt_outlined, size: 18),
+                text: 'Talangan'),
           ]),
           Expanded(
             child: TabBarView(children: [
               const PengadaanDasborTab(
-                  tahap: 'dana_talangan', aksi: 'keuangan_dasbor', namaParam: 'modul'),
+                  tahap: 'dana_talangan',
+                  aksi: 'keuangan_dasbor',
+                  namaParam: 'modul'),
               isiData,
             ]),
           ),
@@ -672,12 +722,16 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                 child: DropdownButtonFormField<String>(
                   value: _statusFilter.isEmpty ? '' : _statusFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Status', isDense: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Status', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: '', child: Text('Semua status')),
-                    ..._daftarStatus.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua status')),
+                    ..._daftarStatus
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s))),
                   ],
-                  onChanged: (v) => setStateIfMounted(() => _statusFilter = v ?? ''),
+                  onChanged: (v) =>
+                      setStateIfMounted(() => _statusFilter = v ?? ''),
                 ),
               ),
               SizedBox(
@@ -685,9 +739,11 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                 child: DropdownButtonFormField<int>(
                   value: _satkerFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Satuan Kerja', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Satuan Kerja', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Semua satuan kerja')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Semua satuan kerja')),
                     ..._satker.map((e) => DropdownMenuItem(
                           value: (e['id'] as num?)?.toInt(),
                           child: Text('${e['nama'] ?? ''}',
@@ -719,10 +775,12 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                     : '${_fmt.format(_dari!)} s/d ${_fmt.format(_sampai!)}'),
               ),
               FilterChip(
-                label: Text(
-                    _jumlahTerhapus == 0 ? 'Terhapus' : 'Terhapus ($_jumlahTerhapus)'),
+                label: Text(_jumlahTerhapus == 0
+                    ? 'Terhapus'
+                    : 'Terhapus ($_jumlahTerhapus)'),
                 selected: _tampilkanTerhapus,
-                onSelected: (v) => setStateIfMounted(() => _tampilkanTerhapus = v),
+                onSelected: (v) =>
+                    setStateIfMounted(() => _tampilkanTerhapus = v),
               ),
               FilledButton.icon(
                 onPressed: _memuat ? null : _muatDaftar,
@@ -737,7 +795,9 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                 ),
               if (_sibuk)
                 const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
             ]),
       );
 
@@ -749,7 +809,9 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
       subjudul: 'Talangan atas uang muka yang transfernya sudah terealisasi',
       scrollable: false,
       aksiHeader: IconButton(
-          icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+          icon: const Icon(Icons.refresh),
+          onPressed: _muatSemua,
+          tooltip: 'Muat ulang'),
       actionsAppBar: [
         IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -765,7 +827,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
               alignment: Alignment.centerLeft,
               child: Text(
                 '${_terlihat.length} dokumen • total ${_uang.format(_totalNilai)}',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondaryOf(context)),
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context)),
               ),
             ),
           ),
@@ -779,7 +842,9 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Text(_galat!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                        FilledButton(
+                            onPressed: _muatSemua,
+                            child: const Text('Coba lagi')),
                       ]),
                     ))
                   : AppDataTable(
@@ -792,22 +857,33 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
                         AppTableColumn('Judul', flex: 4),
                         AppTableColumn('Uang Muka', flex: 3),
                         AppTableColumn('Satuan Kerja', flex: 3),
-                        AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                        AppTableColumn('Nilai',
+                            flex: 2, align: TextAlign.right),
                         AppTableColumn('Dibuat', flex: 2),
                         AppTableColumn('Status', flex: 2),
-                        AppTableColumn('Aksi', width: 200, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 200, align: TextAlign.center),
                       ],
                       rows: _terlihat
                           .map((b) => AppTableRowData(cells: [
-                                AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
-                                AppTableCell.text('${b['nama'] ?? ''}', flex: 4),
+                                AppTableCell.text('${b['kode'] ?? ''}',
+                                    flex: 2),
+                                AppTableCell.text('${b['nama'] ?? ''}',
+                                    flex: 4),
                                 AppTableCell.text(
-                                    '${b['uangMukaKode'] ?? ''} ${b['uangMukaNama'] ?? ''}'.trim(),
+                                    '${b['uangMukaKode'] ?? ''} ${b['uangMukaNama'] ?? ''}'
+                                        .trim(),
                                     flex: 3),
-                                AppTableCell.text('${b['satuanKerjaNama'] ?? ''}', flex: 3),
-                                AppTableCell.text(_uang.format((b['nilai'] as num?) ?? 0),
-                                    flex: 2, align: TextAlign.right),
-                                AppTableCell.text('${b['tanggalPembuatan'] ?? ''}', flex: 2),
+                                AppTableCell.text(
+                                    '${b['satuanKerjaNama'] ?? ''}',
+                                    flex: 3),
+                                AppTableCell.text(
+                                    _uang.format((b['nilai'] as num?) ?? 0),
+                                    flex: 2,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    '${b['tanggalPembuatan'] ?? ''}',
+                                    flex: 2),
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'

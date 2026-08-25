@@ -99,7 +99,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
       });
       setStateIfMounted(() {
         _tipe = tipe;
-        _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _satker =
+            ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _tab?.dispose();
         _tab = ct;
@@ -141,12 +142,14 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
           }();
           if (!mounted) return;
           setStateIfMounted(() {
-            _data[tipe] = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _data[tipe] =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _belumLengkap[tipe] = (hasil['belumLengkap'] as num?)?.toInt() ?? 0;
             final h = hasil['hak'];
             _hak = h is Map
                 ? {
-                    for (final k in ['create', 'update', 'delete']) k: h[k] != false
+                    for (final k in ['create', 'update', 'delete'])
+                      k: h[k] != false
                   }
                 : const {};
             _memuat = false;
@@ -191,7 +194,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
         entitas: 'master_keuangan',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -212,8 +216,11 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -232,7 +239,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
   /// Ringkasan akun satu baris: satu baris teks per medan akun yang dipakai
   /// tipe ini, memakai LABEL milik tipenya sendiri.
   String _ringkasAkun(Map<String, dynamic> meta, Map<String, dynamic> b) {
-    final medan = ((meta['medanAkun'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final medan =
+        ((meta['medanAkun'] as List?) ?? []).cast<Map<String, dynamic>>();
     final baris = <String>[];
     for (final m in medan) {
       final teks = _teksAkun(b['${m['kunci']}']);
@@ -251,19 +259,63 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
     final punyaKode = meta['punyaKode'] == true;
     final punyaAnggaran = meta['punyaAnggaran'] == true;
     final punyaSatker = meta['punyaSatuanKerja'] == true;
-    final medan = ((meta['medanAkun'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final medan =
+        ((meta['medanAkun'] as List?) ?? []).cast<Map<String, dynamic>>();
 
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
     final kode = TextEditingController(text: '${baris?['kode'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     bool aktif = baris == null ? true : baris['aktif'] == true;
     bool menggunakanAnggaran = baris?['menggunakanAnggaran'] == true;
     int? satkerId = (baris?['satuanKerjaId'] as num?)?.toInt();
     final akunTerpilih = <String, int?>{
-      for (final m in medan) '${m['kunci']}': (baris?['${m['kunci']}'] as num?)?.toInt()
+      for (final m in medan)
+        '${m['kunci']}': (baris?['${m['kunci']}'] as num?)?.toInt()
     };
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama ${meta['label']} wajib diisi.');
+      }
+      final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
+      final body = <String, dynamic>{
+        'tipe': '${meta['tipe']}',
+        if (ubah) 'id': baris['id'],
+        'nama': nama.text.trim(),
+        if (punyaKode) 'kode': kode.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'aktif': aktif,
+        if (punyaSatker && satkerId != null) 'satuanKerjaId': satkerId,
+        if (punyaAnggaran) 'menggunakanAnggaran': menggunakanAnggaran,
+        for (final m in medan)
+          if (akunTerpilih['${m['kunci']}'] != null)
+            '${m['kunci']}': akunTerpilih['${m['kunci']}'],
+      };
+      await _kirimLokalDulu(
+        'master_keuangan_simpan',
+        body,
+        kunci: 'master_keuangan:${meta['tipe']}:${ubah ? baris['id'] : idBaru}',
+        idLokal: ubah ? null : idBaru,
+        rowLokal: {
+          'id': ubah ? baris['id'] : idBaru,
+          'nama': nama.text.trim(),
+          'kode': punyaKode ? kode.text.trim() : '',
+          'keterangan': keterangan.text.trim(),
+          'aktif': aktif,
+          'menggunakanAnggaran': menggunakanAnggaran,
+          'satuanKerjaId': satkerId,
+          'dipakai': ubah ? (baris['dipakai'] ?? 0) : 0,
+          for (final m in medan) '${m['kunci']}': akunTerpilih['${m['kunci']}'],
+          'akunLengkap': medan
+              .where((m) => m['wajibUntukJurnal'] == true)
+              .every((m) => akunTerpilih['${m['kunci']}'] != null),
+        },
+      );
+      return true;
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -274,7 +326,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (punyaKode)
                   _isian('Kode', kode,
-                      helper: 'Boleh dikosongkan; dipakai untuk penomoran dokumen.'),
+                      helper:
+                          'Boleh dikosongkan; dipakai untuk penomoran dokumen.'),
                 _isian('Nama', nama, wajib: true),
                 _isian('Keterangan', keterangan, baris: 2),
                 if (punyaSatker)
@@ -333,55 +386,9 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
               ]),
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-          ],
+          actions: [AppCrudDialogActions(onSubmit: simpanData)],
         ),
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama ${meta['label']} wajib diisi.');
-      return;
-    }
-
-    final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
-    final body = <String, dynamic>{
-      'tipe': '${meta['tipe']}',
-      if (ubah) 'id': baris['id'],
-      'nama': nama.text.trim(),
-      if (punyaKode) 'kode': kode.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'aktif': aktif,
-      if (punyaSatker && satkerId != null) 'satuanKerjaId': satkerId,
-      if (punyaAnggaran) 'menggunakanAnggaran': menggunakanAnggaran,
-      for (final m in medan)
-        if (akunTerpilih['${m['kunci']}'] != null)
-          '${m['kunci']}': akunTerpilih['${m['kunci']}'],
-    };
-    await _kirimLokalDulu(
-      'master_keuangan_simpan',
-      body,
-      kunci: 'master_keuangan:${meta['tipe']}:${ubah ? baris['id'] : idBaru}',
-      idLokal: ubah ? null : idBaru,
-      rowLokal: {
-        'id': ubah ? baris['id'] : idBaru,
-        'nama': nama.text.trim(),
-        'kode': punyaKode ? kode.text.trim() : '',
-        'keterangan': keterangan.text.trim(),
-        'aktif': aktif,
-        'menggunakanAnggaran': menggunakanAnggaran,
-        'satuanKerjaId': satkerId,
-        'dipakai': ubah ? (baris['dipakai'] ?? 0) : 0,
-        for (final m in medan) '${m['kunci']}': akunTerpilih['${m['kunci']}'],
-        // Dihitung ulang oleh server saat daftar berikutnya; nilai lokal ini
-        // hanya menjaga tandanya tidak melompat selama masih luring.
-        'akunLengkap': medan
-            .where((m) => m['wajibUntukJurnal'] == true)
-            .every((m) => akunTerpilih['${m['kunci']}'] != null),
-      },
     );
   }
 
@@ -401,12 +408,14 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
         ),
       );
 
-  Future<void> _hapusBaris(Map<String, dynamic> meta, Map<String, dynamic> b) async {
+  Future<void> _hapusBaris(
+      Map<String, dynamic> meta, Map<String, dynamic> b) async {
     final dipakai = (b['dipakai'] as num?)?.toInt() ?? 0;
     if (dipakai > 0) {
       // Ditolak juga oleh server; disebutkan lebih dulu di sini supaya pengguna
       // tidak menunggu bolak-balik hanya untuk mendapat penolakan.
-      _pesan('${meta['label']} ini sudah dipakai $dipakai dokumen sehingga tidak '
+      _pesan(
+          '${meta['label']} ini sudah dipakai $dipakai dokumen sehingga tidak '
           'boleh dihapus. Nonaktifkan saja bila tidak dipakai lagi.');
       return;
     }
@@ -425,7 +434,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
     );
   }
 
-  Future<void> _pulihkanBaris(Map<String, dynamic> meta, Map<String, dynamic> b) async {
+  Future<void> _pulihkanBaris(
+      Map<String, dynamic> meta, Map<String, dynamic> b) async {
     if (!await _konfirmasi(
         'Batalkan penghapusan?',
         '${b['nama'] ?? ''}\n\nBerlaku selama penghapusannya belum terkirim ke server.',
@@ -454,12 +464,14 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
     return AppShell(
       menuAktif: MenuEBisnis.masterKeuangan,
       judul: 'Master Data Keuangan',
-      subjudul: 'Jenis uang muka, kas, reimbursement, pengeluaran, dan cara pembayaran',
+      subjudul:
+          'Jenis uang muka, kas, reimbursement, pengeluaran, dan cara pembayaran',
       scrollable: false,
       actionsAppBar: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+      aksiHeader:
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       body: _galat != null
           ? Center(
               child: Padding(
@@ -467,7 +479,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_galat!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  FilledButton(onPressed: _muatOpsi, child: const Text('Coba lagi')),
+                  FilledButton(
+                      onPressed: _muatOpsi, child: const Text('Coba lagi')),
                 ]),
               ),
             )
@@ -531,7 +544,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(children: [
-              const Icon(Icons.warning_amber_outlined, color: Colors.orange, size: 20),
+              const Icon(Icons.warning_amber_outlined,
+                  color: Colors.orange, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -546,8 +560,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: () =>
-                  setStateIfMounted(() => _tampilkanTerhapus = !_tampilkanTerhapus),
+              onPressed: () => setStateIfMounted(
+                  () => _tampilkanTerhapus = !_tampilkanTerhapus),
               icon: Icon(_tampilkanTerhapus
                   ? Icons.visibility_off_outlined
                   : Icons.restore_from_trash_outlined),
@@ -586,7 +600,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
                 const Padding(
                   padding: EdgeInsets.only(right: 4),
                   child: Tooltip(
-                    message: 'Akun belum lengkap — dokumennya tidak akan terjurnal.',
+                    message:
+                        'Akun belum lengkap — dokumennya tidak akan terjurnal.',
                     child: Icon(Icons.warning_amber_outlined,
                         size: 16, color: Colors.orange),
                   ),

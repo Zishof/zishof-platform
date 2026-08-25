@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -57,7 +59,9 @@ class PemilihAnggaranField extends StatelessWidget {
       child: Row(children: [
         Expanded(
           child: Text(
-            terisi ? (namaAnggaran ?? 'Anggaran #$workspaceId') : 'Belum dipilih',
+            terisi
+                ? (namaAnggaran ?? 'Anggaran #$workspaceId')
+                : 'Belum dipilih',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -84,12 +88,16 @@ class PemilihAnggaranField extends StatelessWidget {
     final kata = TextEditingController();
     List<Map<String, dynamic>> hasil = [];
     bool memuat = false;
+    bool sudahMuatAwal = false;
+    bool dialogAktif = true;
+    int nomorPermintaan = 0;
     String galat = '';
     return showDialog<Map<String, dynamic>>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) {
           Future<void> jalankan() async {
+            final nomorIni = ++nomorPermintaan;
             setD(() {
               memuat = true;
               galat = '';
@@ -98,19 +106,36 @@ class PemilihAnggaranField extends StatelessWidget {
               final res = await ApiClient.instance.aksi(aksiCari, {
                 'cari': kata.text.trim(),
                 if (tahun != null) 'tahun': tahun,
-              });
-              hasil = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              }).timeout(const Duration(seconds: 30));
+              final data = res['data'];
+              final daftar = <Map<String, dynamic>>[];
+              if (data is List) {
+                for (final baris in data) {
+                  if (baris is Map) {
+                    daftar.add(Map<String, dynamic>.from(baris));
+                  }
+                }
+              }
+              if (nomorIni == nomorPermintaan) hasil = daftar;
+            } on TimeoutException {
+              if (nomorIni == nomorPermintaan) {
+                galat =
+                    'Pencarian anggaran melewati batas waktu. Silakan coba lagi.';
+              }
             } catch (e) {
-              galat = '$e';
+              if (nomorIni == nomorPermintaan) galat = '$e';
             } finally {
-              setD(() => memuat = false);
+              if (dialogAktif && nomorIni == nomorPermintaan) {
+                setD(() => memuat = false);
+              }
             }
           }
 
-          if (hasil.isEmpty && !memuat && galat.isEmpty && kata.text.isEmpty) {
+          if (!sudahMuatAwal) {
+            sudahMuatAwal = true;
             // Sekali muat di awal supaya daftar tahun berjalan langsung terlihat.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (kata.text.isEmpty && hasil.isEmpty) jalankan();
+              if (dialogAktif) jalankan();
             });
           }
 
@@ -135,25 +160,30 @@ class PemilihAnggaranField extends StatelessWidget {
                 if (galat.isNotEmpty)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(galat, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    child: Text(galat,
+                        style:
+                            const TextStyle(color: Colors.red, fontSize: 12)),
                   ),
                 Expanded(
                   child: memuat
                       ? const Center(child: CircularProgressIndicator())
                       : hasil.isEmpty
                           ? const Center(
-                              child: Text('Tidak ada anggaran aktif untuk tahun ini.'))
+                              child: Text(
+                                  'Tidak ada anggaran aktif untuk tahun ini.'))
                           : ListView.builder(
                               itemCount: hasil.length,
                               itemBuilder: (_, i) {
                                 final w = hasil[i];
-                                final pagu = (w['pagu'] as num?)?.toDouble() ?? 0;
-                                final realisasi = (w['realisasi'] as num?)?.toDouble() ?? 0;
+                                final pagu =
+                                    (w['pagu'] as num?)?.toDouble() ?? 0;
+                                final realisasi =
+                                    (w['realisasi'] as num?)?.toDouble() ?? 0;
                                 return ListTile(
                                   dense: true,
-                                  title: Text('${w['kode'] ?? ''} — ${w['nama'] ?? ''}'),
-                                  subtitle: Text(
-                                      'Pagu ${_uang.format(pagu)}'
+                                  title: Text(
+                                      '${w['kode'] ?? ''} — ${w['nama'] ?? ''}'),
+                                  subtitle: Text('Pagu ${_uang.format(pagu)}'
                                       ' • realisasi ${_uang.format(realisasi)}'
                                       ' • ${w['satuanKerja'] ?? '-'}'
                                       '${(w['akunKode'] ?? '').toString().isEmpty ? '' : ' • akun ${w['akunKode']}'}'),
@@ -165,11 +195,17 @@ class PemilihAnggaranField extends StatelessWidget {
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Batal')),
             ],
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      dialogAktif = false;
+      nomorPermintaan++;
+      kata.dispose();
+    });
   }
 }

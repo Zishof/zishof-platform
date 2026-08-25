@@ -1314,6 +1314,7 @@ class AppDataTable extends StatefulWidget {
 
 class _AppDataTableState extends State<AppDataTable> {
   int _halaman = 1;
+  final ScrollController _verticalController = ScrollController();
 
   bool get _pagingSendiri =>
       widget.pagination == null &&
@@ -1330,7 +1331,8 @@ class _AppDataTableState extends State<AppDataTable> {
     // sedang dibuka tidak ada lagi. Tanpa penjepitan ini tabel tampak KOSONG
     // padahal datanya ada -- kegagalan yang mudah disalahartikan sebagai
     // "datanya hilang".
-    if (widget.rows.length != oldWidget.rows.length && _halaman > _totalHalaman) {
+    if (widget.rows.length != oldWidget.rows.length &&
+        _halaman > _totalHalaman) {
       _halaman = _totalHalaman;
     }
   }
@@ -1348,6 +1350,17 @@ class _AppDataTableState extends State<AppDataTable> {
     final tujuan = h.clamp(1, _totalHalaman);
     if (tujuan == _halaman) return;
     setState(() => _halaman = tujuan);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_verticalController.hasClients) {
+        _verticalController.jumpTo(0);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _verticalController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1368,7 +1381,7 @@ class _AppDataTableState extends State<AppDataTable> {
               )
             : null);
 
-    return AppSectionCard(
+    final table = AppSectionCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -1378,7 +1391,8 @@ class _AppDataTableState extends State<AppDataTable> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final bounded = constraints.hasBoundedWidth;
-                final lebarTabel = bounded ? constraints.maxWidth : widget.minWidth;
+                final lebarTabel =
+                    bounded ? constraints.maxWidth : widget.minWidth;
                 if (bounded && lebarTabel < 720) {
                   return _AppCompactTable(
                     columns: widget.columns,
@@ -1419,6 +1433,27 @@ class _AppDataTableState extends State<AppDataTable> {
           ],
         ),
       ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, viewport) {
+        if (!viewport.hasBoundedHeight || !viewport.maxHeight.isFinite) {
+          return table;
+        }
+        return Scrollbar(
+          controller: _verticalController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          interactive: true,
+          thickness: 8,
+          radius: const Radius.circular(8),
+          child: SingleChildScrollView(
+            controller: _verticalController,
+            primary: false,
+            child: table,
+          ),
+        );
+      },
     );
   }
 }
@@ -1644,6 +1679,123 @@ class _AppTableFooter extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.chevron_right),
             onPressed: pagination.onBerikutnya,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tombol aksi baku untuk dialog tambah/ubah data.
+///
+/// Proses simpan dijalankan ketika dialog masih terbuka. Dialog hanya ditutup
+/// setelah [onSubmit] mengembalikan `true`; kegagalan validasi, jaringan, atau
+/// server mempertahankan seluruh nilai isian sehingga pengguna dapat langsung
+/// memperbaiki dan mencoba kembali.
+class AppCrudDialogActions extends StatefulWidget {
+  final Future<bool> Function() onSubmit;
+  final String submitLabel;
+  final String cancelLabel;
+  final String failureMessage;
+
+  const AppCrudDialogActions({
+    super.key,
+    required this.onSubmit,
+    this.submitLabel = 'Simpan',
+    this.cancelLabel = 'Batal',
+    this.failureMessage =
+        'Belum berhasil disimpan. Periksa isian lalu coba kembali.',
+  });
+
+  @override
+  State<AppCrudDialogActions> createState() => _AppCrudDialogActionsState();
+}
+
+class _AppCrudDialogActionsState extends State<AppCrudDialogActions> {
+  bool _menyimpan = false;
+  String? _galat;
+
+  Future<void> _simpan() async {
+    if (_menyimpan) return;
+    setState(() {
+      _menyimpan = true;
+      _galat = null;
+    });
+
+    var berhasil = false;
+    try {
+      berhasil = await widget.onSubmit();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _galat = e.toString().replaceFirst('Exception: ', ''));
+      }
+    }
+
+    if (!mounted) return;
+    if (berhasil) {
+      Navigator.pop(context, true);
+      return;
+    }
+    setState(() {
+      _menyimpan = false;
+      _galat ??= widget.failureMessage;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 260),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_galat != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+              ),
+              child: Text(
+                _galat!,
+                style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.pop(context, false),
+                child: Text(widget.cancelLabel),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _menyimpan ? null : _simpan,
+                child: _menyimpan
+                    ? const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Menyimpan...'),
+                        ],
+                      )
+                    : Text(widget.submitLabel),
+              ),
+            ],
           ),
         ],
       ),

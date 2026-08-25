@@ -71,7 +71,37 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
         TextEditingController(text: '${satuanKerja?['alamat'] ?? ''}');
     var aktif = satuanKerja == null ? true : satuanKerja['aktif'] == true;
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama satuan kerja wajib diisi.');
+      }
+      final body = <String, dynamic>{
+        if (ubah) 'id': '${satuanKerja['id']}',
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'alamat': alamat.text.trim(),
+        'aktif': aktif,
+      };
+      await prosesSimpanMaster(
+        context,
+        aksi: 'satuan_kerja_simpan',
+        body: body,
+        kunci: ubah
+            ? 'satuan_kerja:${satuanKerja['id']}'
+            : 'satuan_kerja:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: 'master:satuan_kerja',
+        rowLokal: body,
+      );
+      await _muatDaftar();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Satuan kerja tersimpan.')));
+      }
+      return true;
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (dctx) => StatefulBuilder(
         builder: (dctx, setDialog) => AlertDialog(
@@ -96,54 +126,10 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
               ]),
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(dctx, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(dctx, true),
-                child: const Text('Simpan')),
-          ],
+          actions: [AppCrudDialogActions(onSubmit: simpanData)],
         ),
       ),
     );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nama satuan kerja wajib diisi.')));
-      return;
-    }
-    try {
-      final body = <String, dynamic>{
-        if (ubah) 'id': '${satuanKerja['id']}',
-        'kode': kode.text.trim(),
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'alamat': alamat.text.trim(),
-        'aktif': aktif,
-      };
-      // Lokal dulu, baru dikirim: antre -> indikator kirim -> tutup. Offline
-      // pun tidak menahan pengguna; pengiriman ulang berjalan di latar.
-      await prosesSimpanMaster(
-        context,
-        aksi: 'satuan_kerja_simpan',
-        body: body,
-        kunci: ubah
-            ? 'satuan_kerja:${satuanKerja['id']}'
-            : 'satuan_kerja:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:satuan_kerja',
-        rowLokal: body,
-      );
-      await _muatDaftar();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Satuan kerja tersimpan.')));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
-    }
   }
 
   Future<void> _nonaktifkan(Map<String, dynamic> sk) async {

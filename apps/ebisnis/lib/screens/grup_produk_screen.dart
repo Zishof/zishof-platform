@@ -108,31 +108,30 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
   }
 
   Future<void> _simpan(Map<String, dynamic>? awal) async {
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormGrupDialog(awal: awal),
+      builder: (_) => _FormGrupDialog(
+        awal: awal,
+        onSubmit: (hasil) async {
+          try {
+            await prosesSimpanMaster(
+              context,
+              aksi: 'grup_produk_simpan',
+              body: hasil,
+              kunci: hasil['id'] != null
+                  ? 'grup_produk:${hasil['id']}'
+                  : 'grup_produk:baru:${DateTime.now().microsecondsSinceEpoch}',
+              cacheKey: 'master:grup_produk',
+              rowLokal: hasil,
+            );
+            await _muat();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null || !mounted) return;
-    try {
-      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
-      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      await prosesSimpanMaster(
-        context,
-        aksi: 'grup_produk_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'grup_produk:${hasil['id']}'
-            : 'grup_produk:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:grup_produk',
-        rowLokal: hasil,
-      );
-      await _muat();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
   }
 
   Future<void> _hapus(Map<String, dynamic> g) async {
@@ -344,7 +343,8 @@ class _BahanGrupBaris {
 
 class _FormGrupDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
-  const _FormGrupDialog({this.awal});
+  final Future<bool> Function(Map<String, dynamic> data) onSubmit;
+  const _FormGrupDialog({this.awal, required this.onSubmit});
 
   @override
   State<_FormGrupDialog> createState() => _FormGrupDialogState();
@@ -908,14 +908,15 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
+        AppCrudDialogActions(
+          submitLabel: 'Simpan & Terapkan',
+          onSubmit: () async {
             if (_nama.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Nama grup wajib diisi.')));
-              return;
+              return false;
             }
-            Navigator.pop(context, <String, dynamic>{
+            return widget.onSubmit(<String, dynamic>{
               if (!_baru) 'id': widget.awal!['id'],
               'kode': _kode.text.trim(),
               'nama': _nama.text.trim(),
@@ -940,7 +941,6 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               'aktif': _aktif,
             });
           },
-          child: const Text('Simpan & Terapkan'),
         ),
       ],
     );

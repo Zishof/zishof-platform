@@ -209,6 +209,95 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     return ya == true;
   }
 
+  Future<Map<String, String>?> _inputTanggalCatatan({
+    required String judul,
+    required String isi,
+    required String labelTanggal,
+    required String labelCatatan,
+    required String tombol,
+  }) async {
+    DateTime tanggal = DateTime.now();
+    final catatan = TextEditingController();
+    String? kesalahan;
+    final hasil = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialogState) => AlertDialog(
+          title: Text(judul),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(isi),
+                const SizedBox(height: 16),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () async {
+                    final dipilih = await showDatePicker(
+                      context: c,
+                      initialDate: tanggal,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (dipilih != null) {
+                      setDialogState(() {
+                        tanggal = dipilih;
+                        kesalahan = null;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: '$labelTanggal *',
+                      errorText: kesalahan,
+                      suffixIcon: const Icon(Icons.calendar_today_outlined),
+                    ),
+                    child: Text(_fmt.format(tanggal)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: catatan,
+                  maxLength: 2000,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: '$labelCatatan (opsional)',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final nilaiTanggal = _fmt.format(tanggal);
+                if (nilaiTanggal.isEmpty) {
+                  setDialogState(
+                      () => kesalahan = '$labelTanggal wajib diisi.');
+                  return;
+                }
+                Navigator.pop(c, {
+                  'tanggal': nilaiTanggal,
+                  'catatan': catatan.text.trim(),
+                });
+              },
+              child: Text(tombol),
+            ),
+          ],
+        ),
+      ),
+    );
+    catatan.dispose();
+    return hasil;
+  }
+
   String _rupiah(Object? v) =>
       NumberFormat.decimalPattern('id').format((v as num?)?.toDouble() ?? 0);
 
@@ -254,7 +343,40 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
     // Detail dokumen dimuat lebih dulu (await di atas), jadi context-nya harus
     // diperiksa ulang sebelum dialog dibuka -- layar bisa saja sudah ditutup.
     if (!mounted) return;
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Judul Proses Transfer wajib diisi.');
+      }
+      if (terpilih.isEmpty) {
+        throw Exception('Pilih minimal satu baris DPC yang akan ditransfer.');
+      }
+      final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
+      return _kirimLokalDulu(
+        'proses_transfer_simpan',
+        {
+          if (ubah) 'id': baris['id'],
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          if (caraId != null) 'caraPembayaranId': caraId,
+          if (tanggal != null) 'tanggalPembuatan': _fmt.format(tanggal!),
+          'dptIds': terpilih.keys.toList(),
+        },
+        kunci: 'proses_transfer:${ubah ? baris['id'] : idBaru}',
+        idLokal: ubah ? null : idBaru,
+        rowLokal: {
+          'id': ubah ? baris['id'] : idBaru,
+          'kode': baris?['kode'] ?? '(menunggu nomor)',
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'nilai': terpilih.values.fold<double>(0, (a, b) => a + b),
+          'jumlahItem': terpilih.length,
+          'statusDokumen': 'Draft',
+          if (tanggal != null) 'tanggalPembuatan': _fmt.format(tanggal!),
+        },
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
@@ -482,51 +604,10 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                 ),
               ]),
             ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(c, false),
-                  child: const Text('Batal')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(c, true),
-                  child: const Text('Simpan')),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Judul Proses Transfer wajib diisi.');
-      return;
-    }
-    if (terpilih.isEmpty) {
-      _pesan('Pilih minimal satu baris DPC yang akan ditransfer.');
-      return;
-    }
-
-    final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
-    await _kirimLokalDulu(
-      'proses_transfer_simpan',
-      {
-        if (ubah) 'id': baris['id'],
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        if (caraId != null) 'caraPembayaranId': caraId,
-        if (tanggal != null) 'tanggalPembuatan': _fmt.format(tanggal!),
-        'dptIds': terpilih.keys.toList(),
-      },
-      kunci: 'proses_transfer:${ubah ? baris['id'] : idBaru}',
-      idLokal: ubah ? null : idBaru,
-      rowLokal: {
-        'id': ubah ? baris['id'] : idBaru,
-        'kode': baris?['kode'] ?? '(menunggu nomor)',
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'nilai': terpilih.values.fold<double>(0, (a, b) => a + b),
-        'jumlahItem': terpilih.length,
-        'statusDokumen': 'Draft',
-        if (tanggal != null) 'tanggalPembuatan': _fmt.format(tanggal!),
-      },
     );
   }
 
@@ -901,14 +982,27 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                       label: 'Setujui',
                       onTap: draft && _boleh('approve') && !_sibuk
                           ? () async {
-                              if (await _konfirmasi('Setujui proses transfer?',
-                                  '${b['kode']} — ${b['nama']}', 'Setujui')) {
+                              final metadata = await _inputTanggalCatatan(
+                                judul: 'Setujui proses transfer?',
+                                isi: '${b['kode']} — ${b['nama']}',
+                                labelTanggal: 'Tanggal disetujui',
+                                labelCatatan: 'Catatan persetujuan',
+                                tombol: 'Setujui',
+                              );
+                              if (metadata != null) {
                                 await _kirimLokalDulu(
-                                    'proses_transfer_setujui', {'id': b['id']},
+                                    'proses_transfer_setujui',
+                                    {
+                                      'id': b['id'],
+                                      'tanggalPersetujuan': metadata['tanggal'],
+                                      'catatanPersetujuan': metadata['catatan'],
+                                    },
                                     kunci: 'proses_transfer:${b['id']}',
                                     rowLokal: {
                                       ...b,
-                                      'statusDokumen': 'Disetujui'
+                                      'statusDokumen': 'Disetujui',
+                                      'tanggalPersetujuan': metadata['tanggal'],
+                                      'catatanPersetujuan': metadata['catatan'],
                                     });
                               }
                             }
@@ -921,18 +1015,30 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
                               _boleh('approve') &&
                               !_sibuk
                           ? () async {
-                              if (await _konfirmasi(
-                                  'Tandai dana sudah cair?',
-                                  '${b['kode']} — ${b['nama']}\n\n'
-                                      'Setelah ini jurnal umum dibuat otomatis.',
-                                  'Realisasikan')) {
+                              final metadata = await _inputTanggalCatatan(
+                                judul: 'Tandai dana sudah cair?',
+                                isi: '${b['kode']} — ${b['nama']}\n\n'
+                                    'Setelah ini jurnal umum dibuat otomatis.',
+                                labelTanggal: 'Tanggal realisasi',
+                                labelCatatan: 'Catatan realisasi',
+                                tombol: 'Realisasikan',
+                              );
+                              if (metadata != null) {
                                 await _kirimLokalDulu(
                                     'proses_transfer_realisasikan',
-                                    {'id': b['id']},
+                                    {
+                                      'id': b['id'],
+                                      'tanggalRealisasikan':
+                                          metadata['tanggal'],
+                                      'catatanRealisasi': metadata['catatan'],
+                                    },
                                     kunci: 'proses_transfer:${b['id']}',
                                     rowLokal: {
                                       ...b,
-                                      'statusDokumen': 'Terealisasi'
+                                      'statusDokumen': 'Terealisasi',
+                                      'tanggalRealisasikan':
+                                          metadata['tanggal'],
+                                      'catatanRealisasi': metadata['catatan'],
                                     });
                               }
                             }

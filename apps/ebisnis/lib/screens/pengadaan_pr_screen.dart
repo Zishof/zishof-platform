@@ -152,28 +152,30 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
       }
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormPrDialog(awal: awal, detailAwal: detailAwal),
+      builder: (_) => _FormPrDialog(
+        awal: awal,
+        detailAwal: detailAwal,
+        onSubmit: (hasil) async {
+          try {
+            await prosesSimpanMaster(
+              context,
+              aksi: 'pengadaan_pr_simpan',
+              body: hasil,
+              kunci: hasil['id'] != null
+                  ? 'pengadaan_pr:${hasil['id']}'
+                  : 'pengadaan_pr:baru:${DateTime.now().microsecondsSinceEpoch}',
+              cacheKey: 'master:pengadaan_pr',
+            );
+            await _muat();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null || !mounted) return;
-    try {
-      await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_pr_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'pengadaan_pr:${hasil['id']}'
-            : 'pengadaan_pr:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:pengadaan_pr',
-      );
-      await _muat();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
   }
 
   /// Keputusan atas PR. Menolak WAJIB beralasan -- server menolak alasan < 5 karakter,
@@ -565,7 +567,12 @@ class _BarisPr {
 class _FormPrDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
   final Map<String, dynamic>? detailAwal;
-  const _FormPrDialog({this.awal, this.detailAwal});
+  final Future<bool> Function(Map<String, dynamic> data) onSubmit;
+  const _FormPrDialog({
+    this.awal,
+    this.detailAwal,
+    required this.onSubmit,
+  });
 
   @override
   State<_FormPrDialog> createState() => _FormPrDialogState();
@@ -878,14 +885,14 @@ class _FormPrDialogState extends State<_FormPrDialog> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Tutup')),
         if (!_terkunci)
-          FilledButton(
-            onPressed: () {
+          AppCrudDialogActions(
+            onSubmit: () async {
               if (_baris.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('Tambahkan minimal satu baris barang.')));
-                return;
+                return false;
               }
-              Navigator.pop(context, <String, dynamic>{
+              return widget.onSubmit(<String, dynamic>{
                 if (!_baru) 'id': widget.awal!['id'],
                 'keterangan': _keterangan.text.trim(),
                 'tanpaAnggaran': _tanpaAnggaran,
@@ -905,7 +912,6 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                     .toList(),
               });
             },
-            child: const Text('Simpan'),
           ),
       ],
     );

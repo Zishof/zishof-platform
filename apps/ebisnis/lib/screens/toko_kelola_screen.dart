@@ -161,28 +161,33 @@ class _TokoKelolaScreenState extends State<TokoKelolaScreen> {
       return;
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormTokoDialog(awal: awal, katalogUnit: katalog),
+      builder: (_) => _FormTokoDialog(
+        awal: awal,
+        katalogUnit: katalog,
+        onSubmit: (hasil) async {
+          try {
+            // Form ditutup hanya sesudah penyimpanan lokal/server diterima.
+            await prosesSimpanMaster(
+              context,
+              aksi: 'toko_kelola_simpan',
+              body: hasil,
+              kunci: hasil['id'] != null
+                  ? 'toko:${hasil['id']}'
+                  : 'toko:baru:${DateTime.now().microsecondsSinceEpoch}',
+              cacheKey: 'master:toko_kelola',
+              rowLokal: hasil,
+            );
+            await _muat();
+            return true;
+          } catch (e) {
+            _snack('Gagal menyimpan: $e', galat: true);
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null || !mounted) return;
-    try {
-      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
-      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      await prosesSimpanMaster(
-        context,
-        aksi: 'toko_kelola_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'toko:${hasil['id']}'
-            : 'toko:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:toko_kelola',
-        rowLokal: hasil,
-      );
-      await _muat();
-    } catch (e) {
-      _snack('Gagal menyimpan: $e', galat: true);
-    }
   }
 
   Future<void> _hapus(Map<String, dynamic> t) async {
@@ -456,7 +461,9 @@ class _PilihanUnitUsaha extends StatelessWidget {
 class _FormTokoDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
   final List<Map<String, dynamic>> katalogUnit;
-  const _FormTokoDialog({this.awal, required this.katalogUnit});
+  final Future<bool> Function(Map<String, dynamic>) onSubmit;
+  const _FormTokoDialog(
+      {this.awal, required this.katalogUnit, required this.onSubmit});
 
   @override
   State<_FormTokoDialog> createState() => _FormTokoDialogState();
@@ -511,6 +518,30 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
       // Daftar akun opsional -- kegagalan memuat tidak boleh memblokir simpan toko.
       if (mounted) setState(() => _akun = const []);
     }
+  }
+
+  Future<bool> _simpan() async {
+    if (_nama.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nama toko wajib diisi.')));
+      return false;
+    }
+    final baru = widget.awal == null;
+    return widget.onSubmit(<String, dynamic>{
+      if (!baru) 'id': widget.awal!['id'],
+      'nama': _nama.text.trim(),
+      'kode': _kode.text.trim(),
+      'keterangan': _keterangan.text.trim(),
+      'aktif': _aktif,
+      'boleh_melihat_toko_lain': _bolehLihatTokoLain,
+      'boleh_transaksi_stok_habis': _bolehStokHabis,
+      'toko_demo': _tokoDemo,
+      'unit_usaha': _unit.toList(),
+      'akun_kas_id': _akunKasId ?? 0,
+      'akun_piutang_id': _akunPiutangId ?? 0,
+      'akun_modal_awal_id': _akunModalAwalId ?? 0,
+      'akun_laba_ditahan_id': _akunLabaDitahanId ?? 0,
+    });
   }
 
   @override
@@ -617,34 +648,7 @@ class _FormTokoDialogState extends State<_FormTokoDialog> {
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (_nama.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nama toko wajib diisi.')));
-              return;
-            }
-            Navigator.pop(context, <String, dynamic>{
-              if (!baru) 'id': widget.awal!['id'],
-              'nama': _nama.text.trim(),
-              'kode': _kode.text.trim(),
-              'keterangan': _keterangan.text.trim(),
-              'aktif': _aktif,
-              'boleh_melihat_toko_lain': _bolehLihatTokoLain,
-              'boleh_transaksi_stok_habis': _bolehStokHabis,
-              'toko_demo': _tokoDemo,
-              'unit_usaha': _unit.toList(),
-              'akun_kas_id': _akunKasId ?? 0,
-              'akun_piutang_id': _akunPiutangId ?? 0,
-              'akun_modal_awal_id': _akunModalAwalId ?? 0,
-              'akun_laba_ditahan_id': _akunLabaDitahanId ?? 0,
-            });
-          },
-          child: const Text('Simpan'),
-        ),
+        AppCrudDialogActions(onSubmit: _simpan),
       ],
     );
   }

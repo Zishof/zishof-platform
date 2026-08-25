@@ -39,6 +39,22 @@ void main() {
     expect(find.text('Halaman 1 / 2'), findsOneWidget);
   });
 
+  testWidgets('area tabel terbatas selalu menyediakan scrollbar desktop',
+      (t) async {
+    await pasang(
+      t,
+      SizedBox(
+        height: 360,
+        child: AppDataTable(columns: kolom, rows: baris(20)),
+      ),
+    );
+
+    final scrollbar = t.widget<Scrollbar>(find.byType(Scrollbar));
+    expect(scrollbar.thumbVisibility, isTrue);
+    expect(scrollbar.trackVisibility, isTrue);
+    expect(scrollbar.interactive, isTrue);
+  });
+
   testWidgets('halaman berikutnya menampilkan sisanya', (t) async {
     await pasang(t, AppDataTable(columns: kolom, rows: baris(20)));
     await t.tap(find.byIcon(Icons.chevron_right));

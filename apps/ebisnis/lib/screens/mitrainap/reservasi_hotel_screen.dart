@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
@@ -132,28 +133,33 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
       return;
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
       builder: (_) => _FormReservasiDialog(
-          propertiId: pid, daftarTamu: tamu, daftarTipe: tipe),
+        propertiId: pid,
+        daftarTamu: tamu,
+        daftarTipe: tipe,
+        onSubmit: (hasil) async {
+          try {
+            // ONLINE-ONLY: kamar harus dipastikan masih kosong pada detik itu.
+            final res =
+                await ApiClient.instance.aksi('hotel_reservasi_buat', hasil);
+            final sukses = apiSukses(res);
+            if (sukses) {
+              _info('Reservasi dibuat: ${res['kode'] ?? ''}');
+              _muat();
+            } else {
+              _info('Gagal: ${apiPesan(res, res['status'].toString())}',
+                  galat: true);
+            }
+            return sukses;
+          } catch (e) {
+            _info('Gagal membuat reservasi: $e', galat: true);
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null) return;
-    try {
-      // ONLINE-ONLY: lihat ATURAN KAMAR di resepsionis_hotel_screen -- kamar
-      // yang dipesan harus dipastikan masih kosong pada detik itu. (Data TAMU
-      // dan PEMBATALAN reservasi di layar ini justru lokal-dulu: keduanya tidak
-      // memperebutkan kamar.)
-      final res = await ApiClient.instance.aksi('hotel_reservasi_buat', hasil);
-      if (apiSukses(res)) {
-        _info('Reservasi dibuat: ${res['kode'] ?? ''}');
-        _muat();
-      } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}',
-            galat: true);
-      }
-    } catch (e) {
-      _info('Gagal membuat reservasi: $e', galat: true);
-    }
   }
 
   Future<void> _batalkan(Map<String, dynamic> r) async {
@@ -470,10 +476,12 @@ class _FormReservasiDialog extends StatefulWidget {
   final int propertiId;
   final List<Map<String, dynamic>> daftarTamu;
   final List<Map<String, dynamic>> daftarTipe;
+  final Future<bool> Function(Map<String, dynamic>) onSubmit;
   const _FormReservasiDialog({
     required this.propertiId,
     required this.daftarTamu,
     required this.daftarTipe,
+    required this.onSubmit,
   });
 
   @override
@@ -511,7 +519,7 @@ class _FormReservasiDialogState extends State<_FormReservasiDialog> {
     final nama = TextEditingController();
     final noIdentitas = TextEditingController();
     final telp = TextEditingController();
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Tamu Baru'),
@@ -529,63 +537,88 @@ class _FormReservasiDialogState extends State<_FormReservasiDialog> {
               keyboardType: TextInputType.phone),
         ]),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Simpan')),
+          AppCrudDialogActions(onSubmit: () async {
+            if (nama.text.trim().isEmpty) {
+              ScaffoldMessenger.of(c).showSnackBar(
+                  const SnackBar(content: Text('Nama tamu wajib diisi.')));
+              return false;
+            }
+            try {
+              // Master TAMU offline-first lewat prosesSimpanMaster. Reservasi
+              // tetap menunggu koneksi karena memerlukan state kamar real-time.
+              final res = await prosesSimpanMaster(c,
+                  aksi: 'hotel_tamu_simpan',
+                  body: {
+                    'properti_id': widget.propertiId,
+                    'nama': nama.text.trim(),
+                    'jenis_identitas': 'KTP',
+                    'no_identitas': noIdentitas.text.trim(),
+                    'telp': telp.text.trim(),
+                  },
+                  kunci:
+                      'hotel_tamu:baru:${DateTime.now().microsecondsSinceEpoch}');
+              if (res['offline'] == true) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text(
+                          'Reservasi butuh koneksi — lanjutkan setelah tamu tersinkron.')));
+                }
+                return true;
+              }
+              if (!apiSukses(res)) {
+                throw Exception(apiPesan(res, 'Gagal menyimpan tamu.'));
+              }
+              final ulang = await muatDaftarHotel(
+                  'hotel_tamu_list', {'properti_id': widget.propertiId});
+              int? baru;
+              for (final t in ulang) {
+                if ('${t['nama']}'.toLowerCase() ==
+                    nama.text.trim().toLowerCase()) {
+                  final tid = idInt(t['id']);
+                  if (baru == null || (tid != null && tid > baru)) baru = tid;
+                }
+              }
+              setStateIfMounted(() {
+                _tamu = ulang;
+                _tamuId = baru ?? _tamuId;
+              });
+              return true;
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Gagal menambah tamu: $e'),
+                    backgroundColor: Theme.of(context).colorScheme.error));
+              }
+              return false;
+            }
+          })
         ],
       ),
     );
-    if (ok != true || nama.text.trim().isEmpty || !mounted) return;
-    try {
-      // Master TAMU offline-first lewat prosesSimpanMaster (lokal dulu +
-      // dialog animasi kirim). Alur reservasi/check-in tetap online-only
-      // (butuh validasi state kamar real-time server), jadi saat offline tamu
-      // diantre tapi reservasi TIDAK bisa dilanjutkan dulu.
-      final res = await prosesSimpanMaster(context, aksi: 'hotel_tamu_simpan',
-          body: {
-            'properti_id': widget.propertiId,
-            'nama': nama.text.trim(),
-            'jenis_identitas': 'KTP',
-            'no_identitas': noIdentitas.text.trim(),
-            'telp': telp.text.trim(),
-          },
-          kunci:
-              'hotel_tamu:baru:${DateTime.now().microsecondsSinceEpoch}');
-      if (res['offline'] == true) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Reservasi butuh koneksi — lanjutkan setelah tamu tersinkron.')));
-        return;
-      }
-      if (!apiSukses(res)) {
-        throw Exception(apiPesan(res, 'Gagal menyimpan tamu.'));
-      }
-      final ulang = await muatDaftarHotel(
-          'hotel_tamu_list', {'properti_id': widget.propertiId});
-      // Pilih otomatis tamu yang baru dibuat: id terbesar dgn nama sama
-      // (hotel_tamu_simpan tidak mengembalikan id).
-      int? baru;
-      for (final t in ulang) {
-        if ('${t['nama']}'.toLowerCase() ==
-            nama.text.trim().toLowerCase()) {
-          final tid = idInt(t['id']);
-          if (baru == null || (tid != null && tid > baru)) baru = tid;
-        }
-      }
-      setStateIfMounted(() {
-        _tamu = ulang;
-        _tamuId = baru ?? _tamuId;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menambah tamu: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
+    nama.dispose();
+    noIdentitas.dispose();
+    telp.dispose();
+  }
+
+  Future<bool> _simpan() async {
+    if (!_formKey.currentState!.validate()) return false;
+    if (!_checkout.isAfter(_checkin)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tanggal keluar harus setelah tanggal masuk.')));
+      return false;
     }
+    final harga = double.tryParse(
+        _harga.text.trim().replaceAll('.', '').replaceAll(',', '.'));
+    return widget.onSubmit(<String, dynamic>{
+      'properti_id': widget.propertiId,
+      'tamu_id': _tamuId,
+      'tipe_kamar_id': _tipeId,
+      'tanggal_checkin': formatTanggalHotel.format(_checkin),
+      'tanggal_checkout': formatTanggalHotel.format(_checkout),
+      'jumlah_tamu': int.tryParse(_jumlahTamu.text.trim()) ?? 1,
+      if (harga != null) 'harga_per_malam': harga,
+      'catatan': _catatan.text.trim(),
+    });
   }
 
   Future<void> _pilihTanggal(bool masuk) async {
@@ -706,35 +739,7 @@ class _FormReservasiDialogState extends State<_FormReservasiDialog> {
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            if (!_checkout.isAfter(_checkin)) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content:
-                      Text('Tanggal keluar harus setelah tanggal masuk.')));
-              return;
-            }
-            final harga = double.tryParse(_harga.text
-                .trim()
-                .replaceAll('.', '')
-                .replaceAll(',', '.'));
-            Navigator.of(context).pop(<String, dynamic>{
-              'properti_id': widget.propertiId,
-              'tamu_id': _tamuId,
-              'tipe_kamar_id': _tipeId,
-              'tanggal_checkin': formatTanggalHotel.format(_checkin),
-              'tanggal_checkout': formatTanggalHotel.format(_checkout),
-              'jumlah_tamu': int.tryParse(_jumlahTamu.text.trim()) ?? 1,
-              if (harga != null) 'harga_per_malam': harga,
-              'catatan': _catatan.text.trim(),
-            });
-          },
-          child: const Text('Buat'),
-        ),
+        AppCrudDialogActions(onSubmit: _simpan, submitLabel: 'Buat'),
       ],
     );
   }

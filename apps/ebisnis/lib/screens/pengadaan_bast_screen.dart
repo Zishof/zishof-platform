@@ -155,11 +155,38 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
       }
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    Map<String, dynamic>? hasilTersimpan;
+    Map<String, dynamic>? responsSimpan;
+    await showDialog<void>(
       context: context,
-      builder: (_) =>
-          _FormBastDialog(awal: awal, detailAwal: detailAwal, dariPo: dariPo),
+      builder: (_) => _FormBastDialog(
+        awal: awal,
+        detailAwal: detailAwal,
+        dariPo: dariPo,
+        onSubmit: (hasil) async {
+          final untukServer = Map<String, dynamic>.from(hasil);
+          untukServer.remove('_kurang');
+          untukServer.remove('_poKode');
+          try {
+            responsSimpan = await prosesSimpanMaster(
+              context,
+              aksi: 'pengadaan_bast_simpan',
+              body: untukServer,
+              kunci: untukServer['id'] != null
+                  ? 'pengadaan_bast:${untukServer['id']}'
+                  : 'pengadaan_bast:baru:${DateTime.now().microsecondsSinceEpoch}',
+              cacheKey: 'master:pengadaan_bast',
+            );
+            hasilTersimpan = Map<String, dynamic>.from(hasil);
+            await _muat();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        },
+      ),
     );
+    final hasil = hasilTersimpan;
     if (hasil == null || !mounted) return;
     // Penanda internal tidak ikut dikirim ke server: ia hanya memberi tahu
     // layar ini bahwa sesudah menyimpan masih ada sisa pesanan yang perlu
@@ -168,16 +195,6 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
     final poKodeKurang = '${hasil.remove('_poKode') ?? ''}';
 
     try {
-      final rSimpan = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_bast_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'pengadaan_bast:${hasil['id']}'
-            : 'pengadaan_bast:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:pengadaan_bast',
-      );
-      await _muat();
       /* Penerimaannya sudah tersimpan; barulah sisa pesanan diputuskan.
        * Dialog Back Order dibuka LANGSUNG tanpa konfirmasi perantara, karena
        * dialog itu sendiri sudah menanyakan keputusannya lewat pilihan "Pesan
@@ -189,7 +206,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
          * masih mengantre offline, id-nya belum ada -- server lalu memakai
          * cadangannya, yaitu seluruh draf pesanan itu. */
         await _backOrder((hasil['po_id'] as num).toInt(), poKodeKurang,
-            bastId: (rSimpan['id'] ?? hasil['id']) as Object?);
+            bastId: (responsSimpan?['id'] ?? hasil['id']) as Object?);
       }
     } catch (e) {
       if (!mounted) return;
@@ -793,7 +810,13 @@ class _FormBastDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
   final Map<String, dynamic>? detailAwal;
   final Map<String, dynamic>? dariPo;
-  const _FormBastDialog({this.awal, this.detailAwal, this.dariPo});
+  final Future<bool> Function(Map<String, dynamic> hasil) onSubmit;
+  const _FormBastDialog({
+    this.awal,
+    this.detailAwal,
+    this.dariPo,
+    required this.onSubmit,
+  });
 
   @override
   State<_FormBastDialog> createState() => _FormBastDialogState();
@@ -1340,40 +1363,39 @@ class _FormBastDialogState extends State<_FormBastDialog> {
         // hal yang sudah ditangani, dan justru mengundang pertanyaan "kapan
         // saya harus menekannya?" pada alur yang seharusnya tidak perlu
         // dipikirkan petugas.
-        if (!_terkunci)
-          FilledButton(onPressed: _simpan, child: const Text('Simpan')),
+        if (!_terkunci) AppCrudDialogActions(onSubmit: _simpan),
       ],
     );
   }
 
   /// Validasi di layar hanya untuk umpan balik cepat; server tetap menegakkan
   /// aturan yang sama sehingga kanal lain berperilaku identik.
-  void _simpan() {
+  Future<bool> _simpan() async {
     if (_baris
         .where((b) => b.barangId != null || b.masterAssetId != null)
         .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tambahkan minimal satu baris barang.')));
-      return;
+      return false;
     }
     if (!_dariPesanan && _penyediaId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Pilih penyedia/vendor untuk penerimaan tanpa PO.')));
-      return;
+      return false;
     }
     for (final b in _baris) {
       if (_angka(b.diterima.text) <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Jumlah diterima untuk ${b.namaBarang} harus lebih '
                 'besar dari nol.')));
-        return;
+        return false;
       }
       final sisa = b.sisaBoleh;
       if (sisa != null && _angka(b.diterima.text) > sisa + 1e-6) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Jumlah diterima untuk ${b.namaBarang} melebihi sisa '
                 'yang dipesan (${sisa.toStringAsFixed(0)}).')));
-        return;
+        return false;
       }
     }
     /* Pesanan bertermin ditagih per termin, jadi penerimaannya harus menyebut
@@ -1383,7 +1405,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Pilih dahulu termin yang diterima. Pesanan ini '
               'bertermin, jadi barangnya diterima per termin.')));
-      return;
+      return false;
     }
     /* Vendor sering mengirim KURANG dari yang dipesan. Sebelumnya kasir harus
      * ingat sendiri untuk menekan tombol "Back Order / Pesan Kembali" setelah
@@ -1402,7 +1424,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
           return sisa != null && _angka(b.diterima.text) < sisa - 1e-6;
         });
 
-    Navigator.pop(context, <String, dynamic>{
+    return widget.onSubmit(<String, dynamic>{
       if (!_baru) 'id': widget.awal!['id'],
       if (adaKekurangan) '_kurang': true,
       if (adaKekurangan) '_poKode': _poKode,

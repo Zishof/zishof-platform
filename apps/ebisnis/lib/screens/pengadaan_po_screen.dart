@@ -155,29 +155,31 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
       }
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) =>
-          _FormPoDialog(awal: awal, detailAwal: detailAwal, dariPr: dariPr),
+      builder: (_) => _FormPoDialog(
+        awal: awal,
+        detailAwal: detailAwal,
+        dariPr: dariPr,
+        onSubmit: (hasil) async {
+          try {
+            await prosesSimpanMaster(
+              context,
+              aksi: 'pengadaan_po_simpan',
+              body: hasil,
+              kunci: hasil['id'] != null
+                  ? 'pengadaan_po:${hasil['id']}'
+                  : 'pengadaan_po:baru:${DateTime.now().microsecondsSinceEpoch}',
+              cacheKey: 'master:pengadaan_po',
+            );
+            await _muat();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null || !mounted) return;
-    try {
-      await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_po_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'pengadaan_po:${hasil['id']}'
-            : 'pengadaan_po:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:pengadaan_po',
-      );
-      await _muat();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
   }
 
   /// Buat PO dengan mengambil BARANG dari Permintaan Pembelian -- padanan layar
@@ -969,7 +971,13 @@ class _FormPoDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
   final Map<String, dynamic>? detailAwal;
   final Map<String, dynamic>? dariPr;
-  const _FormPoDialog({this.awal, this.detailAwal, this.dariPr});
+  final Future<bool> Function(Map<String, dynamic> hasil) onSubmit;
+  const _FormPoDialog({
+    this.awal,
+    this.detailAwal,
+    this.dariPr,
+    required this.onSubmit,
+  });
 
   @override
   State<_FormPoDialog> createState() => _FormPoDialogState();
@@ -1571,47 +1579,46 @@ class _FormPoDialogState extends State<_FormPoDialog> {
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Tutup')),
-        if (!_terkunci)
-          FilledButton(onPressed: _simpan, child: const Text('Simpan')),
+        if (!_terkunci) AppCrudDialogActions(onSubmit: _simpan),
       ],
     );
   }
 
   /// Validasi di layar HANYA untuk memberi umpan balik cepat; server tetap
   /// menegakkan aturan yang sama sehingga kanal lain berperilaku identik.
-  void _simpan() {
+  Future<bool> _simpan() async {
     if (_penyediaId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Pilih penyedia/vendor terlebih dahulu.')));
-      return;
+      return false;
     }
     if (_baris
         .where((b) => b.barangId != null || b.masterAssetId != null)
         .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Tambahkan minimal satu baris barang.')));
-      return;
+      return false;
     }
     if (_bertermin) {
       if (_termin.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Tambahkan minimal satu baris termin.')));
-        return;
+        return false;
       }
       if (_termin.any((t) => _angka(t.nilai.text) <= 0)) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Setiap termin harus bernilai lebih dari nol.')));
-        return;
+        return false;
       }
       if (_selisihTermin.abs() > 1) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Jadwal termin belum menutup nilai PO '
                 '(selisih ${_fmtRp.format(_selisihTermin.abs())}). '
                 'Tekan "Bagi Rata" atau sesuaikan nilainya.')));
-        return;
+        return false;
       }
     }
-    Navigator.pop(context, <String, dynamic>{
+    return widget.onSubmit(<String, dynamic>{
       if (!_baru) 'id': widget.awal!['id'],
       'penyedia_id': _penyediaId,
       'keterangan': _keterangan.text.trim(),

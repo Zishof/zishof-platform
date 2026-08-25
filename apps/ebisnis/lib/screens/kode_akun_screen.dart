@@ -297,8 +297,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           .aksi('kode_akun_bersihkan', {'praTinjau': true});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal memeriksa akun: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal memeriksa akun: $e')));
       }
       setStateIfMounted(() => _sibuk = false);
       return;
@@ -310,7 +310,8 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     if (!mounted) return;
     if (jumlah == 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${pratinjau['message'] ?? 'Tidak ada akun yang dapat dibersihkan.'}')));
+          content: Text(
+              '${pratinjau['message'] ?? 'Tidak ada akun yang dapat dibersihkan.'}')));
       return;
     }
 
@@ -320,38 +321,47 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         title: const Text('Bersihkan Akun'),
         content: SizedBox(
           width: 460,
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$jumlah akun belum dipakai jurnal dan tidak punya turunan, '
-                'sehingga akan DIHAPUS.'),
-            const SizedBox(height: 8),
-            const Text(
-                'Akun yang sudah dipakai jurnal, punya turunan, atau masih '
-                'dirujuk data lain tidak akan tersentuh.',
-                style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: SingleChildScrollView(
-                child: Text(
-                  contoh
-                      .take(50)
-                      .map((e) => '${(e as Map)['kode'] ?? ''} - ${e['nama'] ?? ''}')
-                      .join('\n'),
-                  style: const TextStyle(fontSize: 12),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    '$jumlah akun belum dipakai jurnal dan tidak punya turunan, '
+                    'sehingga akan DIHAPUS.'),
+                const SizedBox(height: 8),
+                const Text(
+                    'Akun yang sudah dipakai jurnal, punya turunan, atau masih '
+                    'dirujuk data lain tidak akan tersentuh.',
+                    style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      contoh
+                          .take(50)
+                          .map((e) =>
+                              '${(e as Map)['kode'] ?? ''} - ${e['nama'] ?? ''}')
+                          .join('\n'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            if (contoh.length > 50)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('… dan ${contoh.length - 50} akun lainnya.',
-                    style: const TextStyle(fontSize: 12)),
-              ),
-          ]),
+                if (contoh.length > 50)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('… dan ${contoh.length - 50} akun lainnya.',
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+              ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Hapus')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Hapus')),
         ],
       ),
     );
@@ -791,7 +801,38 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
         : salin
             ? 'Salin Akun'
             : (ubah ? 'Ubah Akun' : 'Tambah Akun');
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (kode.text.trim().isEmpty || nama.text.trim().isEmpty) {
+        throw Exception('Kode dan Nama Akun wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': akun['id'],
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'debetCredit': debetCredit ?? 0,
+        'grupAkunId': grupAkunId ?? 0,
+        'aktifitas': aktifitas,
+        'parentId': parentId ?? 0,
+        'bankId': bankId ?? 0,
+        'atasNama': atasNama.text.trim(),
+        'noRek': noRek.text.trim(),
+      };
+      return _kirim(
+        'kode_akun_simpan',
+        payload,
+        kunci: ubah
+            ? 'kode_akun:${akun['id']}'
+            : 'kode_akun:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cache('akun'),
+        rowLokal: {
+          ...payload,
+          'posisi': (debetCredit ?? 1) == 1 ? 'Debet' : 'Credit'
+        },
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -904,47 +945,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Simpan')),
+            AppCrudDialogActions(onSubmit: simpanData),
           ],
         ),
       ),
-    );
-    if (simpan != true) return;
-    if (kode.text.trim().isEmpty || nama.text.trim().isEmpty) {
-      _pesan('Kode dan Nama Akun wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': akun['id'],
-      'kode': kode.text.trim(),
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'debetCredit': debetCredit ?? 0,
-      'grupAkunId': grupAkunId ?? 0,
-      'aktifitas': aktifitas,
-      'parentId': parentId ?? 0,
-      'bankId': bankId ?? 0,
-      'atasNama': atasNama.text.trim(),
-      'noRek': noRek.text.trim(),
-    };
-    await _kirim(
-      'kode_akun_simpan',
-      payload,
-      kunci: ubah
-          ? 'kode_akun:${akun['id']}'
-          : 'kode_akun:baru:${DateTime.now().microsecondsSinceEpoch}',
-      cacheKey: _cache('akun'),
-      // Bentuk baris daftar: kolom tampilan diisi seadanya supaya tabel langsung
-      // memperlihatkan perubahan walau server belum menjawab.
-      rowLokal: {
-        ...payload,
-        'posisi': (debetCredit ?? 1) == 1 ? 'Debet' : 'Credit'
-      },
     );
   }
 
@@ -958,7 +962,30 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     int? akunId = (bank?['akunId'] as num?)?.toInt();
     bool aktif = bank == null ? true : bank['aktif'] != false;
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama Bank wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': bank['id'],
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'akunId': akunId ?? 0,
+        'aktif': aktif,
+      };
+      return _kirim(
+        'kode_akun_bank_simpan',
+        payload,
+        entitas: 'bank',
+        kunci: ubah
+            ? 'kode_akun_bank:${bank['id']}'
+            : 'kode_akun_bank:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cache('bank'),
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -991,37 +1018,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Simpan')),
+            AppCrudDialogActions(onSubmit: simpanData),
           ],
         ),
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama Bank wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': bank['id'],
-      'kode': kode.text.trim(),
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'akunId': akunId ?? 0,
-      'aktif': aktif,
-    };
-    await _kirim(
-      'kode_akun_bank_simpan',
-      payload,
-      entitas: 'bank',
-      kunci: ubah
-          ? 'kode_akun_bank:${bank['id']}'
-          : 'kode_akun_bank:baru:${DateTime.now().microsecondsSinceEpoch}',
-      cacheKey: _cache('bank'),
     );
   }
 
@@ -1035,7 +1035,30 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     int? akunId = (jenis?['akunId'] as num?)?.toInt();
     bool aktif = jenis == null ? true : jenis['aktif'] != false;
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama Jenis Transaksi wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': jenis['id'],
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'akunId': akunId ?? 0,
+        'aktif': aktif,
+      };
+      return _kirim(
+        'kode_akun_jenis_transaksi_simpan',
+        payload,
+        entitas: 'jenis_transaksi',
+        kunci: ubah
+            ? 'kode_akun_jt:${jenis['id']}'
+            : 'kode_akun_jt:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cache('jenis_transaksi'),
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -1068,37 +1091,10 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
             ),
           ),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Simpan')),
+            AppCrudDialogActions(onSubmit: simpanData),
           ],
         ),
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama Jenis Transaksi wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': jenis['id'],
-      'kode': kode.text.trim(),
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'akunId': akunId ?? 0,
-      'aktif': aktif,
-    };
-    await _kirim(
-      'kode_akun_jenis_transaksi_simpan',
-      payload,
-      entitas: 'jenis_transaksi',
-      kunci: ubah
-          ? 'kode_akun_jt:${jenis['id']}'
-          : 'kode_akun_jt:baru:${DateTime.now().microsecondsSinceEpoch}',
-      cacheKey: _cache('jenis_transaksi'),
     );
   }
 
@@ -1108,7 +1104,27 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
     final nama = TextEditingController(text: '${grup?['nama'] ?? ''}');
     final keterangan =
         TextEditingController(text: '${grup?['keterangan'] ?? ''}');
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama Grup Akun wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': grup['id'],
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+      };
+      return _kirim(
+        'kode_akun_grup_simpan',
+        payload,
+        entitas: 'grup_akun',
+        kunci: ubah
+            ? 'kode_akun_grup:${grup['id']}'
+            : 'kode_akun_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cache('grup'),
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(salin
@@ -1128,33 +1144,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('Simpan')),
+          AppCrudDialogActions(onSubmit: simpanData),
         ],
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama Grup Akun wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': grup['id'],
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-    };
-    await _kirim(
-      'kode_akun_grup_simpan',
-      payload,
-      entitas: 'grup_akun',
-      kunci: ubah
-          ? 'kode_akun_grup:${grup['id']}'
-          : 'kode_akun_grup:baru:${DateTime.now().microsecondsSinceEpoch}',
-      cacheKey: _cache('grup'),
     );
   }
 
@@ -1163,7 +1155,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
   Future<void> _bukaTerhapus() async {
     final nama = _tab.index == 2
         ? 'bank'
-        : (_tab.index == 3 ? 'jenis_transaksi' : (_tab.index == 4 ? 'grup' : 'akun'));
+        : (_tab.index == 3
+            ? 'jenis_transaksi'
+            : (_tab.index == 4 ? 'grup' : 'akun'));
     final jumlah = await bukaPulihkanTerhapus(
       context,
       cacheKey: _cache(nama),
@@ -1360,8 +1354,7 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
                 ? 'Unggah berkas Excel $_defJudul'
                 : 'Hak akses Anda tidak mengizinkan mengimpor $_defJudul',
             child: OutlinedButton.icon(
-                onPressed:
-                    _sibuk || !_bolehImporTabIni ? null : _unggahAkun,
+                onPressed: _sibuk || !_bolehImporTabIni ? null : _unggahAkun,
                 icon: const Icon(Icons.upload_file, size: 18),
                 label: Text('Upload $_defJudul')),
           ),

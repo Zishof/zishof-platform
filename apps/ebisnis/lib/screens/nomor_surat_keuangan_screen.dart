@@ -24,7 +24,8 @@ class NomorSuratKeuanganScreen extends StatefulWidget {
   const NomorSuratKeuanganScreen({super.key});
 
   @override
-  State<NomorSuratKeuanganScreen> createState() => _NomorSuratKeuanganScreenState();
+  State<NomorSuratKeuanganScreen> createState() =>
+      _NomorSuratKeuanganScreenState();
 }
 
 class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
@@ -54,10 +55,12 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('nomor_surat_keuangan_opsi', {});
+      final opsi =
+          await ApiClient.instance.aksi('nomor_surat_keuangan_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _jenisSegmen = ((opsi['jenisSegmen'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _jenisSegmen =
+            ((opsi['jenisSegmen'] as List?) ?? []).cast<Map<String, dynamic>>();
         _catatanAlur = '${opsi['catatanAlur'] ?? ''}';
       });
       await _muatDaftar();
@@ -83,11 +86,15 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
         onData: (hasil) {
           if (!mounted) return;
           setStateIfMounted(() {
-            _alur = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _alur =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _belumDipasang = (hasil['belumDipasang'] as num?)?.toInt() ?? 0;
             final h = hasil['hak'];
             _hak = h is Map
-                ? {for (final k in ['create', 'update', 'delete']) k: h[k] != false}
+                ? {
+                    for (final k in ['create', 'update', 'delete'])
+                      k: h[k] != false
+                  }
                 : const {};
           });
         },
@@ -100,7 +107,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
         onData: (hasil) {
           if (!mounted) return;
           setStateIfMounted(() {
-            _templat = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _templat =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _memuat = false;
           });
         },
@@ -143,7 +151,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
         entitas: 'nomor_surat_keuangan',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -164,8 +173,11 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -176,7 +188,19 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
 
   Future<void> _pasang(Map<String, dynamic> alur) async {
     int? pilih = (alur['nomorSuratId'] as num?)?.toInt();
-    final ok = await showDialog<bool>(
+    Future<bool> simpanData() => _kirimLokalDulu(
+          'nomor_surat_keuangan_pasang',
+          {'alurId': alur['id'], 'nomorSuratId': pilih ?? 0},
+          kunci: 'nomor_surat_keuangan_alur:${alur['id']}',
+          cacheKey: _cacheAlur,
+          rowLokal: {
+            ...alur,
+            'nomorSuratId': pilih,
+            'pakaiBarcode': pilih == null,
+          },
+        );
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -193,10 +217,12 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                     isDense: true),
                 items: [
                   const DropdownMenuItem<int?>(
-                      value: null, child: Text('(tanpa templat — kode barcode)')),
+                      value: null,
+                      child: Text('(tanpa templat — kode barcode)')),
                   ..._templat.map((t) => DropdownMenuItem<int?>(
                         value: (t['id'] as num?)?.toInt(),
-                        child: Text('${t['nama'] ?? ''}  ·  ${t['contohFormat'] ?? ''}'),
+                        child: Text(
+                            '${t['nama'] ?? ''}  ·  ${t['contohFormat'] ?? ''}'),
                       )),
                 ],
                 onChanged: (v) => setDialog(() => pilih = v),
@@ -221,20 +247,9 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 ),
             ]),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-          ],
+          actions: [AppCrudDialogActions(onSubmit: simpanData)],
         ),
       ),
-    );
-    if (ok != true) return;
-    await _kirimLokalDulu(
-      'nomor_surat_keuangan_pasang',
-      {'alurId': alur['id'], 'nomorSuratId': pilih ?? 0},
-      kunci: 'nomor_surat_keuangan_alur:${alur['id']}',
-      cacheKey: _cacheAlur,
-      rowLokal: {...alur, 'nomorSuratId': pilih, 'pakaiBarcode': pilih == null},
     );
   }
 
@@ -243,7 +258,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
   Future<void> _formTemplat([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     int jumlahNol = (baris?['jumlahNolDepan'] as num?)?.toInt() ?? 3;
     bool aktif = baris == null ? true : baris['aktif'] == true;
     bool resetTahun = baris?['resetTiapTahun'] == true;
@@ -260,7 +276,10 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
             .aksi('nomor_surat_keuangan_templat_detail', {'id': baris['id']});
         final s = ((d['segmen'] as List?) ?? []).cast<Map<String, dynamic>>();
         for (var i = 0; i < segmen.length && i < s.length; i++) {
-          segmen[i] = {'jenis': '${s[i]['jenis']}', 'tanda': '${s[i]['tanda'] ?? ''}'};
+          segmen[i] = {
+            'jenis': '${s[i]['jenis']}',
+            'tanda': '${s[i]['tanda'] ?? ''}'
+          };
         }
         contoh = '${d['contoh'] ?? ''}';
       } catch (e) {
@@ -270,13 +289,52 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
     }
 
     if (!mounted) return;
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw const FormatException('Nama templat wajib diisi.');
+      }
+      if (!segmen.any((s) => s['jenis'] == 'Nomor Urut')) {
+        throw const FormatException(
+            'Templat wajib memuat satu segmen "Nomor Urut"; tanpa itu semua dokumen akan menerima nomor yang sama persis.');
+      }
+
+      final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
+      return _kirimLokalDulu(
+        'nomor_surat_keuangan_templat_simpan',
+        {
+          if (ubah) 'id': baris['id'],
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'aktif': aktif,
+          'jumlahNolDepan': jumlahNol,
+          'resetTiapTahun': resetTahun,
+          'resetTiapBulan': resetBulan,
+          'gunakanIndexUrut': gunakanIndexUrut,
+          'nomorIndex': nomorIndex,
+          'segmen': segmen,
+        },
+        kunci: 'nomor_surat_keuangan_templat:${ubah ? baris['id'] : idBaru}',
+        cacheKey: _cacheTemplat,
+        idLokal: ubah ? null : idBaru,
+        rowLokal: {
+          'id': ubah ? baris['id'] : idBaru,
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'aktif': aktif,
+          'contohFormat': contoh,
+          'dipakaiAlur': baris?['dipakaiAlur'] ?? 0,
+        },
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
           Future<void> hitungContoh() async {
             try {
-              final res = await ApiClient.instance.aksi('nomor_surat_keuangan_pratinjau', {
+              final res = await ApiClient.instance
+                  .aksi('nomor_surat_keuangan_pratinjau', {
                 'segmen': segmen,
                 'jumlahNolDepan': jumlahNol,
                 'gunakanIndexUrut': gunakanIndexUrut,
@@ -326,7 +384,9 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 TextField(
                   controller: keterangan,
                   decoration: const InputDecoration(
-                      labelText: 'Keterangan', border: OutlineInputBorder(), isDense: true),
+                      labelText: 'Keterangan',
+                      border: OutlineInputBorder(),
+                      isDense: true),
                 ),
                 const SizedBox(height: 8),
                 Wrap(spacing: 12, children: [
@@ -378,7 +438,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                               decoration: const InputDecoration(isDense: true),
                               items: _jenisSegmen
                                   .map((j) => DropdownMenuItem<String>(
-                                      value: '${j['nilai']}', child: Text('${j['label']}')))
+                                      value: '${j['nilai']}',
+                                      child: Text('${j['label']}')))
                                   .toList(),
                               onChanged: (v) {
                                 setDialog(() => segmen[i] = {
@@ -398,7 +459,9 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                                 isDense: true,
                                 // Pada "Kata Statis", kolom ini BUKAN pemisah melainkan
                                 // isinya sendiri -- perbedaan yang mudah salah tangkap.
-                                labelText: kataStatis ? 'Isi teksnya' : 'Pemisah sesudahnya',
+                                labelText: kataStatis
+                                    ? 'Isi teksnya'
+                                    : 'Pemisah sesudahnya',
                               ),
                               onChanged: (v) {
                                 segmen[i] = {'jenis': jenis, 'tanda': v};
@@ -415,11 +478,14 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(children: [
-                    const Text('Contoh hasil: ', style: TextStyle(fontSize: 12)),
+                    const Text('Contoh hasil: ',
+                        style: TextStyle(fontSize: 12)),
                     Expanded(
-                      child: Text(contoh.isEmpty ? '(belum dapat dihitung)' : contoh,
+                      child: Text(
+                          contoh.isEmpty ? '(belum dapat dihitung)' : contoh,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace')),
                     ),
                     const Text('pratinjau tidak memakai nomor',
                         style: TextStyle(fontSize: 11)),
@@ -427,63 +493,24 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 ),
               ]),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama templat wajib diisi.');
-      return;
-    }
-    if (!segmen.any((s) => s['jenis'] == 'Nomor Urut')) {
-      _pesan('Templat wajib memuat satu segmen "Nomor Urut"; tanpa itu semua dokumen '
-          'akan menerima nomor yang sama persis.');
-      return;
-    }
-
-    final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
-    await _kirimLokalDulu(
-      'nomor_surat_keuangan_templat_simpan',
-      {
-        if (ubah) 'id': baris['id'],
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'aktif': aktif,
-        'jumlahNolDepan': jumlahNol,
-        'resetTiapTahun': resetTahun,
-        'resetTiapBulan': resetBulan,
-        'gunakanIndexUrut': gunakanIndexUrut,
-        'nomorIndex': nomorIndex,
-        'segmen': segmen,
-      },
-      kunci: 'nomor_surat_keuangan_templat:${ubah ? baris['id'] : idBaru}',
-      cacheKey: _cacheTemplat,
-      idLokal: ubah ? null : idBaru,
-      rowLokal: {
-        'id': ubah ? baris['id'] : idBaru,
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'aktif': aktif,
-        'contohFormat': contoh,
-        'dipakaiAlur': baris?['dipakaiAlur'] ?? 0,
-      },
     );
   }
 
   Future<void> _hapusTemplat(Map<String, dynamic> b) async {
     final dipakai = (b['dipakaiAlur'] as num?)?.toInt() ?? 0;
     if (dipakai > 0) {
-      _pesan('Templat ini masih dipasang pada $dipakai alur dokumen. Lepaskan dulu, '
+      _pesan(
+          'Templat ini masih dipasang pada $dipakai alur dokumen. Lepaskan dulu, '
           'atau ganti dengan templat lain — bila dihapus begitu saja, dokumennya akan '
           'terbit berkode barcode.');
       return;
     }
-    if (!await _konfirmasi('Hapus templat nomor?', '${b['nama']}', 'Hapus')) return;
+    if (!await _konfirmasi('Hapus templat nomor?', '${b['nama']}', 'Hapus'))
+      return;
     await _kirimLokalDulu(
       'nomor_surat_keuangan_templat_hapus',
       {'id': b['id']},
@@ -506,7 +533,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
       actionsAppBar: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+      aksiHeader:
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       body: _galat != null
           ? Center(
               child: Padding(
@@ -514,7 +542,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_galat!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                  FilledButton(
+                      onPressed: _muatSemua, child: const Text('Coba lagi')),
                 ]),
               ),
             )
@@ -522,8 +551,12 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
               length: 2,
               child: Column(children: [
                 const TabBar(tabs: [
-                  Tab(icon: Icon(Icons.article_outlined, size: 18), text: 'Alur Dokumen'),
-                  Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Templat Nomor'),
+                  Tab(
+                      icon: Icon(Icons.article_outlined, size: 18),
+                      text: 'Alur Dokumen'),
+                  Tab(
+                      icon: Icon(Icons.tune_outlined, size: 18),
+                      text: 'Templat Nomor'),
                 ]),
                 Expanded(
                   child: _memuat
@@ -544,7 +577,9 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                 Row(children: [
                   const Icon(Icons.info_outline, size: 18),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(_catatanAlur, style: const TextStyle(fontSize: 12))),
+                  Expanded(
+                      child: Text(_catatanAlur,
+                          style: const TextStyle(fontSize: 12))),
                 ]),
               if (_belumDipasang > 0)
                 Padding(
@@ -599,11 +634,14 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                       ),
                     Expanded(
                       child: Text(
-                        barcode ? 'belum dipasang — kode barcode' : '${b['nomorSuratNama']}',
+                        barcode
+                            ? 'belum dipasang — kode barcode'
+                            : '${b['nomorSuratNama']}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: 12.5, color: barcode ? AppColors.danger : null),
+                            fontSize: 12.5,
+                            color: barcode ? AppColors.danger : null),
                       ),
                     ),
                   ]),
@@ -617,7 +655,9 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                       AksiBaris(
                           ikon: Icons.link,
                           label: 'Pasang / ganti templat',
-                          onTap: _boleh('update') && !_sibuk ? () => _pasang(b) : null),
+                          onTap: _boleh('update') && !_sibuk
+                              ? () => _pasang(b)
+                              : null),
                     ],
                   ),
                 ),
@@ -673,12 +713,16 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
                       AksiBaris(
                           ikon: Icons.edit_outlined,
                           label: 'Ubah',
-                          onTap: _boleh('update') && !_sibuk ? () => _formTemplat(b) : null),
+                          onTap: _boleh('update') && !_sibuk
+                              ? () => _formTemplat(b)
+                              : null),
                       AksiBaris(
                           ikon: Icons.delete_outline,
                           label: 'Hapus',
                           merusak: true,
-                          onTap: _boleh('delete') && !_sibuk ? () => _hapusTemplat(b) : null),
+                          onTap: _boleh('delete') && !_sibuk
+                              ? () => _hapusTemplat(b)
+                              : null),
                     ],
                   ),
                 ),

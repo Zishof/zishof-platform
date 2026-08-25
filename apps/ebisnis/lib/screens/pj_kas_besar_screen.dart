@@ -74,9 +74,12 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
       final opsi = await ApiClient.instance.aksi('pj_kas_besar_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _jenisPajak = ((opsi['jenisPajak'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
+        _jenisPajak =
+            ((opsi['jenisPajak'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _satker =
+            ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _daftarStatus =
+            ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
         _pphMengurangi = opsi['pphMengurangiLpj'] == true;
       });
       await _muatDaftar();
@@ -99,12 +102,12 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
       await MasterOffline.daftarCacheDulu(
         'pj_kas_besar_daftar',
         {
-        if (_cari.text.trim().isNotEmpty) 'cari': _cari.text.trim(),
-        if (_statusFilter.isNotEmpty) 'statusFilter': _statusFilter,
-        if (_satkerFilter != null) 'satuanKerjaId': _satkerFilter,
-        if (_dari != null) 'dari': _fmt.format(_dari!),
-        if (_sampai != null) 'sampai': _fmt.format(_sampai!),
-        if (_belumDikembalikan) 'belumDikembalikan': true,
+          if (_cari.text.trim().isNotEmpty) 'cari': _cari.text.trim(),
+          if (_statusFilter.isNotEmpty) 'statusFilter': _statusFilter,
+          if (_satkerFilter != null) 'satuanKerjaId': _satkerFilter,
+          if (_dari != null) 'dari': _fmt.format(_dari!),
+          if (_sampai != null) 'sampai': _fmt.format(_sampai!),
+          if (_belumDikembalikan) 'belumDikembalikan': true,
         },
         _cacheKey,
         kolomKunci: 'id',
@@ -113,20 +116,28 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
             final t = await MasterOffline.daftarTerhapusLokal(_cacheKey);
             if (mounted) setStateIfMounted(() => _terhapus = t);
           }();
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _totalNilai = (hasil['totalNilai'] as num?)?.toDouble() ?? 0;
-        _totalDikembalikan = (hasil['totalDikembalikan'] as num?)?.toDouble() ?? 0;
-        final h = hasil['hak'];
-        _hak = h is Map
-            ? {
-                for (final k in ['create', 'update', 'delete', 'approve', 'reject'])
-                  k: h[k] != false
-              }
-            : const {};
-        _memuat = false;
-      });
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _totalNilai = (hasil['totalNilai'] as num?)?.toDouble() ?? 0;
+            _totalDikembalikan =
+                (hasil['totalDikembalikan'] as num?)?.toDouble() ?? 0;
+            final h = hasil['hak'];
+            _hak = h is Map
+                ? {
+                    for (final k in [
+                      'create',
+                      'update',
+                      'delete',
+                      'approve',
+                      'reject'
+                    ])
+                      k: h[k] != false
+                  }
+                : const {};
+            _memuat = false;
+          });
         },
       );
     } catch (e) {
@@ -136,7 +147,6 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
       });
     }
   }
-
 
   /// Baris yang dihapus di perangkat ini: TIDAK dibuang dari salinan lokal,
   /// hanya ditandai, supaya datanya masih bisa dilihat dan dipulihkan. Di sisi
@@ -159,7 +169,6 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(teks)));
   }
-
 
   /// Tulis LOKAL DULU lalu kirim (prosesSimpanMaster): baris langsung tampak di
   /// daftar walau jaringan sedang mati, dan antreannya dikirim ulang otomatis.
@@ -187,7 +196,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
         entitas: 'pj_kas_besar',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -208,8 +218,11 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -228,11 +241,13 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
           Future<void> jalankan() async {
             setDialog(() => memuat = true);
             try {
-              final res = await ApiClient.instance.aksi('pj_kas_besar_cari_kas_besar', {
+              final res =
+                  await ApiClient.instance.aksi('pj_kas_besar_cari_kas_besar', {
                 'cari': cari.text.trim(),
                 if (idLpj != null) 'id': idLpj,
               });
-              hasil = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              hasil =
+                  ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             } catch (e) {
               _pesan('$e');
             } finally {
@@ -270,14 +285,16 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                   child: memuat
                       ? const Center(child: CircularProgressIndicator())
                       : hasil.isEmpty
-                          ? const Center(child: Text('Ketik kata kunci lalu tekan Cari.'))
+                          ? const Center(
+                              child: Text('Ketik kata kunci lalu tekan Cari.'))
                           : ListView.builder(
                               itemCount: hasil.length,
                               itemBuilder: (_, i) {
                                 final u = hasil[i];
                                 return ListTile(
                                   dense: true,
-                                  title: Text('${u['kode'] ?? ''} — ${u['nama'] ?? ''}'),
+                                  title: Text(
+                                      '${u['kode'] ?? ''} — ${u['nama'] ?? ''}'),
                                   subtitle: Text(
                                       'Nilai ${_uang.format((u['nilai'] as num?) ?? 0)}'
                                       ' • ${u['satuanKerja'] ?? '-'}'
@@ -290,7 +307,9 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Batal')),
             ],
           );
         },
@@ -303,16 +322,15 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
   Future<void> _form([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
-    final namaSponsor = TextEditingController(text: '${baris?['namaSponsor'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final namaSponsor =
+        TextEditingController(text: '${baris?['namaSponsor'] ?? ''}');
     final dariSponsor = TextEditingController(
         text: ((baris?['dariSponsor'] as num?)?.toDouble() ?? 0) == 0
             ? ''
             : '${((baris?['dariSponsor'] as num?) ?? 0).toInt()}');
-    final dikembalikan = TextEditingController(
-        text: ((baris?['dikembalikan'] as num?)?.toDouble() ?? 0) == 0
-            ? ''
-            : '${((baris?['dikembalikan'] as num?) ?? 0).toInt()}');
+    final dikembalikan = TextEditingController();
     int? kasBesarId = (baris?['kasBesarId'] as num?)?.toInt();
     String kasBesarLabel = ubah
         ? '${baris['kasBesarKode'] ?? ''} — ${baris['kasBesarNama'] ?? ''}'
@@ -321,12 +339,62 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     DateTime? tanggalStor = _tgl(baris?['tanggalStor']);
     String statusDokumen = '${baris?['statusDokumen'] ?? 'Pengajuan'}';
     final rincian = <Map<String, dynamic>>[
-      ...(((baris?['rincian'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)))
+      ...(((baris?['rincian'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map)))
     ];
     double nilaiHitung = (baris?['nilai'] as num?)?.toDouble() ?? 0;
     double pajakHitung = (baris?['pajak'] as num?)?.toDouble() ?? 0;
 
-    final simpan = await showDialog<bool>(
+    String angkaInput(double nilai) {
+      if (nilai.abs() < 0.005) return '0';
+      if (nilai == nilai.roundToDouble()) return nilai.toInt().toString();
+      return nilai.toStringAsFixed(2);
+    }
+
+    void hitungSisaDana() {
+      dikembalikan.text = angkaInput(kasBesarNilai - nilaiHitung);
+    }
+
+    hitungSisaDana();
+
+    Future<bool> simpanData() async {
+      hitungSisaDana();
+      final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
+      final payload = <String, dynamic>{
+        if (ubah) 'id': baris['id'],
+        'kasBesarId': kasBesarId ?? 0,
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'rincian': rincian,
+        'dikembalikan': double.tryParse(dikembalikan.text.trim()) ?? 0,
+        if (tanggalStor != null) 'tanggalStor': _fmt.format(tanggalStor!),
+        'namaSponsor': namaSponsor.text.trim(),
+        'dariSponsor': double.tryParse(dariSponsor.text.trim()) ?? 0,
+        'statusDokumen': statusDokumen,
+      };
+      return _kirimLokalDulu(
+        'pj_kas_besar_simpan',
+        payload,
+        kunci:
+            ubah ? 'pj_kas_besar:${baris['id']}' : 'pj_kas_besar:baru:$idLokal',
+        idLokal: idLokal,
+        rowLokal: {
+          ...(baris ?? const <String, dynamic>{}),
+          'id': ubah ? baris['id'] : idLokal,
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'rincian': rincian,
+          'nilai': nilaiHitung,
+          'pajak': pajakHitung,
+          'dikembalikan': double.tryParse(dikembalikan.text.trim()) ?? 0,
+          'statusDokumen': statusDokumen,
+          'kasBesarId': kasBesarId,
+          'kasBesarNilai': kasBesarNilai,
+        },
+      );
+    }
+
+    await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
@@ -337,6 +405,7 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
               setDialog(() {
                 nilaiHitung = (res['nilai'] as num?)?.toDouble() ?? 0;
                 pajakHitung = (res['pajak'] as num?)?.toDouble() ?? 0;
+                hitungSisaDana();
               });
             } catch (_) {
               // Biarkan angka lama; server tetap menghitung ulang saat menyimpan.
@@ -347,7 +416,9 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
             final b = indeks == null ? <String, dynamic>{} : rincian[indeks];
             final uraian = TextEditingController(text: '${b['uraian'] ?? ''}');
             final jumlah = TextEditingController(
-                text: (b['jumlah'] == null) ? '' : '${(b['jumlah'] as num).toInt()}');
+                text: (b['jumlah'] == null)
+                    ? ''
+                    : '${(b['jumlah'] as num).toInt()}');
             final ppn = TextEditingController(
                 text: (b['ppn'] == null) ? '' : '${b['ppn']}');
             int? pajakId = (b['pajak'] as num?)?.toInt();
@@ -355,20 +426,25 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
               context: c,
               builder: (d) => StatefulBuilder(
                 builder: (d, setD) => AlertDialog(
-                  title: Text(indeks == null ? 'Tambah Rincian' : 'Ubah Rincian'),
+                  title:
+                      Text(indeks == null ? 'Tambah Rincian' : 'Ubah Rincian'),
                   content: SizedBox(
                     width: 460,
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       TextField(
                           controller: uraian,
                           decoration: const InputDecoration(
-                              labelText: 'Uraian', border: OutlineInputBorder(), isDense: true)),
+                              labelText: 'Uraian',
+                              border: OutlineInputBorder(),
+                              isDense: true)),
                       const SizedBox(height: 12),
                       TextField(
                           controller: jumlah,
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
-                              labelText: 'Jumlah *', border: OutlineInputBorder(), isDense: true)),
+                              labelText: 'Jumlah *',
+                              border: OutlineInputBorder(),
+                              isDense: true)),
                       const SizedBox(height: 12),
                       TextField(
                           controller: ppn,
@@ -390,12 +466,14 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                             border: const OutlineInputBorder(),
                             isDense: true),
                         items: [
-                          const DropdownMenuItem(value: null, child: Text('Tanpa PPh')),
+                          const DropdownMenuItem(
+                              value: null, child: Text('Tanpa PPh')),
                           ..._jenisPajak.map((p) => DropdownMenuItem(
                                 value: (p['id'] as num?)?.toInt(),
                                 child: Text(
                                     '${p['nama'] ?? ''} (${p['persen'] ?? 0}%)',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
                               )),
                         ],
                         onChanged: (v) => setD(() => pajakId = v),
@@ -404,9 +482,11 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                   ),
                   actions: [
                     TextButton(
-                        onPressed: () => Navigator.pop(d, false), child: const Text('Batal')),
+                        onPressed: () => Navigator.pop(d, false),
+                        child: const Text('Batal')),
                     FilledButton(
-                        onPressed: () => Navigator.pop(d, true), child: const Text('Simpan')),
+                        onPressed: () => Navigator.pop(d, true),
+                        child: const Text('Simpan')),
                   ],
                 ),
               ),
@@ -415,7 +495,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
             final data = <String, dynamic>{
               'uraian': uraian.text.trim(),
               'jumlah': double.tryParse(jumlah.text.trim()) ?? 0,
-              if (ppn.text.trim().isNotEmpty) 'ppn': double.tryParse(ppn.text.trim()) ?? 0,
+              if (ppn.text.trim().isNotEmpty)
+                'ppn': double.tryParse(ppn.text.trim()) ?? 0,
               if (pajakId != null) 'pajak': pajakId,
             };
             setDialog(() {
@@ -429,7 +510,9 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
           }
 
           return AlertDialog(
-            title: Text(ubah ? 'Ubah Pertanggungjawaban Kas Besar' : 'Pertanggungjawaban Kas Besar Baru'),
+            title: Text(ubah
+                ? 'Ubah Pertanggungjawaban Kas Besar'
+                : 'Pertanggungjawaban Kas Besar Baru'),
             content: SizedBox(
               width: 680,
               child: SingleChildScrollView(
@@ -441,12 +524,17 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                         isDense: true),
                     child: Row(children: [
                       Expanded(
-                        child: Text(kasBesarLabel.isEmpty ? 'Belum dipilih' : kasBesarLabel,
-                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                            kasBesarLabel.isEmpty
+                                ? 'Belum dipilih'
+                                : kasBesarLabel,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
                       ),
                       TextButton(
                         onPressed: () async {
-                          final u = await _pilihKasBesar(ubah ? baris['id'] as int? : null);
+                          final u = await _pilihKasBesar(
+                              ubah ? baris['id'] as int? : null);
                           if (u == null) return;
                           // Rincian kas besarnya menjadi titik awal rincian LPJ: LPJ
                           // melaporkan pemakaian atas rencana yang sudah tertulis di
@@ -457,20 +545,23 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                           var salin = bawaan.isNotEmpty;
                           if (salin && rincian.isNotEmpty) {
                             salin = await _konfirmasi(
-                              'Ganti rincian dengan milik kas besar ini?',
-                              'Rincian yang sudah Anda isi (${rincian.length} baris) akan '
-                              'diganti oleh ${bawaan.length} baris dari kas besarnya.',
-                              'Ganti');
+                                'Ganti rincian dengan milik kas besar ini?',
+                                'Rincian yang sudah Anda isi (${rincian.length} baris) akan '
+                                    'diganti oleh ${bawaan.length} baris dari kas besarnya.',
+                                'Ganti');
                           }
                           setDialog(() {
                             kasBesarId = (u['id'] as num?)?.toInt();
-                            kasBesarLabel = '${u['kode'] ?? ''} — ${u['nama'] ?? ''}';
-                            kasBesarNilai = (u['nilai'] as num?)?.toDouble() ?? 0;
+                            kasBesarLabel =
+                                '${u['kode'] ?? ''} — ${u['nama'] ?? ''}';
+                            kasBesarNilai =
+                                (u['nilai'] as num?)?.toDouble() ?? 0;
                             if (salin) {
                               rincian
                                 ..clear()
                                 ..addAll(bawaan);
                             }
+                            hitungSisaDana();
                           });
                           if (salin) await hitung();
                         },
@@ -487,7 +578,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                           'Nilai kas besar ${_uang.format(kasBesarNilai)} — '
                           'PJ tidak boleh melebihi angka ini.',
                           style: TextStyle(
-                              fontSize: 12, color: AppColors.textSecondaryOf(context)),
+                              fontSize: 12,
+                              color: AppColors.textSecondaryOf(context)),
                         ),
                       ),
                     ),
@@ -507,13 +599,16 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                   if (rincian.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('Belum ada rincian. Nilai LPJ dihitung dari rincian ini.'),
+                      child: Text(
+                          'Belum ada rincian. Nilai LPJ dihitung dari rincian ini.'),
                     )
                   else
                     ...rincian.asMap().entries.map((e) {
                       final b = e.value;
                       final pajakNama = _jenisPajak.firstWhere(
-                          (p) => (p['id'] as num?)?.toInt() == (b['pajak'] as num?)?.toInt(),
+                          (p) =>
+                              (p['id'] as num?)?.toInt() ==
+                              (b['pajak'] as num?)?.toInt(),
                           orElse: () => const {})['nama'];
                       return ListTile(
                         dense: true,
@@ -523,7 +618,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                             '${_uang.format((b['jumlah'] as num?) ?? 0)}'
                             '${b['ppn'] != null ? ' • PPN ${b['ppn']}%' : ''}'
                             '${pajakNama != null ? ' • PPh $pajakNama' : ''}'),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        trailing:
+                            Row(mainAxisSize: MainAxisSize.min, children: [
                           IconButton(
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.edit_outlined, size: 18),
@@ -551,7 +647,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _isian('Dikembalikan (sisa dana)', dikembalikan, angka: true),
+                  _isian('Dikembalikan (sisa dana)', dikembalikan,
+                      angka: true, hanyaBaca: true),
                   _tombolTanggal('Tanggal Stor', tanggalStor, () async {
                     final t = await showDatePicker(
                         context: c,
@@ -569,56 +666,22 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                         ? statusDokumen
                         : _daftarStatus.first,
                     decoration: const InputDecoration(
-                        labelText: 'Status', border: OutlineInputBorder(), isDense: true),
+                        labelText: 'Status',
+                        border: OutlineInputBorder(),
+                        isDense: true),
                     items: _daftarStatus
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setDialog(() => statusDokumen = v ?? 'Pengajuan'),
+                    onChanged: (v) =>
+                        setDialog(() => statusDokumen = v ?? 'Pengajuan'),
                   ),
                 ]),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-
-    final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
-    final payload = <String, dynamic>{
-      if (ubah) 'id': baris['id'],
-      'kasBesarId': kasBesarId ?? 0,
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'rincian': rincian,
-      'dikembalikan': double.tryParse(dikembalikan.text.trim()) ?? 0,
-      if (tanggalStor != null) 'tanggalStor': _fmt.format(tanggalStor!),
-      'namaSponsor': namaSponsor.text.trim(),
-      'dariSponsor': double.tryParse(dariSponsor.text.trim()) ?? 0,
-      'statusDokumen': statusDokumen,
-    };
-    await _kirimLokalDulu(
-      'pj_kas_besar_simpan',
-      payload,
-      kunci: ubah ? 'pj_kas_besar:${baris['id']}' : 'pj_kas_besar:baru:$idLokal',
-      idLokal: idLokal,
-      rowLokal: {
-        ...(baris ?? const <String, dynamic>{}),
-        'id': ubah ? baris['id'] : idLokal,
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'rincian': rincian,
-        'nilai': nilaiHitung,
-        'pajak': pajakHitung,
-        'dikembalikan': double.tryParse(dikembalikan.text.trim()) ?? 0,
-        'statusDokumen': statusDokumen,
-        'kasBesarId': kasBesarId,
-        'kasBesarNilai': kasBesarNilai,
-      },
     );
   }
 
@@ -629,21 +692,26 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
   }
 
   Widget _isian(String label, TextEditingController c,
-          {bool wajib = false, bool angka = false}) =>
+          {bool wajib = false, bool angka = false, bool hanyaBaca = false}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: c,
+          readOnly: hanyaBaca,
           keyboardType: angka ? TextInputType.number : TextInputType.text,
           decoration: InputDecoration(
             labelText: wajib ? '$label *' : label,
+            helperText: hanyaBaca
+                ? 'Otomatis: nilai kas besar dikurangi total rincian LPJ.'
+                : null,
             border: const OutlineInputBorder(),
             isDense: true,
           ),
         ),
       );
 
-  Widget _tombolTanggal(String label, DateTime? nilai, VoidCallback onTap) => Padding(
+  Widget _tombolTanggal(String label, DateTime? nilai, VoidCallback onTap) =>
+      Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Align(
           alignment: Alignment.centerLeft,
@@ -674,7 +742,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Sudah di daftar transfer'
                       '${(b['dpcKode'] ?? '').toString().isEmpty ? '' : ' (${b['dpcKode']})'}',
-                  icon: const Icon(Icons.local_atm, size: 18, color: AppColors.success),
+                  icon: const Icon(Icons.local_atm,
+                      size: 18, color: AppColors.success),
                   onPressed: null,
                 )
               : IconButton(
@@ -684,9 +753,10 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                   onPressed: _sibuk
                       ? null
                       : () async {
-                          if (await _konfirmasi('Ajukan ke proses transfer?',
+                          if (await _konfirmasi(
+                              'Ajukan ke proses transfer?',
                               '${b['kode']} — ${b['nama']}\n'
-                              'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
+                                  'Dokumen masuk daftar pengajuan transfer bagian keuangan.',
                               'Ajukan')) {
                             await _kirimLokalDulu(
                                 'pj_kas_besar_ajukan_transfer', {'id': b['id']},
@@ -728,14 +798,17 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+            icon: const Icon(Icons.check_circle_outline,
+                size: 18, color: AppColors.success),
             onPressed: _sibuk
                 ? null
                 : () async {
-                    if (await _konfirmasi('Setujui PJ?',
+                    if (await _konfirmasi(
+                        'Setujui PJ?',
                         '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
                         'Setujui')) {
-                      await _kirimLokalDulu('pj_kas_besar_setujui', {'id': b['id']},
+                      await _kirimLokalDulu(
+                          'pj_kas_besar_setujui', {'id': b['id']},
                           kunci: 'pj_kas_besar:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Disetujui'});
                     }
@@ -751,7 +824,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                 : () async {
                     if (await _konfirmasi(
                         'Tolak PJ?', '${b['kode']} — ${b['nama']}', 'Tolak')) {
-                      await _kirimLokalDulu('pj_kas_besar_tolak', {'id': b['id']},
+                      await _kirimLokalDulu(
+                          'pj_kas_besar_tolak', {'id': b['id']},
                           kunci: 'pj_kas_besar:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Ditolak'});
                     }
@@ -761,13 +835,13 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Hapus PJ',
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: AppColors.danger),
             onPressed: _sibuk ? null : () => _hapusBaris(b),
           ),
       ]),
     );
   }
-
 
   /// Hapus: server menghapus sungguhan (riwayatnya ada pada audit trail server),
   /// sedangkan SALINAN LOKAL hanya DITANDAI terhapus -- barisnya tetap tersimpan
@@ -811,8 +885,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     }
     setStateIfMounted(() => _sibuk = true);
     try {
-      final berhasil = await MasterOffline.pulihkanLokal(
-          _cacheKey, b['id'], kunci: 'pj_kas_besar:${b['id']}');
+      final berhasil = await MasterOffline.pulihkanLokal(_cacheKey, b['id'],
+          kunci: 'pj_kas_besar:${b['id']}');
       _pesan(berhasil
           ? 'Penghapusan dibatalkan.'
           : 'Tidak dapat dibatalkan: penghapusannya sudah terkirim ke server. '
@@ -865,12 +939,16 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                 child: DropdownButtonFormField<String>(
                   value: _statusFilter.isEmpty ? '' : _statusFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Status', isDense: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Status', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: '', child: Text('Semua status')),
-                    ..._daftarStatus.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua status')),
+                    ..._daftarStatus
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s))),
                   ],
-                  onChanged: (v) => setStateIfMounted(() => _statusFilter = v ?? ''),
+                  onChanged: (v) =>
+                      setStateIfMounted(() => _statusFilter = v ?? ''),
                 ),
               ),
               SizedBox(
@@ -878,9 +956,11 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                 child: DropdownButtonFormField<int>(
                   value: _satkerFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Satuan Kerja', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Satuan Kerja', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Semua satuan kerja')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Semua satuan kerja')),
                     ..._satker.map((e) => DropdownMenuItem(
                           value: (e['id'] as num?)?.toInt(),
                           child: Text('${e['nama'] ?? ''}',
@@ -914,14 +994,16 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
               FilterChip(
                 label: const Text('Sisa dana belum distor'),
                 selected: _belumDikembalikan,
-                onSelected: (v) => setStateIfMounted(() => _belumDikembalikan = v),
+                onSelected: (v) =>
+                    setStateIfMounted(() => _belumDikembalikan = v),
               ),
               FilterChip(
                 label: Text(_jumlahTerhapus == 0
                     ? 'Terhapus'
                     : 'Terhapus ($_jumlahTerhapus)'),
                 selected: _tampilkanTerhapus,
-                onSelected: (v) => setStateIfMounted(() => _tampilkanTerhapus = v),
+                onSelected: (v) =>
+                    setStateIfMounted(() => _tampilkanTerhapus = v),
               ),
               FilledButton.icon(
                 onPressed: _memuat ? null : _muatDaftar,
@@ -936,7 +1018,9 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                 ),
               if (_sibuk)
                 const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
             ]),
       );
 
@@ -945,10 +1029,13 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
     return AppShell(
       menuAktif: MenuEBisnis.pjKasBesar,
       judul: 'Pertanggungjawaban Kas Besar',
-      subjudul: 'Laporan penggunaan dana kas besar beserta pengembalian sisanya',
+      subjudul:
+          'Laporan penggunaan dana kas besar beserta pengembalian sisanya',
       scrollable: false,
       aksiHeader: IconButton(
-          icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+          icon: const Icon(Icons.refresh),
+          onPressed: _muatSemua,
+          tooltip: 'Muat ulang'),
       actionsAppBar: [
         IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -965,7 +1052,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
               child: Text(
                 '${_data.length} PJ • total ${_uang.format(_totalNilai)}'
                 ' • dikembalikan ${_uang.format(_totalDikembalikan)}',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondaryOf(context)),
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context)),
               ),
             ),
           ),
@@ -979,37 +1067,52 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Text(_galat!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                        FilledButton(
+                            onPressed: _muatSemua,
+                            child: const Text('Coba lagi')),
                       ]),
                     ))
                   : AppDataTable(
                       minWidth: 1180,
-                      emptyText: 'Belum ada pertanggungjawaban kas besar untuk penyaring ini.',
+                      emptyText:
+                          'Belum ada pertanggungjawaban kas besar untuk penyaring ini.',
                       columns: const [
                         AppTableColumn('Kode', flex: 2),
                         AppTableColumn('Judul', flex: 4),
                         AppTableColumn('Kas Besar', flex: 3),
-                        AppTableColumn('Nilai PJ', flex: 2, align: TextAlign.right),
-                        AppTableColumn('Pajak', flex: 2, align: TextAlign.right),
-                        AppTableColumn('Dikembalikan', flex: 2, align: TextAlign.right),
+                        AppTableColumn('Nilai PJ',
+                            flex: 2, align: TextAlign.right),
+                        AppTableColumn('Pajak',
+                            flex: 2, align: TextAlign.right),
+                        AppTableColumn('Dikembalikan',
+                            flex: 2, align: TextAlign.right),
                         AppTableColumn('Status', flex: 2),
-                        AppTableColumn('Aksi', width: 176, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 176, align: TextAlign.center),
                       ],
                       rows: _terlihat
                           .map((b) => AppTableRowData(cells: [
-                                AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
-                                AppTableCell.text('${b['nama'] ?? ''}', flex: 4),
+                                AppTableCell.text('${b['kode'] ?? ''}',
+                                    flex: 2),
+                                AppTableCell.text('${b['nama'] ?? ''}',
+                                    flex: 4),
                                 AppTableCell.text(
-                                    '${b['kasBesarKode'] ?? ''} ${b['kasBesarNama'] ?? ''}'.trim(),
+                                    '${b['kasBesarKode'] ?? ''} ${b['kasBesarNama'] ?? ''}'
+                                        .trim(),
                                     flex: 3),
-                                AppTableCell.text(_uang.format((b['nilai'] as num?) ?? 0),
-                                    flex: 2, align: TextAlign.right),
-                                AppTableCell.text(_uang.format((b['pajak'] as num?) ?? 0),
-                                    flex: 2, align: TextAlign.right),
+                                AppTableCell.text(
+                                    _uang.format((b['nilai'] as num?) ?? 0),
+                                    flex: 2,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    _uang.format((b['pajak'] as num?) ?? 0),
+                                    flex: 2,
+                                    align: TextAlign.right),
                                 AppTableCell.text(
                                     '${_uang.format((b['dikembalikan'] as num?) ?? 0)}'
                                     '${b['telahDikembalikan'] == true ? ' ✓' : ''}',
-                                    flex: 2, align: TextAlign.right),
+                                    flex: 2,
+                                    align: TextAlign.right),
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'

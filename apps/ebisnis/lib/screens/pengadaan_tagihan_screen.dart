@@ -19,6 +19,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../services/kompresi_gambar.dart';
+import '../widgets/pemilih_anggaran.dart';
 
 /// Layar "Terima Tagihan Vendor" -- tahap 4 modul Pengadaan POS.
 ///
@@ -34,6 +35,308 @@ class PengadaanTagihanScreen extends StatefulWidget {
   State<PengadaanTagihanScreen> createState() => _PengadaanTagihanScreenState();
 }
 
+class _RincianTagihanRutin {
+  _RincianTagihanRutin()
+      : uraian = TextEditingController(),
+        nominal = TextEditingController();
+
+  final TextEditingController uraian;
+  final TextEditingController nominal;
+  String? workspaceId;
+  String? namaAnggaran;
+
+  void dispose() {
+    uraian.dispose();
+    nominal.dispose();
+  }
+}
+
+class _DialogTagihanRutin extends StatefulWidget {
+  const _DialogTagihanRutin({required this.anggaranWajib});
+
+  final bool anggaranWajib;
+
+  @override
+  State<_DialogTagihanRutin> createState() => _DialogTagihanRutinState();
+}
+
+class _DialogTagihanRutinState extends State<_DialogTagihanRutin> {
+  final TextEditingController _nomor = TextEditingController();
+  final TextEditingController _tanggal = TextEditingController(
+      text: DateFormat('dd-MM-yyyy').format(DateTime.now()));
+  final TextEditingController _keterangan = TextEditingController();
+  final List<_RincianTagihanRutin> _rincian = [_RincianTagihanRutin()];
+  int? _penyediaId;
+  String _penyediaNama = '';
+  String _galat = '';
+
+  @override
+  void dispose() {
+    _nomor.dispose();
+    _tanggal.dispose();
+    _keterangan.dispose();
+    for (final baris in _rincian) {
+      baris.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _pilihTanggal() async {
+    final dipilih = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (dipilih != null) {
+      setState(() => _tanggal.text = DateFormat('dd-MM-yyyy').format(dipilih));
+    }
+  }
+
+  Future<void> _pilihPenyedia() async {
+    final q = TextEditingController();
+    List<Map<String, dynamic>> hasil = [];
+    bool memuat = true;
+    bool pencarianAwalDijadwalkan = false;
+    final dipilih = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(builder: (c, setLocal) {
+        Future<void> cari() async {
+          setLocal(() => memuat = true);
+          try {
+            final r = await ApiClient.instance.aksi('pengadaan_penyedia_cari',
+                {'keyword': q.text.trim(), 'limit': 50});
+            hasil = ((r['data'] as List?) ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
+          } catch (_) {
+            hasil = [];
+          }
+          setLocal(() => memuat = false);
+        }
+
+        if (!pencarianAwalDijadwalkan) {
+          pencarianAwalDijadwalkan = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => cari());
+        }
+        return AlertDialog(
+          title: const Text('Pilih Penyedia / Vendor'),
+          content: SizedBox(
+            width: 520,
+            height: 420,
+            child: Column(children: [
+              AppSearchField(
+                controller: q,
+                hintText: 'Cari kode / nama penyedia',
+                autofocus: true,
+                onChanged: (_) => cari(),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: memuat
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        itemCount: hasil.length,
+                        itemBuilder: (_, i) => ListTile(
+                          dense: true,
+                          title: Text('${hasil[i]['nama'] ?? '-'}'),
+                          subtitle: Text('${hasil[i]['kode'] ?? ''}'),
+                          onTap: () => Navigator.pop(dctx, hasil[i]),
+                        ),
+                      ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Tutup')),
+          ],
+        );
+      }),
+    );
+    q.dispose();
+    if (dipilih == null || !mounted) return;
+    setState(() {
+      _penyediaId = (dipilih['id'] as num?)?.toInt();
+      _penyediaNama = '${dipilih['nama'] ?? ''}';
+    });
+  }
+
+  void _simpan() {
+    final data = <Map<String, dynamic>>[];
+    for (int i = 0; i < _rincian.length; i++) {
+      final baris = _rincian[i];
+      final nominal = double.tryParse(
+          baris.nominal.text.replaceAll('.', '').replaceAll(',', '.'));
+      if (baris.uraian.text.trim().isEmpty || nominal == null || nominal <= 0) {
+        setState(() => _galat =
+            'Uraian dan nominal rincian ke-${i + 1} wajib diisi dengan benar.');
+        return;
+      }
+      if (widget.anggaranWajib && (baris.workspaceId ?? '').isEmpty) {
+        setState(() => _galat = 'Anggaran rincian ke-${i + 1} wajib dipilih.');
+        return;
+      }
+      data.add({
+        'keterangan': baris.uraian.text.trim(),
+        'nominal': nominal,
+        if ((baris.workspaceId ?? '').isNotEmpty)
+          'workspaceId': baris.workspaceId,
+      });
+    }
+    if (_penyediaId == null || _nomor.text.trim().isEmpty) {
+      setState(() => _galat = 'Penyedia dan nomor tagihan wajib diisi.');
+      return;
+    }
+    Navigator.pop(context, <String, dynamic>{
+      'penyediaId': _penyediaId,
+      'kodeTagihan': _nomor.text.trim(),
+      'tanggalTagihan': _tanggal.text,
+      'keterangan': _keterangan.text.trim(),
+      'rincian': data,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Terima Tagihan Tanpa BAST'),
+      content: SizedBox(
+        width: 760,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Untuk listrik, air, internet, sewa, dan tagihan rutin lain. '
+                'Sumber anggaran dipilih per rincian${widget.anggaranWajib ? ' (wajib)' : ' (opsional)'}.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pilihPenyedia,
+                  icon: const Icon(Icons.local_shipping_outlined),
+                  label: Text(
+                      _penyediaId == null ? 'Pilih Penyedia *' : _penyediaNama),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _nomor,
+                  decoration: const InputDecoration(
+                      labelText: 'Nomor tagihan / faktur *'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 170,
+                child: TextField(
+                  controller: _tanggal,
+                  readOnly: true,
+                  onTap: _pilihTanggal,
+                  decoration: const InputDecoration(
+                      labelText: 'Tanggal *', suffixIcon: Icon(Icons.event)),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _keterangan,
+              decoration: const InputDecoration(
+                  labelText: 'Keterangan umum (opsional)'),
+            ),
+            const SizedBox(height: 12),
+            for (int i = 0; i < _rincian.length; i++) _baris(i),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    setState(() => _rincian.add(_RincianTagihanRutin())),
+                icon: const Icon(Icons.add),
+                label: const Text('Tambah Rincian'),
+              ),
+            ),
+            if (_galat.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_galat,
+                    style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal')),
+        FilledButton(onPressed: _simpan, child: const Text('Simpan Tagihan')),
+      ],
+    );
+  }
+
+  Widget _baris(int index) {
+    final baris = _rincian[index];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+              flex: 3,
+              child: TextField(
+                controller: baris.uraian,
+                decoration:
+                    InputDecoration(labelText: 'Uraian rincian ${index + 1} *'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: baris.nominal,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Nominal (Rp) *'),
+              ),
+            ),
+            if (_rincian.length > 1)
+              IconButton(
+                tooltip: 'Hapus rincian',
+                onPressed: () {
+                  setState(() => _rincian.removeAt(index));
+                  baris.dispose();
+                },
+                icon: const Icon(Icons.delete_outline),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          PemilihAnggaranField(
+            aksiCari: 'pengadaan_anggaran_cari',
+            workspaceId: baris.workspaceId,
+            namaAnggaran: baris.namaAnggaran,
+            tahun: DateTime.now().year,
+            helperText: widget.anggaranWajib
+                ? 'Wajib sesuai konfigurasi sistem.'
+                : 'Opsional. Pilih sumber anggaran rincian ini bila tersedia.',
+            onDipilih: (pilihan) {
+              setState(() {
+                baris.workspaceId = pilihan == null ? null : '${pilihan['id']}';
+                baris.namaAnggaran = pilihan == null
+                    ? null
+                    : '${pilihan['kode'] ?? ''} - ${pilihan['nama'] ?? ''}';
+              });
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabUtama;
@@ -43,10 +346,12 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
   bool _memuat = true;
   String? _galat;
   List<Map<String, dynamic>> _daftar = [];
+  List<Map<String, dynamic>> _daftarRutin = [];
   String _cari = '';
   String _status = '';
   int _halaman = 1;
   int _total = 0;
+  bool _anggaranWajib = false;
   static const _pageSize = 15;
 
   Set<String> _idBaru = {};
@@ -99,12 +404,20 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
           final data = ((res['data'] as List?) ?? [])
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
+          final dataRutin = ((res['dataRutin'] as List?) ?? [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
           final dariServer = res['dariServer'] == true;
           setStateIfMounted(() {
             _daftar = data;
+            _daftarRutin = dataRutin;
             _total = dariServer
                 ? (res['total'] as num?)?.toInt() ?? data.length
                 : data.length;
+            if (dariServer) {
+              _anggaranWajib = res['anggaranWajib'] == true;
+            }
             _idBaru = dariServer
                 ? Set<String>.from(res['idBaru'] as Set? ?? const <String>{})
                 : {};
@@ -135,7 +448,7 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         context,
         aksi: aksi,
         body: body,
-        kunci: '$aksi:${body['id']}',
+        kunci: '$aksi:${body['id'] ?? body['kodeTagihan'] ?? 'baru'}',
         cacheKey: 'master:pengadaan_tagihan',
       );
       if (!mounted) return;
@@ -263,6 +576,16 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
     await _kirim('pengadaan_tagihan_batal', {'id': row['id']});
   }
 
+  Future<void> _tagihanRutinBaru() async {
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => _DialogTagihanRutin(anggaranWajib: _anggaranWajib),
+    );
+    if (data == null || !mounted) return;
+    await _kirim('pengadaan_tagihan_rutin_simpan', data);
+  }
+
   /// Dua tab pada setiap menu Pengadaan: "Dasbor" (ringkasan angka) dan
   /// "Tagihan" (daftar + CRUD). Susunannya sengaja disamakan di keenam
   /// menu supaya berpindah tahap tidak menuntut penyesuaian kebiasaan.
@@ -303,7 +626,14 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
             icon: const Icon(Icons.refresh)),
       ],
       tampilkanBantuanHeader: false,
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      aksiHeader: Wrap(spacing: 8, children: [
+        OutlinedButton.icon(
+          onPressed: _tagihanRutinBaru,
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: const Text('Tagihan Tanpa BAST'),
+        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      ]),
       body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -374,14 +704,112 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
         ),
       );
     }
-    if (_daftar.isEmpty) {
+    if (_daftar.isEmpty && _daftarRutin.isEmpty) {
       return const Center(
         child: Text(
-            'Belum ada penerimaan barang yang siap ditagihkan.\n'
-            'Setujui dulu BAST-nya di menu Penerimaan Barang.',
+            'Belum ada tagihan rutin maupun penerimaan barang yang siap ditagihkan.\n'
+            'Tagihan rutin dapat dibuat tanpa BAST; tagihan barang memerlukan BAST yang disetujui.',
             textAlign: TextAlign.center),
       );
     }
+    return Column(children: [
+      if (_daftarRutin.isNotEmpty) _panelTagihanRutin(),
+      if (_daftarRutin.isNotEmpty && _daftar.isNotEmpty)
+        const Divider(height: 1),
+      Expanded(
+        child: _daftar.isEmpty
+            ? const Center(
+                child: Text(
+                  'Tidak ada tagihan berbasis BAST pada filter ini.',
+                  textAlign: TextAlign.center,
+                ),
+              )
+            : _tabelTagihanBast(totalHalaman),
+      ),
+    ]);
+  }
+
+  Widget _panelTagihanRutin() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 300),
+      child: Card(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: [
+          const ListTile(
+            dense: true,
+            leading: Icon(Icons.receipt_long_outlined),
+            title: Text('Tagihan rutin tanpa BAST'),
+            subtitle: Text(
+                'Sumber anggaran dicatat per rincian; pengisiannya mengikuti konfigurasi sistem.'),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _daftarRutin.length,
+              itemBuilder: (context, index) {
+                final row = _daftarRutin[index];
+                final rincian = ((row['rincian'] as List?) ?? const [])
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
+                final kode = '${row['kodeTagihan'] ?? row['kode'] ?? '-'}';
+                final penyedia = '${row['penyedia'] ?? '-'}';
+                final tanggal = '${row['tanggalTagihan'] ?? '-'}';
+                final lunas = row['lunas'] == true;
+                return ExpansionTile(
+                  dense: true,
+                  leading: Icon(
+                    lunas ? Icons.check_circle_outline : Icons.schedule,
+                    color: lunas ? Colors.green : Colors.orange,
+                  ),
+                  title: Text('$kode · $penyedia',
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '$tanggal · ${row['keterangan'] ?? '-'} · ${lunas ? 'Lunas' : 'Belum lunas'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Text(
+                    _fmtRp.format(row['nilai'] ?? 0),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  children: rincian.isEmpty
+                      ? const [
+                          ListTile(
+                              dense: true,
+                              title: Text('Belum ada rincian tagihan.'))
+                        ]
+                      : rincian.map((detail) {
+                          final kodeAnggaran =
+                              '${detail['anggaranKode'] ?? ''}'.trim();
+                          final namaAnggaran =
+                              '${detail['anggaranNama'] ?? ''}'.trim();
+                          final anggaran = [kodeAnggaran, namaAnggaran]
+                              .where((e) => e.isNotEmpty)
+                              .join(' — ');
+                          return ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 24),
+                            title: Text('${detail['keterangan'] ?? '-'}'),
+                            subtitle: Text(anggaran.isEmpty
+                                ? 'Anggaran tidak ditentukan (opsional)'
+                                : 'Anggaran: $anggaran'),
+                            trailing:
+                                Text(_fmtRp.format(detail['nominal'] ?? 0)),
+                          );
+                        }).toList(),
+                );
+              },
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _tabelTagihanBast(int totalHalaman) {
     return AppDataTable(
       minWidth: 1080,
       emptyText: 'Tidak ada tagihan pada filter ini.',

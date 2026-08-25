@@ -433,7 +433,34 @@ class _AnggaranScreenState extends State<AnggaranScreen>
       return t;
     }
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama item anggaran wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': item['id'],
+        'tahun': _tahun ?? 0,
+        'satkerId': _satkerId ?? 0,
+        'sumberDanaId': _sumberDanaId ?? 0,
+        'revisi': _revisi,
+        'parentId': parentId,
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'qty': double.tryParse(qty.text.trim()) ?? 1,
+        'satuanVolume': satuanVolume.text.trim(),
+        'hargaSatuan': double.tryParse(hargaSatuan.text.trim()) ?? 0,
+        'akunId': akunId ?? 0,
+        'aktif': aktif,
+        'bulan': [
+          for (var i = 0; i < 12; i++)
+            double.tryParse(bulan[i].text.trim()) ?? 0,
+        ],
+      };
+      return _kirimItem('anggaran_item_simpan', payload);
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -583,42 +610,10 @@ class _AnggaranScreenState extends State<AnggaranScreen>
               ]),
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Simpan')),
-          ],
+          actions: [AppCrudDialogActions(onSubmit: simpanData)],
         ),
       ),
     );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama item anggaran wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': item['id'],
-      'tahun': _tahun ?? 0,
-      'satkerId': _satkerId ?? 0,
-      'sumberDanaId': _sumberDanaId ?? 0,
-      'revisi': _revisi,
-      'parentId': parentId,
-      'kode': kode.text.trim(),
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'qty': double.tryParse(qty.text.trim()) ?? 1,
-      'satuanVolume': satuanVolume.text.trim(),
-      'hargaSatuan': double.tryParse(hargaSatuan.text.trim()) ?? 0,
-      'akunId': akunId ?? 0,
-      'aktif': aktif,
-      'bulan': [
-        for (var i = 0; i < 12; i++) double.tryParse(bulan[i].text.trim()) ?? 0,
-      ],
-    };
-    await _kirimItem('anggaran_item_simpan', payload);
   }
 
   Future<void> _formPenggunaan({Map<String, dynamic>? data}) async {
@@ -638,7 +633,33 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     DateTime waktu =
         DateTime.tryParse('${data?['waktu'] ?? ''}') ?? DateTime.now();
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty || (workspaceId ?? 0) == 0) {
+        throw Exception('Item anggaran dan uraian wajib diisi.');
+      }
+      final payload = <String, dynamic>{
+        if (ubah) 'id': data['id'],
+        'workspaceId': workspaceId,
+        'kode': kode.text.trim(),
+        'nama': nama.text.trim(),
+        'keterangan': keterangan.text.trim(),
+        'nilai': double.tryParse(nilai.text.trim()) ?? 0,
+        'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(waktu),
+      };
+      return _kirimMaster(
+        'anggaran_penggunaan_simpan',
+        payload,
+        kunci: ubah
+            ? 'anggaran_penggunaan:${data['id']}'
+            : 'anggaran_penggunaan:baru:${DateTime.now().microsecondsSinceEpoch}',
+        cacheKey: _cachePenggunaan,
+        rowLokal: {...payload, 'aktif': true, 'sumber': 'Entri Manual'},
+        entitas: 'anggaran_penggunaan',
+        baru: !ubah,
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) => AlertDialog(
@@ -713,44 +734,9 @@ class _AnggaranScreenState extends State<AnggaranScreen>
               ]),
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Simpan')),
-          ],
+          actions: [AppCrudDialogActions(onSubmit: simpanData)],
         ),
       ),
-    );
-    if (simpan != true) return;
-    // Id anggaran pada basis data warisan SELALU negatif (19 digit), jadi "belum
-    // dipilih" berarti TEPAT nol. Memakai <= 0 di sini membuat setiap item yang sah
-    // ditolak dan formulir tidak pernah bisa disimpan.
-    if (nama.text.trim().isEmpty || (workspaceId ?? 0) == 0) {
-      _pesan('Item anggaran dan uraian wajib diisi.');
-      return;
-    }
-    final payload = <String, dynamic>{
-      if (ubah) 'id': data['id'],
-      'workspaceId': workspaceId,
-      'kode': kode.text.trim(),
-      'nama': nama.text.trim(),
-      'keterangan': keterangan.text.trim(),
-      'nilai': double.tryParse(nilai.text.trim()) ?? 0,
-      'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(waktu),
-    };
-    await _kirimMaster(
-      'anggaran_penggunaan_simpan',
-      payload,
-      kunci: ubah
-          ? 'anggaran_penggunaan:${data['id']}'
-          : 'anggaran_penggunaan:baru:${DateTime.now().microsecondsSinceEpoch}',
-      cacheKey: _cachePenggunaan,
-      rowLokal: {...payload, 'aktif': true, 'sumber': 'Entri Manual'},
-      entitas: 'anggaran_penggunaan',
-      baru: !ubah,
     );
   }
 

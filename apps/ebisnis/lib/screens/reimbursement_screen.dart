@@ -96,11 +96,14 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
       final opsi = await ApiClient.instance.aksi('reimbursement_opsi', {});
       if (!mounted) return;
       setStateIfMounted(() {
-        _jenis = ((opsi['jenisReimbursement'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _satker = ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _daftarStatus = ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
-        _jenisPengeluaran =
-            ((opsi['jenisPengeluaran'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _jenis = ((opsi['jenisReimbursement'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
+        _satker =
+            ((opsi['satuanKerja'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _daftarStatus =
+            ((opsi['daftarStatus'] as List?) ?? []).map((e) => '$e').toList();
+        _jenisPengeluaran = ((opsi['jenisPengeluaran'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
       });
       await _muatDaftar();
     } catch (e) {
@@ -137,12 +140,19 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
           }();
           if (!mounted) return;
           setStateIfMounted(() {
-            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _data =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             _totalNilai = (hasil['totalNilai'] as num?)?.toDouble() ?? 0;
             final h = hasil['hak'];
             _hak = h is Map
                 ? {
-                    for (final k in ['create', 'update', 'delete', 'approve', 'reject'])
+                    for (final k in [
+                      'create',
+                      'update',
+                      'delete',
+                      'approve',
+                      'reject'
+                    ])
                       k: h[k] != false
                   }
                 : const {};
@@ -188,7 +198,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
         entitas: 'reimbursement',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -209,8 +220,11 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -242,9 +256,10 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
           Future<void> jalankan() async {
             setD(() => memuat = true);
             try {
-              final res = await ApiClient.instance
-                  .aksi('reimbursement_cari_pegawai', {'cari': cari.text.trim()});
-              hasil = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+              final res = await ApiClient.instance.aksi(
+                  'reimbursement_cari_pegawai', {'cari': cari.text.trim()});
+              hasil =
+                  ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             } catch (e) {
               _pesan('$e');
             } finally {
@@ -279,7 +294,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                   child: memuat
                       ? const Center(child: CircularProgressIndicator())
                       : hasil.isEmpty
-                          ? const Center(child: Text('Tidak ada pegawai yang cocok.'))
+                          ? const Center(
+                              child: Text('Tidak ada pegawai yang cocok.'))
                           : ListView.builder(
                               itemCount: hasil.length,
                               itemBuilder: (_, i) {
@@ -296,7 +312,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Batal')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Batal')),
             ],
           );
         },
@@ -325,8 +343,12 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Kirim')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Kirim')),
         ],
       ),
     );
@@ -339,7 +361,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
   Future<void> _form([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     int? satkerId = (baris?['satuanKerjaId'] as num?)?.toInt();
     int? jenisId = (baris?['jenisReimbursementId'] as num?)?.toInt();
     int? pegawaiId = (baris?['pegawaiId'] as num?)?.toInt();
@@ -349,19 +372,57 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
     DateTime? tanggal = _tgl(baris?['tanggalPengeluaran']);
     String statusDokumen = '${baris?['statusDokumen'] ?? 'Pengajuan'}';
     final rincian = <Map<String, dynamic>>[
-      ...(((baris?['rincian'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)))
+      ...(((baris?['rincian'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map)))
     ];
     double nilaiHitung = (baris?['nilai'] as num?)?.toDouble() ?? 0;
     String masalahRincian = '';
 
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
+      return _kirimLokalDulu(
+        'reimbursement_simpan',
+        {
+          if (ubah) 'id': baris['id'],
+          'satuanKerjaId': satkerId ?? 0,
+          'nama': nama.text.trim(),
+          'jenisReimbursementId': jenisId ?? 0,
+          'pegawaiId': pegawaiId ?? 0,
+          if (workspaceId != null) 'workspaceId': workspaceId,
+          if (tanggal != null) 'tanggalPengeluaran': _fmt.format(tanggal!),
+          'keterangan': keterangan.text.trim(),
+          'rincian': rincian,
+          'statusDokumen': statusDokumen,
+        },
+        kunci: ubah
+            ? 'reimbursement:${baris['id']}'
+            : 'reimbursement:baru:$idLokal',
+        idLokal: idLokal,
+        rowLokal: {
+          ...(baris ?? const <String, dynamic>{}),
+          'id': ubah ? baris['id'] : idLokal,
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'nilai': nilaiHitung,
+          'statusDokumen': statusDokumen,
+          'satuanKerjaId': satkerId,
+          'jenisReimbursementId': jenisId,
+          'pegawaiId': pegawaiId,
+          'pegawaiNama': pegawaiNama,
+          'rincian': rincian,
+          if (tanggal != null) 'tanggalPengeluaran': _fmt.format(tanggal!),
+        },
+      );
+    }
+
+    await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
           Future<void> hitung() async {
             try {
-              final res =
-                  await ApiClient.instance.aksi('reimbursement_hitung', {'rincian': rincian});
+              final res = await ApiClient.instance
+                  .aksi('reimbursement_hitung', {'rincian': rincian});
               setDialog(() {
                 nilaiHitung = (res['nilai'] as num?)?.toDouble() ?? 0;
                 masalahRincian = '${res['masalah'] ?? ''}';
@@ -375,85 +436,98 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
             final b = indeks == null ? <String, dynamic>{} : rincian[indeks];
             final uraian = TextEditingController(text: '${b['uraian'] ?? ''}');
             final jumlah = TextEditingController(
-                text: b['jumlah'] == null ? '' : '${(b['jumlah'] as num).toInt()}');
+                text: b['jumlah'] == null
+                    ? ''
+                    : '${(b['jumlah'] as num).toInt()}');
             int? akunId = (b['akun'] as num?)?.toInt();
             int? jenisPengeluaranId = (b['jenisPengeluaran'] as num?)?.toInt();
             final ok = await showDialog<bool>(
               context: c,
               builder: (d) => StatefulBuilder(
                 builder: (d, setD) => AlertDialog(
-                title: Text(indeks == null ? 'Tambah Rincian Biaya' : 'Ubah Rincian Biaya'),
-                content: SizedBox(
-                  width: 460,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextField(
-                        controller: uraian,
-                        decoration: const InputDecoration(
-                            labelText: 'Uraian', border: OutlineInputBorder(), isDense: true)),
-                    const SizedBox(height: 12),
-                    TextField(
-                        controller: jumlah,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                            labelText: 'Jumlah *',
-                            helperText: 'Tidak boleh nol — server menolaknya.',
-                            border: OutlineInputBorder(),
-                            isDense: true)),
-                    const SizedBox(height: 12),
-                    // Akun baris diturunkan dari JENIS PENGELUARAN, tidak dipilih
-                    // langsung. Bila admin belum memetakan akunnya, server menolak dengan
-                    // pesan yang menyebut siapa yang harus melengkapi -- karena itu jenis
-                    // yang akunnya kosong tetap ditampilkan, bukan disembunyikan.
-                    _dropdownInt(
-                      label: 'Jenis Pengeluaran *',
-                      nilai: jenisPengeluaranId,
-                      opsi: _jenisPengeluaran,
-                      onChanged: (v) => setD(() {
-                        jenisPengeluaranId = v;
-                        akunId = null;
-                        for (final e in _jenisPengeluaran) {
-                          if ((e['id'] as num?)?.toInt() == v) {
-                            akunId = (e['akunId'] as num?)?.toInt();
+                  title: Text(indeks == null
+                      ? 'Tambah Rincian Biaya'
+                      : 'Ubah Rincian Biaya'),
+                  content: SizedBox(
+                    width: 460,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      TextField(
+                          controller: uraian,
+                          decoration: const InputDecoration(
+                              labelText: 'Uraian',
+                              border: OutlineInputBorder(),
+                              isDense: true)),
+                      const SizedBox(height: 12),
+                      TextField(
+                          controller: jumlah,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Jumlah *',
+                              helperText:
+                                  'Tidak boleh nol — server menolaknya.',
+                              border: OutlineInputBorder(),
+                              isDense: true)),
+                      const SizedBox(height: 12),
+                      // Akun baris diturunkan dari JENIS PENGELUARAN, tidak dipilih
+                      // langsung. Bila admin belum memetakan akunnya, server menolak dengan
+                      // pesan yang menyebut siapa yang harus melengkapi -- karena itu jenis
+                      // yang akunnya kosong tetap ditampilkan, bukan disembunyikan.
+                      _dropdownInt(
+                        label: 'Jenis Pengeluaran *',
+                        nilai: jenisPengeluaranId,
+                        opsi: _jenisPengeluaran,
+                        onChanged: (v) => setD(() {
+                          jenisPengeluaranId = v;
+                          akunId = null;
+                          for (final e in _jenisPengeluaran) {
+                            if ((e['id'] as num?)?.toInt() == v) {
+                              akunId = (e['akunId'] as num?)?.toInt();
+                            }
                           }
-                        }
-                      }),
-                    ),
-                    if (jenisPengeluaranId != null && akunId == null)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                              'Akun untuk jenis ini belum dipetakan administrator — '
-                              'baris ini akan ditolak saat disimpan.',
-                              style: TextStyle(fontSize: 12, color: AppColors.danger)),
-                        ),
+                        }),
                       ),
-                  ]),
+                      if (jenisPengeluaranId != null && akunId == null)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                                'Akun untuk jenis ini belum dipetakan administrator — '
+                                'baris ini akan ditolak saat disimpan.',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.danger)),
+                          ),
+                        ),
+                    ]),
+                  ),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(d, false),
+                        child: const Text('Batal')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(d, true),
+                        child: const Text('Simpan')),
+                  ],
                 ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(d, false), child: const Text('Batal')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(d, true), child: const Text('Simpan')),
-                ],
-              ),
               ),
             );
             if (ok != true) return;
             // 'key' menandai baris BIAYA (yang ikut dijumlahkan server); baris tanpa
             // key pada layar ZK hanya pengelompok tampilan.
             final key = b['key'] ??
-                (rincian.fold<int>(0, (m, e) => ((e['key'] as num?)?.toInt() ?? 0) > m
-                    ? (e['key'] as num).toInt()
-                    : m) +
+                (rincian.fold<int>(
+                        0,
+                        (m, e) => ((e['key'] as num?)?.toInt() ?? 0) > m
+                            ? (e['key'] as num).toInt()
+                            : m) +
                     1);
             final data = <String, dynamic>{
               'key': key,
               'uraian': uraian.text.trim(),
               'jumlah': double.tryParse(jumlah.text.trim()) ?? 0,
               if (akunId != null) 'akun': akunId,
-              if (jenisPengeluaranId != null) 'jenisPengeluaran': jenisPengeluaranId,
+              if (jenisPengeluaranId != null)
+                'jenisPengeluaran': jenisPengeluaranId,
             };
             setDialog(() {
               if (indeks == null) {
@@ -466,7 +540,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
           }
 
           return AlertDialog(
-            title: Text(ubah ? 'Ubah Pengajuan Reimbursement' : 'Pengajuan Reimbursement Baru'),
+            title: Text(ubah
+                ? 'Ubah Pengajuan Reimbursement'
+                : 'Pengajuan Reimbursement Baru'),
             content: SizedBox(
               width: 660,
               child: SingleChildScrollView(
@@ -502,8 +578,10 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                         isDense: true),
                     child: Row(children: [
                       Expanded(
-                        child: Text(pegawaiNama.isEmpty ? 'Belum dipilih' : pegawaiNama,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                            pegawaiNama.isEmpty ? 'Belum dipilih' : pegawaiNama,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       ),
                       TextButton(
                         onPressed: () async {
@@ -523,7 +601,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                     PemilihAnggaranField(
                       aksiCari: 'reimbursement_cari_anggaran',
                       workspaceId: workspaceId == null ? null : '$workspaceId',
-                      namaAnggaran: workspaceNama.isEmpty ? null : workspaceNama,
+                      namaAnggaran:
+                          workspaceNama.isEmpty ? null : workspaceNama,
                       tahun: tanggal?.year,
                       helperText: 'Wajib untuk jenis reimbursement ini.',
                       onDipilih: (w) => setDialog(() {
@@ -533,7 +612,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                           return;
                         }
                         workspaceId = (w['id'] as num?)?.toInt();
-                        workspaceNama = '${w['kode'] ?? ''} \u2014 ${w['nama'] ?? ''}';
+                        workspaceNama =
+                            '${w['kode'] ?? ''} \u2014 ${w['nama'] ?? ''}';
                       }),
                     ),
                   ],
@@ -560,14 +640,16 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                   if (rincian.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('Belum ada rincian. Nilai dokumen dihitung dari rincian ini.'),
+                      child: Text(
+                          'Belum ada rincian. Nilai dokumen dihitung dari rincian ini.'),
                     )
                   else
                     ...rincian.asMap().entries.map((e) {
                       final b = e.value;
                       // Merah bila belum layak dijurnal: nilainya nol ATAU akunnya kosong.
-                      final nol = ((b['jumlah'] as num?)?.toDouble() ?? 0) == 0 ||
-                          b['akun'] == null;
+                      final nol =
+                          ((b['jumlah'] as num?)?.toDouble() ?? 0) == 0 ||
+                              b['akun'] == null;
                       return ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
@@ -575,9 +657,11 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                         subtitle: Text(
                           '${_uang.format((b['jumlah'] as num?) ?? 0)}'
                           '${b['anggaranNama'] == null ? '' : ' • ${b['anggaranNama']}'}',
-                          style: TextStyle(color: nol ? AppColors.danger : null),
+                          style:
+                              TextStyle(color: nol ? AppColors.danger : null),
                         ),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        trailing:
+                            Row(mainAxisSize: MainAxisSize.min, children: [
                           IconButton(
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.edit_outlined, size: 18),
@@ -604,7 +688,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                           : 'Nilai dokumen ${_uang.format(nilaiHitung)}',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: masalahRincian.isNotEmpty ? AppColors.danger : null),
+                          color: masalahRincian.isNotEmpty
+                              ? AppColors.danger
+                              : null),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -614,56 +700,22 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                         ? statusDokumen
                         : _daftarStatus.first,
                     decoration: const InputDecoration(
-                        labelText: 'Status', border: OutlineInputBorder(), isDense: true),
+                        labelText: 'Status',
+                        border: OutlineInputBorder(),
+                        isDense: true),
                     items: _daftarStatus
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setDialog(() => statusDokumen = v ?? 'Pengajuan'),
+                    onChanged: (v) =>
+                        setDialog(() => statusDokumen = v ?? 'Pengajuan'),
                   ),
                 ]),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-
-    final idLokal = ubah ? null : MasterOffline.idSementaraBaru();
-    await _kirimLokalDulu(
-      'reimbursement_simpan',
-      {
-        if (ubah) 'id': baris['id'],
-        'satuanKerjaId': satkerId ?? 0,
-        'nama': nama.text.trim(),
-        'jenisReimbursementId': jenisId ?? 0,
-        'pegawaiId': pegawaiId ?? 0,
-        if (workspaceId != null) 'workspaceId': workspaceId,
-        if (tanggal != null) 'tanggalPengeluaran': _fmt.format(tanggal!),
-        'keterangan': keterangan.text.trim(),
-        'rincian': rincian,
-        'statusDokumen': statusDokumen,
-      },
-      kunci: ubah ? 'reimbursement:${baris['id']}' : 'reimbursement:baru:$idLokal',
-      idLokal: idLokal,
-      rowLokal: {
-        ...(baris ?? const <String, dynamic>{}),
-        'id': ubah ? baris['id'] : idLokal,
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'nilai': nilaiHitung,
-        'statusDokumen': statusDokumen,
-        'satuanKerjaId': satkerId,
-        'jenisReimbursementId': jenisId,
-        'pegawaiId': pegawaiId,
-        'pegawaiNama': pegawaiNama,
-        'rincian': rincian,
-        if (tanggal != null) 'tanggalPengeluaran': _fmt.format(tanggal!),
-      },
     );
   }
 
@@ -708,8 +760,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
     }
     setStateIfMounted(() => _sibuk = true);
     try {
-      final berhasil = await MasterOffline.pulihkanLokal(
-          _cacheKey, b['id'], kunci: 'reimbursement:${b['id']}');
+      final berhasil = await MasterOffline.pulihkanLokal(_cacheKey, b['id'],
+          kunci: 'reimbursement:${b['id']}');
       _pesan(berhasil
           ? 'Penghapusan dibatalkan.'
           : 'Tidak dapat dibatalkan: penghapusannya sudah terkirim ke server. '
@@ -764,7 +816,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
     );
   }
 
-  Widget _tombolTanggal(String label, DateTime? nilai, VoidCallback onTap) => Padding(
+  Widget _tombolTanggal(String label, DateTime? nilai, VoidCallback onTap) =>
+      Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Align(
           alignment: Alignment.centerLeft,
@@ -808,18 +861,24 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
             icon: const Icon(Icons.edit_outlined, size: 18),
             onPressed: _sibuk ? null : () => _form(b),
           ),
-        if (!_tampilkanTerhapus && _boleh('approve') && !terkunci && status != 'Disetujui')
+        if (!_tampilkanTerhapus &&
+            _boleh('approve') &&
+            !terkunci &&
+            status != 'Disetujui')
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Setujui',
-            icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+            icon: const Icon(Icons.check_circle_outline,
+                size: 18, color: AppColors.success),
             onPressed: _sibuk
                 ? null
                 : () async {
-                    if (await _konfirmasi('Setujui pengeluaran?',
+                    if (await _konfirmasi(
+                        'Setujui pengeluaran?',
                         '${b['kode']} — ${b['nama']}\nNilai ${_uang.format((b['nilai'] as num?) ?? 0)}',
                         'Setujui')) {
-                      await _kirimLokalDulu('reimbursement_setujui', {'id': b['id']},
+                      await _kirimLokalDulu(
+                          'reimbursement_setujui', {'id': b['id']},
                           kunci: 'reimbursement:${b['id']}',
                           rowLokal: {...b, 'statusDokumen': 'Disetujui'});
                     }
@@ -828,7 +887,10 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
         // Dua keputusan negatif yang BERBEDA, dan itulah yang membedakan modul ini:
         // "Minta Revisi" mengembalikan pengajuan kepada pengaju untuk diperbaiki,
         // sedangkan "Tolak" menutupnya. Keduanya menuntut catatan atasan.
-        if (!_tampilkanTerhapus && _boleh('reject') && !terkunci && status != 'Revisi')
+        if (!_tampilkanTerhapus &&
+            _boleh('reject') &&
+            !terkunci &&
+            status != 'Revisi')
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Minta revisi',
@@ -836,15 +898,23 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
             onPressed: _sibuk
                 ? null
                 : () async {
-                    final catatan = await _mintaCatatan('Minta Revisi Pengajuan');
+                    final catatan =
+                        await _mintaCatatan('Minta Revisi Pengajuan');
                     if (catatan == null) return;
-                    await _kirimLokalDulu(
-                        'reimbursement_revisi', {'id': b['id'], 'catatanAtasan': catatan},
+                    await _kirimLokalDulu('reimbursement_revisi',
+                        {'id': b['id'], 'catatanAtasan': catatan},
                         kunci: 'reimbursement:${b['id']}',
-                        rowLokal: {...b, 'statusDokumen': 'Revisi', 'catatanAtasan': catatan});
+                        rowLokal: {
+                          ...b,
+                          'statusDokumen': 'Revisi',
+                          'catatanAtasan': catatan
+                        });
                   },
           ),
-        if (!_tampilkanTerhapus && _boleh('reject') && !terkunci && status != 'Ditolak')
+        if (!_tampilkanTerhapus &&
+            _boleh('reject') &&
+            !terkunci &&
+            status != 'Ditolak')
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Tolak',
@@ -854,17 +924,22 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 : () async {
                     final catatan = await _mintaCatatan('Tolak Pengajuan');
                     if (catatan == null) return;
-                    await _kirimLokalDulu(
-                        'reimbursement_tolak', {'id': b['id'], 'catatanAtasan': catatan},
+                    await _kirimLokalDulu('reimbursement_tolak',
+                        {'id': b['id'], 'catatanAtasan': catatan},
                         kunci: 'reimbursement:${b['id']}',
-                        rowLokal: {...b, 'statusDokumen': 'Ditolak', 'catatanAtasan': catatan});
+                        rowLokal: {
+                          ...b,
+                          'statusDokumen': 'Ditolak',
+                          'catatanAtasan': catatan
+                        });
                   },
           ),
         if (!_tampilkanTerhapus && _boleh('delete') && !terkunci)
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: 'Hapus dokumen',
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: AppColors.danger),
             onPressed: _sibuk ? null : () => _hapusBaris(b),
           ),
       ]),
@@ -877,12 +952,16 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
         child: Column(children: [
           const TabBar(tabs: [
             Tab(icon: Icon(Icons.insights_outlined, size: 18), text: 'Dasbor'),
-            Tab(icon: Icon(Icons.list_alt_outlined, size: 18), text: 'Pengajuan'),
+            Tab(
+                icon: Icon(Icons.list_alt_outlined, size: 18),
+                text: 'Pengajuan'),
           ]),
           Expanded(
             child: TabBarView(children: [
               const PengadaanDasborTab(
-                  tahap: 'reimbursement', aksi: 'keuangan_dasbor', namaParam: 'modul'),
+                  tahap: 'reimbursement',
+                  aksi: 'keuangan_dasbor',
+                  namaParam: 'modul'),
               isiData,
             ]),
           ),
@@ -909,12 +988,16 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 child: DropdownButtonFormField<String>(
                   value: _statusFilter.isEmpty ? '' : _statusFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Status', isDense: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Status', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: '', child: Text('Semua status')),
-                    ..._daftarStatus.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                    const DropdownMenuItem(
+                        value: '', child: Text('Semua status')),
+                    ..._daftarStatus
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s))),
                   ],
-                  onChanged: (v) => setStateIfMounted(() => _statusFilter = v ?? ''),
+                  onChanged: (v) =>
+                      setStateIfMounted(() => _statusFilter = v ?? ''),
                 ),
               ),
               SizedBox(
@@ -922,9 +1005,11 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 child: DropdownButtonFormField<int>(
                   value: _jenisFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Jenis Kas Kecil', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Jenis Kas Kecil', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Semua jenis')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Semua jenis')),
                     ..._jenis.map((e) => DropdownMenuItem(
                           value: (e['id'] as num?)?.toInt(),
                           child: Text('${e['nama'] ?? ''}',
@@ -939,9 +1024,11 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 child: DropdownButtonFormField<int>(
                   value: _satkerFilter,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Satuan Kerja', isDense: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Satuan Kerja', isDense: true),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Semua satuan kerja')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Semua satuan kerja')),
                     ..._satker.map((e) => DropdownMenuItem(
                           value: (e['id'] as num?)?.toInt(),
                           child: Text('${e['nama'] ?? ''}',
@@ -978,10 +1065,12 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 onSelected: (v) => setStateIfMounted(() => _belumDiganti = v),
               ),
               FilterChip(
-                label: Text(
-                    _jumlahTerhapus == 0 ? 'Terhapus' : 'Terhapus ($_jumlahTerhapus)'),
+                label: Text(_jumlahTerhapus == 0
+                    ? 'Terhapus'
+                    : 'Terhapus ($_jumlahTerhapus)'),
                 selected: _tampilkanTerhapus,
-                onSelected: (v) => setStateIfMounted(() => _tampilkanTerhapus = v),
+                onSelected: (v) =>
+                    setStateIfMounted(() => _tampilkanTerhapus = v),
               ),
               FilledButton.icon(
                 onPressed: _memuat ? null : _muatDaftar,
@@ -996,7 +1085,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                 ),
               if (_sibuk)
                 const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
             ]),
       );
 
@@ -1008,7 +1099,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
       subjudul: 'Penggantian biaya pegawai beserta alur persetujuannya',
       scrollable: false,
       aksiHeader: IconButton(
-          icon: const Icon(Icons.refresh), onPressed: _muatSemua, tooltip: 'Muat ulang'),
+          icon: const Icon(Icons.refresh),
+          onPressed: _muatSemua,
+          tooltip: 'Muat ulang'),
       actionsAppBar: [
         IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -1024,7 +1117,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
               alignment: Alignment.centerLeft,
               child: Text(
                 '${_terlihat.length} dokumen • total ${_uang.format(_totalNilai)}',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondaryOf(context)),
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondaryOf(context)),
               ),
             ),
           ),
@@ -1038,7 +1132,9 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Text(_galat!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                        FilledButton(
+                            onPressed: _muatSemua,
+                            child: const Text('Coba lagi')),
                       ]),
                     ))
                   : AppDataTable(
@@ -1051,20 +1147,31 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
                         AppTableColumn('Judul', flex: 4),
                         AppTableColumn('Pegawai', flex: 3),
                         AppTableColumn('Satuan Kerja', flex: 3),
-                        AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                        AppTableColumn('Nilai',
+                            flex: 2, align: TextAlign.right),
                         AppTableColumn('Tanggal', flex: 2),
                         AppTableColumn('Status', flex: 2),
-                        AppTableColumn('Aksi', width: 200, align: TextAlign.center),
+                        AppTableColumn('Aksi',
+                            width: 200, align: TextAlign.center),
                       ],
                       rows: _terlihat
                           .map((b) => AppTableRowData(cells: [
-                                AppTableCell.text('${b['kode'] ?? ''}', flex: 2),
-                                AppTableCell.text('${b['nama'] ?? ''}', flex: 4),
-                                AppTableCell.text('${b['pegawaiNama'] ?? ''}', flex: 3),
-                                AppTableCell.text('${b['satuanKerjaNama'] ?? ''}', flex: 3),
-                                AppTableCell.text(_uang.format((b['nilai'] as num?) ?? 0),
-                                    flex: 2, align: TextAlign.right),
-                                AppTableCell.text('${b['tanggalPengeluaran'] ?? ''}', flex: 2),
+                                AppTableCell.text('${b['kode'] ?? ''}',
+                                    flex: 2),
+                                AppTableCell.text('${b['nama'] ?? ''}',
+                                    flex: 4),
+                                AppTableCell.text('${b['pegawaiNama'] ?? ''}',
+                                    flex: 3),
+                                AppTableCell.text(
+                                    '${b['satuanKerjaNama'] ?? ''}',
+                                    flex: 3),
+                                AppTableCell.text(
+                                    _uang.format((b['nilai'] as num?) ?? 0),
+                                    flex: 2,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    '${b['tanggalPengeluaran'] ?? ''}',
+                                    flex: 2),
                                 AppTableCell.text(
                                     '${b['statusDokumen'] ?? ''}'
                                     '${b['sudahDijurnal'] == true ? ' • terjurnal' : ''}'

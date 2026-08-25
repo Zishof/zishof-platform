@@ -582,7 +582,60 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
         TextEditingController(text: _kasClosing(row).toStringAsFixed(0));
     final alasan = TextEditingController();
     try {
-      final simpan = await showDialog<bool>(
+      Future<bool> simpanData() async {
+        if (alasan.text.trim().length < 5) {
+          throw const FormatException(
+              'Alasan koreksi wajib minimal 5 karakter.');
+        }
+        final modalNilai = double.tryParse(modal.text.trim());
+        final tunaiNilai = double.tryParse(tunai.text.trim());
+        final fisikNilai = double.tryParse(fisik.text.trim());
+        if (modalNilai == null ||
+            modalNilai < 0 ||
+            (status == 'TUTUP' &&
+                (tunaiNilai == null ||
+                    tunaiNilai < 0 ||
+                    fisikNilai == null ||
+                    fisikNilai < 0))) {
+          throw const FormatException(
+              'Seluruh nominal harus berupa angka nol atau lebih.');
+        }
+        // ONLINE-ONLY, sekeluarga dgn buka/tutup sesi kas: koreksi ini baru sah
+        // bila server MENGONFIRMASI status barunya (lihat pemeriksaan di bawah).
+        // Konfirmasi itu mustahil didapat dari antrean.
+        final hasilSimpan = await ApiClient.instance.aksi('sesi_kas_koreksi', {
+          'id_sesi': row['id'],
+          'status_sesi': status,
+          'modal_awal': modalNilai,
+          'penjualan_tunai': tunaiNilai ?? 0,
+          'uang_fisik': fisikNilai ?? 0,
+          'alasan_koreksi': alasan.text.trim(),
+        });
+        if ('${hasilSimpan['statusSesi']}' != status) {
+          throw StateError(
+              'Server belum mengonfirmasi perubahan status sesi menjadi $status.');
+        }
+        await _muat();
+        Map<String, dynamic>? sesiTersimpan;
+        for (final item in _data) {
+          if ('${item['id']}' == '${row['id']}') {
+            sesiTersimpan = item;
+            break;
+          }
+        }
+        if (sesiTersimpan == null ||
+            '${sesiTersimpan['statusSesi']}' != status) {
+          throw StateError(
+              'Data sesi belum berubah menjadi $status setelah dimuat ulang. Silakan coba kembali.');
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Koreksi sesi kas berhasil disimpan.')));
+        }
+        return true;
+      }
+
+      await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(
@@ -654,69 +707,14 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
               ),
             ),
             actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Batal')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Simpan Koreksi')),
+              AppCrudDialogActions(
+                onSubmit: simpanData,
+                submitLabel: 'Simpan Koreksi',
+              )
             ],
           ),
         ),
       );
-      if (simpan != true) return;
-      if (alasan.text.trim().length < 5) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Alasan koreksi wajib minimal 5 karakter.')));
-        return;
-      }
-      final modalNilai = double.tryParse(modal.text.trim());
-      final tunaiNilai = double.tryParse(tunai.text.trim());
-      final fisikNilai = double.tryParse(fisik.text.trim());
-      if (modalNilai == null ||
-          modalNilai < 0 ||
-          (status == 'TUTUP' &&
-              (tunaiNilai == null ||
-                  tunaiNilai < 0 ||
-                  fisikNilai == null ||
-                  fisikNilai < 0))) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Seluruh nominal harus berupa angka nol atau lebih.')));
-        return;
-      }
-      // ONLINE-ONLY, sekeluarga dgn buka/tutup sesi kas: koreksi ini baru sah
-      // bila server MENGONFIRMASI status barunya (lihat pemeriksaan di bawah).
-      // Konfirmasi itu mustahil didapat dari antrean.
-      final hasilSimpan = await ApiClient.instance.aksi('sesi_kas_koreksi', {
-        'id_sesi': row['id'],
-        'status_sesi': status,
-        'modal_awal': modalNilai,
-        'penjualan_tunai': tunaiNilai ?? 0,
-        'uang_fisik': fisikNilai ?? 0,
-        'alasan_koreksi': alasan.text.trim(),
-      });
-      if ('${hasilSimpan['statusSesi']}' != status) {
-        throw StateError(
-            'Server belum mengonfirmasi perubahan status sesi menjadi $status.');
-      }
-      await _muat();
-      if (!mounted) return;
-      Map<String, dynamic>? sesiTersimpan;
-      for (final item in _data) {
-        if ('${item['id']}' == '${row['id']}') {
-          sesiTersimpan = item;
-          break;
-        }
-      }
-      if (sesiTersimpan == null || '${sesiTersimpan['statusSesi']}' != status) {
-        throw StateError(
-            'Data sesi belum berubah menjadi $status setelah dimuat ulang. Silakan coba kembali.');
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Koreksi sesi kas berhasil disimpan.')));
     } catch (e) {
       if (!mounted) return;
       snackbarGalat(context, e);
@@ -787,7 +785,8 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
               AppSearchField(
                 controller: _cariController,
                 labelText: 'Cari Sesi Kasir',
-                hintText: 'Cari ID sesi, kasir, user, perangkat, waktu, atau keterangan...',
+                hintText:
+                    'Cari ID sesi, kasir, user, perangkat, waktu, atau keterangan...',
                 gayaForm: true,
                 focusNode: _cariFocus,
                 textInputAction: TextInputAction.search,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../services/master_offline.dart';
 import '../../sesi.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/kilau_perubahan.dart';
@@ -93,32 +94,34 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
   }
 
   Future<void> _simpan(Map<String, dynamic>? awal) async {
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
-      builder: (_) => _FormPropertiDialog(awal: awal),
+      builder: (_) => _FormPropertiDialog(
+        awal: awal,
+        onSubmit: (hasil) async {
+          try {
+            final res = await prosesSimpanMaster(
+              context,
+              aksi: 'hotel_properti_simpan',
+              body: hasil,
+              kunci: hasil['id'] != null
+                  ? 'hotel_properti:${hasil['id']}'
+                  : 'hotel_properti:baru:${DateTime.now().microsecondsSinceEpoch}',
+            );
+            if (!mounted) return false;
+            if (res['offline'] != true) _muat();
+            return true;
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Gagal menyimpan: $e'),
+                  backgroundColor: Theme.of(context).colorScheme.error));
+            }
+            return false;
+          }
+        },
+      ),
     );
-    if (hasil == null || !mounted) return;
-    try {
-      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
-      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      // Saat offline daftar TIDAK dimuat ulang (snapshot cache belum memuat
-      // mutasi yang masih antre, jadi memuat ulang hanya menampilkan data lama).
-      final res = await prosesSimpanMaster(
-        context,
-        aksi: 'hotel_properti_simpan',
-        body: hasil,
-        kunci: hasil['id'] != null
-            ? 'hotel_properti:${hasil['id']}'
-            : 'hotel_properti:baru:${DateTime.now().microsecondsSinceEpoch}',
-      );
-      if (!mounted) return;
-      if (res['offline'] != true) _muat();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
   }
 
   /// Generator data contoh (ADMIN saja, aksi hotel_data_contoh -- dijaga ulang
@@ -295,7 +298,8 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
 
 class _FormPropertiDialog extends StatefulWidget {
   final Map<String, dynamic>? awal;
-  const _FormPropertiDialog({this.awal});
+  final Future<bool> Function(Map<String, dynamic>) onSubmit;
+  const _FormPropertiDialog({this.awal, required this.onSubmit});
 
   @override
   State<_FormPropertiDialog> createState() => _FormPropertiDialogState();
@@ -340,6 +344,22 @@ class _FormPropertiDialogState extends State<_FormPropertiDialog> {
     _keterangan.dispose();
     _jumlahLantai.dispose();
     super.dispose();
+  }
+
+  Future<bool> _simpan() async {
+    if (!_formKey.currentState!.validate()) return false;
+    return widget.onSubmit(<String, dynamic>{
+      if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
+      'kode': _kode.text.trim(),
+      'nama': _nama.text.trim(),
+      'alamat': _alamat.text.trim(),
+      'kota': _kota.text.trim(),
+      'telp': _telp.text.trim(),
+      'email': _email.text.trim(),
+      'keterangan': _keterangan.text.trim(),
+      'jumlah_lantai': int.tryParse(_jumlahLantai.text.trim()),
+      'aktif': _aktif,
+    });
   }
 
   @override
@@ -402,29 +422,7 @@ class _FormPropertiDialogState extends State<_FormPropertiDialog> {
           ),
         ),
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.of(context).pop(<String, dynamic>{
-              if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
-              'kode': _kode.text.trim(),
-              'nama': _nama.text.trim(),
-              'alamat': _alamat.text.trim(),
-              'kota': _kota.text.trim(),
-              'telp': _telp.text.trim(),
-              'email': _email.text.trim(),
-              'keterangan': _keterangan.text.trim(),
-              'jumlah_lantai': int.tryParse(_jumlahLantai.text.trim()),
-              'aktif': _aktif,
-            });
-          },
-          child: const Text('Simpan'),
-        ),
-      ],
+      actions: [AppCrudDialogActions(onSubmit: _simpan)],
     );
   }
 }

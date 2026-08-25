@@ -79,11 +79,18 @@ class _ClosingScreenState extends State<ClosingScreen> {
         onData: (hasil) {
           if (!mounted) return;
           setStateIfMounted(() {
-            _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            _data =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
             final h = hasil['hak'];
             _hak = h is Map
                 ? {
-                    for (final k in ['create', 'update', 'delete', 'approve', 'reject'])
+                    for (final k in [
+                      'create',
+                      'update',
+                      'delete',
+                      'approve',
+                      'reject'
+                    ])
                       k: h[k] != false
                   }
                 : const {};
@@ -128,7 +135,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
         entitas: 'closing',
       );
       if (hasil['offline'] == true) {
-        _pesan('Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
+        _pesan(
+            'Tersimpan di perangkat. Akan dikirim otomatis saat jaringan pulih.');
       } else {
         _pesan('${hasil['message'] ?? 'Perubahan tersimpan.'}');
       }
@@ -149,8 +157,11 @@ class _ClosingScreenState extends State<ClosingScreen> {
         title: Text(judul),
         content: Text(isi),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true), child: Text(tombol)),
         ],
       ),
     );
@@ -165,13 +176,52 @@ class _ClosingScreenState extends State<ClosingScreen> {
   Future<void> _form([Map<String, dynamic>? baris]) async {
     final ubah = baris != null;
     final nama = TextEditingController(text: '${baris?['nama'] ?? ''}');
-    final keterangan = TextEditingController(text: '${baris?['keterangan'] ?? ''}');
+    final keterangan =
+        TextEditingController(text: '${baris?['keterangan'] ?? ''}');
     DateTime? tanggal = DateTime.tryParse('${baris?['tanggal'] ?? ''}');
     Map<String, dynamic> periksa = {};
     bool memeriksa = false;
 
     if (!mounted) return;
-    final simpan = await showDialog<bool>(
+    Future<bool> simpanData() async {
+      if (nama.text.trim().isEmpty) {
+        throw Exception('Nama Periode wajib diisi.');
+      }
+      if (tanggal == null) {
+        throw Exception('Tanggal batas wajib dipilih.');
+      }
+      if (periksa['adaTidakBalance'] == true ||
+          periksa['tanggalTerpakai'] == true) {
+        throw Exception([
+          if (periksa['tanggalTerpakai'] == true)
+            '${periksa['peringatanTanggal']}',
+          if (periksa['adaTidakBalance'] == true) '${periksa['peringatan']}',
+        ].join('\n\n'));
+      }
+
+      final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
+      return _kirimLokalDulu(
+        'closing_simpan',
+        {
+          if (ubah) 'id': baris['id'],
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'tanggal': _fmt.format(tanggal!),
+        },
+        kunci: 'closing:${ubah ? baris['id'] : idBaru}',
+        idLokal: ubah ? null : idBaru,
+        rowLokal: {
+          'id': ubah ? baris['id'] : idBaru,
+          'nama': nama.text.trim(),
+          'keterangan': keterangan.text.trim(),
+          'tanggal': _fmt.format(tanggal!),
+          'terkunci': false,
+          'jumlahJurnal': baris?['jumlahJurnal'] ?? 0,
+        },
+      );
+    }
+
+    await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setDialog) {
@@ -228,7 +278,9 @@ class _ClosingScreenState extends State<ClosingScreen> {
                 TextField(
                   controller: keterangan,
                   decoration: const InputDecoration(
-                      labelText: 'Keterangan', border: OutlineInputBorder(), isDense: true),
+                      labelText: 'Keterangan',
+                      border: OutlineInputBorder(),
+                      isDense: true),
                 ),
                 const SizedBox(height: 12),
                 if (memeriksa)
@@ -269,48 +321,10 @@ class _ClosingScreenState extends State<ClosingScreen> {
                 ],
               ]),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
-              FilledButton(
-                // Tombolnya dimatikan saat sudah jelas akan ditolak; server tetap
-                // memeriksanya ulang.
-                onPressed: (timpang || bentrok) ? null : () => Navigator.pop(c, true),
-                child: const Text('Simpan'),
-              ),
-            ],
+            actions: [AppCrudDialogActions(onSubmit: simpanData)],
           );
         },
       ),
-    );
-    if (simpan != true) return;
-    if (nama.text.trim().isEmpty) {
-      _pesan('Nama Periode wajib diisi.');
-      return;
-    }
-    if (tanggal == null) {
-      _pesan('Tanggal batas wajib dipilih.');
-      return;
-    }
-
-    final idBaru = ubah ? null : MasterOffline.idSementaraBaru();
-    await _kirimLokalDulu(
-      'closing_simpan',
-      {
-        if (ubah) 'id': baris['id'],
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'tanggal': _fmt.format(tanggal!),
-      },
-      kunci: 'closing:${ubah ? baris['id'] : idBaru}',
-      idLokal: ubah ? null : idBaru,
-      rowLokal: {
-        'id': ubah ? baris['id'] : idBaru,
-        'nama': nama.text.trim(),
-        'keterangan': keterangan.text.trim(),
-        'tanggal': _fmt.format(tanggal!),
-        'terkunci': false,
-        'jumlahJurnal': baris?['jumlahJurnal'] ?? 0,
-      },
     );
   }
 
@@ -330,8 +344,10 @@ class _ClosingScreenState extends State<ClosingScreen> {
           if (memuat) {
             WidgetsBinding.instance.addPostFrameCallback((_) async {
               try {
-                final d = await ApiClient.instance.aksi('closing_jurnal', {'id': b['id']});
-                item = ((d['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+                final d = await ApiClient.instance
+                    .aksi('closing_jurnal', {'id': b['id']});
+                item =
+                    ((d['data'] as List?) ?? []).cast<Map<String, dynamic>>();
                 seimbang = d['seimbang'] == true;
                 debet = (d['totalDebet'] as num?)?.toDouble() ?? 0;
                 kredit = (d['totalKredit'] as num?)?.toDouble() ?? 0;
@@ -364,7 +380,9 @@ class _ClosingScreenState extends State<ClosingScreen> {
                       const SizedBox(height: 8),
                       Expanded(
                         child: item.isEmpty
-                            ? const Center(child: Text('Belum ada jurnal dalam periode ini.'))
+                            ? const Center(
+                                child:
+                                    Text('Belum ada jurnal dalam periode ini.'))
                             : ListView.builder(
                                 itemCount: item.length,
                                 itemBuilder: (_, i) {
@@ -372,7 +390,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
                                   final ok = j['seimbang'] == true;
                                   return ListTile(
                                     dense: true,
-                                    title: Text('${j['kode'] ?? ''} — ${j['keterangan'] ?? ''}',
+                                    title: Text(
+                                        '${j['kode'] ?? ''} — ${j['keterangan'] ?? ''}',
                                         style: const TextStyle(fontSize: 12.5)),
                                     subtitle: Text('${j['tanggal'] ?? ''}',
                                         style: const TextStyle(fontSize: 11.5)),
@@ -390,7 +409,9 @@ class _ClosingScreenState extends State<ClosingScreen> {
                     ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Tutup')),
             ],
           );
         },
@@ -428,7 +449,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
       actionsAppBar: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
+      aksiHeader:
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatDaftar),
       body: _galat != null
           ? Center(
               child: Padding(
@@ -436,7 +458,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_galat!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  FilledButton(onPressed: _muatSemua, child: const Text('Coba lagi')),
+                  FilledButton(
+                      onPressed: _muatSemua, child: const Text('Coba lagi')),
                 ]),
               ),
             )
@@ -528,7 +551,9 @@ class _ClosingScreenState extends State<ClosingScreen> {
                   AksiBaris(
                       ikon: Icons.edit_outlined,
                       label: 'Ubah',
-                      onTap: !terkunci && _boleh('update') && !_sibuk ? () => _form(b) : null),
+                      onTap: !terkunci && _boleh('update') && !_sibuk
+                          ? () => _form(b)
+                          : null),
                   AksiBaris(
                       ikon: Icons.lock_outline,
                       label: 'Kunci periode',
@@ -540,7 +565,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
                                       'Setelah dikunci, closing ini tidak dapat diubah '
                                       'maupun dihapus sampai kuncinya dibuka.',
                                   'Kunci')) {
-                                await _kirimLokalDulu('closing_kunci', {'id': b['id']},
+                                await _kirimLokalDulu(
+                                    'closing_kunci', {'id': b['id']},
                                     kunci: 'closing:${b['id']}',
                                     rowLokal: {...b, 'terkunci': true});
                               }
@@ -551,9 +577,10 @@ class _ClosingScreenState extends State<ClosingScreen> {
                       label: 'Buka kunci',
                       onTap: terkunci && _boleh('reject') && !_sibuk
                           ? () async {
-                              if (await _konfirmasi('Buka kunci periode?', '${b['nama']}',
-                                  'Buka')) {
-                                await _kirimLokalDulu('closing_buka', {'id': b['id']},
+                              if (await _konfirmasi('Buka kunci periode?',
+                                  '${b['nama']}', 'Buka')) {
+                                await _kirimLokalDulu(
+                                    'closing_buka', {'id': b['id']},
                                     kunci: 'closing:${b['id']}',
                                     rowLokal: {...b, 'terkunci': false});
                               }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import 'mitrainap_common.dart';
@@ -144,28 +145,25 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
       return;
     }
     if (!mounted) return;
-    final hasil = await showDialog<Map<String, dynamic>>(
+    await showDialog<void>(
       context: context,
       builder: (_) => _FormWalkInDialog(
-          propertiId: pid, daftarTamu: tamu, daftarKamar: kosong),
+        propertiId: pid,
+        daftarTamu: tamu,
+        daftarKamar: kosong,
+        onSubmit: (hasil) async {
+          // ONLINE-ONLY -- ATURAN KAMAR: penempatan kamar adalah perebutan
+          // sumber daya fisik yang hanya boleh dipegang satu tamu.
+          final res = await ApiClient.instance.aksi('hotel_checkin', hasil);
+          if (!apiSukses(res)) {
+            throw Exception(apiPesan(res, res['status'].toString()));
+          }
+          _info('Check-in walk-in berhasil. Folio dibuka.');
+          await _muat();
+          return true;
+        },
+      ),
     );
-    if (hasil == null) return;
-    try {
-      // ONLINE-ONLY -- ATURAN KAMAR: penempatan kamar adalah perebutan sumber
-      // daya fisik yang hanya boleh dipegang satu tamu. Bila diantre, dua meja
-      // depan yang sedang offline bisa memberi kamar yang sama kepada dua tamu
-      // dan salah satunya baru ketahuan gagal setelah kuncinya diserahkan.
-      // Aturan yang sama berlaku pada pindah kamar dan pembuatan reservasi.
-      final res = await ApiClient.instance.aksi('hotel_checkin', hasil);
-      if (apiSukses(res)) {
-        _info('Check-in walk-in berhasil. Folio dibuka.');
-        _muat();
-      } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
-      }
-    } catch (e) {
-      _info('Gagal check-in: $e', galat: true);
-    }
   }
 
   Future<void> _lihatFolio(Map<String, dynamic> stay) async {
@@ -190,7 +188,7 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
     }
     if (!mounted) return;
     int? kamarId = idInt(kosong.first['id']);
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Pindah kamar — ${stay['tamu_nama'] ?? ''}'),
@@ -210,38 +208,34 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Pindahkan')),
+          AppCrudDialogActions(
+            submitLabel: 'Pindahkan',
+            onSubmit: () async {
+              if (kamarId == null) {
+                throw Exception('Pilih kamar tujuan.');
+              }
+              final res = await ApiClient.instance.aksi('hotel_pindah_kamar', {
+                'menginap_id': stay['id'],
+                'kamar_baru_id': kamarId,
+              });
+              if (!apiSukses(res)) {
+                throw Exception(apiPesan(res, res['status'].toString()));
+              }
+              _info('Kamar dipindahkan.');
+              await _muat();
+              return true;
+            },
+          )
         ],
       ),
     );
-    if (ok != true || kamarId == null) return;
-    try {
-      // ONLINE-ONLY: lihat ATURAN KAMAR pada check-in di atas.
-      final res = await ApiClient.instance.aksi('hotel_pindah_kamar', {
-        'menginap_id': stay['id'],
-        'kamar_baru_id': kamarId,
-      });
-      if (apiSukses(res)) {
-        _info('Kamar dipindahkan.');
-        _muat();
-      } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
-      }
-    } catch (e) {
-      _info('Gagal pindah kamar: $e', galat: true);
-    }
   }
 
   Future<void> _checkout(Map<String, dynamic> stay) async {
     final bayar = TextEditingController();
     final metode = TextEditingController(text: 'TUNAI');
     final saldo = angka(stay['saldo_folio']);
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Check-out — ${stay['tamu_nama'] ?? ''}'),
@@ -261,44 +255,37 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
           ),
         ]),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Check-out')),
+          AppCrudDialogActions(
+            submitLabel: 'Check-out',
+            onSubmit: () async {
+              final body = <String, dynamic>{'menginap_id': stay['id']};
+              final jumlah = double.tryParse(
+                  bayar.text.trim().replaceAll('.', '').replaceAll(',', '.'));
+              if (jumlah != null && jumlah > 0) {
+                body['bayar_sekarang'] = jumlah;
+                body['metode_bayar'] = metode.text.trim();
+              }
+              final res = await ApiClient.instance.aksi('hotel_checkout', body);
+              if ('${res['status']}' == '91') {
+                throw Exception('Folio masih bersaldo '
+                    '${formatRupiahHotel.format(angka(res['saldo']))}. '
+                    'Lunasi lewat tombol Folio dulu.');
+              }
+              if (!apiSukses(res)) {
+                throw Exception(apiPesan(res, res['status'].toString()));
+              }
+              _info('Check-out selesai. ${res['malam'] ?? ''} malam, '
+                  'room charge '
+                  '${formatRupiahHotel.format(angka(res['room_charge']))}.');
+              await _muat();
+              return true;
+            },
+          )
         ],
       ),
     );
-    if (ok != true) return;
-    try {
-      final body = <String, dynamic>{'menginap_id': stay['id']};
-      final jumlah = double.tryParse(
-          bayar.text.trim().replaceAll('.', '').replaceAll(',', '.'));
-      if (jumlah != null && jumlah > 0) {
-        body['bayar_sekarang'] = jumlah;
-        body['metode_bayar'] = metode.text.trim();
-      }
-      // ONLINE-ONLY: check-out adalah penyelesaian UANG -- server menghitung
-      // room charge malam berjalan dan menolak (91) selama folio bersaldo.
-      // Mengantrekannya berarti kamar dilepas sebelum tagihannya pasti.
-      final res = await ApiClient.instance.aksi('hotel_checkout', body);
-      if (apiSukses(res)) {
-        _info('Check-out selesai. ${res['malam'] ?? ''} malam, '
-            'room charge ${formatRupiahHotel.format(angka(res['room_charge']))}.');
-        _muat();
-      } else if ('${res['status']}' == '91') {
-        _info(
-            'Checkout ditolak: folio masih bersaldo '
-            '${formatRupiahHotel.format(angka(res['saldo']))}. '
-            'Lunasi lewat tombol Folio dulu.',
-            galat: true);
-      } else {
-        _info('Gagal: ${apiPesan(res, res['status'].toString())}', galat: true);
-      }
-    } catch (e) {
-      _info('Gagal check-out: $e', galat: true);
-    }
+    bayar.dispose();
+    metode.dispose();
   }
 
   @override
@@ -434,10 +421,12 @@ class _FormWalkInDialog extends StatefulWidget {
   final int propertiId;
   final List<Map<String, dynamic>> daftarTamu;
   final List<Map<String, dynamic>> daftarKamar;
+  final Future<bool> Function(Map<String, dynamic> data) onSubmit;
   const _FormWalkInDialog({
     required this.propertiId,
     required this.daftarTamu,
     required this.daftarKamar,
+    required this.onSubmit,
   });
 
   @override
@@ -471,7 +460,7 @@ class _FormWalkInDialogState extends State<_FormWalkInDialog> {
     final nama = TextEditingController();
     final noIdentitas = TextEditingController();
     final telp = TextEditingController();
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Tamu Baru'),
@@ -489,46 +478,42 @@ class _FormWalkInDialogState extends State<_FormWalkInDialog> {
               keyboardType: TextInputType.phone),
         ]),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Simpan')),
+          AppCrudDialogActions(onSubmit: () async {
+            if (nama.text.trim().isEmpty) {
+              throw Exception('Nama tamu wajib diisi.');
+            }
+            final res = await ApiClient.instance.aksi('hotel_tamu_simpan', {
+              'properti_id': widget.propertiId,
+              'nama': nama.text.trim(),
+              'jenis_identitas': 'KTP',
+              'no_identitas': noIdentitas.text.trim(),
+              'telp': telp.text.trim(),
+            });
+            if (!apiSukses(res)) {
+              throw Exception(apiPesan(res, 'Gagal menyimpan tamu.'));
+            }
+            final ulang = await muatDaftarHotel(
+                'hotel_tamu_list', {'properti_id': widget.propertiId});
+            int? baru;
+            for (final t in ulang) {
+              if ('${t['nama']}'.toLowerCase() ==
+                  nama.text.trim().toLowerCase()) {
+                final tid = idInt(t['id']);
+                if (baru == null || (tid != null && tid > baru)) baru = tid;
+              }
+            }
+            setStateIfMounted(() {
+              _tamu = ulang;
+              _tamuId = baru ?? _tamuId;
+            });
+            return true;
+          })
         ],
       ),
     );
-    if (ok != true || nama.text.trim().isEmpty) return;
-    try {
-      final res = await ApiClient.instance.aksi('hotel_tamu_simpan', {
-        'properti_id': widget.propertiId,
-        'nama': nama.text.trim(),
-        'jenis_identitas': 'KTP',
-        'no_identitas': noIdentitas.text.trim(),
-        'telp': telp.text.trim(),
-      });
-      if (!apiSukses(res)) {
-        throw Exception(apiPesan(res, 'Gagal menyimpan tamu.'));
-      }
-      final ulang = await muatDaftarHotel(
-          'hotel_tamu_list', {'properti_id': widget.propertiId});
-      int? baru;
-      for (final t in ulang) {
-        if ('${t['nama']}'.toLowerCase() == nama.text.trim().toLowerCase()) {
-          final tid = idInt(t['id']);
-          if (baru == null || (tid != null && tid > baru)) baru = tid;
-        }
-      }
-      setStateIfMounted(() {
-        _tamu = ulang;
-        _tamuId = baru ?? _tamuId;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menambah tamu: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
+    nama.dispose();
+    noIdentitas.dispose();
+    telp.dispose();
   }
 
   @override
@@ -594,23 +579,20 @@ class _FormWalkInDialogState extends State<_FormWalkInDialog> {
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal')),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
+        AppCrudDialogActions(
+          submitLabel: 'Check-in',
+          onSubmit: () async {
+            if (!_formKey.currentState!.validate()) return false;
             final harga = double.tryParse(
                 _harga.text.trim().replaceAll('.', '').replaceAll(',', '.'));
-            Navigator.of(context).pop(<String, dynamic>{
+            return widget.onSubmit(<String, dynamic>{
               'kamar_id': _kamarId,
               'tamu_id': _tamuId,
               if (harga != null) 'harga_per_malam': harga,
               'catatan': _catatan.text.trim(),
             });
           },
-          child: const Text('Check-in'),
-        ),
+        )
       ],
     );
   }
@@ -668,7 +650,7 @@ class _FolioDialogState extends State<_FolioDialog> {
     final keterangan = TextEditingController(
         text: jenis == 'PAYMENT' ? 'Pembayaran tunai' : '');
     bool mengurangi = false;
-    final ok = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(
@@ -696,50 +678,34 @@ class _FolioDialogState extends State<_FolioDialog> {
           ]),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Simpan')),
+          AppCrudDialogActions(onSubmit: () async {
+            final nilai = double.tryParse(
+                jumlah.text.trim().replaceAll('.', '').replaceAll(',', '.'));
+            if (nilai == null || nilai <= 0) {
+              throw Exception('Jumlah harus angka lebih dari 0.');
+            }
+            final res = await MasterOffline.simpanAtauAntre(
+                'hotel_folio_transaksi_tambah',
+                {
+                  'folio_id': folioId,
+                  'jenis': jenis,
+                  'jumlah': nilai,
+                  'keterangan': keterangan.text.trim(),
+                  if (jenis == 'ADJUSTMENT') 'mengurangi': mengurangi,
+                },
+                kunci: 'folio_transaksi:$folioId:'
+                    '${DateTime.now().microsecondsSinceEpoch}');
+            if (res['offline'] != true && !apiSukses(res)) {
+              throw Exception(apiPesan(res, 'Gagal menyimpan transaksi.'));
+            }
+            await _muat();
+            return true;
+          })
         ],
       ),
     );
-    if (ok != true) return;
-    final nilai = double.tryParse(
-        jumlah.text.trim().replaceAll('.', '').replaceAll(',', '.'));
-    if (nilai == null || nilai <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Jumlah harus angka lebih dari 0.')));
-      return;
-    }
-    try {
-      final res = await MasterOffline.simpanAtauAntre(
-          'hotel_folio_transaksi_tambah',
-          {
-            'folio_id': folioId,
-            'jenis': jenis,
-            'jumlah': nilai,
-            'keterangan': keterangan.text.trim(),
-            if (jenis == 'ADJUSTMENT') 'mengurangi': mengurangi,
-          },
-          kunci: 'folio_transaksi:$folioId:'
-              '${DateTime.now().microsecondsSinceEpoch}');
-      // Baris folio bersifat MENAMBAH, bukan menimpa, sehingga aman diantrekan:
-      // urutannya boleh menyusul tanpa mengubah saldo akhirnya. Kuncinya memuat
-      // stempel waktu supaya dua penambahan pada folio yang sama tidak saling
-      // menggantikan di antrean.
-      if (res['offline'] != true && !apiSukses(res)) {
-        throw Exception(apiPesan(res, 'Gagal menyimpan transaksi.'));
-      }
-      _muat();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error));
-    }
+    jumlah.dispose();
+    keterangan.dispose();
   }
 
   @override

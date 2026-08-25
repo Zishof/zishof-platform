@@ -45,11 +45,11 @@ class BantuanFab extends StatelessWidget {
         spesifikasi != null && spesifikasi.tanyaJawabTambahan.isNotEmpty;
 
     return PopupMenuButton<String>(
+      key: const Key('tombol-bantuan-mengambang'),
       tooltip: 'Bantuan',
       offset: const Offset(0, -8),
       position: PopupMenuPosition.over,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onSelected: (pilihan) {
         switch (pilihan) {
           case 'bantuan':

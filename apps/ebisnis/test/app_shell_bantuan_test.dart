@@ -11,21 +11,26 @@ void main() {
         ),
       );
 
-  testWidgets('desktop menampilkan tombol Bantuan kontekstual', (tester) async {
+  testWidgets('desktop hanya menampilkan satu tombol Bantuan mengambang',
+      (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(aplikasi());
     await tester.pump();
-    expect(find.text('Bantuan'), findsOneWidget);
-    await tester.tap(find.text('Bantuan'));
+    expect(find.byKey(const Key('tombol-bantuan-mengambang')), findsOneWidget);
+    expect(find.byTooltip('Bantuan halaman ini'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Bantuan'), findsNothing);
+    await tester.tap(find.byKey(const Key('tombol-bantuan-mengambang')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bantuan Halaman Ini'));
     await tester.pumpAndSettle();
     expect(find.text('Bantuan Stok Opname'), findsWidgets);
     expect(find.text('Mulai sesi'), findsOneWidget);
   });
 
-  testWidgets('Android/mobile menampilkan ikon Bantuan di AppBar',
+  testWidgets('Android/mobile hanya menampilkan satu tombol Bantuan mengambang',
       (tester) async {
     tester.view.physicalSize = const Size(412, 860);
     tester.view.devicePixelRatio = 1;
@@ -33,7 +38,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(aplikasi());
     await tester.pump();
-    expect(find.byTooltip('Bantuan halaman ini'), findsOneWidget);
+    expect(find.byKey(const Key('tombol-bantuan-mengambang')), findsOneWidget);
+    expect(find.byTooltip('Bantuan halaman ini'), findsNothing);
   });
 
   testWidgets('tombol Tanya Jawab membuka QA sesuai halaman', (tester) async {
