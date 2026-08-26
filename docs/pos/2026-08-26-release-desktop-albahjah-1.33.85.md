@@ -33,5 +33,18 @@ penahanan ulang dapat tersimpan memakai tanggal draft sebelumnya.
 - Varian: `albahjah`.
 - Platform: Windows Desktop saja (`-SkipAndroid`).
 - Versi: `1.33.85+143`.
-- Artefak, checksum, commit, tag, dan hasil publikasi GitHub dicatat setelah
-  build selesai.
+- Skrip: `tool/build_semua_varian.ps1 -SkipAndroid -Hanya albahjah`.
+- Flutter Windows release dan kompilasi installer Inno Setup: **berhasil**.
+- Product version installer: `1.33.85`.
+- Commit implementasi: `02145c0`.
+- Authenticode: `NotSigned` karena pipeline lokal belum mempunyai sertifikat.
+
+## Artefak
+
+| Berkas | Ukuran | SHA-256 |
+|---|---:|---|
+| `Al-Bahjah-POS-Setup-1.33.85.exe` | 46.163.518 byte | `8716EA80B78190CA75A49474372AA120B94251CB7FF4B4F00C6B67B585AA2F28` |
+
+Manifest `.sha256.txt` hasil build telah dibandingkan dengan perhitungan ulang
+dan cocok. Publikasi memakai tag `v1.33.85-build143` pada repository
+`Zishof/zishof-platform`.
