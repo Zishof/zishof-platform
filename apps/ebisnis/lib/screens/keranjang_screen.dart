@@ -889,12 +889,125 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     _jadwalkanEvaluasiDiskon();
   }
 
-  Future<bool> _verifikasiPinJikaPerlu() async {
+  bool get _saldoAkanDipotong => _nominalDepositTerpakai() > 0.0001;
+
+  bool get _biometrikWajibUntukSaldo {
     final member = _memberTerpilih;
-    if (member == null || !member.wajibPin) return true;
+    return member != null &&
+        _saldoAkanDipotong &&
+        (member.wajibBiometricWajah || member.wajibBiometricFingerprint);
+  }
+
+  Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
+      String modality, String kodeUnik) async {
+    try {
+      final sample = await bridge.capture(modality);
+      final hasil =
+          await ApiClient.instance.aksi('verifikasi_biometrik_member', {
+        'memberId': _memberTerpilih!.id,
+        'modality': sample.modality,
+        'probe_base64': sample.templateBase64,
+        'template_format': sample.templateFormat,
+        'provider': sample.provider,
+        'liveness_score': sample.livenessScore,
+        'captured_at_epoch': DateTime.now().millisecondsSinceEpoch,
+        'reference_type': 'POS_PURCHASE',
+        'reference_id': kodeUnik,
+        'clientMutationId':
+            'pos-bio-$kodeUnik-${sample.modality.toLowerCase()}',
+      });
+      final ok = hasil['ok'] == true;
+      final eventId = (hasil['biometricEventId'] as num?)?.toInt();
+      if (!ok || eventId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content:
+                  Text('${hasil['message'] ?? 'Biometrik tidak cocok.'}')));
+        }
+        return null;
+      }
+      return eventId;
+    } catch (e) {
+      if (mounted) snackbarGalat(context, e);
+      return null;
+    }
+  }
+
+  Future<bool> _verifikasiPin() async {
+    if (!mounted) return false;
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (_) => const _DialogMasukkanPin(),
+    );
+    if (pin == null || pin.isEmpty) return false;
+    try {
+      final hasil = await ApiClient.instance.aksi(
+          'verifikasi_pin', {'memberId': _memberTerpilih!.id, 'pin': pin});
+      final ok = hasil['ok'] == true;
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('PIN salah.')));
+      }
+      return ok;
+    } catch (e) {
+      if (mounted) snackbarGalat(context, e);
+      return false;
+    }
+  }
+
+  /// Mengembalikan event biometrik yang harus ikut payload checkout. Null
+  /// berarti verifikasi dibatalkan/gagal dan pembayaran tidak boleh lanjut.
+  Future<Map<String, int>?> _verifikasiMemberJikaPerlu(String kodeUnik) async {
+    final member = _memberTerpilih;
+    if (member == null) return <String, int>{};
     final bridge = PosBiometricCaptureBridge();
     final capability = await bridge.capabilities();
-    if (!mounted) return false;
+    if (!mounted) return null;
+
+    if (_biometrikWajibUntukSaldo) {
+      final kurang = <String>[];
+      if (member.wajibBiometricWajah && capability['face'] != true) {
+        kurang.add('kamera dengan face-liveness');
+      }
+      if (member.wajibBiometricFingerprint &&
+          capability['fingerprint'] != true) {
+        kurang.add('scanner fingerprint member');
+      }
+      if (kurang.isNotEmpty) {
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Perangkat biometrik belum siap'),
+              content: Text(
+                  'Jenis member ini mewajibkan ${kurang.join(' dan ')} sebelum saldo dipotong. '
+                  'Pembayaran dihentikan; pilih metode lain atau sambungkan perangkat yang sesuai.'),
+              actions: [
+                FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Mengerti')),
+              ],
+            ),
+          );
+        }
+        return null;
+      }
+      final bukti = <String, int>{};
+      if (member.wajibBiometricWajah) {
+        final id = await _verifikasiBiometrik(bridge, 'FACE', kodeUnik);
+        if (id == null) return null;
+        bukti['biometric_face_event_id'] = id;
+      }
+      if (member.wajibBiometricFingerprint) {
+        final id = await _verifikasiBiometrik(bridge, 'FINGERPRINT', kodeUnik);
+        if (id == null) return null;
+        bukti['biometric_fingerprint_event_id'] = id;
+      }
+      if (member.wajibPin && !await _verifikasiPin()) return null;
+      return bukti;
+    }
+
+    if (!member.wajibPin) return <String, int>{};
     final pilihan = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -930,55 +1043,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ],
       ),
     );
-    if (pilihan == null) return false;
+    if (pilihan == null) return null;
     if (pilihan != 'PIN') {
-      try {
-        final sample = await bridge.capture(pilihan);
-        final hasil =
-            await ApiClient.instance.aksi('verifikasi_biometrik_member', {
-          'memberId': member.id,
-          'modality': sample.modality,
-          'probe_base64': sample.templateBase64,
-          'template_format': sample.templateFormat,
-          'provider': sample.provider,
-          'liveness_score': sample.livenessScore,
-          'clientMutationId':
-              'pos-bio-${DateTime.now().microsecondsSinceEpoch}',
-        });
-        if (!mounted) return false;
-        final ok = hasil['ok'] == true;
-        if (!ok && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('${hasil['message'] ?? 'Biometrik tidak cocok.'}')));
-        }
-        return ok;
-      } catch (e) {
-        if (mounted) snackbarGalat(context, e);
-        return false;
-      }
+      final id = await _verifikasiBiometrik(bridge, pilihan, kodeUnik);
+      return id == null ? null : <String, int>{};
     }
-    if (!mounted) return false;
-    final pin = await showDialog<String>(
-      context: context,
-      builder: (_) => const _DialogMasukkanPin(),
-    );
-    if (pin == null || pin.isEmpty) return false;
-    try {
-      final hasil = await ApiClient.instance
-          .aksi('verifikasi_pin', {'memberId': member.id, 'pin': pin});
-      final ok = hasil['ok'] == true;
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('PIN salah.')));
-      }
-      return ok;
-    } catch (e) {
-      if (mounted) {
-        snackbarGalat(context, e);
-      }
-      return false;
-    }
+    return await _verifikasiPin() ? <String, int>{} : null;
   }
 
   Future<String> _buatKodeUnik() async {
@@ -1457,39 +1527,51 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
     setStateIfMounted(() => _memproses = true);
     try {
-      if (!await _verifikasiPinJikaPerlu()) return;
-
       final kodeUnik = await _buatKodeUnik();
+      final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
+      if (buktiBiometrik == null) return;
       final waktu =
           widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
       final payload =
           _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
+      payload.addAll(buktiBiometrik);
       final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
       final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
       if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
 
-      // Offline-first: tulis PENDING lokal SEBELUM mencoba server -- kegagalan
-      // jaringan di bawah tidak pernah membatalkan penjualan ini.
       final payloadPending = Map<String, dynamic>.from(payload);
       payloadPending['pengiriman_pending'] = true;
-      await CoreDb.instance.simpanTransaksiPending(
-          kodeUnik, jsonEncode(payloadPending),
-          akunKunci: Sesi.instance.userId,
-          tokoId: Sesi.instance.tokoId,
-          idPerangkat: IdentitasMesin.instance.idMesin);
-
-      // Local-first sungguhan: setelah commit SQLite berhasil, checkout tidak
-      // lagi menunggu round-trip HTTP. Outbox mencoba segera di background;
-      // kegagalan teknis dicatat dan baru layak dicoba lagi setelah 10 menit.
-      // Kode unik yang sama dipakai pada semua percobaan sehingga server tetap
-      // idempoten walaupun respons sebelumnya hilang di tengah jaringan.
-      TransaksiOutboxService.instance.kirimDiBackground();
-      const pesanTundaMenuju =
-          'Transaksi aman tersimpan di lokal. Pengiriman ke server berjalan di background; jika gagal akan dicoba lagi dalam 10 menit.';
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text(pesanTundaMenuju)));
+      Map<String, dynamic>? hasilServer;
+      if (_biometrikWajibUntukSaldo) {
+        // Bukti biometrik berumur pendek dan diikat ke kode transaksi. Karena
+        // itu pembayaran saldo wajib menunggu ACK server dan tidak boleh masuk
+        // outbox berulang yang baru terkirim setelah bukti kedaluwarsa.
+        hasilServer = await ApiClient.instance.aksi('bayar', payload);
+        await CoreDb.instance.simpanTransaksiPending(
+            kodeUnik, jsonEncode(payloadPending),
+            akunKunci: Sesi.instance.userId,
+            tokoId: Sesi.instance.tokoId,
+            idPerangkat: IdentitasMesin.instance.idMesin);
+        await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, hasilServer);
+        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Biometrik cocok. Pembayaran saldo sudah diterima server.')));
+      } else {
+        // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
+        // server, lalu kirim/retry idempoten di background.
+        await CoreDb.instance.simpanTransaksiPending(
+            kodeUnik, jsonEncode(payloadPending),
+            akunKunci: Sesi.instance.userId,
+            tokoId: Sesi.instance.tokoId,
+            idPerangkat: IdentitasMesin.instance.idMesin);
+        TransaksiOutboxService.instance.kirimDiBackground();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Transaksi aman tersimpan di lokal. Pengiriman ke server berjalan di background; jika gagal akan dicoba lagi dalam 10 menit.')));
+      }
 
       // Ekstra diratakan (flatten) jadi baris tersendiri TEPAT setelah induknya
       // -- StrukScreen tak kenal struktur bersarang, cuma daftar {nama,qty,
@@ -1871,6 +1953,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                             _memberTerpilih!.kodeIdentitas,
                           'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
                           if (_memberTerpilih!.wajibPin) 'Wajib PIN',
+                          if (_memberTerpilih!.wajibBiometricWajah)
+                            'Wajib Wajah',
+                          if (_memberTerpilih!.wajibBiometricFingerprint)
+                            'Wajib Fingerprint',
                         ].join(' - '),
                         style: const TextStyle(fontSize: 11.5)),
                     trailing: IconButton(
@@ -3214,10 +3300,14 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
                             if (a.hp.isEmpty && a.telp.isNotEmpty) a.telp,
                             if (a.email.isNotEmpty) a.email,
                           ].join(' • ')),
-                          trailing: a.wajibPin
-                              ? const Icon(Icons.pin,
-                                  size: 18, color: Colors.orange)
-                              : null,
+                          trailing: a.wajibBiometricWajah ||
+                                  a.wajibBiometricFingerprint
+                              ? const Icon(Icons.verified_user_outlined,
+                                  size: 18, color: Colors.teal)
+                              : a.wajibPin
+                                  ? const Icon(Icons.pin,
+                                      size: 18, color: Colors.orange)
+                                  : null,
                           onTap: () => Navigator.of(context).pop(a),
                         );
                       },

@@ -289,6 +289,13 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember>
                         if (j['wajibPin'] == true)
                           const StatusPill(
                               label: 'Wajib PIN', warna: AppColors.warning),
+                        if (j['wajibBiometricWajah'] == true)
+                          const StatusPill(
+                              label: 'Wajib Wajah', warna: AppColors.info),
+                        if (j['wajibBiometricFingerprint'] == true)
+                          const StatusPill(
+                              label: 'Wajib Fingerprint',
+                              warna: AppColors.info),
                         if (j['wajibBelanjaRutin'] == true)
                           StatusPill(
                               label:
@@ -382,6 +389,8 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
   bool _tampilSaldo = true;
   bool _tampilCashback = true;
   bool _wajibPin = false;
+  bool _wajibBiometricWajah = false;
+  bool _wajibBiometricFingerprint = false;
   bool _wajibBelanjaRutin = false;
   Set<int> _caraBayarDipilih = {};
   bool _menyimpan = false;
@@ -409,6 +418,8 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
     _tampilSaldo = j?['tampilkanSisaSaldo'] ?? true;
     _tampilCashback = j?['tampilkanCashback'] ?? true;
     _wajibPin = j?['wajibPin'] ?? false;
+    _wajibBiometricWajah = j?['wajibBiometricWajah'] ?? false;
+    _wajibBiometricFingerprint = j?['wajibBiometricFingerprint'] ?? false;
     _wajibBelanjaRutin = j?['wajibBelanjaRutin'] ?? false;
     final daftarCsv = '${j?['daftarCaraPembayaranYangBolehDiPilih'] ?? ''}';
     _caraBayarDipilih = daftarCsv
@@ -457,6 +468,12 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
         'tampilkan_sisa_saldo': _tampilSaldo,
         'tampilkan_cashback': _tampilCashback,
         'wajib_pin': _wajibPin,
+        'wajib_biometric_wajah': _wajibBiometricWajah,
+        'wajib_biometric_fingerprint': _wajibBiometricFingerprint,
+        // Bentuk camelCase dipertahankan pada snapshot optimistik lokal;
+        // server membaca kunci snake_case di atas dan mengabaikan pasangan ini.
+        'wajibBiometricWajah': _wajibBiometricWajah,
+        'wajibBiometricFingerprint': _wajibBiometricFingerprint,
         'wajib_belanja_rutin': _wajibBelanjaRutin,
         'daftar_cara_pembayaran_yang_boleh_di_pilih':
             _caraBayarDipilih.join(','),
@@ -556,6 +573,22 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
                       title: 'Wajib Verifikasi PIN saat Transaksi',
                       value: _wajibPin,
                       onChanged: (v) => setStateIfMounted(() => _wajibPin = v)),
+                  AppFormSwitchTile(
+                    title: 'Wajib Verifikasi Biometric Wajah (Camera)',
+                    subtitle:
+                        'Sebelum saldo dipotong, wajah member harus cocok dan lulus pemeriksaan liveness.',
+                    value: _wajibBiometricWajah,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _wajibBiometricWajah = v),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Wajib Verifikasi menggunakan alat Finger Print',
+                    subtitle:
+                        'Desktop memakai scanner USB; Android membutuhkan scanner/vendor SDK yang dapat membaca template member.',
+                    value: _wajibBiometricFingerprint,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _wajibBiometricFingerprint = v),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),

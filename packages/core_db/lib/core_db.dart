@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 13,
+        version: 14,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -433,6 +433,21 @@ class CoreDb {
         // Tabel kemungkinan sudah ada (upgrade parsial) -- aman dilewati.
       }
     }
+    if (versiLama < 14) {
+      // Kebijakan biometrik ikut snapshot member agar picker offline tidak
+      // menurunkan aturan keamanan menjadi false hanya karena jaringan putus.
+      for (final kolom in const [
+        'wajib_biometric_wajah',
+        'wajib_biometric_fingerprint',
+      ]) {
+        try {
+          await db.execute(
+              'ALTER TABLE anggota_cache ADD COLUMN $kolom INTEGER DEFAULT 0');
+        } catch (_) {
+          // Kolom mungkin sudah dibuat oleh upgrade parsial.
+        }
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -543,6 +558,8 @@ class CoreDb {
         email TEXT,
         jenis_nama TEXT,
         wajib_pin INTEGER DEFAULT 0,
+        wajib_biometric_wajah INTEGER DEFAULT 0,
+        wajib_biometric_fingerprint INTEGER DEFAULT 0,
         foto_url TEXT
       )
     ''');
@@ -701,7 +718,11 @@ class CoreDb {
   Future<int> hitungAntreanTertunda() async {
     final database = await db;
     var jumlah = 0;
-    for (final tabel in const ['outbox_master', 'outbox_is', 'transaksi_pending']) {
+    for (final tabel in const [
+      'outbox_master',
+      'outbox_is',
+      'transaksi_pending'
+    ]) {
       try {
         final r = await database.rawQuery(
             'SELECT COUNT(*) AS n FROM $tabel WHERE status = ?', ['PENDING']);

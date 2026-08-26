@@ -221,7 +221,8 @@ class CaraBayar {
       // Server lama tidak mengirim kunci ini sama sekali; null di sini membuat
       // konstruktor jatuh ke aturan bawaan (hutang / potong saldo), sehingga
       // klien baru + server lama tetap berperilaku seperti sebelumnya.
-      wajibPilihMember: (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
+      wajibPilihMember: (j['wajibPilihMember'] ?? j['wajib_pilih_member']) ==
+              null
           ? null
           : (j['wajibPilihMember'] == true || j['wajib_pilih_member'] == true),
       memotongDeposit: j['memotongDeposit'] == true ||
@@ -377,6 +378,8 @@ class Anggota {
   final int? jenisAnggotaKoperasiId;
   final String jenisNama;
   final bool wajibPin;
+  final bool wajibBiometricWajah;
+  final bool wajibBiometricFingerprint;
   final bool aktif;
   final double minSaldo;
   final int? tipeAnggotaKoperasiId;
@@ -396,6 +399,8 @@ class Anggota {
     this.jenisAnggotaKoperasiId,
     this.jenisNama = '',
     required this.wajibPin,
+    this.wajibBiometricWajah = false,
+    this.wajibBiometricFingerprint = false,
     this.aktif = true,
     required this.minSaldo,
     this.tipeAnggotaKoperasiId,
@@ -416,6 +421,8 @@ class Anggota {
         jenisAnggotaKoperasiId: j['jenisAnggotaKoperasiId'] as int?,
         jenisNama: (j['jenisNama'] ?? '') as String,
         wajibPin: j['wajibPin'] == true,
+        wajibBiometricWajah: j['wajibBiometricWajah'] == true,
+        wajibBiometricFingerprint: j['wajibBiometricFingerprint'] == true,
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
         minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
         tipeAnggotaKoperasiId: j['tipeAnggotaKoperasiId'] as int?,
@@ -436,6 +443,9 @@ class Anggota {
         email: (b['email'] ?? '') as String,
         jenisNama: (b['jenis_nama'] ?? '') as String,
         wajibPin: (b['wajib_pin'] as int? ?? 0) == 1,
+        wajibBiometricWajah: (b['wajib_biometric_wajah'] as int? ?? 0) == 1,
+        wajibBiometricFingerprint:
+            (b['wajib_biometric_fingerprint'] as int? ?? 0) == 1,
         minSaldo: 0,
       );
 
@@ -450,6 +460,9 @@ class Anggota {
         'email': j['email'] ?? '',
         'jenis_nama': j['jenisNama'] ?? '',
         'wajib_pin': (j['wajibPin'] == true) ? 1 : 0,
+        'wajib_biometric_wajah': (j['wajibBiometricWajah'] == true) ? 1 : 0,
+        'wajib_biometric_fingerprint':
+            (j['wajibBiometricFingerprint'] == true) ? 1 : 0,
         'foto_url': j['fotoUrl'],
       };
 }
