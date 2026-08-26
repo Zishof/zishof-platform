@@ -895,7 +895,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final member = _memberTerpilih;
     return member != null &&
         _saldoAkanDipotong &&
-        (member.wajibBiometricWajah || member.wajibBiometricFingerprint);
+        (member.wajibPin ||
+            member.wajibBiometricWajah ||
+            member.wajibBiometricFingerprint);
   }
 
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
@@ -933,25 +935,32 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     }
   }
 
-  Future<bool> _verifikasiPin() async {
-    if (!mounted) return false;
+  Future<int?> _verifikasiPin(String kodeUnik) async {
+    if (!mounted) return null;
     final pin = await showDialog<String>(
       context: context,
       builder: (_) => const _DialogMasukkanPin(),
     );
-    if (pin == null || pin.isEmpty) return false;
+    if (pin == null || pin.isEmpty) return null;
     try {
-      final hasil = await ApiClient.instance.aksi(
-          'verifikasi_pin', {'memberId': _memberTerpilih!.id, 'pin': pin});
+      final hasil = await ApiClient.instance.aksi('verifikasi_pin', {
+        'memberId': _memberTerpilih!.id,
+        'pin': pin,
+        'captured_at_epoch': DateTime.now().millisecondsSinceEpoch,
+        'reference_type': 'POS_PURCHASE',
+        'reference_id': kodeUnik,
+        'clientMutationId': 'pos-pin-$kodeUnik',
+      });
       final ok = hasil['ok'] == true;
       if (!ok && mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('PIN salah.')));
       }
-      return ok;
+      if (!ok) return null;
+      return (hasil['pinVerificationEventId'] as num?)?.toInt();
     } catch (e) {
       if (mounted) snackbarGalat(context, e);
-      return false;
+      return null;
     }
   }
 
@@ -1003,7 +1012,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         if (id == null) return null;
         bukti['biometric_fingerprint_event_id'] = id;
       }
-      if (member.wajibPin && !await _verifikasiPin()) return null;
+      if (member.wajibPin) {
+        final id = await _verifikasiPin(kodeUnik);
+        if (id == null) return null;
+        bukti['pin_verification_event_id'] = id;
+      }
       return bukti;
     }
 
@@ -1048,7 +1061,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final id = await _verifikasiBiometrik(bridge, pilihan, kodeUnik);
       return id == null ? null : <String, int>{};
     }
-    return await _verifikasiPin() ? <String, int>{} : null;
+    final pinEventId = await _verifikasiPin(kodeUnik);
+    return pinEventId == null
+        ? null
+        : <String, int>{'pin_verification_event_id': pinEventId};
   }
 
   Future<String> _buatKodeUnik() async {
@@ -1557,7 +1573,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
-                'Biometrik cocok. Pembayaran saldo sudah diterima server.')));
+                'Identitas member terverifikasi. Pembayaran saldo sudah diterima server.')));
       } else {
         // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
         // server, lalu kirim/retry idempoten di background.
@@ -3656,6 +3672,17 @@ class _DialogMasukkanPin extends StatefulWidget {
 class _DialogMasukkanPinState extends State<_DialogMasukkanPin> {
   final _controller = TextEditingController();
 
+  void _tekanAngka(String angka) {
+    if (_controller.text.length >= 12) return;
+    setState(() => _controller.text += angka);
+  }
+
+  void _hapusSatu() {
+    if (_controller.text.isEmpty) return;
+    setState(() => _controller.text =
+        _controller.text.substring(0, _controller.text.length - 1));
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -3666,21 +3693,77 @@ class _DialogMasukkanPinState extends State<_DialogMasukkanPin> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Masukkan PIN Member'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        obscureText: true,
-        keyboardType: TextInputType.number,
-        decoration: const InputDecoration(
-            labelText: 'PIN', border: OutlineInputBorder()),
-        onSubmitted: (v) => Navigator.of(context).pop(v),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'PIN numerik',
+                helperText: 'Gunakan keypad di bawah atau papan ketik angka.',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (v) =>
+                  v.isEmpty ? null : Navigator.of(context).pop(v.trim()),
+            ),
+            const SizedBox(height: 16),
+            GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 3,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.75,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final angka in const [
+                  '1',
+                  '2',
+                  '3',
+                  '4',
+                  '5',
+                  '6',
+                  '7',
+                  '8',
+                  '9'
+                ])
+                  FilledButton.tonal(
+                    onPressed: () => _tekanAngka(angka),
+                    child: Text(angka),
+                  ),
+                OutlinedButton(
+                  onPressed: _controller.text.isEmpty
+                      ? null
+                      : () => setState(() => _controller.clear()),
+                  child: const Text('C'),
+                ),
+                FilledButton.tonal(
+                  onPressed: () => _tekanAngka('0'),
+                  child: const Text('0'),
+                ),
+                OutlinedButton(
+                  onPressed: _controller.text.isEmpty ? null : _hapusSatu,
+                  child: const Icon(Icons.backspace_outlined),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Batal')),
         ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+            onPressed: _controller.text.isEmpty
+                ? null
+                : () => Navigator.of(context).pop(_controller.text.trim()),
             child: const Text('Verifikasi')),
       ],
     );

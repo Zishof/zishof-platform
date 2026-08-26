@@ -32,7 +32,17 @@ void main() {
     expect(source, contains("'reference_id': kodeUnik"));
     expect(source, contains("'biometric_face_event_id'"));
     expect(source, contains("'biometric_fingerprint_event_id'"));
+    expect(source, contains("'pin_verification_event_id'"));
+    expect(source, contains(r"'clientMutationId': 'pos-pin-$kodeUnik'"));
     expect(source, contains("await ApiClient.instance.aksi('bayar', payload)"));
     expect(source, contains('Pembayaran saldo sudah diterima server'));
+  });
+
+  test('PIN wajib ikut gerbang saldo dan dialog hanya menerima angka', () {
+    final source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
+    expect(source, contains('member.wajibPin ||'));
+    expect(source, contains('FilteringTextInputFormatter.digitsOnly'));
+    expect(source, contains('GridView.count('));
+    expect(source, contains('PIN numerik'));
   });
 }
