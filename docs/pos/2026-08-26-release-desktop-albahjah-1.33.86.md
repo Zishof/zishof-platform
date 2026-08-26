@@ -29,12 +29,25 @@ member tersebut. Akibatnya metode aktif yang dibutuhkan kasir, termasuk
 - [x] Analyzer empat file implementasi/tes: **No issues found**.
 - [x] Seluruh suite aplikasi: **361/361 lulus**.
 - [x] `git diff --check`: lulus.
-- [ ] Build Windows Desktop varian Al-Bahjah.
+- [x] Build Windows Desktop varian Al-Bahjah: berhasil.
 
 ## Build dan publikasi
 
 - Varian: `albahjah`.
 - Platform: Windows Desktop saja (`-SkipAndroid`).
 - Versi: `1.33.86+144`.
-- Artefak, checksum, commit, tag, dan hasil publikasi GitHub dicatat setelah
-  build selesai.
+- Skrip: `tool/build_semua_varian.ps1 -SkipAndroid -Hanya albahjah`.
+- Flutter Windows release dan kompilasi installer Inno Setup: **berhasil**.
+- Product version installer: `1.33.86`.
+- Commit implementasi: `0490288`.
+- Authenticode: `NotSigned` karena pipeline lokal belum mempunyai sertifikat.
+
+## Artefak
+
+| Berkas | Ukuran | SHA-256 |
+|---|---:|---|
+| `Al-Bahjah-POS-Setup-1.33.86.exe` | 46.163.270 byte | `CB2AAAE7A1FCFF1BB3304CEAD607BFA39242AA74ED23A58F7395E2F4E78E19A5` |
+
+Manifest `.sha256.txt` hasil build telah dibandingkan dengan perhitungan ulang
+dan cocok. Publikasi memakai tag `v1.33.86-build144` pada repository
+`Zishof/zishof-platform`.
