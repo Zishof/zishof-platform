@@ -14,6 +14,20 @@ Produk produk(int id, String kode, double harga) => Produk(
     );
 
 void main() {
+  test('muat dan tahan ulang draft memakai waktu tindakan terbaru', () {
+    final waktuMuat = DateTime(2026, 8, 26, 9, 15, 12);
+    final waktuTahanUlang = DateTime(2026, 8, 26, 10, 47, 33);
+
+    expect(
+      waktuTransaksiDraftDilanjutkan(sekarang: waktuMuat),
+      waktuMuat,
+    );
+    expect(
+      waktuTransaksiDraftDilanjutkan(sekarang: waktuTahanUlang),
+      waktuTahanUlang,
+    );
+  });
+
   test('tahan ulang membuang salinan rincian identik tanpa menggandakan qty',
       () {
     final pertama = ItemKeranjang(produk: produk(1, 'A', 110100));

@@ -382,27 +382,6 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     }
   }
 
-  DateTime _tanggalTransaksiTertahan(String nilai) {
-    final teks = nilai.trim();
-    if (teks.isEmpty) return DateTime.now();
-    final iso = DateTime.tryParse(teks);
-    if (iso != null) return iso;
-    final pola = <String>[
-      'dd-MM-yyyy HH:mm:ss',
-      'dd-MM-yyyy HH:mm',
-      'dd/MM/yyyy HH:mm:ss',
-      'dd/MM/yyyy HH:mm',
-    ];
-    for (final format in pola) {
-      try {
-        return DateFormat(format).parseStrict(teks);
-      } catch (_) {
-        // Coba pola tanggal server berikutnya.
-      }
-    }
-    return DateTime.now();
-  }
-
   DateTime? _tanggalTransaksiPesanan(String nilai) {
     final teks = nilai.trim();
     if (teks.isEmpty) return null;
@@ -1430,7 +1409,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         draftIdSumber: p.id,
         draftKodeSumber: p.kode,
         memberAwal: member,
-        waktuTransaksiAwal: _tanggalTransaksiTertahan(p.tanggalPembayaran),
+        // Waktu draft lama tidak boleh ikut menjadi tanggal transaksi baru.
+        // Tangkap waktu tepat ketika kasir memilih "Muat ke Keranjang".
+        waktuTransaksiAwal: waktuTransaksiDraftDilanjutkan(),
       ),
     ));
     await _muat();

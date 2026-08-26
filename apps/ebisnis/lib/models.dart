@@ -341,6 +341,14 @@ List<ItemKeranjang> normalisasiDuplikatKeranjangTertahan(
   return hasil;
 }
 
+/// Waktu bisnis baru untuk draft POS yang dilanjutkan.
+///
+/// Draft lama hanya menjadi sumber identitas dan rincian keranjang. Waktu
+/// transaksi tidak diwarisi karena pemuatan maupun penahanan ulang merupakan
+/// aktivitas kasir baru yang harus tercatat pada saat tindakan itu dilakukan.
+DateTime waktuTransaksiDraftDilanjutkan({DateTime? sekarang}) =>
+    sekarang ?? DateTime.now();
+
 /// Menempatkan baris yang baru ditambahkan/dipindai di urutan pertama.
 ///
 /// Fungsi ini memindahkan objek yang sama (bukan membuat salinan), sehingga

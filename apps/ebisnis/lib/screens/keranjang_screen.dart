@@ -1269,8 +1269,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     setStateIfMounted(() => _memproses = true);
     try {
       final kodeUnik = await _buatKodeUnik();
-      final waktu =
-          widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
+      // Menahan ulang adalah aktivitas baru. Jangan simpan kembali timestamp
+      // draft lama maupun waktu saat draft pertama kali dimuat.
+      final waktu = waktuTransaksiDraftDilanjutkan();
+      _waktuTransaksi = waktu;
       final payload = _buatPayload(kodeUnik, waktu);
       payload['keterangan'] = alasanTahan;
       await ApiClient.instance.aksi('draft_bayar', payload);
