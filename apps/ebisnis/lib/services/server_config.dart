@@ -50,8 +50,14 @@ class ServerConfig {
       final legacyPilot =
           sanitizeHost(legacyHost).toLowerCase() == 'dev.ecampus.id' &&
               sanitizeContextPath(legacyContext).toLowerCase() == 'ecampus';
+      final legacyNahl =
+          sanitizeHost(legacyHost).toLowerCase() == 'an-nahl.santri.info' &&
+              sanitizeContextPath(legacyContext).toLowerCase() == 'nahl';
       if (legacyHost.trim().isNotEmpty &&
-          (AppVariant.isAlBahjah || (!legacyAlBahjah && !legacyPilot))) {
+          (AppVariant.isAlBahjah ||
+              (AppVariant.isNahl
+                  ? legacyNahl
+                  : (!legacyAlBahjah && !legacyPilot)))) {
         await simpan(
           host: legacyHost,
           contextPath: legacyContext,

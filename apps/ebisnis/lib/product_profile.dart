@@ -67,6 +67,16 @@ class AppProductProfile {
           fiturGrup: const {FiturGrup.pos},
         );
 
+  const AppProductProfile.nahl()
+      : this._(
+          kode: 'nahl',
+          namaAplikasi: 'Al-Bahjah An-Nahl POS',
+          namaSidebar: 'An-Nahl POS',
+          updateAssetKeyword: 'nahl',
+          logoAsset: 'assets/images/nahl/icon.png',
+          fiturGrup: const {FiturGrup.pos},
+        );
+
   const AppProductProfile.inventorySales()
       : this._(
           kode: 'inventory_sales',
@@ -142,6 +152,7 @@ class AppProductProfile {
   /// `main.dart` (entrypoint default melayani ebisnis & albahjah sekaligus).
   factory AppProductProfile.dariDartDefine() {
     if (AppVariant.isAlBahjah) return const AppProductProfile.alBahjah();
+    if (AppVariant.isNahl) return const AppProductProfile.nahl();
     if (AppVariant.isInventorySales) {
       return const AppProductProfile.inventorySales();
     }
@@ -177,6 +188,7 @@ class AppProductProfile {
     // updater tidak akan menarik rilis `v*` ebisnis ke instalasi MitraInap.
     if (kode == 'mitrainap') return 'mitrainap-';
     if (kode == 'petra') return 'petra-';
+    if (kode == 'nahl') return 'nahl-';
     return null;
   }
 

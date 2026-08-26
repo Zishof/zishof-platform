@@ -9,6 +9,9 @@ void main() {
     if (AppVariant.isAlBahjah) {
       expect(AppSetting.baseUrlHost, 'ecampus.staialbahjah.ac.id');
       expect(AppSetting.baseUrlContextPath, 'albahjah');
+    } else if (AppVariant.isNahl) {
+      expect(AppSetting.baseUrlHost, 'an-nahl.santri.info');
+      expect(AppSetting.baseUrlContextPath, 'nahl');
     } else {
       expect(AppSetting.baseUrlHost, 'ebisnis.id');
       expect(AppSetting.baseUrlContextPath, 'ebisnis');
@@ -42,6 +45,9 @@ void main() {
     if (AppVariant.isAlBahjah) {
       expect(ServerConfig.instance.host, 'dev.ecampus.id');
       expect(ServerConfig.instance.contextPath, 'ecampus');
+    } else if (AppVariant.isNahl) {
+      expect(ServerConfig.instance.host, 'an-nahl.santri.info');
+      expect(ServerConfig.instance.contextPath, 'nahl');
     } else {
       expect(ServerConfig.instance.host, 'ebisnis.id');
       expect(ServerConfig.instance.contextPath, 'ebisnis');
@@ -60,6 +66,9 @@ void main() {
     if (AppVariant.isAlBahjah) {
       expect(ServerConfig.instance.host, 'ecampus.staialbahjah.ac.id');
       expect(ServerConfig.instance.contextPath, 'albahjah');
+    } else if (AppVariant.isNahl) {
+      expect(ServerConfig.instance.host, 'an-nahl.santri.info');
+      expect(ServerConfig.instance.contextPath, 'nahl');
     } else {
       expect(ServerConfig.instance.host, 'ebisnis.id');
       expect(ServerConfig.instance.contextPath, 'ebisnis');

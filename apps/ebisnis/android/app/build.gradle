@@ -84,6 +84,11 @@ android {
             applicationId "id.zishof.ebisnis.albahjah"
             resValue "string", "app_name", "Al-Bahjah POS"
         }
+        nahl {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.nahl"
+            resValue "string", "app_name", "Al-Bahjah An-Nahl POS"
+        }
         mitrainap {
             dimension "product"
             applicationId "id.zishof.mitrainap"

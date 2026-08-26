@@ -48,10 +48,14 @@ class AppSetting {
   /// https://kantinpcu.ecampus.id/petra.
   static const String baseUrlHost = AppVariant.isAlBahjah
       ? 'ecampus.staialbahjah.ac.id'
-      : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id');
+      : (AppVariant.isNahl
+          ? 'an-nahl.santri.info'
+          : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id'));
   static const String baseUrlContextPath = AppVariant.isAlBahjah
       ? 'albahjah'
-      : (AppVariant.isPetra ? 'petra' : 'ebisnis');
+      : (AppVariant.isNahl
+          ? 'nahl'
+          : (AppVariant.isPetra ? 'petra' : 'ebisnis'));
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya
@@ -60,5 +64,7 @@ class AppSetting {
   /// hijau di `AppColors`, keduanya HANYA aktif utk varian ini). Varian lain
   /// tetap biru spt sebelumnya.
   static const AppThemeWarna temaBawaan =
-      AppVariant.isAlBahjah ? AppThemeWarna.hijau : AppThemeWarna.biru;
+      AppVariant.isAlBahjah || AppVariant.isNahl
+          ? AppThemeWarna.hijau
+          : AppThemeWarna.biru;
 }

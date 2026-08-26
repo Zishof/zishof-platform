@@ -64,4 +64,18 @@ void main() {
         reason: 'Guard harus true tepat ketika dart-define build = emedik, '
             'false utk kombinasi lain.');
   });
+
+  test('profil nahl terisolasi dan hanya merakit POS', () {
+    const nahl = AppProductProfile.nahl();
+    expect(nahl.kode, 'nahl');
+    expect(nahl.namaAplikasi, 'Al-Bahjah An-Nahl POS');
+    expect(nahl.updateAssetKeyword, 'nahl');
+    expect(nahl.logoAsset, 'assets/images/nahl/icon.png');
+    expect(nahl.fiturGrup, const {FiturGrup.pos});
+    expect(nahl.tagRilisPrefix, 'nahl-');
+    expect(
+      nahl.cocokDenganDartDefine(),
+      AppProductProfile.dariDartDefine().kode == 'nahl',
+    );
+  });
 }

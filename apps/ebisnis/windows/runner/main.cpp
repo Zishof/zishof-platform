@@ -29,6 +29,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Size size(1280, 720);
 #ifdef EBISNIS_VARIANT_ALBAHJAH
   const wchar_t* window_title = L"Al-Bahjah POS";
+#elif defined(EBISNIS_VARIANT_NAHL)
+  const wchar_t* window_title = L"Al-Bahjah An-Nahl POS";
 #elif defined(EBISNIS_VARIANT_INVENTORY_SALES)
   const wchar_t* window_title = L"eBisnis Inventory & Sales";
 #elif defined(EBISNIS_VARIANT_APOTIK)

@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
   /// bisa diubah pengguna kapan saja lewat Konfigurasi) krn layar ini muncul
   /// SEBELUM identitas pengguna diketahui, jadi warnanya murni identitas
   /// VARIAN build, sama spt [AppVariant.logoAsset]/[AppVariant.judulLogin].
-  static const _warnaLatar = AppVariant.isAlBahjah
+  static const _warnaLatar = AppVariant.isAlBahjah || AppVariant.isNahl
       ? Color(0xFF14532D)
       : (AppVariant.isPetra ? Color(0xFF1565D8) : Color(0xFF1E3A5F));
 
@@ -290,8 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 10),
           Center(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: _warnaLatar.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
