@@ -83,6 +83,7 @@ Kompilasi target dilakukan dengan `javac -source 1.7 -target 1.7`.
 - Dua file fondasi stabilisasi/dekomisioning pada kedua mirror source: **identik SHA-256**; self-test Java 1.7 lulus **43 pemeriksaan**, output kompilasi terisolasi, dan tidak ada `.class` di samping `.java`.
 - Dua file journal evidence migrasi immutable pada kedua mirror source: **identik SHA-256**; self-test Java 1.7 lulus **25 pemeriksaan**, regresi Fase 13–14 tetap lulus **57/43 pemeriksaan**, output kompilasi terisolasi, dan tidak ada `.class` di direktori paket Java.
 - Empat file repository durable dan evidence gate Fase 16: self-test Java 1.7 lulus **30 pemeriksaan**; regresi Fase 13–15 tetap lulus **57/43/25 pemeriksaan**, output kompilasi terisolasi, dan source tree bersih dari `.class`.
+- Empat file kontrol operasional, snapshot/restore/replay, dan gate Fase 17 pada kedua mirror source: **identik SHA-256**; self-test kesiapan operasional lulus **36 pemeriksaan**, regresi journal/gate tetap lulus **25/30 pemeriksaan**, output kompilasi terisolasi, dan source tree bersih dari `.class`.
 
 Build Ant penuh belum menjadi bukti kelulusan karena konfigurasi existing menunjuk `C:\opt\AIS\ais\web\WEB-INF\lib`, sedangkan library aktual berada di `src/main/webapp/WEB-INF/lib`. Hambatan build ini tidak boleh disamarkan sebagai kegagalan kontrak target maupun dianggap selesai tanpa perbaikan terpisah.
 
@@ -107,6 +108,7 @@ Build Ant penuh belum menjadi bukti kelulusan karena konfigurasi existing menunj
 | 14. Stabilisasi & dekomisioning legacy | Selesai (fondasi) | Registry decision-only default OFF, observasi, rekonsiliasi, dependency scan, deprecation, penghentian writer, arsip, restore/replay, dokumentasi, sign-off, removal release terpisah, dan rollback | Selesaikan pilot Fase 13, kumpulkan evidence produksi, jalankan drill restore/replay, lalu ajukan release penghentian writer dan removal secara terpisah |
 | 15. Journal evidence migrasi immutable | Selesai (fondasi) | Journal append-only, hash chain SHA-256, idempotensi event, conflict rejection, file locking, durable sync, verifikasi tamper/truncation, dan UAT Java 1.7 | Pasang repository durable/WORM, autentikasi aktor, orkestrator fail-closed Fase 13–14, monitoring, serta restore/replay drill di staging |
 | 16. Repository durable & evidence gate | Selesai (fondasi) | Repository terisolasi per scope, gate autentikasi/otorisasi fail-closed, evidence PREPARED/FAILED/APPLIED, retry idempoten, metrik, failure injection, dan UAT Java 1.7 | Pasang adapter WORM produksi, identity provider nyata, observability/retention, crash-recovery dan concurrency test, lalu integrasi rollout risiko rendah di staging |
+| 17. Kesiapan operasional evidence | Selesai (fondasi) | Kontrol feature flag dan identitas fail-closed, snapshot no-overwrite beserta manifest SHA-256, restore terverifikasi, replay per operasi, retention plan/legal hold, uji konkurensi dan crash-recovery | Pasang IAM serta WORM nyata, scheduler/replikasi/monitoring, drill lintas host, canary staging, dan sign-off keamanan/operasional; flag tetap OFF sampai seluruh gerbang lulus |
 
 ## Urutan implementasi berikutnya
 
@@ -126,6 +128,7 @@ Build Ant penuh belum menjadi bukti kelulusan karena konfigurasi existing menunj
 14. Fondasi Fase 14 sudah tersedia; mulai observasi hanya setelah pilot Fase 13 selesai, tutup exception rekonsiliasi, buktikan dependency nol, dan jangan menghentikan writer atau menghapus artefak sebelum seluruh evidence, restore/replay, dokumentasi, ownership, serta sign-off lengkap.
 15. Fondasi Fase 15 sudah tersedia; gunakan journal untuk mengikat evidence pada scope/stage Fase 13–14, tetapi jangan menjadikannya satu-satunya storage produksi sebelum adapter durable/WORM, autentikasi aktor, monitoring, dan restore/replay drill lulus.
 16. Fondasi Fase 16 sudah tersedia; integrasikan repository WORM dan identity provider pada staging, lalu jalankan crash-recovery, concurrency, retention, backup, restore/replay, dan rollback rehearsal sebelum satu pun writer produksi diarahkan melalui gate.
+17. Fondasi Fase 17 sudah tersedia dan SVN r78364 memuat kontrol operasional serta backup evidence; lanjutkan adapter IAM/WORM nyata, scheduler/replikasi/monitoring, drill restore lintas host, dan canary staging dengan flag tetap default OFF.
 
 ## Deployment gates wajib
 
@@ -139,6 +142,6 @@ Build Ant penuh belum menjadi bukti kelulusan karena konfigurasi existing menunj
 
 ## Status repository
 
-- Perubahan adapter berada pada working copy SVN di bawah `C:\opt\AIS\ais\src\main`, tetapi masih lokal dan belum di-commit.
+- Implementasi Fase 17 sudah di-commit ke SVN pada **r78364**; source kanonis dan mirror untuk empat file target telah diverifikasi identik.
 - Folder dokumentasi berada di repository Git `C:\opt\CodeBaseDesktopDanMobile`.
-- Pada eksekusi ini belum dilakukan commit, push, build release, atau publikasi GitHub.
+- Build release/publikasi artefak aplikasi tidak dilakukan pada fase ini; feature flag runtime tetap default OFF.
