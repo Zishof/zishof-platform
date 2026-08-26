@@ -10,9 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 /// metodenya masih diizinkan.
 void main() {
   late String source;
+  late String sourceKasir;
+  late String sourcePesanan;
 
   setUpAll(() {
     source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
+    sourceKasir = File('lib/screens/kasir_screen.dart').readAsStringSync();
+    sourcePesanan = File('lib/screens/pesanan_screen.dart').readAsStringSync();
   });
 
   test('picker memuat ulang metode sesuai member sebelum ditampilkan', () {
@@ -22,8 +26,9 @@ void main() {
     expect(akhir, greaterThan(awal));
 
     final method = source.substring(awal, akhir);
+    expect(method, contains('await _muatCaraBayarUntukMember('));
     expect(method,
-        contains('await _muatCaraBayarUntukMember(_memberTerpilih?.id);'));
+        contains('_semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id'));
     expect(method.indexOf('await _muatCaraBayarUntukMember'),
         lessThan(method.indexOf('showModalBottomSheet')));
   });
@@ -36,5 +41,23 @@ void main() {
     expect(source, contains('splitMasihDiizinkan'));
     expect(source, contains('metodeMenurutId.containsKey(slot.caraBayar.id)'));
     expect(source, contains('_splitBayar = splitTersegar'));
+  });
+
+  test('member awal dari draft menawarkan semua metode aktif', () {
+    expect(sourcePesanan,
+        contains('semuaCaraBayarUntukMemberAwal: member != null'));
+    expect(
+        sourceKasir,
+        contains(
+            'semuaCaraBayarUntukMemberAwal: _semuaCaraBayarUntukMemberAwal'));
+    expect(source, contains('_semuaCaraBayarUntukMemberAwal ? null'));
+  });
+
+  test('mengganti member mengaktifkan kembali filter jenis member', () {
+    final awal = source.indexOf('Future<void> _pilihMember() async');
+    final akhir = source.indexOf('void _hapusMember()', awal);
+    final method = source.substring(awal, akhir);
+    expect(method, contains('_semuaCaraBayarUntukMemberAwal = false'));
+    expect(method, contains('_muatCaraBayarUntukMember(terpilih.id)'));
   });
 }

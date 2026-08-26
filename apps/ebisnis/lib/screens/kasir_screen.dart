@@ -57,6 +57,7 @@ class KasirScreen extends StatefulWidget {
   final String? draftKodeSumber;
   final Anggota? memberAwal;
   final DateTime? waktuTransaksiAwal;
+  final bool semuaCaraBayarUntukMemberAwal;
 
   const KasirScreen({
     super.key,
@@ -65,6 +66,7 @@ class KasirScreen extends StatefulWidget {
     this.draftKodeSumber,
     this.memberAwal,
     this.waktuTransaksiAwal,
+    this.semuaCaraBayarUntukMemberAwal = false,
   });
 
   @override
@@ -91,6 +93,7 @@ class _KasirScreenState extends State<KasirScreen> {
   String? _draftKodeSumber;
   Anggota? _memberAwal;
   DateTime? _waktuTransaksiAwal;
+  bool _semuaCaraBayarUntukMemberAwal = false;
   int _versiTransaksi = 0;
 
   /// "Harga Coret" (preview katalog, gap-closure Fase 2 Stretch) -- peta
@@ -172,6 +175,7 @@ class _KasirScreenState extends State<KasirScreen> {
     _draftKodeSumber = widget.draftKodeSumber;
     _memberAwal = widget.memberAwal;
     _waktuTransaksiAwal = widget.waktuTransaksiAwal;
+    _semuaCaraBayarUntukMemberAwal = widget.semuaCaraBayarUntukMemberAwal;
     _muatPreferensiTampilan();
     _muatAwal();
     if (_keranjang.isNotEmpty) {
@@ -933,6 +937,7 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftKodeSumber = null;
       _memberAwal = null;
       _waktuTransaksiAwal = null;
+      _semuaCaraBayarUntukMemberAwal = false;
     });
     unawaited(_perbaruiJumlahPending());
     // Segarkan katalog segera setelah checkout. Server sudah menghitung ulang stok dari jurnal
@@ -1250,6 +1255,7 @@ class _KasirScreenState extends State<KasirScreen> {
       _draftKodeSumber = null;
       _memberAwal = null;
       _waktuTransaksiAwal = null;
+      _semuaCaraBayarUntukMemberAwal = false;
       _versiTransaksi++;
       _kataKunciController.clear();
       _kataKunci = '';
@@ -1273,6 +1279,7 @@ class _KasirScreenState extends State<KasirScreen> {
         draftKodeSumber: _draftKodeSumber,
         memberAwal: _memberAwal,
         waktuTransaksiAwal: _waktuTransaksiAwal,
+        semuaCaraBayarUntukMemberAwal: _semuaCaraBayarUntukMemberAwal,
       ),
     ));
     await _perbaruiJumlahPending();
@@ -1282,6 +1289,7 @@ class _KasirScreenState extends State<KasirScreen> {
         _draftKodeSumber = null;
         _memberAwal = null;
         _waktuTransaksiAwal = null;
+        _semuaCaraBayarUntukMemberAwal = false;
         _versiTransaksi++;
       }
     });
@@ -1936,6 +1944,7 @@ class _KasirScreenState extends State<KasirScreen> {
       draftKodeSumber: _draftKodeSumber,
       memberAwal: _memberAwal,
       waktuTransaksiAwal: _waktuTransaksiAwal,
+      semuaCaraBayarUntukMemberAwal: _semuaCaraBayarUntukMemberAwal,
       pencarianBarang: _fokusKeranjang ? _kotakPencarian() : null,
       tampilkanJudul: !_fokusKeranjang,
       aksiHeader: _fokusKeranjang

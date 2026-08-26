@@ -67,13 +67,15 @@ class KeranjangScreen extends StatelessWidget {
   final String? draftKodeSumber;
   final Anggota? memberAwal;
   final DateTime? waktuTransaksiAwal;
+  final bool semuaCaraBayarUntukMemberAwal;
   const KeranjangScreen(
       {super.key,
       required this.keranjang,
       this.draftIdSumber,
       this.draftKodeSumber,
       this.memberAwal,
-      this.waktuTransaksiAwal});
+      this.waktuTransaksiAwal,
+      this.semuaCaraBayarUntukMemberAwal = false});
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +86,8 @@ class KeranjangScreen extends StatelessWidget {
           draftIdSumber: draftIdSumber,
           draftKodeSumber: draftKodeSumber,
           memberAwal: memberAwal,
-          waktuTransaksiAwal: waktuTransaksiAwal),
+          waktuTransaksiAwal: waktuTransaksiAwal,
+          semuaCaraBayarUntukMemberAwal: semuaCaraBayarUntukMemberAwal),
     );
   }
 }
@@ -103,6 +106,7 @@ class PanelKeranjang extends StatefulWidget {
   final String? draftKodeSumber;
   final Anggota? memberAwal;
   final DateTime? waktuTransaksiAwal;
+  final bool semuaCaraBayarUntukMemberAwal;
   final Widget? pencarianBarang;
 
   /// Header "Keranjang" + [aksiHeader] di kanannya (mis. tombol toggle Fokus
@@ -123,6 +127,7 @@ class PanelKeranjang extends StatefulWidget {
     this.draftKodeSumber,
     this.memberAwal,
     this.waktuTransaksiAwal,
+    this.semuaCaraBayarUntukMemberAwal = false,
     this.pencarianBarang,
     this.tampilkanJudul = false,
     this.aksiHeader,
@@ -148,6 +153,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool _memuatCaraBayar = false;
   bool _izinCaraBayarMemberTidakDisetel = false;
   int _versiPermintaanCaraBayar = 0;
+  late bool _semuaCaraBayarUntukMemberAwal;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
@@ -184,6 +190,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     super.initState();
     _memberTerpilih = widget.memberAwal;
     _waktuTransaksi = widget.waktuTransaksiAwal ?? DateTime.now();
+    _semuaCaraBayarUntukMemberAwal =
+        widget.semuaCaraBayarUntukMemberAwal && widget.memberAwal != null;
     _caraBayarTersedia = List<CaraBayar>.of(Sesi.instance.caraBayar);
     if (_caraBayarTersedia.isNotEmpty) {
       _caraBayarTerpilih =
@@ -202,7 +210,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
       });
     }
-    await _muatCaraBayarUntukMember(_memberTerpilih?.id);
+    await _muatCaraBayarUntukMember(
+        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
   }
 
   /// Memuat ulang metode pembayaran setiap kali member berubah, sama seperti
@@ -626,6 +635,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       setStateIfMounted(() {
         _memberTerpilih = terpilih;
         _saldoMember = null;
+        _semuaCaraBayarUntukMemberAwal = false;
       });
       unawaited(_muatCaraBayarUntukMember(terpilih.id));
       _siarkanKeranjang();
@@ -647,6 +657,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     setStateIfMounted(() {
       _memberTerpilih = null;
       _saldoMember = null;
+      _semuaCaraBayarUntukMemberAwal = false;
     });
     unawaited(_muatCaraBayarUntukMember(null));
     _siarkanKeranjang();
@@ -1509,7 +1520,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     // dapat diubah admin ketika aplikasi Kasir 2/3 tetap terbuka; muat ulang
     // persis sebelum dialog ditampilkan supaya seluruh perangkat pada toko
     // yang sama melihat izin member/metode terbaru tanpa harus logout.
-    await _muatCaraBayarUntukMember(_memberTerpilih?.id);
+    await _muatCaraBayarUntukMember(
+        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
     if (!mounted || _caraBayarTersedia.isEmpty) return;
     final awal = _splitBayar.isNotEmpty
         ? _splitBayar

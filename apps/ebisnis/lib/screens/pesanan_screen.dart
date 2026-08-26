@@ -1412,6 +1412,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
         // Waktu draft lama tidak boleh ikut menjadi tanggal transaksi baru.
         // Tangkap waktu tepat ketika kasir memilih "Muat ke Keranjang".
         waktuTransaksiAwal: waktuTransaksiDraftDilanjutkan(),
+        // Member draft tetap dikirim ke transaksi, tetapi pemulihan draft
+        // harus menawarkan semua metode aktif (termasuk Kasbon Divisi).
+        semuaCaraBayarUntukMemberAwal: member != null,
       ),
     ));
     await _muat();
