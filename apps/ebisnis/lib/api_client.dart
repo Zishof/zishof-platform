@@ -242,6 +242,9 @@ class ApiClient {
     'secret',
     'api_key',
     'apikey',
+    'template_base64',
+    'probe_base64',
+    'biometric_template',
   };
 
   /// Menyalin payload untuk keperluan log: nilai rahasia diganti penanda, dan

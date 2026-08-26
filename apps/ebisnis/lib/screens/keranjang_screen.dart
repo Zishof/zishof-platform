@@ -15,6 +15,7 @@ import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../services/biometric_capture_bridge.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
@@ -891,6 +892,73 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<bool> _verifikasiPinJikaPerlu() async {
     final member = _memberTerpilih;
     if (member == null || !member.wajibPin) return true;
+    final bridge = PosBiometricCaptureBridge();
+    final capability = await bridge.capabilities();
+    if (!mounted) return false;
+    final pilihan = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Verifikasi member'),
+        children: [
+          if (capability['fingerprint'] == true)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'FINGERPRINT'),
+              child: const ListTile(
+                leading: Icon(Icons.fingerprint),
+                title: Text('Sidik jari'),
+                subtitle: Text('Verifikasi melalui scanner institusi'),
+              ),
+            ),
+          if (capability['face'] == true)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'FACE'),
+              child: const ListTile(
+                leading: Icon(Icons.face),
+                title: Text('Pengenalan wajah'),
+                subtitle: Text('Memerlukan pemeriksaan liveness'),
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'PIN'),
+            child: const ListTile(
+              leading: Icon(Icons.pin),
+              title: Text('PIN member'),
+              subtitle: Text(
+                  'Metode cadangan saat perangkat biometrik tidak tersedia'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (pilihan == null) return false;
+    if (pilihan != 'PIN') {
+      try {
+        final sample = await bridge.capture(pilihan);
+        final hasil =
+            await ApiClient.instance.aksi('verifikasi_biometrik_member', {
+          'memberId': member.id,
+          'modality': sample.modality,
+          'probe_base64': sample.templateBase64,
+          'template_format': sample.templateFormat,
+          'provider': sample.provider,
+          'liveness_score': sample.livenessScore,
+          'clientMutationId':
+              'pos-bio-${DateTime.now().microsecondsSinceEpoch}',
+        });
+        if (!mounted) return false;
+        final ok = hasil['ok'] == true;
+        if (!ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content:
+                  Text('${hasil['message'] ?? 'Biometrik tidak cocok.'}')));
+        }
+        return ok;
+      } catch (e) {
+        if (mounted) snackbarGalat(context, e);
+        return false;
+      }
+    }
+    if (!mounted) return false;
     final pin = await showDialog<String>(
       context: context,
       builder: (_) => const _DialogMasukkanPin(),
@@ -969,8 +1037,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _pilihRoomCharge() async {
     List<Map<String, dynamic>> daftarStay;
     try {
-      final res =
-          await ApiClient.instance.aksi('hotel_room_charge_lookup', {});
+      final res = await ApiClient.instance.aksi('hotel_room_charge_lookup', {});
       if (res['status'] != '00' && res['status'] != 'success') {
         throw Exception(res['description'] ?? 'Gagal memuat tamu in-house.');
       }
@@ -1013,8 +1080,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   hintText: 'Cari nama tamu / nomor kamar',
                   autofocus: true,
                   debounce: Duration.zero,
-                  onChanged: (v) =>
-                      setD(() => filter = v.trim().toLowerCase()),
+                  onChanged: (v) => setD(() => filter = v.trim().toLowerCase()),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
