@@ -1114,6 +1114,22 @@ class CoreDb {
 
   // ============================== ANGGOTA CACHE ==============================
 
+  /// Ganti cache member secara atomik setelah seluruh halaman server berhasil
+  /// diunduh. Baris yang sudah hilang/nonaktif di server ikut dibersihkan,
+  /// sementara kegagalan unduh tidak menyentuh cache lama.
+  Future<void> replaceAnggotaCache(List<Map<String, Object?>> baris) async {
+    final database = await db;
+    await database.transaction((txn) async {
+      await txn.delete('anggota_cache');
+      final batch = txn.batch();
+      for (final b in baris) {
+        batch.insert('anggota_cache', b,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
   Future<void> upsertAnggotaCache(List<Map<String, Object?>> baris) async {
     final database = await db;
     final batch = database.batch();
@@ -1669,6 +1685,92 @@ class CoreDb {
   Future<List<Map<String, Object?>>> listCacheReferensi() async {
     final database = await db;
     return database.query('cache_referensi', orderBy: 'kunci ASC');
+  }
+
+  /// Inventaris seluruh tabel SQLite milik aplikasi secara dinamis.
+  ///
+  /// Tidak ada daftar nama tabel yang di-hardcode di sini: tabel baru yang
+  /// ditambahkan lewat migrasi otomatis ikut tampil pada pusat audit sinkron.
+  /// Nilai ini hanya diagnostik/read-only; keputusan apakah sebuah tabel aman
+  /// disinkronkan tetap berada pada adapter aplikasi (jangan pernah mengirim
+  /// SQL/nama tabel bebas ke server).
+  Future<List<Map<String, Object?>>> statistikSeluruhTabel() async {
+    final database = await db;
+    final tabel = await database.rawQuery('''
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+      ORDER BY name COLLATE NOCASE
+    ''');
+    final hasil = <Map<String, Object?>>[];
+    for (final item in tabel) {
+      final nama = '${item['name'] ?? ''}';
+      if (nama.isEmpty) continue;
+      final aman = '"${nama.replaceAll('"', '""')}"';
+      final info = await database.rawQuery('PRAGMA table_info($aman)');
+      final kolom = info.map((e) => '${e['name'] ?? ''}').toList();
+      final count = await database.rawQuery('SELECT COUNT(*) AS n FROM $aman');
+      var pending = 0;
+      var gagal = 0;
+      var terhapus = 0;
+      if (kolom.contains('status')) {
+        final status = await database.rawQuery('''
+          SELECT UPPER(COALESCE(status, '')) AS status, COUNT(*) AS n
+          FROM $aman GROUP BY UPPER(COALESCE(status, ''))
+        ''');
+        for (final row in status) {
+          final nilai = '${row['status'] ?? ''}';
+          final jumlah = (row['n'] as num?)?.toInt() ?? 0;
+          if (nilai == 'PENDING') pending += jumlah;
+          if (nilai == 'GAGAL' || nilai == 'FAILED') gagal += jumlah;
+        }
+      }
+      if (nama == 'cache_referensi') {
+        final cache =
+            await database.query('cache_referensi', columns: ['nilai_json']);
+        for (final row in cache) {
+          try {
+            final nilai = jsonDecode('${row['nilai_json']}');
+            if (nilai is List) {
+              terhapus += nilai
+                  .whereType<Map>()
+                  .where((e) => e['_dihapus'] == true)
+                  .length;
+            }
+          } catch (_) {
+            // Cache lama/korup dihitung sebagai satu kegagalan audit; satu
+            // nilai rusak tidak boleh menggagalkan inventaris tabel lain.
+            gagal++;
+          }
+        }
+      }
+      final kolomWaktu = [
+        'diperbarui_pada',
+        'terakhir_dicoba',
+        'dibuat_pada',
+        'waktu',
+        'dibuka_pada'
+      ].where(kolom.contains).toList();
+      String? terbaru;
+      if (kolomWaktu.isNotEmpty) {
+        final waktu = kolomWaktu.first;
+        final qWaktu = '"${waktu.replaceAll('"', '""')}"';
+        final max = await database
+            .rawQuery('SELECT MAX($qWaktu) AS terbaru FROM $aman');
+        terbaru = max.first['terbaru']?.toString();
+      }
+      hasil.add({
+        'nama': nama,
+        'jumlah': (count.first['n'] as num?)?.toInt() ?? 0,
+        'pending': pending,
+        'gagal': gagal,
+        'terhapus': terhapus,
+        'terbaru': terbaru,
+        'kolom': kolom,
+        'jumlah_kolom': kolom.length,
+      });
+    }
+    return hasil;
   }
 
   // ============================== TRANSAKSI PENDING (lanjutan) ==============================
