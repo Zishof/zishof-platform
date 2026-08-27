@@ -51,6 +51,16 @@ bool produkCocokKataKunci(Produk produk, String kataKunci) {
       produk.barcode.toLowerCase().contains(kata);
 }
 
+/// Satu sumber keputusan UI untuk kartu, pencarian, scan barcode, Desktop,
+/// dan Android. Server tetap menjadi pemutus akhir saat pembayaran.
+@visibleForTesting
+bool produkBolehDijualMenurutStok(
+  Produk produk, {
+  required bool paksaStokMinusToko,
+}) {
+  return produk.stok > 0 || paksaStokMinusToko || produk.izinkanJualMinusStok;
+}
+
 class KasirScreen extends StatefulWidget {
   final List<ItemKeranjang> keranjangAwal;
   final int? draftIdSumber;
@@ -288,6 +298,8 @@ class _KasirScreenState extends State<KasirScreen> {
         kategoriId: b['kategori_id'] as int?,
         kategoriNama: (b['kategori_nama'] ?? '') as String,
         gambarUrl: b['gambar_url'] as String?,
+        izinkanJualMinusStok:
+            (b['izinkan_jual_minus_stok'] as num?)?.toInt() == 1,
         // Offline-first: gerbang "Pilih Ekstra" (_tambahKeKeranjang) harus
         // tetap aktif walau Kasir baru saja start dari cache lokal (belum
         // sempat sinkron katalog dari server) -- tanpa ini produk dgn ekstra
@@ -1039,6 +1051,19 @@ class _KasirScreenState extends State<KasirScreen> {
   /// dilewati (jalur lama persis, tanpa perubahan) utk mayoritas produk tanpa
   /// ekstra sama sekali.
   void _tambahKeKeranjang(Produk p) {
+    if (!produkBolehDijualMenurutStok(
+      p,
+      paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${p.nama} tidak dapat dijual karena stok habis dan izin stok minus tidak aktif.'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     if (p.ekstraPilihan.isNotEmpty) {
       unawaited(_tambahKeKeranjangDenganEkstra(p));
       return;
@@ -2049,6 +2074,10 @@ class _KasirScreenState extends State<KasirScreen> {
                 itemBuilder: (context, i) => _BarisHasilPencarian(
                   nomor: i < 9 ? '${i + 1}' : (i == 9 ? '0' : ''),
                   produk: hasil[i],
+                  bolehDijual: produkBolehDijualMenurutStok(
+                    hasil[i],
+                    paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
+                  ),
                   onTap: () => _pilihHasilPencarian(hasil[i]),
                 ),
               ),
@@ -2153,6 +2182,10 @@ class _KasirScreenState extends State<KasirScreen> {
                 itemCount: produkTampil.length,
                 itemBuilder: (context, i) => _KartuProduk(
                   produk: produkTampil[i],
+                  bolehDijual: produkBolehDijualMenurutStok(
+                    produkTampil[i],
+                    paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
+                  ),
                   onTap: () => _tambahKeKeranjang(produkTampil[i]),
                   diskon: _diskonKatalog[produkTampil[i].id],
                   cashback: _cashbackKatalog[produkTampil[i].id],
@@ -2419,9 +2452,13 @@ const _paletKartuProduk = [
 class _BarisHasilPencarian extends StatelessWidget {
   final String nomor;
   final Produk produk;
+  final bool bolehDijual;
   final VoidCallback onTap;
   const _BarisHasilPencarian(
-      {required this.nomor, required this.produk, required this.onTap});
+      {required this.nomor,
+      required this.produk,
+      required this.bolehDijual,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2470,10 +2507,11 @@ class _BarisHasilPencarian extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           color: AppColors.textPrimaryOf(context))),
-                  Text('${produk.kode}${habis ? ' · Habis' : ''}',
+                  Text(
+                      '${produk.kode}${habis ? (bolehDijual ? ' · Stok minus diizinkan' : ' · Habis') : ''}',
                       style: TextStyle(
                           fontSize: 11,
-                          color: habis
+                          color: habis && !bolehDijual
                               ? AppColors.danger
                               : AppColors.textSecondaryOf(context))),
                 ],
@@ -2494,6 +2532,7 @@ class _BarisHasilPencarian extends StatelessWidget {
 
 class _KartuProduk extends StatefulWidget {
   final Produk produk;
+  final bool bolehDijual;
   final VoidCallback onTap;
 
   /// "Harga Coret" (gap-closure Fase 2 Stretch) -- nominal diskon dari preview
@@ -2505,7 +2544,11 @@ class _KartuProduk extends StatefulWidget {
   final double? diskon;
   final double? cashback;
   const _KartuProduk(
-      {required this.produk, required this.onTap, this.diskon, this.cashback});
+      {required this.produk,
+      required this.bolehDijual,
+      required this.onTap,
+      this.diskon,
+      this.cashback});
 
   @override
   State<_KartuProduk> createState() => _KartuProdukState();
@@ -2565,6 +2608,7 @@ class _KartuProdukState extends State<_KartuProduk> {
     final diskon = widget.diskon;
     final cashback = widget.cashback;
     final habis = produk.stok <= 0;
+    final diblokirStok = habis && !widget.bolehDijual;
     final stokRendah = !habis && produk.stok <= 5;
     final warnaAvatar = _paletKartuProduk[produk.nama.isEmpty
         ? 0
@@ -2588,9 +2632,9 @@ class _KartuProdukState extends State<_KartuProduk> {
               ],
       ),
       child: Opacity(
-        opacity: habis ? 0.55 : 1,
+        opacity: diblokirStok ? 0.55 : 1,
         child: InkWell(
-          onTap: habis ? null : onTap,
+          onTap: diblokirStok ? null : onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -2648,11 +2692,13 @@ class _KartuProdukState extends State<_KartuProduk> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: habis
+                          color: diblokirStok
                               ? AppColors.danger
-                              : (stokRendah
+                              : habis
                                   ? AppColors.warning
-                                  : AppColors.cardBgOf(context)),
+                                  : (stokRendah
+                                      ? AppColors.warning
+                                      : AppColors.cardBgOf(context)),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
@@ -2661,7 +2707,11 @@ class _KartuProdukState extends State<_KartuProduk> {
                           ],
                         ),
                         child: Text(
-                          habis ? 'Habis' : 'Stok ${produk.stok}',
+                          diblokirStok
+                              ? 'Habis'
+                              : habis
+                                  ? 'Minus OK'
+                                  : 'Stok ${produk.stok}',
                           style: TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w700,

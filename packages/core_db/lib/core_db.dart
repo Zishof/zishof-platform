@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 14,
+        version: 15,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -448,6 +448,16 @@ class CoreDb {
         }
       }
     }
+    if (versiLama < 15) {
+      // Izin stok minus per-produk harus ikut katalog lokal. Tanpa kolom ini,
+      // aplikasi offline menganggap semua produk stok nol selalu terblokir.
+      try {
+        await db.execute(
+            'ALTER TABLE produk_cache ADD COLUMN izinkan_jual_minus_stok INTEGER DEFAULT 0');
+      } catch (_) {
+        // Kolom mungkin sudah dibuat oleh upgrade parsial.
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -539,7 +549,8 @@ class CoreDb {
         aktif INTEGER DEFAULT 1,
         jenis_item TEXT,
         ekstra_pilihan TEXT,
-        foto_urls TEXT
+        foto_urls TEXT,
+        izinkan_jual_minus_stok INTEGER DEFAULT 0
       )
     ''');
     await db

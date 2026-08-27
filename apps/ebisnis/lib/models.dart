@@ -139,6 +139,7 @@ class Produk {
             .toList()),
         'foto_urls': jsonEncode(
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),
+        'izinkan_jual_minus_stok': j['izinkanJualMinusStok'] == true ? 1 : 0,
       };
 }
 
