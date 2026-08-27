@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
+import '../../services/sinkronisasi_tabel_service.dart';
 
 /// Tab "Sinkronisasi Sivitas" (padanan `sinkron_siswa_mahasiswa.jsp`)
 /// -- bulk-buat/perbarui AnggotaKoperasi dari data master sivitas yg
@@ -13,7 +14,9 @@ import '../../widgets/jejak_galat.dart';
 /// supervisor) -- SUDAH SAMA PERSIS dgn `LokasiKantinUtil.bolehKelola` versi
 /// JSP, tak perlu flag baru.
 class AnggotaTabSinkronisasi extends StatefulWidget {
-  const AnggotaTabSinkronisasi({super.key});
+  const AnggotaTabSinkronisasi({super.key, this.onSinkronSelesai});
+
+  final VoidCallback? onSinkronSelesai;
 
   @override
   State<AnggotaTabSinkronisasi> createState() => _AnggotaTabSinkronisasiState();
@@ -59,6 +62,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
   String? _labelProgresSemua;
   String? _pesanErrorSemua;
   List<Map<String, dynamic>>? _hasilSemua;
+  int? _jumlahCacheOffline;
+  String? _galatCacheOffline;
 
   Future<void> _jalankanSemua() async {
     if (_koperasiId == null) {
@@ -72,6 +77,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
       _menjalankanSemua = true;
       _pesanErrorSemua = null;
       _hasilSemua = null;
+      _jumlahCacheOffline = null;
+      _galatCacheOffline = null;
     });
     final hasilPerSumber = <Map<String, dynamic>>[];
     for (final s in _sumberSemua) {
@@ -102,11 +109,21 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
         });
       }
     }
+    int? jumlahCache;
+    String? galatCache;
+    try {
+      jumlahCache = await SinkronisasiTabelService.instance.sinkronkanAnggota();
+    } catch (e) {
+      galatCache = terapkanGalat(e);
+    }
     setStateIfMounted(() {
       _menjalankanSemua = false;
       _labelProgresSemua = null;
       _hasilSemua = hasilPerSumber;
+      _jumlahCacheOffline = jumlahCache;
+      _galatCacheOffline = galatCache;
     });
+    if (jumlahCache != null) widget.onSinkronSelesai?.call();
   }
 
   @override
@@ -366,6 +383,29 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (_galatCacheOffline == null
+                            ? AppColors.success
+                            : AppColors.danger)
+                        .withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _galatCacheOffline == null
+                        ? '${_jumlahCacheOffline ?? 0} member server sudah diunduh ke cache offline perangkat.'
+                        : 'Member server selesai diproses, tetapi cache lokal belum dapat diperbarui: $_galatCacheOffline',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _galatCacheOffline == null
+                          ? AppColors.success
+                          : AppColors.danger,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ..._hasilSemua!.map((r) {

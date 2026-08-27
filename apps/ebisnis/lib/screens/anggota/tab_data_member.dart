@@ -35,7 +35,14 @@ final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
 /// pola tak aman yg sengaja tak direplikasi) dan tombol kirim-notifikasi
 /// per-baris/massal (fitur terpisah, di luar cakupan 6 tab yg diminta).
 class AnggotaTabDataMember extends StatefulWidget {
-  const AnggotaTabDataMember({super.key});
+  const AnggotaTabDataMember({
+    super.key,
+    this.refreshVersion = 0,
+    this.onBukaSinkronisasi,
+  });
+
+  final int refreshVersion;
+  final VoidCallback? onBukaSinkronisasi;
 
   @override
   State<AnggotaTabDataMember> createState() => _AnggotaTabDataMemberState();
@@ -70,6 +77,14 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
   void initState() {
     super.initState();
     _muatSemua();
+  }
+
+  @override
+  void didUpdateWidget(covariant AnggotaTabDataMember oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshVersion != oldWidget.refreshVersion) {
+      _muatSemua();
+    }
   }
 
   Future<void> _muatSemua() async {
@@ -657,6 +672,15 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                   label: Text(_memulaiDataSample
                       ? 'Memulai...'
                       : 'Sample 100K Pelanggan'),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (Sesi.instance.bolehKelola &&
+                  widget.onBukaSinkronisasi != null) ...[
+                FilledButton.icon(
+                  onPressed: widget.onBukaSinkronisasi,
+                  icon: const Icon(Icons.sync_alt, size: 18),
+                  label: const Text('Buat dari Sivitas'),
                 ),
                 const SizedBox(width: 8),
               ],

@@ -36,6 +36,7 @@ class AnggotaScreen extends StatefulWidget {
 class _AnggotaScreenState extends State<AnggotaScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  int _versiDataMember = 0;
 
   @override
   void initState() {
@@ -88,19 +89,24 @@ class _AnggotaScreenState extends State<AnggotaScreen>
             ],
           ),
           Expanded(
-            child: TabBarView(controller: _tab, children: const [
-              AnggotaTabDataMember(),
-              AnggotaTabJenisMember(),
-              AnggotaTabTipeMember(),
-              AnggotaTabPengajuanLimit(),
-              AnggotaTabTopup(),
-              AnggotaTabSaldoVoucher(),
-              AnggotaTabMutasiTabungan(),
-              AnggotaTabMutasiHutang(),
-              AnggotaTabPembantuPiutang(),
-              AnggotaTabNotifikasi(),
-              AnggotaTabSatuanKerja(),
-              AnggotaTabSinkronisasi(),
+            child: TabBarView(controller: _tab, children: [
+              AnggotaTabDataMember(
+                refreshVersion: _versiDataMember,
+                onBukaSinkronisasi: () => _tab.animateTo(11),
+              ),
+              const AnggotaTabJenisMember(),
+              const AnggotaTabTipeMember(),
+              const AnggotaTabPengajuanLimit(),
+              const AnggotaTabTopup(),
+              const AnggotaTabSaldoVoucher(),
+              const AnggotaTabMutasiTabungan(),
+              const AnggotaTabMutasiHutang(),
+              const AnggotaTabPembantuPiutang(),
+              const AnggotaTabNotifikasi(),
+              const AnggotaTabSatuanKerja(),
+              AnggotaTabSinkronisasi(
+                onSinkronSelesai: () => setState(() => _versiDataMember++),
+              ),
             ]),
           ),
         ],

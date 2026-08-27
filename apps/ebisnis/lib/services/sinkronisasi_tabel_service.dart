@@ -175,7 +175,7 @@ class SinkronisasiTabelService {
         final jumlah = await _sinkronProduk();
         return '$jumlah produk berhasil dicocokkan dengan server.';
       case 'anggota':
-        final jumlah = await _sinkronAnggota();
+        final jumlah = await sinkronkanAnggota();
         return '$jumlah member berhasil diunduh dari server.';
       case 'transaksi':
         final hasil = await TransaksiOutboxService.instance
@@ -205,7 +205,10 @@ class SinkronisasiTabelService {
     return pesan;
   }
 
-  Future<int> _sinkronAnggota() async {
+  /// Unduh ulang seluruh member aktif dari server dan ganti cache lokal secara
+  /// atomik. Dipublikasikan agar alur "Sinkronkan Semua Sivitas" dapat langsung
+  /// menutup langkah kedua tanpa meminta pengguna menekan tombol lain.
+  Future<int> sinkronkanAnggota() async {
     await MasterOffline.flush();
     var sejakId = 0;
     final perId = <int, Map<String, Object?>>{};

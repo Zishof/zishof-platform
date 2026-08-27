@@ -47,4 +47,24 @@ void main() {
     expect(source, contains('_menjalankanSemua || _koperasi.isEmpty'));
     expect(source, contains("r['error'] as String?"));
   });
+
+  test('sinkron semua langsung menghidrasi cache dan menyegarkan daftar', () {
+    final sinkron =
+        File('lib/screens/anggota/tab_sinkronisasi.dart').readAsStringSync();
+    final host = File('lib/screens/anggota_screen.dart').readAsStringSync();
+    final data =
+        File('lib/screens/anggota/tab_data_member.dart').readAsStringSync();
+    final service =
+        File('lib/services/sinkronisasi_tabel_service.dart').readAsStringSync();
+
+    expect(sinkron, contains('sinkronkanAnggota()'));
+    expect(sinkron, contains('member server sudah diunduh ke cache offline'));
+    expect(sinkron, contains('widget.onSinkronSelesai?.call()'));
+    expect(host, contains('onSinkronSelesai'));
+    expect(host, contains('_versiDataMember++'));
+    expect(data, contains('didUpdateWidget'));
+    expect(data, contains("label: const Text('Buat dari Sivitas')"));
+    expect(service, contains('Future<int> sinkronkanAnggota()'));
+    expect(service, contains('replaceAnggotaCache'));
+  });
 }
