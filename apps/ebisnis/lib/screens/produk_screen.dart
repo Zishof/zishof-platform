@@ -1328,6 +1328,15 @@ class _DialogDetailStatistikProdukState
   String? _error;
   List<Map<String, dynamic>> _produk = const [];
   int _barisPerHalaman = 10;
+  int _halaman = 0;
+
+  int get _jumlahHalaman => _produk.isEmpty
+      ? 1
+      : ((_produk.length + _barisPerHalaman - 1) ~/ _barisPerHalaman);
+
+  void _keHalaman(int halaman) {
+    setState(() => _halaman = halaman.clamp(0, _jumlahHalaman - 1));
+  }
 
   @override
   void initState() {
@@ -1350,6 +1359,7 @@ class _DialogDetailStatistikProdukState
         _produk = ((hasil['produk'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .toList();
+        _halaman = 0;
       });
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -1493,6 +1503,43 @@ class _DialogDetailStatistikProdukState
                       ),
                     ],
                   ),
+                  if (_produk.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text('Halaman ${_halaman + 1} dari $_jumlahHalaman'),
+                        const Spacer(),
+                        Text('Baris per halaman: $_barisPerHalaman'),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Halaman pertama',
+                          onPressed: _halaman > 0 ? () => _keHalaman(0) : null,
+                          icon: const Icon(Icons.first_page),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman sebelumnya',
+                          onPressed: _halaman > 0
+                              ? () => _keHalaman(_halaman - 1)
+                              : null,
+                          icon: const Icon(Icons.chevron_left),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman berikutnya',
+                          onPressed: _halaman < _jumlahHalaman - 1
+                              ? () => _keHalaman(_halaman + 1)
+                              : null,
+                          icon: const Icon(Icons.chevron_right),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman terakhir',
+                          onPressed: _halaman < _jumlahHalaman - 1
+                              ? () => _keHalaman(_jumlahHalaman - 1)
+                              : null,
+                          icon: const Icon(Icons.last_page),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1530,12 +1577,26 @@ class _DialogDetailStatistikProdukState
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: PaginatedDataTable(
+                                  key: ValueKey(
+                                      'produk-statistik-$_barisPerHalaman-$_halaman'),
                                   showFirstLastButtons: true,
+                                  initialFirstRowIndex:
+                                      _halaman * _barisPerHalaman,
                                   rowsPerPage: _barisPerHalaman,
                                   availableRowsPerPage: const [10, 25, 50, 100],
                                   onRowsPerPageChanged: (value) {
                                     if (value != null) {
-                                      setState(() => _barisPerHalaman = value);
+                                      setState(() {
+                                        _barisPerHalaman = value;
+                                        _halaman = 0;
+                                      });
+                                    }
+                                  },
+                                  onPageChanged: (firstRowIndex) {
+                                    final halaman =
+                                        firstRowIndex ~/ _barisPerHalaman;
+                                    if (halaman != _halaman) {
+                                      setState(() => _halaman = halaman);
                                     }
                                   },
                                   columns: const [

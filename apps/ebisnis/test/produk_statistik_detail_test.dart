@@ -7,6 +7,9 @@ void main() {
 
   test('kartu statistik memuat stok minus dan seluruh kartu clickable', () {
     expect(source, contains("'Stok Minus'"));
+    expect(source, contains(r"'Halaman ${_halaman + 1} dari $_jumlahHalaman'"));
+    expect(source, contains('initialFirstRowIndex:'));
+    expect(source, contains('onPageChanged:'));
     expect(source, contains("'stokMinus'"));
     expect(source, contains('onTap: () => onTap(tipe, label)'));
     expect(source, contains("tooltip: 'Lihat daftar produk \$label'"));
