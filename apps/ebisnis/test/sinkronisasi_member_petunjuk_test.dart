@@ -19,6 +19,10 @@ void main() {
     expect(source, contains('User ID bukan syarat'));
     expect(source, contains('Pegawai harus aktif'));
     expect(source, contains('Pegawai tanpa kode tetap didukung'));
+    expect(source, contains("hasil['description']"));
+    expect(source, contains("hasil['dilewatiDosenGuru']"));
+    expect(source, contains('diproses lewat Dosen/Guru'));
+    expect(source, contains('berstatus nonaktif'));
     expect(source, contains('Dosen memerlukan NIDN'));
     expect(source, contains('Guru memerlukan NIP'));
     expect(source, contains('tekan Unduh Offline'));

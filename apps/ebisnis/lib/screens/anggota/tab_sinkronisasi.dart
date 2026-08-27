@@ -88,6 +88,9 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           'total': hasil['total'] ?? 0,
           'berhasil': hasil['berhasil'] ?? 0,
           'gagal': hasil['gagal'] ?? 0,
+          'description': '${hasil['description'] ?? ''}'.trim(),
+          'dilewatiDosenGuru': hasil['dilewatiDosenGuru'] ?? 0,
+          'dilewatiTidakAktif': hasil['dilewatiTidakAktif'] ?? 0,
         });
       } catch (e) {
         hasilPerSumber.add({
@@ -367,6 +370,11 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                 const SizedBox(height: 12),
                 ..._hasilSemua!.map((r) {
                   final error = r['error'] as String?;
+                  final description = '${r['description'] ?? ''}'.trim();
+                  final dilewatiDosenGuru =
+                      (r['dilewatiDosenGuru'] as num?)?.toInt() ?? 0;
+                  final dilewatiTidakAktif =
+                      (r['dilewatiTidakAktif'] as num?)?.toInt() ?? 0;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.symmetric(
@@ -376,37 +384,56 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
                       border: Border.all(color: AppColors.borderOf(context)),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 2,
-                          child: Text('${r['label']}',
-                              style: const TextStyle(
-                                  fontSize: 12.5, fontWeight: FontWeight.w600)),
-                        ),
-                        if (error != null)
+                        Row(children: [
                           Expanded(
-                            flex: 4,
-                            child: Text('Gagal: $error',
+                            flex: 2,
+                            child: Text('${r['label']}',
                                 style: const TextStyle(
-                                    fontSize: 11.5, color: AppColors.danger),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis),
-                          )
-                        else ...[
-                          Expanded(
-                            child: Text('Total ${r['total']}',
-                                style: const TextStyle(fontSize: 12)),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600)),
                           ),
-                          Expanded(
-                            child: Text('Berhasil ${r['berhasil']}',
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppColors.success)),
-                          ),
-                          Expanded(
-                            child: Text('Gagal ${r['gagal']}',
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppColors.danger)),
+                          if (error != null)
+                            Expanded(
+                              flex: 4,
+                              child: Text('Gagal: $error',
+                                  style: const TextStyle(
+                                      fontSize: 11.5, color: AppColors.danger)),
+                            )
+                          else ...[
+                            Expanded(
+                              child: Text('Total ${r['total']}',
+                                  style: const TextStyle(fontSize: 12)),
+                            ),
+                            Expanded(
+                              child: Text('Berhasil ${r['berhasil']}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: AppColors.success)),
+                            ),
+                            Expanded(
+                              child: Text('Gagal ${r['gagal']}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: AppColors.danger)),
+                            ),
+                          ],
+                        ]),
+                        if (error == null && description.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Text(description,
+                              style: const TextStyle(fontSize: 11.5)),
+                        ],
+                        if (error == null &&
+                            (dilewatiDosenGuru > 0 ||
+                                dilewatiTidakAktif > 0)) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            'Tidak masuk jalur Pegawai umum: '
+                            '$dilewatiDosenGuru diproses lewat Dosen/Guru; '
+                            '$dilewatiTidakAktif berstatus nonaktif.',
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary),
                           ),
                         ],
                       ],
