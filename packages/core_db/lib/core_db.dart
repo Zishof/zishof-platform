@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 16,
+        version: 17,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -469,6 +469,22 @@ class CoreDb {
         // Kolom mungkin sudah dibuat oleh upgrade parsial.
       }
     }
+    if (versiLama < 17) {
+      // Limit tipe member ikut snapshot local-first. Checkout yang mempunyai
+      // limit harus menunggu keputusan server agar pengajuan supervisor tidak
+      // baru diketahui setelah kasir menutup transaksi.
+      for (final kolom in const [
+        'maksimal_transaksi_harian REAL DEFAULT 0',
+        'maksimal_transaksi_mingguan REAL DEFAULT 0',
+        'maksimal_transaksi_bulanan REAL DEFAULT 0',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE anggota_cache ADD COLUMN $kolom');
+        } catch (_) {
+          // Kolom mungkin sudah dibuat oleh upgrade parsial.
+        }
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -583,6 +599,9 @@ class CoreDb {
         pin_sudah_diatur INTEGER DEFAULT 0,
         wajib_biometric_wajah INTEGER DEFAULT 0,
         wajib_biometric_fingerprint INTEGER DEFAULT 0,
+        maksimal_transaksi_harian REAL DEFAULT 0,
+        maksimal_transaksi_mingguan REAL DEFAULT 0,
+        maksimal_transaksi_bulanan REAL DEFAULT 0,
         foto_url TEXT
       )
     ''');

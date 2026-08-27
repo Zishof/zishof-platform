@@ -213,6 +213,28 @@ void main() {
     expect(hasilLazy, hasLength(1));
     expect(hasilLazy.single['kode'], 'UAT-PRODUK-149');
 
+    // UAT kebijakan member: aturan PIN dan limit tipe harus selamat dalam
+    // snapshot lokal. Tanpa tiga kolom limit ini, kasir offline akan salah
+    // menganggap transaksi bebas limit lalu baru mengetahuinya di background.
+    await CoreDb.instance.upsertAnggotaCache(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 7001,
+        'kode': 'MEM-UAT-7001',
+        'nama': 'Member PIN dan Limit',
+        'kode_identitas': 'UAT-7001',
+        'wajib_pin': 1,
+        'maksimal_transaksi_harian': 50000.0,
+        'maksimal_transaksi_mingguan': 200000.0,
+        'maksimal_transaksi_bulanan': 600000.0,
+      }
+    ]);
+    final memberLimit = await CoreDb.instance.cariAnggotaCache('UAT-7001');
+    expect(memberLimit, hasLength(1));
+    expect(memberLimit.single['wajib_pin'], 1);
+    expect(memberLimit.single['maksimal_transaksi_harian'], 50000.0);
+    expect(memberLimit.single['maksimal_transaksi_mingguan'], 200000.0);
+    expect(memberLimit.single['maksimal_transaksi_bulanan'], 600000.0);
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     try {

@@ -392,6 +392,9 @@ class Anggota {
   final bool pinSudahDiatur;
   final bool wajibBiometricWajah;
   final bool wajibBiometricFingerprint;
+  final double maksimalTransaksiHarian;
+  final double maksimalTransaksiMingguan;
+  final double maksimalTransaksiBulanan;
   final bool aktif;
   final double minSaldo;
   final int? tipeAnggotaKoperasiId;
@@ -414,6 +417,9 @@ class Anggota {
     this.pinSudahDiatur = false,
     this.wajibBiometricWajah = false,
     this.wajibBiometricFingerprint = false,
+    this.maksimalTransaksiHarian = 0,
+    this.maksimalTransaksiMingguan = 0,
+    this.maksimalTransaksiBulanan = 0,
     this.aktif = true,
     required this.minSaldo,
     this.tipeAnggotaKoperasiId,
@@ -437,6 +443,12 @@ class Anggota {
         pinSudahDiatur: j['pinSudahDiatur'] == true,
         wajibBiometricWajah: j['wajibBiometricWajah'] == true,
         wajibBiometricFingerprint: j['wajibBiometricFingerprint'] == true,
+        maksimalTransaksiHarian:
+            (j['maksimalTransaksiHarian'] as num?)?.toDouble() ?? 0,
+        maksimalTransaksiMingguan:
+            (j['maksimalTransaksiMingguan'] as num?)?.toDouble() ?? 0,
+        maksimalTransaksiBulanan:
+            (j['maksimalTransaksiBulanan'] as num?)?.toDouble() ?? 0,
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
         minSaldo: (j['minSaldo'] as num?)?.toDouble() ?? 0,
         tipeAnggotaKoperasiId: j['tipeAnggotaKoperasiId'] as int?,
@@ -461,6 +473,12 @@ class Anggota {
         wajibBiometricWajah: (b['wajib_biometric_wajah'] as int? ?? 0) == 1,
         wajibBiometricFingerprint:
             (b['wajib_biometric_fingerprint'] as int? ?? 0) == 1,
+        maksimalTransaksiHarian:
+            (b['maksimal_transaksi_harian'] as num?)?.toDouble() ?? 0,
+        maksimalTransaksiMingguan:
+            (b['maksimal_transaksi_mingguan'] as num?)?.toDouble() ?? 0,
+        maksimalTransaksiBulanan:
+            (b['maksimal_transaksi_bulanan'] as num?)?.toDouble() ?? 0,
         minSaldo: 0,
       );
 
@@ -479,6 +497,12 @@ class Anggota {
         'wajib_biometric_wajah': (j['wajibBiometricWajah'] == true) ? 1 : 0,
         'wajib_biometric_fingerprint':
             (j['wajibBiometricFingerprint'] == true) ? 1 : 0,
+        'maksimal_transaksi_harian':
+            (j['maksimalTransaksiHarian'] as num?)?.toDouble() ?? 0,
+        'maksimal_transaksi_mingguan':
+            (j['maksimalTransaksiMingguan'] as num?)?.toDouble() ?? 0,
+        'maksimal_transaksi_bulanan':
+            (j['maksimalTransaksiBulanan'] as num?)?.toDouble() ?? 0,
         'foto_url': j['fotoUrl'],
       };
 }

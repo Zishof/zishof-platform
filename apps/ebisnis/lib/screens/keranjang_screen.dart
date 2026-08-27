@@ -913,6 +913,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   bool get _saldoAkanDipotong => _nominalDepositTerpakai() > 0.0001;
 
+  bool get _memberMemilikiLimitTransaksi {
+    final member = _memberTerpilih;
+    return member != null &&
+        (member.maksimalTransaksiHarian > 0 ||
+            member.maksimalTransaksiMingguan > 0 ||
+            member.maksimalTransaksiBulanan > 0);
+  }
+
   bool get _biometrikWajibUntukSaldo {
     final member = _memberTerpilih;
     return member != null &&
@@ -1583,10 +1591,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final payloadPending = Map<String, dynamic>.from(payload);
       payloadPending['pengiriman_pending'] = true;
       Map<String, dynamic>? hasilServer;
-      if (_biometrikWajibUntukSaldo) {
+      if (_biometrikWajibUntukSaldo || _memberMemilikiLimitTransaksi) {
         // Bukti biometrik berumur pendek dan diikat ke kode transaksi. Karena
         // itu pembayaran saldo wajib menunggu ACK server dan tidak boleh masuk
-        // outbox berulang yang baru terkirim setelah bukti kedaluwarsa.
+        // outbox berulang yang baru terkirim setelah bukti kedaluwarsa. Hal
+        // yang sama berlaku bila tipe member mempunyai limit: server harus
+        // menghitung periode dan, bila perlu, membuat pengajuan supervisor
+        // sebelum kasir menganggap transaksi selesai.
         hasilServer = await ApiClient.instance.aksi('bayar', payload);
         await CoreDb.instance.simpanTransaksiPending(
             kodeUnik, jsonEncode(payloadPending),
@@ -1596,9 +1607,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, hasilServer);
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Identitas member terverifikasi. Pembayaran saldo sudah diterima server.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_biometrikWajibUntukSaldo
+                ? 'Identitas member terverifikasi. Pembayaran saldo sudah diterima server.'
+                : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
       } else {
         // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
         // server, lalu kirim/retry idempoten di background.
