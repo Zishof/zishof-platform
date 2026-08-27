@@ -5,4 +5,4 @@ flutter build windows --release -t lib/main_nahl.dart --dart-define=EBISNIS_VARI
 $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
 if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 tidak ditemukan.' }
 & $iscc "/DAppVersion=$version" installer\nahl.iss
-Write-Host "Installer: installer\dist\Al-Bahjah-An-Nahl-POS-Setup-$version.exe"
+Write-Host "Installer: installer\dist\FF-Fajrul-Falah-Mart-Setup-$version.exe"

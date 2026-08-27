@@ -8,13 +8,13 @@
 
 [Setup]
 AppId={{A11BAA7A-4E41-4A41-8A11-202608270001}
-AppName=Al-Bahjah An-Nahl POS
+AppName=FF (Fajrul Falah) Mart
 AppVersion={#AppVersion}
 AppPublisher=Zishof
-DefaultDirName={autopf}\Al-Bahjah An-Nahl POS
-DefaultGroupName=Al-Bahjah An-Nahl POS
+DefaultDirName={autopf}\FF (Fajrul Falah) Mart
+DefaultGroupName=FF (Fajrul Falah) Mart
 UninstallDisplayIcon={app}\ebisnis_nahl.exe
-OutputBaseFilename=Al-Bahjah-An-Nahl-POS-Setup-{#AppVersion}
+OutputBaseFilename=FF-Fajrul-Falah-Mart-Setup-{#AppVersion}
 OutputDir=dist
 Compression=lzma2
 SolidCompression=yes
@@ -36,13 +36,13 @@ Source: "..\build\windows\x64\runner\Release\ebisnis_nahl.exe"; DestDir: "{app}"
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\Al-Bahjah An-Nahl POS"; Filename: "{app}\ebisnis_nahl.exe"
-Name: "{group}\Uninstall Al-Bahjah An-Nahl POS"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Al-Bahjah An-Nahl POS"; Filename: "{app}\ebisnis_nahl.exe"; Tasks: desktopicon
+Name: "{group}\FF (Fajrul Falah) Mart"; Filename: "{app}\ebisnis_nahl.exe"
+Name: "{group}\Uninstall FF (Fajrul Falah) Mart"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\FF (Fajrul Falah) Mart"; Filename: "{app}\ebisnis_nahl.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Memasang komponen Microsoft Visual C++ Runtime..."; Check: VCRedistNeeded; Flags: waituntilterminated
-Filename: "{app}\ebisnis_nahl.exe"; Description: "Jalankan Al-Bahjah An-Nahl POS sekarang"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ebisnis_nahl.exe"; Description: "Jalankan FF (Fajrul Falah) Mart sekarang"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function VCRedistNeeded: Boolean;

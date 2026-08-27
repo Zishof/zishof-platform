@@ -110,10 +110,10 @@ BEGIN
             VALUE "OriginalFilename", "ebisnis_albahjah.exe" "\0"
             VALUE "ProductName", "Al-Bahjah POS" "\0"
 #elif defined(EBISNIS_VARIANT_NAHL)
-            VALUE "FileDescription", "Al-Bahjah An-Nahl POS" "\0"
+            VALUE "FileDescription", "FF (Fajrul Falah) Mart" "\0"
             VALUE "InternalName", "ebisnis_nahl" "\0"
             VALUE "OriginalFilename", "ebisnis_nahl.exe" "\0"
-            VALUE "ProductName", "Al-Bahjah An-Nahl POS" "\0"
+            VALUE "ProductName", "FF (Fajrul Falah) Mart" "\0"
 #elif defined(EBISNIS_VARIANT_INVENTORY_SALES)
             VALUE "FileDescription", "eBisnis Inventory & Sales" "\0"
             VALUE "InternalName", "ebisnis_inventory_sales" "\0"

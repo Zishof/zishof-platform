@@ -70,8 +70,8 @@ class AppProductProfile {
   const AppProductProfile.nahl()
       : this._(
           kode: 'nahl',
-          namaAplikasi: 'Al-Bahjah An-Nahl POS',
-          namaSidebar: 'An-Nahl POS',
+          namaAplikasi: 'FF (Fajrul Falah) Mart',
+          namaSidebar: 'FF Mart',
           updateAssetKeyword: 'nahl',
           logoAsset: 'assets/images/nahl/icon.png',
           fiturGrup: const {FiturGrup.pos},

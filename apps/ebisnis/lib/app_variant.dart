@@ -69,7 +69,7 @@ class AppVariant {
   static const namaAplikasi = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isNahl
-          ? 'Al-Bahjah An-Nahl POS'
+          ? 'FF (Fajrul Falah) Mart'
           : (isInventorySales
               ? 'eBisnis Inventory & Sales'
               : (isApotik
@@ -82,7 +82,7 @@ class AppVariant {
   static const namaSidebar = isAlBahjah
       ? 'Al-Bahjah POS'
       : (isNahl
-          ? 'An-Nahl POS'
+          ? 'FF Mart'
           : (isInventorySales
               ? 'Inventory & Sales'
               : (isApotik
@@ -115,7 +115,7 @@ class AppVariant {
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl
-          ? 'Al-Bahjah An-Nahl POS Flutter'
+          ? 'FF (Fajrul Falah) Mart Flutter'
           : (isInventorySales
               ? 'eBisnis Inventory & Sales Flutter'
               : (isApotik
@@ -165,7 +165,7 @@ class AppVariant {
   static const judulLogin = isAlBahjah
       ? 'Unit Usaha Al Bahjah'
       : (isNahl
-          ? 'Unit Usaha Al-Bahjah An-Nahl'
+          ? 'FF (Fajrul Falah) Mart'
           : (isPetra ? 'Masuk eKantin' : namaAplikasi));
 
   /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
