@@ -244,6 +244,17 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     }
   }
 
+  Future<void> _bukaDetailStatistik(String tipe, String judul) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _DialogDetailStatistikProduk(
+        tipe: tipe,
+        judul: judul,
+        tokoId: Sesi.instance.idTokoTerpilih,
+      ),
+    );
+  }
+
   Future<void> _mulaiDataSampleProduk() async {
     final setuju = await showDialog<bool>(
       context: context,
@@ -632,9 +643,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       );
       if (lanjut != true) return;
       final hasil = await ApiClient.instance
-      // ONLINE-ONLY: pratinjau & komit adalah sepasang. Yang disetujui pengguna
-      // adalah hasil hitungan server barusan; menunda komitnya membuat pasangan
-      // itu bisa tidak cocok lagi.
+          // ONLINE-ONLY: pratinjau & komit adalah sepasang. Yang disetujui pengguna
+          // adalah hasil hitungan server barusan; menunda komitnya membuat pasangan
+          // itu bisa tidak cocok lagi.
           .aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1004,7 +1015,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                           children: [
                                             if (_statistik != null)
                                               _KartuStatistik(
-                                                  statistik: _statistik!),
+                                                statistik: _statistik!,
+                                                onTap: _bukaDetailStatistik,
+                                              ),
                                             const SizedBox(height: 12),
                                             AppSearchField(
                                               controller: _controllerCariProduk,
@@ -1206,48 +1219,65 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
 
 class _KartuStatistik extends StatelessWidget {
   final Map<String, dynamic> statistik;
-  const _KartuStatistik({required this.statistik});
+  final void Function(String tipe, String judul) onTap;
+  const _KartuStatistik({
+    required this.statistik,
+    required this.onTap,
+  });
 
   static const double _tinggiKartu = 96;
 
   @override
   Widget build(BuildContext context) {
-    final item = <(IconData, String, String, Color)>[
+    final item = <(IconData, String, String, Color, String)>[
       (
         Icons.inventory_2_outlined,
         'Total',
         '${statistik['totalProduk'] ?? 0}',
-        AppColors.primary
+        AppColors.primary,
+        'total',
       ),
       (
         Icons.check_circle_outline,
         'Aktif',
         '${statistik['totalAktif'] ?? 0}',
-        AppColors.success
+        AppColors.success,
+        'aktif',
       ),
       (
         Icons.pause_circle_outline,
         'Nonaktif',
         '${statistik['totalNonaktif'] ?? 0}',
-        AppColors.textSecondaryOf(context)
+        AppColors.textSecondaryOf(context),
+        'nonaktif',
       ),
       (
         Icons.remove_shopping_cart_outlined,
         'Stok Habis',
         '${statistik['stokHabis'] ?? 0}',
-        AppColors.danger
+        AppColors.danger,
+        'stokHabis',
+      ),
+      (
+        Icons.trending_down_outlined,
+        'Stok Minus',
+        '${statistik['stokMinus'] ?? 0}',
+        const Color(0xFFB91C1C),
+        'stokMinus',
       ),
       (
         Icons.warning_amber_outlined,
         'Stok Rendah',
         '${statistik['stokRendah'] ?? 0}',
-        AppColors.warning
+        AppColors.warning,
+        'stokRendah',
       ),
       (
         Icons.payments_outlined,
         'Nilai Stok',
         _formatRupiah.format((statistik['totalNilaiStok'] as num?) ?? 0),
-        AppColors.teal
+        AppColors.teal,
+        'nilaiStok',
       ),
     ];
     return SizedBox(
@@ -1257,16 +1287,347 @@ class _KartuStatistik extends StatelessWidget {
         itemCount: item.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final (icon, label, nilai, warna) = item[i];
+          final (icon, label, nilai, warna, tipe) = item[i];
           return SizedBox(
               width: 190,
               height: _tinggiKartu,
               child: AppKpiCard(
-                  icon: icon, warna: warna, nilai: nilai, label: label));
+                icon: icon,
+                warna: warna,
+                nilai: nilai,
+                label: label,
+                tooltip: 'Lihat daftar produk $label',
+                onTap: () => onTap(tipe, label),
+              ));
         },
       ),
     );
   }
+}
+
+class _DialogDetailStatistikProduk extends StatefulWidget {
+  final String tipe;
+  final String judul;
+  final int? tokoId;
+
+  const _DialogDetailStatistikProduk({
+    required this.tipe,
+    required this.judul,
+    required this.tokoId,
+  });
+
+  @override
+  State<_DialogDetailStatistikProduk> createState() =>
+      _DialogDetailStatistikProdukState();
+}
+
+class _DialogDetailStatistikProdukState
+    extends State<_DialogDetailStatistikProduk> {
+  bool _memuat = true;
+  bool _mengekspor = false;
+  String? _error;
+  List<Map<String, dynamic>> _produk = const [];
+  int _barisPerHalaman = 10;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setState(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('produk_statistik_detail', {
+        'tipe': widget.tipe,
+        if (widget.tokoId != null) 'toko_id': widget.tokoId,
+      });
+      if (!mounted) return;
+      setState(() {
+        _produk = ((hasil['produk'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  String _tanggal(dynamic value) {
+    final teks = '${value ?? ''}'.trim();
+    if (teks.isEmpty) return 'Belum pernah';
+    final parsed = DateTime.tryParse(teks);
+    return parsed == null
+        ? teks
+        : DateFormat('dd/MM/yyyy HH:mm').format(parsed.toLocal());
+  }
+
+  String _keterangan(Map<String, dynamic> row) {
+    final keterangan = '${row['keterangan'] ?? ''}'.trim();
+    final alasan = '${row['alasanStok'] ?? ''}'.trim();
+    if (keterangan.isEmpty) return alasan.isEmpty ? '-' : alasan;
+    if (alasan.isEmpty) return keterangan;
+    return '$keterangan — $alasan';
+  }
+
+  DynamicReportData _dataLaporan() => DynamicReportData(
+        title: 'Daftar Produk — ${widget.judul}',
+        subtitle:
+            '${_produk.length} produk · dibuat ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+        columns: const [
+          DynamicReportColumn('kode', 'Kode'),
+          DynamicReportColumn('barcode', 'Barcode'),
+          DynamicReportColumn('nama', 'Nama'),
+          DynamicReportColumn('hargaJual', 'Harga Jual', numeric: true),
+          DynamicReportColumn('hargaBeli', 'Harga Beli', numeric: true),
+          DynamicReportColumn('stok', 'Stok', numeric: true),
+          DynamicReportColumn('stokMinimal', 'Stok Minimal', numeric: true),
+          DynamicReportColumn('terakhirPengadaan', 'Terakhir Pengadaan'),
+          DynamicReportColumn('keterangan', 'Keterangan'),
+        ],
+        rows: _produk
+            .map((row) => <String, dynamic>{
+                  'kode': '${row['kode'] ?? ''}',
+                  'barcode': '${row['barcode'] ?? ''}',
+                  'nama': '${row['nama'] ?? ''}',
+                  'hargaJual': (row['hargaJual'] as num?) ?? 0,
+                  'hargaBeli': (row['hargaBeli'] as num?) ?? 0,
+                  'stok': (row['stok'] as num?) ?? 0,
+                  'stokMinimal': (row['stokMinimal'] as num?) ?? 0,
+                  'terakhirPengadaan': _tanggal(row['terakhirPengadaan']),
+                  'keterangan': _keterangan(row),
+                })
+            .toList(),
+      );
+
+  Future<void> _ekspor(String format) async {
+    if (_produk.isEmpty) return;
+    setState(() => _mengekspor = true);
+    try {
+      final data = _dataLaporan();
+      final model = DynamicReportModel.fromData(data)
+        ..landscape = true
+        ..fontSize = 7.5
+        ..showTotals = false;
+      final slug = widget.tipe.replaceAll(RegExp('[^A-Za-z0-9_-]'), '-');
+      if (format == 'pdf') {
+        await DynamicReportDesigner.exportPdf(data, model, 'produk-$slug.pdf');
+      } else {
+        if (!mounted) return;
+        await DynamicReportDesigner.exportExcel(
+            context, data, model, 'produk-$slug.xlsx');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengekspor: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mengekspor = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ukuran = MediaQuery.sizeOf(context);
+    return Dialog(
+      insetPadding: EdgeInsets.all(ukuran.width < 700 ? 8 : 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 1500,
+          maxHeight: ukuran.height * 0.92,
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 10, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.inventory_2_outlined),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Daftar Produk — ${widget.judul}',
+                                style: Theme.of(context).textTheme.titleLarge),
+                            Text('${_produk.length} barang',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tutup',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _mengekspor || _produk.isEmpty
+                            ? null
+                            : () => _ekspor('pdf'),
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        label: const Text('Cetak PDF'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _mengekspor || _produk.isEmpty
+                            ? null
+                            : () => _ekspor('excel'),
+                        icon: const Icon(Icons.table_view_outlined),
+                        label: const Text('Download Excel'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _memuat
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    size: 44, color: AppColors.danger),
+                                const SizedBox(height: 12),
+                                Text(_error!, textAlign: TextAlign.center),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed: _muat,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Coba Lagi'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : _produk.isEmpty
+                          ? const Center(
+                              child:
+                                  Text('Tidak ada produk pada kelompok ini.'))
+                          : SingleChildScrollView(
+                              padding: const EdgeInsets.all(12),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: PaginatedDataTable(
+                                  showFirstLastButtons: true,
+                                  rowsPerPage: _barisPerHalaman,
+                                  availableRowsPerPage: const [10, 25, 50, 100],
+                                  onRowsPerPageChanged: (value) {
+                                    if (value != null) {
+                                      setState(() => _barisPerHalaman = value);
+                                    }
+                                  },
+                                  columns: const [
+                                    DataColumn(label: Text('Kode')),
+                                    DataColumn(label: Text('Barcode')),
+                                    DataColumn(label: Text('Nama')),
+                                    DataColumn(
+                                        label: Text('Harga Jual'),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text('Harga Beli'),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text('Stok'), numeric: true),
+                                    DataColumn(
+                                        label: Text('Stok Minimal'),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text('Terakhir Pengadaan')),
+                                    DataColumn(label: Text('Keterangan')),
+                                  ],
+                                  source: _SumberDetailStatistikProduk(
+                                    rows: _produk,
+                                    tanggal: _tanggal,
+                                    keterangan: _keterangan,
+                                  ),
+                                ),
+                              ),
+                            ),
+            ),
+            if (_mengekspor) const LinearProgressIndicator(minHeight: 2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SumberDetailStatistikProduk extends DataTableSource {
+  final List<Map<String, dynamic>> rows;
+  final String Function(dynamic value) tanggal;
+  final String Function(Map<String, dynamic> row) keterangan;
+
+  _SumberDetailStatistikProduk({
+    required this.rows,
+    required this.tanggal,
+    required this.keterangan,
+  });
+
+  @override
+  DataRow? getRow(int index) {
+    if (index < 0 || index >= rows.length) return null;
+    final row = rows[index];
+    final stok = (row['stok'] as num?)?.toDouble() ?? 0;
+    return DataRow.byIndex(
+      index: index,
+      color: stok < 0
+          ? WidgetStatePropertyAll(AppColors.danger.withValues(alpha: 0.06))
+          : null,
+      cells: [
+        DataCell(SelectableText('${row['kode'] ?? ''}')),
+        DataCell(SelectableText('${row['barcode'] ?? ''}')),
+        DataCell(SizedBox(
+            width: 220,
+            child: Text('${row['nama'] ?? ''}',
+                maxLines: 2, overflow: TextOverflow.ellipsis))),
+        DataCell(Text(_formatRupiah.format((row['hargaJual'] as num?) ?? 0))),
+        DataCell(Text(_formatRupiah.format((row['hargaBeli'] as num?) ?? 0))),
+        DataCell(Text(_teksStok(stok),
+            style: TextStyle(
+                color: stok < 0 ? AppColors.danger : null,
+                fontWeight: stok < 0 ? FontWeight.w700 : null))),
+        DataCell(
+            Text(_teksStok((row['stokMinimal'] as num?)?.toDouble() ?? 0))),
+        DataCell(Text(tanggal(row['terakhirPengadaan']))),
+        DataCell(SizedBox(
+          width: 380,
+          child: Text(keterangan(row),
+              maxLines: 3, overflow: TextOverflow.ellipsis),
+        )),
+      ],
+    );
+  }
+
+  @override
+  int get rowCount => rows.length;
+
+  @override
+  bool get isRowCountApproximate => false;
+
+  @override
+  int get selectedRowCount => 0;
 }
 
 class _BarisProduk extends StatelessWidget {
