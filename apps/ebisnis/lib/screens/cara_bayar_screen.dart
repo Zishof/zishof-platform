@@ -16,7 +16,7 @@ import '../widgets/aksi_baris_menu.dart';
 
 /// Layar "Cara Pembayaran" (padanan `cara_bayar/index.jsp`) -- CRUD penuh
 /// metode pembayaran koperasi, termasuk toggle "Memotong Deposit" dan
-/// "Masukkan sebagai Hutang" (piutang toko). BEDA dari `CaraBayar` read-only
+/// "Masukkan sebagai Piutang Customer". BEDA dari `CaraBayar` read-only
 /// (dropdown picker checkout, lib/models.dart) -- layar admin ini baru
 /// dibangun di sini krn sebelumnya Desktop/Android TIDAK punya CRUD-nya sama
 /// sekali (hanya JSP), padahal grid Hak Akses Pedagang sudah lama menyediakan
@@ -237,9 +237,9 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                           const AppTableColumn('Nama', flex: 2),
                           const AppTableColumn('Potong Saldo',
                               flex: 1, align: TextAlign.center),
-                          const AppTableColumn('Hutang',
+                          const AppTableColumn('Piutang Customer',
                               flex: 1, align: TextAlign.center),
-                          const AppTableColumn('Wajib Member',
+                          const AppTableColumn('Wajib PIC',
                               flex: 1, align: TextAlign.center),
                           const AppTableColumn('Kembalian',
                               flex: 1, align: TextAlign.center),
@@ -257,7 +257,8 @@ class _CaraBayarScreenState extends State<CaraBayarScreen> with JejakGalat {
                           // berlaku, bukan hanya yang disetel admin. Tanda bintang
                           // menandai yang masih ikut bawaan, supaya admin dapat
                           // membedakan "belum pernah disetel" dari "sengaja mati".
-                          final wajibMember = c['wajibPilihMemberEfektif'] == true;
+                          final wajibMember =
+                              c['wajibPilihMemberEfektif'] == true;
                           final wajibDisetel = c['wajibPilihMember'] != null;
                           return AppTableRowData(
                             onTap: Sesi.instance.bolehKelola
@@ -405,10 +406,28 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
   bool _online = false;
   bool _memotongDeposit = false;
   bool _masukSebagaiHutang = false;
+
   /// null = ikut aturan bawaan (hutang / potong saldo). Sengaja TIDAK disamakan
   /// dengan false: metode yang belum pernah disentuh admin harus tetap mengikuti
   /// sifatnya sendiri, bukan terkunci pada jawaban yang kebetulan berlaku hari ini.
   bool? _wajibPilihMember;
+
+  bool get _metodeKasbon {
+    final identitas = '${_kode.text} ${_nama.text}'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_-]+'), ' ');
+    final identitasRingkas = identitas.replaceAll(RegExp(r'\s+'), '');
+    return identitasRingkas.contains('kasbon');
+  }
+
+  void _tegakkanAturanKasbon() {
+    if (_metodeKasbon && (_wajibPilihMember != true || !_masukSebagaiHutang)) {
+      setStateIfMounted(() {
+        _wajibPilihMember = true;
+        _masukSebagaiHutang = true;
+      });
+    }
+  }
 
   /// Akun Kas/Bank metode ini -- menempel di master Cara Pembayaran, dipakai jurnal
   /// penjualan tunai, pembayaran hutang, dan penerimaan piutang.
@@ -434,9 +453,12 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
     _manual = c == null ? true : (c['manual'] != false);
     _online = c?['online'] == true;
     _memotongDeposit = c?['memotongDeposit'] == true;
-    _masukSebagaiHutang = c?['masukSebagaiHutang'] == true;
-    _wajibPilihMember =
-        c == null || c['wajibPilihMember'] == null ? null : c['wajibPilihMember'] == true;
+    _masukSebagaiHutang = _metodeKasbon || c?['masukSebagaiHutang'] == true;
+    _wajibPilihMember = _metodeKasbon
+        ? true
+        : c == null || c['wajibPilihMember'] == null
+            ? null
+            : c['wajibPilihMember'] == true;
     _akunId = (c?['akunId'] as num?)?.toInt();
     _muatAkun();
     if (c == null) {
@@ -449,6 +471,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
     }
     _aktif = c == null ? true : (c['aktif'] != false);
     _nama.addListener(() {
+      _tegakkanAturanKasbon();
       if (!_kembalianDisentuhManual) {
         final ikutTunai = _nama.text.trim().toLowerCase().contains('tunai');
         if (ikutTunai != _adaKembalian) {
@@ -456,6 +479,7 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         }
       }
     });
+    _kode.addListener(_tegakkanAturanKasbon);
   }
 
   @override
@@ -482,8 +506,8 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
         'manual': _manual,
         'online': _online,
         'memotongDeposit': _memotongDeposit,
-        'masukSebagaiHutang': _masukSebagaiHutang,
-        'wajibPilihMember': _wajibPilihMember,
+        'masukSebagaiHutang': _metodeKasbon ? true : _masukSebagaiHutang,
+        'wajibPilihMember': _metodeKasbon ? true : _wajibPilihMember,
         'akunId': _akunId ?? 0,
         'adaKembalian': _adaKembalian,
         'aktif': _aktif,
@@ -593,24 +617,29 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                 ],
               ),
               AppFormSection(
-                judul: 'Hutang',
+                judul: 'Piutang Customer',
                 children: [
                   AppFormSwitchTile(
-                    title: 'Masukkan sebagai Hutang',
-                    subtitle:
-                        'Transaksi dgn metode ini dicatat sebagai HUTANG pelanggan (piutang toko), bukan lunas. Dibatasi oleh field "Maksimal Boleh Utang" pada Tipe Member.',
+                    title: 'Masukkan sebagai Piutang Customer',
+                    subtitle: _metodeKasbon
+                        ? 'Semua Kasbon otomatis dicatat sebagai piutang customer dan dibatasi oleh "Maksimal Boleh Utang" pada Tipe Member.'
+                        : 'Transaksi dgn metode ini dicatat sebagai HUTANG pelanggan (piutang toko), bukan lunas. Dibatasi oleh field "Maksimal Boleh Utang" pada Tipe Member.',
                     value: _masukSebagaiHutang,
-                    onChanged: (v) =>
-                        setStateIfMounted(() => _masukSebagaiHutang = v),
+                    onChanged: _metodeKasbon
+                        ? null
+                        : (v) =>
+                            setStateIfMounted(() => _masukSebagaiHutang = v),
                   ),
                 ],
               ),
               AppFormSection(
-                judul: 'Pelanggan',
-                deskripsi:
-                    'Metode yang meninggalkan tagihan (kasbon, bon, piutang) sebaiknya '
-                    'menuntut nama pelanggan. Tanpa nama, tagihannya masuk laporan '
-                    'sebagai "Umum / Non-Anggota" dan tidak dapat ditagih siapa pun.',
+                judul: 'Penanggung Jawab (PIC)',
+                deskripsi: _metodeKasbon
+                    ? 'Semua Kasbon wajib memilih member sebagai customer/PJ/PIC. '
+                        'Nominalnya langsung masuk piutang customer dan dapat dilunasi '
+                        'melalui menu penerimaan/pembayaran piutang.'
+                    : 'Aktifkan bila transaksi harus mempunyai member/PIC agar dapat '
+                        'ditelusuri. Metode hutang atau potong saldo otomatis mewajibkannya.',
                 children: [
                   Wrap(
                     spacing: 8,
@@ -619,11 +648,13 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                         label: Text('Ikut bawaan ('
                             '${(_masukSebagaiHutang || _memotongDeposit) ? 'wajib' : 'tidak wajib'})'),
                         selected: _wajibPilihMember == null,
-                        onSelected: (_) =>
-                            setStateIfMounted(() => _wajibPilihMember = null),
+                        onSelected: _metodeKasbon
+                            ? null
+                            : (_) => setStateIfMounted(
+                                () => _wajibPilihMember = null),
                       ),
                       ChoiceChip(
-                        label: const Text('Wajib pilih member'),
+                        label: const Text('Wajib pilih member/PIC'),
                         selected: _wajibPilihMember == true,
                         onSelected: (_) =>
                             setStateIfMounted(() => _wajibPilihMember = true),
@@ -631,16 +662,20 @@ class _FormCaraBayarState extends State<_FormCaraBayar> with JejakGalat {
                       ChoiceChip(
                         label: const Text('Tidak wajib'),
                         selected: _wajibPilihMember == false,
-                        onSelected: (_) =>
-                            setStateIfMounted(() => _wajibPilihMember = false),
+                        onSelected: _metodeKasbon
+                            ? null
+                            : (_) => setStateIfMounted(
+                                () => _wajibPilihMember = false),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    (_wajibPilihMember ?? (_masukSebagaiHutang || _memotongDeposit))
-                        ? 'Berlaku sekarang: kasir WAJIB memilih pelanggan.'
-                        : 'Berlaku sekarang: kasir boleh menyelesaikan tanpa pelanggan.',
+                    (_metodeKasbon ||
+                            (_wajibPilihMember ??
+                                (_masukSebagaiHutang || _memotongDeposit)))
+                        ? 'Berlaku sekarang: kasir WAJIB memilih member/PIC.'
+                        : 'Berlaku sekarang: kasir boleh menyelesaikan tanpa member/PIC.',
                     style: const TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w600),
                   ),

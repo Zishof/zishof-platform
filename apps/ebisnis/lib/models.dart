@@ -197,9 +197,8 @@ class CaraBayar {
   /// Metode ini menuntut nama pelanggan dipilih sebelum transaksi ditulis
   /// (`cara_pembayaran_koperasi.wajib_pilih_member`, nilai EFEKTIF dari server).
   ///
-  /// Lebih luas daripada [masukSebagaiHutang]: metode kasbon yang tidak ditandai
-  /// hutang pun menyisakan tagihan, dan tanpa pemilik tagihan itu berakhir sebagai
-  /// piutang "Umum / Non-Anggota" yang tidak dapat ditelusuri siapa pun.
+  /// Lebih luas daripada [masukSebagaiHutang]: metode potong saldo juga wajib
+  /// mempunyai pemilik. Semua Kasbon sendiri dinormalisasi menjadi piutang.
   final bool wajibPilihMember;
   CaraBayar({
     required this.id,
@@ -213,19 +212,30 @@ class CaraBayar {
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();
+    final identitas = '${j['kode'] ?? ''} $nama'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_-]+'), ' ');
+    final identitasRingkas = identitas.replaceAll(RegExp(r'\s+'), '');
+    // Pengaman lintas versi: semua varian Kasbon adalah piutang customer dan
+    // wajib mempunyai member/PIC, termasuk respons server lama yang masih
+    // membawa kedua flag dalam keadaan false.
+    final metodeKasbon = identitasRingkas.contains('kasbon');
     return CaraBayar(
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
-      masukSebagaiHutang:
-          j['masukSebagaiHutang'] == true || j['masuk_sebagai_hutang'] == true,
+      masukSebagaiHutang: metodeKasbon ||
+          j['masukSebagaiHutang'] == true ||
+          j['masuk_sebagai_hutang'] == true,
       // Server lama tidak mengirim kunci ini sama sekali; null di sini membuat
       // konstruktor jatuh ke aturan bawaan (hutang / potong saldo), sehingga
       // klien baru + server lama tetap berperilaku seperti sebelumnya.
-      wajibPilihMember: (j['wajibPilihMember'] ?? j['wajib_pilih_member']) ==
-              null
-          ? null
-          : (j['wajibPilihMember'] == true || j['wajib_pilih_member'] == true),
+      wajibPilihMember: metodeKasbon
+          ? true
+          : (j['wajibPilihMember'] ?? j['wajib_pilih_member']) == null
+              ? null
+              : (j['wajibPilihMember'] == true ||
+                  j['wajib_pilih_member'] == true),
       memotongDeposit: j['memotongDeposit'] == true ||
           j['memotong_deposit'] == true ||
           j['potongSaldo'] == true ||

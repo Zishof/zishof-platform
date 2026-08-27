@@ -836,6 +836,48 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with Jej
     }
   }
 
+  Widget _diagnostikPemetaan(List<dynamic> sumber) {
+    final semua = sumber
+        .map((e) => '$e'.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    final unik = semua.toSet().toList(growable: false);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: .35)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ExpansionTile(
+        leading: const Icon(Icons.settings_suggest_outlined,
+            color: Color(0xFFB45309)),
+        title: Text('${semua.length} transaksi belum siap karena setting akun.'),
+        subtitle: Text(unik.isEmpty
+            ? 'Buka rincian untuk mengetahui pengaturan yang perlu dilengkapi.'
+            : unik.first),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Yang perlu dilakukan:',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          for (var i = 0; i < unik.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: SelectableText('${i + 1}. ${unik[i]}'),
+            ),
+          const Text(
+            'Sesudah setting disimpan, klik Pratinjau lagi. Transaksi yang belum siap '
+            'tidak boleh dipaksa posting atau diperbaiki langsung pada draf jurnal.',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final jurnal = ((_data?['jurnal'] as List?) ?? [])
@@ -904,12 +946,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with Jej
                   if (_data!['terakhir'] != null)
                     Chip(label: Text('Posting terakhir ${_data!['terakhir']}')),
                 ]),
-                if (belum.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('${belum.length} pemetaan akun belum lengkap.',
-                        style: const TextStyle(color: Colors.orange)),
-                  ),
+                if (belum.isNotEmpty) _diagnostikPemetaan(belum),
               ],
               const SizedBox(height: 8),
               Expanded(

@@ -143,6 +143,46 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     }
   }
 
+  Widget _diagnostikSetting(List<Map<String, dynamic>> rincian) {
+    final alasan = rincian
+        .where((r) => r['siap'] != true)
+        .map((r) => '${r['referensi'] ?? r['id'] ?? 'Dokumen'} — '
+            '${r['alasan'] ?? 'Setting akun belum lengkap.'}')
+        .where((e) => e.trim().isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (alasan.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: .35)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ExpansionTile(
+        leading: const Icon(Icons.settings_suggest_outlined,
+            color: Color(0xFFB45309)),
+        title: Text('${alasan.length} dokumen memerlukan perbaikan setting'),
+        subtitle: Text(alasan.first),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < alasan.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: SelectableText('${i + 1}. ${alasan[i]}'),
+            ),
+          const Text(
+            'Lengkapi master/akun yang disebutkan, simpan, lalu klik Muat ulang. '
+            'Dokumen lain yang sudah siap tetap dapat diposting.',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rincian = _rincian;
@@ -198,6 +238,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                 AppDetailGalatOpsional(detail: detailUntuk(_galat)),
               ],
               const SizedBox(height: 12),
+              _diagnostikSetting(rincian),
               Expanded(
                 child: rincian.isEmpty
                     ? Center(

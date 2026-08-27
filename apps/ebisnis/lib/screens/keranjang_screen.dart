@@ -1485,13 +1485,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     return _caraBayarTerpilih?.nama ?? '';
   }
 
-  /// True bila metode bayar terpilih (slot 1 atau slot split mana pun) berjenis
-  /// piutang SEDANGKAN pelanggan belum dipilih.
-  bool get _perluPelangganUntukPiutang {
+  /// True bila metode bayar terpilih (slot 1 atau slot split mana pun) menuntut
+  /// member sebagai pemilik hutang atau sekadar PJ/PIC, tetapi belum dipilih.
+  bool get _perluMemberAtauPic {
     if (_memberTerpilih != null) return false;
-    // Memakai wajibPilihMember, BUKAN masukSebagaiHutang: metode kasbon yang
-    // tidak ditandai hutang pun menyisakan tagihan tanpa pemilik. Itulah yang
-    // melahirkan 541 nota "Umum / Non-Anggota" di satu toko.
+    // Memakai wajibPilihMember, BUKAN hanya masukSebagaiHutang: selain seluruh
+    // Kasbon, metode potong saldo juga tidak bermakna tanpa pemilik/PIC.
     if (_caraBayarTerpilih?.wajibPilihMember == true) return true;
     for (final s in _splitBayar) {
       if (s.caraBayar.wajibPilihMember && s.nominal > 0) return true;
@@ -1516,22 +1515,24 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     // tagihan toko ke pelanggan. Tanpa nama pelanggan, tim keuangan tidak dapat
     // menagih -- server pun menolaknya. Kasir langsung diarahkan memilih
     // pelanggan di sini, bukan dibiarkan gagal setelah menekan Bayar.
-    if (_perluPelangganUntukPiutang) {
+    if (_perluMemberAtauPic) {
       final lanjut = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Pilih Nama Pelanggan'),
+          title: const Text('Pilih Member / PIC'),
           content: Text(
-              'Metode "${_namaMetodeWajibMember()}" meninggalkan tagihan yang harus '
-              'ditagih belakangan. Pilih nama pelanggan dahulu, agar tagihannya tidak '
-              'berakhir sebagai piutang tanpa pemilik.'),
+              'Metode "${_namaMetodeWajibMember()}" wajib mempunyai penanggung jawab. '
+              'Pilih member/PIC terlebih dahulu agar transaksi dapat ditelusuri tim '
+              'keuangan. Semua metode Kasbon langsung dicatat sebagai piutang customer; '
+              'untuk Kasbon Divisi/Operasional, member menjadi customer sekaligus PJ/PIC '
+              'yang mewakili divisi.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(c, false),
                 child: const Text('Batal')),
             FilledButton(
                 onPressed: () => Navigator.pop(c, true),
-                child: const Text('Pilih Pelanggan')),
+                child: const Text('Pilih Member / PIC')),
           ],
         ),
       );
