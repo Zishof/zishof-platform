@@ -16,7 +16,7 @@ import 'anggota/tab_satuan_kerja.dart';
 
 /// Layar "Pelanggan" (padanan `anggota.jsp` JSP -- "Manajemen Anggota") --
 /// 6 sub-tab persis urutan JSP: Data Member Baru, Jenis Member, Tipe
-/// Member, Topup, Notifikasi, Sinkronisasi Siswa/Mahasiswa. Setiap tab
+/// Member, Topup, Notifikasi, Sinkronisasi Sivitas. Setiap tab
 /// StatefulWidget terpisah (lihat folder anggota/, pola sama dgn
 /// RingkasanScreen 9-tab) -- memuat datanya sendiri di initState, lazy
 /// sesuai TabBarView.
@@ -82,7 +82,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               Tab(text: 'Pembantu Piutang'),
               Tab(text: 'Notifikasi'),
               Tab(text: 'Satuan Kerja'),
-              Tab(text: 'Sinkronisasi Siswa/Mahasiswa'),
+              Tab(text: 'Sinkronisasi Sivitas'),
             ],
           ),
           Expanded(

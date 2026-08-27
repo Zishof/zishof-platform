@@ -6,8 +6,8 @@ import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 
-/// Tab "Sinkronisasi Siswa/Mahasiswa" (padanan `sinkron_siswa_mahasiswa.jsp`)
-/// -- bulk-buat/perbarui AnggotaKoperasi dari data master Mahasiswa/Siswa yg
+/// Tab "Sinkronisasi Sivitas" (padanan `sinkron_siswa_mahasiswa.jsp`)
+/// -- bulk-buat/perbarui AnggotaKoperasi dari data master sivitas yg
 /// sudah ada, difilter tahun angkatan/masuk (+ opsional fakultas/jurusan
 /// atau yayasan/sekolah). Gerbang `Sesi.instance.bolehKelola` (admin/
 /// supervisor) -- SUDAH SAMA PERSIS dgn `LokasiKantinUtil.bolehKelola` versi
@@ -16,11 +16,11 @@ class AnggotaTabSinkronisasi extends StatefulWidget {
   const AnggotaTabSinkronisasi({super.key});
 
   @override
-  State<AnggotaTabSinkronisasi> createState() =>
-      _AnggotaTabSinkronisasiState();
+  State<AnggotaTabSinkronisasi> createState() => _AnggotaTabSinkronisasiState();
 }
 
-class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with JejakGalat {
+class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
+    with JejakGalat {
   bool _modeMahasiswa = true;
   bool _memuatReferensi = true;
   bool _menjalankan = false;
@@ -66,7 +66,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
           () => _pesanErrorSemua = 'Koperasi wajib dipilih terlebih dahulu.');
       return;
     }
-    final tahun = int.tryParse(_tahunController.text.trim()) ?? DateTime.now().year;
+    final tahun =
+        int.tryParse(_tahunController.text.trim()) ?? DateTime.now().year;
     setStateIfMounted(() {
       _menjalankanSemua = true;
       _pesanErrorSemua = null;
@@ -75,7 +76,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
     final hasilPerSumber = <Map<String, dynamic>>[];
     for (final s in _sumberSemua) {
       if (!mounted) return;
-      setStateIfMounted(() => _labelProgresSemua = 'Menyingkronkan Data ${s.$2}...');
+      setStateIfMounted(
+          () => _labelProgresSemua = 'Menyingkronkan Data ${s.$2}...');
       try {
         final hasil = await ApiClient.instance.aksi(s.$1, {
           'koperasi_id': _koperasiId,
@@ -174,8 +176,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
   Future<void> _jalankan() async {
     final tahun = int.tryParse(_tahunController.text.trim());
     if (_koperasiId == null || tahun == null) {
-      setStateIfMounted(
-          () => _pesanError = 'Koperasi dan Tahun wajib diisi.');
+      setStateIfMounted(() => _pesanError = 'Koperasi dan Tahun wajib diisi.');
       return;
     }
     setStateIfMounted(() {
@@ -223,24 +224,35 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
         ),
       );
     }
-    if (_memuatReferensi) return const Center(child: CircularProgressIndicator());
+    if (_memuatReferensi) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         AppSectionCard(
-          judul: 'Singkronkan Semua Data Sivitas',
+          judul: 'Sinkronkan Semua Data Sivitas',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Satu tombol utk buat/perbarui Anggota Koperasi sekaligus dari 5 sumber: Data Siswa, Data Mahasiswa, Data Dosen, Data Guru, dan Data Pegawai. Pegawai yang sebenarnya dosen/guru TIDAK akan tercatat dobel -- otomatis disinkronkan lewat jalur Dosen/Guru saja.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                'Langkah 1: pilih Koperasi lalu buat/perbarui Anggota Koperasi dari 5 sumber: Siswa, Mahasiswa, Dosen, Guru, dan Pegawai. User ID bukan syarat. Pegawai harus aktif; pegawai yang tertaut sebagai dosen/guru diproses lewat jalur Dosen/Guru agar tidak duplikat. Pegawai tanpa kode tetap didukung dengan kode member otomatis. Dosen memerlukan NIDN dan Guru memerlukan NIP.',
+                style:
+                    TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Langkah 2: setelah berhasil, kembali ke tab Data Member Baru lalu tekan Unduh Offline agar member server masuk ke cache perangkat.',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int?>(
                 value: _koperasiId,
-                decoration:
-                    AppFormStyle.fieldDecoration(context, labelText: 'Koperasi *'),
+                decoration: AppFormStyle.fieldDecoration(context,
+                    labelText: 'Koperasi *'),
                 items: _koperasi
                     .map((k) => DropdownMenuItem<int?>(
                         value: k['id'] as int, child: Text('${k['nama']}')))
@@ -272,7 +284,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
                       : const Icon(Icons.sync_alt),
                   label: Text(_menjalankanSemua
                       ? (_labelProgresSemua ?? 'Menjalankan...')
-                      : 'Singkronkan Semua'),
+                      : 'Sinkronkan Semua'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -320,8 +332,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
                   final error = r['error'] as String?;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 6),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: AppColors.pageBgOf(context),
                       border: Border.all(color: AppColors.borderOf(context)),
@@ -387,7 +399,8 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
             children: [
               const Text(
                 'Buat/perbarui data member secara massal dari data master Mahasiswa/Siswa yang sudah ada. Anggota yang sudah ada akan disegarkan (nama/kontak) -- aman dijalankan berulang.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                style:
+                    TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 16),
               SegmentedButton<bool>(
@@ -418,9 +431,7 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
               ),
               const SizedBox(height: 12),
               AppFormTextField(
-                label: _modeMahasiswa
-                    ? 'Tahun Angkatan *'
-                    : 'Tahun Masuk *',
+                label: _modeMahasiswa ? 'Tahun Angkatan *' : 'Tahun Masuk *',
                 controller: _tahunController,
                 keyboardType: TextInputType.number,
               ),
@@ -495,8 +506,9 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi> with Je
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.sync),
-                  label: Text(
-                      _menjalankan ? 'Menjalankan...' : 'Jalankan Sinkronisasi'),
+                  label: Text(_menjalankan
+                      ? 'Menjalankan...'
+                      : 'Jalankan Sinkronisasi'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,

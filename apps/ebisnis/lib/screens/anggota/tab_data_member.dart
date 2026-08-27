@@ -238,13 +238,18 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
       // dgn yang dipakai modul lain utk hidrasi awal cache.
       final total = await jalankanDenganProgressSinkron<int>(
         context,
-        judul: 'Sinkron member ke cache offline',
+        judul: 'Unduh member ke cache offline',
         satuan: 'member',
         tugas: _loopSinkronAnggota,
       );
       if (total != null && mounted) {
+        final kosong = total == 0;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('$total member tersinkron ke cache offline.')));
+          duration: Duration(seconds: kosong ? 8 : 4),
+          content: Text(kosong
+              ? 'Belum ada member aktif di server. Tombol ini hanya mengunduh cache; buka tab Sinkronisasi Sivitas untuk membuat member dari Siswa, Mahasiswa, Dosen, Guru, atau Pegawai.'
+              : '$total member diunduh ke cache offline.'),
+        ));
       }
     } finally {
       if (mounted) setStateIfMounted(() => _sinkronBerjalan = false);
@@ -407,8 +412,8 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.cloud_sync_outlined, size: 18),
-                label: const Text('Sinkron'),
+                    : const Icon(Icons.cloud_download_outlined, size: 18),
+                label: const Text('Unduh Offline'),
               ),
               if (Sesi.instance.bolehKelola) ...[
                 const SizedBox(width: 8),
