@@ -198,3 +198,22 @@ Permintaan stok outlet tidak diubah menjadi PR sebelum allocation membuktikan st
 internal tidak mencukupi. Ini mencegah pengadaan vendor ganda dan menjaga pemisahan
 tanggung jawab Gudang dengan Pengadaan.
 
+## 8. Implementasi kontrak aplikasi — 26 Agustus 2026
+
+Kontrak aplikasi awal Fase 2 telah diterapkan identik pada dua mirror source:
+
+- `ais.common.inventory.master.InventoryItemReference`;
+- `ais.common.inventory.master.InventoryLocationReference`;
+- `ais.common.inventory.master.InventoryUomConversion`;
+- `ais.common.inventory.master.InventoryIdentityResolver`.
+
+Kontrak tersebut mengunci discriminator sumber dan tenant sebelum repository
+atau DDL dibuat. `InventoryMasterReferenceContractUat` telah lulus pada target
+Java 1.7, mencakup collision ID antar-domain, perubahan scope, penolakan tipe
+asing, validasi denominator, dan konversi UOM bolak-balik.
+
+Keputusan dan trade-off lengkap dicatat dalam
+`2026-08-26-adr-bridge-identitas-item-uom-lokasi.md`. Implementasi ini belum
+menjalankan preflight terhadap database target, belum membuat tabel bridge, dan
+belum mengubah data produksi. Tahap berikutnya tetap schema additive yang telah
+direview dan migrasi kering pada salinan/staging.

@@ -913,6 +913,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   bool get _saldoAkanDipotong => _nominalDepositTerpakai() > 0.0001;
 
+  bool get _pinWajibUntukMetodeTerpilih {
+    if (_memberTerpilih == null) return false;
+    if (_splitAktif) {
+      return pembayaranMemerlukanPin(_splitBayar
+          .where((slot) => slot.nominal > 0)
+          .map((slot) => slot.caraBayar));
+    }
+    final cara = _caraBayarTerpilih;
+    return cara != null && pembayaranMemerlukanPin([cara]);
+  }
+
   bool get _memberMemilikiLimitTransaksi {
     final member = _memberTerpilih;
     return member != null &&
@@ -925,15 +936,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final member = _memberTerpilih;
     return member != null &&
         _saldoAkanDipotong &&
-        (member.wajibPin ||
-            member.wajibBiometricWajah ||
-            member.wajibBiometricFingerprint);
+        (member.wajibBiometricWajah || member.wajibBiometricFingerprint);
   }
 
   bool get _verifikasiMemberWajibServer {
     final member = _memberTerpilih;
     return member != null &&
-        (member.wajibPin ||
+        (_pinWajibUntukMetodeTerpilih ||
             (_saldoAkanDipotong &&
                 (member.wajibBiometricWajah ||
                     member.wajibBiometricFingerprint)));
@@ -1051,7 +1060,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         if (id == null) return null;
         bukti['biometric_fingerprint_event_id'] = id;
       }
-      if (member.wajibPin) {
+      if (_pinWajibUntukMetodeTerpilih) {
         final id = await _verifikasiPin(kodeUnik);
         if (id == null) return null;
         bukti['pin_verification_event_id'] = id;
@@ -1059,7 +1068,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return bukti;
     }
 
-    if (!member.wajibPin) return <String, int>{};
+    if (!_pinWajibUntukMetodeTerpilih) return <String, int>{};
     final pilihan = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -1538,6 +1547,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   Future<void> _bayar() async {
+    // Pertahanan terhadap pintasan F2/race: member baru memicu pemuatan ulang
+    // aturan pembayaran. Jangan pernah mengirim transaksi memakai snapshot
+    // metode member sebelumnya sebelum aturan server selesai diterapkan.
+    if (!_bisaBayar) return;
     if (widget.keranjang.isEmpty) return;
     if (_caraBayarTerpilih == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1881,7 +1894,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (_sedangInputTeksAktif()) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.f2) {
-      if (!_memproses) _bayar();
+      if (_bisaBayar) _bayar();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f3) {

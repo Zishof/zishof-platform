@@ -393,6 +393,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
   bool _wajibBiometricFingerprint = false;
   bool _wajibBelanjaRutin = false;
   Set<int> _caraBayarDipilih = {};
+  Set<int> _caraBayarWajibPin = {};
   bool _menyimpan = false;
   String? _pesanError;
 
@@ -428,6 +429,11 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
         .map((s) => int.tryParse(s.trim()))
         .whereType<int>()
         .toSet();
+    _caraBayarWajibPin = '${j?['daftarCaraPembayaranWajibPin'] ?? ''}'
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .toSet();
   }
 
   @override
@@ -445,6 +451,12 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_caraBayarDipilih.isNotEmpty &&
+        !_caraBayarDipilih.containsAll(_caraBayarWajibPin)) {
+      setStateIfMounted(() => _pesanError =
+          'Cara bayar wajib PIN harus termasuk cara bayar yang diizinkan.');
+      return;
+    }
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
@@ -468,6 +480,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
         'tampilkan_sisa_saldo': _tampilSaldo,
         'tampilkan_cashback': _tampilCashback,
         'wajib_pin': _wajibPin,
+        'daftar_cara_pembayaran_wajib_pin': _caraBayarWajibPin.join(','),
         'wajib_biometric_wajah': _wajibBiometricWajah,
         'wajib_biometric_fingerprint': _wajibBiometricFingerprint,
         // Bentuk camelCase dipertahankan pada snapshot optimistik lokal;
@@ -573,6 +586,31 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
                       title: 'Wajib Verifikasi PIN saat Transaksi',
                       value: _wajibPin,
                       onChanged: (v) => setStateIfMounted(() => _wajibPin = v)),
+                  if (_wajibPin) ...[
+                    const Text(
+                      'Wajib PIN hanya untuk cara bayar berikut (kosong = semua cara bayar):',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: widget.caraBayar.map((c) {
+                        final id = (c['id'] as num).toInt();
+                        return FilterChip(
+                          label: Text('${c['nama']}',
+                              style: const TextStyle(fontSize: 12)),
+                          selected: _caraBayarWajibPin.contains(id),
+                          onSelected: (v) => setStateIfMounted(() {
+                            if (v) {
+                              _caraBayarWajibPin.add(id);
+                            } else {
+                              _caraBayarWajibPin.remove(id);
+                            }
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   AppFormSwitchTile(
                     title: 'Wajib Verifikasi Biometric Wajah (Camera)',
                     subtitle:
@@ -636,6 +674,7 @@ class _FormJenisMemberState extends State<_FormJenisMember> with JejakGalat {
                               _caraBayarDipilih.add(id);
                             } else {
                               _caraBayarDipilih.remove(id);
+                              _caraBayarWajibPin.remove(id);
                             }
                           }),
                         );

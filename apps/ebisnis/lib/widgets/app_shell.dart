@@ -34,6 +34,7 @@ import '../screens/diskon_screen.dart';
 import '../screens/cara_bayar_screen.dart';
 import '../screens/supplier_screen.dart';
 import '../screens/jenis_produk_screen.dart';
+import '../screens/uom_screen.dart';
 import '../screens/grup_produk_screen.dart';
 import '../screens/toko_kelola_screen.dart';
 import '../screens/laporan_transaksi_screen.dart';
@@ -126,6 +127,7 @@ enum MenuEBisnis {
   anggota,
   produk,
   jenisProduk,
+  uom,
   grupProduk,
   stokOpname,
   kedaluwarsa,
@@ -290,6 +292,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.anggota: 'anggota',
   MenuEBisnis.produk: 'produk',
   MenuEBisnis.jenisProduk: 'produk',
+  MenuEBisnis.uom: 'uom_konversi',
   // Fail-closed di server (KUNCI_DEFAULT_NONAKTIF): perubahan harga massal lintas outlet.
   MenuEBisnis.grupProduk: 'grup_produk',
   MenuEBisnis.stokOpname: 'stokopname',
@@ -381,6 +384,10 @@ const _menuSalesSaja = <MenuEBisnis>{
 };
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
+  // Admin global harus dapat melihat SELURUH menu lintas varian dan lintas
+  // role. Gerbang ini sengaja ditempatkan paling awal karena beberapa menu
+  // dahulu sudah gugur pada filter varian sebelum pemeriksaan akses admin.
+  if (Sesi.instance.isAdmin) return true;
   if (kunci == MenuEBisnis.hakAkses) return Sesi.instance.isAdmin;
   // Riwayat Audit menampilkan data TERHAPUS dari seluruh toko dan dapat
   // memulihkannya. Server sudah membatasinya ke ADMINISTRATOR; menu ini
@@ -553,6 +560,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.jenisProduk, Icons.category_outlined, 'Jenis Produk',
       builder: _bangunJenisProduk),
+  _ItemMenuShell(MenuEBisnis.uom, Icons.straighten_outlined, 'Satuan / UOM',
+      builder: _bangunUom),
   _ItemMenuShell(
       MenuEBisnis.grupProduk, Icons.workspaces_outline, 'Grup Produk',
       builder: _bangunGrupProduk),
@@ -771,6 +780,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.anggota,
     MenuEBisnis.produk,
     MenuEBisnis.jenisProduk,
+    MenuEBisnis.uom,
     MenuEBisnis.grupProduk,
     MenuEBisnis.stokOpname,
     MenuEBisnis.kedaluwarsa,
@@ -871,6 +881,7 @@ Widget _bangunPesanan(BuildContext c) => const PesananScreen();
 Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
 Widget _bangunProduk(BuildContext c) => const ProdukScreen();
 Widget _bangunJenisProduk(BuildContext c) => const JenisProdukScreen();
+Widget _bangunUom(BuildContext c) => const UomScreen();
 Widget _bangunGrupProduk(BuildContext c) => const GrupProdukScreen();
 Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKedaluwarsa(BuildContext c) => const KedaluwarsaScreen();
@@ -1284,6 +1295,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Produk';
     case MenuEBisnis.jenisProduk:
       return 'Jenis Produk';
+    case MenuEBisnis.uom:
+      return 'Satuan / UOM';
     case MenuEBisnis.grupProduk:
       return 'Grup Produk';
     case MenuEBisnis.stokOpname:
@@ -1463,6 +1476,10 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.produk;
     case 'Jenis Produk':
       return MenuEBisnis.jenisProduk;
+    case 'Satuan / UOM':
+      return MenuEBisnis.uom;
+    case 'Grup Produk':
+      return MenuEBisnis.grupProduk;
     case 'Stok Opname':
       return MenuEBisnis.stokOpname;
     case 'Kedaluwarsa':

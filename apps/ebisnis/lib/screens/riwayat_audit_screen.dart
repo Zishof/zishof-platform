@@ -124,7 +124,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
   Future<void> _muatDaftarEntitas() async {
     try {
       final res = await ApiClient.instance.aksi('revisi_entitas');
-      if (res['status'] != '00') return;
+      if (!ApiClient.statusResponsSukses(res['status'])) return;
       final data = (res['data'] as List?) ?? const [];
       setStateIfMounted(() {
         _daftarEntitas =
@@ -181,7 +181,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
         'batas': 100,
         'mulai': lanjut ? _hasil.length : 0,
       });
-      if (res['status'] != '00') {
+      if (!ApiClient.statusResponsSukses(res['status'])) {
         throw Exception(res['description'] ?? 'Gagal memuat riwayat.');
       }
       final data = (res['data'] as List?) ?? const [];
@@ -246,7 +246,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
         'simulasi': simulasi,
         'timpaYangMasihAda': timpa,
       });
-      if (res['status'] != '00') {
+      if (!ApiClient.statusResponsSukses(res['status'])) {
         throw Exception(res['description'] ?? 'Restore ditolak server.');
       }
       return res;
@@ -284,7 +284,9 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setLokal) => AlertDialog(
-            title: Text(id == null ? 'Pulihkan semua yang cocok?' : 'Pulihkan baris #$id?'),
+            title: Text(id == null
+                ? 'Pulihkan semua yang cocok?'
+                : 'Pulihkan baris #$id?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,8 +311,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                             '(total ${akan + masihAda} baris ditulis).'
                         : '$masihAda dilewati karena datanya masih ada.',
                     style: TextStyle(
-                      color:
-                          timpa ? AppColors.danger : AppColors.textSecondary,
+                      color: timpa ? AppColors.danger : AppColors.textSecondary,
                       fontWeight: timpa ? FontWeight.w700 : FontWeight.w400,
                     ),
                   ),
@@ -385,7 +386,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
       try {
         final res =
             await ApiClient.instance.aksi('perbaiki_nilai_bayar', minta(true));
-        if (res['status'] != '00') {
+        if (!ApiClient.statusResponsSukses(res['status'])) {
           throw Exception(res['description'] ?? 'Perhitungan ditolak server.');
         }
         hitung = res;
@@ -418,11 +419,13 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
               Text('${_fTampil.format(_dari)} s/d ${_fTampil.format(_sampai)}'
                   '${_toko == null ? ' · semua toko' : ' · toko #$_toko'}'),
               const SizedBox(height: 10),
-              Text('$akan nota akan diisi nilai bayarnya sesuai metode '
+              Text(
+                  '$akan nota akan diisi nilai bayarnya sesuai metode '
                   'pembayarannya sendiri.',
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               if (dilewati > 0)
-                Text('$dilewati nota dilewati karena piutangnya SAH '
+                Text(
+                    '$dilewati nota dilewati karena piutangnya SAH '
                     '(metode bertanda hutang) atau tanpa metode bayar.',
                     style: const TextStyle(color: AppColors.textSecondary)),
               const SizedBox(height: 12),
@@ -449,7 +452,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
       try {
         final res =
             await ApiClient.instance.aksi('perbaiki_nilai_bayar', minta(false));
-        if (res['status'] != '00') {
+        if (!ApiClient.statusResponsSukses(res['status'])) {
           throw Exception(res['description'] ?? 'Perbaikan ditolak server.');
         }
         if (mounted) await _tampilkanLaporan(res);
@@ -737,8 +740,8 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                 onPressed: sibuk ? null : () => _pulihkan(),
                 icon: const Icon(Icons.restore, size: 18),
                 label: const Text('Pulihkan Semua (sesuai filter)'),
-                style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger),
+                style:
+                    OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
               ),
             // Tidak bergantung pada hasil pencarian audit: yang diperbaiki adalah
             // nota bernilai bayar kosong pada rentang tanggal, bukan baris audit
@@ -823,8 +826,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                       visualDensity: VisualDensity.compact,
                       tooltip: 'Pulihkan data terakhir baris ini',
                       icon: const Icon(Icons.restore, size: 18),
-                      onPressed:
-                          _memulihkan ? null : () => _pulihkan(id: id),
+                      onPressed: _memulihkan ? null : () => _pulihkan(id: id),
                     ),
                   const Icon(Icons.chevron_right,
                       size: 18, color: AppColors.textSecondary),

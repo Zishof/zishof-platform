@@ -187,6 +187,7 @@ class CaraBayar {
   final String nama;
   final bool manual;
   final bool memotongDeposit;
+  final bool wajibPin;
 
   /// Metode ini membentuk PIUTANG toko ke pelanggan (kolom
   /// `cara_pembayaran_koperasi.masuk_sebagai_hutang`). Bila true, kasir WAJIB
@@ -205,6 +206,7 @@ class CaraBayar {
     required this.nama,
     required this.manual,
     this.memotongDeposit = false,
+    this.wajibPin = false,
     this.masukSebagaiHutang = false,
     bool? wajibPilihMember,
   }) : wajibPilihMember =
@@ -224,6 +226,7 @@ class CaraBayar {
       id: j['id'] as int,
       nama: nama,
       manual: j['manual'] == true,
+      wajibPin: j['wajibPin'] == true || j['wajib_pin'] == true,
       masukSebagaiHutang: metodeKasbon ||
           j['masukSebagaiHutang'] == true ||
           j['masuk_sebagai_hutang'] == true,
@@ -247,6 +250,9 @@ class CaraBayar {
     );
   }
 }
+
+bool pembayaranMemerlukanPin(Iterable<CaraBayar> metode) =>
+    metode.any((cara) => cara.wajibPin);
 
 /// Satu pilihan Produk Ekstra (add-on/modifier) yang dilekatkan ke satu baris
 /// [ItemKeranjang] -- bentuknya mengikuti persis kontrak `ekstra` dlm

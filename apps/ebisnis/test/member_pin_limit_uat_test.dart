@@ -47,7 +47,8 @@ void main() {
 
       expect(source, contains('bool get _memberMemilikiLimitTransaksi'));
       expect(source, contains('bool get _verifikasiMemberWajibServer'));
-      expect(source, contains('member.wajibPin ||'));
+      expect(source, contains('_pinWajibUntukMetodeTerpilih'));
+      expect(source, contains('pembayaranMemerlukanPin'));
       expect(
           source,
           contains(

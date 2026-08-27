@@ -38,11 +38,49 @@ void main() {
     expect(source, contains('Pembayaran sudah diterima server'));
   });
 
-  test('PIN wajib ikut gerbang saldo dan dialog hanya menerima angka', () {
+  test('PIN mengikuti metode pembayaran dan dialog hanya menerima angka', () {
     final source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
-    expect(source, contains('member.wajibPin ||'));
+    expect(source, contains('_pinWajibUntukMetodeTerpilih'));
     expect(source, contains('FilteringTextInputFormatter.digitsOnly'));
     expect(source, contains('GridView.count('));
     expect(source, contains('PIN numerik'));
+    expect(source, contains('if (!_bisaBayar) return;'));
+    expect(source, contains('if (_bisaBayar) _bayar();'));
+  });
+
+  test('aturan PIN per cara bayar mendukung satu metode dan split', () {
+    final tunai = CaraBayar(
+      id: 1,
+      nama: 'Tunai',
+      manual: true,
+    );
+    final voucherSantri = CaraBayar(
+      id: 2,
+      nama: 'Voucher Santri',
+      manual: false,
+      wajibPin: true,
+    );
+    expect(pembayaranMemerlukanPin([tunai]), isFalse);
+    expect(pembayaranMemerlukanPin([voucherSantri]), isTrue);
+    expect(pembayaranMemerlukanPin([tunai, voucherSantri]), isTrue);
+    expect(
+        CaraBayar.fromJson({
+          'id': 2,
+          'nama': 'Voucher Santri',
+          'manual': false,
+          'wajibPin': true,
+        }).wajibPin,
+        isTrue);
+  });
+
+  test('form Jenis dan Tipe menyimpan scope cara bayar wajib PIN', () {
+    final tipe =
+        File('lib/screens/anggota/tab_tipe_member.dart').readAsStringSync();
+    final jenis =
+        File('lib/screens/anggota/tab_jenis_member.dart').readAsStringSync();
+    expect(tipe, contains('daftarCaraPembayaranWajibPin'));
+    expect(jenis, contains('daftar_cara_pembayaran_wajib_pin'));
+    expect(tipe, contains('kosong = semua cara bayar'));
+    expect(jenis, contains('kosong = semua cara bayar'));
   });
 }

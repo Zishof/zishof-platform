@@ -396,6 +396,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
   late final TextEditingController _maksimalTransaksiMingguan;
   late final TextEditingController _maksimalTransaksiBulanan;
   Set<int> _caraBayarDipilih = {};
+  Set<int> _caraBayarWajibPin = {};
   int? _caraBayarDefaultId;
   bool _tidakBolehCaraBayarLain = false;
   bool _aktif = true;
@@ -423,6 +424,11 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     _maksimalTransaksiBulanan =
         _controllerBatas(t?['maksimalTransaksiBulanan']);
     _caraBayarDipilih = '${t?['daftarCaraPembayaranYangBolehDiPilih'] ?? ''}'
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toSet();
+    _caraBayarWajibPin = '${t?['daftarCaraPembayaranWajibPin'] ?? ''}'
         .split(',')
         .map((e) => int.tryParse(e.trim()))
         .whereType<int>()
@@ -478,6 +484,12 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
           'Pilih cara bayar default sebelum melarang cara bayar lain.');
       return;
     }
+    if (_caraBayarDipilih.isNotEmpty &&
+        !_caraBayarDipilih.containsAll(_caraBayarWajibPin)) {
+      setStateIfMounted(() => _pesanError =
+          'Cara bayar wajib PIN harus termasuk cara bayar yang diizinkan.');
+      return;
+    }
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
@@ -495,6 +507,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
         'wajibHp': _wajibHp,
         'wajibEmail': _wajibEmail,
         'wajibPin': _wajibPin,
+        'daftarCaraPembayaranWajibPin': _caraBayarWajibPin.join(','),
         'wajibBiometricWajah': _wajibBiometricWajah,
         'wajibBiometricFingerprint': _wajibBiometricFingerprint,
         'wajib_pin': _wajibPin,
@@ -604,6 +617,31 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
                     value: _wajibPin,
                     onChanged: (v) => setStateIfMounted(() => _wajibPin = v),
                   ),
+                  if (_wajibPin) ...[
+                    const Text(
+                      'Wajib PIN hanya untuk cara bayar berikut (kosong = semua cara bayar):',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: widget.caraBayar.map((c) {
+                        final id = (c['id'] as num).toInt();
+                        return FilterChip(
+                          label: Text('${c['nama']}',
+                              style: const TextStyle(fontSize: 12)),
+                          selected: _caraBayarWajibPin.contains(id),
+                          onSelected: (dipilih) => setStateIfMounted(() {
+                            if (dipilih) {
+                              _caraBayarWajibPin.add(id);
+                            } else {
+                              _caraBayarWajibPin.remove(id);
+                            }
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   AppFormSwitchTile(
                     title: 'Wajib pakai Face Recognition',
                     subtitle:
@@ -646,6 +684,7 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
                               _caraBayarDipilih.add(id);
                             } else {
                               _caraBayarDipilih.remove(id);
+                              _caraBayarWajibPin.remove(id);
                               if (_caraBayarDefaultId == id) {
                                 _caraBayarDefaultId = null;
                               }
