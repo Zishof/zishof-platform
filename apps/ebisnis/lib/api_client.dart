@@ -25,6 +25,14 @@ class ApiClient {
 
   String? _token;
 
+  /// Memberi tahu gerbang aplikasi ketika sesi benar-benar dibuang, termasuk
+  /// saat server menolak token dengan HTTP 401. Tanpa sinyal ini layar lama
+  /// tetap hidup dan terus mengirim permintaan dengan konteks sesi kosong.
+  final StreamController<void> _sesiBerakhirController =
+      StreamController<void>.broadcast(sync: true);
+
+  Stream<void> get sesiBerakhir => _sesiBerakhirController.stream;
+
   /// Tenant aktif perangkat ini. Dikirim sebagai header `X-Tenant-Id` pada
   /// setiap permintaan.
   ///
@@ -82,7 +90,9 @@ class ApiClient {
   /// sandi luring. Ketiganya satu paket -- identitas yang tidak lagi dipakai di
   /// perangkat ini tidak boleh menyisakan jalan masuk luring.
   Future<void> hapusToken({bool tutupBasisData = false}) async {
+    final sebelumnyaMasuk = _token != null;
     _token = null;
+    if (sebelumnyaMasuk) _sesiBerakhirController.add(null);
     final sp = await SharedPreferences.getInstance();
     await sp.remove('token');
     await PengaturanSesiLokal.instance.hapusCatatanAktif();
@@ -156,9 +166,14 @@ class ApiClient {
     'produk_impor_excel',
     'produk_impor_excel_preview',
     'produk_rekonsiliasi_ledger',
+    'produk_mutasi_ringkasan',
+    'produk_statistik',
+    'produk_statistik_detail',
     'so_simpan',
+    'so_ringkasan',
     'so_ekspor_excel',
     'so_impor_excel',
+    'stok_dashboard',
     'kulakan_faktur_simpan',
     'peringkat_mitra',
     'diskon_simpan',
@@ -169,7 +184,20 @@ class ApiClient {
     'otomatis_layani_jalankan',
     'layani_transaksi',
     'detail_transaksi',
+    'layar_pelanggan_slide_list',
+    'layar_pelanggan_slide_upload',
+    'layar_pelanggan_slide_ubah',
+    'layar_pelanggan_slide_hapus',
+    'layar_pelanggan_slide_untuk_tampil',
+    'layar_pelanggan_screensaver_config_ambil',
+    'layar_pelanggan_screensaver_config_simpan',
   };
+
+  static bool _nilaiTokoValid(Object? nilai) {
+    if (nilai is num) return nilai.toInt() > 0;
+    final id = int.tryParse('$nilai');
+    return id != null && id > 0;
+  }
 
   /// Menyusun payload akhir sebuah aksi, termasuk penyisipan toko.
   ///
@@ -179,10 +207,17 @@ class ApiClient {
   static Map<String, dynamic> susunPayload(
       String namaAksi, Map<String, dynamic>? body) {
     final payload = <String, dynamic>{'action': namaAksi, ...?body};
-    final sudahAdaToko = payload.containsKey('tokoId') ||
-        payload.containsKey('id_toko') ||
-        payload.containsKey('idToko') ||
-        payload.containsKey('toko_id');
+    // `toko_id: null` bukan pilihan eksplisit. Beberapa layar lama selalu
+    // membentuk kunci itu meski nilainya kosong; bila hanya keberadaan kunci
+    // yang diperiksa, penyisipan toko aktif di bawah tidak pernah berjalan.
+    const kunciToko = ['tokoId', 'id_toko', 'idToko', 'toko_id'];
+    for (final kunci in kunciToko) {
+      if (payload.containsKey(kunci) && !_nilaiTokoValid(payload[kunci])) {
+        payload.remove(kunci);
+      }
+    }
+    final sudahAdaToko =
+        kunciToko.any((kunci) => _nilaiTokoValid(payload[kunci]));
     final sudahAdaLingkupKatalog =
         sudahAdaToko || payload.containsKey('semuaToko');
     // Peran berizin lintas toko: pilihan combo disisipkan di satu tempat
@@ -202,7 +237,9 @@ class ApiClient {
     // toko lalu menulis ke tempat yang salah.
     if (_aksiBerTokoId.contains(namaAksi) && !sudahAdaToko) {
       final idToko = Sesi.instance.idTokoTerpilih;
-      if (idToko != null) payload['toko_id'] = idToko;
+      if (idToko != null) {
+        payload['toko_id'] = idToko;
+      }
     }
     // `katalog` memiliki kontrak khusus di peladen: admin tanpa toko terikat
     // hanya memperoleh daftar bila menyatakan `semuaToko=true`. Beberapa
@@ -561,14 +598,29 @@ class ApiException implements Exception {
       'Buka kembali pesanan tersebut dan periksa nama produk serta jumlahnya.',
       'Jika masih berbeda, jangan membuat transaksi pengganti. Salin Detail Error dan hubungi supervisor/admin.',
     ];
+    final panduan =
+        panduanResolusiGalat(pesan, aktivitas: aktivitas, kode: kode);
+    final solusiServerGenerik = solusi.isNotEmpty &&
+        solusi.every((s) {
+          final lower = s.toLowerCase();
+          return lower.contains('perbaiki data sesuai penjelasan') ||
+              lower.contains('hubungi admin/supervisor') ||
+              lower.contains('coba kembali');
+        });
+    final judulServer = judul?.trim() ?? '';
+    final judulServerGenerik = judulServer.isEmpty ||
+        judulServer == 'Belum dapat diproses' ||
+        judulServer == 'Proses belum berhasil';
     return AppErrorInfo(
-      judul: judul != null && judul!.trim().isNotEmpty
-          ? judul!.trim()
-          : rincianPesananBerbeda
-              ? 'Pesanan perlu dimuat ulang'
-              : aktivitasPembayaran && !offline
-                  ? 'Pembayaran belum berhasil'
-                  : dasar.judul,
+      judul: rincianPesananBerbeda
+          ? 'Pesanan perlu dimuat ulang'
+          : !offline && judulServerGenerik && panduan.judul != null
+              ? panduan.judul!
+              : judulServer.isNotEmpty
+                  ? judulServer
+                  : aktivitasPembayaran && !offline
+                      ? 'Pembayaran belum berhasil'
+                      : dasar.judul,
       // `message` pada kontrak API memang ditujukan kepada pengguna dan
       // sudah disanitasi server. Stack/SQL tetap hanya muncul di [teknis].
       pesan: offline
@@ -576,16 +628,12 @@ class ApiException implements Exception {
           : rincianPesananBerbeda
               ? 'Isi pesanan di server berbeda dengan keranjang yang sedang tampil. Pembayaran dihentikan agar barang atau jumlah yang salah tidak tersimpan.'
               : pesan,
-      solusi: solusi.isNotEmpty
+      solusi: solusi.isNotEmpty && !solusiServerGenerik
           ? solusi
           : rincianPesananBerbeda
               ? solusiPesananBerbeda
-              : aktivitasPembayaran && !offline
-                  ? const [
-                      'Jangan langsung menekan Bayar berulang kali. Periksa Riwayat Penjualan dan Riwayat Sinkronisasi untuk memastikan transaksi pertama belum tercatat.',
-                      'Periksa kembali keranjang, metode pembayaran, nominal uang diterima, member/saldo, serta status sesi kas.',
-                      'Buka Informasi Teknis di bawah ini. Jika belum terselesaikan, salin seluruh detailnya dan kirimkan kepada admin/developer.',
-                    ]
+              : !offline
+                  ? panduan.solusi
                   : dasar.solusi,
       teknis: teknis.isEmpty
           ? 'action=${aktivitas ?? '-'}; HTTP=${statusHttp ?? '-'}; $pesan'

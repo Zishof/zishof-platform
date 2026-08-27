@@ -6,6 +6,7 @@ berhubungan dengan POS harus dicatat di sini sebelum pekerjaan dinyatakan selesa
 
 Dokumen aktif:
 
+- [Standar wajib pesan error dan penolakan yang edukatif](2026-08-26-standar-wajib-pesan-error-edukatif.md)
 - [Handover 24 Agustus 2026](handover-2026-08-24.md)
 - [Analisis implementasi modul Pergudangan](2026-08-25-analisis-modul-pergudangan.md)
 - [Fase implementasi modul Pergudangan](2026-08-25-fase-implementasi-modul-pergudangan.md)

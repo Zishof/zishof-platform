@@ -74,6 +74,20 @@ void main() {
             'yang sah');
   });
 
+  test('gerbang kembali ke login segera setelah sesi dibuang', () {
+    final api = File('lib/api_client.dart').readAsStringSync();
+    expect(api, contains('Stream<void> get sesiBerakhir'));
+    expect(api, contains('_sesiBerakhirController.add(null)'));
+
+    for (final nama in berkasGerbang) {
+      final source = File(nama).readAsStringSync();
+      expect(source, contains('ApiClient.instance.sesiBerakhir.listen'),
+          reason: '$nama harus bereaksi terhadap penolakan sesi dari server');
+      expect(source, contains('_sesiBerakhirSubscription?.cancel()'),
+          reason: '$nama harus melepas listener saat gerbang dibuang');
+    }
+  });
+
   test('bukti sandi lokal HANYA disimpan sesudah server menerima login', () {
     final login = File('lib/screens/login_screen.dart').readAsStringSync();
     final iSimpanToken = login.indexOf('simpanToken(');

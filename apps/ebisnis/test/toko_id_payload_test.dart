@@ -46,6 +46,21 @@ void main() {
           reason: 'layar yang sudah menentukan tokonya sendiri harus menang');
     });
 
+    test('nilai null dari layar lama diganti toko aktif', () {
+      Sesi.instance.tokoId = 7;
+      final p = ApiClient.susunPayload(
+          'layar_pelanggan_screensaver_config_ambil', {'toko_id': null});
+      expect(p['toko_id'], 7);
+    });
+
+    test('nilai toko nol tidak dianggap sebagai pilihan eksplisit', () {
+      Sesi.instance.tokoId = 7;
+      final p = ApiClient.susunPayload('produk_statistik', {'id_toko': 0});
+      expect(p['toko_id'], 7);
+      expect(p.containsKey('id_toko'), isFalse,
+          reason: 'nilai toko tidak sah tidak boleh ikut dikirim ke server');
+    });
+
     test('tanpa toko terpilih, kunci tidak dikirim (server yang menolak)', () {
       Sesi.instance
         ..bolehSemuaToko = true
@@ -148,13 +163,21 @@ void main() {
       'produk_ekspor_excel',
       'produk_impor_excel_preview',
       'produk_rekonsiliasi_ledger',
+      'produk_mutasi_ringkasan',
+      'produk_statistik',
+      'produk_statistik_detail',
       'so_simpan',
+      'so_ringkasan',
       'so_ekspor_excel',
       'so_impor_excel',
+      'stok_dashboard',
       'kulakan_faktur_simpan',
       'peringkat_mitra',
       'layani_transaksi',
       'detail_transaksi',
+      'layar_pelanggan_slide_list',
+      'layar_pelanggan_screensaver_config_ambil',
+      'layar_pelanggan_screensaver_config_simpan',
     ]) {
       expect(ApiClient.aksiMemakaiTokoId(aksi), isTrue, reason: aksi);
     }

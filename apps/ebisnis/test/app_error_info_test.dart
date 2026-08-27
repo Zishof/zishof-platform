@@ -13,7 +13,7 @@ void main() {
       teknis: 'Exception server: contoh detail teknis',
     );
 
-    expect(gagal.info.judul, 'Pembayaran belum berhasil');
+    expect(gagal.info.judul, 'Stok belum mencukupi');
     expect(gagal.info.pesan,
         'Stok TELUR AYAM tidak mencukupi untuk jumlah yang diminta.');
     expect(gagal.info.teknis, contains('detail teknis'));
@@ -33,6 +33,52 @@ void main() {
     expect(gagal.info.pesan, isNot(contains('IllegalStateException')));
     expect(gagal.info.teknis, contains('IllegalStateException'));
     expect(gagal.info.solusi.join(' '), contains('muat ulang'));
+  });
+
+  test('batas hutang memberi langkah mandiri dan jalur klik yang lengkap', () {
+    final gagal = ApiException(
+      'Transaksi ditolak: batas maksimal hutang anggota ini (500.000) akan terlampaui. Hutang berjalan saat ini 0, transaksi ini menambah 2.601.968.',
+      aktivitas: 'bayar',
+      kode: 'PERMINTAAN_DITOLAK',
+      judul: 'Belum dapat diproses',
+      solusi: const [
+        'Perbaiki data sesuai penjelasan di atas, lalu simpan kembali.',
+        'Bila penjelasannya menyangkut hak akses atau pengaturan, hubungi admin/supervisor.',
+      ],
+    );
+
+    expect(gagal.info.judul, 'Batas hutang member terlampaui');
+    expect(gagal.info.solusi.join(' '), contains('Pelanggan > Tipe Member'));
+    expect(
+        gagal.info.solusi.join(' '), contains('Pesanan > Transaksi Pending'));
+    expect(gagal.info.solusi.join(' '), contains('jangan mengubah jurnal'));
+  });
+
+  test('toko kosong menjelaskan tombol, urutan, dan batas eskalasi', () {
+    final gagal = ApiException(
+      'Toko tidak diketahui.',
+      aktivitas: 'produk_statistik',
+      kode: 'PERMINTAAN_DITOLAK',
+      solusi: const ['Perbaiki data sesuai penjelasan di atas.'],
+    );
+
+    expect(gagal.info.judul, 'Toko aktif belum dipilih');
+    expect(gagal.info.solusi.first, contains('bilah atas'));
+    expect(gagal.info.solusi.join(' '), contains('Muat Ulang'));
+    expect(gagal.info.solusi.join(' '), contains('minta admin'));
+  });
+
+  test('solusi spesifik server tidak ditimpa panduan fallback', () {
+    final gagal = ApiException(
+      'Dokumen belum disetujui.',
+      aktivitas: 'pengadaan_bayar',
+      solusi: const [
+        'Buka Pengadaan > Persetujuan lalu minta pejabat yang ditunjuk menyetujui dokumen ini.',
+      ],
+    );
+
+    expect(gagal.info.solusi, hasLength(1));
+    expect(gagal.info.solusi.first, contains('Pengadaan > Persetujuan'));
   });
 
   testWidgets('informasi teknis error selalu dapat dibuka', (tester) async {

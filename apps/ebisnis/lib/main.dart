@@ -238,16 +238,28 @@ class _GerbangAwal extends StatefulWidget {
 class _GerbangAwalState extends State<_GerbangAwal> {
   bool _memeriksa = true;
   bool _perluSetupServer = false;
+
   /// Token masih ada tetapi sesi terkunci karena aplikasi lama tidak dipakai --
   /// lihat [LayarKunciScreen].
   bool _terkunci = false;
   InfoUpdate? _infoUpdate;
+  StreamSubscription<void>? _sesiBerakhirSubscription;
 
   @override
   void initState() {
     super.initState();
+    _sesiBerakhirSubscription = ApiClient.instance.sesiBerakhir.listen((_) {
+      if (!mounted) return;
+      setStateIfMounted(() => _terkunci = false);
+    });
     _periksaToken();
     _cekUpdate();
+  }
+
+  @override
+  void dispose() {
+    _sesiBerakhirSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _periksaToken() async {

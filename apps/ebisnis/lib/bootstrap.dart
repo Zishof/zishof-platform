@@ -222,12 +222,23 @@ class _GerbangAwalState extends State<_GerbangAwal> {
   /// lihat [LayarKunciScreen].
   bool _terkunci = false;
   InfoUpdate? _infoUpdate;
+  StreamSubscription<void>? _sesiBerakhirSubscription;
 
   @override
   void initState() {
     super.initState();
+    _sesiBerakhirSubscription = ApiClient.instance.sesiBerakhir.listen((_) {
+      if (!mounted) return;
+      setStateIfMounted(() => _terkunci = false);
+    });
     _periksaToken();
     _cekUpdate();
+  }
+
+  @override
+  void dispose() {
+    _sesiBerakhirSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _periksaToken() async {

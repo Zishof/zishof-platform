@@ -35,8 +35,8 @@ void main() {
 
     final pesan = state.terapkanGalat(_penolakan());
     expect(pesan, contains('tidak diizinkan menerima topup'));
-    expect(pesan, contains('Perbaiki data sesuai penjelasan'),
-        reason: 'satu langkah solusi ikut ditampilkan');
+    expect(pesan, contains('Jangan mengulang tombol yang sama'),
+        reason: 'satu langkah operasional ikut ditampilkan');
 
     final detail = state.detailUntuk(pesan);
     expect(detail, isNotNull);
@@ -72,7 +72,8 @@ void main() {
     await tester.tap(find.text('picu'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('tidak diizinkan menerima topup'), findsOneWidget);
+    expect(
+        find.textContaining('tidak diizinkan menerima topup'), findsOneWidget);
     expect(find.text('Detail'), findsOneWidget);
     expect(find.textContaining('status=91'), findsNothing);
 
@@ -80,6 +81,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Informasi Teknis'), findsOneWidget);
+    await tester.ensureVisible(find.text('Informasi Teknis'));
     await tester.tap(find.text('Informasi Teknis'));
     await tester.pumpAndSettle();
     expect(find.textContaining('status=91'), findsOneWidget);
