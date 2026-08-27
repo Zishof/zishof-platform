@@ -31,4 +31,16 @@ void main() {
     expect(source, contains('if (_koperasi.length == 1)'));
     expect(source, contains("_koperasi.first['id']"));
   });
+
+  test('koperasi kosong menampilkan diagnosis backend dan memblokir sinkron',
+      () {
+    final source =
+        File('lib/screens/anggota/tab_sinkronisasi.dart').readAsStringSync();
+
+    expect(source, contains('Master Koperasi belum tersedia di server'));
+    expect(source, contains('r78394'));
+    expect(source, contains('Muat Ulang Referensi'));
+    expect(source, contains('_menjalankanSemua || _koperasi.isEmpty'));
+    expect(source, contains("r['error'] as String?"));
+  });
 }

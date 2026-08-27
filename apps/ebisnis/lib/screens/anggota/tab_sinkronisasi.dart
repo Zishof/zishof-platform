@@ -142,6 +142,11 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
           if (_koperasi.length == 1) {
             _koperasiId = (_koperasi.first['id'] as num?)?.toInt();
           }
+          _pesanErrorSemua = _koperasi.isEmpty
+              ? 'Master Koperasi belum tersedia di server. Deploy backend SVN '
+                  'r78394 atau buat satu Koperasi terlebih dahulu, lalu tekan '
+                  'Muat Ulang Referensi.'
+              : null;
           _fakultas = hasil[1];
           _yayasan = hasil[2];
         });
@@ -273,14 +278,40 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
               ),
               const SizedBox(height: 16),
               if (_pesanErrorSemua != null) ...[
-                Text(_pesanErrorSemua!,
-                    style: const TextStyle(color: AppColors.danger)),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.08),
+                    border: Border.all(
+                        color: AppColors.danger.withValues(alpha: 0.35)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: AppColors.danger),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(_pesanErrorSemua!,
+                            style: const TextStyle(color: AppColors.danger)),
+                      ),
+                      if (_koperasi.isEmpty)
+                        TextButton.icon(
+                          onPressed: _muatReferensiAwal,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Muat Ulang Referensi'),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
               ],
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _menjalankanSemua ? null : _jalankanSemua,
+                  onPressed: _menjalankanSemua || _koperasi.isEmpty
+                      ? null
+                      : _jalankanSemua,
                   icon: _menjalankanSemua
                       ? const SizedBox(
                           width: 18,
