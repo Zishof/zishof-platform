@@ -32,6 +32,7 @@ Future<Map<String, dynamic>> prosesSimpanMaster(
   Map<String, dynamic>? rowLokal,
   bool hapusLokal = false,
   Duration batasTungguKirim = const Duration(seconds: 6),
+
   /// Id SEMENTARA (negatif) untuk baris BARU yang dibuat offline. Diteruskan ke
   /// antrean supaya pasangannya dengan id server tercatat begitu terkirim, dan
   /// baris lain yang menunjuknya ikut ditukar saat sinkron.
@@ -55,11 +56,32 @@ Future<Map<String, dynamic>> prosesSimpanMaster(
   );
   if (hasil == null) {
     // Tidak seharusnya terjadi (barrier tak bisa ditutup) -- fail-safe.
-    return {'status': 'success', 'offline': true};
+    return normalisasiHasilSimpanForm(null, offline: true);
   }
   if (hasil.error != null) throw hasil.error!;
-  return hasil.respons ??
-      {'status': 'success', if (hasil.offline) 'offline': true};
+  return normalisasiHasilSimpanForm(hasil.respons, offline: hasil.offline);
+}
+
+/// Kontrak sukses tunggal untuk semua form yang memakai [prosesSimpanMaster].
+///
+/// Endpoint lama mengembalikan `00`, sedangkan endpoint baru mengembalikan
+/// `success`. Pada tahap ini penolakan server sudah dilempar sebagai exception,
+/// sehingga setiap hasil yang sampai ke pemanggil pasti merupakan simpan yang
+/// sah (terkirim atau sudah aman di antrean lokal). Status dinormalisasi ke
+/// `00` agar form lama dan baru sama-sama menutup setelah berhasil. Nilai asli
+/// tetap disimpan sebagai `statusAsli` untuk audit/debugging.
+Map<String, dynamic> normalisasiHasilSimpanForm(
+  Map<String, dynamic>? respons, {
+  bool offline = false,
+}) {
+  final hasil = <String, dynamic>{...?respons};
+  final statusAsli = hasil['status'];
+  if (statusAsli != null && statusAsli != '00') {
+    hasil['statusAsli'] = statusAsli;
+  }
+  hasil['status'] = '00';
+  if (offline) hasil['offline'] = true;
+  return hasil;
 }
 
 class _HasilProses {
@@ -153,8 +175,7 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
         offline = true;
       }
       if (!mounted) return;
-      setState(
-          () => _tahap = offline ? _Tahap.antreOffline : _Tahap.terkirim);
+      setState(() => _tahap = offline ? _Tahap.antreOffline : _Tahap.terkirim);
       await Future<void>.delayed(offline
           ? const Duration(milliseconds: 900)
           : const Duration(milliseconds: 850));
@@ -202,8 +223,8 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2.4, color: warna),
                       )
-                    : Icon(ikon, key: ValueKey('diam-$teks'),
-                        color: warna, size: 22),
+                    : Icon(ikon,
+                        key: ValueKey('diam-$teks'), color: warna, size: 22),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -258,8 +279,7 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
                       'Pengiriman diulang di latar dan berhenti sendiri '
                       'begitu berhasil.',
                       style: TextStyle(
-                          fontSize: 11.5,
-                          color: Theme.of(context).hintColor)),
+                          fontSize: 11.5, color: Theme.of(context).hintColor)),
                 ),
             ],
           ),

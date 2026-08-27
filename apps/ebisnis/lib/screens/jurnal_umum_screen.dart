@@ -222,7 +222,8 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     setStateIfMounted(() => _sibuk = true);
     try {
       final ids = draf.map((e) => e['id']).toList();
-      final hasil = await ApiClient.instance.aksi('jurnal_umum_posting', {'ids': ids});
+      final hasil =
+          await ApiClient.instance.aksi('jurnal_umum_posting', {'ids': ids});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${hasil['message'] ?? 'Selesai.'}')));
@@ -616,8 +617,9 @@ class _EditorJurnalState extends State<_EditorJurnal> {
       for (final b in _baris) {
         final d = _angka(b.debet);
         final k = _angka(b.kredit);
-        if (b.akunId == null && d == 0 && k == 0)
+        if (b.akunId == null && d == 0 && k == 0) {
           continue; // baris kosong diabaikan
+        }
         baris.add({
           'akunId': b.akunId ?? 0,
           'debet': d,
@@ -650,13 +652,14 @@ class _EditorJurnalState extends State<_EditorJurnal> {
         },
       );
       if (!mounted) return;
-      if ('${hasil['status']}' != '00') {
+      if (!ApiClient.statusResponsSukses(hasil['status'])) {
         setStateIfMounted(
             () => _pesan = '${hasil['message'] ?? 'Gagal menyimpan.'}');
         return;
       }
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
           SnackBar(content: Text('${hasil['message'] ?? 'Tersimpan.'}')));
     } catch (e) {
       setStateIfMounted(() => _pesan = 'Gagal menyimpan: $e');
@@ -706,8 +709,9 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                                 initialDate: _tanggal,
                                 firstDate: DateTime(2015),
                                 lastDate: DateTime(2100));
-                            if (p != null)
+                            if (p != null) {
                               setStateIfMounted(() => _tanggal = p);
+                            }
                           },
                     icon: const Icon(Icons.event, size: 18),
                     label: Text('Tanggal ${_fmtTanggal.format(_tanggal)}'),
@@ -778,14 +782,15 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                             decoration: InputDecoration(
                                 labelText: 'Debet',
                                 isDense: true,
-                                errorText: _duaSisi(b) ? 'pilih salah satu' : null),
+                                errorText:
+                                    _duaSisi(b) ? 'pilih salah satu' : null),
                             // Satu baris hanya mewakili SATU sisi. Mengisi Debet mengosongkan
                             // Kredit pada baris yang sama, supaya keadaan yang ditolak server
                             // tidak mungkin terbentuk lewat layar.
                             onChanged: (v) => setStateIfMounted(() {
                               if (_angka(b.debet) > 0) {
-                            b.kredit.clear();
-                          }
+                                b.kredit.clear();
+                              }
                             }),
                           ),
                         ),
@@ -800,11 +805,12 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                             decoration: InputDecoration(
                                 labelText: 'Kredit',
                                 isDense: true,
-                                errorText: _duaSisi(b) ? 'pilih salah satu' : null),
+                                errorText:
+                                    _duaSisi(b) ? 'pilih salah satu' : null),
                             onChanged: (v) => setStateIfMounted(() {
                               if (_angka(b.kredit) > 0) {
-                            b.debet.clear();
-                          }
+                                b.debet.clear();
+                              }
                             }),
                           ),
                         ),
@@ -822,7 +828,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                         // langkah yang paling sering dilewatkan: jurnal butuh lawan baris,
                         // bukan dua kolom pada baris yang sama.
                         IconButton(
-                          tooltip: 'Isikan sisi penyeimbang (${_rpSelisihTooltip()})',
+                          tooltip:
+                              'Isikan sisi penyeimbang (${_rpSelisihTooltip()})',
                           onPressed: _terkunci ||
                                   _selisih.abs() < 0.005 ||
                                   _angka(b.debet) > 0 ||
@@ -851,11 +858,10 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                        'Tiap baris diisi SALAH SATU: Debet atau Kredit. Jurnal perlu '
-                        'minimal dua baris yang saling melawan, dan totalnya harus sama.',
+                      'Tiap baris diisi SALAH SATU: Debet atau Kredit. Jurnal perlu '
+                      'minimal dua baris yang saling melawan, dan totalnya harus sama.',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).hintColor),
+                          fontSize: 12, color: Theme.of(context).hintColor),
                     ),
                   ),
                 ]),
