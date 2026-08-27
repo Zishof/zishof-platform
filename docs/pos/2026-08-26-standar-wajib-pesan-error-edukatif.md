@@ -90,6 +90,25 @@ Ketentuan:
 | Duplikat/idempotensi | Larang membuat transaksi pengganti; arahkan ke Riwayat Penjualan dan Riwayat Sinkronisasi. |
 | Transaksi pending | Bedakan gangguan teknis yang layak retry dengan penolakan bisnis yang tidak akan membaik karena retry. Pertahankan jurnal lokal. |
 | Error internal | Nyatakan proses yang gagal dan apakah ada perubahan tersimpan; sediakan Salin Informasi Teknis dan kode referensi. |
+| Data master masih dipakai | Sebut data yang hendak dihapus, jenis dan jumlah referensinya, contoh akun/transaksi terkait, menu untuk menonaktifkan atau memperbaiki relasi, serta larangan menghapus langsung di database. |
+| Versi server tertinggal | Jelaskan bahwa perbaikan sudah ada di sumber tetapi kelas/JSP aktif masih lama; operator harus deploy artefak server terbaru, bersihkan cache kompilasi JSP bila relevan, restart, lalu verifikasi nomor revisi. Jangan menyuruh kasir mengulang aksi yang sama. |
+
+## Penghapusan data master yang masih direferensi
+
+Pelanggaran foreign key yang dapat diprediksi harus diperiksa **sebelum**
+perintah `DELETE`. Contoh: Pedagang yang masih menjadi identitas akun pada
+`tbmuser` tidak boleh dipaksa dihapus atau dihapus secara cascade.
+
+Pesan wajib menyebut nama Pedagang, jumlah akun dan contoh ID akun terkait,
+kemudian mengarahkan pengguna ke **Konfigurasi > Akun Pengguna**. Jika akun
+tidak digunakan lagi, tindakan mandiri yang aman adalah mengubah **Status**
+menjadi **Nonaktif**; data Pedagang tidak perlu dihapus. Penghapusan permanen
+hanya dilanjutkan setelah admin sistem memindahkan atau melepaskan relasi akun
+melalui alur yang teraudit. Mengubah foreign key langsung di database dilarang.
+
+Pemeriksaan awal ini juga mencegah transaksi database masuk status `aborted`,
+sehingga kegagalan yang sudah diperkirakan tidak menghasilkan stack trace
+sebagai satu-satunya penjelasan kepada pengguna.
 
 ## Contoh wajib: batas hutang transaksi pending
 
