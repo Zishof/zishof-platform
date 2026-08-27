@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:core_db/core_db.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../services/dynamic_report.dart';
@@ -22,6 +23,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/proses_simpan_master.dart';
+import '../widgets/progress_sinkron_awal.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
@@ -103,6 +105,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   int _totalProduk = 0;
   Map<String, dynamic>? _statistik;
   bool _memulaiDataSample = false;
+  bool _menyinkronProduk = false;
   // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
   // banner "pembaruan dari server" (termasuk perubahan kasir lain).
   Set<String> _idBaru = {};
@@ -241,6 +244,93 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  /// Unduh seluruh katalog sesuai lingkup toko aktif, lalu ganti cache SQLite
+  /// secara atomik. Tidak ada cache parsial: bila satu halaman gagal, cache
+  /// lama tetap utuh dan masih dapat dipakai kasir saat offline.
+  Future<int> _sinkronSeluruhProduk(
+      void Function(int tersinkron, int? total) lapor) async {
+    // Dorong perubahan lokal lebih dahulu. Yang masih gagal/tertunda tetap
+    // dilindungi oleh simpanDaftarLengkapDariServer, bukan ditimpa server.
+    await MasterOffline.flush();
+
+    const ukuranHalaman = 100; // batas maksimum prosesKatalog di backend.
+    final perId = <int, Map<String, dynamic>>{};
+    var halaman = 1;
+    int? total;
+    while (true) {
+      final hasil = await ApiClient.instance.aksi('katalog', {
+        'page': halaman,
+        'page_size': ukuranHalaman,
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+        if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
+      });
+      final data = ((hasil['produk'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final totalMentah = hasil['total'];
+      if (totalMentah is num) total ??= totalMentah.toInt();
+
+      final sebelum = perId.length;
+      for (final baris in data) {
+        final id = (baris['id'] as num?)?.toInt();
+        if (id == null) {
+          throw StateError(
+              'Server mengirim produk tanpa ID pada halaman $halaman.');
+        }
+        perId[id] = baris;
+      }
+      lapor(perId.length, total);
+
+      final selesai = data.length < ukuranHalaman ||
+          (total != null && perId.length >= total);
+      if (selesai) break;
+      if (perId.length == sebelum) {
+        throw StateError(
+            'Paging katalog tidak bergerak pada halaman $halaman; cache lama dipertahankan.');
+      }
+      halaman++;
+      if (halaman > 1000) {
+        throw StateError(
+            'Sinkron katalog dihentikan karena jumlah halaman tidak wajar.');
+      }
+    }
+
+    if (total != null && perId.length != total) {
+      throw StateError(
+          'Katalog belum lengkap (${perId.length}/$total); cache lama dipertahankan.');
+    }
+    final semua = perId.values.toList(growable: false);
+    await CoreDb.instance.replaceProdukCache(
+        semua.map(Produk.baseKeCacheRow).toList(growable: false));
+    await MasterOffline.simpanDaftarLengkapDariServer(
+        'master:produk_list', semua);
+    return semua.length;
+  }
+
+  Future<void> _sinkronProdukKeLokal() async {
+    if (_menyinkronProduk) return;
+    setStateIfMounted(() => _menyinkronProduk = true);
+    try {
+      final jumlah = await jalankanDenganProgressSinkron<int>(
+        context,
+        judul: 'Sinkron produk server ke lokal',
+        satuan: 'produk',
+        tugas: _sinkronSeluruhProduk,
+      );
+      if (!mounted || jumlah == null) return;
+      setStateIfMounted(() => _halaman = 0);
+      await _muatSemua();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$jumlah produk tersimpan lengkap di perangkat dan siap dipakai offline.')));
+    } finally {
+      if (mounted) setStateIfMounted(() => _menyinkronProduk = false);
     }
   }
 
@@ -879,6 +969,17 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
               : 'Sample 1K Supplier + 600 Jenis + 50K Produk',
           onPressed: _memulaiDataSample ? null : _mulaiDataSampleProduk,
         ),
+      HeaderActionButton(
+        icon: Icons.sync_alt,
+        label: _menyinkronProduk ? 'Menyinkron...' : 'Sinkron Produk',
+        onPressed: _menyinkronProduk ? null : _sinkronProdukKeLokal,
+        loading: _menyinkronProduk
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : null,
+      ),
       HeaderActionButton(
         icon: Icons.sell_outlined,
         label: 'Price Tag',

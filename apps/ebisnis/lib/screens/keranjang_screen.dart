@@ -153,11 +153,20 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   List<_SlotBayar> _splitBayar = [];
   bool _memuatCaraBayar = false;
   bool _izinCaraBayarMemberTidakDisetel = false;
+  bool _caraBayarDikunciTipe = false;
   int _versiPermintaanCaraBayar = 0;
   late bool _semuaCaraBayarUntukMemberAwal;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
+
+  /// Kode transaksi yang sudah menghasilkan pengajuan limit di server.
+  ///
+  /// Persetujuan supervisor diikat ke member, nominal, dan kode transaksi yang
+  /// tepat. Karena itu percobaan Bayar setelah pengajuan disetujui wajib memakai
+  /// kembali kode ini, bukan membuat nomor struk baru. Nilai dibersihkan hanya
+  /// setelah pembayaran benar-benar berhasil.
+  String? _kodePengajuanLimitTertunda;
 
   /// Metadata tampilan promo manual, dipetakan berdasarkan id aturan. Sumber
   /// kebenaran tetap berada pada setiap [ItemKeranjang], sehingga dua barang
@@ -218,7 +227,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// Memuat ulang metode pembayaran setiap kali member berubah, sama seperti
   /// `loadMetodePembayaranPOS` di `_pos.jsp`. Tanpa member server mengembalikan
   /// semua cara bayar aktif; dengan member server memfilter berdasarkan
-  /// `jenis_anggota_koperasi.daftar_cara_pembayaran_yang_boleh_di_pilih`.
+  /// irisan izin Jenis Member dan Tipe Member. Respons juga membawa metode
+  /// default serta status kunci agar perilaku Desktop/Android sama.
   ///
   /// Nomor versi mencegah respons lama menimpa pilihan member yang lebih baru
   /// bila kasir mengganti member ketika permintaan sebelumnya masih berjalan.
@@ -231,6 +241,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final hasil = await ApiClient.instance
           .aksi('cara_bayar_list', {'id_member': memberId});
       final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
+      final caraBayarTerkunci = hasil['caraBayarTerkunci'] == true;
+      final caraBayarDefaultId = (hasil['caraBayarDefaultId'] as num?)?.toInt();
       final daftar = ((hasil['caraBayar'] as List?) ?? const [])
           .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -238,7 +250,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
       final idTerpilih = _caraBayarTerpilih?.id;
       CaraBayar? pilihan;
-      if (idTerpilih != null) {
+      if (caraBayarDefaultId != null) {
+        for (final cara in daftar) {
+          if (cara.id == caraBayarDefaultId) {
+            pilihan = cara;
+            break;
+          }
+        }
+      }
+      if (pilihan == null && idTerpilih != null) {
         for (final cara in daftar) {
           if (cara.id == idTerpilih) {
             pilihan = cara;
@@ -253,7 +273,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final metodeMenurutId = <int, CaraBayar>{
         for (final cara in daftar) cara.id: cara,
       };
-      final splitMasihDiizinkan = _splitBayar.isNotEmpty &&
+      final splitMasihDiizinkan = !caraBayarTerkunci &&
+          _splitBayar.isNotEmpty &&
           _splitBayar
               .every((slot) => metodeMenurutId.containsKey(slot.caraBayar.id));
       final splitTersegar = splitMasihDiizinkan
@@ -267,6 +288,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _caraBayarTersedia = daftar;
         _caraBayarTerpilih = pilihan;
         _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
+        _caraBayarDikunciTipe = memberId != null && caraBayarTerkunci;
         // Refresh ketika picker dibuka tidak boleh menghapus split yang masih
         // sah. Bila member/config berubah dan salah satu metode tak lagi
         // diizinkan, barulah seluruh split dibatalkan agar payload tidak
@@ -1542,9 +1564,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       if (_memberTerpilih == null) return; // tetap belum dipilih -> batalkan
     }
 
+    String? kodePercobaan;
     setStateIfMounted(() => _memproses = true);
     try {
-      final kodeUnik = await _buatKodeUnik();
+      kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
+      final kodeUnik = kodePercobaan;
       final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
       if (buktiBiometrik == null) return;
       final waktu =
@@ -1622,6 +1646,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final double? kembalianStruk =
           _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
       final saldoStruk = _saldoDepositSetelahBayar(null);
+      _kodePengajuanLimitTertunda = null;
       widget.keranjang.clear();
       // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
       // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
@@ -1655,6 +1680,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ),
       ));
     } catch (e, stackTrace) {
+      if (e is ApiException &&
+          e.kode == 'PENGAJUAN_LIMIT_MENUNGGU' &&
+          kodePercobaan != null) {
+        final pesanLimit = e.pesan.toLowerCase();
+        // Keputusan ditolak atau isi checkout sudah berubah berarti persetujuan
+        // lama tidak boleh digunakan. Selain dua keadaan itu, jangan mengganti
+        // kode pada retry karena persetujuan supervisor di backend hanya sah
+        // untuk transaksi, member, dan nominal yang sama.
+        _kodePengajuanLimitTertunda =
+            pesanLimit.contains('ditolak') || pesanLimit.contains('berbeda')
+                ? null
+                : kodePercobaan;
+      }
       // Kegagalan sebelum pemanggilan API (mis. tulis outbox SQLite, pembuatan
       // nomor struk, atau serialisasi payload) dahulu hanya sampai ke zone
       // handler global. Akibatnya tombol kembali normal tanpa penjelasan dan
@@ -2391,7 +2429,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               // Tetap dapat diketuk ketika snapshot kosong: _pilihMetode akan
               // meminta daftar terbaru ke server. Hanya permintaan yang sedang
               // berjalan yang mencegah ketukan ganda.
-              onTap: _memuatCaraBayar ? null : _pilihMetode,
+              onTap: _memuatCaraBayar || _caraBayarDikunciTipe
+                  ? null
+                  : _pilihMetode,
               borderRadius: BorderRadius.circular(10),
               child: InputDecorator(
                 decoration: const InputDecoration(
@@ -2420,6 +2460,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
+                    else if (_caraBayarDikunciTipe)
+                      const Icon(Icons.lock_outline, size: 18)
                     else
                       const Icon(Icons.chevron_right, size: 18),
                   ],
@@ -2435,6 +2477,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   'disetel. Sementara semua metode aktif dapat dipilih; '
                   'mohon admin melengkapi konfigurasinya.',
                   style: TextStyle(fontSize: 11, color: Colors.orange),
+                ),
+              ),
+            ],
+            if (_caraBayarDikunciTipe) ...[
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Cara pembayaran dikunci oleh Tipe Member dan dipilih otomatis.',
+                  style: TextStyle(fontSize: 11, color: AppColors.success),
                 ),
               ),
             ],

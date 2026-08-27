@@ -446,6 +446,56 @@ class MasterOffline {
     return semua.length;
   }
 
+  /// Menyimpan snapshot lengkap dari server tanpa menimpa perubahan lokal
+  /// yang masih berada di outbox. Dipakai sinkron manual berskala penuh
+  /// (misalnya seluruh katalog produk), setelah pemanggil berhasil mengunduh
+  /// SEMUA halaman server. Baris lokal bertanda [_kunci] yang masih
+  /// menunggu/gagal dikirim tetap menang atas salinan server.
+  static Future<void> simpanDaftarLengkapDariServer(
+    String cacheKey,
+    List<dynamic> dataServer, {
+    String? kolomKunci,
+  }) async {
+    pastikanTimer();
+    List<dynamic> lokal = const [];
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+    if (tersimpan != null) {
+      try {
+        lokal = List<dynamic>.from(jsonDecode(tersimpan) as List);
+      } catch (_) {
+        lokal = const [];
+      }
+    }
+
+    final terlindungi = <String, dynamic>{};
+    for (final baris in lokal) {
+      if (baris is! Map) continue;
+      final kunciOutbox = baris['_kunci'];
+      final kunciBaris = _kunciDiff(baris, kolomKunci);
+      if (kunciBaris != null &&
+          kunciOutbox is String &&
+          _statusBaris.containsKey(kunciOutbox)) {
+        terlindungi[kunciBaris] = baris;
+      }
+    }
+
+    final hasil = <dynamic>[];
+    final kunciServer = <String>{};
+    for (final baris in dataServer) {
+      final kunci = _kunciDiff(baris, kolomKunci);
+      if (kunci != null) kunciServer.add(kunci);
+      hasil.add(kunci != null && terlindungi.containsKey(kunci)
+          ? terlindungi[kunci]
+          : baris);
+    }
+    for (final entri in terlindungi.entries) {
+      if (!kunciServer.contains(entri.key)) hasil.add(entri.value);
+    }
+
+    await CoreDb.instance.simpanCacheReferensi(cacheKey, jsonEncode(hasil));
+    revisiBaris.value++;
+  }
+
   /// Hasil satu emisi [daftarCacheDulu]: data + asal + diff vs tampilan lama.
   /// [idBaru]/[idBerubah] dipakai layar utk animasi kilau baris; [jumlahHapus]
   /// utk banner "N data dihapus dari server" (barisnya sudah lenyap dari list).

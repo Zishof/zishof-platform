@@ -34,6 +34,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _daftar = [];
+  List<Map<String, dynamic>> _caraBayar = [];
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
@@ -49,6 +50,24 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
   void initState() {
     super.initState();
     _muatDaftar();
+    _muatCaraBayar();
+  }
+
+  Future<void> _muatCaraBayar() async {
+    try {
+      await MasterOffline.daftarCacheDulu(
+        'cara_bayar_list_semua',
+        const {},
+        'master:cara_bayar:pilihan_tipe',
+        onData: (hasil) {
+          final data =
+              ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          if (mounted) setStateIfMounted(() => _caraBayar = data);
+        },
+      );
+    } catch (_) {
+      // Form tetap dapat dibuka; snapshot tipe yang sudah ada tidak diubah.
+    }
   }
 
   Future<void> _muatDaftar() async {
@@ -116,7 +135,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FormTipeMember(tipe: tipe),
+      builder: (_) => _FormTipeMember(tipe: tipe, caraBayar: _caraBayar),
     );
     if (tersimpan == true) await _muatDaftar();
   }
@@ -228,7 +247,7 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
               const AppTableColumn('Keterangan', flex: 3),
               const AppTableColumn('Maks. Utang',
                   flex: 2, align: TextAlign.right),
-              const AppTableColumn('Kontak Wajib',
+              const AppTableColumn('Aturan Wajib',
                   flex: 2, align: TextAlign.center),
               const AppTableColumn('Status', flex: 1, align: TextAlign.center),
               AppTableColumn('Aksi', width: 64, align: TextAlign.center),
@@ -272,17 +291,28 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
                     [
                       if (wajibHpDariTipe(t)) 'No. HP',
                       if (wajibEmailDariTipe(t)) 'Email',
+                      if (t['wajibPin'] == true) 'PIN',
+                      if (t['wajibBiometricWajah'] == true) 'Wajah',
+                      if (t['wajibBiometricFingerprint'] == true) 'Fingerprint',
                     ].join(' + ').isEmpty
                         ? '-'
                         : [
                             if (wajibHpDariTipe(t)) 'No. HP',
                             if (wajibEmailDariTipe(t)) 'Email',
+                            if (t['wajibPin'] == true) 'PIN',
+                            if (t['wajibBiometricWajah'] == true) 'Wajah',
+                            if (t['wajibBiometricFingerprint'] == true)
+                              'Fingerprint',
                           ].join(' + '),
                     flex: 2,
                     align: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: wajibHpDariTipe(t) || wajibEmailDariTipe(t)
+                      color: wajibHpDariTipe(t) ||
+                              wajibEmailDariTipe(t) ||
+                              t['wajibPin'] == true ||
+                              t['wajibBiometricWajah'] == true ||
+                              t['wajibBiometricFingerprint'] == true
                           ? AppColors.info
                           : AppColors.textSecondary,
                     ),
@@ -349,7 +379,8 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
 
 class _FormTipeMember extends StatefulWidget {
   final Map<String, dynamic>? tipe;
-  const _FormTipeMember({required this.tipe});
+  final List<Map<String, dynamic>> caraBayar;
+  const _FormTipeMember({required this.tipe, required this.caraBayar});
 
   @override
   State<_FormTipeMember> createState() => _FormTipeMemberState();
@@ -361,9 +392,18 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
   late final TextEditingController _nama;
   late final TextEditingController _keterangan;
   late final TextEditingController _maksimalBolehUtang;
+  late final TextEditingController _maksimalTransaksiHarian;
+  late final TextEditingController _maksimalTransaksiMingguan;
+  late final TextEditingController _maksimalTransaksiBulanan;
+  Set<int> _caraBayarDipilih = {};
+  int? _caraBayarDefaultId;
+  bool _tidakBolehCaraBayarLain = false;
   bool _aktif = true;
   bool _wajibHp = false;
   bool _wajibEmail = false;
+  bool _wajibPin = false;
+  bool _wajibBiometricWajah = false;
+  bool _wajibBiometricFingerprint = false;
   bool _menyimpan = false;
   String? _pesanError;
 
@@ -377,12 +417,38 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     final maksUtang = (t?['maksimalBolehUtang'] as num?) ?? 0;
     _maksimalBolehUtang =
         TextEditingController(text: maksUtang == 0 ? '' : '$maksUtang');
+    _maksimalTransaksiHarian = _controllerBatas(t?['maksimalTransaksiHarian']);
+    _maksimalTransaksiMingguan =
+        _controllerBatas(t?['maksimalTransaksiMingguan']);
+    _maksimalTransaksiBulanan =
+        _controllerBatas(t?['maksimalTransaksiBulanan']);
+    _caraBayarDipilih = '${t?['daftarCaraPembayaranYangBolehDiPilih'] ?? ''}'
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toSet();
+    _caraBayarDefaultId = (t?['caraPembayaranDefaultId'] as num?)?.toInt();
+    _tidakBolehCaraBayarLain = t?['tidakBolehCaraPembayaranLain'] == true;
     _aktif = t?['aktif'] ?? true;
     // Kebijakan kontak: nilai server bila ada, selain itu default per nama
     // (Pegawai/Dosen/Guru/Umum wajib HP; email tidak wajib semua).
     _wajibHp = wajibHpDariTipe(t);
     _wajibEmail = wajibEmailDariTipe(t);
+    _wajibPin = t?['wajibPin'] == true;
+    _wajibBiometricWajah = t?['wajibBiometricWajah'] == true;
+    _wajibBiometricFingerprint = t?['wajibBiometricFingerprint'] == true;
   }
+
+  TextEditingController _controllerBatas(dynamic nilai) {
+    final angka = (nilai as num?)?.toDouble() ?? 0;
+    return TextEditingController(
+        text: angka <= 0 ? '' : angka.toStringAsFixed(0));
+  }
+
+  double _angka(TextEditingController controller) =>
+      double.tryParse(
+          controller.text.trim().replaceAll('.', '').replaceAll(',', '.')) ??
+      0;
 
   @override
   void dispose() {
@@ -390,11 +456,28 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     _nama.dispose();
     _keterangan.dispose();
     _maksimalBolehUtang.dispose();
+    _maksimalTransaksiHarian.dispose();
+    _maksimalTransaksiMingguan.dispose();
+    _maksimalTransaksiBulanan.dispose();
     super.dispose();
   }
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_caraBayarDipilih.length == 1) {
+      _caraBayarDefaultId = _caraBayarDipilih.first;
+    }
+    if (_caraBayarDefaultId != null &&
+        !_caraBayarDipilih.contains(_caraBayarDefaultId)) {
+      setStateIfMounted(() => _pesanError =
+          'Cara bayar default harus termasuk cara bayar yang diizinkan.');
+      return;
+    }
+    if (_tidakBolehCaraBayarLain && _caraBayarDefaultId == null) {
+      setStateIfMounted(() => _pesanError =
+          'Pilih cara bayar default sebelum melarang cara bayar lain.');
+      return;
+    }
     setStateIfMounted(() {
       _menyimpan = true;
       _pesanError = null;
@@ -411,6 +494,18 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
             0,
         'wajibHp': _wajibHp,
         'wajibEmail': _wajibEmail,
+        'wajibPin': _wajibPin,
+        'wajibBiometricWajah': _wajibBiometricWajah,
+        'wajibBiometricFingerprint': _wajibBiometricFingerprint,
+        'wajib_pin': _wajibPin,
+        'wajib_biometric_wajah': _wajibBiometricWajah,
+        'wajib_biometric_fingerprint': _wajibBiometricFingerprint,
+        'daftarCaraPembayaranYangBolehDiPilih': _caraBayarDipilih.join(','),
+        'caraPembayaranDefaultId': _caraBayarDefaultId,
+        'tidakBolehCaraPembayaranLain': _tidakBolehCaraBayarLain,
+        'maksimalTransaksiHarian': _angka(_maksimalTransaksiHarian),
+        'maksimalTransaksiMingguan': _angka(_maksimalTransaksiMingguan),
+        'maksimalTransaksiBulanan': _angka(_maksimalTransaksiBulanan),
       };
       await prosesSimpanMaster(
         context,
@@ -494,6 +589,132 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
                       value: _wajibEmail,
                       onChanged: (v) =>
                           setStateIfMounted(() => _wajibEmail = v)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Verifikasi Transaksi',
+                deskripsi:
+                    'Default semuanya tidak aktif. Jika Jenis Member atau Tipe Member mewajibkan suatu metode, kasir tetap harus memverifikasinya sebelum saldo dipotong.',
+                children: [
+                  AppFormSwitchTile(
+                    title: 'Wajib pakai PIN',
+                    subtitle:
+                        'Kasir meminta PIN numerik member sebelum transaksi saldo diproses.',
+                    value: _wajibPin,
+                    onChanged: (v) => setStateIfMounted(() => _wajibPin = v),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Wajib pakai Face Recognition',
+                    subtitle:
+                        'Wajah member harus cocok melalui kamera dan pemeriksaan liveness.',
+                    value: _wajibBiometricWajah,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _wajibBiometricWajah = v),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Wajib pakai Finger Print',
+                    subtitle:
+                        'Desktop/Android menggunakan scanner fingerprint eksternal yang didukung SDK vendor.',
+                    value: _wajibBiometricFingerprint,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _wajibBiometricFingerprint = v),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Cara Pembayaran',
+                deskripsi:
+                    'Pilih satu atau beberapa metode. Kosong berarti tidak menambah pembatasan dari Jenis Member.',
+                children: [
+                  if (widget.caraBayar.isEmpty)
+                    const Text('Daftar cara bayar belum dapat dimuat.',
+                        style: TextStyle(fontSize: 12, color: Colors.orange))
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: widget.caraBayar.map((c) {
+                        final id = (c['id'] as num).toInt();
+                        return FilterChip(
+                          label: Text('${c['nama']}',
+                              style: const TextStyle(fontSize: 12)),
+                          selected: _caraBayarDipilih.contains(id),
+                          onSelected: (dipilih) => setStateIfMounted(() {
+                            if (dipilih) {
+                              _caraBayarDipilih.add(id);
+                            } else {
+                              _caraBayarDipilih.remove(id);
+                              if (_caraBayarDefaultId == id) {
+                                _caraBayarDefaultId = null;
+                              }
+                            }
+                            if (_caraBayarDipilih.length == 1) {
+                              _caraBayarDefaultId = _caraBayarDipilih.first;
+                            }
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  DropdownButtonFormField<int>(
+                    value: _caraBayarDipilih.contains(_caraBayarDefaultId)
+                        ? _caraBayarDefaultId
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Cara Bayar Default',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: widget.caraBayar
+                        .where((c) => _caraBayarDipilih
+                            .contains((c['id'] as num).toInt()))
+                        .map((c) => DropdownMenuItem<int>(
+                              value: (c['id'] as num).toInt(),
+                              child: Text('${c['nama']}'),
+                            ))
+                        .toList(),
+                    onChanged: _caraBayarDipilih.isEmpty
+                        ? null
+                        : (v) =>
+                            setStateIfMounted(() => _caraBayarDefaultId = v),
+                  ),
+                  AppFormSwitchTile(
+                    title: 'Tidak boleh pakai cara bayar lain',
+                    subtitle:
+                        'Kasir otomatis memakai cara bayar default dan pemilih metode dinonaktifkan. Jika hanya satu metode diizinkan, aturan ini berlaku otomatis.',
+                    value: _tidakBolehCaraBayarLain,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _tidakBolehCaraBayarLain = v),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Batas Pembelian',
+                deskripsi:
+                    'Total transaksi member tidak boleh melewati batas periode. Nilai 0 atau kosong berarti tanpa batas.',
+                children: [
+                  AppFormTextField(
+                    label: 'Maksimal Transaksi Harian',
+                    controller: _maksimalTransaksiHarian,
+                    hintText: '0 = tanpa batas',
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  AppFormTextField(
+                    label: 'Maksimal Transaksi Mingguan',
+                    controller: _maksimalTransaksiMingguan,
+                    hintText: '0 = tanpa batas',
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  AppFormTextField(
+                    label: 'Maksimal Transaksi Bulanan',
+                    controller: _maksimalTransaksiBulanan,
+                    hintText: '0 = tanpa batas',
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
                 ],
               ),
             ],

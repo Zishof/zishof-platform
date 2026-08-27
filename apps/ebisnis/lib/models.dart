@@ -389,6 +389,7 @@ class Anggota {
   final int? jenisAnggotaKoperasiId;
   final String jenisNama;
   final bool wajibPin;
+  final bool pinSudahDiatur;
   final bool wajibBiometricWajah;
   final bool wajibBiometricFingerprint;
   final bool aktif;
@@ -410,6 +411,7 @@ class Anggota {
     this.jenisAnggotaKoperasiId,
     this.jenisNama = '',
     required this.wajibPin,
+    this.pinSudahDiatur = false,
     this.wajibBiometricWajah = false,
     this.wajibBiometricFingerprint = false,
     this.aktif = true,
@@ -432,6 +434,7 @@ class Anggota {
         jenisAnggotaKoperasiId: j['jenisAnggotaKoperasiId'] as int?,
         jenisNama: (j['jenisNama'] ?? '') as String,
         wajibPin: j['wajibPin'] == true,
+        pinSudahDiatur: j['pinSudahDiatur'] == true,
         wajibBiometricWajah: j['wajibBiometricWajah'] == true,
         wajibBiometricFingerprint: j['wajibBiometricFingerprint'] == true,
         aktif: j['aktif'] == null ? true : j['aktif'] == true,
@@ -454,6 +457,7 @@ class Anggota {
         email: (b['email'] ?? '') as String,
         jenisNama: (b['jenis_nama'] ?? '') as String,
         wajibPin: (b['wajib_pin'] as int? ?? 0) == 1,
+        pinSudahDiatur: (b['pin_sudah_diatur'] as int? ?? 0) == 1,
         wajibBiometricWajah: (b['wajib_biometric_wajah'] as int? ?? 0) == 1,
         wajibBiometricFingerprint:
             (b['wajib_biometric_fingerprint'] as int? ?? 0) == 1,
@@ -471,6 +475,7 @@ class Anggota {
         'email': j['email'] ?? '',
         'jenis_nama': j['jenisNama'] ?? '',
         'wajib_pin': (j['wajibPin'] == true) ? 1 : 0,
+        'pin_sudah_diatur': (j['pinSudahDiatur'] == true) ? 1 : 0,
         'wajib_biometric_wajah': (j['wajibBiometricWajah'] == true) ? 1 : 0,
         'wajib_biometric_fingerprint':
             (j['wajibBiometricFingerprint'] == true) ? 1 : 0,

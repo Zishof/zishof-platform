@@ -1,9 +1,14 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:core_db/core_db.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../models.dart';
 import '../../services/master_offline.dart';
+import '../../services/simple_xlsx.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
 import 'kebijakan_tipe_member.dart';
 import '../../sesi.dart';
@@ -41,6 +46,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
   bool _memuat = true;
   bool _sinkronBerjalan = false;
   bool _memulaiDataSample = false;
+  bool _memprosesPin = false;
   String? _pesanError;
   List<Anggota> _daftar = [];
   List<Kategori> _jenisAnggota = [];
@@ -308,6 +314,255 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
     if (tersimpan == true) await _muatSemua();
   }
 
+  void _infoPin(String pesan) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+  }
+
+  Future<List<Map<String, dynamic>>> _ambilSemuaMemberUntukPin() async {
+    final semua = <Map<String, dynamic>>[];
+    var page = 1;
+    while (true) {
+      final hasil = await ApiClient.instance.aksi('anggota_list', {
+        'page': page,
+        'page_size': 100,
+      });
+      final data = ((hasil['data'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      semua.addAll(data);
+      final total = (hasil['total'] as num?)?.toInt() ?? semua.length;
+      if (data.isEmpty || semua.length >= total) return semua;
+      page++;
+    }
+  }
+
+  /// Mengunduh STATUS + template penggantian PIN, bukan PIN asli. PIN baru
+  /// disimpan server sebagai PBKDF2+salt sehingga memang tidak dapat dibalik.
+  Future<void> _downloadTemplatePin() async {
+    if (_memprosesPin) return;
+    setStateIfMounted(() => _memprosesPin = true);
+    try {
+      final data = await _ambilSemuaMemberUntukPin();
+      final bytes = buildSimpleXlsx(
+        sheetName: 'PIN Member',
+        headers: const [
+          'ID_MEMBER',
+          'KODE_MEMBER',
+          'NAMA_MEMBER',
+          'IDENTITAS',
+          'PIN_SUDAH_DIATUR',
+          'PIN_BARU',
+          'KETERANGAN',
+        ],
+        rows: data
+            .map((m) => <Object?>[
+                  m['id'] ?? '',
+                  m['kode'] ?? '',
+                  m['nama'] ?? '',
+                  m['kodeIdentitas'] ?? '',
+                  m['pinSudahDiatur'] == true ? 'YA' : 'BELUM',
+                  '',
+                  'Isi PIN_BARU 4-8 angka. Untuk PIN berawalan 0, format sel sebagai Text.',
+                ])
+            .toList(),
+      );
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Template PIN Member',
+        fileName:
+            'Template_PIN_Member_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        _infoPin(
+            '${data.length} member diekspor. PIN asli/hash tidak disertakan demi keamanan.');
+      }
+    } catch (e) {
+      _infoPin('Template PIN belum berhasil dibuat: $e');
+    } finally {
+      if (mounted) setStateIfMounted(() => _memprosesPin = false);
+    }
+  }
+
+  Future<void> _uploadPin() async {
+    if (_memprosesPin) return;
+    final dipilih = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Pilih Template PIN Member',
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    if (dipilih == null || dipilih.files.isEmpty) return;
+    final file = dipilih.files.single;
+    final bytes = file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null) {
+      _infoPin('Berkas Excel tidak dapat dibaca.');
+      return;
+    }
+    setStateIfMounted(() => _memprosesPin = true);
+    try {
+      final tabel = readSimpleXlsx(Uint8List.fromList(bytes));
+      if (tabel.length < 2) {
+        throw const FormatException('Excel tidak memiliki baris data.');
+      }
+      final header = <String, int>{};
+      for (var i = 0; i < tabel.first.length; i++) {
+        header[tabel.first[i].trim().toUpperCase()] = i;
+      }
+      final idKolom = header['ID_MEMBER'];
+      final kodeKolom = header['KODE_MEMBER'];
+      final pinKolom = header['PIN_BARU'];
+      if ((idKolom == null && kodeKolom == null) || pinKolom == null) {
+        throw const FormatException(
+            'Kolom ID_MEMBER atau KODE_MEMBER, serta PIN_BARU wajib tersedia.');
+      }
+      String nilai(List<String> row, int? kolom) =>
+          kolom == null || kolom >= row.length ? '' : row[kolom].trim();
+
+      final baris = <Map<String, dynamic>>[];
+      for (var i = 1; i < tabel.length; i++) {
+        final row = tabel[i];
+        final pin = nilai(row, pinKolom).replaceFirst("'", '');
+        if (pin.isEmpty) continue;
+        final idText = nilai(row, idKolom).replaceFirst(RegExp(r'\.0$'), '');
+        final kode = nilai(row, kodeKolom);
+        final id = int.tryParse(idText);
+        if (id == null && kode.isEmpty) {
+          throw FormatException('Baris ${i + 1}: identitas member kosong.');
+        }
+        if (!RegExp(r'^[0-9]{4,8}$').hasMatch(pin)) {
+          throw FormatException(
+              'Baris ${i + 1}: PIN wajib terdiri dari 4 sampai 8 angka.');
+        }
+        baris.add({
+          if (id != null) 'id': id,
+          if (kode.isNotEmpty) 'kode': kode,
+          'pin': pin
+        });
+      }
+      if (baris.isEmpty) {
+        throw const FormatException('Tidak ada PIN_BARU yang diisi.');
+      }
+      if (!mounted) return;
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Ganti PIN Member Massal?'),
+          content: Text(
+              '${baris.length} PIN akan diganti. Proses ini tidak menampilkan atau mencadangkan PIN lama dan hanya dapat dijalankan saat online.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Ganti PIN')),
+          ],
+        ),
+      );
+      if (lanjut != true) return;
+      final hasil = await ApiClient.instance
+          .aksi('anggota_pin_simpan_massal', {'data': baris});
+      _infoPin('${hasil['description'] ?? '${baris.length} PIN diperbarui.'}');
+      await _muatSemua();
+    } catch (e) {
+      _infoPin('Upload PIN gagal: $e');
+    } finally {
+      if (mounted) setStateIfMounted(() => _memprosesPin = false);
+    }
+  }
+
+  Future<void> _aturPinMember(Anggota anggota) async {
+    final pin = TextEditingController();
+    final ulang = TextEditingController();
+    String? galat;
+    final simpan = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title:
+              Text('${anggota.pinSudahDiatur ? 'Ganti' : 'Atur'} PIN Member'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${anggota.nama} · ${anggota.kode}'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pin,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 8,
+                  decoration: const InputDecoration(
+                      labelText: 'PIN baru (4-8 angka)',
+                      border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ulang,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 8,
+                  decoration: const InputDecoration(
+                      labelText: 'Ulangi PIN baru',
+                      border: OutlineInputBorder()),
+                ),
+                if (galat != null) ...[
+                  const SizedBox(height: 8),
+                  Text(galat!, style: const TextStyle(color: AppColors.danger)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final nilai = pin.text.trim();
+                if (!RegExp(r'^[0-9]{4,8}$').hasMatch(nilai)) {
+                  setDialogState(
+                      () => galat = 'PIN wajib terdiri dari 4 sampai 8 angka.');
+                } else if (nilai != ulang.text.trim()) {
+                  setDialogState(() => galat = 'Konfirmasi PIN tidak sama.');
+                } else {
+                  Navigator.of(dialogContext).pop(true);
+                }
+              },
+              child: const Text('Simpan PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (simpan != true || !mounted) {
+      pin.dispose();
+      ulang.dispose();
+      return;
+    }
+    final nilai = pin.text.trim();
+    pin.dispose();
+    ulang.dispose();
+    try {
+      final hasil = await ApiClient.instance.aksi('anggota_pin_simpan_massal', {
+        'data': [
+          {'id': anggota.id, 'pin': nilai}
+        ]
+      });
+      _infoPin('${hasil['description'] ?? 'PIN member berhasil diperbarui.'}');
+      await _muatSemua();
+    } catch (e) {
+      _infoPin('PIN belum berhasil diperbarui: $e');
+    }
+  }
+
   Future<void> _hapusAnggota(Anggota a) async {
     final konfirmasi = await showDialog<bool>(
       context: context,
@@ -416,6 +671,34 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                 label: const Text('Unduh Offline'),
               ),
               if (Sesi.instance.bolehKelola) ...[
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  enabled: !_memprosesPin,
+                  tooltip: 'Kelola PIN member',
+                  onSelected: (value) {
+                    if (value == 'download') _downloadTemplatePin();
+                    if (value == 'upload') _uploadPin();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                        value: 'download',
+                        child: Text('Download Template PIN')),
+                    PopupMenuItem(
+                        value: 'upload', child: Text('Upload PIN Member')),
+                  ],
+                  child: IgnorePointer(
+                    child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: _memprosesPin
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.password_outlined, size: 18),
+                      label: const Text('Kelola PIN'),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () => _bukaFormAnggota(),
@@ -543,6 +826,13 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                       label: 'Wajib PIN',
                       warna: AppColors.warning,
                     ),
+                  StatusPill(
+                    label:
+                        a.pinSudahDiatur ? 'PIN Terpasang' : 'PIN Belum Diatur',
+                    warna: a.pinSudahDiatur
+                        ? AppColors.success
+                        : AppColors.textSecondary,
+                  ),
                 ],
               ),
             ),
@@ -555,6 +845,14 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                   label: 'Riwayat data ini',
                   onTap: () => tampilkanRiwayatData(context,
                       entitas: 'anggota', id: a.id, judul: a.nama),
+                ),
+                AksiBaris(
+                  ikon: Icons.password_outlined,
+                  label:
+                      a.pinSudahDiatur ? 'Ganti PIN member' : 'Atur PIN member',
+                  onTap: Sesi.instance.bolehKelola
+                      ? () => _aturPinMember(a)
+                      : null,
                 ),
                 AksiBaris(
                   ikon: Icons.edit_outlined,

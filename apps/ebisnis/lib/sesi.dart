@@ -52,6 +52,7 @@ class Sesi {
   /// dari hak kelola CRUD member. Server tetap menegakkan gerbang sungguhan
   /// di `KantinHelper.topupSaldo/depositUbah/depositHapus` -- ini murni UI.
   bool bolehEntryTopup = false;
+  bool bolehVerifikasiLimitMember = false;
   bool bolehHapusPesanan = false;
 
   /// Multi-toko (spec: akun boleh akses lebih dari satu toko, dipilih via
@@ -182,6 +183,7 @@ class Sesi {
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
+    bolehVerifikasiLimitMember = konfig['bolehVerifikasiLimitMember'] == true;
     bolehHapusPesanan = konfig['bolehHapusPesanan'] == true || bolehKelola;
     caraBayar = ((konfig['caraBayar'] as List?) ?? [])
         .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
@@ -255,6 +257,7 @@ class Sesi {
     supervisorPedagang = false;
     bolehHapusPesanan = false;
     bolehEntryTopup = false;
+    bolehVerifikasiLimitMember = false;
     aksesMenu = {};
     crudPos = {};
     multiToko = false;

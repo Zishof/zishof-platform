@@ -54,7 +54,14 @@ void main() {
     // screen), tab cukup jalur MasterOffline + cacheKey-nya.
     'lib/screens/anggota/tab_data_member.dart': ["'master:anggota'"],
     'lib/screens/anggota/tab_jenis_member.dart': ["'master:jenis_anggota'"],
-    'lib/screens/anggota/tab_tipe_member.dart': ["'master:tipe_anggota'"],
+    'lib/screens/anggota/tab_tipe_member.dart': [
+      "'master:tipe_anggota'",
+      "'master:cara_bayar:pilihan_tipe'",
+      "'daftarCaraPembayaranYangBolehDiPilih'",
+      "'maksimalTransaksiHarian'",
+      "'maksimalTransaksiMingguan'",
+      "'maksimalTransaksiBulanan'",
+    ],
     'lib/screens/supplier_screen.dart': [
       "'master:penyedia'",
       'IndikatorSinkronMaster(',
@@ -217,8 +224,7 @@ void main() {
     'lib/screens/anggota/tab_satuan_kerja.dart': "'satuan_kerja_simpan'",
     'lib/screens/anggota/tab_topup.dart': "'deposit_hapus'",
     'lib/screens/mitrainap/kamar_hotel_screen.dart': 'prosesSimpanMaster(',
-    'lib/screens/pengadaan_tagihan_screen.dart':
-        "'pengadaan_lampiran_hapus'",
+    'lib/screens/pengadaan_tagihan_screen.dart': "'pengadaan_lampiran_hapus'",
     'lib/screens/inventory_sales/hutang_supplier_screen.dart':
         "'si_purchase_terms_save'",
   };
@@ -229,8 +235,8 @@ void main() {
       final indeks = source.indexOf(entri.value);
       expect(indeks, greaterThanOrEqualTo(0),
           reason: '${entri.key} kehilangan penanda ${entri.value}');
-      final sekitar = source.substring(
-          (indeks - 400).clamp(0, indeks), (indeks + 200).clamp(0, source.length));
+      final sekitar = source.substring((indeks - 400).clamp(0, indeks),
+          (indeks + 200).clamp(0, source.length));
       expect(sekitar, contains('prosesSimpanMaster'),
           reason: '${entri.key}: ${entri.value} harus lewat prosesSimpanMaster '
               '(tulis lokal dulu), bukan ApiClient langsung atau '
@@ -256,7 +262,8 @@ void main() {
         expect(indeks, greaterThanOrEqualTo(0),
             reason: '${entri.key} kehilangan aksi $aksi');
         // Aksi harus dipanggil lewat ApiClient.instance.aksi (bukan antrean).
-        final sebelum = padat.substring((indeks - 200).clamp(0, indeks), indeks);
+        final sebelum =
+            padat.substring((indeks - 200).clamp(0, indeks), indeks);
         expect(sebelum, contains(rapat('ApiClient.instance')),
             reason: '${entri.key}: $aksi harus tetap lewat ApiClient '
                 '(online-only sesuai spec 13.3 / aturan kredensial)');
@@ -279,8 +286,7 @@ void main() {
     expect(dialog, contains('antreLokal'),
         reason: 'wajib menulis lokal SEBELUM menyentuh jaringan');
 
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     expect(layanan, contains('Duration(minutes: 5)'),
         reason: 'retry latar 5 menit sekali (permintaan bisnis)');
     expect(layanan, contains('_timer?.cancel()'),
@@ -288,8 +294,7 @@ void main() {
   });
 
   test('baca lokal-dulu + animasi perubahan server + riwayat AuditTrails', () {
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     // Emisi ganda: cache instan lalu server + diff utk animasi.
     expect(layanan, contains('daftarCacheDulu'));
     expect(layanan, contains("'idBaru'"));
@@ -318,8 +323,7 @@ void main() {
   });
 
   test('sinkron awal ber-progress saat cache lokal kosong (generik)', () {
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     // API generik utk SEMUA modul CRUD (permintaan bisnis: reuse, bukan
     // helper khusus satu layar).
     expect(layanan, contains('perluSinkronAwal'));
@@ -338,6 +342,20 @@ void main() {
         File('lib/screens/anggota/tab_data_member.dart').readAsStringSync();
     expect(member, contains('jumlahAnggotaCache'));
     expect(member, contains('jalankanDenganProgressSinkron'));
+  });
+
+  test('layar produk menyediakan sinkron penuh server ke cache lokal', () {
+    final produk = File('lib/screens/produk_screen.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
+    expect(
+        produk,
+        contains(
+            "label: _menyinkronProduk ? 'Menyinkron...' : 'Sinkron Produk'"));
+    expect(produk, contains('replaceProdukCache('));
+    expect(produk, contains("'page_size': ukuranHalaman"));
+    expect(produk, contains('jalankanDenganProgressSinkron<int>'));
+    expect(layanan, contains('simpanDaftarLengkapDariServer'));
+    expect(layanan, contains('_statusBaris.containsKey(kunciOutbox)'));
   });
 
   // Layar LAPORAN yang menyajikan angka uang dari cache lokal WAJIB
@@ -361,8 +379,7 @@ void main() {
   });
 
   test('layanan MasterOffline terikat ke outbox_master core_db', () {
-    final source =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final source = File('lib/services/master_offline.dart').readAsStringSync();
     expect(source, contains('outboxMasterTambah'));
     expect(source, contains('outboxMasterPending'));
     expect(source, contains('outboxMasterTandaiSukses'));

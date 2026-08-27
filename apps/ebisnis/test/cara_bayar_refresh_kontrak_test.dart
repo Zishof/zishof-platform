@@ -33,8 +33,11 @@ void main() {
         lessThan(method.indexOf('showModalBottomSheet')));
   });
 
-  test('snapshot kosong tetap dapat meminta daftar terbaru', () {
-    expect(source, contains('onTap: _memuatCaraBayar ? null : _pilihMetode'));
+  test('snapshot kosong tetap dapat meminta daftar terbaru bila tidak dikunci',
+      () {
+    expect(source,
+        contains('onTap: _memuatCaraBayar || _caraBayarDikunciTipe'));
+    expect(source, contains(': _pilihMetode'));
   });
 
   test('refresh mempertahankan split yang seluruh metodenya masih sah', () {

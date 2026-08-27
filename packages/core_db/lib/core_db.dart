@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 15,
+        version: 16,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -458,6 +458,17 @@ class CoreDb {
         // Kolom mungkin sudah dibuat oleh upgrade parsial.
       }
     }
+    if (versiLama < 16) {
+      // Hanya STATUS keberadaan PIN yang dicache. PIN/hash/salt tidak pernah
+      // disalin ke perangkat; metadata ini cukup untuk UI supervisor tetap
+      // informatif saat local-first/offline.
+      try {
+        await db.execute(
+            'ALTER TABLE anggota_cache ADD COLUMN pin_sudah_diatur INTEGER DEFAULT 0');
+      } catch (_) {
+        // Kolom mungkin sudah dibuat oleh upgrade parsial.
+      }
+    }
   }
 
   /// Pemetaan id sementara (negatif, dibuat klien saat offline) -> id server.
@@ -569,6 +580,7 @@ class CoreDb {
         email TEXT,
         jenis_nama TEXT,
         wajib_pin INTEGER DEFAULT 0,
+        pin_sudah_diatur INTEGER DEFAULT 0,
         wajib_biometric_wajah INTEGER DEFAULT 0,
         wajib_biometric_fingerprint INTEGER DEFAULT 0,
         foto_url TEXT
