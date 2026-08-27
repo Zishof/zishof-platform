@@ -930,6 +930,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             member.wajibBiometricFingerprint);
   }
 
+  bool get _verifikasiMemberWajibServer {
+    final member = _memberTerpilih;
+    return member != null &&
+        (member.wajibPin ||
+            (_saldoAkanDipotong &&
+                (member.wajibBiometricWajah ||
+                    member.wajibBiometricFingerprint)));
+  }
+
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
       String modality, String kodeUnik) async {
     try {
@@ -1591,7 +1600,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final payloadPending = Map<String, dynamic>.from(payload);
       payloadPending['pengiriman_pending'] = true;
       Map<String, dynamic>? hasilServer;
-      if (_biometrikWajibUntukSaldo || _memberMemilikiLimitTransaksi) {
+      if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
         // Bukti biometrik berumur pendek dan diikat ke kode transaksi. Karena
         // itu pembayaran saldo wajib menunggu ACK server dan tidak boleh masuk
         // outbox berulang yang baru terkirim setelah bukti kedaluwarsa. Hal
@@ -1608,8 +1617,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_biometrikWajibUntukSaldo
-                ? 'Identitas member terverifikasi. Pembayaran saldo sudah diterima server.'
+            content: Text(_verifikasiMemberWajibServer
+                ? 'Identitas member terverifikasi. Pembayaran sudah diterima server.'
                 : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
       } else {
         // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba

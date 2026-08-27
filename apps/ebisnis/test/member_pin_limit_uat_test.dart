@@ -46,10 +46,12 @@ void main() {
           File('lib/screens/keranjang_screen.dart').readAsStringSync();
 
       expect(source, contains('bool get _memberMemilikiLimitTransaksi'));
+      expect(source, contains('bool get _verifikasiMemberWajibServer'));
+      expect(source, contains('member.wajibPin ||'));
       expect(
           source,
           contains(
-              'if (_biometrikWajibUntukSaldo || _memberMemilikiLimitTransaksi)'));
+              'if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi)'));
       expect(source, contains("ApiClient.instance.aksi('bayar', payload)"));
       expect(source, contains("e.kode == 'PENGAJUAN_LIMIT_MENUNGGU'"));
       expect(source, contains('_kodePengajuanLimitTertunda ='));

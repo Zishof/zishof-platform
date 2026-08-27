@@ -35,7 +35,7 @@ void main() {
     expect(source, contains("'pin_verification_event_id'"));
     expect(source, contains(r"'clientMutationId': 'pos-pin-$kodeUnik'"));
     expect(source, contains("await ApiClient.instance.aksi('bayar', payload)"));
-    expect(source, contains('Pembayaran saldo sudah diterima server'));
+    expect(source, contains('Pembayaran sudah diterima server'));
   });
 
   test('PIN wajib ikut gerbang saldo dan dialog hanya menerima angka', () {
