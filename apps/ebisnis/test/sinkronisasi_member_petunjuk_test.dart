@@ -23,4 +23,12 @@ void main() {
     expect(source, contains('Guru memerlukan NIP'));
     expect(source, contains('tekan Unduh Offline'));
   });
+
+  test('koperasi tunggal dipilih otomatis untuk sinkronisasi massal', () {
+    final source =
+        File('lib/screens/anggota/tab_sinkronisasi.dart').readAsStringSync();
+
+    expect(source, contains('if (_koperasi.length == 1)'));
+    expect(source, contains("_koperasi.first['id']"));
+  });
 }

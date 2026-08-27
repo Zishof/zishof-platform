@@ -136,6 +136,12 @@ class _AnggotaTabSinkronisasiState extends State<AnggotaTabSinkronisasi>
       if (mounted) {
         setStateIfMounted(() {
           _koperasi = hasil[0];
+          // Instalasi satu-institusi umumnya hanya memiliki satu koperasi.
+          // Pilih otomatis agar tombol "Sinkronkan Semua" langsung siap dan
+          // pengguna tidak mengira dropdown kosong/terlewat dipilih.
+          if (_koperasi.length == 1) {
+            _koperasiId = (_koperasi.first['id'] as num?)?.toInt();
+          }
           _fakultas = hasil[1];
           _yayasan = hasil[2];
         });
