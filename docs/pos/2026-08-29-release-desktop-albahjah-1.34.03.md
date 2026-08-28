@@ -38,4 +38,10 @@ Jangan memasang desktop sebelum migrasi dan server baru aktif karena penyimpanan
 
 ## Artefak
 
-Nama installer, ukuran, dan SHA-256 diisi setelah build bersih selesai.
+- File: `Al-Bahjah-POS-Setup-1.34.03.exe`
+- Ukuran: `47.230.693 byte` (`45,04 MiB`)
+- SHA-256: `B7BF9046455660DFAC210B0FE5CC9C8DFDE5E042C809F95AC034FC3AAF89F265`
+- Metadata executable: `Al-Bahjah POS 1.34.03+161`
+- Authenticode: belum ditandatangani (`NotSigned`). Jika Windows menampilkan peringatan penerbit, cocokkan nama file dan SHA-256 sebelum melanjutkan instalasi.
+
+Build dilakukan dari checkout bersih pada commit Git `4f81136`; perubahan lokal dari pekerjaan lain tidak masuk ke artefak.
