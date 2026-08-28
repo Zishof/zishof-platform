@@ -1,7 +1,9 @@
 # Runbook Koreksi Produk Tanpa Satuan
 
-Tanggal: 29 Agustus 2026  
-Lingkup: POS Al-Bahjah, toko `1`  
+Tanggal: 29 Agustus 2026
+
+Lingkup: POS Al-Bahjah, toko `1`
+
 Tujuan: melengkapi satuan dasar dan satuan pembelian tanpa menebak data atau mengubah audit stok/HPP historis.
 
 ## Kapan runbook ini digunakan
