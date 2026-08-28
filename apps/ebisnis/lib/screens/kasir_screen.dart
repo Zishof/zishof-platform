@@ -48,7 +48,10 @@ bool produkCocokKataKunci(Produk produk, String kataKunci) {
   return kata.isEmpty ||
       produk.nama.toLowerCase().contains(kata) ||
       produk.kode.toLowerCase().contains(kata) ||
-      produk.barcode.toLowerCase().contains(kata);
+      produk.barcode.toLowerCase().contains(kata) ||
+      produk.kemasan.any((k) =>
+          '${k['barcode'] ?? ''}'.toLowerCase().contains(kata) ||
+          '${k['nama'] ?? ''}'.toLowerCase().contains(kata));
 }
 
 /// Satu sumber keputusan UI untuk kartu, pencarian, scan barcode, Desktop,
@@ -305,6 +308,7 @@ class _KasirScreenState extends State<KasirScreen> {
         // sempat sinkron katalog dari server) -- tanpa ini produk dgn ekstra
         // yang dimuat dari cache akan diam-diam kehilangan picker-nya.
         ekstraPilihan: _ekstraPilihanDariCache(b['ekstra_pilihan']),
+        kemasan: _kemasanDariCache(b['kemasan']),
         fotoUrls: _daftarStringDariCache(b['foto_urls']),
       );
 
@@ -317,6 +321,22 @@ class _KasirScreenState extends State<KasirScreen> {
       }
     } catch (_) {
       // Data cache lama/korup -- anggap tanpa ekstra, bukan error fatal.
+    }
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _kemasanDariCache(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      // Cache lama/korup dianggap belum memiliki preset kemasan.
     }
     return const [];
   }
@@ -1050,7 +1070,7 @@ class _KasirScreenState extends State<KasirScreen> {
   /// (checkbox, lihat [_bukaPickerEkstra]) SEBELUM masuk keranjang -- gerbang
   /// dilewati (jalur lama persis, tanpa perubahan) utk mayoritas produk tanpa
   /// ekstra sama sekali.
-  void _tambahKeKeranjang(Produk p) {
+  void _tambahKeKeranjang(Produk p, {int jumlahAwal = 1}) {
     if (!produkBolehDijualMenurutStok(
       p,
       paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
@@ -1065,7 +1085,7 @@ class _KasirScreenState extends State<KasirScreen> {
       return;
     }
     if (p.ekstraPilihan.isNotEmpty) {
-      unawaited(_tambahKeKeranjangDenganEkstra(p));
+      unawaited(_tambahKeKeranjangDenganEkstra(p, jumlahAwal: jumlahAwal));
       return;
     }
     setStateIfMounted(() {
@@ -1074,10 +1094,10 @@ class _KasirScreenState extends State<KasirScreen> {
           .toList();
       if (existing.isNotEmpty) {
         final item = existing.first;
-        item.jumlah++;
+        item.jumlah += jumlahAwal;
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.insert(0, ItemKeranjang(produk: p));
+        _keranjang.insert(0, ItemKeranjang(produk: p, jumlah: jumlahAwal));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -1094,7 +1114,8 @@ class _KasirScreenState extends State<KasirScreen> {
   /// biasa, hanya kunci penggabungan baris (merge-key) ikut mensyaratkan
   /// set ekstra yg SAMA PERSIS -- 2 baris produk sama tapi ekstra beda TIDAK
   /// digabung jadi satu qty, tetap 2 baris keranjang terpisah.
-  Future<void> _tambahKeKeranjangDenganEkstra(Produk p) async {
+  Future<void> _tambahKeKeranjangDenganEkstra(Produk p,
+      {int jumlahAwal = 1}) async {
     final dipilih = await _bukaPickerEkstra(p);
     if (dipilih == null || !mounted) return; // batal -- tidak menambah apa pun
     setStateIfMounted(() {
@@ -1103,10 +1124,11 @@ class _KasirScreenState extends State<KasirScreen> {
           .toList();
       if (existing.isNotEmpty) {
         final item = existing.first;
-        item.jumlah++;
+        item.jumlah += jumlahAwal;
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.insert(0, ItemKeranjang(produk: p, ekstra: dipilih));
+        _keranjang.insert(
+            0, ItemKeranjang(produk: p, jumlah: jumlahAwal, ekstra: dipilih));
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -1180,14 +1202,57 @@ class _KasirScreenState extends State<KasirScreen> {
     if (v.isEmpty) return;
     var cocok =
         _semuaProduk.where((p) => p.kode == v || p.barcode == v).toList();
+    Produk? produkKemasan;
+    Map<String, dynamic>? kemasanCocok;
+    if (cocok.isEmpty) {
+      for (final p in _semuaProduk) {
+        for (final k in p.kemasan) {
+          if (k['aktif'] != false && '${k['barcode'] ?? ''}' == v) {
+            produkKemasan = p;
+            kemasanCocok = k;
+            break;
+          }
+        }
+        if (produkKemasan != null) break;
+      }
+    }
     if (cocok.isEmpty) {
       final cache = await CoreDb.instance.produkCache(keyword: v, limit: 10);
       cocok = cache
           .map(_produkDariCache)
           .where((p) => p.kode == v || p.barcode == v)
           .toList();
+      if (cocok.isEmpty && produkKemasan == null) {
+        final semuaCache =
+            await CoreDb.instance.produkCache(keyword: '', limit: 100000);
+        for (final row in semuaCache) {
+          final p = _produkDariCache(row);
+          for (final k in p.kemasan) {
+            if (k['aktif'] != false && '${k['barcode'] ?? ''}' == v) {
+              produkKemasan = p;
+              kemasanCocok = k;
+              break;
+            }
+          }
+          if (produkKemasan != null) break;
+        }
+      }
     }
     if (!mounted) return;
+    if (produkKemasan != null && kemasanCocok != null) {
+      final qtyDasar = (kemasanCocok['qtyDasar'] as num?)?.round() ?? 1;
+      _tambahKeKeranjang(produkKemasan, jumlahAwal: qtyDasar);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '${kemasanCocok['nama']} ditambahkan sebagai $qtyDasar ${produkKemasan.satuanNama.isEmpty ? 'unit stok' : produkKemasan.satuanNama} ${produkKemasan.nama}.'),
+        duration: const Duration(milliseconds: 1200),
+      ));
+      _kataKunciController.clear();
+      setStateIfMounted(() => _kataKunci = '');
+      _cariProdukLazy('');
+      _jadwalkanFokusCariItem();
+      return;
+    }
     if (cocok.isNotEmpty) {
       _tambahKeKeranjang(cocok.first);
       // Produk dgn ekstra BELUM tentu jadi masuk keranjang di sini -- masih

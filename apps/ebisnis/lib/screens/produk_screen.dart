@@ -16,6 +16,7 @@ import '../services/dynamic_report.dart';
 import 'produk_stok_tanggal.dart';
 import '../services/kompresi_gambar.dart';
 import '../services/master_offline.dart';
+import '../services/uom_konversi.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
@@ -628,6 +629,21 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         // untuk data pilihan tambahan sedang terganggu.
       }
     }
+    final pilihanUom = <Map<String, dynamic>>[];
+    try {
+      final hasil = await ApiClient.instance.aksi('uom_list', {
+        'keyword': '',
+        'page': 1,
+        'page_size': 500,
+        'termasuk_nonaktif': true,
+      });
+      for (final raw in (hasil['data'] as List?) ?? const []) {
+        pilihanUom.add(Map<String, dynamic>.from(raw as Map));
+      }
+    } catch (_) {
+      // Form tetap dibuka. Validator UOM akan memberi petunjuk yang dapat
+      // dilakukan user bila daftar master belum berhasil dimuat.
+    }
     if (!mounted) return;
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
@@ -636,6 +652,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           produk: produk,
           kategori: _kategori,
           kebijakanRetur: _kebijakanRetur.where((e) => e.aktif).toList(),
+          pilihanUom: pilihanUom,
           semuaProduk: pilihanRelasi.values.toList()),
     );
     if (tersimpan == true) {
@@ -2225,11 +2242,13 @@ class _FormProduk extends StatefulWidget {
   final Produk? produk;
   final List<Kategori> kategori;
   final List<KebijakanRetur> kebijakanRetur;
+  final List<Map<String, dynamic>> pilihanUom;
   final List<Produk> semuaProduk;
   const _FormProduk(
       {required this.produk,
       required this.kategori,
       required this.kebijakanRetur,
+      required this.pilihanUom,
       required this.semuaProduk});
 
   @override
@@ -2255,6 +2274,28 @@ class _BahanBakuBaris {
   void dispose() {
     qty.dispose();
     harga.dispose();
+  }
+}
+
+class _KemasanBaris {
+  final TextEditingController nama;
+  final TextEditingController barcode;
+  final TextEditingController qtyDasar;
+  bool aktif;
+
+  _KemasanBaris({
+    String namaAwal = '',
+    String barcodeAwal = '',
+    String qtyDasarAwal = '1',
+    this.aktif = true,
+  })  : nama = TextEditingController(text: namaAwal),
+        barcode = TextEditingController(text: barcodeAwal),
+        qtyDasar = TextEditingController(text: qtyDasarAwal);
+
+  void dispose() {
+    nama.dispose();
+    barcode.dispose();
+    qtyDasar.dispose();
   }
 }
 
@@ -2284,9 +2325,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   late final TextEditingController _stok;
   late final TextEditingController _keterangan;
 
-  /// Pemasok utama & satuan (UOM) -- lihat Produk.pemasokNama/satuanNama.
+  /// Pemasok utama tetap berupa nama. Satuan wajib menunjuk master UOM lewat
+  /// ID; teks hanya label tampilan, bukan sumber identitas relasi.
   late final TextEditingController _pemasok;
-  late final TextEditingController _satuan;
+  int? _satuanId;
+  late String _satuanNamaAwal;
+  int? _satuanPembelianId;
+  late String _satuanPembelianNamaAwal;
   int? _kategoriId;
   int? _kebijakanReturId;
   bool _izinkanJualMinusStok = false;
@@ -2300,6 +2345,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
+  final List<_KemasanBaris> _kemasan = [];
 
   /// Pilihan Produk Ekstra (add-on/modifier) -- cuma daftar id (beda dari
   /// [_bahanBaku] yang perlu qty/harga per baris), server cukup menyimpan
@@ -2329,7 +2375,12 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _stok = TextEditingController(text: p == null ? '0' : p.stok.toString());
     _keterangan = TextEditingController(text: p?.keterangan ?? '');
     _pemasok = TextEditingController(text: p?.pemasokNama ?? '');
-    _satuan = TextEditingController(text: p?.satuanNama ?? '');
+    _satuanId = p?.satuanId;
+    _satuanNamaAwal = p?.satuanNama ?? '';
+    _satuanPembelianId = p?.satuanPembelianId ?? p?.satuanId;
+    _satuanPembelianNamaAwal = p?.satuanPembelianNama.isNotEmpty == true
+        ? p!.satuanPembelianNama
+        : (p?.satuanNama ?? '');
     _kategoriId = p?.kategoriId;
     _kebijakanReturId = p?.kebijakanReturId ??
         (widget.kebijakanRetur.where((e) => e.bawaan).isNotEmpty
@@ -2350,6 +2401,14 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       ));
     }
     _ekstraPilihan.addAll(p?.ekstraPilihan ?? const <int>[]);
+    for (final k in p?.kemasan ?? const <Map<String, dynamic>>[]) {
+      _kemasan.add(_KemasanBaris(
+        namaAwal: '${k['nama'] ?? ''}',
+        barcodeAwal: '${k['barcode'] ?? ''}',
+        qtyDasarAwal: '${k['qtyDasar'] ?? 1}',
+        aktif: k['aktif'] != false,
+      ));
+    }
   }
 
   @override
@@ -2362,9 +2421,11 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _stok.dispose();
     _keterangan.dispose();
     _pemasok.dispose();
-    _satuan.dispose();
     for (final b in _bahanBaku) {
       b.dispose();
+    }
+    for (final k in _kemasan) {
+      k.dispose();
     }
     super.dispose();
   }
@@ -2374,6 +2435,145 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
 
   double get _totalHpp => _bahanBaku.fold(
       0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
+
+  String _namaUom(int? id) {
+    if (id == null) return '';
+    for (final uom in widget.pilihanUom) {
+      if ((uom['id'] as num?)?.toInt() == id) {
+        return '${uom['nama'] ?? ''}';
+      }
+    }
+    return _satuanNamaAwal;
+  }
+
+  Map<String, dynamic>? _uom(int? id) {
+    if (id == null) return null;
+    for (final uom in widget.pilihanUom) {
+      if ((uom['id'] as num?)?.toInt() == id) return uom;
+    }
+    return null;
+  }
+
+  String _ringkasanKonversiPembelian() {
+    final dasar = _uom(_satuanId);
+    final beli = _uom(_satuanPembelianId);
+    if (dasar == null || beli == null) return '';
+    final faktor = UomKonversi.konversi(jumlah: 1, dari: beli, ke: dasar);
+    final angka = faktor == faktor.roundToDouble()
+        ? faktor.toStringAsFixed(0)
+        : faktor.toStringAsFixed(6).replaceFirst(RegExp(r'0+$'), '');
+    return '1 ${beli['nama']} = $angka ${dasar['nama']} stok. Contoh PO 10 ${beli['nama']} menambah ${_angkaFormat(10 * faktor)} ${dasar['nama']}.';
+  }
+
+  String _angkaFormat(double nilai) => nilai == nilai.roundToDouble()
+      ? nilai.toStringAsFixed(0)
+      : nilai.toStringAsFixed(4).replaceFirst(RegExp(r'0+$'), '');
+
+  Widget _pemilihUom({bool pembelian = false}) {
+    final idTerpilih = pembelian ? _satuanPembelianId : _satuanId;
+    final namaAwal = pembelian ? _satuanPembelianNamaAwal : _satuanNamaAwal;
+    final kategoriDasar = '${_uom(_satuanId)?['kategori'] ?? ''}';
+    return Autocomplete<Map<String, dynamic>>(
+      key: ValueKey('${pembelian ? 'purchase' : 'base'}:$idTerpilih'),
+      initialValue: TextEditingValue(text: namaAwal),
+      displayStringForOption: (uom) => '${uom['nama'] ?? ''}',
+      optionsBuilder: (nilai) {
+        final q = nilai.text.trim().toLowerCase();
+        return widget.pilihanUom.where((uom) {
+          final id = (uom['id'] as num?)?.toInt();
+          final bolehDipilih = uom['aktif'] != false || id == idTerpilih;
+          final kategoriSama = !pembelian ||
+              kategoriDasar.isEmpty ||
+              '${uom['kategori'] ?? 'UNIT'}'.toUpperCase() ==
+                  kategoriDasar.toUpperCase();
+          return bolehDipilih &&
+              kategoriSama &&
+              (q.isEmpty || '${uom['nama'] ?? ''}'.toLowerCase().contains(q));
+        });
+      },
+      onSelected: (uom) => setStateIfMounted(() {
+        final id = (uom['id'] as num?)?.toInt();
+        if (pembelian) {
+          _satuanPembelianId = id;
+          _satuanPembelianNamaAwal = '${uom['nama'] ?? ''}';
+        } else {
+          _satuanId = id;
+          _satuanNamaAwal = '${uom['nama'] ?? ''}';
+          final beli = _uom(_satuanPembelianId);
+          if (beli == null ||
+              '${beli['kategori'] ?? 'UNIT'}'.toUpperCase() !=
+                  '${uom['kategori'] ?? 'UNIT'}'.toUpperCase()) {
+            _satuanPembelianId = id;
+            _satuanPembelianNamaAwal = '${uom['nama'] ?? ''}';
+          }
+        }
+      }),
+      fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: AppFormStyle.fieldDecoration(
+            context,
+            labelText:
+                pembelian ? 'Satuan Pembelian/PO *' : 'Satuan Stok/Dasar *',
+            hintText: pembelian
+                ? 'Cari UOM satu kategori, mis. Dus'
+                : 'Cari UOM, mis. Botol',
+            helperText: widget.pilihanUom.isEmpty
+                ? 'Daftar UOM belum termuat. Tekan Sinkronkan/Muat Ulang, atau kelola di Master Data > Satuan/UOM.'
+                : 'Pilih dari Master Data > Satuan/UOM; teks bebas tidak disimpan.',
+          ),
+          onChanged: (teks) {
+            final namaDipilih =
+                _namaUom(pembelian ? _satuanPembelianId : _satuanId);
+            if (teks.trim().toLowerCase() != namaDipilih.trim().toLowerCase()) {
+              if (pembelian) {
+                _satuanPembelianId = null;
+              } else {
+                _satuanId = null;
+              }
+            }
+          },
+          validator: (_) {
+            if ((pembelian ? _satuanPembelianId : _satuanId) == null) {
+              return widget.pilihanUom.isEmpty
+                  ? 'Daftar UOM belum tersedia; sinkronkan lalu buka form kembali'
+                  : 'Pilih satuan dari hasil pencarian UOM';
+            }
+            return null;
+          },
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) => Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 260, maxWidth: 360),
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (_, index) {
+                final uom = options.elementAt(index);
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.straighten_outlined),
+                  title: Text('${uom['nama'] ?? ''}'),
+                  trailing: Text('${uom['kategori'] ?? 'UNIT'}'),
+                  subtitle: uom['aktif'] == false
+                      ? const Text('Nonaktif — ganti ke UOM aktif')
+                      : null,
+                  onTap: () => onSelected(uom),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _tambahBahanBaku() async {
     final dipilih = await showDialog<Produk>(
@@ -2395,6 +2595,14 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   void _hapusBahanBaku(_BahanBakuBaris b) {
     setStateIfMounted(() => _bahanBaku.remove(b));
     b.dispose();
+  }
+
+  void _tambahKemasan() =>
+      setStateIfMounted(() => _kemasan.add(_KemasanBaris()));
+
+  void _hapusKemasan(_KemasanBaris k) {
+    setStateIfMounted(() => _kemasan.remove(k));
+    k.dispose();
   }
 
   /// Reuse [_DialogPilihProduk] (padanan persis [_tambahBahanBaku], hanya
@@ -2628,7 +2836,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'stok': _angka(_stok.text),
           'keterangan': _keterangan.text.trim(),
           'pemasok_nama': _pemasok.text.trim(),
-          'satuan_nama': _satuan.text.trim(),
+          'satuan_id': _satuanId,
+          'satuan_pembelian_id': _satuanPembelianId,
           'kategori_id': _kategoriId,
           'kebijakan_retur_id': _kebijakanReturId,
           'izinkan_jual_minus_stok': _izinkanJualMinusStok,
@@ -2646,6 +2855,14 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   })
               .toList(),
           'ekstra_pilihan': _ekstraPilihan,
+          'kemasan': _kemasan
+              .map((k) => {
+                    'nama': k.nama.text.trim(),
+                    'barcode': k.barcode.text.trim(),
+                    'qtyDasar': _angka(k.qtyDasar.text),
+                    'aktif': k.aktif,
+                  })
+              .toList(),
         },
         kunci: ubah
             ? 'produk:${widget.produk!.id}'
@@ -2667,11 +2884,23 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 'hargaJual': _angka(_hargaJual.text),
                 'stok': _angka(_stok.text),
                 'keterangan': _keterangan.text.trim(),
+                'satuanId': _satuanId,
+                'satuanNama': _namaUom(_satuanId),
+                'satuanPembelianId': _satuanPembelianId,
+                'satuanPembelianNama': _namaUom(_satuanPembelianId),
                 'kategoriId': _kategoriId,
                 'kebijakanReturId': _kebijakanReturId,
                 'izinkanJualMinusStok': _izinkanJualMinusStok,
                 'aktif': _aktif,
                 'jenisItem': _jenisItem,
+                'kemasan': _kemasan
+                    .map((k) => {
+                          'nama': k.nama.text.trim(),
+                          'barcode': k.barcode.text.trim(),
+                          'qtyDasar': _angka(k.qtyDasar.text),
+                          'aktif': k.aktif,
+                        })
+                    .toList(),
               }
             : null,
       );
@@ -2773,11 +3002,6 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       tooltip: 'Scan barcode / QR-Code dengan kamera',
                     ),
                   ),
-                  // Pemasok & Satuan: sengaja isian bebas, bukan dropdown.
-                  // Master-nya dibuat otomatis di server bila nama belum ada,
-                  // jadi tidak perlu membuka layar master lebih dulu. Kedua
-                  // kolom ini yang mengisi "Nama Pemasok Utama" dan "Satuan"
-                  // pada ekspor Daftar Barang dan Jasa.
                   Row(
                     children: [
                       Expanded(
@@ -2789,14 +3013,29 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: AppFormTextField(
-                          label: 'Satuan',
-                          controller: _satuan,
-                          hintText: 'mis. Pcs',
-                        ),
+                        child: _pemilihUom(),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  _pemilihUom(pembelian: true),
+                  if (_ringkasanKonversiPembelian().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.info.withValues(alpha: 0.25)),
+                      ),
+                      child: Text(
+                        _ringkasanKonversiPembelian(),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
                   DropdownButtonFormField<int?>(
                     value: _kategoriId,
                     decoration: AppFormStyle.fieldDecoration(
@@ -2850,6 +3089,93 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                         setStateIfMounted(() => _jenisItem = s.first),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              AppSectionCard(
+                judul: 'Kemasan / Barcode Multi-unit',
+                aksiJudul: TextButton.icon(
+                  onPressed: _tambahKemasan,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Tambah Kemasan'),
+                ),
+                child: _kemasan.isEmpty
+                    ? Text(
+                        'Opsional. Contoh: Dus 24 dengan barcode dus dan isi 24 ${_namaUom(_satuanId).isEmpty ? 'unit stok' : _namaUom(_satuanId)}. Scan barcode tersebut di Kasir langsung menambah 24 unit; UOM akuntansi tidak berubah.',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context)),
+                      )
+                    : Column(
+                        children: _kemasan
+                            .map((k) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: TextFormField(
+                                        controller: k.nama,
+                                        decoration:
+                                            AppFormStyle.fieldDecoration(
+                                                context,
+                                                labelText: 'Nama (mis. Dus 24)',
+                                                isDense: true),
+                                        validator: (v) =>
+                                            v == null || v.trim().isEmpty
+                                                ? 'Wajib'
+                                                : null,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 4,
+                                      child: TextFormField(
+                                        controller: k.barcode,
+                                        decoration:
+                                            AppFormStyle.fieldDecoration(
+                                                context,
+                                                labelText: 'Barcode kemasan',
+                                                isDense: true),
+                                        validator: (v) =>
+                                            v == null || v.trim().isEmpty
+                                                ? 'Wajib'
+                                                : null,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 2,
+                                      child: TextFormField(
+                                        controller: k.qtyDasar,
+                                        keyboardType: TextInputType.number,
+                                        decoration: AppFormStyle.fieldDecoration(
+                                            context,
+                                            labelText:
+                                                'Isi ${_namaUom(_satuanId)}',
+                                            isDense: true),
+                                        validator: (v) {
+                                          final n = _angka(v ?? '');
+                                          return n <= 0 ||
+                                                  n != n.roundToDouble()
+                                              ? 'Bulat > 0'
+                                              : null;
+                                        },
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: k.aktif,
+                                      onChanged: (v) =>
+                                          setStateIfMounted(() => k.aktif = v),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => _hapusKemasan(k),
+                                      icon: const Icon(Icons.delete_outline),
+                                      color: AppColors.danger,
+                                      tooltip: 'Hapus kemasan',
+                                    ),
+                                  ]),
+                                ))
+                            .toList(),
+                      ),
               ),
               const SizedBox(height: 12),
               AppFormSection(

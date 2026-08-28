@@ -6,8 +6,9 @@ import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
 
-/// Master satuan produk POS. Matriks konversi antar-UOM merupakan fitur
-/// terpisah karena tabel `koperasi.satuan_produk` hanya menyimpan nama/status.
+/// Master UOM produk POS: kategori/dimensi, satuan acuan, rasio terhadap acuan,
+/// dan presisi pembulatan. Product Packaging tetap fitur terpisah karena
+/// kemasan adalah preset qty/barcode per produk, bukan UOM akuntansi.
 class UomScreen extends StatefulWidget {
   const UomScreen({super.key});
 
@@ -84,6 +85,13 @@ class _UomScreenState extends State<UomScreen> {
   Future<void> _form([Map<String, dynamic>? row]) async {
     final TextEditingController nama =
         TextEditingController(text: row?['nama']?.toString() ?? '');
+    final TextEditingController kategori =
+        TextEditingController(text: row?['kategori']?.toString() ?? 'UNIT');
+    final TextEditingController rasio =
+        TextEditingController(text: '${row?['rasio'] ?? 1}');
+    final TextEditingController presisi =
+        TextEditingController(text: '${row?['presisiPembulatan'] ?? 0.01}');
+    String tipe = '${row?['tipeKonversi'] ?? 'REFERENCE'}'.toUpperCase();
     bool aktif = row?['aktif'] != false;
     final bool? simpan = await showDialog<bool>(
       context: context,
@@ -105,6 +113,65 @@ class _UomScreenState extends State<UomScreen> {
                     hintText: 'Contoh: Pcs, Kg, Liter, Dus',
                   ),
                 ),
+                TextField(
+                  controller: kategori,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Kategori UOM *',
+                    hintText: 'UNIT, BERAT, VOLUME',
+                    helperText:
+                        'Konversi hanya dapat dilakukan dalam kategori yang sama.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: tipe,
+                  decoration:
+                      const InputDecoration(labelText: 'Tipe terhadap acuan'),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(
+                        value: 'REFERENCE', child: Text('Reference (acuan)')),
+                    DropdownMenuItem(
+                        value: 'BIGGER', child: Text('Bigger (lebih besar)')),
+                    DropdownMenuItem(
+                        value: 'SMALLER', child: Text('Smaller (lebih kecil)')),
+                  ],
+                  onChanged: (String? value) => ubah(() {
+                    tipe = value ?? 'REFERENCE';
+                    if (tipe == 'REFERENCE') rasio.text = '1';
+                  }),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: rasio,
+                        enabled: tipe != 'REFERENCE',
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Rasio *',
+                          helperText: tipe == 'SMALLER'
+                              ? 'Contoh Gram: 1000 berarti 1 Gram = 1/1000 Kg.'
+                              : 'Contoh Dus: 24 berarti 1 Dus = 24 Pcs.',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: presisi,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Presisi pembulatan *',
+                          hintText: '0.01',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Aktif'),
@@ -121,7 +188,18 @@ class _UomScreenState extends State<UomScreen> {
             ),
             FilledButton(
               onPressed: () {
-                if (nama.text.trim().isEmpty) return;
+                final double? nilaiRasio = double.tryParse(rasio.text.trim());
+                final double? nilaiPresisi =
+                    double.tryParse(presisi.text.trim());
+                if (nama.text.trim().isEmpty ||
+                    kategori.text.trim().isEmpty ||
+                    nilaiRasio == null ||
+                    nilaiRasio <= 0 ||
+                    nilaiPresisi == null ||
+                    nilaiPresisi <= 0 ||
+                    (tipe != 'REFERENCE' && nilaiRasio <= 1)) {
+                  return;
+                }
                 Navigator.pop(dialogContext, true);
               },
               child: const Text('Simpan'),
@@ -132,6 +210,9 @@ class _UomScreenState extends State<UomScreen> {
     );
     if (simpan != true || !mounted) {
       nama.dispose();
+      kategori.dispose();
+      rasio.dispose();
+      presisi.dispose();
       return;
     }
     final int idLokal = row?['id'] is num
@@ -144,6 +225,10 @@ class _UomScreenState extends State<UomScreen> {
         body: <String, dynamic>{
           if (row?['id'] != null) 'id': row!['id'],
           'nama': nama.text.trim(),
+          'kategori': kategori.text.trim().toUpperCase(),
+          'tipe_konversi': tipe,
+          'rasio': double.parse(rasio.text.trim()),
+          'presisi_pembulatan': double.parse(presisi.text.trim()),
           'aktif': aktif,
         },
         kunci: 'uom:$idLokal',
@@ -152,12 +237,19 @@ class _UomScreenState extends State<UomScreen> {
         rowLokal: <String, dynamic>{
           'id': idLokal,
           'nama': nama.text.trim(),
+          'kategori': kategori.text.trim().toUpperCase(),
+          'tipeKonversi': tipe,
+          'rasio': double.parse(rasio.text.trim()),
+          'presisiPembulatan': double.parse(presisi.text.trim()),
           'aktif': aktif,
         },
       );
       await _muat();
     } finally {
       nama.dispose();
+      kategori.dispose();
+      rasio.dispose();
+      presisi.dispose();
     }
   }
 
@@ -207,7 +299,7 @@ class _UomScreenState extends State<UomScreen> {
     return AppShell(
       menuAktif: MenuEBisnis.uom,
       judul: 'Satuan / UOM',
-      subjudul: 'Kelola satuan katalog produk POS',
+      subjudul: 'Kelola kategori, satuan acuan, rasio, dan presisi konversi',
       scrollable: false,
       aksiHeader: Row(
         mainAxisSize: MainAxisSize.min,
@@ -258,7 +350,9 @@ class _UomScreenState extends State<UomScreen> {
                                     child: Text(_inisial(row['nama'])),
                                   ),
                                   title: Text(row['nama']?.toString() ?? '-'),
-                                  subtitle: Text(aktif ? 'Aktif' : 'Nonaktif'),
+                                  subtitle: Text(
+                                    '${row['kategori'] ?? 'UNIT'} · ${row['tipeKonversi'] ?? 'REFERENCE'} · Rasio ${row['rasio'] ?? 1} · Presisi ${row['presisiPembulatan'] ?? 0.01} · ${aktif ? 'Aktif' : 'Nonaktif'}',
+                                  ),
                                   trailing: Sesi.instance.bolehKelola
                                       ? Wrap(
                                           children: <Widget>[

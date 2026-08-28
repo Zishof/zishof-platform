@@ -38,6 +38,10 @@ class _ItemFaktur {
   final String kode;
   final double qty;
   final double harga;
+  final int? satuanInputId;
+  final String satuanInputNama;
+  final String satuanDasarNama;
+  final double faktorKonversi;
   final String? nomorBatch;
   final DateTime? tanggalProduksi;
   final DateTime? tanggalExpired;
@@ -47,6 +51,10 @@ class _ItemFaktur {
       required this.kode,
       required this.qty,
       required this.harga,
+      this.satuanInputId,
+      this.satuanInputNama = '',
+      this.satuanDasarNama = '',
+      this.faktorKonversi = 1,
       this.nomorBatch,
       this.tanggalProduksi,
       this.tanggalExpired});
@@ -247,7 +255,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           // penerimaan barang tetap bisa diselesaikan tanpa mengetik harga.
           final terakhir =
               (hasil['hargaBeliTerakhir'] as num?)?.toDouble() ?? 0;
-          final master = (hasil['hargaBeli'] as num?)?.toDouble() ?? 0;
+          final faktor =
+              (hasil['faktorPembelianKeDasar'] as num?)?.toDouble() ?? 1;
+          final master =
+              ((hasil['hargaBeli'] as num?)?.toDouble() ?? 0) * faktor;
           final dipakai = terakhir > 0 ? terakhir : master;
           if (dipakai > 0) {
             _hargaController.text = dipakai.toStringAsFixed(0);
@@ -299,6 +310,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         kode: '${p['kode'] ?? ''}',
         qty: qty,
         harga: harga,
+        satuanInputId: (p['satuanPembelianId'] as num?)?.toInt(),
+        satuanInputNama: '${p['satuanPembelianNama'] ?? ''}',
+        satuanDasarNama: '${p['satuanDasarNama'] ?? ''}',
+        faktorKonversi: (p['faktorPembelianKeDasar'] as num?)?.toDouble() ?? 1,
         nomorBatch: _kelolaBatch ? _batchController.text.trim() : null,
         tanggalProduksi: _kelolaBatch ? _tanggalProduksi : null,
         tanggalExpired: _kelolaBatch ? _tanggalExpired : null,
@@ -407,6 +422,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     'produk_id': it.produkId,
                     'qty': it.qty,
                     'harga_beli_satuan': it.harga,
+                    if (it.satuanInputId != null)
+                      'satuan_input_id': it.satuanInputId,
                     if (it.nomorBatch != null) 'nomor_batch': it.nomorBatch,
                     if (it.tanggalProduksi != null)
                       'tanggal_produksi':
@@ -586,6 +603,16 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     Text(
                         'Kode: ${_produkDitemukan!['kode'] ?? ''} Â· Stok: ${_formatAngka.format(_produkDitemukan!['stokSistem'] ?? 0)}',
                         style: const TextStyle(fontSize: 11.5)),
+                    if ('${_produkDitemukan!['satuanPembelianNama'] ?? ''}'
+                        .isNotEmpty)
+                      Text(
+                        'Input pembelian: ${_produkDitemukan!['satuanPembelianNama']} · '
+                        '1 ${_produkDitemukan!['satuanPembelianNama']} = '
+                        '${_formatAngka.format(_produkDitemukan!['faktorPembelianKeDasar'] ?? 1)} '
+                        '${_produkDitemukan!['satuanDasarNama'] ?? ''}',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -595,7 +622,9 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
                             decoration: AppFormStyle.fieldDecoration(context,
-                                labelText: 'Jumlah Masuk *', isDense: true),
+                                labelText:
+                                    'Jumlah (${_produkDitemukan!['satuanPembelianNama'] ?? 'UOM pembelian'}) *',
+                                isDense: true),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -610,7 +639,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                                           decimal: true),
                                   decoration: AppFormStyle.fieldDecoration(
                                       context,
-                                      labelText: 'Harga Beli Satuan *',
+                                      labelText:
+                                          'Harga per ${_produkDitemukan!['satuanPembelianNama'] ?? 'UOM pembelian'} *',
                                       isDense: true),
                                 )
                               : AppHargaTerkunci(
@@ -697,7 +727,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     dense: true,
                     title: Text(it.nama, style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
-                        '${_formatAngka.format(it.qty)}x @ ${_formatRupiah.format(it.harga)}'
+                        '${_formatAngka.format(it.qty)} ${it.satuanInputNama} x @ ${_formatRupiah.format(it.harga)}'
+                        '${it.faktorKonversi == 1 || it.satuanDasarNama.isEmpty ? '' : ' = ${_formatAngka.format(it.qty * it.faktorKonversi)} ${it.satuanDasarNama} stok'}'
                         '${it.nomorBatch == null ? '' : ' Â· Batch ${it.nomorBatch} Â· Exp ${_formatTanggal.format(it.tanggalExpired!)}'}',
                         style: const TextStyle(fontSize: 11.5)),
                     trailing: Row(
@@ -852,6 +883,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       ),
     );
     if (setuju != true) return;
+    if (!mounted) return;
 
     try {
       // Alur "Edit Faktur" = batalkan lama lalu entri ulang. Keduanya kini lokal-dulu

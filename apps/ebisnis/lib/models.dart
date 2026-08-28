@@ -19,7 +19,10 @@ class Produk {
   /// kedua kolom ini dan ekspor "Daftar Barang dan Jasa" ikut kosong. Kini
   /// keduanya dapat disunting langsung di form Produk.
   final String pemasokNama;
+  final int? satuanId;
   final String satuanNama;
+  final int? satuanPembelianId;
+  final String satuanPembelianNama;
 
   final String? gambarUrl;
   final double hargaBeli;
@@ -53,6 +56,10 @@ class Produk {
   /// sudah berisi nama/harga siap tampil dari server.
   final List<int> ekstraPilihan;
 
+  /// Preset kemasan produk. Barcode kemasan menambah [qtyDasar] unit stok,
+  /// tanpa mengubah UOM akuntansi produk.
+  final List<Map<String, dynamic>> kemasan;
+
   /// URL foto produk (maks 10, urut lama->baru), dari field `fotoUrls`
   /// respons `katalog` -- gap-closure "Foto Produk". Kosong = belum ada foto
   /// diunggah (kartu Kasir tetap pakai avatar inisial placeholder). Lebih
@@ -72,7 +79,10 @@ class Produk {
     this.kebijakanReturId,
     this.kebijakanReturNama = 'Tanpa Kebijakan Retur',
     this.pemasokNama = '',
+    this.satuanId,
     this.satuanNama = '',
+    this.satuanPembelianId,
+    this.satuanPembelianNama = '',
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -81,6 +91,7 @@ class Produk {
     this.jenisItem = 'JUAL',
     this.bahanBaku = const [],
     this.ekstraPilihan = const [],
+    this.kemasan = const [],
     this.fotoUrls = const [],
   });
 
@@ -97,7 +108,10 @@ class Produk {
         kebijakanReturNama:
             (j['kebijakanReturNama'] ?? 'Tanpa Kebijakan Retur') as String,
         pemasokNama: (j['pemasokNama'] ?? '') as String,
+        satuanId: (j['satuanId'] as num?)?.toInt(),
         satuanNama: (j['satuanNama'] ?? '') as String,
+        satuanPembelianId: (j['satuanPembelianId'] as num?)?.toInt(),
+        satuanPembelianNama: (j['satuanPembelianNama'] ?? '') as String,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
@@ -112,6 +126,9 @@ class Produk {
             ((j['bahanBaku'] as List?) ?? []).cast<Map<String, dynamic>>(),
         ekstraPilihan: ((j['ekstraPilihan'] as List?) ?? [])
             .map((e) => (e as num).toInt())
+            .toList(),
+        kemasan: ((j['kemasan'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
             .toList(),
         fotoUrls:
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList(),
@@ -136,6 +153,9 @@ class Produk {
             : 'JUAL',
         'ekstra_pilihan': jsonEncode(((j['ekstraPilihan'] as List?) ?? [])
             .map((e) => e as num)
+            .toList()),
+        'kemasan': jsonEncode(((j['kemasan'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
             .toList()),
         'foto_urls': jsonEncode(
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),

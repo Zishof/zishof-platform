@@ -34,11 +34,16 @@ void main() {
       kategoriId: 1,
       kategoriNama: 'Minuman',
       gambarUrl: null,
+      kemasan: const [
+        {'nama': 'Dus 24', 'barcode': '899DUS24', 'qtyDasar': 24}
+      ],
     );
 
     expect(produkCocokKataKunci(produk, 'mineral'), isTrue);
     expect(produkCocokKataKunci(produk, 'ab-123'), isTrue);
     expect(produkCocokKataKunci(produk, '8991002003004'), isTrue);
+    expect(produkCocokKataKunci(produk, '899dus24'), isTrue);
+    expect(produkCocokKataKunci(produk, 'dus 24'), isTrue);
     expect(produkCocokKataKunci(produk, 'produk tidak ada'), isFalse);
   });
 

@@ -504,6 +504,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
       {required String judul, String? jenisItem}) async {
     final q = TextEditingController();
     List<Map<String, dynamic>> hasilCari = [];
+    List<Map<String, dynamic>> hasilJenisLain = [];
+    String? petunjuk;
     bool mencari = false;
     final dipilih = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -517,8 +519,13 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
             });
             hasilCari =
                 ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+            hasilJenisLain = ((r['dataJenisLain'] as List?) ?? [])
+                .cast<Map<String, dynamic>>();
+            petunjuk = r['description'] as String?;
           } catch (e) {
             hasilCari = [];
+            hasilJenisLain = [];
+            petunjuk = null;
             if (mounted) {
               ScaffoldMessenger.of(context)
                   .showSnackBar(SnackBar(content: Text('Pencarian gagal: $e')));
@@ -544,18 +551,25 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               Expanded(
                 child: mencari
                     ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        itemCount: hasilCari.length,
-                        itemBuilder: (_, i) {
-                          final p = hasilCari[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text('${p['nama']}'),
-                            subtitle: Text(
-                                '${p['kode'] ?? ''} ${p['barcode'] ?? ''} · ${p['tokoNama'] ?? ''}'),
-                            onTap: () => Navigator.pop(dialogContext, p),
-                          );
-                        }),
+                    : hasilCari.isEmpty
+                        ? _hasilProdukKosong(
+                            keyword: q.text.trim(),
+                            jenisItem: jenisItem,
+                            produkJenisLain: hasilJenisLain,
+                            petunjuk: petunjuk,
+                          )
+                        : ListView.builder(
+                            itemCount: hasilCari.length,
+                            itemBuilder: (_, i) {
+                              final p = hasilCari[i];
+                              return ListTile(
+                                dense: true,
+                                title: Text('${p['nama']}'),
+                                subtitle: Text(
+                                    '${p['kode'] ?? ''} ${p['barcode'] ?? ''} · ${p['tokoNama'] ?? ''}'),
+                                onTap: () => Navigator.pop(dialogContext, p),
+                              );
+                            }),
               ),
             ]),
           ),
@@ -569,6 +583,64 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
     );
     q.dispose();
     return dipilih;
+  }
+
+  Widget _hasilProdukKosong({
+    required String keyword,
+    required String? jenisItem,
+    required List<Map<String, dynamic>> produkJenisLain,
+    required String? petunjuk,
+  }) {
+    if (keyword.isEmpty) {
+      return const Center(
+          child: Text('Ketik nama, kode, atau barcode produk untuk mencari.'));
+    }
+    if (jenisItem == 'BAHAN' && produkJenisLain.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          Card(
+            color: Colors.orange.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Produk ada, tetapi bukan Bahan Baku',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(petunjuk ??
+                      'Buka Master Data > Produk, ubah Jenis Item menjadi Bahan Baku, simpan, lalu cari kembali.'),
+                ],
+              ),
+            ),
+          ),
+          ...produkJenisLain.map((p) => ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text('${p['nama'] ?? '-'}'),
+                subtitle: Text(
+                    '${p['kode'] ?? ''} · ${p['tokoNama'] ?? ''} · Jenis saat ini: ${_labelJenisItem('${p['jenisItem'] ?? 'JUAL'}')}'),
+              )),
+        ],
+      );
+    }
+    return Center(
+      child: Text(
+        'Tidak ditemukan produk aktif untuk "$keyword". Periksa ejaan, kode/barcode, lalu tekan Sinkronkan atau Muat Ulang bila produk baru dibuat.',
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  String _labelJenisItem(String kode) {
+    switch (kode.toUpperCase()) {
+      case 'BAHAN':
+        return 'Bahan Baku';
+      case 'EKSTRA':
+        return 'Ekstra';
+      default:
+        return 'Produk (Dijual)';
+    }
   }
 
   Future<void> _unduhAnggota() async {

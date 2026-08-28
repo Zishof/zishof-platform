@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 17,
+        version: 18,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -347,6 +347,13 @@ class CoreDb {
         } catch (_) {
           // Kolom kemungkinan sudah ada akibat upgrade parsial.
         }
+      }
+    }
+    if (versiLama < 18) {
+      try {
+        await db.execute('ALTER TABLE produk_cache ADD COLUMN kemasan TEXT');
+      } catch (_) {
+        // Kolom kemungkinan sudah ada -- aman diabaikan.
       }
     }
     if (versiLama < 7) {
@@ -582,6 +589,7 @@ class CoreDb {
         jenis_item TEXT,
         ekstra_pilihan TEXT,
         foto_urls TEXT,
+        kemasan TEXT,
         izinkan_jual_minus_stok INTEGER DEFAULT 0
       )
     ''');
