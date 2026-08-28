@@ -50,6 +50,27 @@ Jangan memasang desktop sebelum migrasi dan server baru aktif karena penyimpanan
 
 Log reload masih memuat peringatan lama Hibernate `SchemaUpdate` pada constraint modul akademik/payroll dan peringatan thread context yang belum berhenti. Keduanya tidak berasal dari perubahan UOM, tetapi perlu tiket teknis terpisah agar reload berikutnya lebih bersih.
 
+### Penguatan lifecycle backend r78486
+
+Analisis lanjutan menemukan tiga executor statis yang belum dihentikan eksplisit ketika context web dihentikan: `session-deleter-*`, `bacatulis-async-writer`, dan executor preload `InitData`. Selain menahan classloader lama, urutan shutdown sebelumnya memungkinkan task preload mencoba memakai pool c3p0 setelah `SessionFactory` ditutup.
+
+Perbaikan SVN `r78486` melakukan hal berikut:
+
+- menghentikan dan mem-flush writer `BacaTulisUtil` sebelum koneksi Hibernate ditutup;
+- membatalkan task preload, memasang flag penghentian, dan menunggu thread induk init secara terbatas;
+- menghentikan pool `SessionCounter` secara eksplisit;
+- mencegah penjadwalan preload baru setelah proses shutdown dimulai;
+- mempertahankan startup normal dan batas tunggu konfigurasi lama ketika aplikasi tidak sedang dihentikan.
+
+UAT sebelum deployment:
+
+- clean compile Maven: 7.290 source Java, `BUILD SUCCESS`;
+- kompilasi terarah lima kelas lifecycle: lulus;
+- UAT executor dengan task aktif: ketiga executor berstatus shutdown, referensi writer dilepas, dan flag pembatalan init aktif;
+- paket clean export SVN `r78486`: `albahjah-lifecycle-r78486.jar`, 30 class, 118.341 byte, SHA-256 `F94B7CD3474D292651B35AF0FB6E4A78556A0CA04BC76C6AC7DD20B24F31644E`.
+
+Deployment r78486 harus dianggap selesai hanya setelah context Al-Bahjah direload dari WAR yang sudah diperbarui dan log membuktikan tidak ada lagi warning `session-deleter-*`, `bacatulis-async-writer`, maupun task init yang memakai pool tertutup.
+
 ## Rollback
 
 - Hentikan rollout bila simpan produk/pembelian gagal, hasil konversi stok tidak sesuai, atau sinkronisasi master UOM ditolak server.
@@ -92,7 +113,7 @@ WAR hasil build SVN bersih tetap disimpan sebagai artefak referensi. WAR produks
 
 1. Admin master data melengkapi satuan dasar pada 234 produk lama yang masih kosong, lalu melakukan sinkronisasi produk. Riwayat lama tidak boleh diubah dengan satuan hasil tebakan.
 2. Kasir memasang desktop `1.34.03+161`, menekan **Sinkronkan/Muat Ulang**, lalu menguji satu produk dengan satuan pembelian berbeda dan memastikan stok bertambah dalam satuan dasar.
-3. Tim backend membuat tiket optimasi startup Tomcat dan memperbaiki cleanup thread/C3P0 pada context reload; startup penuh saat ini dapat memerlukan sekitar 25 menit.
+3. Tim backend memvalidasi hasil `r78486` pada reload produksi. Optimasi durasi startup penuh (saat ini sekitar 25 menit) tetap pekerjaan terpisah karena sebagian besar waktunya berasal dari bootstrap/schema legacy, bukan lifecycle executor.
 4. Admin Cloudflare merotasi token tunnel yang sempat terekspos pada keluaran diagnostik deployment. Token lama tidak boleh disalin ke dokumentasi atau chat.
 
 Prosedur koreksi master data dijelaskan pada [Runbook Koreksi Produk Tanpa Satuan](2026-08-29-runbook-koreksi-produk-tanpa-satuan.md).
