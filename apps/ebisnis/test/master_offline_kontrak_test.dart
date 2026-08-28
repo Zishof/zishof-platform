@@ -530,6 +530,28 @@ void main() {
             'harus tetap online-only, bukan objekDenganCache');
   });
 
+  // Langkah 4 audit 2026-08-29: pencarian produk (koreksi transaksi &
+  // dialog cari produk Sales) jatuh ke cache produk core_db saat offline,
+  // lewat pemetaan tunggal Produk.cacheRowKeJson (kebalikan baseKeCacheRow --
+  // pemetaan SQLite<->JSON tidak boleh digandakan per layar). Jalur katalog
+  // lain sudah benar sejak awal: kasir cache-dulu, price_tag cache+fallback,
+  // produk_screen sinkron penuh ber-progress.
+  test('pencarian produk jatuh ke cache produk lokal saat offline', () {
+    final models = rapat(File('lib/models.dart').readAsStringSync());
+    expect(models,
+        contains(rapat('static Map<String, dynamic> cacheRowKeJson(')));
+    for (final file in const [
+      'lib/screens/riwayat_penjualan_screen.dart',
+      'lib/screens/inventory_sales/penjualan_sales_screen.dart',
+    ]) {
+      final source = rapat(File(file).readAsStringSync());
+      expect(source, contains(rapat('produkCache(keyword:')),
+          reason: '$file harus membaca cache produk lokal saat offline');
+      expect(source, contains('Produk.cacheRowKeJson'),
+          reason: '$file harus memakai pemetaan cache tunggal dari models');
+    }
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

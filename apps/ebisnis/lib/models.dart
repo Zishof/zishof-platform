@@ -161,6 +161,21 @@ class Produk {
             ((j['fotoUrls'] as List?) ?? []).map((e) => e as String).toList()),
         'izinkan_jual_minus_stok': j['izinkanJualMinusStok'] == true ? 1 : 0,
       };
+
+  /// Kebalikan [baseKeCacheRow] utk kolom dasarnya: baris cache lokal ->
+  /// bentuk JSON `katalog`. Dipakai layar pencarian produk yang jatuh ke
+  /// cache saat offline (koreksi transaksi, dialog cari produk Sales) supaya
+  /// pemetaan kolom SQLite->JSON tidak digandakan di tiap layar.
+  static Map<String, dynamic> cacheRowKeJson(Map<String, Object?> b) => {
+        'id': b['id'],
+        'kode': b['kode'] ?? '',
+        'barcode': b['barcode'] ?? '',
+        'nama': b['nama'] ?? '',
+        'hargaJual': b['harga_jual'] ?? 0,
+        'stok': b['stok'] ?? 0,
+        'kategoriId': b['kategori_id'],
+        'kategoriNama': b['kategori_nama'] ?? '',
+      };
 }
 
 class KebijakanRetur {

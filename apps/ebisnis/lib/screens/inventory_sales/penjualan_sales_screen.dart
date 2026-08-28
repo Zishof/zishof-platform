@@ -1,7 +1,9 @@
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../models.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../sesi.dart';
@@ -1052,6 +1054,16 @@ class _DialogCariProdukState extends State<_DialogCariProduk> {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .take(30)
             .toList());
+      }
+    } on ApiException catch (e) {
+      // Offline: jatuh ke cache produk lokal hasil sinkron katalog POS.
+      if (e.offline && generasi == _generasiCari) {
+        final cache =
+            await CoreDb.instance.produkCache(keyword: q, limit: 30);
+        if (generasi == _generasiCari) {
+          setStateIfMounted(
+              () => _rows = cache.map(Produk.cacheRowKeJson).toList());
+        }
       }
     } catch (_) {
     } finally {

@@ -6,6 +6,7 @@ import 'package:core_device/core_device.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
+import '../models.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -247,7 +248,20 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
           .map((e) => Map<String, dynamic>.from(e))
           .toList());
     } catch (e) {
-      if (mounted) {
+      // Offline: jatuh ke cache produk lokal hasil sinkron katalog --
+      // koreksi transaksi justru sering dibutuhkan saat jaringan bermasalah.
+      if (e is ApiException && e.offline) {
+        final cache =
+            await CoreDb.instance.produkCache(keyword: kata, limit: 15);
+        if (!mounted) return;
+        setState(() {
+          _hasilCari = cache.map(Produk.cacheRowKeJson).toList();
+          if (_hasilCari.isEmpty) {
+            _pesan = 'Server tak terjangkau dan "$kata" tidak ditemukan di '
+                'cache produk lokal.';
+          }
+        });
+      } else if (mounted) {
         setState(() => _pesan =
             'Produk belum dapat dicari. Periksa koneksi, lalu coba kembali.');
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,

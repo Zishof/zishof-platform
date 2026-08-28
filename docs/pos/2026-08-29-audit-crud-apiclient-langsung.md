@@ -133,3 +133,19 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   ikut: body-nya memuat rentang tanggal sehingga kunci cache-nya tak
   terbatas; tetap online-only dan dikunci test. Penjaganya: test `keluarga
   *_opsi dibaca lewat objekDenganCache`.
+- **Langkah 4 (`katalog` di layar non-produk) — selesai 29 Agustus 2026.**
+  Audit lanjutan menemukan 4 dari 6 call-site sudah benar sejak awal: kasir
+  sudah Local-First penuh (cache dulu + server refresh background + upsert),
+  price_tag sudah cache-first dengan fallback katalog yang mengisi ulang
+  cache, dan dua call-site produk_screen adalah sinkron penuh ber-progress
+  (memang online) serta pemuat relasi form dengan degradasi yang sudah baik.
+  Yang diperbaiki adalah dua dialog pencarian produk tanpa fallback offline:
+  pencarian produk koreksi transaksi (`riwayat_penjualan_screen`) dan dialog
+  cari produk Sales (`penjualan_sales_screen`) kini jatuh ke
+  `CoreDb.produkCache(keyword: ...)` saat `ApiException.offline`, dipetakan
+  lewat helper tunggal baru `Produk.cacheRowKeJson` di `models.dart`
+  (kebalikan `baseKeCacheRow`, supaya pemetaan SQLite<->JSON tidak digandakan
+  per layar). `kulakan_bulk_entry` memakai `katalog` hanya sebagai fallback
+  kategori server-lama di dalam try/catch yang sudah bergraceful-degradation —
+  dibiarkan. Penjaganya: test `pencarian produk jatuh ke cache produk lokal
+  saat offline`.
