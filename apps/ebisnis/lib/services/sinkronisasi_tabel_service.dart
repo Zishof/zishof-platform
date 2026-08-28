@@ -213,8 +213,11 @@ class SinkronisasiTabelService {
     var sejakId = 0;
     final perId = <int, Map<String, Object?>>{};
     while (true) {
-      final hasil = await ApiClient.instance
-          .aksi('anggota_sync_list', {'sejak_id': sejakId, 'page_size': 500});
+      final hasil = await ApiClient.instance.aksi('anggota_sync_list', {
+        'sejak_id': sejakId,
+        'page_size': 500,
+        'id_toko': Sesi.instance.idTokoTerpilih,
+      });
       final data = (hasil['data'] as List?) ?? const [];
       for (final nilai in data.whereType<Map>()) {
         final row = Map<String, dynamic>.from(nilai);

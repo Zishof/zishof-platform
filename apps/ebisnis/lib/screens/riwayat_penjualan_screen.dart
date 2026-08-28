@@ -19,7 +19,6 @@ import 'riwayat_audit_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
-import '../services/pengaturan_koreksi_transaksi.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
 
@@ -986,12 +985,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     final hariIni = DateTime.now();
     _mulai = DateTime(hariIni.year, hariIni.month, hariIni.day);
     _sampai = DateTime(hariIni.year, hariIni.month, hariIni.day);
-    _muatPengaturanDanData();
-  }
-
-  Future<void> _muatPengaturanDanData() async {
-    await PengaturanKoreksiTransaksi.instance.muat();
-    await _muat();
+    _muat();
   }
 
   int? _idCaraBayarDariNama(String nama) {
@@ -1441,10 +1435,11 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
       final payloadLokal = row['payloadLokal'];
-      final Map<String, dynamic> hasil;
-      final List<Map<String, dynamic>> items;
-      if (payloadLokal is Map) {
-        final payload = Map<String, dynamic>.from(payloadLokal);
+      late Map<String, dynamic> hasil;
+      late List<Map<String, dynamic>> items;
+
+      void pakaiSnapshotLokal(Map payloadSumber) {
+        final payload = Map<String, dynamic>.from(payloadSumber);
         hasil = <String, dynamic>{
           'kode': row['nomorNota'],
           'waktu': row['waktu'],
@@ -1463,10 +1458,25 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             'diskon': i['diskon'] ?? 0,
           };
         }).toList();
+      }
+
+      // Baris hasil sinkron tetap membawa payload lokal sebagai cadangan. Dahulu
+      // keberadaan payload itu selalu menang dan memaksa bolehEditTransaksi=false,
+      // sehingga tombol Edit hilang meskipun server mengizinkan. Transaksi yang
+      // sudah SYNCED wajib meminta detail + otorisasi terkini dari server; snapshot
+      // lokal hanya dipakai bila koneksi benar-benar gagal.
+      final sudahTersinkron = row['statusSinkronLokal'] == 'SYNCED';
+      if (payloadLokal is Map && !sudahTersinkron) {
+        pakaiSnapshotLokal(payloadLokal);
       } else {
-        hasil = await ApiClient.instance
-            .aksi('detail_transaksi', {'id': row['idTransaksi']});
-        items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+        try {
+          hasil = await ApiClient.instance
+              .aksi('detail_transaksi', {'id': row['idTransaksi']});
+          items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+        } on ApiException catch (error) {
+          if (!error.offline || payloadLokal is! Map) rethrow;
+          pakaiSnapshotLokal(payloadLokal);
+        }
       }
       final pajakHeader = (row['pajak'] as num?)?.toDouble() ?? 0;
       final diskonHeader = (row['totalDiskon'] as num?)?.toDouble() ?? 0;
@@ -1555,8 +1565,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             ),
           ),
           actions: [
-            if (PengaturanKoreksiTransaksi.instance.izinkanEdit &&
-                hasil['bolehEditTransaksi'] == true)
+            if (hasil['bolehEditTransaksi'] == true)
               TextButton.icon(
                 icon: const Icon(Icons.edit_note_outlined, size: 19),
                 label: const Text('Edit Transaksi'),

@@ -1,21 +1,35 @@
-import 'package:ebisnis/services/pengaturan_koreksi_transaksi.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  test('transaksi tersinkron meminta detail dan otorisasi terbaru dari server',
+      () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
 
-  test('default edit aktif untuk mempertahankan fungsi lama', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    await PengaturanKoreksiTransaksi.instance.muat();
-    expect(PengaturanKoreksiTransaksi.instance.izinkanEdit, isTrue);
+    expect(source, contains("row['statusSinkronLokal'] == 'SYNCED'"));
+    expect(source, contains(".aksi('detail_transaksi'"));
+    expect(source, contains("hasil['bolehEditTransaksi'] == true"));
+    expect(source, isNot(contains('PengaturanKoreksiTransaksi.instance')));
   });
 
-  test('pilihan edit tersimpan dan dimuat kembali', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    await PengaturanKoreksiTransaksi.instance.simpan(false);
-    PengaturanKoreksiTransaksi.instance.izinkanEdit = true;
-    await PengaturanKoreksiTransaksi.instance.muat();
-    expect(PengaturanKoreksiTransaksi.instance.izinkanEdit, isFalse);
+  test('snapshot offline hanya untuk membaca dan tidak memberi izin edit', () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
+
+    expect(source, contains("'bolehEditTransaksi': false"));
+    expect(source, contains('if (!error.offline'));
+  });
+
+  test('konfigurasi edit transaksi berasal dari server global dan per toko',
+      () {
+    final source =
+        File('lib/screens/konfigurasi_screen.dart').readAsStringSync();
+
+    expect(source, contains("'pengaturan_edit_transaksi_ambil'"));
+    expect(source, contains("'pengaturan_edit_transaksi_global_simpan'"));
+    expect(source, contains("'izinkan_edit_transaksi_toko'"));
+    expect(source, contains('Kebijakan global server'));
   });
 }

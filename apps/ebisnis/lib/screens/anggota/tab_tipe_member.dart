@@ -132,10 +132,17 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
   }
 
   Future<void> _bukaForm({Map<String, dynamic>? tipe}) async {
+    final tokoTersedia = Sesi.instance.daftarTokoFilter.isNotEmpty
+        ? Sesi.instance.daftarTokoFilter
+        : Sesi.instance.daftarToko;
     final tersimpan = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FormTipeMember(tipe: tipe, caraBayar: _caraBayar),
+      builder: (_) => _FormTipeMember(
+        tipe: tipe,
+        caraBayar: _caraBayar,
+        toko: tokoTersedia,
+      ),
     );
     if (tersimpan == true) await _muatDaftar();
   }
@@ -380,7 +387,12 @@ class _AnggotaTabTipeMemberState extends State<AnggotaTabTipeMember>
 class _FormTipeMember extends StatefulWidget {
   final Map<String, dynamic>? tipe;
   final List<Map<String, dynamic>> caraBayar;
-  const _FormTipeMember({required this.tipe, required this.caraBayar});
+  final List<Map<String, dynamic>> toko;
+  const _FormTipeMember({
+    required this.tipe,
+    required this.caraBayar,
+    required this.toko,
+  });
 
   @override
   State<_FormTipeMember> createState() => _FormTipeMemberState();
@@ -405,6 +417,8 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
   bool _wajibPin = false;
   bool _wajibBiometricWajah = false;
   bool _wajibBiometricFingerprint = false;
+  bool _berlakuSemuaToko = true;
+  Set<int> _tokoDipilih = {};
   bool _menyimpan = false;
   String? _pesanError;
 
@@ -443,6 +457,12 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
     _wajibPin = t?['wajibPin'] == true;
     _wajibBiometricWajah = t?['wajibBiometricWajah'] == true;
     _wajibBiometricFingerprint = t?['wajibBiometricFingerprint'] == true;
+    _berlakuSemuaToko = t?['berlakuSemuaToko'] ?? true;
+    _tokoDipilih = '${t?['daftarToko'] ?? ''}'
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toSet();
   }
 
   TextEditingController _controllerBatas(dynamic nilai) {
@@ -470,6 +490,11 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_berlakuSemuaToko && _tokoDipilih.isEmpty) {
+      setStateIfMounted(() => _pesanError =
+          'Pilih minimal satu toko atau aktifkan Berlaku ke semua toko.');
+      return;
+    }
     if (_caraBayarDipilih.length == 1) {
       _caraBayarDefaultId = _caraBayarDipilih.first;
     }
@@ -519,6 +544,8 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
         'maksimalTransaksiHarian': _angka(_maksimalTransaksiHarian),
         'maksimalTransaksiMingguan': _angka(_maksimalTransaksiMingguan),
         'maksimalTransaksiBulanan': _angka(_maksimalTransaksiBulanan),
+        'berlakuSemuaToko': _berlakuSemuaToko,
+        'daftarToko': _berlakuSemuaToko ? '' : _tokoDipilih.join(','),
       };
       await prosesSimpanMaster(
         context,
@@ -558,6 +585,31 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
             icon: Icons.label_outline,
             errorText: _pesanError,
             errorDetail: detailUntuk(_pesanError),
+            actions: [
+              OutlinedButton.icon(
+                onPressed:
+                    _menyimpan ? null : () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Batal'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _menyimpan ? null : _simpan,
+                icon: _menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: const Text('Simpan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+            ],
             children: [
               AppFormSection(
                 judul: 'Identitas',
@@ -756,30 +808,49 @@ class _FormTipeMemberState extends State<_FormTipeMember> with JejakGalat {
                   ),
                 ],
               ),
-            ],
-            actions: [
-              OutlinedButton.icon(
-                onPressed:
-                    _menyimpan ? null : () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Batal'),
-              ),
-              ElevatedButton.icon(
-                onPressed: _menyimpan ? null : _simpan,
-                icon: _menyimpan
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Simpan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                ),
+              const SizedBox(height: 12),
+              AppFormSection(
+                judul: 'Cakupan Toko',
+                deskripsi:
+                    'Menentukan toko tempat aturan cara bayar, PIN/biometrik, batas pembelian, dan batas utang tipe ini berlaku.',
+                children: [
+                  AppFormSwitchTile(
+                    title: 'Berlaku ke semua toko',
+                    subtitle:
+                        'Aktif secara default dan kompatibel dengan seluruh data tipe member lama.',
+                    value: _berlakuSemuaToko,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _berlakuSemuaToko = v),
+                  ),
+                  if (!_berlakuSemuaToko) ...[
+                    if (widget.toko.isEmpty)
+                      const Text(
+                        'Daftar toko aktif belum tersedia. Muat ulang konfigurasi saat online.',
+                        style: TextStyle(fontSize: 12, color: Colors.orange),
+                      )
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: widget.toko.map((t) {
+                          final id = (t['id'] as num?)?.toInt();
+                          if (id == null) return const SizedBox.shrink();
+                          return FilterChip(
+                            label: Text('${t['nama'] ?? 'Toko $id'}',
+                                style: const TextStyle(fontSize: 12)),
+                            selected: _tokoDipilih.contains(id),
+                            onSelected: (dipilih) => setStateIfMounted(() {
+                              if (dipilih) {
+                                _tokoDipilih.add(id);
+                              } else {
+                                _tokoDipilih.remove(id);
+                              }
+                            }),
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ],
               ),
             ],
           ),

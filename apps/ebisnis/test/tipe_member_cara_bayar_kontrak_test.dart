@@ -27,4 +27,21 @@ void main() {
     expect(source, contains('Wajib pakai Finger Print'));
     expect(source, contains('Default semuanya tidak aktif'));
   });
+
+  test('Tipe Member dapat dibatasi ke banyak toko dan default ke semua toko',
+      () {
+    final form =
+        File('lib/screens/anggota/tab_tipe_member.dart').readAsStringSync();
+    final kasir = File('lib/screens/keranjang_screen.dart').readAsStringSync();
+    final sinkron =
+        File('lib/services/sinkronisasi_tabel_service.dart').readAsStringSync();
+
+    expect(form, contains("bool _berlakuSemuaToko = true"));
+    expect(form, contains("'berlakuSemuaToko': _berlakuSemuaToko"));
+    expect(form, contains("'daftarToko':"));
+    expect(form, contains('Berlaku ke semua toko'));
+    expect(form, contains('FilterChip('));
+    expect(kasir, contains("'id_toko': Sesi.instance.idTokoTerpilih"));
+    expect(sinkron, contains("'id_toko': Sesi.instance.idTokoTerpilih"));
+  });
 }

@@ -10,7 +10,6 @@ import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
 import '../services/pengaturan_laci.dart';
-import '../services/pengaturan_koreksi_transaksi.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/pengaturan_struk.dart';
@@ -199,7 +198,9 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
   FormatNomorStruk _formatNomorStruk = FormatNomorStruk.defaultPos;
   bool _menyimpanPembayaran = false;
   bool _updateOtomatis = true;
-  bool _izinkanEditTransaksi = true;
+  bool _izinkanEditTransaksi = false;
+  bool _bolehUbahEditTransaksiGlobal = false;
+  bool _menyimpanEditTransaksiGlobal = false;
 
   @override
   void initState() {
@@ -223,7 +224,14 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
     await PengaturanNomorStruk.instance.muat();
     await PengaturanSesiLokal.instance.muat();
     await PengaturanUpdate.instance.muat();
-    await PengaturanKoreksiTransaksi.instance.muat();
+    Map<String, dynamic> pengaturanEdit = const <String, dynamic>{};
+    try {
+      pengaturanEdit = await ApiClient.instance
+          .aksi('pengaturan_edit_transaksi_ambil', const {});
+    } catch (_) {
+      // Pengaturan keamanan tidak boleh diasumsikan aktif ketika server tidak
+      // dapat dimintai keputusan. Detail transaksi tetap dapat dibaca offline.
+    }
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
       try {
@@ -246,7 +254,9 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         _timeoutSesiController.text =
             PengaturanSesiLokal.instance.timeoutMenit.toString();
         _updateOtomatis = PengaturanUpdate.instance.otomatis;
-        _izinkanEditTransaksi = PengaturanKoreksiTransaksi.instance.izinkanEdit;
+        _izinkanEditTransaksi = pengaturanEdit['global'] == true;
+        _bolehUbahEditTransaksiGlobal =
+            pengaturanEdit['bolehUbahGlobal'] == true;
         _memuat = false;
       });
     }
@@ -474,25 +484,41 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
         AppFormSection(
           judul: 'Keamanan & Koreksi Transaksi',
           deskripsi:
-              'Atur apakah koreksi transaksi lunas ditawarkan pada perangkat ini. Otorisasi admin/supervisor dari server tetap wajib.',
+              'Kebijakan global server. Jika aktif, seluruh toko mengizinkan koreksi; otorisasi admin/supervisor tetap wajib.',
           children: [
             AppFormSwitchTile(
               title: 'Izinkan Edit Transaksi dari Riwayat Penjualan',
-              subtitle: Sesi.instance.bolehKelola
-                  ? 'Jika dimatikan, tombol Edit Transaksi disembunyikan. Perubahan hanya berlaku pada varian aplikasi dan perangkat ini.'
-                  : 'Hanya admin atau supervisor yang dapat mengubah pengaturan ini. Hak akses server tetap menjadi pengaman utama.',
+              subtitle: _izinkanEditTransaksi
+                  ? 'AKTIF GLOBAL — izin ini menang untuk seluruh toko.'
+                  : 'NONAKTIF GLOBAL — keputusan mengikuti konfigurasi toko aktif.',
               value: _izinkanEditTransaksi,
-              onChanged: Sesi.instance.bolehKelola
+              onChanged: _bolehUbahEditTransaksiGlobal &&
+                      !_menyimpanEditTransaksiGlobal
                   ? (nilai) async {
                       final messenger = ScaffoldMessenger.of(context);
-                      await PengaturanKoreksiTransaksi.instance.simpan(nilai);
-                      if (!mounted) return;
-                      setStateIfMounted(() => _izinkanEditTransaksi = nilai);
-                      messenger.showSnackBar(SnackBar(
-                        content: Text(nilai
-                            ? 'Edit transaksi diizinkan pada perangkat ini.'
-                            : 'Edit transaksi dinonaktifkan pada perangkat ini.'),
-                      ));
+                      setStateIfMounted(
+                          () => _menyimpanEditTransaksiGlobal = true);
+                      try {
+                        final hasil = await ApiClient.instance.aksi(
+                            'pengaturan_edit_transaksi_global_simpan',
+                            {'aktif': nilai});
+                        if (!mounted) return;
+                        setStateIfMounted(() =>
+                            _izinkanEditTransaksi = hasil['global'] == true);
+                        messenger.showSnackBar(const SnackBar(
+                            content: Text(
+                                'Kebijakan global edit transaksi tersimpan di server.')));
+                      } catch (error) {
+                        if (mounted) {
+                          messenger.showSnackBar(SnackBar(
+                              content: Text('Gagal menyimpan: $error')));
+                        }
+                      } finally {
+                        if (mounted) {
+                          setStateIfMounted(
+                              () => _menyimpanEditTransaksiGlobal = false);
+                        }
+                      }
                     }
                   : null,
             ),
@@ -500,7 +526,7 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
               icon: Icons.verified_user_outlined,
               color: AppColors.info,
               text:
-                  'Sakelar ini tidak memberikan hak baru. Kasir biasa tetap tidak dapat mengedit meskipun pengaturan aktif, dan server memvalidasi kewenangan pada saat simpan.',
+                  'Sakelar ini tidak memberikan hak baru. Server memeriksa kebijakan global/per toko dan hak admin/supervisor ketika detail dibuka maupun saat koreksi disimpan.',
             ),
           ],
         ),
@@ -732,16 +758,15 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
         // nilai yang baru saja dipilih pengguna supaya saklar tidak melompat
         // balik ke keadaan lama.
         final terantre = res['offline'] == true;
-        _globalOtomatisBayar = terantre
-            ? (bayar ?? _globalOtomatisBayar)
-            : res['bayar'] == true;
+        _globalOtomatisBayar =
+            terantre ? (bayar ?? _globalOtomatisBayar) : res['bayar'] == true;
         _globalOtomatisLayani = terantre
             ? (layani ?? _globalOtomatisLayani)
             : res['layani'] == true;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Pengaturan global tersimpan.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pengaturan global tersimpan.')));
       }
     } catch (e) {
       if (mounted) {
@@ -760,6 +785,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
   String? _error;
   bool _bolehUbah = false;
   bool _bolehTransaksiStokHabis = false;
+  bool _globalIzinkanEditTransaksi = false;
+  bool _izinkanEditTransaksiToko = false;
 
   /// Kebijakan UBAH HARGA per toko. Default AKTIF = semua pengguna boleh
   /// mengubah harga (perilaku lama). Bila dimatikan, hanya akun pada
@@ -931,6 +958,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
           : null;
       _globalOtomatisBayar = d['globalOtomatisBayarSetelahJam24'] == true;
       _globalOtomatisLayani = d['globalOtomatisLayaniSetelahJam24'] == true;
+      _globalIzinkanEditTransaksi = d['globalIzinkanEditTransaksi'] == true;
+      _izinkanEditTransaksiToko = d['izinkanEditTransaksiToko'] == true;
       _userBolehUbahHarga
         ..clear()
         ..addAll(((d['userBolehUbahHarga'] as List?) ?? const [])
@@ -1080,35 +1109,39 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
       }
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
       // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      await prosesSimpanMaster(context, aksi: 'toko_profil_simpan', body: {
-        'toko_id': idToko,
-        'nama': _nama.text.trim(),
-        'alamat': _alamat.text.trim(),
-        'kota': _kota.text.trim(),
-        'kode_pos': _kodePos.text.trim(),
-        'telp': _telp.text.trim(),
-        'email': _email.text.trim(),
-        'pic_nama': _picNama.text.trim(),
-        'pic_hp': _picHp.text.trim(),
-        'npwp': _npwp.text.trim(),
-        'jam_operasional': _jamOperasional.text.trim(),
-        'keterangan': _keterangan.text.trim(),
-        'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
-        'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
-        'semua_boleh_ubah_harga': _semuaBolehUbahHarga,
-        // Kunci SELALU dikirim, isinya boleh null -> server membedakan
-        // "kembalikan ke ikut global" dari "jangan diubah".
-        'otomatis_bayar_setelah_jam_24': _otomatisBayarToko,
-        'otomatis_layani_setelah_jam_24': _otomatisLayaniToko,
-        'user_boleh_ubah_harga': _userBolehUbahHarga.toList(),
-        'role_boleh_ubah_harga': _roleBolehUbahHarga.toList(),
-        if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
-        'alasan_tahan': _alasanTahan.text
-            .split(RegExp(r'[\r\n]+'))
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList(),
-      }, kunci: 'toko_profil:${Sesi.instance.tokoId}');
+      await prosesSimpanMaster(context,
+          aksi: 'toko_profil_simpan',
+          body: {
+            'toko_id': idToko,
+            'nama': _nama.text.trim(),
+            'alamat': _alamat.text.trim(),
+            'kota': _kota.text.trim(),
+            'kode_pos': _kodePos.text.trim(),
+            'telp': _telp.text.trim(),
+            'email': _email.text.trim(),
+            'pic_nama': _picNama.text.trim(),
+            'pic_hp': _picHp.text.trim(),
+            'npwp': _npwp.text.trim(),
+            'jam_operasional': _jamOperasional.text.trim(),
+            'keterangan': _keterangan.text.trim(),
+            'pesan_terima_kasih': _pesanTerimaKasih.text.trim(),
+            'boleh_transaksi_stok_habis': _bolehTransaksiStokHabis,
+            'izinkan_edit_transaksi_toko': _izinkanEditTransaksiToko,
+            'semua_boleh_ubah_harga': _semuaBolehUbahHarga,
+            // Kunci SELALU dikirim, isinya boleh null -> server membedakan
+            // "kembalikan ke ikut global" dari "jangan diubah".
+            'otomatis_bayar_setelah_jam_24': _otomatisBayarToko,
+            'otomatis_layani_setelah_jam_24': _otomatisLayaniToko,
+            'user_boleh_ubah_harga': _userBolehUbahHarga.toList(),
+            'role_boleh_ubah_harga': _roleBolehUbahHarga.toList(),
+            if (_bolehUbahTokoDemo) 'toko_demo': _tokoDemo,
+            'alasan_tahan': _alasanTahan.text
+                .split(RegExp(r'[\r\n]+'))
+                .map((e) => e.trim())
+                .where((e) => e.isNotEmpty)
+                .toList(),
+          },
+          kunci: 'toko_profil:${Sesi.instance.tokoId}');
       if (mounted) {
         Sesi.instance
           ..tokoNama = _nama.text.trim()
@@ -1580,6 +1613,33 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
           ],
         ),
         AppFormSection(
+          judul: 'Keamanan & Koreksi Transaksi Toko',
+          deskripsi:
+              'Berlaku untuk ${_nama.text.trim().isEmpty ? 'toko yang sedang dipilih' : _nama.text.trim()}. Global aktif selalu menang; jika global nonaktif, nilai toko ini yang menentukan.',
+          children: [
+            AppFormSwitchTile(
+              title: 'Izinkan Edit Transaksi dari Riwayat Penjualan',
+              subtitle: _globalIzinkanEditTransaksi
+                  ? 'AKTIF karena kebijakan global — pilihan toko disimpan tetapi sementara tidak menentukan hasil.'
+                  : (_izinkanEditTransaksiToko
+                      ? 'AKTIF khusus toko ini.'
+                      : 'NONAKTIF untuk toko ini.'),
+              value: _globalIzinkanEditTransaksi || _izinkanEditTransaksiToko,
+              onChanged: _bolehUbah && !_globalIzinkanEditTransaksi
+                  ? (nilai) =>
+                      setStateIfMounted(() => _izinkanEditTransaksiToko = nilai)
+                  : null,
+            ),
+            if (_globalIzinkanEditTransaksi)
+              const AppInfoBanner(
+                icon: Icons.policy_outlined,
+                color: AppColors.info,
+                text:
+                    'Kebijakan global sedang aktif. Matikan kebijakan global di tab Identitas Mesin agar pengaturan per toko kembali berlaku.',
+              ),
+          ],
+        ),
+        AppFormSection(
           judul: 'Kebijakan Ubah Harga',
           deskripsi:
               'Berlaku hanya untuk ${_nama.text.trim().isEmpty ? 'toko yang sedang dipilih' : _nama.text.trim()}. '
@@ -1654,7 +1714,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
               const Divider(height: 24),
               Row(children: [
                 const Expanded(
-                  child: Text('Grup pengguna (Hak Akses) yang boleh mengubah harga',
+                  child: Text(
+                      'Grup pengguna (Hak Akses) yang boleh mengubah harga',
                       style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
                 TextButton.icon(
@@ -1707,8 +1768,7 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
                       controlAffinity: ListTileControlAffinity.leading,
                       value: _roleBolehUbahHarga.contains(id),
                       title: Text('${r['nama'] ?? id}'),
-                      subtitle:
-                          Text(id, style: const TextStyle(fontSize: 11)),
+                      subtitle: Text(id, style: const TextStyle(fontSize: 11)),
                       onChanged: _bolehUbah
                           ? (v) => setStateIfMounted(() {
                                 if (v == true) {
@@ -2042,13 +2102,16 @@ class _FormAkunState extends State<_FormAkun> with JejakGalat {
           });
         } else {
           // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster).
-          await prosesSimpanMaster(context, aksi: 'pedagang_ubah', body: {
-            'id': widget.akun!['id'],
-            'nama': _nama.text.trim(),
-            'keterangan': _keterangan.text.trim(),
-            'aktif': _aktif,
-            'supervisor': _supervisor,
-          }, kunci: 'pedagang:${widget.akun!['id']}');
+          await prosesSimpanMaster(context,
+              aksi: 'pedagang_ubah',
+              body: {
+                'id': widget.akun!['id'],
+                'nama': _nama.text.trim(),
+                'keterangan': _keterangan.text.trim(),
+                'aktif': _aktif,
+                'supervisor': _supervisor,
+              },
+              kunci: 'pedagang:${widget.akun!['id']}');
         }
       } else {
         // Offline-first (pola master, lihat MasterOffline): akun baru diantre

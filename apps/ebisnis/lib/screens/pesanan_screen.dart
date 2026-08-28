@@ -1281,8 +1281,10 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     Anggota? member;
     if (p.anggotaId != null) {
       try {
-        final hasil =
-            await ApiClient.instance.aksi('cari_member', {'id': p.anggotaId});
+        final hasil = await ApiClient.instance.aksi('cari_member', {
+          'id': p.anggotaId,
+          'id_toko': Sesi.instance.idTokoTerpilih,
+        });
         final arr = (hasil['member'] as List?) ?? [];
         if (arr.isNotEmpty) {
           member = Anggota.fromJson(arr.first as Map<String, dynamic>);

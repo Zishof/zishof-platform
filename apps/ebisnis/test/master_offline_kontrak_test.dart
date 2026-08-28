@@ -61,6 +61,8 @@ void main() {
       "'maksimalTransaksiHarian'",
       "'maksimalTransaksiMingguan'",
       "'maksimalTransaksiBulanan'",
+      "'berlakuSemuaToko'",
+      "'daftarToko'",
     ],
     'lib/screens/supplier_screen.dart': [
       "'master:penyedia'",

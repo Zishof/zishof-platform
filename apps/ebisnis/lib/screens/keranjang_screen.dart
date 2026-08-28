@@ -238,8 +238,10 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final versi = ++_versiPermintaanCaraBayar;
     if (mounted) setStateIfMounted(() => _memuatCaraBayar = true);
     try {
-      final hasil = await ApiClient.instance
-          .aksi('cara_bayar_list', {'id_member': memberId});
+      final hasil = await ApiClient.instance.aksi('cara_bayar_list', {
+        'id_member': memberId,
+        'id_toko': Sesi.instance.idTokoTerpilih,
+      });
       final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
       final caraBayarTerkunci = hasil['caraBayarTerkunci'] == true;
       final caraBayarDefaultId = (hasil['caraBayarDefaultId'] as num?)?.toInt();
@@ -3320,8 +3322,10 @@ class _DialogPilihMemberState extends State<_DialogPilihMember> {
       _transaksiTerbaru = false;
     });
     try {
-      final hasil =
-          await ApiClient.instance.aksi('cari_member', {'keyword': kataKunci});
+      final hasil = await ApiClient.instance.aksi('cari_member', {
+        'keyword': kataKunci,
+        'id_toko': Sesi.instance.idTokoTerpilih,
+      });
       final arr = (hasil['member'] as List?) ?? [];
       if (mounted) {
         setStateIfMounted(() {

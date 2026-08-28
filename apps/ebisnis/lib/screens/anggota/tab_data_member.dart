@@ -235,8 +235,11 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
     var sejakId = 0;
     var totalTersinkron = 0;
     while (true) {
-      final hasil = await ApiClient.instance
-          .aksi('anggota_sync_list', {'sejak_id': sejakId, 'page_size': 500});
+      final hasil = await ApiClient.instance.aksi('anggota_sync_list', {
+        'sejak_id': sejakId,
+        'page_size': 500,
+        'id_toko': Sesi.instance.idTokoTerpilih,
+      });
       final data = (hasil['data'] as List?) ?? [];
       if (data.isNotEmpty) {
         await CoreDb.instance.upsertAnggotaCache(data
