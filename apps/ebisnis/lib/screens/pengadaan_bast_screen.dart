@@ -1028,6 +1028,7 @@ class _FormBastDialogState extends State<_FormBastDialog> {
               AppSearchField(
                 controller: q,
                 hintText: 'Cari kode / nama barang',
+                scanProduk: true,
                 autofocus: true,
                 onChanged: (_) => cari(),
               ),

@@ -62,16 +62,19 @@ class _PersediaanScreenState extends State<PersediaanScreen> with JejakGalat {
       // pernah diterima tampil seketika, hasil server menyusul + diff utk
       // kilau baris. Baris saldo TIDAK punya kolom 'id' -> identitasnya
       // 'produkId' (lihat parameter kolomKunci).
-      await MasterOffline.daftarCacheDulu('si_inventory_balance', {
-        if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
-        'dari': _fmtTgl.format(_dari),
-        'sampai': _fmtTgl.format(_sampai),
-        'hanya_minimum': _filter == 'minimum',
-        'hanya_negatif': _filter == 'negatif',
-        'hanya_tersedia': _filter == 'tersedia',
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:si_persediaan:$_filter',
+      await MasterOffline.daftarCacheDulu(
+          'si_inventory_balance',
+          {
+            if (_kataKunci.isNotEmpty) 'keyword': _kataKunci,
+            'dari': _fmtTgl.format(_dari),
+            'sampai': _fmtTgl.format(_sampai),
+            'hanya_minimum': _filter == 'minimum',
+            'hanya_negatif': _filter == 'negatif',
+            'hanya_tersedia': _filter == 'tersedia',
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:si_persediaan:$_filter',
           kolomKunci: 'produkId', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
@@ -286,6 +289,7 @@ class _PersediaanScreenState extends State<PersediaanScreen> with JejakGalat {
                             width: 260,
                             child: AppSearchField(
                               hintText: 'Cari kode / nama / barcode...',
+                              scanProduk: true,
                               onChanged: (v) {
                                 _kataKunci = v.trim();
                                 _halaman = 1;

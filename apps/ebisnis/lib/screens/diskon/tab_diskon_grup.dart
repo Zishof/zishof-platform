@@ -58,11 +58,14 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('diskon_grup_list', {
-        'page': _page,
-        'page_size': _pageSize,
-        if (_keyword.isNotEmpty) 'keyword': _keyword,
-      }, 'master:diskon_grup', onData: (r) {
+      await MasterOffline.daftarCacheDulu(
+          'diskon_grup_list',
+          {
+            'page': _page,
+            'page_size': _pageSize,
+            if (_keyword.isNotEmpty) 'keyword': _keyword,
+          },
+          'master:diskon_grup', onData: (r) {
         if (!mounted) return;
         final data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         final dariServer = r['dariServer'] == true;
@@ -197,8 +200,7 @@ class _TabDiskonGrupState extends State<TabDiskonGrup> with JejakGalat {
                               idBerubah: _idBerubah,
                               child: Row(children: [
                                 IndikatorBarisSinkron(
-                                    kunci:
-                                        kunciBarisMaster('diskon_grup', e)),
+                                    kunci: kunciBarisMaster('diskon_grup', e)),
                                 Expanded(
                                     child: Text('${e['namaGrup']}',
                                         overflow: TextOverflow.ellipsis)),
@@ -411,14 +413,13 @@ class _FormDiskonGrupState extends State<_FormDiskonGrup> with JejakGalat {
             width: 650,
             height: 430,
             child: Column(children: [
-              TextField(
+              AppSearchField(
                   controller: q,
                   autofocus: true,
                   onSubmitted: (_) => cari(),
-                  decoration: InputDecoration(
-                      hintText: 'Kode, barcode, atau nama',
-                      suffixIcon: IconButton(
-                          onPressed: cari, icon: const Icon(Icons.search)))),
+                  hintText: 'Kode, barcode, atau nama',
+                  scanProduk: true,
+                  onScanned: (_) => cari()),
               const SizedBox(height: 8),
               Expanded(
                   child: loading

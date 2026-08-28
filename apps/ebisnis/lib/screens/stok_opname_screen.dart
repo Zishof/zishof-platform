@@ -559,6 +559,7 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
                 child: AppSearchField(
                   controller: _cariController,
                   hintText: 'Cari produk/jenis/keterangan...',
+                  scanProduk: true,
                   onChanged: (v) => setStateIfMounted(() => _kataKunci = v),
                 ),
               ),
@@ -968,6 +969,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
             Expanded(
               child: PencarianProdukBanbox(
                 controller: _barcodeController,
+                tampilkanScanner: false,
                 label: 'Kode / Barcode / Nama Produk',
                 icon: Icons.search,
                 onPilih: _cariProduk,
@@ -1233,6 +1235,7 @@ class _TabSoByScanState extends State<_TabSoByScan>
               Expanded(
                 child: PencarianProdukBanbox(
                   controller: _barcodeController,
+                  tampilkanScanner: false,
                   focusNode: _barcodeFocus,
                   autofocus: true,
                   label: 'Scan / Ketik Kode / Nama Produk',

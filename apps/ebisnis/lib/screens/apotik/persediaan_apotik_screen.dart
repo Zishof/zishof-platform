@@ -348,6 +348,7 @@ class _SheetCariItemState extends State<_SheetCariItem> {
           child: AppSearchField(
             controller: _cari,
             hintText: 'Cari obat: kode / barcode / nama...',
+            scanProduk: true,
             autofocus: true,
             debounce: Duration.zero,
             onChanged: _berubah,
@@ -406,10 +407,13 @@ class _TabFormulariumState extends State<_TabFormularium> {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu('apotik_item_cari', {
-        if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
-        'page_size': 30,
-      }, 'master:apotik_item', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'apotik_item_cari',
+          {
+            if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
+            'page_size': 30,
+          },
+          'master:apotik_item', onData: (hasil) {
         if (!mounted) return;
         final dariServer = hasil['dariServer'] == true;
         setStateIfMounted(() {
@@ -418,11 +422,9 @@ class _TabFormulariumState extends State<_TabFormularium> {
               ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
               : {};
           _idBerubah = dariServer
-              ? Set<String>.from(
-                  hasil['idBerubah'] as Set? ?? const <String>{})
+              ? Set<String>.from(hasil['idBerubah'] as Set? ?? const <String>{})
               : {};
-          _jumlahHapus =
-              dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+          _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
           if (dariServer &&
               (_idBaru.isNotEmpty ||
                   _idBerubah.isNotEmpty ||
@@ -504,7 +506,8 @@ class _TabFormulariumState extends State<_TabFormularium> {
     try {
       // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
       // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      await prosesSimpanMaster(context, aksi: 'apotik_item_profil_simpan',
+      await prosesSimpanMaster(context,
+          aksi: 'apotik_item_profil_simpan',
           body: {
             'item_id': it['id'],
             'golongan_obat': golongan,
@@ -528,6 +531,7 @@ class _TabFormulariumState extends State<_TabFormularium> {
         AppSearchField(
           controller: _cari,
           hintText: 'Cari obat...',
+          scanProduk: true,
           onChanged: (_) => _muat(),
         ),
         const SizedBox(height: 8),
@@ -945,8 +949,9 @@ class _TabOpnameState extends State<_TabOpname> {
       );
       if (hasil['offline'] == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Opname tersimpan di perangkat dan akan dikirim otomatis. '
-                'Rincian selisihnya muncul setelah terkirim.')));
+            content:
+                Text('Opname tersimpan di perangkat dan akan dikirim otomatis. '
+                    'Rincian selisihnya muncul setelah terkirim.')));
       }
       setStateIfMounted(() {
         _hasilTerakhir =

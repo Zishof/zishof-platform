@@ -295,6 +295,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                     Expanded(
                       child: PencarianProdukBanbox(
                         controller: _barcodeController,
+                        tampilkanScanner: false,
                         label: 'Kode / Barcode / Nama Produk',
                         icon: Icons.search,
                         onPilih: _cariProduk,

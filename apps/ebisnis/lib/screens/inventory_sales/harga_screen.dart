@@ -265,6 +265,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
             Expanded(
               child: AppSearchField(
                 hintText: 'Cari kode / nama barang...',
+                scanProduk: true,
                 onChanged: (v) {
                   _kataKunci = v.trim();
                   _halaman = 1;
@@ -427,7 +428,7 @@ class _TabHargaVersiState extends State<_TabHargaVersi> with JejakGalat {
             'page_size': _pageSize,
           },
           'master:si_harga_versi:${widget.jenis}'
-              '${!_beli && _hanyaUmum ? ':umum' : ''}', onData: (hasil) {
+          '${!_beli && _hanyaUmum ? ':umum' : ''}', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);

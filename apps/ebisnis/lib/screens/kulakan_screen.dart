@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_hw/core_hw.dart';
@@ -158,7 +158,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   /// `kulakan_faktur_detail`). MasterOffline menyusun kunci diff-nya sbg
   /// `namaKolom=nilai` (lihat MasterOffline._kunciDiff) sehingga format di
   /// sini WAJIB sama, kalau tidak kilau tidak pernah cocok.
-  String _kunciKilau(Map<String, dynamic> f) => 'fakturId=${f['fakturId'] ?? ''}';
+  String _kunciKilau(Map<String, dynamic> f) =>
+      'fakturId=${f['fakturId'] ?? ''}';
 
   void _setStateEntri(VoidCallback fn) {
     setStateIfMounted(fn);
@@ -193,11 +194,15 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
       // FAKTUR tetap online-only lewat ApiClient (transaksional).
-      await MasterOffline.daftarCacheDulu('kulakan_faktur_list', {
-        'page': _halaman,
-        'page_size': _pageSize,
-        if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
-      }, 'master:kulakan_faktur', kolomKunci: 'fakturId', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'kulakan_faktur_list',
+          {
+            'page': _halaman,
+            'page_size': _pageSize,
+            if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
+          },
+          'master:kulakan_faktur',
+          kolomKunci: 'fakturId', onData: (hasil) {
         if (!mounted) return;
         _setStateEntri(() {
           _riwayat = _diff.terapkan(hasil);
@@ -240,7 +245,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           // label. Nilainya diisikan otomatis dari harga penerimaan terakhir
           // (jatuh ke harga beli master bila belum pernah diterima) supaya
           // penerimaan barang tetap bisa diselesaikan tanpa mengetik harga.
-          final terakhir = (hasil['hargaBeliTerakhir'] as num?)?.toDouble() ?? 0;
+          final terakhir =
+              (hasil['hargaBeliTerakhir'] as num?)?.toDouble() ?? 0;
           final master = (hasil['hargaBeli'] as num?)?.toDouble() ?? 0;
           final dipakai = terakhir > 0 ? terakhir : master;
           if (dipakai > 0) {
@@ -390,25 +396,26 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           'jumlahItem': _itemsFaktur.length,
         },
         body: {
-        'nomor_faktur': nomorFaktur,
-        'tanggal_faktur': _tanggalFaktur.toIso8601String(),
-        if (_supplierTerpilih != null) 'supplier_id': _supplierTerpilih!['id'],
-        if (_totalManual != null) 'total_faktur_manual': _totalManual,
-        'keterangan': _keteranganController.text.trim(),
-        'items': _itemsFaktur
-            .map((it) => {
-                  'produk_id': it.produkId,
-                  'qty': it.qty,
-                  'harga_beli_satuan': it.harga,
-                  if (it.nomorBatch != null) 'nomor_batch': it.nomorBatch,
-                  if (it.tanggalProduksi != null)
-                    'tanggal_produksi':
-                        DateFormat('yyyy-MM-dd').format(it.tanggalProduksi!),
-                  if (it.tanggalExpired != null)
-                    'tanggal_expired':
-                        DateFormat('yyyy-MM-dd').format(it.tanggalExpired!),
-                })
-            .toList(),
+          'nomor_faktur': nomorFaktur,
+          'tanggal_faktur': _tanggalFaktur.toIso8601String(),
+          if (_supplierTerpilih != null)
+            'supplier_id': _supplierTerpilih!['id'],
+          if (_totalManual != null) 'total_faktur_manual': _totalManual,
+          'keterangan': _keteranganController.text.trim(),
+          'items': _itemsFaktur
+              .map((it) => {
+                    'produk_id': it.produkId,
+                    'qty': it.qty,
+                    'harga_beli_satuan': it.harga,
+                    if (it.nomorBatch != null) 'nomor_batch': it.nomorBatch,
+                    if (it.tanggalProduksi != null)
+                      'tanggal_produksi':
+                          DateFormat('yyyy-MM-dd').format(it.tanggalProduksi!),
+                    if (it.tanggalExpired != null)
+                      'tanggal_expired':
+                          DateFormat('yyyy-MM-dd').format(it.tanggalExpired!),
+                  })
+              .toList(),
         },
       );
       final diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
@@ -531,6 +538,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                 Expanded(
                   child: PencarianProdukBanbox(
                     controller: _barcodeController,
+                    tampilkanScanner: false,
                     label: 'Kode / Barcode / Nama Produk',
                     icon: Icons.search,
                     onPilih: _cariProduk,
@@ -559,8 +567,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     color: AppColors.latarLembut(AppColors.danger),
                     borderRadius: BorderRadius.circular(8)),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_errorForm!,
-                    style: TextStyle(color: AppColors.danger)),
+                  Text(_errorForm!, style: TextStyle(color: AppColors.danger)),
                   AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
                 ]),
               ),
@@ -608,11 +615,11 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                                 )
                               : AppHargaTerkunci(
                                   label: 'Harga Beli Satuan',
-                                  nilai: _formatRupiah.format(
-                                      double.tryParse(_hargaController.text
+                                  nilai: _formatRupiah.format(double.tryParse(
+                                          _hargaController.text
                                               .replaceAll(',', '.')
                                               .trim()) ??
-                                          0),
+                                      0),
                                   catatan:
                                       Sesi.instance.pesanTidakBolehUbahHarga,
                                 ),
@@ -871,8 +878,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal membatalkan faktur: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membatalkan faktur: $e')));
       return;
     }
 
@@ -934,8 +941,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
               Sesi.instance.bolehAksiPos('kulakan', 'delete'))
             OutlinedButton.icon(
               onPressed: () => _batalkanFaktur(f, header),
-              style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.danger),
+              style:
+                  OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
               icon: const Icon(Icons.block_outlined, size: 18),
               label: const Text('Batalkan'),
             ),
@@ -1243,167 +1250,167 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   pw.Document _dokumenFakturPdf(
       Map<String, dynamic> header, List<Map<String, dynamic>> items) {
     final data = _buatLaporanFaktur(header, items);
-      final biru = PdfColor.fromInt(0xff0f3b5f);
-      final abu = PdfColor.fromInt(0xffe5e7eb);
-      final doc = pw.Document();
-      doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.all(24),
-          footer: (ctx) => pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text('Halaman ${ctx.pageNumber} dari ${ctx.pagesCount}',
-                style: const pw.TextStyle(fontSize: 8)),
-          ),
-          build: (_) => [
-            pw.Center(
-              child: pw.Column(children: [
-                pw.Text(data.toko,
-                    style: pw.TextStyle(
-                        fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 8),
-                pw.Text(data.alamat,
-                    textAlign: pw.TextAlign.center,
-                    style: const pw.TextStyle(fontSize: 9)),
-              ]),
-            ),
-            pw.SizedBox(height: 14),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(
-                        width: double.infinity,
-                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                        decoration: pw.BoxDecoration(
-                            border: pw.Border(bottom: pw.BorderSide(width: 1))),
-                        child: pw.Text('Dari',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                      ),
-                      pw.Container(
-                        width: double.infinity,
-                        height: 42,
-                        color: PdfColor.fromInt(0xffd8dde5),
-                        padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text(data.supplier,
-                            style: const pw.TextStyle(fontSize: 9)),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(width: 42),
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(
-                        width: double.infinity,
-                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                        decoration: pw.BoxDecoration(
-                            border: pw.Border(bottom: pw.BorderSide(width: 1))),
-                        child: pw.Text('Faktur Pembelian',
-                            style: const pw.TextStyle(fontSize: 18)),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(': ${data.nomorFaktur}'),
-                      if (data.nomorReferensi.isNotEmpty)
-                        pw.Text(': ${data.nomorReferensi}'),
-                      pw.Text(': ${data.tanggal}'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 12),
-            pw.TableHelper.fromTextArray(
-              border: pw.TableBorder.all(color: abu, width: 0.4),
-              headerDecoration: pw.BoxDecoration(color: biru),
-              headerStyle: pw.TextStyle(
-                  color: PdfColors.white,
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 8),
-              cellStyle: const pw.TextStyle(fontSize: 8),
-              cellPadding:
-                  const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(75),
-                1: const pw.FlexColumnWidth(2.2),
-                2: const pw.FixedColumnWidth(45),
-                3: const pw.FixedColumnWidth(70),
-                4: const pw.FixedColumnWidth(60),
-                5: const pw.FixedColumnWidth(80),
-              },
-              cellAlignments: {
-                2: pw.Alignment.centerRight,
-                3: pw.Alignment.centerRight,
-                4: pw.Alignment.centerRight,
-                5: pw.Alignment.centerRight,
-              },
-              headers: const [
-                'Kode Barang',
-                'Nama Barang',
-                'Kts.',
-                '@Harga',
-                'Diskon',
-                'Total Harga'
-              ],
-              data: data.items
-                  .map((it) => [
-                        it.kode,
-                        it.nama,
-                        _formatQtyLaporan(it.qty),
-                        _formatAngka.format(it.harga),
-                        _formatAngka.format(it.diskon),
-                        _formatAngka.format(it.total),
-                      ])
-                  .toList(),
-            ),
-            pw.SizedBox(height: 8),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Keterangan',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Container(
-                        width: double.infinity,
-                        height: 54,
-                        padding: const pw.EdgeInsets.all(5),
-                        decoration: pw.BoxDecoration(
-                            border: pw.Border.all(color: biru, width: 0.8)),
-                        child: pw.Text(data.keterangan),
-                      ),
-                      pw.SizedBox(height: 8),
-                      pw.Text('Bagian Pembelian,'),
-                      pw.SizedBox(height: 12),
-                      pw.Text('Tgl.'),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(width: 28),
-                pw.Container(
-                  width: 230,
-                  child: pw.Column(children: [
-                    _barisTotalPdf('Sub Total', data.subtotal),
-                    _barisTotalPdf('Diskon', data.diskon),
-                    _barisTotalPdf('PPN (0%)', data.ppn),
-                    _barisTotalPdf('Biaya Lain-lain', data.biayaLain),
-                    _barisTotalPdf('Total', data.total,
-                        gelap: true, warnaGelap: biru),
-                  ]),
-                ),
-              ],
-            ),
-          ],
+    final biru = PdfColor.fromInt(0xff0f3b5f);
+    final abu = PdfColor.fromInt(0xffe5e7eb);
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        footer: (ctx) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text('Halaman ${ctx.pageNumber} dari ${ctx.pagesCount}',
+              style: const pw.TextStyle(fontSize: 8)),
         ),
-      );
+        build: (_) => [
+          pw.Center(
+            child: pw.Column(children: [
+              pw.Text(data.toko,
+                  style: pw.TextStyle(
+                      fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              pw.Text(data.alamat,
+                  textAlign: pw.TextAlign.center,
+                  style: const pw.TextStyle(fontSize: 9)),
+            ]),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                      decoration: pw.BoxDecoration(
+                          border: pw.Border(bottom: pw.BorderSide(width: 1))),
+                      child: pw.Text('Dari',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Container(
+                      width: double.infinity,
+                      height: 42,
+                      color: PdfColor.fromInt(0xffd8dde5),
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(data.supplier,
+                          style: const pw.TextStyle(fontSize: 9)),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 42),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                      decoration: pw.BoxDecoration(
+                          border: pw.Border(bottom: pw.BorderSide(width: 1))),
+                      child: pw.Text('Faktur Pembelian',
+                          style: const pw.TextStyle(fontSize: 18)),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(': ${data.nomorFaktur}'),
+                    if (data.nomorReferensi.isNotEmpty)
+                      pw.Text(': ${data.nomorReferensi}'),
+                    pw.Text(': ${data.tanggal}'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+          pw.TableHelper.fromTextArray(
+            border: pw.TableBorder.all(color: abu, width: 0.4),
+            headerDecoration: pw.BoxDecoration(color: biru),
+            headerStyle: pw.TextStyle(
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellPadding:
+                const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(75),
+              1: const pw.FlexColumnWidth(2.2),
+              2: const pw.FixedColumnWidth(45),
+              3: const pw.FixedColumnWidth(70),
+              4: const pw.FixedColumnWidth(60),
+              5: const pw.FixedColumnWidth(80),
+            },
+            cellAlignments: {
+              2: pw.Alignment.centerRight,
+              3: pw.Alignment.centerRight,
+              4: pw.Alignment.centerRight,
+              5: pw.Alignment.centerRight,
+            },
+            headers: const [
+              'Kode Barang',
+              'Nama Barang',
+              'Kts.',
+              '@Harga',
+              'Diskon',
+              'Total Harga'
+            ],
+            data: data.items
+                .map((it) => [
+                      it.kode,
+                      it.nama,
+                      _formatQtyLaporan(it.qty),
+                      _formatAngka.format(it.harga),
+                      _formatAngka.format(it.diskon),
+                      _formatAngka.format(it.total),
+                    ])
+                .toList(),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Keterangan',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Container(
+                      width: double.infinity,
+                      height: 54,
+                      padding: const pw.EdgeInsets.all(5),
+                      decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: biru, width: 0.8)),
+                      child: pw.Text(data.keterangan),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text('Bagian Pembelian,'),
+                    pw.SizedBox(height: 12),
+                    pw.Text('Tgl.'),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 28),
+              pw.Container(
+                width: 230,
+                child: pw.Column(children: [
+                  _barisTotalPdf('Sub Total', data.subtotal),
+                  _barisTotalPdf('Diskon', data.diskon),
+                  _barisTotalPdf('PPN (0%)', data.ppn),
+                  _barisTotalPdf('Biaya Lain-lain', data.biayaLain),
+                  _barisTotalPdf('Total', data.total,
+                      gelap: true, warnaGelap: biru),
+                ]),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
     return doc;
   }
 
@@ -1439,8 +1446,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mencetak faktur: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal mencetak faktur: $e')));
     }
   }
 
@@ -1590,7 +1597,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           else if (_errorRiwayat != null)
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                child: Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_errorRiwayat!),
                   AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
                 ])))

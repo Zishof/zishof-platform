@@ -1179,6 +1179,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
               AppSearchField(
                 controller: q,
                 hintText: 'Cari kode / nama barang',
+                scanProduk: true,
                 autofocus: true,
                 onChanged: (_) => cari(),
               ),

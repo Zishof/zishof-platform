@@ -57,17 +57,21 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
     try {
       // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot
       // cache tampil seketika, hasil server menyusul + diff utk kilau baris.
-      await MasterOffline.daftarCacheDulu('kedaluwarsa_list', {
-        'filter': _filter,
-        'keyword': _cari.text.trim(),
-        'page': _halaman,
-        'page_size': _pageSize,
-      }, 'master:kedaluwarsa:$_filter', onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'kedaluwarsa_list',
+          {
+            'filter': _filter,
+            'keyword': _cari.text.trim(),
+            'page': _halaman,
+            'page_size': _pageSize,
+          },
+          'master:kedaluwarsa:$_filter', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
           if (_diff.dariServer) {
-            _summary = ((hasil['summary'] as Map?) ?? {}).cast<String, dynamic>();
+            _summary =
+                ((hasil['summary'] as Map?) ?? {}).cast<String, dynamic>();
           }
           _total = _diff.total ?? _data.length;
         });
@@ -371,6 +375,7 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
             final cari = AppSearchField(
               controller: _cari,
               labelText: 'Cari produk / kode / batch',
+              scanProduk: true,
               gayaForm: true,
               onChanged: (_) {
                 _halaman = 1;
@@ -431,10 +436,9 @@ class _KedaluwarsaScreenState extends State<KedaluwarsaScreen> with JejakGalat {
                 padding: const EdgeInsets.all(30),
                 child: Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text(_error!,
-                        style: const TextStyle(color: Colors.red)),
-                      AppDetailGalatOpsional(detail: detailUntuk(_error)),
-                    ])))
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                ])))
           else
             AppDataTable(
               minWidth: 980,

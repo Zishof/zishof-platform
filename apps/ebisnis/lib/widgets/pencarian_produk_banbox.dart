@@ -1,4 +1,5 @@
 import 'package:core_db/core_db.dart';
+import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'safe_state.dart';
 
@@ -26,6 +27,7 @@ class PencarianProdukBanbox extends StatefulWidget {
   final ValueChanged<String> onPilih;
   final FocusNode? focusNode;
   final bool autofocus;
+  final bool tampilkanScanner;
 
   /// Override opsional utk decoration kotak teks -- dipakai layar yang
   /// sudah punya gaya form sendiri (mis. `AppFormStyle.fieldDecoration`)
@@ -42,6 +44,7 @@ class PencarianProdukBanbox extends StatefulWidget {
     this.aktif = true,
     this.focusNode,
     this.autofocus = false,
+    this.tampilkanScanner = true,
     this.decorationBuilder,
   });
 
@@ -98,6 +101,19 @@ class _PencarianProdukBanboxState extends State<PencarianProdukBanbox> {
     }).take(15);
   }
 
+  Future<void> _scanProduk() async {
+    final kode = await BarcodeScannerScreen.pindai(
+      context,
+      judul: 'Scan Barcode / QR Produk',
+    );
+    if (!mounted || kode == null || kode.trim().isEmpty) return;
+    final nilai = kode.trim();
+    widget.controller
+      ..text = nilai
+      ..selection = TextSelection.collapsed(offset: nilai.length);
+    widget.onPilih(nilai);
+  }
+
   @override
   Widget build(BuildContext context) {
     return RawAutocomplete<Map<String, Object?>>(
@@ -110,17 +126,26 @@ class _PencarianProdukBanboxState extends State<PencarianProdukBanbox> {
         if (kode.isNotEmpty) widget.onPilih(kode);
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        final dasar = widget.decorationBuilder?.call(context) ??
+            InputDecoration(
+              labelText: widget.label,
+              border: const OutlineInputBorder(),
+              prefixIcon: Icon(widget.icon),
+            );
         return TextField(
           controller: controller,
           focusNode: focusNode,
           autofocus: widget.autofocus,
           enabled: widget.aktif,
-          decoration: widget.decorationBuilder?.call(context) ??
-              InputDecoration(
-                labelText: widget.label,
-                border: const OutlineInputBorder(),
-                prefixIcon: Icon(widget.icon),
-              ),
+          decoration: dasar.copyWith(
+            suffixIcon: widget.tampilkanScanner
+                ? IconButton(
+                    tooltip: 'Scan barcode/QR dengan kamera',
+                    icon: const Icon(Icons.qr_code_scanner),
+                    onPressed: widget.aktif ? _scanProduk : null,
+                  )
+                : dasar.suffixIcon,
+          ),
           // Enter = cari LANGSUNG apa pun teksnya (jalur scanner), bukan
           // menyeleksi opsi dropdown -- lihat JavaDoc kelas.
           onSubmitted: widget.onPilih,

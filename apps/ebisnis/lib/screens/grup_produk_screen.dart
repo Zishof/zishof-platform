@@ -205,8 +205,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
             tooltip: 'Muat ulang',
             icon: const Icon(Icons.refresh)),
       ],
-      aksiHeader:
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _simpan(null),
         icon: const Icon(Icons.add),
@@ -238,8 +237,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                   : Column(
                       children: [
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: BannerPerubahanServer(
                             key: ValueKey('perubahan:$_versiPerubahan'),
                             baru: _idBaru.length,
@@ -272,8 +270,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                                           child: Text(
                                               '${(g['kode'] ?? '').toString().isEmpty ? '' : '${g['kode']} - '}${g['nama']}',
                                               style: const TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.w600)),
+                                                  fontWeight: FontWeight.w600)),
                                         ),
                                       ]),
                                     ),
@@ -294,8 +291,7 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                                                       id: g['id'],
                                                       judul:
                                                           '${g['nama'] ?? ''}'),
-                                              icon:
-                                                  const Icon(Icons.history)),
+                                              icon: const Icon(Icons.history)),
                                         IconButton(
                                             tooltip: 'Ubah & terapkan',
                                             onPressed: () => _simpan(g),
@@ -432,8 +428,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
           .aksi('diskon_list', {'page': 1, 'page_size': 100});
       if (!mounted) return;
       setStateIfMounted(() {
-        _diskonOpsi =
-            ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _diskonOpsi = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _memuatDiskon = false;
       });
     } catch (_) {
@@ -483,8 +478,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
   // ---------- Bahan baku ----------
 
   Future<void> _tambahBahan() async {
-    final dipilih = await _dialogCariProduk(
-        judul: 'Pilih Bahan Baku', jenisItem: 'BAHAN');
+    final dipilih =
+        await _dialogCariProduk(judul: 'Pilih Bahan Baku', jenisItem: 'BAHAN');
     if (dipilih == null) return;
     setStateIfMounted(() => _bahan.add(_BahanGrupBaris(
         produkId: (dipilih['id'] as num?)?.toInt(),
@@ -516,8 +511,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
         Future<void> cari() async {
           setLocal(() => mencari = true);
           try {
-            final r =
-                await ApiClient.instance.aksi('grup_produk_produk_cari', {
+            final r = await ApiClient.instance.aksi('grup_produk_produk_cari', {
               'keyword': q.text.trim(),
               if (jenisItem != null) 'jenis_item': jenisItem,
             });
@@ -526,8 +520,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
           } catch (e) {
             hasilCari = [];
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Pencarian gagal: $e')));
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text('Pencarian gagal: $e')));
             }
           }
           setLocal(() => mencari = false);
@@ -542,6 +536,7 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               AppSearchField(
                 controller: q,
                 hintText: 'Cari kode/barcode/nama (semua toko)',
+                scanProduk: true,
                 autofocus: true,
                 onChanged: (_) => cari(),
               ),
@@ -610,8 +605,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
         f.bytes ?? (f.path == null ? null : await File(f.path!).readAsBytes());
     if (raw == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('File Excel tidak dapat dibaca.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('File Excel tidak dapat dibaca.')));
       }
       return;
     }
@@ -703,11 +698,12 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+                    border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.45)),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                    const Icon(Icons.lock_outline,
+                        size: 18, color: Colors.orange),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(Sesi.instance.pesanTidakBolehUbahHarga,
@@ -737,14 +733,12 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                           decoration:
                               const InputDecoration(labelText: 'Harga Jual'))
                       : AppHargaTerkunci(
-                          label: 'Harga Jual',
-                          nilai: _rupiah(_hargaJual.text)),
+                          label: 'Harga Jual', nilai: _rupiah(_hargaJual.text)),
                 ),
               ]),
               SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                      'HPP selalu mengikuti Grup Produk'),
+                  title: const Text('HPP selalu mengikuti Grup Produk'),
                   subtitle: const Text(
                       'HPP + resep bahan baku grup disalin ke seluruh produk anggota di semua toko',
                       style: TextStyle(fontSize: 11)),
@@ -752,8 +746,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                   onChanged: (v) => setState(() => _ikutHpp = v)),
               SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                      'Harga Jual selalu sama dengan Grup Produk'),
+                  title:
+                      const Text('Harga Jual selalu sama dengan Grup Produk'),
                   subtitle: const Text(
                       'Harga jual grup disalin ke seluruh produk anggota di semua toko',
                       style: TextStyle(fontSize: 11)),
@@ -771,7 +765,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                     label: const Text('Tambah Bahan')),
               ]),
               if (_bahan.isEmpty)
-                const Text('Belum ada bahan. Resep ikut tersalin ke anggota '
+                const Text(
+                    'Belum ada bahan. Resep ikut tersalin ke anggota '
                     'hanya bila "HPP selalu mengikuti Grup" menyala.',
                     style: TextStyle(fontSize: 12)),
               for (final b in _bahan)
@@ -818,8 +813,8 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               _memuatDiskon
                   ? const LinearProgressIndicator(minHeight: 2)
                   : DropdownButtonFormField<int?>(
-                      value: _diskonOpsi
-                              .any((d) => (d['id'] as num?)?.toInt() == _aturanDiskonId)
+                      value: _diskonOpsi.any((d) =>
+                              (d['id'] as num?)?.toInt() == _aturanDiskonId)
                           ? _aturanDiskonId
                           : null,
                       decoration: const InputDecoration(
@@ -831,8 +826,10 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
                             value: null, child: Text('(tanpa diskon)')),
                         ..._diskonOpsi.map((d) => DropdownMenuItem<int?>(
                             value: (d['id'] as num?)?.toInt(),
-                            child: Text('${d['namaAturan'] ?? d['nama_aturan'] ?? d['id']}',
-                                maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            child: Text(
+                                '${d['namaAturan'] ?? d['nama_aturan'] ?? d['id']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis))),
                       ],
                       onChanged: (v) => setState(() => _aturanDiskonId = v),
                     ),
@@ -894,11 +891,11 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
               Text(
                   _ikutHpp || _ikutJual
                       ? 'Menyimpan akan MENYALIN ${_ikutHpp ? 'HPP + resep' : ''}'
-                        '${_ikutHpp && _ikutJual ? ' dan ' : ''}'
-                        '${_ikutJual ? 'harga jual' : ''} ke seluruh produk '
-                        'anggota grup ini di semua toko/outlet.'
+                          '${_ikutHpp && _ikutJual ? ' dan ' : ''}'
+                          '${_ikutJual ? 'harga jual' : ''} ke seluruh produk '
+                          'anggota grup ini di semua toko/outlet.'
                       : 'Menyimpan hanya memperbarui data grup & keanggotaan '
-                        '(tanpa menyentuh harga produk).',
+                          '(tanpa menyentuh harga produk).',
                   style: const TextStyle(fontSize: 12)),
             ],
           ),

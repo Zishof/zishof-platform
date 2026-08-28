@@ -1925,10 +1925,11 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('Gagal memuat: $_pesanError'),
-                AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
-              ]))
+              ? Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('Gagal memuat: $_pesanError'),
+                  AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+                ]))
               : Column(
                   children: [
                     Expanded(
@@ -2256,6 +2257,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
           child: AppSearchField(
             controller: _controllerCari,
             hintText: 'Cari nama/kode/barcode produk...',
+            scanProduk: true,
             focusNode: _fokusCari,
             debounce: Duration.zero,
             onChanged: (_) => setStateIfMounted(() {}),
@@ -2294,17 +2296,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                 Expanded(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Text(
-                    _memuatProdukPromo
-                        ? 'Memuat produk yang terhubung promo...'
-                        : _pesanProdukPromo != null
-                            ? 'Gagal memuat produk promo: $_pesanProdukPromo'
-                            : _promoTampilkanSemuaProduk
-                                ? 'Menampilkan semua produk: ${_semuaProduk.length} - promo aktif: ${_promoProdukIds?.length ?? 0}'
-                                : 'Produk promo aktif: ${_promoProdukIds?.length ?? 0}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                    AppDetailGalatOpsional(detail: detailUntuk(_pesanProdukPromo)),
+                      _memuatProdukPromo
+                          ? 'Memuat produk yang terhubung promo...'
+                          : _pesanProdukPromo != null
+                              ? 'Gagal memuat produk promo: $_pesanProdukPromo'
+                              : _promoTampilkanSemuaProduk
+                                  ? 'Menampilkan semua produk: ${_semuaProduk.length} - promo aktif: ${_promoProdukIds?.length ?? 0}'
+                                  : 'Produk promo aktif: ${_promoProdukIds?.length ?? 0}',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    AppDetailGalatOpsional(
+                        detail: detailUntuk(_pesanProdukPromo)),
                   ]),
                 ),
                 IconButton(

@@ -309,6 +309,7 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
             child: AppSearchField(
               controller: _cari,
               hintText: 'Cari obat: kode / barcode / nama...',
+              scanProduk: true,
               debounce: Duration.zero,
               onChanged: _cariBerubah,
             ),

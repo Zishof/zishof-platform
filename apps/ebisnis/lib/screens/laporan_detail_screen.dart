@@ -30,7 +30,8 @@ class LaporanDetailScreen extends StatefulWidget {
   State<LaporanDetailScreen> createState() => _LaporanDetailScreenState();
 }
 
-class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGalat {
+class _LaporanDetailScreenState extends State<LaporanDetailScreen>
+    with JejakGalat {
   final _formatTgl = DateFormat('yyyy-MM-dd');
   DateTime? _tglMulai;
   DateTime? _tglSampai;
@@ -304,6 +305,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                     AppSearchField(
                       controller: _controllerProduk,
                       labelText: 'Cari Produk',
+                      scanProduk: true,
                     ),
                   ],
                   if (_adaFilterPelanggan) ...[
@@ -379,7 +381,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen> with JejakGal
                     borderRadius: BorderRadius.circular(8)),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_pesanError!,
-                    style: const TextStyle(color: AppColors.danger)),
+                      style: const TextStyle(color: AppColors.danger)),
                   AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
                 ]),
               ),
@@ -494,7 +496,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
         children: List.generate(kolom.length, (i) {
           final angka = '${kolom[i]['t'] ?? 'text'}' == 'num';
           final isi = i < r.length
-              ? _fmtSel(r[i], '${kolom[i]['t'] ?? 'text'}', '${kolom[i]['l'] ?? ''}')
+              ? _fmtSel(
+                  r[i], '${kolom[i]['t'] ?? 'text'}', '${kolom[i]['l'] ?? ''}')
               : '';
           // Kolom yang angkanya sedang ditelusuri ditebalkan supaya pengguna
           // tahu deret mana yang benar-benar dijumlahkan.
@@ -537,7 +540,8 @@ class _TabelLaporanState extends State<_TabelLaporan> {
                           sel('TOTAL ($labelKolom)', angka: false, tebal: true),
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
                               child: Text(
                                 _fmtNum(total, hitung),
                                 textAlign: TextAlign.right,
@@ -601,10 +605,9 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       final adaRentang =
           '${widget.payloadFilter['tglMulai'] ?? ''}'.isNotEmpty &&
               '${widget.payloadFilter['tglSampai'] ?? ''}'.isNotEmpty;
-      final dimensi =
-          adaRentang
-              ? _dimensiBaris(kolom, baris, widget.idLaporan)
-              : const <String, dynamic>{};
+      final dimensi = adaRentang
+          ? _dimensiBaris(kolom, baris, widget.idLaporan)
+          : const <String, dynamic>{};
       await showDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
@@ -923,7 +926,11 @@ class _TabelLaporanState extends State<_TabelLaporan> {
               child: _SelAngkaRincian(
                 teks: teks,
                 gaya: gayaTotal,
-                onTap: () => _bukaPenyusun(context, kolom, anggotaGrup, i,
+                onTap: () => _bukaPenyusun(
+                    context,
+                    kolom,
+                    anggotaGrup,
+                    i,
                     'Subtotal $key',
                     'Baris yang dijumlahkan menjadi subtotal grup ini.'),
               ),

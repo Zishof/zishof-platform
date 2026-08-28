@@ -1220,6 +1220,19 @@ class _KasirScreenState extends State<KasirScreen> {
     _jadwalkanFokusCariItem();
   }
 
+  Future<void> _scanProdukKasir() async {
+    final kode = await BarcodeScannerScreen.pindai(
+      context,
+      judul: 'Scan Barcode / QR Produk',
+    );
+    if (!mounted || kode == null || kode.trim().isEmpty) return;
+    final nilai = kode.trim();
+    _kataKunciController
+      ..text = nilai
+      ..selection = TextSelection.collapsed(offset: nilai.length);
+    await _submitPencarian(nilai);
+  }
+
   double get _totalKeranjang => _keranjang.fold(0, (s, i) => s + i.subtotal);
   int get _jumlahItemKeranjang => _keranjang.fold(0, (s, i) => s + i.jumlah);
   bool get _adaTransaksiAktif =>
@@ -2042,10 +2055,15 @@ class _KasirScreenState extends State<KasirScreen> {
       keyboardType: defaultTargetPlatform == TargetPlatform.windows
           ? TextInputType.none
           : null,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         hintText: 'Cari / scan barcode produk...',
-        prefixIcon: Icon(Icons.search),
-        border: OutlineInputBorder(
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: IconButton(
+          tooltip: 'Scan barcode/QR dengan kamera',
+          icon: const Icon(Icons.qr_code_scanner),
+          onPressed: _scanProdukKasir,
+        ),
+        border: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(10))),
         isDense: true,
       ),

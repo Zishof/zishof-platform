@@ -15,7 +15,8 @@ import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 
-final _fmtRp = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _fmtRp =
+    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _fmtTgl = DateFormat('yyyy-MM-dd');
 
 /// <h3>Piutang Customer (AR) -- layar legacy 32-38.</h3>
@@ -129,12 +130,15 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
     try {
       // Baca LOKAL DULU (lihat MasterOffline.daftarCacheDulu): snapshot cache
       // tampil seketika, hasil server menyusul + diff utk kilau baris.
-      await MasterOffline.daftarCacheDulu('si_receivable_list', {
-        if (_kataKunci.isNotEmpty) 'q': _kataKunci,
-        'tampilkan_lunas': _tampilkanLunas,
-        'page': 1,
-        'page_size': 200,
-      }, 'master:si_piutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
+      await MasterOffline.daftarCacheDulu(
+          'si_receivable_list',
+          {
+            if (_kataKunci.isNotEmpty) 'q': _kataKunci,
+            'tampilkan_lunas': _tampilkanLunas,
+            'page': 1,
+            'page_size': 200,
+          },
+          'master:si_piutang:${_tampilkanLunas ? 'semua' : 'berjalan'}',
           fieldData: 'rows', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
@@ -158,7 +162,9 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -294,8 +300,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
 
   /// Kunci idempoten DIBUAT ULANG tiap sukses simpan; retry "Simpan" yang sama
   /// memakai kunci yang sama sehingga server tidak menggandakan penerimaan.
-  String _kodeUnik =
-      'KWT-${DateTime.now().millisecondsSinceEpoch}-0';
+  String _kodeUnik = 'KWT-${DateTime.now().millisecondsSinceEpoch}-0';
   int _urutKode = 0;
 
   @override
@@ -402,8 +407,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
         ],
       });
       _urutKode++;
-      _kodeUnik =
-          'KWT-${DateTime.now().millisecondsSinceEpoch}-$_urutKode';
+      _kodeUnik = 'KWT-${DateTime.now().millisecondsSinceEpoch}-$_urutKode';
       setStateIfMounted(() => _sukses = hasil['offline'] == true
           ? 'Jaringan terputus — penerimaan DISIMPAN OFFLINE dan akan dikirim otomatis saat online (idempoten, tidak dobel).'
           : 'Penerimaan tersimpan: ${hasil['nomor'] ?? hasil['id']} — kwitansi bisa dicetak di tab Riwayat.');
@@ -502,8 +506,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
                                 'jt ${f['jatuhTempo'] ?? '-'} · sisa ${_fmtRp.format(f['outstanding'] ?? 0)}',
                                 style: TextStyle(
                                     fontSize: 11,
-                                    color:
-                                        AppColors.textSecondaryOf(context))),
+                                    color: AppColors.textSecondaryOf(context))),
                           ]),
                     ),
                     SizedBox(
@@ -512,8 +515,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
                         controller: _alokasi[(f['id'] as num).toInt()],
                         keyboardType: TextInputType.number,
                         enabled: _dipilih.contains((f['id'] as num).toInt()),
-                        decoration:
-                            const InputDecoration(labelText: 'Alokasi'),
+                        decoration: const InputDecoration(labelText: 'Alokasi'),
                         onChanged: (_) => setStateIfMounted(() {}),
                       ),
                     ),
@@ -534,8 +536,7 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
                     value: 'DISCOUNT', child: Text('Potongan (Discount)')),
                 DropdownMenuItem(value: 'RETUR', child: Text('Retur')),
               ],
-              onChanged: (v) =>
-                  setStateIfMounted(() => _metode = v ?? 'TUNAI'),
+              onChanged: (v) => setStateIfMounted(() => _metode = v ?? 'TUNAI'),
             ),
             if (_metode == 'GIRO')
               TextField(
@@ -578,8 +579,8 @@ class _TabPenerimaanState extends State<_TabPenerimaan> with JejakGalat {
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 13)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13)),
               icon: _menyimpan
                   ? const SizedBox(
                       width: 18,
@@ -659,8 +660,8 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text('KWITANSI PENERIMAAN PIUTANG',
-                style: pw.TextStyle(
-                    fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
             pw.Text('No. Kwitansi: ${d['nomor']}'),
             pw.Text('Tanggal: ${d['tanggal']}'),
@@ -801,7 +802,9 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -843,8 +846,8 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
             ),
             const Spacer(),
             Text('Total: ${_fmtRp.format(_totalNominal)}',
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           ]),
           const SizedBox(height: 10),
           AppDataTable(
@@ -869,7 +872,8 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
                       '${'${r['statusBg']}'.isNotEmpty ? ' · BG ${r['statusBg']}' : ''}',
                       flex: 2,
                       maxLines: 2),
-                  AppTableCell.text('${r['tanggal']}'.split('.').first, flex: 2),
+                  AppTableCell.text('${r['tanggal']}'.split('.').first,
+                      flex: 2),
                   AppTableCell.text('${r['customerNama']}', flex: 3),
                   AppTableCell.text('${r['metode']}', flex: 1),
                   AppTableCell.text('${r['faktur']}', flex: 3, maxLines: 2),
@@ -979,7 +983,9 @@ class _TabAgingCustomerState extends State<_TabAgingCustomer> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1102,7 +1108,9 @@ class _TabAgingSalesState extends State<_TabAgingSales> with JejakGalat {
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
@@ -1188,7 +1196,8 @@ class _TabLaporanPiutang extends StatefulWidget {
   State<_TabLaporanPiutang> createState() => _TabLaporanPiutangState();
 }
 
-class _TabLaporanPiutangState extends State<_TabLaporanPiutang> with JejakGalat {
+class _TabLaporanPiutangState extends State<_TabLaporanPiutang>
+    with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
@@ -1237,7 +1246,8 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> with JejakGalat 
     final doc = pw.Document();
     doc.addPage(pw.MultiPage(
       build: (ctx) => [
-        pw.Text('REKAP PENJUALAN BARANG (Laporan Piutang — fungsi legacy layar 41)',
+        pw.Text(
+            'REKAP PENJUALAN BARANG (Laporan Piutang — fungsi legacy layar 41)',
             style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.Text(
             'Periode ${_fmtTgl.format(_dari)} s/d ${_fmtTgl.format(_sampai)} · urut ${_urut == 'qty' ? 'Fast Moving (QTY)' : 'Nama Barang'}'),
@@ -1264,8 +1274,7 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> with JejakGalat 
         name: 'rekap-penjualan-${_fmtTgl.format(_dari)}.pdf');
     ApiClient.instance.aksi('si_print_log_create', {
       'jenis_dokumen': 'rekap_penjualan_barang',
-      'referensi':
-          '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
+      'referensi': '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
       'parameter':
           'dari=${_fmtTgl.format(_dari)};sampai=${_fmtTgl.format(_sampai)};urut=$_urut;q=$_q',
       'perangkat': 'flutter',
@@ -1275,73 +1284,80 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang> with JejakGalat 
   @override
   Widget build(BuildContext context) {
     if (_memuat) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _PanelError(pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
+    if (_error != null)
+      return _PanelError(
+          pesan: _error!, detail: detailUntuk(_error), onCoba: _muat);
     return RefreshIndicator(
       onRefresh: _muat,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            OutlinedButton.icon(
-              onPressed: () async {
-                final t = await showDatePicker(
-                    context: context,
-                    initialDate: _dari,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2035));
-                if (t != null) {
-                  setStateIfMounted(() => _dari = t);
-                  _muat();
-                }
-              },
-              icon: const Icon(Icons.event, size: 16),
-              label: Text('Dari ${_fmtTgl.format(_dari)}',
-                  style: const TextStyle(fontSize: 12)),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final t = await showDatePicker(
-                    context: context,
-                    initialDate: _sampai,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2035));
-                if (t != null) {
-                  setStateIfMounted(() => _sampai = t);
-                  _muat();
-                }
-              },
-              icon: const Icon(Icons.event, size: 16),
-              label: Text('s/d ${_fmtTgl.format(_sampai)}',
-                  style: const TextStyle(fontSize: 12)),
-            ),
-            DropdownButton<String>(
-              value: _urut,
-              items: const [
-                DropdownMenuItem(
-                    value: 'nama', child: Text('Urut Nama Barang')),
-                DropdownMenuItem(
-                    value: 'qty', child: Text('Fast Moving (QTY)')),
-              ],
-              onChanged: (v) {
-                setStateIfMounted(() => _urut = v ?? 'nama');
-                _muat();
-              },
-            ),
-            SizedBox(
-              width: 220,
-              child: AppSearchField(
-                hintText: 'Cari nama barang...',
-                onChanged: (v) {
-                  _q = v.trim();
-                  _muat();
-                },
-              ),
-            ),
-            IconButton(
-                onPressed: _cetak,
-                tooltip: 'Cetak PDF',
-                icon: const Icon(Icons.print_outlined)),
-          ]),
+          Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final t = await showDatePicker(
+                        context: context,
+                        initialDate: _dari,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2035));
+                    if (t != null) {
+                      setStateIfMounted(() => _dari = t);
+                      _muat();
+                    }
+                  },
+                  icon: const Icon(Icons.event, size: 16),
+                  label: Text('Dari ${_fmtTgl.format(_dari)}',
+                      style: const TextStyle(fontSize: 12)),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final t = await showDatePicker(
+                        context: context,
+                        initialDate: _sampai,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2035));
+                    if (t != null) {
+                      setStateIfMounted(() => _sampai = t);
+                      _muat();
+                    }
+                  },
+                  icon: const Icon(Icons.event, size: 16),
+                  label: Text('s/d ${_fmtTgl.format(_sampai)}',
+                      style: const TextStyle(fontSize: 12)),
+                ),
+                DropdownButton<String>(
+                  value: _urut,
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'nama', child: Text('Urut Nama Barang')),
+                    DropdownMenuItem(
+                        value: 'qty', child: Text('Fast Moving (QTY)')),
+                  ],
+                  onChanged: (v) {
+                    setStateIfMounted(() => _urut = v ?? 'nama');
+                    _muat();
+                  },
+                ),
+                SizedBox(
+                  width: 220,
+                  child: AppSearchField(
+                    hintText: 'Cari nama barang...',
+                    scanProduk: true,
+                    onChanged: (v) {
+                      _q = v.trim();
+                      _muat();
+                    },
+                  ),
+                ),
+                IconButton(
+                    onPressed: _cetak,
+                    tooltip: 'Cetak PDF',
+                    icon: const Icon(Icons.print_outlined)),
+              ]),
           const SizedBox(height: 10),
           AppDataTable(
             minWidth: 700,
@@ -1454,8 +1470,7 @@ class _PanelError extends StatelessWidget {
   final String pesan;
   final VoidCallback onCoba;
   final String? detail;
-  const _PanelError(
-      {required this.pesan, required this.onCoba, this.detail});
+  const _PanelError({required this.pesan, required this.onCoba, this.detail});
 
   @override
   Widget build(BuildContext context) {

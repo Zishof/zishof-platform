@@ -1123,6 +1123,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                             const SizedBox(height: 12),
                                             AppSearchField(
                                               controller: _controllerCariProduk,
+                                              scanProduk: true,
                                               debounce: const Duration(
                                                   milliseconds: 350),
                                               hintText:
@@ -3233,6 +3234,7 @@ class _DialogPilihProdukState extends State<_DialogPilihProduk> {
         AppSearchField(
           labelText: 'Cari Produk',
           hintText: 'Cari produk...',
+          scanProduk: true,
           gayaForm: true,
           autofocus: true,
           debounce: Duration.zero,

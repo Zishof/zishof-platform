@@ -127,6 +127,7 @@ class _ProdukRekonsiliasiLedgerTabState
               child: AppSearchField(
                 controller: _cari,
                 hintText: 'Cari nama, kode, atau barcode',
+                scanProduk: true,
                 onChanged: (_) {
                   _page = 1;
                   _muat();

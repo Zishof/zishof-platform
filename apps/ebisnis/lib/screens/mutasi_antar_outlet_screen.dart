@@ -30,11 +30,14 @@ final _formatAngka = NumberFormat.decimalPattern('id_ID');
 class MutasiAntarOutletScreen extends StatefulWidget {
   const MutasiAntarOutletScreen({super.key});
   @override
-  State<MutasiAntarOutletScreen> createState() => _MutasiAntarOutletScreenState();
+  State<MutasiAntarOutletScreen> createState() =>
+      _MutasiAntarOutletScreenState();
 }
 
-class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with JejakGalat {
-  Map<String, dynamic>? _tokoAsalTerpilih; // hanya diisi manual utk admin; non-admin pakai Sesi.instance.tokoId
+class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen>
+    with JejakGalat {
+  Map<String, dynamic>?
+      _tokoAsalTerpilih; // hanya diisi manual utk admin; non-admin pakai Sesi.instance.tokoId
   Map<String, dynamic>? _tokoTujuanTerpilih;
   Map<String, dynamic>? _produkAsalTerpilih;
   Map<String, dynamic>? _produkTujuanManualTerpilih;
@@ -86,8 +89,10 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
       // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
       // per TOKO ASAL supaya riwayat outlet lain tidak saling tercampur.
       // Jalur KIRIM STOK tetap online-only lewat ApiClient (transaksional).
-      await MasterOffline.daftarCacheDulu('mutasi_stok_list', {'toko_id': tokoId, 'limit': 100}, 'master:mutasi_stok:$tokoId',
-          onData: (hasil) {
+      await MasterOffline.daftarCacheDulu(
+          'mutasi_stok_list',
+          {'toko_id': tokoId, 'limit': 100},
+          'master:mutasi_stok:$tokoId', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _riwayat = _diff.terapkan(hasil);
@@ -138,7 +143,8 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
     final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SheetPilihProduk(tokoId: tokoId, judul: 'Pilih Produk Asal'),
+      builder: (_) =>
+          _SheetPilihProduk(tokoId: tokoId, judul: 'Pilih Produk Asal'),
     );
     if (dipilih != null) setStateIfMounted(() => _produkAsalTerpilih = dipilih);
   }
@@ -149,9 +155,11 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
     final dipilih = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SheetPilihProduk(tokoId: '$tokoTujuanId', judul: 'Pilih Produk Tujuan'),
+      builder: (_) => _SheetPilihProduk(
+          tokoId: '$tokoTujuanId', judul: 'Pilih Produk Tujuan'),
     );
-    if (dipilih != null) setStateIfMounted(() => _produkTujuanManualTerpilih = dipilih);
+    if (dipilih != null)
+      setStateIfMounted(() => _produkTujuanManualTerpilih = dipilih);
   }
 
   void _resetPilihManual() {
@@ -166,11 +174,13 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
     final qty = parseDesimal(_qtyController.text);
 
     if (tokoAsalId == null || tokoTujuanId == null || produkAsalId == null) {
-      setStateIfMounted(() => _errorForm = 'Toko asal, toko tujuan, dan produk wajib diisi.');
+      setStateIfMounted(
+          () => _errorForm = 'Toko asal, toko tujuan, dan produk wajib diisi.');
       return;
     }
     if (qty == null || qty <= 0) {
-      setStateIfMounted(() => _errorForm = 'Jumlah (qty) wajib diisi lebih dari 0.');
+      setStateIfMounted(
+          () => _errorForm = 'Jumlah (qty) wajib diisi lebih dari 0.');
       return;
     }
 
@@ -185,7 +195,8 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
         'toko_tujuan_id': tokoTujuanId,
         'qty': qty,
         'keterangan': _keteranganController.text.trim(),
-        if (_produkTujuanManualTerpilih != null) 'produk_tujuan_id': _produkTujuanManualTerpilih!['id'],
+        if (_produkTujuanManualTerpilih != null)
+          'produk_tujuan_id': _produkTujuanManualTerpilih!['id'],
       };
       // LOKAL DULU: kiriman ditulis ke antrean + snapshot daftar sebelum menyentuh
       // jaringan, lalu dikirim. Offline tidak menahan pengguna.
@@ -207,7 +218,8 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
         // baru bisa muncul setelah antreannya terkirim. Disebut apa adanya supaya
         // pengguna tidak menganggap perpindahan stok sudah pasti selesai.
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Kiriman tersimpan di perangkat dan akan dikirim otomatis. '
+            content: Text(
+                'Kiriman tersimpan di perangkat dan akan dikirim otomatis. '
                 'Bila produk tujuan perlu dipilih manual, pertanyaannya muncul setelah terkirim.')));
         setStateIfMounted(() => _qtyController.clear());
         return;
@@ -224,8 +236,9 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
         return;
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Stok berhasil dikirim ke ${hasil['produkTujuanNama'] ?? ''}.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Stok berhasil dikirim ke ${hasil['produkTujuanNama'] ?? ''}.')));
       }
       setStateIfMounted(() {
         _qtyController.clear();
@@ -241,14 +254,18 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
     }
   }
 
-  Widget _kotakPilih(String label, String? nilai, VoidCallback onTap, {bool aktif = true}) {
+  Widget _kotakPilih(String label, String? nilai, VoidCallback onTap,
+      {bool aktif = true}) {
     return InkWell(
       onTap: aktif ? onTap : null,
       child: InputDecorator(
         decoration: AppFormStyle.fieldDecoration(context, labelText: label),
         child: Row(
           children: [
-            Expanded(child: Text(nilai ?? '-- Belum dipilih --', style: TextStyle(color: nilai == null ? Colors.black38 : null))),
+            Expanded(
+                child: Text(nilai ?? '-- Belum dipilih --',
+                    style: TextStyle(
+                        color: nilai == null ? Colors.black38 : null))),
             const Icon(Icons.arrow_drop_down),
           ],
         ),
@@ -275,47 +292,73 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
                     'Sistem mencocokkan produk tujuan otomatis via kode/barcode. Bila tidak ditemukan/ambigu, pilih produk tujuan secara manual.',
                 children: [
                   if (_isAdmin) ...[
-                    _kotakPilih('Toko Asal *', _tokoAsalTerpilih == null ? null : '${_tokoAsalTerpilih!['nama']}', _pilihTokoAsal),
+                    _kotakPilih(
+                        'Toko Asal *',
+                        _tokoAsalTerpilih == null
+                            ? null
+                            : '${_tokoAsalTerpilih!['nama']}',
+                        _pilihTokoAsal),
                     const SizedBox(height: 12),
                   ],
-                  _kotakPilih('Toko Tujuan *', _tokoTujuanTerpilih == null ? null : '${_tokoTujuanTerpilih!['nama']}', _pilihTokoTujuan),
+                  _kotakPilih(
+                      'Toko Tujuan *',
+                      _tokoTujuanTerpilih == null
+                          ? null
+                          : '${_tokoTujuanTerpilih!['nama']}',
+                      _pilihTokoTujuan),
                   const SizedBox(height: 12),
                   _kotakPilih(
                     'Produk / Barang (Toko Asal) *',
-                    _produkAsalTerpilih == null ? null : '${_produkAsalTerpilih!['nama']}',
+                    _produkAsalTerpilih == null
+                        ? null
+                        : '${_produkAsalTerpilih!['nama']}',
                     _pilihProdukAsal,
                     aktif: _tokoAsalId != null,
                   ),
                   if (_produkAsalTerpilih != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text('Stok saat ini: ${_formatAngka.format(_produkAsalTerpilih!['stok'] ?? 0)}',
-                          style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                      child: Text(
+                          'Stok saat ini: ${_formatAngka.format(_produkAsalTerpilih!['stok'] ?? 0)}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.black54)),
                     ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _qtyController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: AppFormStyle.fieldDecoration(context, labelText: 'Jumlah (Qty) *'),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: AppFormStyle.fieldDecoration(context,
+                        labelText: 'Jumlah (Qty) *'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _keteranganController,
-                    decoration: AppFormStyle.fieldDecoration(context, labelText: 'Keterangan (opsional)'),
+                    decoration: AppFormStyle.fieldDecoration(context,
+                        labelText: 'Keterangan (opsional)'),
                   ),
                   if (_butuhPilihManual) ...[
                     const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.latarLembut(AppColors.warning), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                          color: AppColors.latarLembut(AppColors.warning),
+                          borderRadius: BorderRadius.circular(10)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Produk yang sama tidak ditemukan otomatis di toko tujuan -- pilih produk tujuan secara manual:',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                          const Text(
+                              'Produk yang sama tidak ditemukan otomatis di toko tujuan -- pilih produk tujuan secara manual:',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.warning)),
                           const SizedBox(height: 10),
-                          _kotakPilih('Produk Tujuan',
-                              _produkTujuanManualTerpilih == null ? null : '${_produkTujuanManualTerpilih!['nama']}',
+                          _kotakPilih(
+                              'Produk Tujuan',
+                              _produkTujuanManualTerpilih == null
+                                  ? null
+                                  : '${_produkTujuanManualTerpilih!['nama']}',
                               _pilihProdukTujuanManual),
                         ],
                       ),
@@ -325,9 +368,12 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
                     Container(
                       padding: const EdgeInsets.all(10),
                       margin: const EdgeInsets.only(top: 12),
-                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8)),
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_errorForm!, style: TextStyle(color: Colors.red.shade700)),
+                        Text(_errorForm!,
+                            style: TextStyle(color: Colors.red.shade700)),
                         AppDetailGalatOpsional(detail: detailUntuk(_errorForm)),
                       ]),
                     ),
@@ -337,14 +383,18 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
                     child: ElevatedButton.icon(
                       onPressed: _menyimpan ? null : _kirimStok,
                       icon: _menyimpan
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.compare_arrows, size: 18),
                       label: const Text('Kirim Stok'),
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 12)),
                     ),
                   ),
                 ],
@@ -353,10 +403,15 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
             ] else
               const Padding(
                 padding: EdgeInsets.only(bottom: 12),
-                child: Text('Hanya admin/supervisor toko yang dapat mencatat Mutasi Stok Antar Outlet. Riwayat di bawah tetap bisa dilihat.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+                child: Text(
+                    'Hanya admin/supervisor toko yang dapat mencatat Mutasi Stok Antar Outlet. Riwayat di bawah tetap bisa dilihat.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        fontStyle: FontStyle.italic)),
               ),
-            const Text('Riwayat Mutasi Stok', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const Text('Riwayat Mutasi Stok',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 8),
             BannerPerubahanServer(
               key: ValueKey('perubahan:${_diff.versi}'),
@@ -367,15 +422,21 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
             if (_tokoAsalId == null)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text('Pilih Toko Asal di atas untuk melihat riwayat mutasi toko itu.'),
+                child: Text(
+                    'Pilih Toko Asal di atas untuk melihat riwayat mutasi toko itu.'),
               )
             else if (_memuatRiwayat)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+              const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()))
             else if (_errorRiwayat != null)
-              Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(_errorRiwayat!),
-                AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
-              ])))
+              Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(_errorRiwayat!),
+                    AppDetailGalatOpsional(detail: detailUntuk(_errorRiwayat)),
+                  ])))
             else
               AppDataTable(
                 minWidth: 900,
@@ -406,20 +467,26 @@ class _MutasiAntarOutletScreenState extends State<MutasiAntarOutletScreen> with 
                     AppTableCell(
                       flex: 1,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                            color: AppColors.latarLembut(masuk ? AppColors.success : AppColors.danger),
+                            color: AppColors.latarLembut(
+                                masuk ? AppColors.success : AppColors.danger),
                             borderRadius: BorderRadius.circular(999)),
                         child: Text(masuk ? 'Masuk' : 'Keluar',
                             style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
-                                color: masuk ? AppColors.success : AppColors.danger)),
+                                color: masuk
+                                    ? AppColors.success
+                                    : AppColors.danger)),
                       ),
                     ),
                     AppTableCell.text('${m['produkAsalNama'] ?? '-'}', flex: 2),
-                    AppTableCell.text('${m['produkTujuanNama'] ?? '-'}', flex: 2),
-                    AppTableCell.text(_formatAngka.format(m['qty'] ?? 0), flex: 1, align: TextAlign.right),
+                    AppTableCell.text('${m['produkTujuanNama'] ?? '-'}',
+                        flex: 2),
+                    AppTableCell.text(_formatAngka.format(m['qty'] ?? 0),
+                        flex: 1, align: TextAlign.right),
                     AppTableCell.text('${m['keterangan'] ?? '-'}', flex: 2),
                   ]);
                 }).toList(),
@@ -458,7 +525,8 @@ class _SheetPilihTokoState extends State<_SheetPilihToko> with JejakGalat {
     });
     try {
       final hasil = await ApiClient.instance.aksi('mutasi_stok_toko_list', {});
-      setStateIfMounted(() => _daftar = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() => _daftar =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
@@ -478,25 +546,33 @@ class _SheetPilihTokoState extends State<_SheetPilihToko> with JejakGalat {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(widget.judul,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
             Expanded(
               child: _memuat
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_error!),
-                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
-                      ]))
+                      ? Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(_error!),
+                          AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                        ]))
                       : ListView(
                           controller: scrollController,
                           children: [
                             ..._daftar.map((t) => ListTile(
-                                  leading: const Icon(Icons.storefront_outlined),
+                                  leading:
+                                      const Icon(Icons.storefront_outlined),
                                   title: Text('${t['nama']}'),
                                   onTap: () => Navigator.of(context).pop(t),
                                 )),
-                            if (_daftar.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('Tidak ada toko ditemukan.')),
+                            if (_daftar.isEmpty)
+                              const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text('Tidak ada toko ditemukan.')),
                           ],
                         ),
             ),
@@ -542,8 +618,10 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('mutasi_stok_produk_list', {'toko_id': widget.tokoId, 'keyword': keyword});
-      setStateIfMounted(() => _daftar = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      final hasil = await ApiClient.instance.aksi('mutasi_stok_produk_list',
+          {'toko_id': widget.tokoId, 'keyword': keyword});
+      setStateIfMounted(() => _daftar =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
@@ -563,11 +641,14 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(widget.judul,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
             AppSearchField(
               controller: _cariController,
               labelText: 'Cari nama/kode produk...',
+              scanProduk: true,
               gayaForm: true,
               onChanged: _cari,
             ),
@@ -576,20 +657,27 @@ class _SheetPilihProdukState extends State<_SheetPilihProduk> with JejakGalat {
               child: _memuat
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_error!),
-                        AppDetailGalatOpsional(detail: detailUntuk(_error)),
-                      ]))
+                      ? Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(_error!),
+                          AppDetailGalatOpsional(detail: detailUntuk(_error)),
+                        ]))
                       : ListView(
                           controller: scrollController,
                           children: [
                             ..._daftar.map((p) => ListTile(
-                                  leading: const Icon(Icons.inventory_2_outlined),
+                                  leading:
+                                      const Icon(Icons.inventory_2_outlined),
                                   title: Text('${p['nama']}'),
-                                  subtitle: Text('Kode: ${p['kode'] ?? '-'} · Stok: ${_formatAngka.format(p['stok'] ?? 0)}'),
+                                  subtitle: Text(
+                                      'Kode: ${p['kode'] ?? '-'} · Stok: ${_formatAngka.format(p['stok'] ?? 0)}'),
                                   onTap: () => Navigator.of(context).pop(p),
                                 )),
-                            if (_daftar.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('Tidak ada produk ditemukan.')),
+                            if (_daftar.isEmpty)
+                              const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text('Tidak ada produk ditemukan.')),
                           ],
                         ),
             ),

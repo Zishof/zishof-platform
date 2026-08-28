@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
@@ -138,6 +139,14 @@ class AppSearchField extends StatefulWidget {
   /// menambah satu langkah tanpa guna.
   final bool autofocus;
 
+  /// Menampilkan pemindai barcode/QR produk. Android/iOS memakai kamera HP,
+  /// sedangkan Windows memakai webcam internal atau USB melalui core_hw.
+  final bool scanProduk;
+
+  /// Callback khusus sesudah kamera berhasil membaca kode. Jika null, hasil
+  /// diteruskan ke [onSubmitted], lalu [onChanged] sebagai fallback.
+  final ValueChanged<String>? onScanned;
+
   const AppSearchField({
     super.key,
     // Boleh kosong: sebagian kotak hanya berlabel, tanpa contoh isian.
@@ -154,6 +163,8 @@ class AppSearchField extends StatefulWidget {
     this.textInputAction,
     this.gayaForm = false,
     this.autofocus = false,
+    this.scanProduk = false,
+    this.onScanned,
   });
 
   @override
@@ -186,6 +197,22 @@ class _AppSearchFieldState extends State<AppSearchField> {
     _timer = Timer(widget.debounce, () => cb(value));
   }
 
+  Future<void> _scanProduk() async {
+    final kode = await BarcodeScannerScreen.pindai(
+      context,
+      judul: 'Scan Barcode / QR Produk',
+    );
+    if (!mounted || kode == null || kode.trim().isEmpty) return;
+    final nilai = kode.trim();
+    _timer?.cancel();
+    _controller
+      ..text = nilai
+      ..selection = TextSelection.collapsed(offset: nilai.length);
+    setStateIfMounted(() {});
+    final callback = widget.onScanned ?? widget.onSubmitted ?? widget.onChanged;
+    callback?.call(nilai);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bersihkan = _controller.text.isEmpty
@@ -198,6 +225,19 @@ class _AppSearchFieldState extends State<AppSearchField> {
               _ubah('');
               setStateIfMounted(() {});
             },
+          );
+    final aksiAkhir = !widget.scanProduk
+        ? bersihkan
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Scan barcode/QR dengan kamera',
+                icon: const Icon(Icons.qr_code_scanner, size: 20),
+                onPressed: _scanProduk,
+              ),
+              if (bersihkan != null) bersihkan,
+            ],
           );
     return TextField(
       controller: _controller,
@@ -213,7 +253,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
               hintText: widget.labelText == null ? null : widget.hintText,
               helperText: widget.helperText,
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: bersihkan,
+              suffixIcon: aksiAkhir,
               isDense: true,
               showLabel: widget.labelText != null,
             )
@@ -223,7 +263,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
               helperText: widget.helperText,
               helperMaxLines: widget.helperMaxLines,
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: bersihkan,
+              suffixIcon: aksiAkhir,
             ),
     );
   }

@@ -1022,6 +1022,7 @@ class _DialogCariProdukSpjState extends State<_DialogCariProdukSpj> {
         child: Column(children: [
           AppSearchField(
             hintText: 'Cari kode/nama produk...',
+            scanProduk: true,
             autofocus: true,
             onChanged: _cari,
           ),

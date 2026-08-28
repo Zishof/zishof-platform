@@ -29,7 +29,8 @@ class ProdukMutasiBarangTab extends StatefulWidget {
   State<ProdukMutasiBarangTab> createState() => _ProdukMutasiBarangTabState();
 }
 
-class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> with JejakGalat {
+class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab>
+    with JejakGalat {
   static const _pageSize = 15;
   late DateTime _dari;
   late DateTime _sampai;
@@ -353,6 +354,7 @@ class _ProdukMutasiBarangTabState extends State<ProdukMutasiBarangTab> with Jeja
         const SizedBox(height: 10),
         AppSearchField(
           hintText: 'Cari kategori / kode / barcode / nama barang...',
+          scanProduk: true,
           debounce: const Duration(milliseconds: 400),
           onChanged: (v) {
             _keyword = v;

@@ -454,13 +454,12 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
             const SizedBox(height: 8),
             Row(children: [
               Expanded(
-                child: TextField(
+                child: AppSearchField(
                   controller: _cariController,
                   onSubmitted: (_) => _cariProduk(),
-                  decoration: const InputDecoration(
-                    labelText: 'Tambah produk (kode / barcode / nama)',
-                    prefixIcon: Icon(Icons.search),
-                  ),
+                  labelText: 'Tambah produk (kode / barcode / nama)',
+                  scanProduk: true,
+                  onScanned: (_) => _cariProduk(),
                 ),
               ),
               const SizedBox(width: 8),

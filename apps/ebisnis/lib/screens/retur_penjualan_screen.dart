@@ -1146,6 +1146,7 @@ class _TabRiwayatReturState extends State<_TabRiwayatRetur> with JejakGalat {
           const SizedBox(height: 12),
           AppSearchField(
             hintText: 'Cari produk / nomor nota / pelanggan...',
+            scanProduk: true,
             onChanged: _terapkanFilter,
           ),
           const SizedBox(height: 12),
