@@ -1972,7 +1972,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(child: _daftarItemKeranjang()),
-                      _panelCheckout(samping: false),
+                      // Pada panel kanan desktop yang sempit/pendek, checkout
+                      // wajib ikut menerima batas tinggi dari viewport. Isi
+                      // panel sendiri sudah scrollable sehingga semua kontrol
+                      // tetap dapat diakses tanpa RenderFlex overflow.
+                      Flexible(child: _panelCheckout(samping: false)),
                     ],
                   );
                 },

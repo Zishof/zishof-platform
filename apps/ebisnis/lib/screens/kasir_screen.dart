@@ -1878,8 +1878,15 @@ class _KasirScreenState extends State<KasirScreen> {
           tampilkanJudul: false,
           scrollable: false,
           actionsAppBar: _tombolAksiMobile,
-          aksiHeader:
-              Row(mainAxisSize: MainAxisSize.min, children: _tombolAksi),
+          // Setiap aksi harus menjadi anak Wrap tersendiri agar toolbar dapat
+          // turun baris pada desktop/laptop sempit. Row membuat seluruh toolbar
+          // menjadi satu blok atomik dan memicu overflow horizontal.
+          aksiHeader: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 4,
+            runSpacing: 4,
+            children: _tombolAksi,
+          ),
           bottomBar: defaultTargetPlatform == TargetPlatform.windows ||
                   _keranjang.isEmpty
               ? null
