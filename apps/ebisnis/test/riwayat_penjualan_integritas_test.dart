@@ -47,4 +47,67 @@ void main() {
       );
     });
   });
+
+  group('penggabungan transaksi server dan lokal', () {
+    test('menggabungkan kode stabil yang sama dan mempertahankan id server',
+        () {
+      final hasil = gabungkanTransaksiServerDanLokal(
+        [
+          {
+            'idTransaksi': 123,
+            'kodeUnik': 'EB260828153412422S',
+            'nomorNota': 'Order 001 - 0001 - 001 (EB260828153412422S)',
+            'totalBiaya': 13500,
+          },
+        ],
+        [
+          {
+            'nomorNota': 'EB260828153412422S',
+            'statusSinkronLokal': 'SYNCED',
+            'payloadLokal': {
+              'kodeUnik': 'EB260828153412422S',
+              'transaksi': <Object?>[],
+            },
+          },
+        ],
+        batas: 15,
+      );
+
+      expect(hasil, hasLength(1));
+      expect(hasil.single['idTransaksi'], 123);
+      expect(
+        hasil.single['nomorNota'],
+        'Order 001 - 0001 - 001 (EB260828153412422S)',
+      );
+      expect(hasil.single['statusSinkronLokal'], 'SYNCED');
+      expect(hasil.single['payloadLokal'], isA<Map>());
+    });
+
+    test('mempertahankan transaksi lokal yang belum ada di server', () {
+      final hasil = gabungkanTransaksiServerDanLokal(
+        [
+          {
+            'idTransaksi': 456,
+            'kodeUnik': 'SERVER-ONLY',
+            'nomorNota': 'Order Server (SERVER-ONLY)',
+          },
+        ],
+        [
+          {
+            'nomorNota': 'LOCAL-PENDING',
+            'statusSinkronLokal': 'PENDING',
+            'payloadLokal': {
+              'kodeUnik': 'LOCAL-PENDING',
+              'transaksi': <Object?>[],
+            },
+          },
+        ],
+        batas: 15,
+      );
+
+      expect(hasil, hasLength(2));
+      expect(hasil.first['nomorNota'], 'LOCAL-PENDING');
+      expect(hasil.last['idTransaksi'], 456);
+    });
+  });
 }

@@ -745,6 +745,46 @@ String _kodeTransaksiStabil(Map<String, dynamic> row) {
   return '';
 }
 
+/// Menggabungkan arsip lokal-first dengan hasil server berdasarkan kode
+/// idempotensi transaksi, bukan label nota presentasi.
+///
+/// Server baru menampilkan nomor seperti `Order 001 - 0001 - 001 (EB...)`,
+/// sedangkan arsip lokal menyimpan `EB...` secara mentah. Membandingkan
+/// `nomorNota` membuat keduanya dianggap transaksi berbeda; baris lokal yang
+/// sudah SYNCED lalu tetap tidak mempunyai `idTransaksi` dan sebelumnya dapat
+/// memanggil `detail_transaksi` dengan `id: null`.
+@visibleForTesting
+List<Map<String, dynamic>> gabungkanTransaksiServerDanLokal(
+  List<Map<String, dynamic>> server,
+  List<Map<String, dynamic>> lokal, {
+  required int batas,
+}) {
+  final serverMenurutKode = <String, Map<String, dynamic>>{};
+  for (final row in server) {
+    final kode = _kodeTransaksiStabil(row);
+    if (kode.isNotEmpty) serverMenurutKode[kode] = row;
+  }
+
+  final kodeServerTerpakai = <String>{};
+  final hasilLokal = lokal.map((rowLokal) {
+    final kode = _kodeTransaksiStabil(rowLokal);
+    final rowServer = kode.isEmpty ? null : serverMenurutKode[kode];
+    if (rowServer == null) return rowLokal;
+    kodeServerTerpakai.add(kode);
+    // Field otoritatif server (terutama idTransaksi dan label nota) menang;
+    // metadata/cadangan lokal tetap dibawa untuk fallback ketika offline.
+    return <String, dynamic>{...rowLokal, ...rowServer};
+  }).toList();
+
+  final serverBelumTerpakai = server.where((row) {
+    final kode = _kodeTransaksiStabil(row);
+    return kode.isEmpty || !kodeServerTerpakai.contains(kode);
+  });
+  return <Map<String, dynamic>>[...hasilLokal, ...serverBelumTerpakai]
+      .take(batas)
+      .toList();
+}
+
 String _formatWaktuBayar(DateTime waktu) =>
     DateFormat('dd-MM-yyyy HH:mm:ss').format(waktu);
 
@@ -1157,15 +1197,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   List<Map<String, dynamic>> _gabungkanDenganArsipLokal(
       List<Map<String, dynamic>> server, List<Map<String, dynamic>> lokal) {
-    final kodeServer = server
-        .map((e) => '${e['nomorNota'] ?? ''}'.trim().toLowerCase())
-        .where((e) => e.isNotEmpty)
-        .toSet();
-    final belumAda = lokal
-        .where((e) => !kodeServer
-            .contains('${e['nomorNota'] ?? ''}'.trim().toLowerCase()))
-        .toList();
-    belumAda.sort((a, b) {
+    lokal.sort((a, b) {
       final aPending = a['statusSinkronLokal'] == 'PENDING' ? 0 : 1;
       final bPending = b['statusSinkronLokal'] == 'PENDING' ? 0 : 1;
       if (aPending != bPending) return aPending.compareTo(bPending);
@@ -1175,9 +1207,7 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     // tetapi jumlah baris tetap mengikuti paging 15 data. Tanpa batas ini,
     // perangkat lama dengan ribuan arsip akan membuat halaman pertama sangat
     // panjang dan lambat walaupun query server sudah memakai paging.
-    return <Map<String, dynamic>>[...belumAda, ...server]
-        .take(_pageSize)
-        .toList();
+    return gabungkanTransaksiServerDanLokal(server, lokal, batas: _pageSize);
   }
 
   Future<void> _muat() async {
@@ -1469,13 +1499,27 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       if (payloadLokal is Map && !sudahTersinkron) {
         pakaiSnapshotLokal(payloadLokal);
       } else {
-        try {
-          hasil = await ApiClient.instance
-              .aksi('detail_transaksi', {'id': row['idTransaksi']});
-          items = ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
-        } on ApiException catch (error) {
-          if (!error.offline || payloadLokal is! Map) rethrow;
-          pakaiSnapshotLokal(payloadLokal);
+        final idTransaksi = row['idTransaksi'];
+        if (idTransaksi == null) {
+          // Jangan pernah mengirim `id:null`. Snapshot lokal masih merupakan
+          // detail yang benar untuk dibaca; sesudah refresh dari server, merge
+          // berdasarkan kode stabil di atas akan melengkapinya dengan ID.
+          if (payloadLokal is Map) {
+            pakaiSnapshotLokal(payloadLokal);
+          } else {
+            throw const FormatException(
+                'Detail transaksi belum memiliki ID server. Muat ulang data lalu coba kembali.');
+          }
+        } else {
+          try {
+            hasil = await ApiClient.instance
+                .aksi('detail_transaksi', {'id': idTransaksi});
+            items =
+                ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
+          } on ApiException catch (error) {
+            if (!error.offline || payloadLokal is! Map) rethrow;
+            pakaiSnapshotLokal(payloadLokal);
+          }
         }
       }
       final pajakHeader = (row['pajak'] as num?)?.toDouble() ?? 0;
@@ -1530,6 +1574,25 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                         'Transaksi tidak valid: total master ${_formatRupiah.format(row['totalMaster'] ?? 0)}, total rincian ${_formatRupiah.format(row['totalDetail'] ?? 0)}, selisih ${_formatRupiah.format(row['selisihTotal'] ?? 0)}.',
                         style: const TextStyle(
                           color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (hasil['bolehEditTransaksi'] != true &&
+                      '${hasil['alasanEditTransaksi'] ?? ''}'.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.latarLembut(AppColors.warning),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${hasil['alasanEditTransaksi']}',
+                        style: const TextStyle(
+                          color: AppColors.warning,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

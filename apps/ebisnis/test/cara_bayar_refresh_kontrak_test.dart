@@ -63,4 +63,14 @@ void main() {
     expect(method, contains('_semuaCaraBayarUntukMemberAwal = false'));
     expect(method, contains('_muatCaraBayarUntukMember(terpilih.id)'));
   });
+
+  test('penolakan izin metode memberi langkah setting dan membedakan limit', () {
+    final errorSource =
+        File('lib/widgets/app_error_info.dart').readAsStringSync();
+    expect(errorSource, contains("lower.contains('metode pembayaran')"));
+    expect(errorSource, contains('Pelanggan > Jenis Member'));
+    expect(errorSource, contains('Pelanggan > Tipe Member'));
+    expect(errorSource, contains('Maksimal Boleh Utang tidak menyelesaikan'));
+    expect(errorSource, contains('Coba Kirim Transaksi Pending satu kali'));
+  });
 }

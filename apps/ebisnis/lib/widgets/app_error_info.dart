@@ -31,6 +31,21 @@ PanduanResolusiGalat panduanResolusiGalat(String pesan,
     );
   }
 
+  if (lower.contains('metode pembayaran') &&
+      lower.contains('tidak diizinkan') &&
+      (lower.contains('jenis member') || lower.contains('tipe member'))) {
+    return const PanduanResolusiGalat(
+      judul: 'Metode pembayaran belum diizinkan untuk member',
+      solusi: [
+        'Jangan klik Bayar, Sinkron, atau Coba Kirim berulang; transaksi belum diterima server dan jurnal pending lokal tetap aman.',
+        'Menaikkan Batas Transaksi atau Maksimal Boleh Utang tidak menyelesaikan penolakan ini karena kendalanya adalah izin metode pembayaran.',
+        'Minta admin membuka Pelanggan > Jenis Member dan Pelanggan > Tipe Member. Pada data yang disebutkan dalam pesan, centang metode terkait di Cara Bayar yang Diizinkan/Cara Bayar dan pastikan Cakupan Toko mencakup toko kasir, lalu klik Simpan.',
+        'Sesudah admin menyimpan, kasir menekan Sinkronkan lalu Muat Ulang. Buka Pesanan > Transaksi Pending dan klik Coba Kirim Transaksi Pending satu kali.',
+        'Jika tetap ditolak, kirim kode transaksi, nama member, Jenis/Tipe Member, metode pembayaran, dan Informasi Teknis kepada admin; jangan membuat transaksi pengganti atau mengubah payload pending.',
+      ],
+    );
+  }
+
   if (lower.contains('toko tidak diketahui') ||
       lower.contains('toko wajib dipilih') ||
       lower.contains('pilih toko terlebih dahulu')) {
