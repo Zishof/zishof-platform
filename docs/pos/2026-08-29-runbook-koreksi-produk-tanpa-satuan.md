@@ -21,8 +21,9 @@ Karena sebagian besar data masih aktif dan berdampak pada stok, satuan tidak bol
 
 ## Berkas kerja
 
-- `template-koreksi-produk-tanpa-satuan-20260829.csv`: 234 produk, sudah diurutkan menurut prioritas dan mempunyai kolom keputusan admin.
+- `template-koreksi-produk-tanpa-satuan-v2-20260829.csv`: 234 produk, sudah diurutkan menurut prioritas dan mempunyai kolom keputusan admin. Enam baris memuat usulan dari kecocokan barcode/nama identik; usulan tetap wajib dikonfirmasi.
 - `referensi-uom-20260829.csv`: 22 UOM yang saat ini tersedia beserta ID, kategori, tipe konversi, rasio, dan presisinya.
+- `rencana-konsolidasi-uom-20260829.csv`: delapan kelompok nama UOM beserta seluruh ID legacy untuk diisi keputusan kategori canonical dan UOM reference.
 - Salinan server berada di `/backup4/deployments/albahjah-uom-r78485-20260829-0125`.
 
 Kolom yang harus diisi admin pada template:
@@ -31,6 +32,8 @@ Kolom yang harus diisi admin pada template:
 - `pilih_satuan_pembelian_id`: UOM saat PO/penerimaan. Isi sama dengan satuan dasar bila tidak ada kemasan pembelian berbeda.
 - `kemasan_dan_rasio`: contoh `1 Dus = 24 Pcs`. Jangan hanya menulis `Dus` tanpa jumlah isi.
 - `catatan_admin`: sumber keputusan, misalnya kemasan fisik, faktur pemasok, atau konfirmasi PIC toko.
+
+Kolom `usulan_satuan_id_exact_match`, `dasar_usulan`, dan `sumber_produk_id` hanya merupakan alat bantu audit. Jangan menyalin usulan ke kolom keputusan sebelum produk sumber dan kemasan fisiknya diperiksa. Contoh produksi menunjukkan produk bernama botol dapat mempunyai pasangan nama identik yang memakai UOM `DUS`.
 
 ## Prasyarat
 
