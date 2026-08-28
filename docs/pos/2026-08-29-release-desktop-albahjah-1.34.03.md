@@ -68,6 +68,8 @@ UAT sebelum deployment:
 - kompilasi terarah lima kelas lifecycle: lulus;
 - UAT executor dengan task aktif: ketiga executor berstatus shutdown, referensi writer dilepas, dan flag pembatalan init aktif;
 - paket clean export SVN `r78486`: `albahjah-lifecycle-r78486.jar`, 30 class, 118.341 byte, SHA-256 `F94B7CD3474D292651B35AF0FB6E4A78556A0CA04BC76C6AC7DD20B24F31644E`.
+- skrip deployment dan rollback diuji pada WAR simulasi: deployment mengganti tepat 30 class, kandidat bebas entri duplikat/`war-tracker`, dan rollback mengembalikan SHA-256 WAR awal secara identik;
+- paket operasional `albahjah-lifecycle-r78486-deploy.zip`: 118.068 byte, SHA-256 `CA938D1925185CAD3F8FF982835B17287BE9A279608339DDABB905B44AC66E17`.
 
 Deployment r78486 harus dianggap selesai hanya setelah context Al-Bahjah direload dari WAR yang sudah diperbarui dan log membuktikan tidak ada lagi warning `session-deleter-*`, `bacatulis-async-writer`, maupun task init yang memakai pool tertutup.
 
