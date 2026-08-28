@@ -436,6 +436,52 @@ void main() {
     }
   });
 
+  // Konfigurasi & profil toko adalah respons OBJEK (bukan daftar) -- jalur
+  // fallback offline-nya objekDenganCache (langkah 2 audit 2026-08-29):
+  // kasir/beranda tetap hidup saat offline dan struk tetap ber-kop dari
+  // snapshot profil toko. Kunci profil toko WAJIB per toko.
+  test('konfigurasi dan toko_profil_ambil punya fallback cache objek', () {
+    final layanan =
+        rapat(File('lib/services/master_offline.dart').readAsStringSync());
+    expect(
+        layanan,
+        contains(
+            rapat('static Future<Map<String, dynamic>> objekDenganCache(')));
+
+    const layarKonfig = <String>[
+      'lib/screens/kasir_screen.dart',
+      'lib/screens/apotik/beranda_apotik_screen.dart',
+      'lib/screens/inventory_sales/beranda_is_screen.dart',
+    ];
+    for (final file in layarKonfig) {
+      final source = rapat(File(file).readAsStringSync());
+      expect(
+          source,
+          contains(
+              rapat("objekDenganCache('konfigurasi', const {}, 'konfigurasi')")),
+          reason: '$file harus memuat konfigurasi dengan fallback cache');
+    }
+    // Refetch konfigurasi PASCA ganti toko sengaja tetap online-only:
+    // snapshot lokal masih milik toko sebelumnya.
+    final kasir = rapat(File('lib/screens/kasir_screen.dart').readAsStringSync());
+    expect(kasir,
+        contains(rapat("return await ApiClient.instance.aksi('konfigurasi')")),
+        reason: 'refetch konfigurasi setelah pilih toko harus tetap online');
+
+    const layarProfil = <String>[
+      'lib/screens/struk_screen.dart',
+      'lib/screens/konfigurasi_screen.dart',
+    ];
+    for (final file in layarProfil) {
+      final source = rapat(File(file).readAsStringSync());
+      expect(
+          source,
+          contains(rapat("objekDenganCache('toko_profil_ambil', "
+              "{'toko_id': idToko}, 'toko_profil_ambil:\$idToko')")),
+          reason: '$file harus membaca profil toko lewat cache per toko');
+    }
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../product_profile.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
@@ -70,7 +71,8 @@ class _BerandaInventorySalesScreenState
       _error = null;
     });
     try {
-      final konfig = await ApiClient.instance.aksi('konfigurasi');
+      final konfig = await MasterOffline.objekDenganCache(
+          'konfigurasi', const {}, 'konfigurasi');
       Sesi.instance.terapkanKonfig(konfig);
       // Konteks aktor terbaru (currentTripId dsb.) -- aksi khusus varian; bila
       // server belum di-deploy dgn dukungan si_, konfigurasi saja sudah cukup.

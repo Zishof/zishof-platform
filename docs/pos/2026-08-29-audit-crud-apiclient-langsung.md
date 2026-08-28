@@ -108,3 +108,15 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   bentuk respons sama); yang bertambah adalah snapshot lokal sehingga dropdown
   akun tetap terisi saat offline. Penjaganya: test `akun_list dibaca lewat
   cache bersama master:akun` di `test/master_offline_kontrak_test.dart`.
+- **Langkah 2 (`konfigurasi` + `toko_profil_ambil`) — selesai 29 Agustus 2026.**
+  `MasterOffline` mendapat helper baru `objekDenganCache` (padanan
+  `daftarDenganCache` untuk respons objek: server dulu, snapshot seluruh
+  respons, fallback `{offline: true}`). Pemakainya: `konfigurasi` di
+  kasir (`_gantiToko`, `_sinkronKatalogDanKonfigurasi`), beranda apotik, dan
+  beranda Inventory & Sales dengan kunci bersama `'konfigurasi'`; serta
+  `toko_profil_ambil` di layar struk dan tab profil toko konfigurasi dengan
+  kunci per toko `'toko_profil_ambil:<idToko>'` — struk tetap ber-kop saat
+  offline. Pengecualian yang disengaja: refetch `konfigurasi` PASCA memilih
+  toko baru di kasir tetap online-only karena snapshot lokal masih milik toko
+  sebelumnya. Penjaganya: test `konfigurasi dan toko_profil_ambil punya
+  fallback cache objek` di test kontrak yang sama.

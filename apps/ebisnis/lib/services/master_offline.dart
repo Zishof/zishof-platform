@@ -766,6 +766,33 @@ class MasterOffline {
     }
   }
 
+  /// Padanan [daftarDenganCache] utk aksi yang responsnya OBJEK, bukan daftar
+  /// (konfigurasi, profil toko): server dulu (seluruh respons disimpan ke
+  /// cache), offline -> snapshot terakhir + `{offline: true}`. Aksi yang
+  /// hasilnya bergantung konteks (mis. toko) wajib menyertakan konteks itu di
+  /// [cacheKey] -- satu kunci utk dua konteks membuat fallback offline
+  /// menyajikan konteks yang salah tanpa ada tanda apa pun.
+  static Future<Map<String, dynamic>> objekDenganCache(
+    String aksi,
+    Map<String, dynamic> body,
+    String cacheKey,
+  ) async {
+    pastikanTimer();
+    try {
+      final hasil = await ApiClient.instance.aksi(aksi, body);
+      await CoreDb.instance.simpanCacheReferensi(cacheKey, jsonEncode(hasil));
+      return hasil;
+    } on ApiException catch (e) {
+      if (!e.offline) rethrow;
+      final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+      if (tersimpan == null) rethrow; // belum pernah online -> apa adanya.
+      return {
+        ...Map<String, dynamic>.from(jsonDecode(tersimpan) as Map),
+        'offline': true,
+      };
+    }
+  }
+
   /// Terapkan satu baris ke snapshot daftar (optimistis, saat offline).
   /// Cocokkan lewat 'id' bila ada; tanpa 'id' (create offline) baris
   /// ditambahkan di depan dengan penanda `_offline: true` utk ditampilkan

@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import '../app_setting.dart';
 import '../app_variant.dart';
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
@@ -929,8 +930,8 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
       // berhasil, permintaan yang gagal membuat penjaga di build() menganggap
       // toko masih belum termuat dan memanggil ulang tanpa henti.
       _idTokoDimuat = idToko;
-      final hasil = await ApiClient.instance
-          .aksi('toko_profil_ambil', {'toko_id': idToko});
+      final hasil = await MasterOffline.objekDenganCache('toko_profil_ambil',
+          {'toko_id': idToko}, 'toko_profil_ambil:$idToko');
       final d = (hasil['data'] as Map<String, dynamic>?) ?? {};
       _kode.text = '${d['kode'] ?? ''}';
       _nama.text = '${d['nama'] ?? ''}';

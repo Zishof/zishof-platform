@@ -14,7 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../app_variant.dart';
-import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pengaturan_struk.dart';
 import '../services/print_util.dart';
@@ -403,8 +403,8 @@ class StrukScreen extends StatelessWidget {
       // pencetakan yang sedang ditunggu pelanggan di depan kasir.
       final idToko = Sesi.instance.idTokoTerpilih;
       if (idToko == null) return;
-      final hasil = await ApiClient.instance
-          .aksi('toko_profil_ambil', {'toko_id': idToko});
+      final hasil = await MasterOffline.objekDenganCache('toko_profil_ambil',
+          {'toko_id': idToko}, 'toko_profil_ambil:$idToko');
       final data = (hasil['data'] as Map<String, dynamic>?) ?? {};
       final nama = '${data['nama'] ?? ''}'.trim();
       final alamat = '${data['alamat'] ?? ''}'.trim();

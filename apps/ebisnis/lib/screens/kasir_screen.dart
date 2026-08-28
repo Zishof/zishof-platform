@@ -13,6 +13,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../app_variant.dart';
 import '../models.dart';
 import '../sesi.dart';
@@ -487,6 +488,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (dipilih == null) return konfig;
     try {
       await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': dipilih});
+      // SENGAJA tanpa fallback cache: konfigurasi di sini harus mencerminkan
+      // toko yang BARU dipilih; snapshot lokal masih milik toko sebelumnya.
       return await ApiClient.instance.aksi('konfigurasi');
     } catch (e) {
       if (mounted) {
@@ -501,7 +504,8 @@ class _KasirScreenState extends State<KasirScreen> {
   /// kasir ingin PINDAH ke toko lain di tengah sesi -- bukan cuma sekali di
   /// awal login).
   Future<void> _gantiToko() async {
-    final konfig = await ApiClient.instance.aksi('konfigurasi');
+    final konfig = await MasterOffline.objekDenganCache(
+        'konfigurasi', const {}, 'konfigurasi');
     final hasilBaru =
         await _pastikanTokoDipilih({...konfig, 'tokoAktifId': null});
     await _terapkanKonfigDenganGuardToko(hasilBaru, klaimBaru: true);
@@ -512,7 +516,8 @@ class _KasirScreenState extends State<KasirScreen> {
   Future<void> _sinkronKatalogDanKonfigurasi(
       {bool tampilkanErrorJikaKosong = false}) async {
     try {
-      var konfig = await ApiClient.instance.aksi('konfigurasi');
+      var konfig = await MasterOffline.objekDenganCache(
+          'konfigurasi', const {}, 'konfigurasi');
       konfig = await _pastikanTokoDipilih(konfig);
       await _terapkanKonfigDenganGuardToko(konfig);
 
