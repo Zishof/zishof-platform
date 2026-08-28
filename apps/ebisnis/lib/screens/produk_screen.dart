@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:core_db/core_db.dart';
+import 'package:core_hw/core_hw.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../services/dynamic_report.dart';
@@ -2590,6 +2591,20 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     if (sumber != null) await _pilihFoto(sumber);
   }
 
+  Future<void> _pindaiBarcodeProduk() async {
+    final hasil = await BarcodeScannerScreen.pindai(
+      context,
+      judul: 'Scan Barcode / QR-Code Produk',
+    );
+    if (hasil == null || !mounted) return;
+    setStateIfMounted(() {
+      _barcode.text = hasil.trim();
+      _barcode.selection = TextSelection.collapsed(
+        offset: _barcode.text.length,
+      );
+    });
+  }
+
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
     setStateIfMounted(() {
@@ -2749,6 +2764,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   AppFormTextField(
                     label: 'Barcode (opsional)',
                     controller: _barcode,
+                    helperText:
+                        'Pindai barcode/QR-Code dengan kamera, scanner USB, atau ketik manual.',
+                    suffixIcon: IconButton(
+                      onPressed: _menyimpan ? null : _pindaiBarcodeProduk,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      tooltip: 'Scan barcode / QR-Code dengan kamera',
+                    ),
                   ),
                   // Pemasok & Satuan: sengaja isian bebas, bukan dropdown.
                   // Master-nya dibuat otomatis di server bila nama belum ada,

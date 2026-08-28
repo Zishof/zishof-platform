@@ -243,7 +243,10 @@ class CoreDb {
         if (parsed is! Map) continue;
         final row = Map<String, Object?>.from(parsed);
         final kode = '${row['kode_unik'] ?? ''}'.trim();
-        if (kode.isNotEmpty && row['payload_json'] != null) terbaru[kode] = row;
+        // Baris terakhir boleh berupa tombstone. Tanpa tombstone, transaksi
+        // yang sengaja dibuang dari SQLite akan hidup kembali ketika database
+        // dipulihkan dari backup append-only.
+        if (kode.isNotEmpty) terbaru[kode] = row;
       } catch (_) {
         // Satu baris terputus (mis. perangkat mati saat append) tidak merusak
         // snapshot-snapshot lengkap lain di file append-only.
@@ -252,6 +255,8 @@ class CoreDb {
     if (terbaru.isEmpty) return;
     final batch = database.batch();
     for (final row in terbaru.values) {
+      if (row['dihapus'] == true) continue;
+      if (row['payload_json'] == null) continue;
       batch.insert(
         'transaksi_pending',
         <String, Object?>{
@@ -1475,6 +1480,53 @@ class CoreDb {
     final database = await db;
     await database.delete('transaksi_pending',
         where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+  }
+
+  /// Menghapus transaksi yang telah dipastikan tidak ada pada arsip server.
+  ///
+  /// Pemanggil wajib memberikan hasil perbandingan server lengkap. Metode ini
+  /// hanya menghapus kode yang diminta, lalu menulis tombstone ke backup
+  /// append-only agar transaksi tidak dipulihkan kembali saat DB direcovery.
+  Future<int> hapusTransaksiLokalTidakAdaDiServer(
+      Iterable<String> kodeUnik) async {
+    final kode = kodeUnik
+        .map((nilai) => nilai.trim().toLowerCase())
+        .where((nilai) => nilai.isNotEmpty)
+        .toSet()
+        .toList();
+    if (kode.isEmpty) return 0;
+
+    final database = await db;
+    final tanda = List.filled(kode.length, '?').join(',');
+    final terhapus = await database.transaction((txn) async {
+      final rows = await txn.query(
+        'transaksi_pending',
+        columns: const ['kode_unik'],
+        where: 'LOWER(kode_unik) IN ($tanda)',
+        whereArgs: kode,
+      );
+      if (rows.isEmpty) return <String>[];
+      final kodeAsli = rows
+          .map((row) => '${row['kode_unik'] ?? ''}'.trim())
+          .where((nilai) => nilai.isNotEmpty)
+          .toList();
+      final tandaAsli = List.filled(kodeAsli.length, '?').join(',');
+      await txn.delete(
+        'transaksi_pending',
+        where: 'kode_unik IN ($tandaAsli)',
+        whereArgs: kodeAsli,
+      );
+      return kodeAsli;
+    });
+
+    for (final nilai in terhapus) {
+      await _cadangkanTransaksiPersisten(<String, Object?>{
+        'kode_unik': nilai,
+        'dihapus': true,
+        'alasan': 'TIDAK_ADA_DI_SERVER',
+      });
+    }
+    return terhapus.length;
   }
 
   Future<List<Map<String, Object?>>> transaksiPendingBelumSinkron(

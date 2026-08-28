@@ -800,9 +800,13 @@ bool _transaksiSudahAdaDiServer(Object error) {
 }
 
 class _DialogPerbandinganTransaksi extends StatefulWidget {
-  const _DialogPerbandinganTransaksi({required this.hasil});
+  const _DialogPerbandinganTransaksi({
+    required this.hasil,
+    required this.onHapusHanyaLokal,
+  });
 
   final HasilPerbandinganTransaksi hasil;
+  final Future<int> Function(List<String> kode) onHapusHanyaLokal;
 
   @override
   State<_DialogPerbandinganTransaksi> createState() =>
@@ -812,6 +816,54 @@ class _DialogPerbandinganTransaksi extends StatefulWidget {
 class _DialogPerbandinganTransaksiState
     extends State<_DialogPerbandinganTransaksi> {
   bool _hanyaSelisih = true;
+  bool _menghapus = false;
+
+  Future<void> _hapusHanyaLokal() async {
+    final hanyaLokal = widget.hasil.baris
+        .where((item) => item.status == StatusPerbandinganTransaksi.hanyaLokal)
+        .toList();
+    if (hanyaLokal.isEmpty || _menghapus) return;
+    final total =
+        hanyaLokal.fold<double>(0, (jumlah, item) => jumlah + item.totalLokal);
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus transaksi yang hanya ada di lokal?'),
+        content: Text(
+          '${hanyaLokal.length} transaksi dengan total '
+          '${_formatRupiah.format(total)} akan dihapus dari arsip, antrean, '
+          'dan cadangan lokal perangkat ini.\n\n'
+          'Tindakan ini tidak mengubah data server dan tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_outline),
+            label: Text('Hapus ${hanyaLokal.length} transaksi'),
+          ),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setState(() => _menghapus = true);
+    try {
+      final jumlah = await widget
+          .onHapusHanyaLokal(hanyaLokal.map((item) => item.kode).toList());
+      if (mounted) Navigator.of(context).pop(jumlah);
+    } catch (error) {
+      if (mounted) {
+        await tampilkanKesalahan(context, error,
+            aktivitas: 'menghapus transaksi yang hanya ada di lokal');
+      }
+    } finally {
+      if (mounted) setState(() => _menghapus = false);
+    }
+  }
 
   String _labelStatus(StatusPerbandinganTransaksi status) {
     switch (status) {
@@ -867,7 +919,9 @@ class _DialogPerbandinganTransaksiState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Pemeriksaan ini hanya membaca data. Tekan Sinkronkan setelah selisih dipastikan benar.',
+              'Perbandingan memuat seluruh arsip server untuk toko aktif. '
+              'Sinkronkan bila transaksi lokal masih perlu dikirim; hapus hanya '
+              'jika transaksi memang tidak boleh ada di server.',
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -964,8 +1018,26 @@ class _DialogPerbandinganTransaksiState
         ),
       ),
       actions: [
+        if (widget.hasil.jumlah(StatusPerbandinganTransaksi.hanyaLokal) > 0)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              side: BorderSide(color: Colors.red.shade300),
+            ),
+            onPressed: _menghapus ? null : _hapusHanyaLokal,
+            icon: _menghapus
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline),
+            label: Text(
+              'Hapus hanya lokal '
+              '(${widget.hasil.jumlah(StatusPerbandinganTransaksi.hanyaLokal)})',
+            ),
+          ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _menghapus ? null : () => Navigator.of(context).pop(),
           child: const Text('Tutup'),
         ),
       ],
@@ -1580,7 +1652,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                     ),
                   ],
                   if (hasil['bolehEditTransaksi'] != true &&
-                      '${hasil['alasanEditTransaksi'] ?? ''}'.trim().isNotEmpty) ...[
+                      '${hasil['alasanEditTransaksi'] ?? ''}'
+                          .trim()
+                          .isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Container(
                       width: double.infinity,
@@ -2019,10 +2093,22 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         await _semuaTransaksiServer(),
       );
       if (!mounted) return;
-      await showDialog<void>(
+      final jumlahDihapus = await showDialog<int>(
         context: context,
-        builder: (dialogContext) => _DialogPerbandinganTransaksi(hasil: hasil),
+        builder: (dialogContext) => _DialogPerbandinganTransaksi(
+          hasil: hasil,
+          onHapusHanyaLokal:
+              CoreDb.instance.hapusTransaksiLokalTidakAdaDiServer,
+        ),
       );
+      if (jumlahDihapus != null && mounted) {
+        await _muat();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$jumlahDihapus transaksi lokal yang tidak ada di server telah dihapus.'),
+        ));
+      }
     } catch (e) {
       if (mounted) {
         await tampilkanKesalahan(context, e is ApiException ? e.info : e,

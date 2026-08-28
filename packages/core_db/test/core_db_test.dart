@@ -155,6 +155,32 @@ void main() {
         '${satuKode.single['payload_json']}', contains('server-terverifikasi'));
 
     await CoreDb.instance.simpanTransaksiPending(
+      'UAT-HAPUS-LOKAL-005',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-HAPUS-LOKAL-005',
+        'total': 50000,
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    final jumlahDihapus =
+        await CoreDb.instance.hapusTransaksiLokalTidakAdaDiServer(
+      const ['uat-hapus-lokal-005'],
+    );
+    expect(jumlahDihapus, 1);
+    expect(
+        await CoreDb.instance.transaksiLokalDenganKode('UAT-HAPUS-LOKAL-005'),
+        isNull,
+        reason: 'baris SQLite yang dipilih harus benar-benar terhapus');
+    final barisBackup = await backup.readAsLines();
+    final tombstone = Map<String, dynamic>.from(
+        jsonDecode(barisBackup.last) as Map<dynamic, dynamic>);
+    expect(tombstone['kode_unik'], 'UAT-HAPUS-LOKAL-005');
+    expect(tombstone['dihapus'], isTrue,
+        reason: 'backup append-only harus mencatat tombstone penghapusan');
+
+    await CoreDb.instance.simpanTransaksiPending(
       'UAT-RETRY-004',
       jsonEncode(<String, Object?>{
         'kodeUnik': 'UAT-RETRY-004',
