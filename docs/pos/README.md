@@ -27,6 +27,8 @@ Dokumen aktif:
 - [Implementasi Fase 2: master identitas item, UOM, dan lokasi](2026-08-25-implementasi-fase-2-master-identitas-item-lokasi.md)
 - [SQL preflight Fase 2 (read-only)](2026-08-25-fase-2-preflight-master-identitas-lokasi.sql)
 - [ADR bridge identitas item, UOM, dan lokasi lintas domain](2026-08-26-adr-bridge-identitas-item-uom-lokasi.md)
+- [ADR satuan dasar, pembelian, dan penjualan produk](2026-08-28-adr-satuan-produk-pembelian-penjualan.md)
+- [Rilis Desktop Al-Bahjah POS 1.34.03](2026-08-29-release-desktop-albahjah-1.34.03.md)
 - [Eksekusi lanjutan seluruh fase dan deployment gate](2026-08-26-eksekusi-lanjutan-semua-fase.md)
 - [ADR kontrak posting persediaan idempoten](2026-08-26-adr-inventory-posting-port-idempoten.md)
 - [SQL preflight Fase 3 inventory ledger (read-only)](2026-08-26-fase-3-preflight-inventory-ledger.sql)
