@@ -16,7 +16,7 @@ Tag GitHub: `v1.34.03-build161`
 ## Urutan penerapan
 
 1. Jalankan `migrasi_uom_kategori_pembelian_20260828.sql` pada database server.
-2. Deploy server/SVN revisi `r78484`.
+2. Deploy server/SVN revisi `r78485` (`r78484` implementasi runtime, `r78485` penguatan migrasi).
 3. Pasang desktop Al-Bahjah POS 1.34.03.
 4. Tekan **Sinkronkan/Muat Ulang** agar master UOM dan produk terbaru masuk ke cache lokal.
 
@@ -27,7 +27,9 @@ Jangan memasang desktop sebelum migrasi dan server baru aktif karena penyimpanan
 - Analisis statis Flutter pada modul UOM, produk, pembelian, dan kasir: lulus.
 - Seluruh pengujian aplikasi Flutter: 437 lulus.
 - Seluruh pengujian `core_db`: 9 lulus.
-- Kompilasi Java 8 untuk model, API POS, dan helper pembelian: lulus.
+- Kompilasi Java 8 terarah untuk model, API POS, dan helper pembelian: lulus.
+- Full build backend dari snapshot SVN bersih: 7.288 sumber Java terkompilasi dan Maven menghasilkan `ais.war` (`BUILD SUCCESS`).
+- Parser PostgreSQL menerima migrasi dan rollback final tanpa kesalahan sintaks.
 - Kesesuaian salinan sumber Java `java/` dan `src/`: terverifikasi identik sebelum commit.
 
 ## Rollback
@@ -45,3 +47,13 @@ Jangan memasang desktop sebelum migrasi dan server baru aktif karena penyimpanan
 - Authenticode: belum ditandatangani (`NotSigned`). Jika Windows menampilkan peringatan penerbit, cocokkan nama file dan SHA-256 sebelum melanjutkan instalasi.
 
 Build dilakukan dari checkout bersih pada commit Git `4f81136`; perubahan lokal dari pekerjaan lain tidak masuk ke artefak.
+
+### Artefak backend untuk release owner
+
+- Source: snapshot SVN bersih sampai `r78485`.
+- File lokal: `C:\opt\release-worktrees\ais-r78484\build\maven\ais.war`
+- Ukuran: `747.885.455 byte` (`713,24 MiB`)
+- SHA-256: `89E369C4F27E7A08406D2152C588AE89ADFC5D96522819F2945387A379A33A9A`
+- Isi diverifikasi memuat kelas `PosApi`, `KantinHelper`, `Produk`, `PengadaanProduk`, serta SQL migrasi/rollback final.
+
+WAR tidak dipasang otomatis ke produksi. Deployment membutuhkan backup database, endpoint target, kredensial release owner, jadwal maintenance, dan observasi runtime setelah restart.
