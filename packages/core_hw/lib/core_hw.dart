@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'src/barcode_scanner_windows_stub.dart'
+    if (dart.library.io) 'src/barcode_scanner_windows.dart';
+
 export 'src/buka_laci.dart' show bukaLaciKasir, cetakRawKasir;
 
 /// Layar full-screen pemindai barcode/QR kamera (MLKit lewat `mobile_scanner`)
@@ -23,11 +26,14 @@ class BarcodeScannerScreen extends StatefulWidget {
   /// Buka layar scan, kembalikan kode hasil scan (atau null bila dibatalkan).
   static Future<String?> pindai(BuildContext context,
       {String judul = 'Scan Barcode'}) {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return pindaiBarcodeWindows(context, judul: judul);
+    }
     if (!_kameraScannerDidukung) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text(
-                'Scan kamera hanya tersedia di Android/iOS. Gunakan scanner barcode USB atau ketik kode produk.')),
+                'Scan kamera belum tersedia di platform ini. Gunakan scanner barcode USB atau ketik kode produk.')),
       );
       return Future.value();
     }
