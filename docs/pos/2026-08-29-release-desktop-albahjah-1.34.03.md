@@ -42,8 +42,11 @@ Jangan memasang desktop sebelum migrasi dan server baru aktif karena penyimpanan
 - Migrasi berjalan dalam satu transaksi dan selesai `COMMIT`: 10 kolom target serta 2 foreign key terbentuk.
 - Seluruh 22 UOM lama valid setelah migrasi; 5.975 dari 6.209 produk mendapatkan satuan pembelian dari satuan dasar yang sudah ada.
 - Sebanyak 234 produk lama memang belum memiliki satuan dasar. Dampaknya, 228 dari 933 riwayat penerimaan tetap tanpa snapshot satuan. Nilai tidak ditebak agar audit stok/HPP historis tidak berubah; admin perlu melengkapi satuan master produk tersebut.
-- Paket 15 class dipasang sebagai overlay terverifikasi pada exploded context, lalu hanya context Al-Bahjah yang di-reload pada `2026-08-29T01:34:44+07:00`. Reload selesai pukul `01:37:37 WIB`; tenant Nahl tetap aktif.
-- Pascareload, seluruh 15 hash class cocok, halaman utama publik HTTP 200, dan `PosApi` publik/lokal HTTP 401 tanpa sesi sesuai kontrak keamanan. Tidak ditemukan error baru yang menyebut `PosApi`, `KantinHelper`, `PengadaanProduk`, atau kolom UOM baru; tidak ada sesi database yang terblokir.
+- Paket 15 class mula-mula dipasang sebagai overlay terverifikasi pada exploded context dan berhasil direload. Setelah itu WAR produksi lama yang memiliki entri ZIP tumpang tindih dibangun ulang dari context aktif.
+- Build WAR pertama ikut membawa marker runtime Tomcat `META-INF/war-tracker` sehingga ekspansi ditolak. Artefak tersebut tidak dipakai sebagai hasil akhir. WAR v2 dibangun tanpa marker runtime, tanpa entri duplikat, lalu diaktifkan secara atomik.
+- Restart Tomcat terkontrol dimulai pukul `01:59:04 WIB`. Startup seluruh host selesai pukul `02:24:01 WIB`; Nahl kembali aktif sebelum redeploy final Al-Bahjah.
+- Deployment WAR v2 Al-Bahjah berlangsung pada `02:24:11–02:25:37 WIB` dan selesai dalam `86.318 ms` tanpa `SEVERE` baru.
+- Pascadeploy, seluruh 15 hash class cocok, halaman utama publik/lokal HTTP 200, dan `PosApi` Al-Bahjah serta Nahl HTTP 401 tanpa sesi sesuai kontrak keamanan. Tidak ditemukan error baru yang menyebut `PosApi`, `KantinHelper`, `PengadaanProduk`, atau kolom UOM baru; tidak ada sesi database yang terblokir.
 
 Log reload masih memuat peringatan lama Hibernate `SchemaUpdate` pada constraint modul akademik/payroll dan peringatan thread context yang belum berhenti. Keduanya tidak berasal dari perubahan UOM, tetapi perlu tiket teknis terpisah agar reload berikutnya lebih bersih.
 
@@ -71,7 +74,7 @@ Build dilakukan dari checkout bersih pada commit Git `4f81136`; perubahan lokal 
 - SHA-256: `89E369C4F27E7A08406D2152C588AE89ADFC5D96522819F2945387A379A33A9A`
 - Isi diverifikasi memuat kelas `PosApi`, `KantinHelper`, `Produk`, `PengadaanProduk`, serta SQL migrasi/rollback final.
 
-WAR hasil build bersih disimpan sebagai artefak rilis, tetapi tidak menimpa WAR produksi lama. Produksi memakai overlay class terverifikasi pada exploded context setelah backup database dan arsip rollback tersedia.
+WAR hasil build SVN bersih tetap disimpan sebagai artefak referensi. WAR produksi dibangun ulang dari exploded context aktif agar seluruh konfigurasi dan aset khusus server dipertahankan sekaligus menghapus struktur ZIP lama yang tumpang tindih.
 
 ### Paket operasional backend
 
@@ -81,11 +84,13 @@ WAR hasil build bersih disimpan sebagai artefak rilis, tetapi tidak menimpa WAR 
 - Isi: seluruh `PosApi*.class`, seluruh `KantinHelper*.class`, model `Produk` dan `PengadaanProduk`, migrasi/rollback final, checksum per file, serta runbook deployment dan UAT.
 - Endpoint publik `https://ecampus.staialbahjah.ac.id/albahjah/PosApi` terjangkau dan menolak request tanpa sesi dengan HTTP 401 sesuai kontrak keamanan.
 - Paket produksi, log migrasi, arsip rollback 15 class, dan bukti checksum tersimpan di `/backup4/deployments/albahjah-uom-r78485-20260829-0125`.
-- Deployment produksi selesai melalui overlay class karena WAR lama mengandung entri ZIP tumpang tindih `WEB-INF/lib/JhengHei.jar` dan tidak aman diperbarui in-place. WAR lama tidak ditimpa. Deployment WAR bersih berikutnya wajib memakai hasil SVN minimal `r78485` agar perubahan tetap ikut ketika exploded context diganti.
+- WAR produksi final: `/backup4/tomcat_ecampus/webapps/albahjah.war`, ukuran `949.662.895 byte`, SHA-256 `0D413BD2D5A2713204DC88B99FD8255AEC50DA8762FA68976DAE7C0A302024CC`.
+- WAR final mempunyai `73.699` entri, tanpa duplikasi dan tanpa marker runtime `META-INF/war-tracker`. Salinan WAR lama dan checksum-nya tetap tersedia di direktori deployment untuk rollback.
+- Daftar 234 produk tanpa satuan dibuat otomatis di `/backup4/deployments/albahjah-uom-r78485-20260829-0125/produk-tanpa-satuan-20260829.csv` agar admin dapat melakukan koreksi data master terarah.
 
 ## Tindak lanjut operasional
 
 1. Admin master data melengkapi satuan dasar pada 234 produk lama yang masih kosong, lalu melakukan sinkronisasi produk. Riwayat lama tidak boleh diubah dengan satuan hasil tebakan.
 2. Kasir memasang desktop `1.34.03+161`, menekan **Sinkronkan/Muat Ulang**, lalu menguji satu produk dengan satuan pembelian berbeda dan memastikan stok bertambah dalam satuan dasar.
-3. Release owner memperbaiki WAR lama yang mempunyai entri ZIP tumpang tindih sebelum deployment WAR berikutnya.
+3. Tim backend membuat tiket optimasi startup Tomcat dan memperbaiki cleanup thread/C3P0 pada context reload; startup penuh saat ini dapat memerlukan sekitar 25 menit.
 4. Admin Cloudflare merotasi token tunnel yang sempat terekspos pada keluaran diagnostik deployment. Token lama tidak boleh disalin ke dokumentasi atau chat.
