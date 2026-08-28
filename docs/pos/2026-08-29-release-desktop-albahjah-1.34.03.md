@@ -94,3 +94,5 @@ WAR hasil build SVN bersih tetap disimpan sebagai artefak referensi. WAR produks
 2. Kasir memasang desktop `1.34.03+161`, menekan **Sinkronkan/Muat Ulang**, lalu menguji satu produk dengan satuan pembelian berbeda dan memastikan stok bertambah dalam satuan dasar.
 3. Tim backend membuat tiket optimasi startup Tomcat dan memperbaiki cleanup thread/C3P0 pada context reload; startup penuh saat ini dapat memerlukan sekitar 25 menit.
 4. Admin Cloudflare merotasi token tunnel yang sempat terekspos pada keluaran diagnostik deployment. Token lama tidak boleh disalin ke dokumentasi atau chat.
+
+Prosedur koreksi master data dijelaskan pada [Runbook Koreksi Produk Tanpa Satuan](2026-08-29-runbook-koreksi-produk-tanpa-satuan.md).
