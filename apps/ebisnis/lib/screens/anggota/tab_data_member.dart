@@ -22,6 +22,7 @@ import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/aksi_baris_menu.dart';
+import 'member_biometric_panel.dart';
 
 final _formatTanggalKadaluarsa = DateFormat('dd-MM-yyyy');
 
@@ -1306,6 +1307,25 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
                   ),
                 ],
               ),
+              if (ubah) ...[
+                const SizedBox(height: 12),
+                if (_userid.text.trim().isNotEmpty)
+                  MemberBiometricPanel(
+                    targetUserId: _userid.text.trim(),
+                    memberName: _nama.text.trim(),
+                  )
+                else
+                  AppFormSection(
+                    judul: 'Biometrik Member',
+                    deskripsi:
+                        'Biometrik diikat ke akun AIS agar dapat diverifikasi lintas perangkat.',
+                    children: const [
+                      Text(
+                        'Isi dan simpan User ID terlebih dahulu, lalu buka kembali Member ini untuk merekam 5 sidik jari dan 5 sampel wajah.',
+                      ),
+                    ],
+                  ),
+              ],
             ],
           ),
         ),
