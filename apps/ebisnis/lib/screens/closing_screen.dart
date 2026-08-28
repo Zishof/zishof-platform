@@ -56,7 +56,8 @@ class _ClosingScreenState extends State<ClosingScreen> {
 
   Future<void> _muatSemua() async {
     try {
-      final opsi = await ApiClient.instance.aksi('closing_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'closing_opsi', const {}, 'closing_opsi');
       if (!mounted) return;
       setStateIfMounted(() => _catatanAlur = '${opsi['catatanAlur'] ?? ''}');
     } catch (_) {

@@ -71,7 +71,8 @@ class _PjKasBesarScreenState extends State<PjKasBesarScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('pj_kas_besar_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'pj_kas_besar_opsi', const {}, 'pj_kas_besar_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenisPajak =

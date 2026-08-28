@@ -80,7 +80,8 @@ class _ProsesTransferScreenState extends State<ProsesTransferScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('proses_transfer_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'proses_transfer_opsi', const {}, 'proses_transfer_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _cara = ((opsi['caraPembayaran'] as List?) ?? [])

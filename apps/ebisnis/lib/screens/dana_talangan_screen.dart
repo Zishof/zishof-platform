@@ -86,7 +86,8 @@ class _DanaTalanganScreenState extends State<DanaTalanganScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('dana_talangan_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'dana_talangan_opsi', const {}, 'dana_talangan_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _satker =

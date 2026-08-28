@@ -120,3 +120,16 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   toko baru di kasir tetap online-only karena snapshot lokal masih milik toko
   sebelumnya. Penjaganya: test `konfigurasi dan toko_profil_ambil punya
   fallback cache objek` di test kontrak yang sama.
+- **Langkah 3 (keluarga `*_opsi`) — selesai 29 Agustus 2026.** Helper generik
+  yang direncanakan audit ternyata sudah terpenuhi oleh `objekDenganCache`
+  (respons `*_opsi` adalah objek berisi beberapa daftar opsi). 14 call-site
+  ber-body kosong dimigrasikan dengan kunci cache = nama aksinya:
+  `closing_opsi`, `dana_talangan_opsi`, `kas_kecil_opsi`, `kas_besar_opsi`,
+  `master_keuangan_opsi`, `nomor_surat_keuangan_opsi`,
+  `pengadaan_cara_bayar_opsi`, `penggantian_kas_kecil_opsi`,
+  `pj_uang_muka_opsi`, `pj_kas_besar_opsi`, `proses_transfer_opsi`,
+  `proses_transitori_opsi`, `reimbursement_opsi`, `uang_muka_opsi` — form
+  tetap bisa dibuka saat offline. `laporan_metode_bayar_opsi` sengaja TIDAK
+  ikut: body-nya memuat rentang tanggal sehingga kunci cache-nya tak
+  terbatas; tetap online-only dan dikunci test. Penjaganya: test `keluarga
+  *_opsi dibaca lewat objekDenganCache`.

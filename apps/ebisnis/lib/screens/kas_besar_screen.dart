@@ -91,7 +91,8 @@ class _KasBesarScreenState extends State<KasBesarScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('kas_besar_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'kas_besar_opsi', const {}, 'kas_besar_opsi');
       final res = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;

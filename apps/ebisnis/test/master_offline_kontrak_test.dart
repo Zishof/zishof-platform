@@ -482,6 +482,54 @@ void main() {
     }
   });
 
+  // Keluarga *_opsi ber-body kosong (langkah 3 audit 2026-08-29): opsi form
+  // stabil, dibaca lewat objekDenganCache dgn kunci = nama aksinya sehingga
+  // form tetap bisa dibuka saat offline. laporan_metode_bayar_opsi SENGAJA
+  // tidak ikut: hasilnya bergantung rentang tanggal sehingga kunci cache-nya
+  // tak terbatas -- tetap online-only.
+  test('keluarga *_opsi dibaca lewat objekDenganCache', () {
+    const layarOpsi = <String, String>{
+      'lib/screens/closing_screen.dart': 'closing_opsi',
+      'lib/screens/dana_talangan_screen.dart': 'dana_talangan_opsi',
+      'lib/screens/kas_kecil_screen.dart': 'kas_kecil_opsi',
+      'lib/screens/kas_besar_screen.dart': 'kas_besar_opsi',
+      'lib/screens/master_keuangan_screen.dart': 'master_keuangan_opsi',
+      'lib/screens/nomor_surat_keuangan_screen.dart':
+          'nomor_surat_keuangan_opsi',
+      'lib/screens/pengadaan_bayar_screen.dart': 'pengadaan_cara_bayar_opsi',
+      'lib/screens/penggantian_kas_kecil_screen.dart':
+          'penggantian_kas_kecil_opsi',
+      'lib/screens/pj_uang_muka_screen.dart': 'pj_uang_muka_opsi',
+      'lib/screens/pj_kas_besar_screen.dart': 'pj_kas_besar_opsi',
+      'lib/screens/proses_transfer_screen.dart': 'proses_transfer_opsi',
+      'lib/screens/proses_transitori_screen.dart': 'proses_transitori_opsi',
+      'lib/screens/reimbursement_screen.dart': 'reimbursement_opsi',
+      'lib/screens/uang_muka_screen.dart': 'uang_muka_opsi',
+    };
+    for (final entri in layarOpsi.entries) {
+      final source = rapat(File(entri.key).readAsStringSync());
+      expect(
+          source,
+          contains(rapat("objekDenganCache('${entri.value}', "
+              "const {}, '${entri.value}')")),
+          reason: '${entri.key} harus memuat ${entri.value} lewat cache');
+      expect(
+          source,
+          isNot(
+              contains(rapat("ApiClient.instance.aksi('${entri.value}'"))),
+          reason: '${entri.key} tidak boleh lagi fetch ${entri.value} '
+              'langsung');
+    }
+    final laporan = rapat(
+        File('lib/screens/laporan_transaksi_screen.dart').readAsStringSync());
+    expect(
+        laporan,
+        contains(
+            rapat("ApiClient.instance.aksi('laporan_metode_bayar_opsi'")),
+        reason: 'laporan_metode_bayar_opsi bergantung rentang tanggal -- '
+            'harus tetap online-only, bukan objekDenganCache');
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

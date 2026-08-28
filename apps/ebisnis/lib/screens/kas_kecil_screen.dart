@@ -91,7 +91,8 @@ class _KasKecilScreenState extends State<KasKecilScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('kas_kecil_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'kas_kecil_opsi', const {}, 'kas_kecil_opsi');
       final res = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;

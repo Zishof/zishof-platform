@@ -73,7 +73,8 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('uang_muka_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'uang_muka_opsi', const {}, 'uang_muka_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenis = ((opsi['jenisUangMuka'] as List?) ?? [])

@@ -71,7 +71,8 @@ class _PjUangMukaScreenState extends State<PjUangMukaScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('pj_uang_muka_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'pj_uang_muka_opsi', const {}, 'pj_uang_muka_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenisPajak =

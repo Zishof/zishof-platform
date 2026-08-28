@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api_client.dart';
 import '../services/master_offline.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/app_components.dart';
@@ -81,7 +80,8 @@ class _MasterKeuanganScreenState extends State<MasterKeuanganScreen>
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('master_keuangan_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'master_keuangan_opsi', const {}, 'master_keuangan_opsi');
       final res = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;

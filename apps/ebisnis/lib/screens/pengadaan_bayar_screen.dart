@@ -823,7 +823,8 @@ class _FormBayarDialogState extends State<_FormBayarDialog> {
 
   Future<void> _muatCaraBayar() async {
     try {
-      final r = await ApiClient.instance.aksi('pengadaan_cara_bayar_opsi', {});
+      final r = await MasterOffline.objekDenganCache(
+          'pengadaan_cara_bayar_opsi', const {}, 'pengadaan_cara_bayar_opsi');
       if (!mounted) return;
       setState(() {
         _caraBayar = ((r['data'] as List?) ?? const [])

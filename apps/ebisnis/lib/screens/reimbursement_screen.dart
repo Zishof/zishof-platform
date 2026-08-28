@@ -93,7 +93,8 @@ class _ReimbursementScreenState extends State<ReimbursementScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('reimbursement_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'reimbursement_opsi', const {}, 'reimbursement_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenis = ((opsi['jenisReimbursement'] as List?) ?? [])

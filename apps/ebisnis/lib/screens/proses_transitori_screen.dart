@@ -72,7 +72,8 @@ class _ProsesTransitoriScreenState extends State<ProsesTransitoriScreen> {
       _galat = null;
     });
     try {
-      final opsi = await ApiClient.instance.aksi('proses_transitori_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'proses_transitori_opsi', const {}, 'proses_transitori_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _daftarStatus =

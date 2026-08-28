@@ -55,8 +55,8 @@ class _NomorSuratKeuanganScreenState extends State<NomorSuratKeuanganScreen> {
       _galat = null;
     });
     try {
-      final opsi =
-          await ApiClient.instance.aksi('nomor_surat_keuangan_opsi', {});
+      final opsi = await MasterOffline.objekDenganCache(
+          'nomor_surat_keuangan_opsi', const {}, 'nomor_surat_keuangan_opsi');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenisSegmen =
