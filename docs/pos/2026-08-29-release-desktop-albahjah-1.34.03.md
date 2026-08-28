@@ -57,3 +57,13 @@ Build dilakukan dari checkout bersih pada commit Git `4f81136`; perubahan lokal 
 - Isi diverifikasi memuat kelas `PosApi`, `KantinHelper`, `Produk`, `PengadaanProduk`, serta SQL migrasi/rollback final.
 
 WAR tidak dipasang otomatis ke produksi. Deployment membutuhkan backup database, endpoint target, kredensial release owner, jadwal maintenance, dan observasi runtime setelah restart.
+
+### Paket operasional backend
+
+- Paket hot-swap terverifikasi: `C:\opt\release-worktrees\deploy-pos-uom-r78485.zip`
+- Ukuran: `339.254 byte`
+- SHA-256: `8AFEBDB56D0E38EC629BB04400E406A8C24718CF082036034E1E82A993877244`
+- Isi: seluruh `PosApi*.class`, seluruh `KantinHelper*.class`, model `Produk` dan `PengadaanProduk`, migrasi/rollback final, checksum per file, serta runbook deployment dan UAT.
+- Endpoint publik `https://ecampus.staialbahjah.ac.id/albahjah/PosApi` terjangkau dan menolak request tanpa sesi dengan HTTP 401 sesuai kontrak keamanan.
+
+Deployment produksi belum dijalankan karena host asal berada di balik Cloudflare dan tidak ada profil server lokal yang dapat dibuktikan sebagai target Al-Bahjah. Operator wajib mengonfirmasi host/context, service Tomcat, database target, backup, dan jadwal maintenance; jangan memilih profil SSH berdasarkan perkiraan.
