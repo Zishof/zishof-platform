@@ -409,6 +409,33 @@ void main() {
     expect(source, contains('kunci'));
   });
 
+  // Bagan akun dipakai 9 layar keuangan sekaligus; sejak audit 2026-08-29
+  // semuanya membaca lewat SATU cache bersama 'master:akun' (fallback offline)
+  // dengan limit seragam 5000, bukan fetch ApiClient sendiri-sendiri per layar.
+  test('akun_list dibaca lewat cache bersama master:akun', () {
+    const layarAkun = <String>[
+      'lib/screens/anggaran_screen.dart',
+      'lib/screens/jurnal_umum_screen.dart',
+      'lib/screens/kas_besar_screen.dart',
+      'lib/screens/kas_kecil_screen.dart',
+      'lib/screens/laporan_screen.dart',
+      'lib/screens/master_keuangan_screen.dart',
+      'lib/screens/penggantian_kas_kecil_screen.dart',
+      'lib/screens/siklus_akuntansi_screen.dart',
+      'lib/screens/uang_muka_screen.dart',
+    ];
+    for (final file in layarAkun) {
+      final source = rapat(File(file).readAsStringSync());
+      expect(
+          source,
+          contains(rapat(
+              "daftarDenganCache('akun_list', {'limit': 5000}, 'master:akun')")),
+          reason: '$file harus memuat akun_list lewat cache bersama');
+      expect(source, isNot(contains(rapat("ApiClient.instance.aksi('akun_list'"))),
+          reason: '$file tidak boleh lagi fetch akun_list langsung per layar');
+    }
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

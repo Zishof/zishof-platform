@@ -91,7 +91,8 @@ class _PenggantianKasKecilScreenState extends State<PenggantianKasKecilScreen> {
     try {
       final opsi =
           await ApiClient.instance.aksi('penggantian_kas_kecil_opsi', {});
-      final res = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final res = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;
       setStateIfMounted(() {
         _satker =

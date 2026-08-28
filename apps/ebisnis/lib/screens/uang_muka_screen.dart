@@ -545,7 +545,8 @@ class _UangMukaScreenState extends State<UangMukaScreen> {
     // Akun dipilih dari bagan akun yang sama dengan modul Akuntansi.
     List<Map<String, dynamic>> daftarAkun = [];
     try {
-      final res = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final res = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       daftarAkun = ((res['data'] as List?) ?? []).cast<Map<String, dynamic>>();
     } catch (_) {
       // Biarkan kosong; pemilih akan tampil tanpa pilihan dan server tetap memvalidasi.

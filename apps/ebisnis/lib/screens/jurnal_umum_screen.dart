@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -68,7 +69,8 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
       final jenis =
           await ApiClient.instance.aksi('jurnal_umum_jenis_transaksi', {});
       // Daftar akun dipakai pemilih akun di editor; sekali muat, dipakai semua baris.
-      final akun = await ApiClient.instance.aksi('akun_list', {'limit': 5000});
+      final akun = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;
       setStateIfMounted(() {
         _jurnal = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();

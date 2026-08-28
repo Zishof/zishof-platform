@@ -100,7 +100,8 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
         setStateIfMounted(() => _template =
             ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>());
       });
-      final ak = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final ak = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;
       setStateIfMounted(() {
         _akun = ((ak['data'] as List?) ?? []).cast<Map<String, dynamic>>();

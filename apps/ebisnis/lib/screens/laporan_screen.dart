@@ -591,7 +591,8 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
 
   Future<void> _muat() async {
     try {
-      final hasil = await ApiClient.instance.aksi('akun_list', {'limit': 5000});
+      final hasil = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       final sumber = (hasil['data'] as List?) ?? (hasil['akun'] as List?) ?? [];
       if (!mounted) return;
       setState(() {

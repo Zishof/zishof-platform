@@ -146,7 +146,8 @@ class _AnggaranScreenState extends State<AnggaranScreen>
     });
     try {
       final res = await ApiClient.instance.aksi('anggaran_konteks', {});
-      final akun = await ApiClient.instance.aksi('akun_list', {'limit': 2000});
+      final akun = await MasterOffline.daftarDenganCache(
+          'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;
       final tahun = ((res['tahun'] as List?) ?? [])
           .map((e) => (e as num).toInt())

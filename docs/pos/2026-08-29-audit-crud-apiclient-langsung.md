@@ -95,3 +95,16 @@ Typeahead ke server tetap online, tetapi dua di antaranya menyentuh jalur kasir 
 6. Statistik/dashboard dan daftar berhalaman → bertahap per layar, dengan test kontrak pagination.
 
 Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sudah ada) dan tidak mencampur perubahan antarfitur dalam satu commit.
+
+## 6. Status pelaksanaan
+
+- **Langkah 1 (`akun_list`) — selesai 29 Agustus 2026.** Kesembilan layar keuangan
+  (anggaran, jurnal umum, kas besar, kas kecil, laporan, master keuangan,
+  penggantian kas kecil, siklus akuntansi, uang muka) kini memuat bagan akun
+  lewat `MasterOffline.daftarDenganCache('akun_list', {'limit': 5000},
+  'master:akun')` — satu cache bersama dengan fallback offline. Limit
+  diseragamkan ke 5000 (superset dari 2000 yang lama; jurnal umum sudah memakai
+  5000 sebelumnya). Perilaku online tidak berubah (server tetap dipanggil dan
+  bentuk respons sama); yang bertambah adalah snapshot lokal sehingga dropdown
+  akun tetap terisi saat offline. Penjaganya: test `akun_list dibaca lewat
+  cache bersama master:akun` di `test/master_offline_kontrak_test.dart`.
