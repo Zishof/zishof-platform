@@ -340,6 +340,15 @@ class ItemKeranjang {
   /// Stok dan qty TETAP dalam satuan dasar; ini murni label tampilan.
   String? kemasanNama;
   int? kemasanQtyDasar;
+
+  /// Satuan JUAL per baris (Fase B dok. 48/49): kasir memilih satuan besar
+  /// (mis. Karung 50) dan mengetik qty dalam satuan itu. `jumlah` TETAP
+  /// satuan dasar; server menimpa/menghitung ulang jumlah dari qty_input x
+  /// faktor miliknya sendiri (klien hanya pratinjau lewat UomKonversi).
+  int? satuanJualId;
+  String? satuanJualNama;
+  double? qtyInput;
+  double? faktorKeDasar;
   double diskon;
   double cashback;
   int? aturanDiskonId;
@@ -376,6 +385,27 @@ class ItemKeranjang {
   /// dibagi isi kemasan; bila kasir mengubah qty hingga tidak bulat lagi,
   /// jatuh ke bentuk informatif "Karung 50kg (isi N)" -- tidak berbohong
   /// mengaku kelipatan yang bukan.
+  /// Snapshot satuan jual masih SEJALAN dengan qty dasar? Begitu kasir
+  /// mengubah qty lewat stepper sehingga qtyInput x faktor != jumlah,
+  /// snapshot gugur sendiri -- label dan payload satuan tidak dikirim,
+  /// tanpa satu pun stepper perlu tahu konsep satuan jual.
+  bool get satuanJualKonsisten {
+    final q = qtyInput, f = faktorKeDasar;
+    if (satuanJualId == null || q == null || f == null || q <= 0 || f <= 0) {
+      return false;
+    }
+    return ((q * f) - jumlah).abs() < 1e-6;
+  }
+
+  /// Label satuan jual utk baris & struk: "2 Karung50 = 100 kg".
+  String? get labelSatuanJual {
+    if (!satuanJualKonsisten) return null;
+    final q = qtyInput!;
+    final qTeks = q == q.roundToDouble() ? '${q.round()}' : '$q';
+    final dasar = produk.satuanNama.isEmpty ? 'unit' : produk.satuanNama;
+    return '$qTeks ${satuanJualNama ?? ''} = $jumlah $dasar';
+  }
+
   String? get labelKemasan {
     final nama = kemasanNama;
     final isi = kemasanQtyDasar ?? 0;
