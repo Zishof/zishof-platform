@@ -130,7 +130,9 @@ void main() {
   // dan aksi sensitif menurut spec offline (PERINTAH_MASTER... section 13.3).
   const tetapOnline = <String, List<String>>{
     'lib/screens/hak_akses_screen.dart': ["'ebisnis_role_menu_simpan'"],
-    'lib/screens/kulakan_bulk_entry_screen.dart': ["'produk_simpan'"],
+    // kulakan_bulk_entry produk_simpan: dulu online-only karena butuh id
+    // server seketika; sejak 2026-08-29 memakai id sementara MasterOffline
+    // (lihat test 'produk baru bulk entry ...' di bawah) -- entrinya pindah.
     // Bagan akun: spec 13.3 menempatkan "perubahan rekening/harga sensitif"
     // sebagai wajib online. Akun yang baru muncul setelah sinkronisasi akan
     // membuat jurnal mengacu ke akun tak dikenal.
@@ -584,6 +586,25 @@ void main() {
       expect(source, contains(rapat('OutboxIs.flush()')),
           reason: '$file harus mengirim ulang antrean saat layar dibuka');
     }
+  });
+
+  // Langkah 6 audit 2026-08-29: produk baru di Bulk Entry Kulakan tidak lagi
+  // memblokir posting saat offline. Id SEMENTARA negatif dipakai item faktur
+  // dan ditukar id server oleh tukarIdSementara saat antrean terkirim; faktur
+  // yang menunjuk produk belum-terkirim DITAHAN flush. Sukses-tanpa-id tetap
+  // dilempar (bukan jatuh ke id sementara) supaya faktur tidak tertahan
+  // selamanya, dan penolakan bisnis tetap menghentikan posting.
+  test('produk baru bulk entry dibuat lokal-dulu dgn id sementara', () {
+    final source = rapat(
+        File('lib/screens/kulakan_bulk_entry_screen.dart').readAsStringSync());
+    expect(source, contains(rapat('MasterOffline.idSementaraBaru()')));
+    expect(source, contains(rapat("antreLokal('produk_simpan'")));
+    expect(source, contains(rapat("entitas: 'produk'")));
+    expect(source,
+        isNot(contains(rapat("ApiClient.instance.aksi('produk_simpan'"))),
+        reason: 'produk_simpan bulk entry tidak boleh lagi online-only');
+    expect(source, contains(rapat('if (!e.offline) rethrow')),
+        reason: 'penolakan bisnis harus tetap menghentikan posting');
   });
 
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {

@@ -163,3 +163,16 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   append-only; `kode_unik` sudah dikirim sehingga dedup server dapat
   ditambahkan belakangan tanpa mengubah klien. Penjaganya: test `log cetak
   diantre lewat OutboxIs, tidak hilang saat offline`.
+- **Langkah 6 (`produk_simpan` di Bulk Entry Kulakan) — selesai 29 Agustus
+  2026.** Sebelumnya sengaja online-only (tercatat di daftar `tetapOnline`
+  test kontrak) karena id server produk baru langsung dipakai sebagai
+  `produk_id` item faktur. Kini memakai mekanisme id sementara `MasterOffline`
+  yang sudah terbukti pada supplier kulakan_screen: `antreLokal` +
+  `kirimSatuAntrean` (batas tunggu 6 detik); saat offline/timeout item faktur
+  memakai id negatif yang ditukar `tukarIdSementara` ketika antrean terkirim,
+  dan faktur yang menunjuk produk belum-terkirim ditahan flush. Dua penjaga
+  ketat dipertahankan: sukses-tanpa-id tetap dilempar sebagai error (jatuh ke
+  id sementara akan membuat faktur tertahan selamanya karena pemetaan id tak
+  pernah tercatat), dan penolakan bisnis server tetap menghentikan posting.
+  Entri `tetapOnline` di test kontrak dipindah ke penjaga baru `produk baru
+  bulk entry dibuat lokal-dulu dgn id sementara`.

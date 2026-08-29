@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -777,7 +778,15 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
       for (final row in _activeRows) {
         var produkId = row.produkId;
         if (produkId == null) {
-          final hasil = await ApiClient.instance.aksi('produk_simpan', {
+          // Produk baru boleh dibuat offline (pola supplier kulakan_screen):
+          // id SEMENTARA negatif langsung dipakai item faktur di bawah, lalu
+          // ditukar dengan id server saat antreannya terkirim
+          // (MasterOffline.tukarIdSementara) -- faktur yang masih menunjuk
+          // produk yang belum terkirim DITAHAN flush, bukan dikirim rusak.
+          final idLokal = MasterOffline.idSementaraBaru();
+          final kunci =
+              'produk:baru:${DateTime.now().microsecondsSinceEpoch}';
+          final bodyProduk = <String, dynamic>{
             'kode': row.kodeBersih,
             'nama': row.namaBersih,
             'barcode': row.kodeBersih,
@@ -794,10 +803,31 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
             'jenis_item': 'JUAL',
             'bahan_baku': const [],
             'ekstra_pilihan': const [],
-          });
-          produkId = (hasil['id'] as num?)?.toInt();
-          if (produkId == null) {
-            throw 'Produk baru ${row.namaBersih} gagal mendapat ID dari server.';
+          };
+          final idAntrean = await MasterOffline.antreLokal(
+            'produk_simpan',
+            bodyProduk,
+            kunci: kunci,
+            idLokal: idLokal,
+            entitas: 'produk',
+          );
+          try {
+            final hasil = await MasterOffline.kirimSatuAntrean(
+                    idAntrean, 'produk_simpan', bodyProduk,
+                    kunci: kunci)
+                .timeout(const Duration(seconds: 6));
+            produkId = (hasil['id'] as num?)?.toInt();
+            if (produkId == null) {
+              // Sukses tanpa id tidak boleh jatuh ke id sementara: barisnya
+              // sudah ditandai terkirim sehingga pemetaan id tak akan pernah
+              // tercatat dan faktur tertahan selamanya.
+              throw 'Produk baru ${row.namaBersih} gagal mendapat ID dari server.';
+            }
+          } on TimeoutException {
+            produkId = idLokal; // tetap antre -- flush latar melanjutkan.
+          } on ApiException catch (e) {
+            if (!e.offline) rethrow; // penolakan bisnis: posting berhenti.
+            produkId = idLokal;
           }
         }
         final expired = _parseTanggal(row.expired.text);
