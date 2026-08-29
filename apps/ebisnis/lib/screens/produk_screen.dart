@@ -24,6 +24,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/indikator_sinkron_master.dart';
 import '../widgets/kilau_perubahan.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/progress_sinkron_awal.dart';
 import '../widgets/riwayat_data_dialog.dart';
@@ -106,6 +107,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   int _halaman = 0;
   int _totalProduk = 0;
   Map<String, dynamic>? _statistik;
+  bool _statistikDariCache = false;
   bool _memulaiDataSample = false;
   bool _menyinkronProduk = false;
   // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
@@ -233,7 +235,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
 
       Map<String, dynamic>? statistik;
       try {
-        statistik = await ApiClient.instance.aksi('produk_statistik');
+        statistik = await MasterOffline.objekDenganCache(
+            'produk_statistik', const {}, 'produk_statistik');
       } catch (_) {
         // dasbor KPI gagal muat bukan blocker -- daftar produk tetap tampil normal.
       }
@@ -241,6 +244,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       setStateIfMounted(() {
         _kategori = kategori;
         _statistik = statistik;
+        _statistikDariCache = statistik?['offline'] == true;
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
@@ -1132,6 +1136,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                                           padding: const EdgeInsets.fromLTRB(
                                               12, 12, 12, 90),
                                           children: [
+                                            PenandaDataTersimpan(
+                                                tampil: _statistikDariCache),
                                             if (_statistik != null)
                                               _KartuStatistik(
                                                 statistik: _statistik!,

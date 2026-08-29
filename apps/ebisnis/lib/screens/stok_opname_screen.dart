@@ -16,6 +16,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
@@ -272,6 +273,7 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
   String? _pesanError;
   Map<String, dynamic>? _dasbor;
   Map<String, dynamic>? _ringkasanHariIni;
+  bool _dasborDariCache = false;
 
   @override
   void initState() {
@@ -286,12 +288,16 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
     });
     try {
       final results = await Future.wait([
-        ApiClient.instance.aksi('stok_dashboard', {'periode': 'month'}),
-        ApiClient.instance.aksi('so_ringkasan'),
+        MasterOffline.objekDenganCache(
+            'stok_dashboard', {'periode': 'month'}, 'stok_dashboard:month'),
+        MasterOffline.objekDenganCache(
+            'so_ringkasan', const {}, 'so_ringkasan'),
       ]);
       setStateIfMounted(() {
         _dasbor = results[0];
         _ringkasanHariIni = results[1];
+        _dasborDariCache = results[0]['offline'] == true ||
+            results[1]['offline'] == true;
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
@@ -333,6 +339,8 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          // Nilai stok dari salinan tersimpan wajib dinyatakan terang-terangan.
+          PenandaDataTersimpan(tampil: _dasborDariCache),
           SizedBox(
             height: 96,
             child: ListView(

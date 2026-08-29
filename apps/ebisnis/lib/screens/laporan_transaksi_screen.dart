@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import 'inventory_sales/cetak_util.dart';
 import 'struk_screen.dart';
@@ -178,6 +179,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
   Map<String, dynamic>? _statistik;
+  bool _statistikDariCache = false;
   final _orderKey = GlobalKey<_TabOrderState>();
   final _sesiKey = GlobalKey<_TabSesiState>();
   final _transaksiKasirKey = GlobalKey<_TabTransaksiPerKasirState>();
@@ -205,8 +207,14 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
 
   Future<void> _muatStatistik() async {
     try {
-      final hasil = await ApiClient.instance.aksi('transaksi_statistik');
-      if (mounted) setStateIfMounted(() => _statistik = hasil);
+      final hasil = await MasterOffline.objekDenganCache(
+          'transaksi_statistik', const {}, 'transaksi_statistik');
+      if (mounted) {
+        setStateIfMounted(() {
+          _statistik = hasil;
+          _statistikDariCache = hasil['offline'] == true;
+        });
+      }
     } catch (_) {
       // dasbor KPI gagal muat bukan blocker utk 3 tab laporan di bawahnya.
     }
@@ -358,6 +366,9 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
             ],
           ),
           _toolbarLaporanDinamis(),
+          // Angka rupiah KPI dari salinan tersimpan wajib dinyatakan terang-
+          // terangan (aturan laporan ber-cache).
+          PenandaDataTersimpan(tampil: _statistikDariCache),
           Expanded(
             child: TabBarView(controller: _tab, children: [
               _TabOrder(key: _orderKey, statistik: _statistik),

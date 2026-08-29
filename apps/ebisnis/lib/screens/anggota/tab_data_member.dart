@@ -16,6 +16,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/dashboard_charts.dart';
 import '../../widgets/kilau_perubahan.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/progress_sinkron_awal.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/riwayat_data_dialog.dart';
@@ -63,6 +64,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
   int _total = 0;
   String _kataKunci = '';
   Map<String, dynamic>? _statistik;
+  bool _statistikDariCache = false;
   // Diff dari emisi server daftarCacheDulu -- menggerakkan kilau baris +
   // banner "pembaruan dari server" (termasuk perubahan kasir lain).
   Set<String> _idBaru = {};
@@ -209,8 +211,14 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
 
   Future<void> _muatStatistik() async {
     try {
-      final hasil = await ApiClient.instance.aksi('anggota_statistik');
-      if (mounted) setStateIfMounted(() => _statistik = hasil);
+      final hasil = await MasterOffline.objekDenganCache(
+          'anggota_statistik', const {}, 'anggota_statistik');
+      if (mounted) {
+        setStateIfMounted(() {
+          _statistik = hasil;
+          _statistikDariCache = hasil['offline'] == true;
+        });
+      }
     } catch (_) {
       // dasbor KPI gagal muat bukan blocker.
     }
@@ -650,6 +658,7 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
+          PenandaDataTersimpan(tampil: _statistikDariCache),
           if (_statistik != null)
             _KartuStatistikAnggota(statistik: _statistik!),
           const SizedBox(height: 12),

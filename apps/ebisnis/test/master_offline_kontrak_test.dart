@@ -611,6 +611,48 @@ void main() {
         reason: 'penolakan bisnis harus tetap menghentikan posting');
   });
 
+  // P3 gelombang 1 (2026-08-29): statistik/dashboard ber-body kosong/tetap
+  // dibaca lewat objekDenganCache + PenandaDataTersimpan saat salinan
+  // tersimpan dipakai. Yang berparameter rentang/filter (monitor_promo_
+  // cashback, draft_jurnal_ringkasan, sop_dashboard) tetap online karena
+  // kunci cache-nya tak terbatas. error_log_health SENGAJA tetap online:
+  // status "server sehat" dari cache saat server justru tak terjangkau
+  // menyesatkan secara aktif.
+  test('statistik dashboard ber-cache + penanda data tersimpan', () {
+    const layarStatistik = <String, List<String>>{
+      'lib/screens/anggota/tab_data_member.dart': [
+        "objekDenganCache('anggota_statistik', const {}, 'anggota_statistik')",
+      ],
+      'lib/screens/laporan_transaksi_screen.dart': [
+        "objekDenganCache("
+            "'transaksi_statistik', const {}, 'transaksi_statistik')",
+      ],
+      'lib/screens/produk_screen.dart': [
+        "objekDenganCache('produk_statistik', const {}, 'produk_statistik')",
+      ],
+      'lib/screens/stok_opname_screen.dart': [
+        "objekDenganCache("
+            "'stok_dashboard', {'periode': 'month'}, 'stok_dashboard:month')",
+        "objekDenganCache('so_ringkasan', const {}, 'so_ringkasan')",
+      ],
+    };
+    for (final entri in layarStatistik.entries) {
+      final source = rapat(File(entri.key).readAsStringSync());
+      for (final penanda in entri.value) {
+        expect(source, contains(rapat(penanda)),
+            reason: '${entri.key} kehilangan penanda: $penanda');
+      }
+      expect(source, contains('PenandaDataTersimpan('),
+          reason: '${entri.key} menampilkan angka cache TANPA penanda');
+    }
+    final logError =
+        rapat(File('lib/screens/log_error_screen.dart').readAsStringSync());
+    expect(logError,
+        contains(rapat("ApiClient.instance.aksi('error_log_health'")),
+        reason: 'error_log_health harus tetap online-only -- kesehatan server '
+            'dari cache saat offline menyesatkan');
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

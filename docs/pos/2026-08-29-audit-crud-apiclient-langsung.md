@@ -186,3 +186,18 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   pernah diantre sesuai aturan secret handover. Tidak ada perubahan kode;
   cabang kredensial itu kini dikunci eksplisit di daftar `tetapOnline` test
   kontrak agar tidak "dimigrasikan" keliru di masa depan.
+- **Langkah 8 (P3 gelombang 1: statistik/dashboard) — selesai 29 Agustus
+  2026.** Lima fetch ber-body kosong/tetap dimigrasikan ke `objekDenganCache`
+  dan layarnya memasang `PenandaDataTersimpan` (tampil saat `offline: true`)
+  di atas kartu KPI: `anggota_statistik` (tab data member),
+  `transaksi_statistik` (laporan transaksi — angka rupiah), `produk_statistik`
+  (layar produk), serta `stok_dashboard` (periode month, kunci
+  `stok_dashboard:month`) + `so_ringkasan` (dashboard stok opname — nilai
+  stok). Tiga aksi dashboard SENGAJA tetap online karena body-nya memuat
+  rentang tanggal/filter sehingga kunci cache tak terbatas:
+  `monitor_promo_cashback`, `draft_jurnal_ringkasan`, `sop_dashboard`.
+  `error_log_health` juga sengaja tetap online — menampilkan status "server
+  sehat" dari cache justru ketika server tak terjangkau menyesatkan secara
+  aktif. Penjaganya: test `statistik dashboard ber-cache + penanda data
+  tersimpan`. Sisa P3 (daftar berhalaman per layar) belum digarap dan tetap
+  terbuka di bagian 3.2.
