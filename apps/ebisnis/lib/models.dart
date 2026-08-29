@@ -160,7 +160,7 @@ class Produk {
         'kategori_id': j['kategoriId'],
         'kategori_nama': j['kategoriNama'] ?? '',
         'gambar_url': j['gambarUrl'],
-        'aktif': 1,
+        'aktif': j['aktif'] == false ? 0 : 1,
         'jenis_item': (j['jenisItem'] as String?)?.isNotEmpty == true
             ? j['jenisItem']
             : 'JUAL',
@@ -188,7 +188,49 @@ class Produk {
         'stok': b['stok'] ?? 0,
         'kategoriId': b['kategori_id'],
         'kategoriNama': b['kategori_nama'] ?? '',
+        'gambarUrl': b['gambar_url'],
+        'aktif': b['aktif'] != 0,
+        'jenisItem':
+            '${b['jenis_item'] ?? ''}'.isEmpty ? 'JUAL' : '${b['jenis_item']}',
+        'ekstraPilihan': _bacaDaftarAngka(b['ekstra_pilihan']),
+        'kemasan': _bacaDaftarPeta(b['kemasan']),
+        'fotoUrls': _bacaDaftarTeks(b['foto_urls']),
+        'izinkanJualMinusStok': b['izinkan_jual_minus_stok'] == 1,
       };
+
+  static List<int> _bacaDaftarAngka(Object? mentah) {
+    try {
+      final nilai = jsonDecode('$mentah');
+      return nilai is List
+          ? nilai.whereType<num>().map((e) => e.toInt()).toList()
+          : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static List<Map<String, dynamic>> _bacaDaftarPeta(Object? mentah) {
+    try {
+      final nilai = jsonDecode('$mentah');
+      return nilai is List
+          ? nilai
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static List<String> _bacaDaftarTeks(Object? mentah) {
+    try {
+      final nilai = jsonDecode('$mentah');
+      return nilai is List ? nilai.map((e) => '$e').toList() : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
 }
 
 class KebijakanRetur {
@@ -426,6 +468,7 @@ class ItemKeranjang {
     if (jumlah % isi == 0 && jumlah >= isi) return '${jumlah ~/ isi} x $nama';
     return '$nama (isi $isi)';
   }
+
   double get subtotal => (hargaSatuanEfektif + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
@@ -515,6 +558,9 @@ class Anggota {
   final String tipeNama;
   final String? tanggalKadaluarsa;
   final String userid;
+  final String fotoUrl;
+  final String fotoNama;
+  final int? fotoUkuran;
 
   Anggota({
     required this.id,
@@ -540,6 +586,9 @@ class Anggota {
     this.tipeNama = '',
     this.tanggalKadaluarsa,
     this.userid = '',
+    this.fotoUrl = '',
+    this.fotoNama = '',
+    this.fotoUkuran,
   });
 
   factory Anggota.fromJson(Map<String, dynamic> j) => Anggota(
@@ -569,6 +618,9 @@ class Anggota {
         tipeNama: (j['tipeNama'] ?? '') as String,
         tanggalKadaluarsa: j['tanggalKadaluarsa'] as String?,
         userid: (j['userid'] ?? '') as String,
+        fotoUrl: (j['fotoUrl'] ?? '') as String,
+        fotoNama: (j['fotoNama'] ?? '') as String,
+        fotoUkuran: (j['fotoUkuran'] as num?)?.toInt(),
       );
 
   /// Dari baris cache lokal (anggota_cache, kolom snake_case SQLite) -- dipakai
@@ -594,6 +646,7 @@ class Anggota {
         maksimalTransaksiBulanan:
             (b['maksimal_transaksi_bulanan'] as num?)?.toDouble() ?? 0,
         minSaldo: 0,
+        fotoUrl: (b['foto_url'] ?? '') as String,
       );
 
   /// Baris utk `CoreDb.upsertAnggotaCache` dari respons `anggota_sync_list`.

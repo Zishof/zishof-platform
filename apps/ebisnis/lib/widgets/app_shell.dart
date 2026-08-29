@@ -789,7 +789,8 @@ const _daftarMenu = <_ItemMenuShell>[
       builder: _bangunRiwayatSinkron),
   _ItemMenuShell(MenuEBisnis.logError, Icons.error_outline, 'Log Error',
       builder: _bangunLogError),
-  _ItemMenuShell(MenuEBisnis.riwayatAudit, Icons.manage_search, 'Riwayat Audit',
+  _ItemMenuShell(
+      MenuEBisnis.riwayatAudit, Icons.manage_search, 'Riwayat Perubahan Data',
       builder: _bangunRiwayatAudit),
   _ItemMenuShell(
       MenuEBisnis.konfigurasi, Icons.settings_outlined, 'Konfigurasi',
@@ -1591,7 +1592,7 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.logError:
       return 'Log Error';
     case MenuEBisnis.riwayatAudit:
-      return 'Riwayat Audit';
+      return 'Riwayat Perubahan Data';
     case MenuEBisnis.konfigurasi:
       return 'Konfigurasi';
     case MenuEBisnis.layarPelanggan:

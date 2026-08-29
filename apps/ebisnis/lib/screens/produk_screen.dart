@@ -17,6 +17,8 @@ import 'harga_grosir_editor.dart';
 import 'produk_stok_tanggal.dart';
 import '../services/kompresi_gambar.dart';
 import '../services/master_offline.dart';
+import '../services/simpan_gambar_local_first.dart';
+import '../services/url_media.dart';
 import '../services/uom_konversi.dart';
 import '../widgets/indikator_baris_sinkron.dart';
 import '../sesi.dart';
@@ -31,8 +33,10 @@ import '../widgets/progress_sinkron_awal.dart';
 import '../widgets/riwayat_data_dialog.dart';
 import 'impor_excel_produk_screen.dart';
 import 'price_tag_screen.dart';
+import 'foto_produk_camera_screen.dart';
 import 'produk_mutasi_barang_tab.dart';
 import 'produk_rekonsiliasi_ledger_tab.dart';
+import 'produk_riwayat_perubahan_tab.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
@@ -117,6 +121,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   Set<String> _idBerubah = {};
   int _jumlahHapus = 0;
   int _versiPerubahan = 0;
+  int _generasiMuat = 0;
 
   /// Filter tampilan Jenis Item -- CLIENT-SIDE saja dari [_semuaProduk] yang
   /// sudah dimuat penuh (JUAL+BAHAN+EKSTRA, tanpa filter server `jenisItem`,
@@ -144,77 +149,126 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   }
 
   Future<void> _muatSemua() async {
+    final generasi = ++_generasiMuat;
+    final halaman = _halaman;
+    final kataKunci = _kataKunci.trim();
+    final kategoriId = _kategoriTerpilih;
+    final jenisItem = _filterJenisItem;
     setStateIfMounted(() {
       _memuat = true;
       _pesanError = null;
     });
+    var lokalTersedia = false;
+    var idProdukDilindungi = <int>{};
     try {
-      // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
-      // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
-      await MasterOffline.daftarCacheDulu(
-          'katalog',
-          {
-            'page': _halaman + 1,
-            'page_size': _itemPerHalaman,
-            if (_kataKunci.trim().isNotEmpty) 'keyword': _kataKunci.trim(),
-            if (_kategoriTerpilih != null) 'kategori_id': _kategoriTerpilih,
-            if (_filterJenisItem != 'SEMUA') 'jenisItem': _filterJenisItem,
-            // LINGKUP TOKO dinyatakan eksplisit. Tanpa ini, admin yang tidak
-            // terikat toko mendapat daftar KOSONG walau katalognya berisi:
-            // PriceTagUtil.listProduk berhenti lebih dulu pada
-            // `tokoId == null && !(semuaToko && adminGlobal)`, sehingga maksud
-            // "seluruh toko" (yang di sisi peladen berbentuk tokoId null) tidak
-            // pernah diakui. Kartu KPI memakai aksi lain sehingga tetap berisi --
-            // itulah kenapa gejalanya "angka ada, daftar kosong".
-            if (Sesi.instance.idTokoTerpilih != null)
-              'toko_id': Sesi.instance.idTokoTerpilih,
-            if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
-          },
-          'master:produk_list', onData: (katalog) {
-        if (!mounted) return;
-        final produk = ((katalog['produk'] as List?) ?? [])
-            .whereType<Map<String, dynamic>>()
-            // Draf create offline belum punya id -- Produk.fromJson
-            // mewajibkannya, jadi baris draf dilewati sampai tersinkron.
-            .where((e) => e['id'] is int)
-            .map(Produk.fromJson)
-            .toList();
-        final dariServer = katalog['dariServer'] == true;
+      // Jangan mengurai `master:produk_list` di thread UI: setelah sinkron
+      // penuh snapshot itu dapat berisi 50 ribu baris. SQLite mengerjakan
+      // filter, hitung, dan pagination; layar hanya membentuk 15 model.
+      final hasilLokal = await Future.wait<Object>([
+        CoreDb.instance.produkCacheMaster(
+          keyword: kataKunci,
+          kategoriId: kategoriId,
+          jenisItem: jenisItem,
+          limit: _itemPerHalaman,
+          offset: halaman * _itemPerHalaman,
+        ),
+        CoreDb.instance.jumlahProdukCacheMaster(
+          keyword: kataKunci,
+          kategoriId: kategoriId,
+          jenisItem: jenisItem,
+        ),
+        CoreDb.instance.outboxMasterPending(),
+        CoreDb.instance.outboxMasterGagal(batas: 500),
+      ]);
+      if (!mounted || generasi != _generasiMuat) return;
+      final barisLokal = hasilLokal[0] as List<Map<String, Object?>>;
+      final produkLokal = barisLokal
+          .map(Produk.cacheRowKeJson)
+          .map(Produk.fromJson)
+          .toList(growable: false);
+      final totalLokal = hasilLokal[1] as int;
+      idProdukDilindungi = <int>{
+        for (final baris in <Map<String, Object?>>[
+          ...(hasilLokal[2] as List<Map<String, Object?>>),
+          ...(hasilLokal[3] as List<Map<String, Object?>>),
+        ])
+          if ('${baris['kunci'] ?? ''}'.startsWith('produk:'))
+            if (int.tryParse('${baris['kunci']}'.substring('produk:'.length)) !=
+                null)
+              int.parse('${baris['kunci']}'.substring('produk:'.length)),
+      };
+      lokalTersedia = produkLokal.isNotEmpty || totalLokal > 0;
+      if (lokalTersedia) {
         setStateIfMounted(() {
-          _semuaProduk = produk;
-          // Emisi daftarCacheDulu tidak meneruskan 'total' server -- selama
-          // halaman penuh, asumsikan masih ada halaman berikutnya supaya
-          // kontrol paginasi tetap bisa dipakai menjelajah katalog besar.
-          _totalProduk = dariServer
-              ? (katalog['total'] as num?)?.toInt() ??
-                  (produk.length >= _itemPerHalaman
-                      ? (_halaman + 1) * _itemPerHalaman + 1
-                      : _halaman * _itemPerHalaman + produk.length)
-              : produk.length;
-          _idBaru = dariServer
-              ? Set<String>.from(katalog['idBaru'] as Set? ?? const <String>{})
-              : {};
-          _idBerubah = dariServer
-              ? Set<String>.from(
-                  katalog['idBerubah'] as Set? ?? const <String>{})
-              : {};
-          _jumlahHapus = dariServer ? (katalog['jumlahHapus'] as int? ?? 0) : 0;
-          if (dariServer &&
-              (_idBaru.isNotEmpty ||
-                  _idBerubah.isNotEmpty ||
-                  _jumlahHapus > 0)) {
-            _versiPerubahan++;
-          }
-          // _memuat sengaja TIDAK dimatikan di sini: begitu snapshot cache
-          // terisi, spinner penuh otomatis berganti daftar (kondisi build
-          // `_memuat && _semuaProduk.isEmpty`), sementara progress tipis tetap
-          // tampil sampai seluruh muatan (server/kategori/statistik) selesai.
+          _semuaProduk = produkLokal;
+          _totalProduk = totalLokal;
+          _memuat = false;
         });
-      }, fieldData: 'produk');
+      }
+
+      // Segarkan SATU halaman dari server. Kegagalan server tidak membuang
+      // daftar lokal yang sudah tampil dan tidak mengunci seluruh halaman.
+      final katalog = await ApiClient.instance.aksi('katalog', {
+        'page': halaman + 1,
+        'page_size': _itemPerHalaman,
+        if (kataKunci.isNotEmpty) 'keyword': kataKunci,
+        if (kategoriId != null) 'kategori_id': kategoriId,
+        if (jenisItem != 'SEMUA') 'jenisItem': jenisItem,
+        // LINGKUP TOKO wajib eksplisit untuk admin lintas toko.
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+        if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
+      });
+      if (!mounted || generasi != _generasiMuat) return;
+      final dataServer = ((katalog['produk'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => e['id'] is num)
+          .toList(growable: false);
+      // Respons server tidak boleh menimpa edit local-first yang masih
+      // PENDING/GAGAL. Baris tersebut tetap memakai versi SQLite sampai
+      // outbox membuktikan kiriman berhasil.
+      await CoreDb.instance.upsertProdukCache(dataServer
+          .where((e) => !idProdukDilindungi.contains((e['id'] as num).toInt()))
+          .map(Produk.baseKeCacheRow)
+          .toList());
+      if (!mounted || generasi != _generasiMuat) return;
+      final idLokal = {for (final p in _semuaProduk) p.id: p};
+      final produkServer = dataServer.map(Produk.fromJson).map((p) {
+        return idProdukDilindungi.contains(p.id) ? (idLokal[p.id] ?? p) : p;
+      }).toList();
+      final idBaru = <String>{};
+      final idBerubah = <String>{};
+      for (final p in produkServer) {
+        final lama = idLokal[p.id];
+        if (lama == null) {
+          idBaru.add('${p.id}');
+        } else if (lama.nama != p.nama ||
+            lama.kode != p.kode ||
+            lama.barcode != p.barcode ||
+            lama.hargaJual != p.hargaJual ||
+            lama.stok != p.stok ||
+            lama.aktif != p.aktif) {
+          idBerubah.add('${p.id}');
+        }
+      }
+      setStateIfMounted(() {
+        _semuaProduk = produkServer;
+        _totalProduk = (katalog['total'] as num?)?.toInt() ??
+            (produkServer.length >= _itemPerHalaman
+                ? (halaman + 1) * _itemPerHalaman + 1
+                : halaman * _itemPerHalaman + produkServer.length);
+        _idBaru = idBaru;
+        _idBerubah = idBerubah;
+        _jumlahHapus = 0;
+        if (idBaru.isNotEmpty || idBerubah.isNotEmpty) _versiPerubahan++;
+      });
+
       final hasilKategori = await MasterOffline.daftarDenganCache(
           'jenis_produk_list',
           {'page': 1, 'page_size': 100},
           'master:jenis_produk');
+      if (!mounted || generasi != _generasiMuat) return;
       final kategori = ((hasilKategori['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -248,9 +302,19 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         _statistikDariCache = statistik?['offline'] == true;
       });
     } catch (e) {
-      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      if (!mounted || generasi != _generasiMuat) return;
+      final pesan = terapkanGalat(e);
+      setStateIfMounted(() {
+        _pesanError = lokalTersedia
+            ? 'Data lokal tetap dapat digunakan. Penyegaran dari server belum '
+                'berhasil: $pesan Periksa koneksi atau Log Error, lalu tekan '
+                'Muat Ulang; tidak perlu menutup aplikasi.'
+            : pesan;
+      });
     } finally {
-      if (mounted) setStateIfMounted(() => _memuat = false);
+      if (mounted && generasi == _generasiMuat) {
+        setStateIfMounted(() => _memuat = false);
+      }
     }
   }
 
@@ -1045,7 +1109,7 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
       ),
     ];
     return DefaultTabController(
-        length: 4,
+        length: 5,
         initialIndex: _tabAktif,
         child: AppShell(
           menuAktif: MenuEBisnis.produk,
@@ -1058,7 +1122,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           ),
           actionsAppBar: [const IndikatorSinkronMaster(), ...tombolAksi],
           scrollable: false,
-          floatingActionButton: _tabAktif == 1 || _tabAktif == 2
+          floatingActionButton: _tabAktif == 1 ||
+                  _tabAktif == 2 ||
+                  _tabAktif == 4
               ? null
               : FloatingActionButton.extended(
                   onPressed: () =>
@@ -1091,6 +1157,9 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                   Tab(
                       text: 'Kebijakan Retur',
                       icon: Icon(Icons.assignment_return_outlined)),
+                  Tab(
+                      text: 'Riwayat Perubahan',
+                      icon: Icon(Icons.manage_history_outlined)),
                 ],
               ),
             ),
@@ -1099,246 +1168,321 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
                     ? const ProdukMutasiBarangTab()
                     : _tabAktif == 2
                         ? const ProdukRekonsiliasiLedgerTab()
-                        : _tabAktif == 3
-                            ? (_memuat
-                                ? const Center(
-                                    child: CircularProgressIndicator())
-                                : _daftarKebijakanRetur())
-                            : (_memuat && _semuaProduk.isEmpty
-                                ? const Center(
-                                    child: CircularProgressIndicator())
-                                : _pesanError != null && _semuaProduk.isEmpty
-                                    ? Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(24),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.error_outline,
-                                                  size: 48, color: Colors.red),
-                                              const SizedBox(height: 12),
-                                              Text(_pesanError!,
-                                                  textAlign: TextAlign.center),
-                                              AppDetailGalatOpsional(
-                                                  detail:
-                                                      detailUntuk(_pesanError)),
-                                              const SizedBox(height: 16),
-                                              ElevatedButton(
-                                                  onPressed: _muatSemua,
-                                                  child:
-                                                      const Text('Coba Lagi')),
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    : RefreshIndicator(
-                                        onRefresh: _muatSemua,
-                                        child: ListView(
-                                          padding: const EdgeInsets.fromLTRB(
-                                              12, 12, 12, 90),
-                                          children: [
-                                            PenandaDataTersimpan(
-                                                tampil: _statistikDariCache),
-                                            if (_statistik != null)
-                                              _KartuStatistik(
-                                                statistik: _statistik!,
-                                                onTap: _bukaDetailStatistik,
-                                              ),
-                                            const SizedBox(height: 12),
-                                            AppSearchField(
-                                              controller: _controllerCariProduk,
-                                              scanProduk: true,
-                                              debounce: const Duration(
-                                                  milliseconds: 350),
-                                              hintText:
-                                                  'Cari produk (nama/kode/barcode)...',
-                                              onChanged: (v) {
-                                                setStateIfMounted(() {
-                                                  _kataKunci = v;
-                                                  _halaman = 0;
-                                                });
-                                                _muatSemua();
-                                                // Stok per tanggal ikut
-                                                // disaring kata kunci, jadi
-                                                // harus ditarik ulang.
-                                                _muatStokTanggal();
-                                              },
-                                            ),
-                                            const SizedBox(height: 10),
-                                            _bilahStokDanLaporan(),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SegmentedButton<String>(
-                                                segments: const [
-                                                  ButtonSegment(
-                                                      value: 'SEMUA',
-                                                      label: Text('Semua')),
-                                                  ButtonSegment(
-                                                      value: 'JUAL',
-                                                      label: Text('Produk')),
-                                                  ButtonSegment(
-                                                      value: 'BAHAN',
-                                                      label: Text('Bahan')),
-                                                  ButtonSegment(
-                                                      value: 'EKSTRA',
-                                                      label: Text('Ekstra')),
-                                                ],
-                                                selected: {_filterJenisItem},
-                                                onSelectionChanged: (s) {
-                                                  setStateIfMounted(() {
-                                                    _filterJenisItem = s.first;
-                                                    _halaman = 0;
-                                                  });
-                                                  _muatSemua();
-                                                },
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            SizedBox(
-                                              height: 40,
-                                              child: ListView(
-                                                scrollDirection:
-                                                    Axis.horizontal,
+                        : _tabAktif == 4
+                            ? const ProdukRiwayatPerubahanTab()
+                            : _tabAktif == 3
+                                ? (_memuat
+                                    ? const Center(
+                                        child: CircularProgressIndicator())
+                                    : _daftarKebijakanRetur())
+                                : (_memuat && _semuaProduk.isEmpty
+                                    ? const Center(
+                                        child: CircularProgressIndicator())
+                                    : _pesanError != null &&
+                                            _semuaProduk.isEmpty
+                                        ? Center(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(24),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                            right: 8),
-                                                    child: ChoiceChip(
-                                                      label:
-                                                          const Text('Semua'),
-                                                      selected:
-                                                          _kategoriTerpilih ==
-                                                              null,
-                                                      onSelected: (_) {
-                                                        setStateIfMounted(() {
-                                                          _kategoriTerpilih =
-                                                              null;
-                                                          _halaman = 0;
-                                                        });
-                                                        _muatSemua();
-                                                      },
+                                                  const Icon(
+                                                      Icons.error_outline,
+                                                      size: 48,
+                                                      color: Colors.red),
+                                                  const SizedBox(height: 12),
+                                                  Text(_pesanError!,
+                                                      textAlign:
+                                                          TextAlign.center),
+                                                  AppDetailGalatOpsional(
+                                                      detail: detailUntuk(
+                                                          _pesanError)),
+                                                  const SizedBox(height: 16),
+                                                  ElevatedButton(
+                                                      onPressed: _muatSemua,
+                                                      child: const Text(
+                                                          'Coba Lagi')),
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                        : RefreshIndicator(
+                                            onRefresh: _muatSemua,
+                                            child: ListView(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      12, 12, 12, 90),
+                                              children: [
+                                                PenandaDataTersimpan(
+                                                    tampil:
+                                                        _statistikDariCache),
+                                                if (_pesanError != null) ...[
+                                                  Card(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .errorContainer,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              12),
+                                                      child: Row(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Icon(
+                                                            Icons
+                                                                .cloud_off_outlined,
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .colorScheme
+                                                                .onErrorContainer,
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 10),
+                                                          Expanded(
+                                                            child: Text(
+                                                              _pesanError!,
+                                                              style: TextStyle(
+                                                                color: Theme.of(
+                                                                        context)
+                                                                    .colorScheme
+                                                                    .onErrorContainer,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          TextButton.icon(
+                                                            onPressed: _memuat
+                                                                ? null
+                                                                : _muatSemua,
+                                                            icon: const Icon(Icons
+                                                                .refresh_outlined),
+                                                            label: const Text(
+                                                                'Coba Lagi'),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
-                                                  ..._kategori.map((k) =>
+                                                  const SizedBox(height: 8),
+                                                ],
+                                                if (_statistik != null)
+                                                  _KartuStatistik(
+                                                    statistik: _statistik!,
+                                                    onTap: _bukaDetailStatistik,
+                                                  ),
+                                                const SizedBox(height: 12),
+                                                AppSearchField(
+                                                  controller:
+                                                      _controllerCariProduk,
+                                                  scanProduk: true,
+                                                  debounce: const Duration(
+                                                      milliseconds: 350),
+                                                  hintText:
+                                                      'Cari produk (nama/kode/barcode)...',
+                                                  onChanged: (v) {
+                                                    setStateIfMounted(() {
+                                                      _kataKunci = v;
+                                                      _halaman = 0;
+                                                    });
+                                                    _muatSemua();
+                                                    // Stok per tanggal ikut
+                                                    // disaring kata kunci, jadi
+                                                    // harus ditarik ulang.
+                                                    _muatStokTanggal();
+                                                  },
+                                                ),
+                                                const SizedBox(height: 10),
+                                                _bilahStokDanLaporan(),
+                                                const SizedBox(height: 10),
+                                                Align(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child:
+                                                      SegmentedButton<String>(
+                                                    segments: const [
+                                                      ButtonSegment(
+                                                          value: 'SEMUA',
+                                                          label: Text('Semua')),
+                                                      ButtonSegment(
+                                                          value: 'JUAL',
+                                                          label:
+                                                              Text('Produk')),
+                                                      ButtonSegment(
+                                                          value: 'BAHAN',
+                                                          label: Text('Bahan')),
+                                                      ButtonSegment(
+                                                          value: 'EKSTRA',
+                                                          label:
+                                                              Text('Ekstra')),
+                                                    ],
+                                                    selected: {
+                                                      _filterJenisItem
+                                                    },
+                                                    onSelectionChanged: (s) {
+                                                      setStateIfMounted(() {
+                                                        _filterJenisItem =
+                                                            s.first;
+                                                        _halaman = 0;
+                                                      });
+                                                      _muatSemua();
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                SizedBox(
+                                                  height: 40,
+                                                  child: ListView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    children: [
                                                       Padding(
                                                         padding:
                                                             const EdgeInsets
                                                                 .only(right: 8),
                                                         child: ChoiceChip(
-                                                          label: Text(k.nama),
+                                                          label: const Text(
+                                                              'Semua'),
                                                           selected:
                                                               _kategoriTerpilih ==
-                                                                  k.id,
+                                                                  null,
                                                           onSelected: (_) {
                                                             setStateIfMounted(
                                                                 () {
                                                               _kategoriTerpilih =
-                                                                  k.id;
+                                                                  null;
                                                               _halaman = 0;
                                                             });
                                                             _muatSemua();
                                                           },
                                                         ),
-                                                      )),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            BannerPerubahanServer(
-                                              key: ValueKey(
-                                                  'perubahan:$_versiPerubahan'),
-                                              baru: _idBaru.length,
-                                              berubah: _idBerubah.length,
-                                              dihapus: _jumlahHapus,
-                                            ),
-                                            if (_memuat) ...[
-                                              const LinearProgressIndicator(
-                                                  minHeight: 2),
-                                              const SizedBox(height: 10),
-                                            ],
-                                            if (_produkTersaring.isEmpty)
-                                              const Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                    vertical: 40),
-                                                child: Center(
-                                                    child: Text(
-                                                        'Belum ada produk.')),
-                                              )
-                                            else
-                                              LayoutBuilder(
-                                                builder: (context, constraints) => constraints
-                                                            .maxWidth >=
-                                                        kAmbangLebarDesktop
-                                                    ? _TabelProduk(
-                                                        produkList:
-                                                            _produkHalamanIni,
-                                                        stokPerKode: _stokTanggal
-                                                            ?.stokPerKode,
-                                                        idBaru: _idBaru,
-                                                        idBerubah: _idBerubah,
-                                                        onTap: (p) => _bukaFormProduk(
-                                                            produk: p),
-                                                        onRiwayat:
-                                                            _riwayatProduk)
-                                                    : Column(
-                                                        children: _produkHalamanIni
-                                                            .map((p) => _BarisProduk(
-                                                                produk: p,
-                                                                stokTanggal:
-                                                                    _stokTanggal?.stokPerKode[
-                                                                        p.kode],
-                                                                idBaru: _idBaru,
-                                                                idBerubah:
-                                                                    _idBerubah,
-                                                                onTap: () =>
-                                                                    _bukaFormProduk(produk: p),
-                                                                onRiwayat: () => _riwayatProduk(p)))
-                                                            .toList()),
-                                              ),
-                                            if (_totalProduk > _itemPerHalaman)
-                                              Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 12),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                          Icons.chevron_left),
-                                                      onPressed: _halaman > 0
-                                                          ? () {
-                                                              setStateIfMounted(
-                                                                  () =>
-                                                                      _halaman--);
-                                                              _muatSemua();
-                                                            }
-                                                          : null,
-                                                    ),
-                                                    Text(
-                                                        'Halaman ${_halaman + 1} / $_totalHalaman'),
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                          Icons.chevron_right),
-                                                      onPressed: _halaman <
-                                                              _totalHalaman - 1
-                                                          ? () {
-                                                              setStateIfMounted(
-                                                                  () =>
-                                                                      _halaman++);
-                                                              _muatSemua();
-                                                            }
-                                                          : null,
-                                                    ),
-                                                  ],
+                                                      ),
+                                                      ..._kategori.map((k) =>
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    right: 8),
+                                                            child: ChoiceChip(
+                                                              label:
+                                                                  Text(k.nama),
+                                                              selected:
+                                                                  _kategoriTerpilih ==
+                                                                      k.id,
+                                                              onSelected: (_) {
+                                                                setStateIfMounted(
+                                                                    () {
+                                                                  _kategoriTerpilih =
+                                                                      k.id;
+                                                                  _halaman = 0;
+                                                                });
+                                                                _muatSemua();
+                                                              },
+                                                            ),
+                                                          )),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                          ],
-                                        ),
-                                      ))),
+                                                const SizedBox(height: 12),
+                                                BannerPerubahanServer(
+                                                  key: ValueKey(
+                                                      'perubahan:$_versiPerubahan'),
+                                                  baru: _idBaru.length,
+                                                  berubah: _idBerubah.length,
+                                                  dihapus: _jumlahHapus,
+                                                ),
+                                                if (_memuat) ...[
+                                                  const LinearProgressIndicator(
+                                                      minHeight: 2),
+                                                  const SizedBox(height: 10),
+                                                ],
+                                                if (_produkTersaring.isEmpty)
+                                                  const Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            vertical: 40),
+                                                    child: Center(
+                                                        child: Text(
+                                                            'Belum ada produk.')),
+                                                  )
+                                                else
+                                                  LayoutBuilder(
+                                                    builder: (context, constraints) => constraints
+                                                                .maxWidth >=
+                                                            kAmbangLebarDesktop
+                                                        ? _TabelProduk(
+                                                            produkList:
+                                                                _produkHalamanIni,
+                                                            stokPerKode: _stokTanggal
+                                                                ?.stokPerKode,
+                                                            idBaru: _idBaru,
+                                                            idBerubah:
+                                                                _idBerubah,
+                                                            onTap: (p) =>
+                                                                _bukaFormProduk(
+                                                                    produk: p),
+                                                            onRiwayat:
+                                                                _riwayatProduk)
+                                                        : Column(
+                                                            children: _produkHalamanIni
+                                                                .map((p) => _BarisProduk(
+                                                                    produk: p,
+                                                                    stokTanggal: _stokTanggal?.stokPerKode[
+                                                                        p.kode],
+                                                                    idBaru:
+                                                                        _idBaru,
+                                                                    idBerubah:
+                                                                        _idBerubah,
+                                                                    onTap: () => _bukaFormProduk(produk: p),
+                                                                    onRiwayat: () => _riwayatProduk(p)))
+                                                                .toList()),
+                                                  ),
+                                                if (_totalProduk >
+                                                    _itemPerHalaman)
+                                                  Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        vertical: 12),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        IconButton(
+                                                          icon: const Icon(Icons
+                                                              .chevron_left),
+                                                          onPressed:
+                                                              _halaman > 0
+                                                                  ? () {
+                                                                      setStateIfMounted(
+                                                                          () =>
+                                                                              _halaman--);
+                                                                      _muatSemua();
+                                                                    }
+                                                                  : null,
+                                                        ),
+                                                        Text(
+                                                            'Halaman ${_halaman + 1} / $_totalHalaman'),
+                                                        IconButton(
+                                                          icon: const Icon(Icons
+                                                              .chevron_right),
+                                                          onPressed: _halaman <
+                                                                  _totalHalaman -
+                                                                      1
+                                                              ? () {
+                                                                  setStateIfMounted(
+                                                                      () =>
+                                                                          _halaman++);
+                                                                  _muatSemua();
+                                                                }
+                                                              : null,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ))),
           ]),
         ));
   }
@@ -2318,8 +2462,18 @@ class _FotoBaris {
   String? url;
   Uint8List? bytes;
   String? namaFile;
+  int? idAntreanLokal;
+  final String kunciLokal;
   bool mengunggah = false;
-  _FotoBaris({this.id, this.url, this.bytes, this.namaFile});
+  _FotoBaris({
+    this.id,
+    this.url,
+    this.bytes,
+    this.namaFile,
+    this.idAntreanLokal,
+    String? kunciLokal,
+  }) : kunciLokal = kunciLokal ??
+            'foto:${DateTime.now().microsecondsSinceEpoch}:${identityHashCode(bytes)}';
 }
 
 class _FormProdukState extends State<_FormProduk> with JejakGalat {
@@ -2368,10 +2522,12 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   /// sampai `produk_simpan` sukses dapat id baru -- lihat [_simpan].
   final List<_FotoBaris> _foto = [];
   bool _memuatFoto = false;
+  late final int _idProdukEfektif;
 
   @override
   void initState() {
     super.initState();
+    _idProdukEfektif = widget.produk?.id ?? MasterOffline.idSementaraBaru();
     if (widget.produk != null) _muatFoto();
     final p = widget.produk;
     _kode = TextEditingController(text: p?.kode ?? '');
@@ -2479,6 +2635,53 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   String _angkaFormat(double nilai) => nilai == nilai.roundToDouble()
       ? nilai.toStringAsFixed(0)
       : nilai.toStringAsFixed(4).replaceFirst(RegExp(r'0+$'), '');
+
+  /// Cache hasil merge dapat sementara membawa id referensi ganda, sedangkan
+  /// DropdownButton Flutter mensyaratkan tepat satu item untuk nilai aktif.
+  /// Deduplikasi dilakukan di batas UI dan nilai lama tetap disediakan sebagai
+  /// fallback agar produk masih dapat diedit ketika referensinya belum masuk
+  /// halaman cache yang sedang tersedia.
+  List<DropdownMenuItem<int?>> _itemKategori() {
+    final unik = <int, Kategori>{};
+    for (final kategori in widget.kategori) {
+      unik.putIfAbsent(kategori.id, () => kategori);
+    }
+    final hasil = <DropdownMenuItem<int?>>[
+      const DropdownMenuItem<int?>(
+          value: null, child: Text('-- Tanpa Kategori --')),
+      for (final kategori in unik.values)
+        DropdownMenuItem<int?>(value: kategori.id, child: Text(kategori.nama)),
+    ];
+    final aktif = _kategoriId;
+    if (aktif != null && !unik.containsKey(aktif)) {
+      final nama = widget.produk?.kategoriNama.trim() ?? '';
+      hasil.add(DropdownMenuItem<int?>(
+          value: aktif,
+          child: Text(nama.isEmpty
+              ? 'Kategori #$aktif (belum tersinkron)'
+              : '$nama (referensi belum tersinkron)')));
+    }
+    return hasil;
+  }
+
+  List<DropdownMenuItem<int?>> _itemKebijakanRetur() {
+    final unik = <int, KebijakanRetur>{};
+    for (final kebijakan in widget.kebijakanRetur) {
+      unik.putIfAbsent(kebijakan.id, () => kebijakan);
+    }
+    final hasil = <DropdownMenuItem<int?>>[
+      for (final kebijakan in unik.values)
+        DropdownMenuItem<int?>(
+            value: kebijakan.id, child: Text(kebijakan.nama)),
+    ];
+    final aktif = _kebijakanReturId;
+    if (aktif != null && !unik.containsKey(aktif)) {
+      hasil.add(DropdownMenuItem<int?>(
+          value: aktif,
+          child: Text('Kebijakan #$aktif (referensi belum tersinkron)')));
+    }
+    return hasil;
+  }
 
   Widget _pemilihUom({bool pembelian = false}) {
     final idTerpilih = pembelian ? _satuanPembelianId : _satuanId;
@@ -2653,21 +2856,41 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   Future<void> _muatFoto() async {
     if (widget.produk == null) return;
     setStateIfMounted(() => _memuatFoto = true);
+    final fotoServer = <_FotoBaris>[];
     try {
       final hasil = await ApiClient.instance
           .aksi('produk_foto_list', {'produk_id': widget.produk!.id});
       final data = (hasil['data'] as List?) ?? const [];
-      setStateIfMounted(() {
-        _foto
-          ..clear()
-          ..addAll(data.map((d) => _FotoBaris(
-              id: (d['id'] as num).toInt(), url: d['urlGambar'] as String?)));
-      });
+      fotoServer.addAll(data.map((d) {
+        final id = (d['id'] as num).toInt();
+        final url = normalisasiUrlMedia(d['urlGambar'] as String?);
+        return _FotoBaris(
+          id: id,
+          url: url.isEmpty ? urlFotoProdukDariId(id) : url,
+        );
+      }));
     } catch (e) {
       // Gagal muat foto bukan error fatal utk form ini -- form tetap bisa
-      // dipakai edit field lain, kasir/admin tinggal buka ulang utk retry.
+      // dipakai dan preview antrean lokal tetap dipulihkan di bawah.
     } finally {
-      if (mounted) setStateIfMounted(() => _memuatFoto = false);
+      final fotoLokal = await muatGambarLokalTertunda(
+        aksi: 'produk_foto_upload',
+        awalanKunci: 'produk_foto:${widget.produk!.id}:',
+      );
+      if (mounted) {
+        setStateIfMounted(() {
+          _foto
+            ..clear()
+            ..addAll(fotoServer)
+            ..addAll(fotoLokal.map((foto) => _FotoBaris(
+                  bytes: foto.bytes,
+                  namaFile: foto.namaFile,
+                  idAntreanLokal: foto.idAntrean,
+                  kunciLokal: foto.kunci,
+                )));
+          _memuatFoto = false;
+        });
+      }
     }
   }
 
@@ -2693,8 +2916,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       }
       return;
     }
-    final XFile? berkas =
-        await ImagePicker().pickImage(source: sumber, imageQuality: 100);
+    XFile? berkas;
+    if (sumber == ImageSource.camera) {
+      if (!mounted) return;
+      berkas = await FotoProdukCameraScreen.ambil(context);
+    } else {
+      berkas = await ImagePicker().pickImage(source: sumber, imageQuality: 100);
+    }
     if (berkas == null) return;
     final namaFile = berkas.name;
     final ekstensi =
@@ -2733,6 +2961,12 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       return;
     }
     baris.bytes = bytesKompres;
+    // kompresGambarKeBawah500Kb selalu menghasilkan JPEG. Nama/ekstensi yang
+    // dikirim harus ikut JPEG; mempertahankan `.png`/`.heic` asli membuat
+    // servlet media mengirim Content-Type yang tidak cocok dengan isi berkas
+    // dan sebagian renderer menampilkan ikon gambar rusak.
+    final namaDasar = namaFile.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    baris.namaFile = '${namaDasar.isEmpty ? 'foto' : namaDasar}.jpg';
 
     if (widget.produk == null) {
       // Produk baru: belum punya id server -- tahan di memori, diunggah
@@ -2746,27 +2980,61 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   Future<void> _unggahBaris(_FotoBaris baris, int produkId) async {
     setStateIfMounted(() => baris.mengunggah = true);
     try {
-      await ApiClient.instance.aksi('produk_foto_upload', {
-        'produk_id': produkId,
-        'file_base64': base64Encode(baris.bytes!),
-        'nama_file': baris.namaFile ?? 'foto.jpg',
-      });
+      final hasil = await simpanGambarLocalFirst(
+        aksi: 'produk_foto_upload',
+        kunci: 'produk_foto:$produkId:${baris.kunciLokal}',
+        body: {
+          'produk_id': produkId,
+          'file_base64': base64Encode(baris.bytes!),
+          'nama_file': baris.namaFile ?? 'foto.jpg',
+        },
+      );
+      if (hasil.tertunda) {
+        setStateIfMounted(() {
+          baris.mengunggah = false;
+          baris.idAntreanLokal = hasil.idAntrean;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+              'Foto tersimpan di perangkat. Server belum dapat menerima; '
+              'pengiriman akan dicoba otomatis tanpa memilih foto ulang.',
+            ),
+          ));
+        }
+        return;
+      }
       // Muat ulang daftar dari server supaya baris ini dapat urlGambar yg
       // benar (produk_foto_upload sendiri cuma balas {status,id}) -- ukuran
       // daftar kecil (maks 10), round-trip tambahan ini murah.
       await _muatFoto();
     } catch (e) {
-      setStateIfMounted(() => _foto.remove(baris));
+      // Preview dipertahankan. Pengguna dapat melihat foto yang dipilih dan
+      // memperbaiki penolakan bisnis tanpa harus memilih berkas dari awal.
+      final lokal = await muatGambarLokalTertunda(
+        aksi: 'produk_foto_upload',
+        awalanKunci: 'produk_foto:$produkId:${baris.kunciLokal}',
+      );
+      setStateIfMounted(() {
+        baris.mengunggah = false;
+        if (lokal.isNotEmpty) baris.idAntreanLokal = lokal.last.idAntrean;
+      });
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal mengunggah foto: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text('Foto tersimpan lokal, tetapi server menolak datanya: $e. '
+                    'Periksa Log Error lalu coba sinkronkan kembali.')));
       }
     }
   }
 
   Future<void> _hapusFoto(_FotoBaris baris) async {
     if (baris.id == null) {
-      // Staged, belum pernah sampai ke server -- cukup buang dari memori.
+      final antreanLokal = baris.idAntreanLokal;
+      if (antreanLokal != null) {
+        await hapusGambarLokalTertunda(antreanLokal);
+      }
+      // Staged/tertunda dan belum pernah sampai ke server.
       setStateIfMounted(() => _foto.remove(baris));
       return;
     }
@@ -2833,11 +3101,12 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     });
     try {
       final ubah = widget.produk != null;
+      final idProduk = _idProdukEfektif;
       final hasil = await prosesSimpanMaster(
         context,
         aksi: 'produk_simpan',
         body: {
-          if (ubah) 'id': widget.produk!.id,
+          if (ubah) 'id': idProduk,
           'kode': _kode.text.trim(),
           'nama': _nama.text.trim(),
           'barcode': _barcode.text.trim(),
@@ -2877,61 +3146,85 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   })
               .toList(),
         },
-        kunci: ubah
-            ? 'produk:${widget.produk!.id}'
-            : 'produk:baru:${DateTime.now().microsecondsSinceEpoch}',
+        kunci: 'produk:$idProduk',
         // Optimistis HANYA utk edit -- baris create offline belum punya id,
         // sedangkan Produk.fromJson mewajibkannya (baris tanpa id di snapshot
         // akan membuat parsing daftar gagal saat offline). rowLokal memakai
         // nama field camelCase respons `katalog` (bukan snake_case payload)
         // supaya perubahan langsung terlihat di snapshot daftar.
-        cacheKey: ubah ? 'master:produk_list' : null,
-        rowLokal: ubah
-            ? {
-                'id': widget.produk!.id,
-                'kode': _kode.text.trim(),
-                'nama': _nama.text.trim(),
-                'barcode': _barcode.text.trim(),
-                'hargaBeli':
-                    _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
-                'hargaJual': _angka(_hargaJual.text),
-                'stok': _angka(_stok.text),
-                'keterangan': _keterangan.text.trim(),
-                'satuanId': _satuanId,
-                'satuanNama': _namaUom(_satuanId),
-                'satuanPembelianId': _satuanPembelianId,
-                'satuanPembelianNama': _namaUom(_satuanPembelianId),
-                'kategoriId': _kategoriId,
-                'kebijakanReturId': _kebijakanReturId,
-                'izinkanJualMinusStok': _izinkanJualMinusStok,
-                'aktif': _aktif,
-                'jenisItem': _jenisItem,
-                'rute': _rute,
-                'perluQc': _perluQc,
-                'kemasan': _kemasan
-                    .map((k) => {
-                          'nama': k.nama.text.trim(),
-                          'barcode': k.barcode.text.trim(),
-                          'qtyDasar': _angka(k.qtyDasar.text),
-                          'aktif': k.aktif,
-                        })
-                    .toList(),
-              }
-            : null,
+        cacheKey: 'master:produk_list',
+        idLokal: ubah ? null : idProduk,
+        entitas: 'produk',
+        rowLokal: {
+          'id': idProduk,
+          'kode': _kode.text.trim(),
+          'nama': _nama.text.trim(),
+          'barcode': _barcode.text.trim(),
+          'hargaBeli':
+              _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
+          'hargaJual': _angka(_hargaJual.text),
+          'stok': _angka(_stok.text),
+          'keterangan': _keterangan.text.trim(),
+          'satuanId': _satuanId,
+          'satuanNama': _namaUom(_satuanId),
+          'satuanPembelianId': _satuanPembelianId,
+          'satuanPembelianNama': _namaUom(_satuanPembelianId),
+          'kategoriId': _kategoriId,
+          'kebijakanReturId': _kebijakanReturId,
+          'izinkanJualMinusStok': _izinkanJualMinusStok,
+          'aktif': _aktif,
+          'jenisItem': _jenisItem,
+          'rute': _rute,
+          'perluQc': _perluQc,
+          'kemasan': _kemasan
+              .map((k) => {
+                    'nama': k.nama.text.trim(),
+                    'barcode': k.barcode.text.trim(),
+                    'qtyDasar': _angka(k.qtyDasar.text),
+                    'aktif': k.aktif,
+                  })
+              .toList(),
+        },
       );
+      // produk_cache adalah sumber pencarian Kasir, Kulakan, dan Stok Opname;
+      // ia terpisah dari snapshot master:produk_list di atas. Setelah edit
+      // terbukti tersimpan lokal (baik server sudah menerima maupun masih
+      // PENDING), perbarui cache ini juga agar barcode/nama baru langsung bisa
+      // dipakai tanpa menunggu server pulih. Create tetap menunggu id server
+      // karena produk_cache memakai id sebagai primary key.
+      await CoreDb.instance.upsertProdukCache([
+        Produk.baseKeCacheRow({
+          'id': idProduk,
+          'kode': _kode.text.trim(),
+          'barcode': _barcode.text.trim(),
+          'nama': _nama.text.trim(),
+          'hargaJual': _angka(_hargaJual.text),
+          'stok': _angka(_stok.text),
+          'kategoriId': _kategoriId,
+          'kategoriNama': widget.produk?.kategoriNama ?? '',
+          'gambarUrl': widget.produk?.gambarUrl ?? '',
+          'aktif': _aktif,
+          'jenisItem': _jenisItem,
+          'ekstraPilihan': _ekstraPilihan,
+          'kemasan': _kemasan
+              .map((k) => {
+                    'nama': k.nama.text.trim(),
+                    'barcode': k.barcode.text.trim(),
+                    'qtyDasar': _angka(k.qtyDasar.text),
+                    'aktif': k.aktif,
+                  })
+              .toList(),
+          'fotoUrls': widget.produk?.fotoUrls ?? const <String>[],
+          'izinkanJualMinusStok': _izinkanJualMinusStok,
+        })
+      ]);
       // Produk baru: baris foto yg ditahan di memori (id==null, blm pernah
       // diunggah krn belum ada produk_id) diunggah SEKARANG pakai id baru
       // dari respons ini -- lihat JavaDoc _foto/_pilihFoto.
       if (widget.produk == null) {
-        final produkIdBaru = (hasil['id'] as num?)?.toInt();
-        if (produkIdBaru != null) {
-          for (final baris in _foto.where((b) => b.id == null).toList()) {
-            await ApiClient.instance.aksi('produk_foto_upload', {
-              'produk_id': produkIdBaru,
-              'file_base64': base64Encode(baris.bytes!),
-              'nama_file': baris.namaFile ?? 'foto.jpg',
-            });
-          }
+        final produkIdBaru = (hasil['id'] as num?)?.toInt() ?? idProduk;
+        for (final baris in _foto.where((b) => b.id == null).toList()) {
+          await _unggahBaris(baris, produkIdBaru);
         }
       }
       if (mounted) Navigator.of(context).pop(true);
@@ -3057,12 +3350,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       context,
                       labelText: 'Kategori',
                     ),
-                    items: [
-                      const DropdownMenuItem<int?>(
-                          value: null, child: Text('-- Tanpa Kategori --')),
-                      ...widget.kategori.map((k) => DropdownMenuItem<int?>(
-                          value: k.id, child: Text(k.nama))),
-                    ],
+                    items: _itemKategori(),
                     onChanged: (v) => setStateIfMounted(() => _kategoriId = v),
                   ),
                   const SizedBox(height: 12),
@@ -3072,10 +3360,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       context,
                       labelText: 'Kebijakan Retur',
                     ),
-                    items: widget.kebijakanRetur
-                        .map((k) => DropdownMenuItem<int?>(
-                            value: k.id, child: Text(k.nama)))
-                        .toList(),
+                    items: _itemKebijakanRetur(),
                     onChanged: (v) =>
                         setStateIfMounted(() => _kebijakanReturId = v),
                     validator: (v) => v == null
@@ -3119,8 +3404,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                     value: _rute,
                     isExpanded: true,
                     items: const [
-                      DropdownMenuItem(
-                          value: '', child: Text('Beli (bawaan)')),
+                      DropdownMenuItem(value: '', child: Text('Beli (bawaan)')),
                       DropdownMenuItem(
                           value: 'PRODUKSI', child: Text('Produksi Sendiri')),
                       DropdownMenuItem(
@@ -3128,11 +3412,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                           child: Text('MTO Beli (pesan dulu, beli saat SO)')),
                       DropdownMenuItem(
                           value: 'MTO_PRODUKSI',
-                          child:
-                              Text('MTO Produksi (pesan dulu, WO saat SO)')),
+                          child: Text('MTO Produksi (pesan dulu, WO saat SO)')),
                     ],
-                    onChanged: (v) =>
-                        setStateIfMounted(() => _rute = v ?? ''),
+                    onChanged: (v) => setStateIfMounted(() => _rute = v ?? ''),
                   ),
                   const SizedBox(height: 6),
                   SwitchListTile(
@@ -3237,7 +3519,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
               // Fase A: aturan harga grosir per produk. Hanya untuk produk
               // TERSIMPAN (butuh id server) dan pemegang izin ubah harga --
               // aturan grosir adalah keputusan harga.
-              if (widget.produk?.id != null && Sesi.instance.bolehUbahHarga) ...[
+              if (widget.produk?.id != null &&
+                  Sesi.instance.bolehUbahHarga) ...[
                 HargaGrosirEditor(
                   produkId: widget.produk!.id,
                   satuanNama: _namaUom(_satuanId),
@@ -3537,6 +3820,13 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                           final data = ((snap.data?['data'] as List?) ?? [])
                               .map((e) => Map<String, dynamic>.from(e as Map))
                               .toList();
+                          final grupUnik = <int, Map<String, dynamic>>{};
+                          for (final grup in data) {
+                            final id = (grup['id'] as num?)?.toInt();
+                            if (id != null && id > 0) {
+                              grupUnik.putIfAbsent(id, () => grup);
+                            }
+                          }
                           return DropdownButtonFormField<int>(
                             value: _grupProdukPilihan,
                             decoration: const InputDecoration(
@@ -3549,9 +3839,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                               const DropdownMenuItem<int>(
                                   value: 0,
                                   child: Text('Tanpa Grup (lepaskan)')),
-                              ...data.map((g) => DropdownMenuItem<int>(
-                                  value: (g['id'] as num).toInt(),
-                                  child: Text('${g['nama']}'))),
+                              ...grupUnik.values.map((g) =>
+                                  DropdownMenuItem<int>(
+                                      value: (g['id'] as num).toInt(),
+                                      child: Text('${g['nama']}'))),
                             ],
                             onChanged: (v) => setStateIfMounted(
                                 () => _grupProdukPilihan = v ?? -1),

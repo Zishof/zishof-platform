@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 18,
+        version: 19,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -348,6 +348,9 @@ class CoreDb {
           // Kolom kemungkinan sudah ada akibat upgrade parsial.
         }
       }
+    }
+    if (versiLama < 19) {
+      await _buatIndeksBarisCacheReferensi(db);
     }
     if (versiLama < 18) {
       try {
@@ -653,6 +656,7 @@ class CoreDb {
         diperbarui_pada TEXT NOT NULL
       )
     ''');
+    await _buatIndeksBarisCacheReferensi(db);
 
     await db.execute('''
       CREATE TABLE error_log (
@@ -913,7 +917,10 @@ class CoreDb {
     return database.transaction<int>((txn) async {
       if (kunci != null && kunci.isNotEmpty) {
         await txn.delete('outbox_master',
-            where: "status = 'PENDING' AND kunci = ?", whereArgs: [kunci]);
+            // Koreksi user atas validasi GAGAL menggantikan payload lama juga;
+            // satu objek hanya boleh mempunyai satu versi lokal yang aktif.
+            where: "status IN ('PENDING','GAGAL') AND kunci = ?",
+            whereArgs: [kunci]);
       }
       return txn.insert('outbox_master', {
         'aksi': aksi,
@@ -925,8 +932,9 @@ class CoreDb {
     });
   }
 
-  /// Hapus satu baris antrean -- dipakai saat server MENOLAK scr bisnis di
-  /// jendela simpan (user melihat pesannya langsung, baris tak perlu tersisa).
+  /// Hapus satu baris antrean hanya untuk pembatalan/pemulihan eksplisit.
+  /// Penolakan server tidak boleh memakai ini: gangguan teknis tetap PENDING,
+  /// sedangkan validasi bisnis menjadi GAGAL agar payload lokal tidak hilang.
   /// Buang antrean PENDING milik satu kunci. Dipakai saat penghapusan lokal
   /// DIPULIHKAN: barisnya kembali tampil, jadi perintah hapus yang masih
   /// mengantre TIDAK boleh ikut terkirim -- kalau tetap terkirim, datanya
@@ -946,6 +954,26 @@ class CoreDb {
     final database = await db;
     return database.query('outbox_master',
         where: "status = 'PENDING'", orderBy: 'id ASC');
+  }
+
+  /// Antrean aktif untuk satu jenis data/kunci tertentu.
+  ///
+  /// Selain proses sinkronisasi, payload lokal juga merupakan sumber tampilan
+  /// local-first. Foto yang belum diterima server harus tetap bisa dipulihkan
+  /// ketika form ditutup lalu dibuka kembali. Status GAGAL ikut dibaca karena
+  /// penolakan server tidak boleh menghilangkan media yang sudah disimpan di
+  /// perangkat.
+  Future<List<Map<String, Object?>>> outboxMasterAktif({
+    required String aksi,
+    required String awalanKunci,
+  }) async {
+    final database = await db;
+    return database.query(
+      'outbox_master',
+      where: "status IN ('PENDING','GAGAL') AND aksi = ? AND kunci LIKE ?",
+      whereArgs: [aksi, '$awalanKunci%'],
+      orderBy: 'id ASC',
+    );
   }
 
   Future<void> outboxMasterTandaiSukses(int id) async {
@@ -1073,6 +1101,69 @@ class CoreDb {
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
+
+      // Snapshot server tidak boleh menghapus edit produk yang sudah sah
+      // tersimpan lokal tetapi belum diterima server. Terapkan kembali payload
+      // outbox sebagai lapisan paling baru setelah replace penuh. Baris create
+      // belum ikut di sini karena belum memiliki id server/primary key cache.
+      final mutasiLokal = await txn.query(
+        'outbox_master',
+        columns: ['payload_json'],
+        where: "aksi = 'produk_simpan' AND status IN ('PENDING','GAGAL')",
+        orderBy: 'id ASC',
+      );
+      for (final antrean in mutasiLokal) {
+        try {
+          final payload = Map<String, dynamic>.from(
+            jsonDecode(antrean['payload_json'] as String) as Map,
+          );
+          final id = (payload['id'] as num?)?.toInt();
+          if (id == null) continue;
+          final hasil = await txn.query(
+            'produk_cache',
+            where: 'id = ?',
+            whereArgs: [id],
+            limit: 1,
+          );
+          if (hasil.isEmpty) continue;
+          final lokal = Map<String, Object?>.from(hasil.single);
+          void salin(String payloadKey, String cacheKey) {
+            if (payload.containsKey(payloadKey)) {
+              lokal[cacheKey] = payload[payloadKey];
+            }
+          }
+
+          salin('kode', 'kode');
+          salin('barcode', 'barcode');
+          salin('nama', 'nama');
+          salin('harga_jual', 'harga_jual');
+          salin('stok', 'stok');
+          salin('kategori_id', 'kategori_id');
+          salin('jenis_item', 'jenis_item');
+          if (payload.containsKey('aktif')) {
+            lokal['aktif'] = payload['aktif'] == false ? 0 : 1;
+          }
+          if (payload.containsKey('izinkan_jual_minus_stok')) {
+            lokal['izinkan_jual_minus_stok'] =
+                payload['izinkan_jual_minus_stok'] == true ? 1 : 0;
+          }
+          if (payload.containsKey('ekstra_pilihan')) {
+            lokal['ekstra_pilihan'] =
+                jsonEncode(payload['ekstra_pilihan'] ?? const []);
+          }
+          if (payload.containsKey('kemasan')) {
+            lokal['kemasan'] = jsonEncode(payload['kemasan'] ?? const []);
+          }
+          await txn.insert(
+            'produk_cache',
+            lokal,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        } catch (_) {
+          // Payload rusak tetap dipertahankan di outbox untuk diagnosis; satu
+          // baris tidak boleh menggagalkan refresh katalog lainnya.
+        }
+      }
     });
   }
 
@@ -1126,6 +1217,92 @@ class CoreDb {
       limit: limit,
       offset: offset,
     );
+  }
+
+  /// Daftar produk untuk layar MASTER Produk, dibaca langsung dari SQLite dan
+  /// dipaginasi di database. Berbeda dari [produkCache] milik Kasir, daftar
+  /// ini tetap menyertakan produk nonaktif, BAHAN, dan EKSTRA agar admin dapat
+  /// mengelola seluruh master tanpa mengurai snapshot JSON puluhan ribu baris
+  /// di thread UI.
+  Future<List<Map<String, Object?>>> produkCacheMaster({
+    String keyword = '',
+    int? kategoriId,
+    String jenisItem = 'SEMUA',
+    int limit = 15,
+    int offset = 0,
+  }) async {
+    final database = await db;
+    final syarat = <String>[];
+    final argumen = <Object?>[];
+    final kata = keyword.trim().toLowerCase();
+    if (kata.isNotEmpty) {
+      syarat.add(
+          "(LOWER(COALESCE(nama,'')) LIKE ? OR LOWER(COALESCE(kode,'')) LIKE ? OR LOWER(COALESCE(barcode,'')) LIKE ?)");
+      final pola = '%$kata%';
+      argumen.addAll([pola, pola, pola]);
+    }
+    if (kategoriId != null) {
+      syarat.add('kategori_id = ?');
+      argumen.add(kategoriId);
+    }
+    final jenis = jenisItem.trim().toUpperCase();
+    if (jenis != 'SEMUA') {
+      if (jenis == 'JUAL') {
+        // Produk lama sebelum fitur Jenis Item bernilai NULL dan secara
+        // kontrak diperlakukan sebagai produk jual biasa.
+        syarat.add("(jenis_item IS NULL OR jenis_item = '' OR jenis_item = ?)");
+        argumen.add('JUAL');
+      } else {
+        syarat.add('jenis_item = ?');
+        argumen.add(jenis);
+      }
+    }
+    return database.query(
+      'produk_cache',
+      where: syarat.isEmpty ? null : syarat.join(' AND '),
+      whereArgs: argumen.isEmpty ? null : argumen,
+      orderBy: 'nama COLLATE NOCASE ASC, id ASC',
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  /// Jumlah pasangan filter [produkCacheMaster], dipisah dari pengambilan
+  /// halaman agar kontrol pagination tidak perlu memuat semua produk.
+  Future<int> jumlahProdukCacheMaster({
+    String keyword = '',
+    int? kategoriId,
+    String jenisItem = 'SEMUA',
+  }) async {
+    final database = await db;
+    final syarat = <String>[];
+    final argumen = <Object?>[];
+    final kata = keyword.trim().toLowerCase();
+    if (kata.isNotEmpty) {
+      syarat.add(
+          "(LOWER(COALESCE(nama,'')) LIKE ? OR LOWER(COALESCE(kode,'')) LIKE ? OR LOWER(COALESCE(barcode,'')) LIKE ?)");
+      final pola = '%$kata%';
+      argumen.addAll([pola, pola, pola]);
+    }
+    if (kategoriId != null) {
+      syarat.add('kategori_id = ?');
+      argumen.add(kategoriId);
+    }
+    final jenis = jenisItem.trim().toUpperCase();
+    if (jenis != 'SEMUA') {
+      if (jenis == 'JUAL') {
+        syarat.add("(jenis_item IS NULL OR jenis_item = '' OR jenis_item = ?)");
+        argumen.add('JUAL');
+      } else {
+        syarat.add('jenis_item = ?');
+        argumen.add(jenis);
+      }
+    }
+    final hasil = await database.rawQuery(
+      'SELECT COUNT(*) AS n FROM produk_cache${syarat.isEmpty ? '' : ' WHERE ${syarat.join(' AND ')}'}',
+      argumen,
+    );
+    return (hasil.first['n'] as num?)?.toInt() ?? 0;
   }
 
   /// Resolusi id produk EKSTRA (dari [Produk.ekstraPilihan] produk dasar)
@@ -1624,17 +1801,65 @@ class CoreDb {
 
   // ============================== CACHE REFERENSI (generik) ==============================
 
+  static Future<void> _buatIndeksBarisCacheReferensi(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cache_referensi_baris (
+        kunci TEXT NOT NULL,
+        urutan INTEGER NOT NULL,
+        nilai_json TEXT NOT NULL,
+        dihapus INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (kunci, urutan)
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_cache_referensi_baris_halaman
+      ON cache_referensi_baris(kunci, dihapus, urutan)
+    ''');
+  }
+
+  Future<List<dynamic>?> _uraiDaftarReferensi(String nilaiJson) async {
+    // Snapshot besar harus diurai di isolate pekerja; kalau dilakukan pada
+    // isolate UI, migrasi pertama cache lama justru kembali membuat layar
+    // terlihat mandek sebelum LIMIT/OFFSET dapat dipakai.
+    if (nilaiJson.length >= 64 * 1024) {
+      return compute(_uraiDaftarReferensiDiIsolate, nilaiJson);
+    }
+    return _uraiDaftarReferensiDiIsolate(nilaiJson);
+  }
+
+  Future<void> _indeksDaftarReferensi(
+      DatabaseExecutor database, String kunci, List<dynamic>? daftar) async {
+    await database.delete('cache_referensi_baris',
+        where: 'kunci = ?', whereArgs: [kunci]);
+    if (daftar == null || daftar.isEmpty) return;
+    final batch = database.batch();
+    for (var i = 0; i < daftar.length; i++) {
+      final baris = daftar[i];
+      batch.insert('cache_referensi_baris', {
+        'kunci': kunci,
+        'urutan': i,
+        'nilai_json': jsonEncode(baris),
+        'dihapus': baris is Map && baris['_dihapus'] == true ? 1 : 0,
+      });
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> simpanCacheReferensi(String kunci, String nilaiJson) async {
     final database = await db;
-    await database.insert(
-      'cache_referensi',
-      {
-        'kunci': kunci,
-        'nilai_json': nilaiJson,
-        'diperbarui_pada': DateTime.now().toIso8601String()
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final daftar = await _uraiDaftarReferensi(nilaiJson);
+    await database.transaction((txn) async {
+      await txn.insert(
+        'cache_referensi',
+        {
+          'kunci': kunci,
+          'nilai_json': nilaiJson,
+          'diperbarui_pada': DateTime.now().toIso8601String()
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await _indeksDaftarReferensi(txn, kunci, daftar);
+    });
   }
 
   Future<String?> ambilCacheReferensi(String kunci) async {
@@ -1643,6 +1868,56 @@ class CoreDb {
         .query('cache_referensi', where: 'kunci = ?', whereArgs: [kunci]);
     if (hasil.isEmpty) return null;
     return hasil.first['nilai_json'] as String?;
+  }
+
+  /// Membaca snapshot daftar generik memakai LIMIT/OFFSET SQLite. Snapshot
+  /// instalasi versi lama diindeks otomatis satu kali saat pertama diakses;
+  /// setelah itu perpindahan halaman tidak lagi mengurai puluhan ribu baris.
+  Future<HalamanCacheReferensi?> ambilCacheReferensiHalaman(
+    String kunci, {
+    required int limit,
+    required int offset,
+  }) async {
+    if (limit <= 0 || offset < 0) return null;
+    final database = await db;
+    final hitungIndeks = await database.rawQuery(
+        'SELECT COUNT(*) AS jumlah FROM cache_referensi_baris WHERE kunci = ?',
+        [kunci]);
+    final jumlah = hitungIndeks.isEmpty
+        ? 0
+        : (hitungIndeks.first['jumlah'] as num).toInt();
+    if (jumlah == 0) {
+      final nilai = await ambilCacheReferensi(kunci);
+      if (nilai == null) return null;
+      final daftar = await _uraiDaftarReferensi(nilai);
+      if (daftar == null) return null;
+      await database
+          .transaction((txn) => _indeksDaftarReferensi(txn, kunci, daftar));
+    }
+    final hitungAktif = await database.rawQuery('''
+          SELECT COUNT(*) AS jumlah FROM cache_referensi_baris
+          WHERE kunci = ? AND dihapus = 0
+        ''', [kunci]);
+    final total =
+        hitungAktif.isEmpty ? 0 : (hitungAktif.first['jumlah'] as num).toInt();
+    final rows = await database.query(
+      'cache_referensi_baris',
+      columns: ['nilai_json'],
+      where: 'kunci = ? AND dihapus = 0',
+      whereArgs: [kunci],
+      orderBy: 'urutan ASC',
+      limit: limit,
+      offset: offset,
+    );
+    final data = <dynamic>[];
+    for (final row in rows) {
+      try {
+        data.add(jsonDecode(row['nilai_json'] as String));
+      } catch (_) {
+        // Satu baris rusak tidak boleh menggagalkan seluruh halaman.
+      }
+    }
+    return HalamanCacheReferensi(data, total);
   }
 
   /// GENERIK utk semua modul CRUD: true bila cache daftar [kunci] sudah ada
@@ -1967,4 +2242,24 @@ enum StatusPengikatan {
   /// Perangkat terikat pada tenant LAIN. Data lokalnya bukan milik tenant yang
   /// sedang login, dan antreannya tidak boleh terkirim atas namanya.
   beda,
+}
+
+/// Satu halaman snapshot referensi generik yang dibaca langsung dari SQLite.
+/// [total] adalah jumlah seluruh baris aktif pada snapshot, bukan hanya jumlah
+/// [data], sehingga layar tetap dapat membentuk paginator tanpa memuat semua
+/// JSON ke thread UI.
+class HalamanCacheReferensi {
+  final List<dynamic> data;
+  final int total;
+
+  const HalamanCacheReferensi(this.data, this.total);
+}
+
+List<dynamic>? _uraiDaftarReferensiDiIsolate(String nilaiJson) {
+  try {
+    final hasil = jsonDecode(nilaiJson);
+    return hasil is List ? hasil : null;
+  } catch (_) {
+    return null;
+  }
 }

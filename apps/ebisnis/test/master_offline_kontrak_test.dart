@@ -366,6 +366,15 @@ void main() {
     expect(layanan, contains('_statusBaris.containsKey(kunciOutbox)'));
   });
 
+  test('edit produk langsung tersedia di cache Kasir/Kulakan/SO', () {
+    final produk = File('lib/screens/produk_screen.dart').readAsStringSync();
+    final opname =
+        File('lib/screens/stok_opname_screen.dart').readAsStringSync();
+    expect(produk, contains('upsertProdukCache'));
+    expect(produk, contains('Produk.baseKeCacheRow'));
+    expect(opname, contains('cariProdukLokalPersis(kode)'));
+  });
+
   // Layar LAPORAN yang menyajikan angka uang dari cache lokal WAJIB
   // menandainya: diam-diam menampilkan angka basi itu menyesatkan (beda dgn
   // daftar master, yang keterlambatannya tidak berbahaya).
@@ -437,7 +446,8 @@ void main() {
           contains(rapat(
               "daftarDenganCache('akun_list', {'limit': 5000}, 'master:akun')")),
           reason: '$file harus memuat akun_list lewat cache bersama');
-      expect(source, isNot(contains(rapat("ApiClient.instance.aksi('akun_list'"))),
+      expect(
+          source, isNot(contains(rapat("ApiClient.instance.aksi('akun_list'"))),
           reason: '$file tidak boleh lagi fetch akun_list langsung per layar');
     }
   });
@@ -463,13 +473,14 @@ void main() {
       final source = rapat(File(file).readAsStringSync());
       expect(
           source,
-          contains(
-              rapat("objekDenganCache('konfigurasi', const {}, 'konfigurasi')")),
+          contains(rapat(
+              "objekDenganCache('konfigurasi', const {}, 'konfigurasi')")),
           reason: '$file harus memuat konfigurasi dengan fallback cache');
     }
     // Refetch konfigurasi PASCA ganti toko sengaja tetap online-only:
     // snapshot lokal masih milik toko sebelumnya.
-    final kasir = rapat(File('lib/screens/kasir_screen.dart').readAsStringSync());
+    final kasir =
+        rapat(File('lib/screens/kasir_screen.dart').readAsStringSync());
     expect(kasir,
         contains(rapat("return await ApiClient.instance.aksi('konfigurasi')")),
         reason: 'refetch konfigurasi setelah pilih toko harus tetap online');
@@ -519,19 +530,15 @@ void main() {
           contains(rapat("objekDenganCache('${entri.value}', "
               "const {}, '${entri.value}')")),
           reason: '${entri.key} harus memuat ${entri.value} lewat cache');
-      expect(
-          source,
-          isNot(
-              contains(rapat("ApiClient.instance.aksi('${entri.value}'"))),
+      expect(source,
+          isNot(contains(rapat("ApiClient.instance.aksi('${entri.value}'"))),
           reason: '${entri.key} tidak boleh lagi fetch ${entri.value} '
               'langsung');
     }
     final laporan = rapat(
         File('lib/screens/laporan_transaksi_screen.dart').readAsStringSync());
-    expect(
-        laporan,
-        contains(
-            rapat("ApiClient.instance.aksi('laporan_metode_bayar_opsi'")),
+    expect(laporan,
+        contains(rapat("ApiClient.instance.aksi('laporan_metode_bayar_opsi'")),
         reason: 'laporan_metode_bayar_opsi bergantung rentang tanggal -- '
             'harus tetap online-only, bukan objekDenganCache');
   });
@@ -544,8 +551,8 @@ void main() {
   // produk_screen sinkron penuh ber-progress.
   test('pencarian produk jatuh ke cache produk lokal saat offline', () {
     final models = rapat(File('lib/models.dart').readAsStringSync());
-    expect(models,
-        contains(rapat('static Map<String, dynamic> cacheRowKeJson(')));
+    expect(
+        models, contains(rapat('static Map<String, dynamic> cacheRowKeJson(')));
     for (final file in const [
       'lib/screens/riwayat_penjualan_screen.dart',
       'lib/screens/inventory_sales/penjualan_sales_screen.dart',
@@ -564,7 +571,8 @@ void main() {
   // kode_unik (append-only); pengirimannya kini tercatat supaya dedup server
   // dapat menyusul tanpa mengubah klien.
   test('log cetak diantre lewat OutboxIs, tidak hilang saat offline', () {
-    final outbox = rapat(File('lib/services/outbox_is.dart').readAsStringSync());
+    final outbox =
+        rapat(File('lib/services/outbox_is.dart').readAsStringSync());
     expect(outbox, contains(rapat("'si_print_log_create'")),
         reason: 'si_print_log_create harus terdaftar di aksiDidukung OutboxIs');
     const layarCetak = <String>[
@@ -575,15 +583,13 @@ void main() {
     ];
     for (final file in layarCetak) {
       final source = rapat(File(file).readAsStringSync());
-      expect(
-          source,
-          contains(
-              rapat("OutboxIs.kirimAtauAntre('si_print_log_create'")),
+      expect(source,
+          contains(rapat("OutboxIs.kirimAtauAntre('si_print_log_create'")),
           reason: '$file harus mengantre log cetak lewat OutboxIs');
       expect(
           source,
-          isNot(contains(
-              rapat("ApiClient.instance.aksi('si_print_log_create'"))),
+          isNot(
+              contains(rapat("ApiClient.instance.aksi('si_print_log_create'"))),
           reason: '$file tidak boleh lagi fire-and-forget tanpa antrean');
       expect(source, contains(rapat("'kode_unik': 'PRN-")),
           reason: '$file wajib memberi kode_unik per kejadian cetak');
@@ -647,8 +653,8 @@ void main() {
     }
     final logError =
         rapat(File('lib/screens/log_error_screen.dart').readAsStringSync());
-    expect(logError,
-        contains(rapat("ApiClient.instance.aksi('error_log_health'")),
+    expect(
+        logError, contains(rapat("ApiClient.instance.aksi('error_log_health'")),
         reason: 'error_log_health harus tetap online-only -- kesehatan server '
             'dari cache saat offline menyesatkan');
   });
@@ -675,8 +681,7 @@ void main() {
     }
     // Kunci cache sesi kas wajib per toko.
     final sesi = rapat(
-        File('lib/screens/konfigurasi/tab_sesi_kasir.dart')
-            .readAsStringSync());
+        File('lib/screens/konfigurasi/tab_sesi_kasir.dart').readAsStringSync());
     expect(sesi, contains(rapat("'sesi_kas:\${Sesi.instance.tokoId")),
         reason: 'cache sesi kas harus dipisah per toko');
     // Ekspor topup tetap mengunduh seluruh halaman dari server.
@@ -705,8 +710,8 @@ void main() {
     final piutang = rapat(
         File('lib/screens/inventory_sales/piutang_screen.dart')
             .readAsStringSync());
-    expect(piutang,
-        contains(rapat("ambilCacheReferensi('master:si_customer')")),
+    expect(
+        piutang, contains(rapat("ambilCacheReferensi('master:si_customer')")),
         reason: 'pemilih customer kwitansi harus jatuh ke cache master');
     final transitori = rapat(
         File('lib/screens/pengadaan_transitori_tab.dart').readAsStringSync());
@@ -726,14 +731,13 @@ void main() {
   test('daftar jurnal umum lokal-dulu satu kunci dgn draf editor', () {
     final source =
         rapat(File('lib/screens/jurnal_umum_screen.dart').readAsStringSync());
-    expect(
-        source, contains(rapat("daftarCacheDulu('jurnal_umum_list'")),
+    expect(source, contains(rapat("daftarCacheDulu('jurnal_umum_list'")),
         reason: 'daftar jurnal harus lokal-dulu');
     // Kunci yang sama dipakai daftarCacheDulu DAN prosesSimpanMaster draf.
     expect(
         RegExp(r"'master:jurnal_umum'")
-            .allMatches(File('lib/screens/jurnal_umum_screen.dart')
-                .readAsStringSync())
+            .allMatches(
+                File('lib/screens/jurnal_umum_screen.dart').readAsStringSync())
             .length,
         greaterThanOrEqualTo(2),
         reason: 'kunci cache daftar & draf editor harus sama-sama '
@@ -742,8 +746,7 @@ void main() {
         reason: 'emisi cache wajib disaring ulang mengikuti filter layar');
     expect(source, contains('PenandaDataTersimpan('),
         reason: 'nominal jurnal dari cache wajib ber-penanda');
-    expect(
-        source,
+    expect(source,
         contains(rapat("daftarDenganCache('jurnal_umum_jenis_transaksi'")),
         reason: 'dropdown jenis transaksi ikut ber-cache');
   });

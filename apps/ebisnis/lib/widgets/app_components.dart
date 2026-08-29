@@ -752,6 +752,7 @@ class AppFormSheet extends StatelessWidget {
   final String? errorDetail;
   final List<Widget> children;
   final List<Widget> actions;
+  final Widget? headerTrailing;
 
   const AppFormSheet({
     super.key,
@@ -763,6 +764,7 @@ class AppFormSheet extends StatelessWidget {
     this.errorDetail,
     required this.children,
     required this.actions,
+    this.headerTrailing,
   });
 
   @override
@@ -829,6 +831,10 @@ class AppFormSheet extends StatelessWidget {
                   ],
                 ),
               ),
+              if (headerTrailing != null) ...[
+                const SizedBox(width: 12),
+                headerTrailing!,
+              ],
             ],
           ),
         ),

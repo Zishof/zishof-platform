@@ -13,6 +13,7 @@ import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../services/kompresi_gambar.dart';
+import '../../services/simpan_gambar_local_first.dart';
 
 const _opsiMode = [
   ('FULLSCREEN', 'Layar Penuh', Icons.fullscreen),
@@ -82,7 +83,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
   }
 
   Future<void> _muatPengaturan() async {
-    final hasil = await ApiClient.instance.aksi('layar_pelanggan_screensaver_config_ambil',
+    final hasil = await ApiClient.instance.aksi(
+        'layar_pelanggan_screensaver_config_ambil',
         {'toko_id': Sesi.instance.tokoId});
     final cfg = hasil['data'] as Map?;
     if (cfg == null) return;
@@ -96,10 +98,31 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
   }
 
   Future<void> _muatSlide() async {
-    final hasil = await ApiClient.instance.aksi('layar_pelanggan_slide_list',
-        {'toko_id': Sesi.instance.tokoId});
+    final slideServer = <Map<String, dynamic>>[];
+    try {
+      final hasil = await ApiClient.instance.aksi(
+          'layar_pelanggan_slide_list', {'toko_id': Sesi.instance.tokoId});
+      slideServer.addAll(
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+    } catch (_) {
+      // Daftar server tidak boleh menghalangi pemulihan gambar lokal.
+    }
+    final slideLokal = await muatGambarLokalTertunda(
+      aksi: 'layar_pelanggan_slide_upload',
+      awalanKunci: 'layar_slide:${Sesi.instance.tokoId}:',
+      fieldBase64: 'gambar_base64',
+    );
     setStateIfMounted(() {
-      _slide = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      _slide = [
+        ...slideServer,
+        ...slideLokal.map((gambar) => <String, dynamic>{
+              '_idAntreanLokal': gambar.idAntrean,
+              '_gambarLokal': gambar.bytes,
+              'namaFile': gambar.namaFile,
+              'aktif': true,
+              'statusLokal': gambar.status,
+            }),
+      ];
     });
   }
 
@@ -136,7 +159,9 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
         title: const Text('Hapus Gambar?'),
         content: const Text('Gambar ini akan dihapus dari screensaver.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Hapus', style: TextStyle(color: Colors.red))),
@@ -144,6 +169,12 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
       ),
     );
     if (yakin != true || !mounted) return;
+    final idAntreanLokal = (s['_idAntreanLokal'] as num?)?.toInt();
+    if (idAntreanLokal != null) {
+      await hapusGambarLokalTertunda(idAntreanLokal);
+      setStateIfMounted(() => _slide.remove(s));
+      return;
+    }
     try {
       await prosesSimpanMaster(context,
           aksi: 'layar_pelanggan_slide_hapus',
@@ -159,7 +190,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
       }
     }
   }
@@ -174,7 +206,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
     } catch (e) {
       setStateIfMounted(() => s['aktif'] = !aktif);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengubah: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal mengubah: $e')));
       }
     }
   }
@@ -200,11 +233,14 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Gambar akan ditambahkan ke urutan screensaver toko ini.',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondaryOf(context))),
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondaryOf(context))),
               const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Khusus mesin POS ini', style: TextStyle(fontSize: 13)),
+                title: const Text('Khusus mesin POS ini',
+                    style: TextStyle(fontSize: 13)),
                 subtitle: Text(
                     khususMesinIni
                         ? 'Hanya tampil di mesin ini.'
@@ -216,15 +252,20 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Unggah')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Unggah')),
           ],
         ),
       ),
     );
     if (lanjut != true) return;
 
-    final progress = ValueNotifier<String>('Mengunggah 0/${hasilPicker.files.length}...');
+    final progress =
+        ValueNotifier<String>('Mengunggah 0/${hasilPicker.files.length}...');
     if (!mounted) return;
     showDialog(
       context: context,
@@ -234,7 +275,10 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
           valueListenable: progress,
           builder: (context, teks, __) => Row(
             children: [
-              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
               const SizedBox(width: 16),
               Expanded(child: Text(teks)),
             ],
@@ -262,12 +306,21 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
         // penyaring ekstensi picker hanya melihat nama, bukan isi.
         final bytesAsal = await File(path).readAsBytes();
         final bytes = await compute(siapkanLampiranGambar, bytesAsal);
-        await ApiClient.instance.aksi('layar_pelanggan_slide_upload', {
-          'toko_id': Sesi.instance.tokoId,
-          'gambar_base64': base64Encode(bytes),
-          'nama_file': f.name,
-          'id_mesin': khususMesinIni ? IdentitasMesin.instance.idMesin : '',
-        });
+        final hasilSimpan = await simpanGambarLocalFirst(
+          aksi: 'layar_pelanggan_slide_upload',
+          kunci:
+              'layar_slide:${Sesi.instance.tokoId}:${khususMesinIni ? IdentitasMesin.instance.idMesin : 'semua'}:${DateTime.now().microsecondsSinceEpoch}:$i',
+          body: {
+            'toko_id': Sesi.instance.tokoId,
+            'gambar_base64': base64Encode(bytes),
+            'nama_file': '${f.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg',
+            'id_mesin': khususMesinIni ? IdentitasMesin.instance.idMesin : '',
+          },
+        );
+        if (hasilSimpan.tertunda) {
+          // Tertunda bukan gagal: gambar aman di perangkat dan timer outbox
+          // akan mengirimnya saat server pulih.
+        }
         berhasil++;
       } catch (_) {
         gagal++;
@@ -276,7 +329,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
     if (mounted) Navigator.of(context, rootNavigator: true).pop();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Unggah selesai: $berhasil berhasil${gagal > 0 ? ', $gagal gagal' : ''}.')));
+          content: Text(
+              'Unggah selesai: $berhasil berhasil${gagal > 0 ? ', $gagal gagal' : ''}.')));
       await _muatSlide();
     }
   }
@@ -296,7 +350,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
               Text(_error!, textAlign: TextAlign.center),
               AppDetailGalatOpsional(detail: detailUntuk(_error)),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _muatSemua, child: const Text('Coba Lagi')),
+              ElevatedButton(
+                  onPressed: _muatSemua, child: const Text('Coba Lagi')),
             ],
           ),
         ),
@@ -314,7 +369,9 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
               children: [
                 Text(
                   'Tampilkan slideshow gambar promosi di jendela Layar Pelanggan (jendela kedua) saat kasir tidak sedang bertransaksi -- seperti screensaver.',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondaryOf(context)),
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondaryOf(context)),
                 ),
                 const SizedBox(height: 14),
                 AppFormSwitchTile(
@@ -324,18 +381,28 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                 ),
                 const SizedBox(height: 4),
                 Text('Mode Tampilan',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondaryOf(context))),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondaryOf(context))),
                 const SizedBox(height: 6),
                 SegmentedButton<String>(
                   segments: _opsiMode
-                      .map((o) => ButtonSegment(value: o.$1, label: Text(o.$2), icon: Icon(o.$3, size: 16)))
+                      .map((o) => ButtonSegment(
+                          value: o.$1,
+                          label: Text(o.$2),
+                          icon: Icon(o.$3, size: 16)))
                       .toList(),
                   selected: {_mode},
-                  onSelectionChanged: (v) => setStateIfMounted(() => _mode = v.first),
+                  onSelectionChanged: (v) =>
+                      setStateIfMounted(() => _mode = v.first),
                 ),
                 const SizedBox(height: 14),
                 Text('Animasi Transisi',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondaryOf(context))),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondaryOf(context))),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -344,11 +411,15 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                     final terpilih = _animasi == o.$1;
                     return ChoiceChip(
                       label: Text(o.$2),
-                      avatar: Icon(o.$3, size: 16, color: terpilih ? Colors.white : null),
+                      avatar: Icon(o.$3,
+                          size: 16, color: terpilih ? Colors.white : null),
                       selected: terpilih,
-                      onSelected: (_) => setStateIfMounted(() => _animasi = o.$1),
+                      onSelected: (_) =>
+                          setStateIfMounted(() => _animasi = o.$1),
                       selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(color: terpilih ? Colors.white : null, fontSize: 12.5),
+                      labelStyle: TextStyle(
+                          color: terpilih ? Colors.white : null,
+                          fontSize: 12.5),
                     );
                   }).toList(),
                 ),
@@ -368,7 +439,8 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                         label: 'Aktif Setelah Idle (detik)',
                         controller: _idleController,
                         keyboardType: TextInputType.number,
-                        helperText: 'Tanpa transaksi selama ini, screensaver menyala.',
+                        helperText:
+                            'Tanpa transaksi selama ini, screensaver menyala.',
                       ),
                     ),
                   ],
@@ -380,7 +452,10 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                     onPressed: _menyimpanPengaturan ? null : _simpanPengaturan,
                     icon: _menyimpanPengaturan
                         ? const SizedBox(
-                            width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.save_outlined, size: 18),
                     label: const Text('Simpan Pengaturan'),
                     style: ElevatedButton.styleFrom(
@@ -405,8 +480,11 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                 ? Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Center(
-                      child: Text('Belum ada gambar. Klik "Tambah Gambar" untuk mulai.',
-                          style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 13)),
+                      child: Text(
+                          'Belum ada gambar. Klik "Tambah Gambar" untuk mulai.',
+                          style: TextStyle(
+                              color: AppColors.textSecondaryOf(context),
+                              fontSize: 13)),
                     ),
                   )
                 : Wrap(
@@ -414,11 +492,14 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                     runSpacing: 12,
                     children: _slide.map((s) {
                       final aktif = s['aktif'] == true;
-                      final khususMesin = (s['idMesin'] as String?)?.isNotEmpty == true;
+                      final gambarLokal = s['_gambarLokal'] as Uint8List?;
+                      final khususMesin =
+                          (s['idMesin'] as String?)?.isNotEmpty == true;
                       return Container(
                         width: 168,
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.borderOf(context)),
+                          border:
+                              Border.all(color: AppColors.borderOf(context)),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         clipBehavior: Clip.antiAlias,
@@ -429,13 +510,39 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                               children: [
                                 AspectRatio(
                                   aspectRatio: 16 / 10,
-                                  child: s['urlGambar'] != null
-                                      ? Image.network('${s['urlGambar']}', fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(
-                                              color: AppColors.pageBgOf(context),
-                                              child: const Icon(Icons.broken_image_outlined)))
-                                      : Container(color: AppColors.pageBgOf(context)),
+                                  child: gambarLokal != null
+                                      ? Image.memory(gambarLokal,
+                                          fit: BoxFit.cover)
+                                      : s['urlGambar'] != null
+                                          ? Image.network('${s['urlGambar']}',
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                      color: AppColors.pageBgOf(
+                                                          context),
+                                                      child: const Icon(Icons
+                                                          .broken_image_outlined)))
+                                          : Container(
+                                              color:
+                                                  AppColors.pageBgOf(context)),
                                 ),
+                                if (gambarLokal != null)
+                                  Positioned(
+                                    left: 4,
+                                    top: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade800,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text('Menunggu sinkron',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10)),
+                                    ),
+                                  ),
                                 Positioned(
                                   top: 4,
                                   right: 4,
@@ -443,9 +550,11 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                                     color: Colors.black.withValues(alpha: 0.55),
                                     borderRadius: BorderRadius.circular(20),
                                     child: IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.white),
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 16, color: Colors.white),
                                       onPressed: () => _hapusSlide(s),
-                                      constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                      constraints: const BoxConstraints(
+                                          minWidth: 30, minHeight: 30),
                                       padding: EdgeInsets.zero,
                                     ),
                                   ),
@@ -455,25 +564,35 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
                                     left: 4,
                                     bottom: 4,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.55),
-                                          borderRadius: BorderRadius.circular(6)),
+                                          color: Colors.black
+                                              .withValues(alpha: 0.55),
+                                          borderRadius:
+                                              BorderRadius.circular(6)),
                                       child: const Text('Mesin ini',
-                                          style: TextStyle(color: Colors.white, fontSize: 10)),
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10)),
                                     ),
                                   ),
                               ],
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(aktif ? 'Aktif' : 'Nonaktif',
                                       style: TextStyle(
                                           fontSize: 11.5,
-                                          color: aktif ? AppColors.success : AppColors.textSecondaryOf(context))),
+                                          color: aktif
+                                              ? AppColors.success
+                                              : AppColors.textSecondaryOf(
+                                                  context))),
                                   Transform.scale(
                                     scale: 0.75,
                                     child: Switch(
@@ -494,8 +613,11 @@ class _TabScreensaverState extends State<TabScreensaver> with JejakGalat {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Gambar & pengaturan berlaku untuk toko Anda saat ini.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondaryOf(context))),
+              child: Text(
+                  'Gambar & pengaturan berlaku untuk toko Anda saat ini.',
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textSecondaryOf(context))),
             ),
           ],
         ],

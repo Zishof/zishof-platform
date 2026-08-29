@@ -18,6 +18,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
+import '../services/pencarian_produk_lokal.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 
@@ -296,8 +297,8 @@ class _TabMutasiStokState extends State<_TabMutasiStok> with JejakGalat {
       setStateIfMounted(() {
         _dasbor = results[0];
         _ringkasanHariIni = results[1];
-        _dasborDariCache = results[0]['offline'] == true ||
-            results[1]['offline'] == true;
+        _dasborDariCache =
+            results[0]['offline'] == true || results[1]['offline'] == true;
       });
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
@@ -784,7 +785,10 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       _produkDitemukan = null;
     });
     try {
-      final hasil =
+      // Local-first: barcode yang baru diedit dan masih PENDING di perangkat
+      // harus langsung dapat dipakai SO. Server tetap menjadi tujuan akhir
+      // saat so_simpan dikirim dan menghitung ulang selisih aktual.
+      final hasil = await cariProdukLokalPersis(kode) ??
           await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       setStateIfMounted(() {
         _produkDitemukan = hasil;
@@ -1144,7 +1148,7 @@ class _TabSoByScanState extends State<_TabSoByScan>
       _pesanError = null;
     });
     try {
-      final hasil =
+      final hasil = await cariProdukLokalPersis(kode) ??
           await ApiClient.instance.aksi('so_produk_scan', {'barcode': kode});
       if (_antrean.any((a) => a.produk['produkId'] == hasil['produkId'])) {
         setStateIfMounted(

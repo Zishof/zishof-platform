@@ -534,7 +534,8 @@ class _Detail extends StatelessWidget {
   Widget build(BuildContext context) {
     final baris = _daftar(data['baris']),
         gen = _daftar(data['genealogi']),
-        events = _daftar(data['riwayatStatus']);
+        events = _daftar(data['riwayatStatus']),
+        reservasi = _daftar(data['reservasi']);
     final status = '${data['statusDokumen'] ?? 'DRAFT'}';
     return Dialog.fullscreen(
         child: Scaffold(
@@ -560,6 +561,17 @@ class _Detail extends StatelessWidget {
                       '${b['tipeBaris']} · ${b['nama'] ?? b['kode'] ?? '-'}'),
                   subtitle: Text(
                       'Qty ${b['qty']} ${b['uom'] ?? ''} · Lot ${b['lot'] ?? '-'}'))),
+              // Fase D pelengkap: reservasi komponen WO (ditulis server saat
+              // rilis; sisa berkurang oleh Material Issue ber-referensi WO).
+              if (reservasi.isNotEmpty) ...<Widget>[
+                const Divider(),
+                const Text('Reservasi komponen',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                ...reservasi.map((r) => ListTile(
+                    title: Text('${r['keterangan'] ?? r['produkId']}'),
+                    subtitle: Text(
+                        'Sisa ${r['qtySisa']} dari ${r['qty']} · ${r['statusReservasi']}')))
+              ],
               if (gen.isNotEmpty) ...<Widget>[
                 const Divider(),
                 const Text('Genealogi',

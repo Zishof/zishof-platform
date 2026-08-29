@@ -23,6 +23,7 @@ import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../services/url_media.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_error_info.dart';
@@ -1150,7 +1151,8 @@ class _KasirScreenState extends State<KasirScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.looks_one_outlined),
-            title: Text('Satuan (1 ${p.satuanNama.isEmpty ? 'unit' : p.satuanNama})'),
+            title: Text(
+                'Satuan (1 ${p.satuanNama.isEmpty ? 'unit' : p.satuanNama})'),
             onTap: () => Navigator.pop(c, const <String, dynamic>{}),
           ),
           for (final k in aktif)
@@ -2351,11 +2353,10 @@ class _KasirScreenState extends State<KasirScreen> {
                   // Tekan-lama membuka pemilih kemasan -- hanya bila produk
                   // punya preset; selain itu null supaya gestur tidak
                   // menelan long-press default (tidak ada).
-                  onPilihKemasan: produkTampil[i]
-                          .kemasan
-                          .any((k) => k['aktif'] != false)
-                      ? () => _pilihKemasan(produkTampil[i])
-                      : null,
+                  onPilihKemasan:
+                      produkTampil[i].kemasan.any((k) => k['aktif'] != false)
+                          ? () => _pilihKemasan(produkTampil[i])
+                          : null,
                   diskon: _diskonKatalog[produkTampil[i].id],
                   cashback: _cashbackKatalog[produkTampil[i].id],
                 ),
@@ -2823,8 +2824,8 @@ class _KartuProdukState extends State<_KartuProduk> {
                           ? AnimatedSwitcher(
                               duration: const Duration(milliseconds: 400),
                               child: Image.network(
-                                produk.fotoUrls[
-                                    _indeksFoto % produk.fotoUrls.length],
+                                normalisasiUrlMedia(produk.fotoUrls[
+                                    _indeksFoto % produk.fotoUrls.length]),
                                 key: ValueKey(
                                     _indeksFoto % produk.fotoUrls.length),
                                 fit: BoxFit.cover,

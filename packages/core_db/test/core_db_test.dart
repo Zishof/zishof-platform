@@ -239,6 +239,77 @@ void main() {
     expect(hasilLazy, hasLength(1));
     expect(hasilLazy.single['kode'], 'UAT-PRODUK-149');
 
+    // UAT master Produk: katalog besar harus dipaginasi oleh SQLite, bukan
+    // diurai seluruhnya di thread UI. Berbeda dari Kasir, master tetap boleh
+    // melihat produk nonaktif dan jenis BAHAN/EKSTRA.
+    await CoreDb.instance.upsertProdukCache(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 9001,
+        'kode': 'UAT-BAHAN-1',
+        'barcode': 'UAT-BAHAN-BARCODE',
+        'nama': 'Bahan UAT Nonaktif',
+        'harga_jual': 0,
+        'stok': 4,
+        'kategori_id': 77,
+        'kategori_nama': 'Bahan UAT',
+        'aktif': 0,
+        'jenis_item': 'BAHAN',
+      },
+      <String, Object?>{
+        'id': 9002,
+        'kode': 'UAT-EKSTRA-1',
+        'nama': 'Ekstra UAT',
+        'harga_jual': 500,
+        'stok': 2,
+        'kategori_id': 77,
+        'kategori_nama': 'Bahan UAT',
+        'aktif': 1,
+        'jenis_item': 'EKSTRA',
+      },
+    ]);
+    final bahanMaster = await CoreDb.instance.produkCacheMaster(
+      kategoriId: 77,
+      jenisItem: 'BAHAN',
+      limit: 15,
+    );
+    expect(bahanMaster, hasLength(1));
+    expect(bahanMaster.single['aktif'], 0,
+        reason: 'master tetap menampilkan produk nonaktif');
+    expect(
+      await CoreDb.instance.jumlahProdukCacheMaster(
+        kategoriId: 77,
+        jenisItem: 'SEMUA',
+      ),
+      2,
+    );
+    final halamanMaster = await CoreDb.instance.produkCacheMaster(
+      jenisItem: 'JUAL',
+      limit: 15,
+      offset: 15,
+    );
+    expect(halamanMaster, hasLength(15),
+        reason: 'master hanya membaca halaman yang sedang ditampilkan');
+
+    // Semua snapshot referensi generik juga mempunyai indeks baris. Halaman
+    // kedua harus dibaca dengan LIMIT/OFFSET tanpa mengurai 40 baris di UI.
+    await CoreDb.instance.simpanCacheReferensi(
+      'uat:daftar-generik',
+      jsonEncode(<Map<String, Object?>>[
+        for (var i = 1; i <= 40; i++)
+          <String, Object?>{'id': i, 'nama': 'Baris $i'},
+      ]),
+    );
+    final halamanGenerik = await CoreDb.instance.ambilCacheReferensiHalaman(
+      'uat:daftar-generik',
+      limit: 15,
+      offset: 15,
+    );
+    expect(halamanGenerik, isNotNull);
+    expect(halamanGenerik!.total, 40);
+    expect(halamanGenerik.data, hasLength(15));
+    expect((halamanGenerik.data.first as Map)['id'], 16);
+    expect((halamanGenerik.data.last as Map)['id'], 30);
+
     // UAT kebijakan member: aturan PIN dan limit tipe harus selamat dalam
     // snapshot lokal. Tanpa tiga kolom limit ini, kasir offline akan salah
     // menganggap transaksi bebas limit lalu baru mengetahuinya di background.

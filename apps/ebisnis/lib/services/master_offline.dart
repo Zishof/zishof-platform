@@ -6,6 +6,15 @@ import 'package:flutter/foundation.dart';
 
 import '../api_client.dart';
 
+List<dynamic>? _uraiSnapshotDaftar(String mentah) {
+  try {
+    final hasil = jsonDecode(mentah);
+    return hasil is List ? hasil : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Fase sinkronisasi utk indikator UI (lihat IndikatorSinkronMaster).
 enum FaseSinkron { diam, adaAntrean, mengirim, baruTersinkron, adaGagal }
 
@@ -29,8 +38,8 @@ class StatusSinkronMaster {
 
 /// <h3>Offline-first CRUD data MASTER (anggota, produk, jenis produk, dst).</h3>
 ///
-/// Pola: [simpanAtauAntre] MENCOBA server dulu; bila kegagalan MURNI jaringan
-/// ([ApiException.offline]) mutasi diantre di tabel `outbox_master` (core_db
+/// Pola lama [simpanAtauAntre] mencoba server dulu; bila kegagalan teknis
+/// ([dapatDicobaUlang]) mutasi diantre di tabel `outbox_master` (core_db
 /// v10, coalesce per [kunci] -- edit berulang baris yang sama saat offline
 /// hanya menyisakan payload terakhir) lalu dikirim ulang di latar oleh
 /// [flush] (timer periodik + segera setelah antre). Penolakan BISNIS server
@@ -53,6 +62,41 @@ enum StatusBarisSinkron { menunggu, gagal, baruTersinkron }
 
 class MasterOffline {
   MasterOffline._();
+
+  /// Penolakan yang pasti tidak akan pulih hanya dengan mengirim payload yang
+  /// sama. Daftar ini sengaja tertutup: kode baru/asing dianggap gangguan
+  /// teknis supaya perubahan lokal tidak hilang karena server lama membungkus
+  /// exception database sebagai HTTP 200 + SERVER_ERROR.
+  static const Set<String> kodePenolakanPermanen = {
+    'DATA_TIDAK_LENGKAP',
+    'VALIDASI_GAGAL',
+    'TIDAK_DITEMUKAN',
+    'AKSES_DITOLAK',
+    'TIDAK_BERWENANG',
+    'DUPLIKAT_DATA',
+    'DUPLIKAT_KODE',
+    'DUPLIKAT_BARCODE',
+  };
+
+  /// True bila kegagalan layak dicoba lagi dengan client_mutation_id yang
+  /// sama. HTTP 5xx, timeout, jawaban non-JSON, SERVER_ERROR, dan kode server
+  /// baru termasuk gangguan teknis. Hanya kode bisnis di atas yang permanen.
+  static bool dapatDicobaUlang(Object error) {
+    if (error is! ApiException) return true;
+    if (error.statusHttp == 401 || error.statusHttp == 403) return false;
+    if (error.offline ||
+        error.statusHttp == 408 ||
+        error.statusHttp == 429 ||
+        (error.statusHttp ?? 0) >= 500) {
+      return true;
+    }
+    final kode = (error.kode ?? '').trim().toUpperCase();
+    // Respons endpoint lama sering mengirim HTTP 200 + status error TANPA
+    // kode. Tidak aman menyimpulkan itu validasi bisnis: insiden FK pemasok
+    // produk juga berbentuk demikian. Default tanpa/asing kode = retry.
+    if (kode.isEmpty) return true;
+    return !kodePenolakanPermanen.contains(kode);
+  }
 
   static final ValueNotifier<StatusSinkronMaster> status =
       ValueNotifier<StatusSinkronMaster>(
@@ -184,7 +228,9 @@ class MasterOffline {
     }
   }
 
-  /// Simpan/hapus master: server dulu; offline -> antre + `{offline: true}`.
+  /// Jalur kompatibilitas programatik: server dulu; semua gangguan teknis
+  /// server -> antre + `{offline: true}`. Form interaktif wajib memakai
+  /// `prosesSimpanMaster`, yang benar-benar menulis lokal lebih dahulu.
   ///
   /// [kunci] identitas baris utk coalesce, mis. `'produk:123'` (edit) atau
   /// `'produk:baru:<stempel>'` (create -- unik per draf). [cacheKey] +
@@ -210,7 +256,9 @@ class MasterOffline {
       unawaited(flush());
       return hasil;
     } on ApiException catch (e) {
-      if (!e.offline) rethrow; // penolakan bisnis -> user harus melihatnya.
+      if (!dapatDicobaUlang(e)) {
+        rethrow; // validasi bisnis eksplisit -> user harus memperbaiki data.
+      }
       // Bekal dedup replay: server yang sudah mendukung boleh mengabaikan
       // kiriman ulang ber-id sama (field asing aman utk server lama).
       final antreBody = <String, dynamic>{
@@ -267,9 +315,10 @@ class MasterOffline {
 
   /// LANGKAH 2 alur "simpan lokal dulu": coba kirim SATU baris antrean itu
   /// segera. Sukses -> baris ditandai SYNCED + centang per-baris, return
-  /// respons server. Offline -> percobaan dicatat, lempar ulang (baris tetap
-  /// antre; pemanggil menutup jendela). Penolakan BISNIS -> baris antrean
-  /// DIHAPUS (user melihat pesannya langsung di form) lalu dilempar ulang.
+  /// respons server. Gangguan teknis -> percobaan dicatat, lempar ulang (baris
+  /// tetap PENDING; pemanggil menutup jendela). Penolakan BISNIS -> baris
+  /// ditandai GAGAL tetapi TIDAK dihapus, sehingga perubahan lokal tetap
+  /// terlindungi dan user dapat memperbaiki/mengirim ulang dengan jejak jelas.
   static Future<Map<String, dynamic>> kirimSatuAntrean(
       int idAntrean, String aksi, Map<String, dynamic> body,
       {String? kunci}) async {
@@ -293,16 +342,13 @@ class MasterOffline {
       unawaited(flush());
       return hasil;
     } on ApiException catch (e) {
-      if (e.offline) {
+      if (dapatDicobaUlang(e)) {
         await CoreDb.instance.outboxMasterCatatPercobaan(idAntrean, e.pesan);
         await _muatUlangHitungan();
         rethrow;
       }
-      await CoreDb.instance.outboxMasterHapus(idAntrean);
-      if (kunci != null) {
-        _statusBaris.remove(kunci);
-        revisiBaris.value++;
-      }
+      await CoreDb.instance.outboxMasterTandaiGagal(idAntrean, e.pesan);
+      _tandaiBarisGagal(kunci);
       await _muatUlangHitungan();
       rethrow;
     }
@@ -556,6 +602,34 @@ class MasterOffline {
     return k == null ? null : '$k';
   }
 
+  static int? _angkaPaginasi(Map<String, dynamic> body, List<String> kunci) {
+    for (final nama in kunci) {
+      final nilai = body[nama];
+      if (nilai is num) return nilai.toInt();
+      final parsed = int.tryParse('${nilai ?? ''}');
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  /// Menerjemahkan kontrak paginasi API yang umum menjadi LIMIT/OFFSET lokal.
+  /// Bila request memang tidak berhalaman, null dikembalikan agar layar yang
+  /// membutuhkan dataset lengkap (mis. kalkulasi/agregasi) tetap utuh.
+  @visibleForTesting
+  static Map<String, int>? paginasiLokalUntukTest(Map<String, dynamic> body) {
+    final limit =
+        _angkaPaginasi(body, const ['page_size', 'pageSize', 'limit', 'batas']);
+    if (limit == null || limit <= 0) return null;
+    final offsetLangsung = _angkaPaginasi(body, const ['offset', 'mulai']);
+    final halaman = _angkaPaginasi(body, const ['page', 'halaman']) ?? 1;
+    return {
+      'limit': limit,
+      'offset': offsetLangsung != null && offsetLangsung >= 0
+          ? offsetLangsung
+          : ((halaman < 1 ? 1 : halaman) - 1) * limit,
+    };
+  }
+
   /// <h3>Muat daftar LOKAL DULU, lalu server di latar (permintaan bisnis).</h3>
   ///
   /// Emisi lewat [onData] (bisa dipanggil 1-2 kali):
@@ -589,8 +663,27 @@ class MasterOffline {
     final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
     if (tersimpan != null) {
       try {
-        lokal = jsonDecode(tersimpan) as List;
-        onData(_hasilDaftar(lokal, dariServer: false, fieldData: fieldData));
+        final paginasi = paginasiLokalUntukTest(body);
+        if (paginasi != null) {
+          final halaman = await CoreDb.instance.ambilCacheReferensiHalaman(
+              cacheKey,
+              limit: paginasi['limit']!,
+              offset: paginasi['offset']!);
+          if (halaman != null) {
+            onData(_hasilDaftar(halaman.data,
+                dariServer: false, fieldData: fieldData, total: halaman.total));
+            // Beri kesempatan Flutter melukis halaman lokal sebelum snapshot
+            // lengkap dibaca untuk kebutuhan merge respons server di latar.
+            await Future<void>.delayed(Duration.zero);
+          }
+        }
+        // Merge server masih memerlukan snapshot lengkap, tetapi parsing-nya
+        // dipindahkan dari isolate UI supaya scroll/navigasi tidak membeku.
+        lokal = await compute(_uraiSnapshotDaftar, tersimpan);
+        if (lokal == null) throw const FormatException('Cache bukan daftar');
+        if (paginasi == null) {
+          onData(_hasilDaftar(lokal, dariServer: false, fieldData: fieldData));
+        }
       } catch (_) {
         lokal = null; // cache rusak -- lanjut jalur server biasa.
       }
@@ -932,11 +1025,16 @@ class MasterOffline {
           _tandaiBarisSukses(kunci);
           terkirim++;
         } on ApiException catch (e) {
-          if (e.offline) {
+          if (dapatDicobaUlang(e)) {
             await CoreDb.instance.outboxMasterCatatPercobaan(id, e.pesan);
-            break; // masih offline -- sisanya pasti gagal juga, coba nanti.
+            if (e.offline || (e.statusHttp ?? 0) >= 500) {
+              break; // server tak tersedia -- sisanya akan sama, coba nanti.
+            }
+            // Error teknis satu payload (mis. FK server belum siap) tidak
+            // boleh menghalangi CRUD lain di antrean untuk ikut dicoba.
+            continue;
           }
-          // Server menolak scr bisnis -> permanen (terlihat, tidak diretry).
+          // Validasi bisnis eksplisit -> perlu koreksi user, payload disimpan.
           await CoreDb.instance.outboxMasterTandaiGagal(id, e.pesan);
           _tandaiBarisGagal(kunci);
         }

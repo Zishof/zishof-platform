@@ -54,8 +54,7 @@ void main() {
         reason: 'edit TERAKHIR yang menang saat replay');
   });
 
-  test('transisi status: sukses & gagal keluar dari antrean pending',
-      () async {
+  test('transisi status: sukses & gagal keluar dari antrean pending', () async {
     final db = CoreDb.instance;
     final pending = await db.outboxMasterPending();
     expect(pending, isNotEmpty);
@@ -75,5 +74,64 @@ void main() {
     final gagal = await db.outboxMasterGagal();
     expect(gagal.any((r) => r['id'] == idKedua), isTrue,
         reason: 'penolakan bisnis permanen tetap terlihat utk ditindak');
+  });
+
+  test('koreksi atas baris GAGAL mengganti payload lama menjadi PENDING',
+      () async {
+    final db = CoreDb.instance;
+    final idLama = await db.outboxMasterTambah(
+        'produk_simpan', 'produk:99', '{"nama":"Salah"}');
+    await db.outboxMasterTandaiGagal(idLama, 'barcode sudah dipakai');
+
+    final idBaru = await db.outboxMasterTambah(
+        'produk_simpan', 'produk:99', '{"nama":"Benar"}');
+    final pending = await db.outboxMasterPending();
+    final baris = pending.where((r) => r['kunci'] == 'produk:99').toList();
+    expect(baris.length, 1);
+    expect(baris.single['id'], idBaru);
+    expect(baris.single['payload_json'], '{"nama":"Benar"}');
+    final gagal = await db.outboxMasterGagal(batas: 500);
+    expect(gagal.any((r) => r['id'] == idLama), isFalse,
+        reason: 'payload salah tidak boleh hidup berdampingan dgn koreksinya');
+  });
+
+  test('refresh katalog server mempertahankan edit produk yang masih pending',
+      () async {
+    final db = CoreDb.instance;
+    await db.replaceProdukCache([
+      {
+        'id': 501,
+        'kode': 'LAMA',
+        'barcode': '111',
+        'nama': 'Produk server lama',
+        'harga_jual': 1000,
+        'stok': 2,
+        'aktif': 1,
+      }
+    ]);
+    await db.outboxMasterTambah(
+      'produk_simpan',
+      'produk:501',
+      '{"id":501,"kode":"BARU","barcode":"999","nama":"Edit lokal","harga_jual":2500,"aktif":true}',
+    );
+
+    // Server masih mengirim versi lama ketika sinkron penuh dijalankan.
+    await db.replaceProdukCache([
+      {
+        'id': 501,
+        'kode': 'LAMA',
+        'barcode': '111',
+        'nama': 'Produk server lama',
+        'harga_jual': 1000,
+        'stok': 2,
+        'aktif': 1,
+      }
+    ]);
+
+    final hasil = await db.produkCache(keyword: '999');
+    expect(hasil, hasLength(1));
+    expect(hasil.single['kode'], 'BARU');
+    expect(hasil.single['nama'], 'Edit lokal');
+    expect(hasil.single['harga_jual'], 2500);
   });
 }

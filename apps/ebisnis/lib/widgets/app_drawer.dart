@@ -811,18 +811,19 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const RiwayatPenjualanScreen(),
                           ),
                         ),
-                      // Riwayat Audit menampilkan data TERHAPUS lintas toko dan
+                      // Riwayat Perubahan Data menampilkan data TERHAPUS lintas toko dan
                       // dapat memulihkannya; server membatasinya ke administrator,
                       // dan menu ini mengikuti gerbang yang sama supaya tidak
                       // menawarkan sesuatu yang akan ditolak.
                       if (Sesi.instance.isAdmin)
                         _ItemMenu(
                           icon: Icons.manage_search,
-                          label: 'Riwayat Audit',
-                          aktif: menuAktif == 'Riwayat Audit',
+                          label: 'Riwayat Perubahan Data',
+                          aktif: menuAktif == 'Riwayat Perubahan Data' ||
+                              menuAktif == 'Riwayat Audit',
                           onTap: () => _pindahMenu(
                             context,
-                            label: 'Riwayat Audit',
+                            label: 'Riwayat Perubahan Data',
                             builder: (_) => const RiwayatAuditScreen(
                               menuAktif: MenuEBisnis.riwayatAudit,
                               labelKembali: 'Kembali',

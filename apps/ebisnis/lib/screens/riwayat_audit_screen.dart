@@ -43,12 +43,17 @@ class RiwayatAuditScreen extends StatefulWidget {
   /// Label tombol kembali, mengikuti layar pemanggil.
   final String labelKembali;
 
+  /// Bila true, hanya isi audit yang dirender di dalam tab layar lain tanpa
+  /// membuat AppShell/sidebar kedua.
+  final bool embedded;
+
   const RiwayatAuditScreen({
     super.key,
-    this.entitasAwal = 'pesanan',
+    this.entitasAwal = 'produk',
     this.tipeAwal = 'SEMUA',
     this.menuAktif = MenuEBisnis.pesanan,
     this.labelKembali = 'Kembali',
+    this.embedded = false,
   });
 
   @override
@@ -74,6 +79,51 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     'toko': 'Toko',
     'diskon': 'Aturan Diskon',
     'cara_bayar': 'Cara Pembayaran',
+    'jenis_produk': 'Jenis/Kategori Produk',
+    'grup_produk': 'Grup Produk',
+    'penyedia': 'Penyedia',
+    'jenis_anggota': 'Jenis Member',
+    'tipe_anggota': 'Tipe Member',
+    'kebijakan_retur': 'Kebijakan Retur',
+    'diskon_grup': 'Grup Aturan Diskon',
+    'produk_batch': 'Batch Produk',
+    'si_customer': 'Customer Inventory & Sales',
+    'si_sales': 'Sales Inventory & Sales',
+    'si_supplier': 'Supplier Inventory & Sales',
+    'pencairan_diskon': 'Pencairan Diskon',
+    'apotik_item': 'Profil Item Apotek',
+    'satuan_produk': 'Satuan/UOM Produk',
+    'pemasok_produk': 'Pemasok Produk',
+    'pengadaan_faktur': 'Faktur Kulakan',
+    'pengadaan_produk': 'Item Kulakan',
+    'stok_opname': 'Detail Stok Opname',
+    'sesi_stok_opname': 'Sesi Stok Opname',
+    'mutasi_stok': 'Mutasi Stok Antar Outlet',
+    'retur_penjualan': 'Retur Penjualan',
+    'retur_pembelian': 'Retur Pembelian',
+    'produksi': 'Produksi',
+    'pemakaian_bahan_baku': 'Pemakaian Bahan Baku',
+    'sesi_kas': 'Sesi Kas Kasir',
+    'calon_anggota': 'Calon/Pengajuan Member',
+    'jenis_identitas_anggota': 'Jenis Identitas Member',
+    'pengajuan_limit_member': 'Pengajuan Limit Member',
+    'pembayaran_anggota': 'Pembayaran Member',
+    'penyesuaian_saldo_anggota': 'Penyesuaian Saldo Member',
+    'pembayaran_hutang_supplier': 'Pembayaran Hutang Supplier',
+    'penerimaan_piutang_customer': 'Penerimaan Piutang Customer',
+    'harga_jual_customer': 'Harga Jual Customer',
+    'harga_beli_supplier': 'Harga Beli Supplier',
+    'pengadaan_pr': 'Pengadaan — Purchase Request',
+    'pengadaan_po': 'Pengadaan — Purchase Order',
+    'pengadaan_bast': 'Pengadaan — BAST',
+    'pengadaan_bayar': 'Pengadaan — Pembayaran',
+    'hotel_properti': 'Hotel — Properti',
+    'hotel_kontrak': 'Hotel — Kontrak Pemilik',
+    'hotel_tamu': 'Hotel — Tamu',
+    'hotel_tipe_kamar': 'Hotel — Tipe Kamar',
+    'hotel_kamar': 'Hotel — Kamar',
+    'ujian': 'Ujian',
+    'ujian_soal': 'Soal Ujian',
   };
 
   /// Kolom yang paling menolong saat menelusuri baris hilang, ditampilkan lebih
@@ -538,7 +588,19 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
 
   // ── Tampilan ──────────────────────────────────────────────────────────────
 
-  String _labelKode(String kode) => _labelEntitas[kode] ?? kode;
+  String _ramah(String kode) {
+    final bersih = kode
+        .replaceAll('_', ' ')
+        .replaceAllMapped(RegExp(r'(?<=[a-z0-9])(?=[A-Z])'), (_) => ' ');
+    if (bersih.isEmpty) return kode;
+    return bersih
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .map((e) => '${e[0].toUpperCase()}${e.substring(1)}')
+        .join(' ');
+  }
+
+  String _labelKode(String kode) => _labelEntitas[kode] ?? _ramah(kode);
 
   Color _warnaTipe(String tipe) {
     if (tipe == 'HAPUS') return AppColors.danger;
@@ -840,7 +902,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
                   children: kunci
                       .take(10)
                       .map((k) => Text(
-                            '$k: ${_nilaiTampil(ringkas[k])}',
+                            '${_ramah(k)}: ${_nilaiTampil(ringkas[k])}',
                             style: const TextStyle(fontSize: 12),
                           ))
                       .toList(),
@@ -918,13 +980,10 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      menuAktif: widget.menuAktif,
-      judul: 'History (Riwayat Audit)',
-      subjudul: 'Menelusuri tabel audit -- termasuk baris yang sudah terhapus',
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final isi = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!widget.embedded) ...[
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
@@ -934,11 +993,40 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
             ),
           ),
           const SizedBox(height: 8),
-          _filter(),
-          const SizedBox(height: 12),
-          _isi(),
+        ] else ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Riwayat CRUD dibaca langsung dari tabel audit server. Pilih '
+              'jenis data Member untuk perubahan pelanggan, atau ganti Jenis '
+              'Data untuk memantau CRUD POS lain. Klik baris untuk melihat '
+              'nilai dari → menjadi.',
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
-      ),
+        _filter(),
+        const SizedBox(height: 12),
+        _isi(),
+      ],
+    );
+    if (widget.embedded) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: isi,
+      );
+    }
+    return AppShell(
+      menuAktif: widget.menuAktif,
+      judul: 'Riwayat Perubahan Data',
+      subjudul:
+          'Pantau seluruh CRUD POS dari tabel audit server, termasuk data terhapus',
+      body: isi,
     );
   }
 }

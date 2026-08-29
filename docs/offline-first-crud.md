@@ -3,6 +3,11 @@
 Berlaku untuk `apps/ebisnis` (POS Desktop & Android, seluruh varian).
 Versi acuan: 1.33.62 (2026-08-19).
 
+Foto produk memakai kamera native `camera`/`camera_windows` (bukan
+`ImageSource.camera` dari `image_picker`, yang tidak diimplementasikan pada
+Windows). Hasil kompresi selalu diberi ekstensi `.jpg`, dan URL servlet media
+dinormalkan ke origin server aktif agar tetap benar di belakang reverse proxy.
+
 ## Tiga lapis
 
 ### 1. Simpan LOKAL DULU — `widgets/proses_simpan_master.dart`
@@ -12,13 +17,23 @@ menampilkan dialog bertahap: **"Tersimpan di perangkat" ✓** →
 **"Offline — akan dikirim otomatis nanti"**, lalu jendela menutup.
 Batas tunggu kirim 6 detik: offline/server lambat TIDAK menahan kasir.
 
-- Penolakan BISNIS server (validasi) → baris antrean dihapus, error dilempar
-  ke form, jendela TETAP terbuka supaya pesannya terbaca. Ini kontrak inti.
+- Gangguan teknis server (offline, timeout, HTTP 5xx, jawaban rusak, atau
+  `SERVER_ERROR`) → baris tetap `PENDING`, form selesai sebagai sukses lokal,
+  dan pengiriman dicoba ulang otomatis dengan `client_mutation_id` yang sama.
+- Penolakan BISNIS server (validasi) → baris menjadi `GAGAL`, tidak dihapus.
+  Form tetap terbuka agar pesan dapat dibaca dan datanya diperbaiki; snapshot
+  lokal tetap terlindungi agar refresh tidak mengembalikan versi server lama.
+  Saat user menyimpan koreksi, payload `GAGAL` lama untuk kunci yang sama
+  diganti payload terbaru lalu kembali `PENDING`.
 - Retry latar tiap **5 menit** (`MasterOffline.intervalFlush`) dan
   **berhenti otomatis** begitu antrean kosong; hidup lagi saat ada antrean
   baru atau layar master dibuka.
 - Payload antrean membawa `client_mutation_id`; server AIS mendedup replay
   (`MutasiIdempotenEBisnisUtil`), jadi kiriman ulang tidak menggandakan data.
+- Refresh/sinkron penuh katalog dari server wajib menerapkan kembali edit
+  produk lokal berstatus `PENDING`/`GAGAL` setelah snapshot server disimpan.
+  Dengan demikian barcode, nama, harga, dan status lokal tidak mundur ke versi
+  server lama selama mutasi masih menunggu penyelesaian.
 
 ### 2. Baca LOKAL DULU — `MasterOffline.daftarCacheDulu(...)`
 Memberi 1–2 emisi lewat `onData`: snapshot lokal seketika, lalu hasil server
@@ -48,6 +63,14 @@ ZK). Tombol "Pulihkan" hanya muncul bila server menyatakan `bolehPulihkan`
 `RevisiApiHelper.ENTITAS` DAN entity-nya `@Audited`.
 
 ## Aturan yang TIDAK boleh dilanggar
+
+0. **Kegagalan teknis server tidak boleh membatalkan simpan lokal CRUD.**
+   HTTP 5xx, timeout/offline, jawaban non-JSON, `SERVER_ERROR`, kode teknis
+   baru, dan respons error endpoint lama tanpa kode tetap `PENDING`. Retry
+   periodik menggunakan `client_mutation_id` yang sama agar idempoten.
+   Khusus edit produk, perubahan juga langsung di-upsert ke `produk_cache`
+   agar barcode/nama terbaru tersedia untuk Kasir, Kulakan, dan Stok Opname
+   sebelum server pulih. Pencarian SO membaca cache tersebut lebih dahulu.
 
 1. **Jangan antrekan mutasi sensitif.** Kredensial/hak akses, uang
    (pembayaran, topup, retur, opname, mutasi stok), dan alur yang butuh id
@@ -110,6 +133,8 @@ bukan untuk form.
 | `mitrainap/kamar_hotel_screen.dart` | seluruh mutasi kamar (dari server-dulu) |
 | `pengadaan_tagihan_screen.dart` | `pengadaan_lampiran_hapus` (dari server-dulu) |
 | `produk_screen.dart` | `produk_foto_hapus` (dari server-dulu) |
+| `anggota/tab_data_member.dart` | `anggota_foto_upload`, `anggota_foto_hapus` — JPEG maks. 500 KB tersimpan di outbox dan diulang otomatis bila server terganggu |
+| foto produk/member/screensaver | seluruh upload memakai `simpanGambarLocalFirst`: payload gambar masuk outbox sebelum HTTP; timeout, HTTP 5xx, dan respons non-JSON tidak menghilangkan pilihan pengguna |
 | `layar_pelanggan_screen.dart` | `survey_kepuasan_simpan` — sebelumnya kegagalan kirim ditelan diam-diam dan rating hilang |
 
 **Sengaja TETAP online-only.** Bukan kelalaian; mengantrekannya akan merusak
@@ -135,3 +160,43 @@ sudah diretur di mesin lain) baru ketahuan saat pengiriman latar — pengguna
 sudah meninggalkan layar dan mungkin sudah menyerahkan uang atau barang.
 Mengubahnya menuntut otorisasi stok dari server seperti diminta spec 13.3
 ("jangan sekadar melewati validasi"), bukan sekadar mengganti pemanggilan.
+
+## Foto profil member
+
+- Foto hanya dapat ditambahkan setelah member memiliki ID server. Pada form
+  member baru, aplikasi mengedukasi pengguna untuk menyimpan member dahulu,
+  lalu membuka **Ubah Member**. Ini mencegah foto kehilangan relasi saat ID
+  lokal sementara belum dipetakan ke ID server.
+- Galeri dan kamera menghasilkan JPEG terkompresi di bawah 500 KB sebelum
+  masuk antrean `outbox_master`. Gangguan server tidak membatalkan pilihan
+  foto; aksi unggah/hapus dikirim ulang otomatis dan idempoten.
+- Backend tidak membuat tabel foto baru. `anggota_foto_upload` mengganti foto
+  pada `FotoSiswa`, `FotoMahasiswa`, `FotoPegawai`, atau `FotoAdmin` melalui
+  `ProfileImageUtil`, sehingga foto yang sama langsung dipakai POS dan web
+  eCampus. Member yang belum ditautkan ke pengguna/sivitas ditolak dengan
+  petunjuk eksplisit agar admin memperbaiki relasinya terlebih dahulu.
+
+## Kontrak upload gambar (2026-08-30)
+
+- Semua upload gambar wajib melalui `services/simpan_gambar_local_first.dart`.
+  Dilarang memanggil `ApiClient.instance.aksi(...)` langsung untuk upload foto.
+- Cakupan saat ini: `produk_foto_upload`, `anggota_foto_upload`, dan
+  `layar_pelanggan_slide_upload`. Semua gambar dikonversi ke JPEG di bawah
+  500 KB dan nama berkas diakhiri `.jpg`, sehingga tipe konten sesuai isi.
+- Produk baru memakai ID lokal negatif. Foto yang dipilih ikut mengantre dengan
+  `produk_id` tersebut dan baru dikirim setelah pemetaan ID server tersedia.
+- Status `PENDING` berarti gambar sudah aman di perangkat, bukan gagal simpan.
+  Pengguna tidak perlu memilih ulang; buka **Sistem > Riwayat Sinkronisasi**
+  untuk melihat kendala dan tekan sinkron setelah backend diperbarui.
+- Backend yang dipasang wajib mengenali ketiga aksi di atas. Bila Log Error
+  berbunyi `Aksi tidak dikenal`, perbaikannya adalah deploy backend yang memuat
+  kontrak aksi tersebut—menekan Sinkron berulang tidak dapat memperbarui kode
+  server. Payload tetap disimpan dan otomatis terkirim setelah backend sesuai.
+### Foto dan gambar
+
+Semua gambar yang dipilih pengguna wajib ditulis ke outbox SQLite sebelum
+dikirim. Layar edit/daftar wajib menggabungkan media server dengan payload
+gambar berstatus `PENDING` atau `GAGAL`, sehingga menutup dan membuka ulang
+form tidak menghilangkan preview. Saat server pulih, pengiriman periodik tetap
+menjadi jalur penyelesaian; kegagalan server tidak boleh memaksa pengguna
+memilih foto yang sama untuk kedua kalinya.

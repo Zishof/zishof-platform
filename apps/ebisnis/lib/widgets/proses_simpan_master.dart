@@ -20,9 +20,11 @@ import '../services/master_offline.dart';
 ///      menutup, form TETAP MENUTUP (return `{status:'success', offline:true}`)
 ///      -- retry lanjut di latar tiap [MasterOffline.intervalFlush] dan
 ///      berhenti sendiri begitu terkirim;
-///    - DITOLAK server (validasi bisnis) -> baris antrean dihapus, dialog
-///      menutup, [ApiException] dilempar ulang supaya form menampilkan pesan
-///      dan TIDAK menutup.
+///    - gangguan teknis server -> antrean tetap PENDING, form menutup sebagai
+///      sukses lokal, dan pengiriman dicoba otomatis lagi;
+///    - DITOLAK server (validasi bisnis) -> antrean ditandai GAGAL (tidak
+///      dihapus), [ApiException] dilempar supaya form menunjukkan bagian data
+///      yang harus diperbaiki. Salinan lokal tetap dipertahankan.
 Future<Map<String, dynamic>> prosesSimpanMaster(
   BuildContext context, {
   required String aksi,
@@ -164,14 +166,17 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
       } on TimeoutException {
         offline = true; // masih tercatat PENDING -- flush latar melanjutkan.
       } on ApiException catch (e) {
-        if (!e.offline) {
-          // Penolakan bisnis: baris antrean sudah dihapus service; form harus
-          // tetap terbuka menampilkan pesan -- teruskan error ke pemanggil.
+        if (!MasterOffline.dapatDicobaUlang(e)) {
+          // Validasi bisnis: antrean berstatus GAGAL tetap menyimpan payload
+          // dan melindungi salinan lokal, tetapi form harus tetap terbuka agar
+          // user dapat memperbaiki kolom yang disebutkan server.
           if (mounted) {
             Navigator.of(context).pop(_HasilProses(error: e));
           }
           return;
         }
+        // Server/database sementara bermasalah. Data sudah aman di perangkat;
+        // perlakukan seperti offline dan biarkan retry latar mengirim ulang.
         offline = true;
       }
       if (!mounted) return;
@@ -268,7 +273,7 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
                 teks: terkirim
                     ? 'Terkirim ke server'
                     : antre
-                        ? 'Offline — akan dikirim otomatis nanti'
+                        ? 'Belum terkirim — akan dikirim otomatis nanti'
                         : 'Mengirim ke server...',
                 warnaSelesai: Colors.green,
               ),

@@ -14,15 +14,16 @@ import 'anggota/tab_mutasi_hutang.dart';
 import 'anggota/tab_pembantu_piutang.dart';
 import 'anggota/tab_pengajuan_limit.dart';
 import 'anggota/tab_satuan_kerja.dart';
+import 'riwayat_audit_screen.dart';
 
 /// Layar "Pelanggan" (padanan `anggota.jsp` JSP -- "Manajemen Anggota") --
-/// 6 sub-tab persis urutan JSP: Data Member Baru, Jenis Member, Tipe
-/// Member, Topup, Notifikasi, Sinkronisasi Sivitas. Setiap tab
+/// Sub-tab operasional member, termasuk sinkronisasi sivitas dan riwayat
+/// perubahan lintas-member dari tabel audit server. Setiap tab
 /// StatefulWidget terpisah (lihat folder anggota/, pola sama dgn
 /// RingkasanScreen 9-tab) -- memuat datanya sendiri di initState, lazy
 /// sesuai TabBarView.
 ///
-/// TIDAK diporting dari JSP (di luar cakupan permintaan "6 tab" ini):
+/// TIDAK diporting dari JSP:
 /// penampil password member (dekripsi plaintext -- pola tak aman) dan
 /// tombol kirim-notifikasi per-baris/massal dari tab Data Member (fitur
 /// terpisah, JSP-only utk saat ini).
@@ -44,7 +45,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
     // WAJIB sama dgn jumlah Tab di TabBar dan widget di TabBarView; kalau
     // berbeda, layar ini gagal dibuka. Sebelumnya tertinggal di 9 padahal
     // tabnya sudah bertambah.
-    _tab = TabController(length: 12, vsync: this);
+    _tab = TabController(length: 13, vsync: this);
   }
 
   @override
@@ -74,7 +75,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
             indicatorColor: AppColors.primary,
             tabAlignment: TabAlignment.start,
             tabs: const [
-              Tab(text: 'Data Member Baru'),
+              Tab(text: 'Data Member'),
               Tab(text: 'Jenis Member'),
               Tab(text: 'Tipe Member'),
               Tab(text: 'Pengajuan Melebihi Limit'),
@@ -85,7 +86,8 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               Tab(text: 'Pembantu Piutang'),
               Tab(text: 'Notifikasi'),
               Tab(text: 'Satuan Kerja'),
-              Tab(text: 'Sinkronisasi Sivitas'),
+              Tab(text: 'Sinkron Sivitas'),
+              Tab(text: 'Riwayat CRUD'),
             ],
           ),
           Expanded(
@@ -106,6 +108,11 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               const AnggotaTabSatuanKerja(),
               AnggotaTabSinkronisasi(
                 onSinkronSelesai: () => setState(() => _versiDataMember++),
+              ),
+              const RiwayatAuditScreen(
+                embedded: true,
+                entitasAwal: 'anggota',
+                menuAktif: MenuEBisnis.anggota,
               ),
             ]),
           ),

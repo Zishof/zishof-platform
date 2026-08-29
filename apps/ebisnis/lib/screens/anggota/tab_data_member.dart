@@ -1,14 +1,22 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../models.dart';
 import '../../services/master_offline.dart';
+import '../../services/kompresi_gambar.dart';
+import '../../services/simpan_gambar_local_first.dart';
 import '../../services/simple_xlsx.dart';
+import '../../services/url_media.dart';
+import '../foto_produk_camera_screen.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
 import 'kebijakan_tipe_member.dart';
 import '../../sesi.dart';
@@ -805,14 +813,19 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
                     CircleAvatar(
                       radius: 18,
                       backgroundColor: const Color(0xFF1E3A5F),
-                      child: Text(
-                        a.nama.isNotEmpty ? a.nama[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      backgroundImage: a.fotoUrl.trim().isEmpty
+                          ? null
+                          : NetworkImage(normalisasiUrlMedia(a.fotoUrl)),
+                      child: a.fotoUrl.trim().isNotEmpty
+                          ? null
+                          : Text(
+                              a.nama.isNotEmpty ? a.nama[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -1017,7 +1030,11 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
   bool _aktif = true;
   DateTime? _tanggalKadaluarsa;
   bool _menyimpan = false;
+  bool _memprosesFoto = false;
   String? _pesanError;
+  String _fotoUrl = '';
+  Uint8List? _fotoBytes;
+  int? _fotoAntreanLokalId;
 
   Kategori? get _tipeTerpilih {
     for (final k in widget.tipeAnggota) {
@@ -1052,11 +1069,29 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
     _jenisId = a?.jenisAnggotaKoperasiId;
     _tipeId = a?.tipeAnggotaKoperasiId;
     _aktif = a?.aktif ?? true;
+    _fotoUrl = a?.fotoUrl ?? '';
     if (a?.tanggalKadaluarsa != null && a!.tanggalKadaluarsa!.isNotEmpty) {
       try {
         _tanggalKadaluarsa = DateTime.parse(a.tanggalKadaluarsa!);
       } catch (_) {}
     }
+    unawaited(_muatFotoLokalTertunda());
+  }
+
+  Future<void> _muatFotoLokalTertunda() async {
+    final anggotaId = widget.anggota?.id;
+    if (anggotaId == null) return;
+    final foto = await muatGambarLokalTertunda(
+      aksi: 'anggota_foto_upload',
+      awalanKunci: 'anggota_foto:$anggotaId',
+    );
+    if (!mounted || foto.isEmpty) return;
+    // Baris terakhir adalah pilihan terbaru dan harus mengungguli foto server
+    // lama sampai antreannya benar-benar diterima.
+    setStateIfMounted(() {
+      _fotoBytes = foto.last.bytes;
+      _fotoAntreanLokalId = foto.last.idAntrean;
+    });
   }
 
   @override
@@ -1081,6 +1116,208 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
       lastDate: DateTime(2100),
     );
     if (hasil != null) setStateIfMounted(() => _tanggalKadaluarsa = hasil);
+  }
+
+  Future<void> _pilihFoto(ImageSource sumber) async {
+    final anggota = widget.anggota;
+    if (anggota == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Simpan member terlebih dahulu, lalu buka Ubah Member untuk menambahkan foto.')));
+      return;
+    }
+    XFile? berkas;
+    if (sumber == ImageSource.camera) {
+      berkas = await FotoProdukCameraScreen.ambil(context,
+          judul: 'Ambil Foto Member');
+    } else {
+      berkas = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 100);
+    }
+    if (berkas == null) return;
+    setStateIfMounted(() {
+      _memprosesFoto = true;
+      _pesanError = null;
+    });
+    try {
+      final asli = await berkas.readAsBytes();
+      if (asli.length > 10 * 1024 * 1024) {
+        throw const FormatException('Ukuran foto maksimal 10 MB.');
+      }
+      final hasil = await compute(kompresGambarKeBawah500Kb, asli);
+      if (!mounted) return;
+      setStateIfMounted(() => _fotoBytes = hasil);
+      final hasilSimpan = await simpanGambarLocalFirst(
+          aksi: 'anggota_foto_upload',
+          body: {
+            'anggota_id': anggota.id,
+            'file_base64': base64Encode(hasil),
+            'nama_file': 'member-${anggota.id}.jpg',
+          },
+          kunci: 'anggota_foto:${anggota.id}');
+      final respons = hasilSimpan.respons;
+      final tertunda = hasilSimpan.tertunda;
+      setStateIfMounted(() {
+        _fotoUrl = '${respons['fotoUrl'] ?? ''}';
+        _fotoAntreanLokalId = tertunda ? hasilSimpan.idAntrean : null;
+        if (!tertunda) _fotoBytes = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tertunda
+                ? 'Foto tersimpan di perangkat dan akan diunggah otomatis saat server dapat dihubungi.'
+                : 'Foto member berhasil disimpan.')));
+      }
+    } catch (e) {
+      final lokal = await muatGambarLokalTertunda(
+        aksi: 'anggota_foto_upload',
+        awalanKunci: 'anggota_foto:${anggota.id}',
+      );
+      setStateIfMounted(() {
+        if (lokal.isNotEmpty) {
+          _fotoBytes = lokal.last.bytes;
+          _fotoAntreanLokalId = lokal.last.idAntrean;
+        }
+        _pesanError = terapkanGalat(e);
+      });
+    } finally {
+      setStateIfMounted(() => _memprosesFoto = false);
+    }
+  }
+
+  Future<void> _hapusFoto() async {
+    final anggota = widget.anggota;
+    if (anggota == null || (_fotoUrl.trim().isEmpty && _fotoBytes == null)) {
+      return;
+    }
+    setStateIfMounted(() {
+      _memprosesFoto = true;
+      _pesanError = null;
+    });
+    try {
+      final antreanLokal = _fotoAntreanLokalId;
+      if (antreanLokal != null) {
+        await hapusGambarLokalTertunda(antreanLokal);
+        setStateIfMounted(() {
+          _fotoBytes = null;
+          _fotoAntreanLokalId = null;
+        });
+      }
+      if (_fotoUrl.trim().isEmpty) return;
+      if (!mounted) return;
+      final respons = await prosesSimpanMaster(context,
+          aksi: 'anggota_foto_hapus',
+          body: {'anggota_id': anggota.id},
+          kunci: 'anggota_foto:${anggota.id}');
+      setStateIfMounted(() {
+        _fotoUrl = '';
+        _fotoBytes = null;
+        _fotoAntreanLokalId = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(respons['offline'] == true
+                ? 'Penghapusan foto tersimpan di perangkat dan akan dikirim otomatis.'
+                : 'Foto member berhasil dihapus.')));
+      }
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+    } finally {
+      setStateIfMounted(() => _memprosesFoto = false);
+    }
+  }
+
+  Future<void> _bukaAksiFoto() async {
+    if (_memprosesFoto) return;
+    if (widget.anggota == null) {
+      await _pilihFoto(ImageSource.gallery);
+      return;
+    }
+    final aksi = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Pilih dari Galeri'),
+            onTap: () => Navigator.pop(ctx, 'galeri'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_alt_outlined),
+            title: const Text('Ambil Foto (Kamera)'),
+            onTap: () => Navigator.pop(ctx, 'kamera'),
+          ),
+          if (_fotoUrl.trim().isNotEmpty || _fotoBytes != null)
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title:
+                  const Text('Hapus Foto', style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(ctx, 'hapus'),
+            ),
+        ]),
+      ),
+    );
+    if (!mounted || aksi == null) return;
+    if (aksi == 'hapus') {
+      await _hapusFoto();
+    } else {
+      await _pilihFoto(
+          aksi == 'kamera' ? ImageSource.camera : ImageSource.gallery);
+    }
+  }
+
+  Widget _avatarHeader() {
+    final fotoMemori = _fotoBytes;
+    final url = normalisasiUrlMedia(_fotoUrl);
+    final huruf =
+        _nama.text.trim().isEmpty ? '?' : _nama.text.trim()[0].toUpperCase();
+    return Tooltip(
+      message: widget.anggota == null
+          ? 'Simpan member dahulu untuk menambah foto'
+          : 'Tambah, ganti, atau hapus foto member',
+      child: InkWell(
+        onTap: _memprosesFoto ? null : _bukaAksiFoto,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 66,
+          height: 66,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+            border:
+                Border.all(color: AppColors.primary.withValues(alpha: 0.24)),
+          ),
+          child: _memprosesFoto
+              ? const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : fotoMemori != null
+                  ? Image.memory(fotoMemori, fit: BoxFit.cover)
+                  : url.isNotEmpty
+                      ? Image.network(url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                              child: Text(huruf,
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800))))
+                      : Stack(alignment: Alignment.center, children: [
+                          Text(huruf,
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800)),
+                          const Positioned(
+                            right: 4,
+                            bottom: 4,
+                            child: Icon(Icons.add_a_photo_outlined, size: 18),
+                          ),
+                        ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _simpan() async {
@@ -1148,6 +1385,7 @@ class _FormAnggotaState extends State<_FormAnggota> with JejakGalat {
                 ? 'Kode member: ${widget.anggota!.kode}'
                 : 'Lengkapi identitas pelanggan/member agar transaksi dan laporan lebih mudah dilacak.',
             icon: ubah ? Icons.edit_outlined : Icons.person_add_alt_1_outlined,
+            headerTrailing: _avatarHeader(),
             errorText: _pesanError,
             errorDetail: detailUntuk(_pesanError),
             actions: [
