@@ -15,6 +15,7 @@ import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
+import '../services/uom_konversi.dart';
 import '../services/biometric_capture_bridge.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
@@ -1373,6 +1374,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 'nama': i.produk.nama,
                 'harga': i.hargaSatuanEfektif,
                 'jumlah': i.jumlah,
+                // Fase B: server menghitung ulang jumlah dari qty_input x
+                // faktor miliknya -- kiriman ini pratinjau + snapshot.
+                if (i.satuanJualKonsisten) ...{
+                  'satuan_jual_id': i.satuanJualId,
+                  'qty_input': i.qtyInput,
+                },
                 'diskon': i.diskon,
                 'aturanDiskon': i.aturanDiskonId,
                 'diskon_bebas': i.diskonBebas,
@@ -1686,9 +1693,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         itemStruk.add({
           // Label kemasan ikut ke struk: "Beras (2 x Karung 50kg)" --
           // pembeli grosir memeriksa struknya dalam hitungan kemasan.
-          'nama': i.labelKemasan == null
-              ? i.produk.nama
-              : '${i.produk.nama} (${i.labelKemasan})',
+          'nama': i.labelSatuanJual != null
+              ? '${i.produk.nama} (${i.labelSatuanJual})'
+              : i.labelKemasan == null
+                  ? i.produk.nama
+                  : '${i.produk.nama} (${i.labelKemasan})',
           'qty': i.jumlah,
           'harga': i.hargaSatuanEfektif,
           'diskon': i.diskon,
@@ -2339,9 +2348,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      // Label satuan jual (Fase B) -- swa-batal bila qty
+                      // dasar diubah hingga tak sejalan lagi.
+                      if (item.labelSatuanJual != null)
+                        Text(item.labelSatuanJual!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.textSecondaryOf(context),
+                                fontSize: 11.5)),
                       // Label kemasan (snapshot saat baris ditambah) --
                       // qty tetap satuan dasar, ini murni keterbacaan.
-                      if (item.labelKemasan != null)
+                      if (item.labelKemasan != null && item.labelSatuanJual == null)
                         Text(item.labelKemasan!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -2427,6 +2445,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                       _tombolBulat(Icons.add, () => _ubahJumlah(item, 1)),
                       const SizedBox(width: 4),
                       _tombolQtyManual(item),
+                      // Fase B: pilih satuan jual (Karung/Dus/dst) --
+                      // hanya untuk produk yang punya satuan dasar.
+                      if (item.produk.satuanId != null) ...[
+                        const SizedBox(width: 4),
+                        _tombolSatuanJual(item),
+                      ],
                     ],
                   ),
                 ),
@@ -2834,6 +2858,143 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       ),
     );
     if (jumlah != null) _aturJumlahItem(item, jumlah);
+  }
+
+  Widget _tombolSatuanJual(ItemKeranjang item) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: IconButton(
+        tooltip: 'Jual per satuan besar (Karung/Dus/...)',
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.straighten, size: 15),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.pageBgOf(context),
+          foregroundColor: item.satuanJualKonsisten
+              ? AppColors.success
+              : AppColors.primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () => _pilihSatuanJual(item),
+      ),
+    );
+  }
+
+  /// Pemilih satuan jual per baris (Fase B). Daftar satuan diambil dari
+  /// master UOM dan disaring SEKATEGORI dengan satuan dasar produk --
+  /// pratinjau konversi memakai [UomKonversi], tetapi server tetap
+  /// menghitung ulang jumlah dasar miliknya sendiri saat bayar
+  /// (KantinHelper.terapkanSatuanJual menimpa kiriman klien).
+  Future<void> _pilihSatuanJual(ItemKeranjang item) async {
+    List<Map<String, dynamic>> uom;
+    try {
+      final r = await ApiClient.instance.aksi('uom_list',
+          {'keyword': '', 'page': 1, 'page_size': 500});
+      uom = ((r['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Perlu daring untuk memuat daftar satuan: $e')));
+      return;
+    }
+    Map<String, dynamic>? dasar;
+    for (final u in uom) {
+      if ((u['id'] as num?)?.toInt() == item.produk.satuanId) dasar = u;
+    }
+    if (dasar == null || !mounted) return;
+    final kategori = '${dasar['kategori'] ?? 'UNIT'}'.toUpperCase();
+    final pilihanSatuan = uom
+        .where((u) =>
+            u['aktif'] != false &&
+            (u['id'] as num?)?.toInt() != item.produk.satuanId &&
+            '${u['kategori'] ?? 'UNIT'}'.toUpperCase() == kategori)
+        .toList();
+    if (pilihanSatuan.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Belum ada satuan lain sekategori. Tambahkan di Master Data > Satuan/UOM.')));
+      return;
+    }
+    final qtyCtrl = TextEditingController(text: '1');
+    Map<String, dynamic>? terpilih = pilihanSatuan.first;
+    final jadi = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialog) {
+          double? faktor;
+          double? hasilDasar;
+          try {
+            faktor = UomKonversi.konversi(
+                jumlah: 1, dari: terpilih!, ke: dasar!);
+            final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.'));
+            if (q != null && q > 0) hasilDasar = q * faktor;
+          } catch (_) {}
+          return AlertDialog(
+            title: Text('Satuan jual - ${item.produk.nama}'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<Map<String, dynamic>>(
+                value: terpilih,
+                isExpanded: true,
+                items: pilihanSatuan
+                    .map((u) => DropdownMenuItem(
+                        value: u, child: Text('${u['nama']}')))
+                    .toList(),
+                onChanged: (v) => setDialog(() => terpilih = v),
+                decoration: const InputDecoration(labelText: 'Satuan'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: qtyCtrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setDialog(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Qty (${terpilih?['nama'] ?? ''})',
+                  helperText: hasilDasar == null
+                      ? 'Masukkan qty lebih dari nol.'
+                      : '= $hasilDasar ${item.produk.satuanNama} (pratinjau; server menghitung ulang)',
+                ),
+              ),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: hasilDasar == null ||
+                          (hasilDasar - hasilDasar.roundToDouble()).abs() > 1e-6
+                      ? null
+                      : () => Navigator.pop(c, true),
+                  child: const Text('Terapkan')),
+            ],
+          );
+        },
+      ),
+    );
+    if (jadi != true || !mounted || terpilih == null) return;
+    final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.')) ?? 0;
+    double faktor;
+    try {
+      faktor = UomKonversi.konversi(jumlah: 1, dari: terpilih!, ke: dasar);
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
+      return;
+    }
+    setStateIfMounted(() {
+      item
+        ..satuanJualId = (terpilih!['id'] as num?)?.toInt()
+        ..satuanJualNama = '${terpilih!['nama'] ?? ''}'
+        ..qtyInput = q
+        ..faktorKeDasar = faktor
+        ..jumlah = (q * faktor).round();
+      _sinkronkanUangDiterima();
+    });
+    _evaluasiDiskon();
+    _siarkanKeranjang();
   }
 
   Widget _tombolQtyManual(ItemKeranjang item) {
