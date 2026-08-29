@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
@@ -24,6 +26,7 @@ class _TabRiwayatCetakState extends State<TabRiwayatCetak> with JejakGalat {
   bool _memuat = true;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  bool _dariCache = false;
 
   @override
   void initState() {
@@ -46,16 +49,36 @@ class _TabRiwayatCetakState extends State<TabRiwayatCetak> with JejakGalat {
     try {
       final jenis = _jenis.text.trim();
       final referensi = _referensi.text.trim();
-      final hasil = await ApiClient.instance.aksi('si_print_log_list', {
-        if (jenis.isNotEmpty) 'jenis_dokumen': jenis,
-        if (referensi.isNotEmpty) 'referensi': referensi,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['rows'] as List?) ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _memuat = false;
-      });
+      if (jenis.isEmpty && referensi.isEmpty) {
+        // Tanpa filter: baca lokal-dulu, server menyusul di latar (merge --
+        // respons parsial tidak pernah menghapus baris lokal).
+        await MasterOffline.daftarCacheDulu(
+            'si_print_log_list', const {}, 'si_print_log',
+            fieldData: 'rows', onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _data = ((hasil['rows'] as List?) ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
+            _dariCache = hasil['offline'] == true;
+            _memuat = false;
+          });
+        });
+      } else {
+        // Pencarian berfilter tetap online: satu cache tak berfilter tidak
+        // boleh disajikan sebagai hasil filter.
+        final hasil = await ApiClient.instance.aksi('si_print_log_list', {
+          if (jenis.isNotEmpty) 'jenis_dokumen': jenis,
+          if (referensi.isNotEmpty) 'referensi': referensi,
+        });
+        setStateIfMounted(() {
+          _data = ((hasil['rows'] as List?) ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _dariCache = false;
+          _memuat = false;
+        });
+      }
     } catch (e) {
       setStateIfMounted(() {
         _error = terapkanGalat(e);
@@ -77,6 +100,7 @@ class _TabRiwayatCetakState extends State<TabRiwayatCetak> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          PenandaDataTersimpan(tampil: _dariCache),
           AppFormSection(
             judul: 'Riwayat Cetak Inventory & Sales',
             deskripsi:

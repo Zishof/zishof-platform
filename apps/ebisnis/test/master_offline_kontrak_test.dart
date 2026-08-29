@@ -653,6 +653,39 @@ void main() {
             'dari cache saat offline menyesatkan');
   });
 
+  // P3 gelombang 2 (2026-08-29): daftar berhalaman sederhana dibaca
+  // lokal-dulu lewat daftarCacheDulu (merge -- respons parsial tidak pernah
+  // menghapus baris lokal) + penanda salinan tersimpan. Pencarian BERFILTER
+  // riwayat cetak tetap online: satu cache tak berfilter tidak boleh
+  // disajikan sebagai hasil filter. Ekspor Excel topup (deposit_list loop
+  // berhalaman) SENGAJA tetap online: ekspor wajib data server lengkap.
+  test('daftar sederhana lokal-dulu + penanda salinan tersimpan', () {
+    const layarDaftar = <String, String>{
+      'lib/screens/konfigurasi/tab_riwayat_cetak.dart':
+          "daftarCacheDulu('si_print_log_list', const {}, 'si_print_log'",
+      'lib/screens/konfigurasi/tab_sesi_kasir.dart':
+          "daftarCacheDulu('sesi_kas_list'",
+    };
+    for (final entri in layarDaftar.entries) {
+      final source = rapat(File(entri.key).readAsStringSync());
+      expect(source, contains(rapat(entri.value)),
+          reason: '${entri.key} kehilangan jalur baca lokal-dulu');
+      expect(source, contains('PenandaDataTersimpan('),
+          reason: '${entri.key} menampilkan data cache TANPA penanda');
+    }
+    // Kunci cache sesi kas wajib per toko.
+    final sesi = rapat(
+        File('lib/screens/konfigurasi/tab_sesi_kasir.dart')
+            .readAsStringSync());
+    expect(sesi, contains(rapat("'sesi_kas:\${Sesi.instance.tokoId")),
+        reason: 'cache sesi kas harus dipisah per toko');
+    // Ekspor topup tetap mengunduh seluruh halaman dari server.
+    final topup =
+        rapat(File('lib/screens/anggota/tab_topup.dart').readAsStringSync());
+    expect(topup, contains(rapat("ApiClient.instance.aksi('deposit_list'")),
+        reason: 'ekspor Excel topup wajib data server lengkap, bukan cache');
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

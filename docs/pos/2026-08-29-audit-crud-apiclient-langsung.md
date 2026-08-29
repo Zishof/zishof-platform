@@ -201,3 +201,20 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   aktif. Penjaganya: test `statistik dashboard ber-cache + penanda data
   tersimpan`. Sisa P3 (daftar berhalaman per layar) belum digarap dan tetap
   terbuka di bagian 3.2.
+- **Langkah 9 (P3 gelombang 2: daftar berhalaman sederhana) — selesai
+  29 Agustus 2026.** Dua daftar dimigrasikan ke `daftarCacheDulu` (merge —
+  respons parsial tidak pernah menghapus baris lokal) dengan
+  `PenandaDataTersimpan`: riwayat cetak I&S (`si_print_log_list`, kunci
+  `si_print_log`; pencarian BERFILTER tetap online karena satu cache tak
+  berfilter tidak boleh disajikan sebagai hasil filter) dan daftar sesi kasir
+  (`sesi_kas_list`, kunci per toko `sesi_kas:<idToko>`; nominal tunai/modal
+  dari salinan diberi penanda, dan `sesi_kas_koreksi` tetap online-only).
+  Temuan koreksi: `deposit_list` di tab topup ternyata jalur EKSPOR Excel
+  yang mengunduh seluruh halaman — ekspor wajib data server lengkap, tetap
+  online dan dikunci test; daftar utama topup sudah local-first sejak dulu.
+  Demikian pula `laporan_order_list` di riwayat_penjualan berada di dalam
+  alur baca lokal-dulu manual layar itu (lihat komentar kepala file-nya) —
+  bukan sisa migrasi. Penjaganya: test `daftar sederhana lokal-dulu +
+  penanda salinan tersimpan`. Daftar berhalaman lain (pengadaan, si_*,
+  jurnal, anggaran, apotik) tetap terbuka untuk gelombang berikutnya —
+  masing-masing butuh pembacaan alur penuh sebelum disentuh.

@@ -6,9 +6,11 @@ import '../../widgets/proses_simpan_master.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/jejak_galat.dart';
 
@@ -32,6 +34,7 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
   bool _menghitungUlang = false;
   String? _error;
   List<Map<String, dynamic>> _data = [];
+  bool _dariCache = false;
   String _filter = 'SEMUA';
   String _kataKunci = '';
 
@@ -556,14 +559,22 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('sesi_kas_list', {
-        if (Sesi.instance.tokoId != null) 'id_toko': Sesi.instance.tokoId,
-      });
-      setStateIfMounted(() {
-        _data = ((hasil['sesi'] as List?) ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _memuat = false;
+      // Baca lokal-dulu per toko (kunci per id_toko -- satu kunci utk dua
+      // toko akan menyajikan sesi toko lain saat offline). Koreksi sesi
+      // tetap online-only (lihat daftar tetapOnline test kontrak).
+      await MasterOffline.daftarCacheDulu(
+          'sesi_kas_list',
+          {if (Sesi.instance.tokoId != null) 'id_toko': Sesi.instance.tokoId},
+          'sesi_kas:${Sesi.instance.tokoId ?? 'semua'}',
+          fieldData: 'sesi', onData: (hasil) {
+        if (!mounted) return;
+        setStateIfMounted(() {
+          _data = ((hasil['sesi'] as List?) ?? const [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _dariCache = hasil['offline'] == true;
+          _memuat = false;
+        });
       });
     } catch (e) {
       setStateIfMounted(() {
@@ -740,6 +751,9 @@ class _TabSesiKasirState extends State<TabSesiKasir> with JejakGalat {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Nominal tunai/modal dari salinan tersimpan wajib dinyatakan
+          // terang-terangan.
+          PenandaDataTersimpan(tampil: _dariCache),
           AppFormSection(
             judul: 'Sesi Kasir',
             deskripsi:
