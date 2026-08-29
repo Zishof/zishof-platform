@@ -218,3 +218,17 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   penanda salinan tersimpan`. Daftar berhalaman lain (pengadaan, si_*,
   jurnal, anggaran, apotik) tetap terbuka untuk gelombang berikutnya —
   masing-masing butuh pembacaan alur penuh sebelum disentuh.
+- **Langkah 10 (P3 gelombang 3: pelengkap alur offline I&S) — selesai
+  29 Agustus 2026.** Dua celah yang memblokir alur yang SUDAH queueable:
+  (1) daftar kategori biaya nota sales (`si_expense_category_list`) kini
+  `daftarDenganCache` kunci `master:si_expense_category` — sebelumnya saat
+  offline dialog biaya diam-diam tidak terbuka padahal `si_expense_create`
+  sudah diantre OutboxIs; (2) pemilih customer kwitansi piutang
+  (`si_customer_list`) jatuh ke cache layar master `master:si_customer` saat
+  offline (filter nama/kode di sisi klien, maks 20 baris) — sebelumnya
+  kwitansi offline terblokir di pemilihnya padahal `si_collection_create`
+  sudah diantre. Sengaja TIDAK disentuh: `pengadaan_transitori_daftar`
+  (barisnya dipilih untuk diposting — seleksi dari salinan basi berisiko;
+  dikunci test) dan `si_supplier_list` picker hutang (alur pembayarannya
+  online-only, nilai offline rendah). Penjaganya: test `pelengkap alur
+  offline: kategori biaya & pemilih customer`.

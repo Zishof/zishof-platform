@@ -686,6 +686,37 @@ void main() {
         reason: 'ekspor Excel topup wajib data server lengkap, bukan cache');
   });
 
+  // P3 gelombang 3 (2026-08-29): dua pelengkap alur offline yang SUDAH
+  // queueable. Kategori biaya nota sales ber-cache (si_expense_create sudah
+  // di OutboxIs -- pencatatan biaya tidak boleh terblokir daftar kategorinya),
+  // dan pemilih customer kwitansi piutang jatuh ke cache master
+  // 'master:si_customer' saat offline (si_collection_create sudah di
+  // OutboxIs). pengadaan_transitori_daftar SENGAJA tetap online: barisnya
+  // dipilih utk diposting, seleksi dari salinan basi berisiko.
+  test('pelengkap alur offline: kategori biaya & pemilih customer', () {
+    final nota = rapat(
+        File('lib/screens/inventory_sales/nota_sales_screen.dart')
+            .readAsStringSync());
+    expect(
+        nota,
+        contains(rapat("daftarDenganCache('si_expense_category_list', "
+            "const {}, 'master:si_expense_category'")),
+        reason: 'kategori biaya harus ber-cache offline');
+    final piutang = rapat(
+        File('lib/screens/inventory_sales/piutang_screen.dart')
+            .readAsStringSync());
+    expect(piutang,
+        contains(rapat("ambilCacheReferensi('master:si_customer')")),
+        reason: 'pemilih customer kwitansi harus jatuh ke cache master');
+    final transitori = rapat(
+        File('lib/screens/pengadaan_transitori_tab.dart').readAsStringSync());
+    expect(
+        transitori,
+        contains(
+            rapat("ApiClient.instance.aksi('pengadaan_transitori_daftar'")),
+        reason: 'daftar transitori dipilih utk posting -- harus data server');
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

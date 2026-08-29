@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -1425,6 +1428,32 @@ class _DialogCariCustomerPiutangState
       setStateIfMounted(() => _rows = ((hasil['rows'] as List?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList());
+    } on ApiException catch (e) {
+      // Offline: jatuh ke cache customer layar master ('master:si_customer').
+      // Kwitansi offline (si_collection_create ber-outbox) tidak boleh
+      // terblokir hanya karena pemilih customer tak bisa fetch.
+      if (e.offline) {
+        try {
+          final tersimpan =
+              await CoreDb.instance.ambilCacheReferensi('master:si_customer');
+          if (tersimpan != null) {
+            final kecil = q.trim().toLowerCase();
+            final semua = (jsonDecode(tersimpan) as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .where((r) =>
+                    kecil.isEmpty ||
+                    '${r['nama'] ?? ''} ${r['kode'] ?? ''}'
+                        .toLowerCase()
+                        .contains(kecil))
+                .take(20)
+                .toList();
+            setStateIfMounted(() => _rows = semua);
+          }
+        } catch (_) {
+          // Cache rusak/kosong -- biarkan hasil lama.
+        }
+      }
     } catch (_) {
     } finally {
       setStateIfMounted(() => _memuat = false);

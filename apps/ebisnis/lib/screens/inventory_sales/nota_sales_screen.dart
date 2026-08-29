@@ -268,8 +268,12 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales>
   Future<void> _dialogBiaya() async {
     List<Map<String, dynamic>> kategori = [];
     try {
-      final hasil =
-          await ApiClient.instance.aksi('si_expense_category_list', {});
+      // Ber-cache: si_expense_create sudah bisa diantre offline (OutboxIs);
+      // pencatatan biaya tidak boleh terblokir hanya karena daftar kategorinya
+      // tak bisa di-fetch.
+      final hasil = await MasterOffline.daftarDenganCache(
+          'si_expense_category_list', const {}, 'master:si_expense_category',
+          fieldData: 'rows');
       kategori = ((hasil['rows'] as List?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
