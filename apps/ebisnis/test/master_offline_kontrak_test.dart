@@ -164,6 +164,10 @@ void main() {
     'lib/screens/mitrainap/reservasi_hotel_screen.dart': [
       "aksi('hotel_reservasi_buat'"
     ],
+    // Ganti password pedagang = KREDENSIAL: tidak pernah diantre (aturan
+    // secret handover). Edit non-password akun yang sama sudah lokal-dulu
+    // lewat prosesSimpanMaster dgn kunci 'pedagang:<id>'.
+    'lib/screens/konfigurasi_screen.dart': ["'password_baru':"],
     // Server yang memilih baris: himpunan yang disetujui pengguna bisa berubah
     // sebelum antrean terkirim.
     'lib/screens/ringkasan/tab_umum.dart': ["aksi('layani_semua_transaksi'"],

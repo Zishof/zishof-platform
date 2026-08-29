@@ -176,3 +176,13 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   pernah tercatat), dan penolakan bisnis server tetap menghentikan posting.
   Entri `tetapOnline` di test kontrak dipindah ke penjaga baru `produk baru
   bulk entry dibuat lokal-dulu dgn id sementara`.
+- **Langkah 7 (`pedagang_ubah`) — koreksi temuan, selesai 29 Agustus 2026.**
+  Audit awal (bagian 3.3) menandai `pedagang_ubah` sebagai kandidat outbox,
+  tetapi pembacaan ulang source menunjukkan mutasi ini SUDAH lokal-dulu:
+  edit non-password memakai `prosesSimpanMaster` dengan kunci
+  `'pedagang:<id>'` (itulah penanda `'pedagang:'` di test kontrak yang sudah
+  ada). Satu-satunya panggilan langsung yang tersisa adalah cabang ganti
+  password (`password_baru`) yang memang wajib online-only — kredensial tidak
+  pernah diantre sesuai aturan secret handover. Tidak ada perubahan kode;
+  cabang kredensial itu kini dikunci eksplisit di daftar `tetapOnline` test
+  kontrak agar tidak "dimigrasikan" keliru di masa depan.
