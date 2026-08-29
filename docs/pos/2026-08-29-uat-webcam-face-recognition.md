@@ -1,0 +1,47 @@
+# UAT webcam face recognition — Desktop Windows (gelombang 2b)
+
+Tanggal persiapan: 29 Agustus 2026  
+Build: `flutter build windows --release` varian default, dari commit `1d45537`
+(provider wajah on-device) — build UAT internal, BUKAN artefak rilis.
+
+## Prasyarat di mesin UAT
+
+1. Webcam terpasang (mesin ini: 2 kamera terdeteksi — PASS readiness).
+2. Model wajah tersedia di `assets\face` DI SAMPING exe (disalin otomatis
+   oleh persiapan ini; verifikasi ulang: dua berkas .onnx + dua LICENSE).
+   Bila pindah mesin: jalankan `tool\unduh_model_wajah.ps1` lalu salin.
+3. Server AIS terjangkau dan akun UAT punya izin enrollment biometrik
+   (`boleh_enroll_pengguna_lain`), master key biometrik server aktif
+   (`server_encryption_ready` dari `biometrik_kemampuan`).
+4. Subjek uji yang BERIZIN. Jangan merekam wajah siapa pun tanpa persetujuan.
+
+## Jalur eksekusi
+
+Jalankan `build\windows\x64\runner\Release\ebisnis.exe` dari folder Release
+(agar `assets\face` di sampingnya ditemukan lokator; alternatif: set
+`AIS_FACE_MODEL_DIR` ke folder model).
+
+## Matriks UAT minimum
+
+| # | Langkah | Hasil yang diharapkan |
+|---|---|---|
+| 1 | Login akun UAT → panel biometrik member → cek diagnosa wajah | "Kamera + face-liveness" = siap, provider `AIS_ONDEVICE_SFACE_V1`; matcher wajah server siap |
+| 2 | Rekam wajah subjek berizin (tantangan 2 pose: lurus → menoleh) | Layar kamera terbuka, dua potret, slot wajah terisi di server |
+| 3 | Rekam ulang dgn pose kedua IDENTIK (tidak menoleh) | DITOLAK: "Tantangan liveness gagal" |
+| 4 | Rekam dgn dua orang di depan kamera | DITOLAK: "lebih dari satu wajah" |
+| 5 | Rekam tanpa wajah (arahkan ke dinding) | DITOLAK: "Wajah tidak terdeteksi" |
+| 6 | Verifikasi checkout saldo member dgn wajah pemilik | MATCH; transaksi lanjut |
+| 7 | Verifikasi dgn wajah orang lain (berizin) | TIDAK match; transaksi berhenti (fail-closed) |
+| 8 | Cabut model (`assets\face` dipindah) → restart → coba rekam | Fail-closed dgn pesan "jalankan tool/unduh_model_wajah.ps1" |
+| 9 | Matikan jaringan → coba rekam/verifikasi | Berhenti dgn pesan jelas (enrollment/verifikasi online-only) |
+| 10 | Periksa log/DB lokal | TIDAK ada embedding/foto mentah di SQLite, outbox, atau log |
+
+Catat skor cosine yang muncul di sisi server utk kalibrasi
+`AIS_BIOMETRIC_FACE_THRESHOLD` (default 0.82) — kumpulkan skor match-benar
+dan match-salah dari beberapa subjek berizin sebelum mengubah ambang.
+
+## Yang secara sadar BELUM diuji di gelombang ini
+
+- Android (distribusi model 38,7 MB belum diputuskan).
+- Anti-spoof bersertifikat (liveness kita = tantangan aktif).
+- Kinerja inferensi pada mesin kasir kelas rendah.
