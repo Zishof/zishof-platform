@@ -11,6 +11,7 @@ import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
+import '../../services/outbox_is.dart';
 import '../../widgets/kilau_perubahan.dart';
 import '../../widgets/jejak_galat.dart';
 import '../../widgets/proses_simpan_master.dart';
@@ -41,6 +42,9 @@ class _HutangSupplierScreenState extends State<HutangSupplierScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 5, vsync: this);
+    // P10: kirim ulang log cetak yang mengantre offline begitu layar dibuka --
+    // no-op saat kosong (idempoten kode_unik).
+    OutboxIs.flush();
   }
 
   @override
@@ -406,11 +410,12 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
       ));
       await Printing.layoutPdf(
           onLayout: (_) => doc.save(), name: 'voucher-hutang-${d['id']}.pdf');
-      ApiClient.instance.aksi('si_print_log_create', {
+      OutboxIs.kirimAtauAntre('si_print_log_create', {
         'jenis_dokumen': 'voucher_pembayaran_hutang',
         'referensi': 'PHS-${d['id']}',
         'parameter': 'kode_unik=${d['kodeUnik']}',
         'perangkat': 'flutter',
+        'kode_unik': 'PRN-${DateTime.now().microsecondsSinceEpoch}',
       }).then((_) {}, onError: (_) {});
     } catch (e) {
       if (mounted) {

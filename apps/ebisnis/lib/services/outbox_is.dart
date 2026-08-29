@@ -19,10 +19,16 @@ import '../api_client.dart';
 class OutboxIs {
   OutboxIs._();
 
-  /// Aksi yang BOLEH diantre offline -- semuanya idempoten kode_unik di server.
+  /// Aksi yang BOLEH diantre offline -- semuanya idempoten kode_unik di
+  /// server, KECUALI si_print_log_create: register cetak append-only yang
+  /// server-nya belum men-dedup kode_unik. Duplikat barisnya hanya mungkin
+  /// bila aplikasi mati tepat di antara kirim dan tandai-sukses -- dapat
+  /// diterima utk log; kode_unik tetap dikirim supaya dedup server bisa
+  /// menyusul tanpa mengubah klien.
   static const aksiDidukung = {
     'si_collection_create',
     'si_expense_create',
+    'si_print_log_create',
     'si_trip_purchase_link',
   };
 

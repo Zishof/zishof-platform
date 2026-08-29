@@ -716,10 +716,11 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
           onLayout: (_) => doc.save(), name: 'kwitansi-${d['nomor']}.pdf');
       // P10: register riwayat cetak (append-only) -- gagal log tidak
       // menggagalkan cetak (fire-and-forget).
-      ApiClient.instance.aksi('si_print_log_create', {
+      OutboxIs.kirimAtauAntre('si_print_log_create', {
         'jenis_dokumen': 'kwitansi_penerimaan',
         'referensi': '${d['nomor']}',
         'perangkat': 'flutter',
+        'kode_unik': 'PRN-${DateTime.now().microsecondsSinceEpoch}',
       }).then((_) {}, onError: (_) {});
     } catch (e) {
       if (mounted) {
@@ -1272,12 +1273,13 @@ class _TabLaporanPiutangState extends State<_TabLaporanPiutang>
     await Printing.layoutPdf(
         onLayout: (_) => doc.save(),
         name: 'rekap-penjualan-${_fmtTgl.format(_dari)}.pdf');
-    ApiClient.instance.aksi('si_print_log_create', {
+    OutboxIs.kirimAtauAntre('si_print_log_create', {
       'jenis_dokumen': 'rekap_penjualan_barang',
       'referensi': '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
       'parameter':
           'dari=${_fmtTgl.format(_dari)};sampai=${_fmtTgl.format(_sampai)};urut=$_urut;q=$_q',
       'perangkat': 'flutter',
+      'kode_unik': 'PRN-${DateTime.now().microsecondsSinceEpoch}',
     }).then((_) {}, onError: (_) {});
   }
 

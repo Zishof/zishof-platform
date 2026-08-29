@@ -552,6 +552,40 @@ void main() {
     }
   });
 
+  // Langkah 5 audit 2026-08-29: register riwayat cetak (P10) tidak lagi
+  // hilang diam-diam saat offline -- diantre lewat OutboxIs dgn kode_unik
+  // PRN-* per kejadian cetak. Server printLogCreate belum men-dedup
+  // kode_unik (append-only); pengirimannya kini tercatat supaya dedup server
+  // dapat menyusul tanpa mengubah klien.
+  test('log cetak diantre lewat OutboxIs, tidak hilang saat offline', () {
+    final outbox = rapat(File('lib/services/outbox_is.dart').readAsStringSync());
+    expect(outbox, contains(rapat("'si_print_log_create'")),
+        reason: 'si_print_log_create harus terdaftar di aksiDidukung OutboxIs');
+    const layarCetak = <String>[
+      'lib/screens/inventory_sales/piutang_screen.dart',
+      'lib/screens/inventory_sales/nota_sales_screen.dart',
+      'lib/screens/inventory_sales/laba_rugi_screen.dart',
+      'lib/screens/inventory_sales/hutang_supplier_screen.dart',
+    ];
+    for (final file in layarCetak) {
+      final source = rapat(File(file).readAsStringSync());
+      expect(
+          source,
+          contains(
+              rapat("OutboxIs.kirimAtauAntre('si_print_log_create'")),
+          reason: '$file harus mengantre log cetak lewat OutboxIs');
+      expect(
+          source,
+          isNot(contains(
+              rapat("ApiClient.instance.aksi('si_print_log_create'"))),
+          reason: '$file tidak boleh lagi fire-and-forget tanpa antrean');
+      expect(source, contains(rapat("'kode_unik': 'PRN-")),
+          reason: '$file wajib memberi kode_unik per kejadian cetak');
+      expect(source, contains(rapat('OutboxIs.flush()')),
+          reason: '$file harus mengirim ulang antrean saat layar dibuka');
+    }
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

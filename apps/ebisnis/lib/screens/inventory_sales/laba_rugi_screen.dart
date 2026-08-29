@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../api_client.dart';
+import '../../services/outbox_is.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
@@ -55,6 +56,9 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    // P10: kirim ulang log cetak yang mengantre offline begitu layar dibuka --
+    // no-op saat kosong (idempoten kode_unik).
+    OutboxIs.flush();
     _muatParams();
     _muat();
   }
@@ -227,13 +231,14 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> with JejakGalat {
     await Printing.layoutPdf(
         onLayout: (_) => doc.save(),
         name: 'laba-rugi-${_fmtTgl.format(_dari)}-${_fmtTgl.format(_sampai)}.pdf');
-    ApiClient.instance.aksi('si_print_log_create', {
+    OutboxIs.kirimAtauAntre('si_print_log_create', {
       'jenis_dokumen': 'laporan_laba_rugi',
       'referensi':
           '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}',
       'parameter':
           'dari=${_fmtTgl.format(_dari)};sampai=${_fmtTgl.format(_sampai)};sales_id=${_salesId ?? ''};group_by=$_groupBy',
       'perangkat': 'flutter',
+      'kode_unik': 'PRN-${DateTime.now().microsecondsSinceEpoch}',
     }).then((_) {}, onError: (_) {});
   }
 

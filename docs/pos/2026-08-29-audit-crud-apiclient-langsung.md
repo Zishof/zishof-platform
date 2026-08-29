@@ -149,3 +149,17 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   kategori server-lama di dalam try/catch yang sudah bergraceful-degradation —
   dibiarkan. Penjaganya: test `pencarian produk jatuh ke cache produk lokal
   saat offline`.
+- **Langkah 5 (`si_print_log_create`) — selesai 29 Agustus 2026.** Register
+  riwayat cetak (P10) sebelumnya fire-and-forget langsung ke server sehingga
+  log hilang diam-diam saat offline. Kelima call-site (kwitansi penerimaan
+  dan rekap penjualan di piutang, laporan sesi nota sales, laporan laba rugi,
+  voucher pembayaran hutang) kini lewat `OutboxIs.kirimAtauAntre` dengan
+  `kode_unik` `PRN-<microsecondsSinceEpoch>` per kejadian cetak; layar
+  laba_rugi dan hutang_supplier ikut memanggil `OutboxIs.flush()` saat dibuka
+  (piutang dan nota_sales sudah sejak dulu). Catatan jujur: handler backend
+  `printLogCreate` (SalesInventoryReversalHelper.java) masih append murni
+  tanpa dedup `kode_unik` — duplikat baris log hanya mungkin bila aplikasi
+  mati tepat di antara kirim dan tandai-sukses, dapat diterima untuk log
+  append-only; `kode_unik` sudah dikirim sehingga dedup server dapat
+  ditambahkan belakangan tanpa mengubah klien. Penjaganya: test `log cetak
+  diantre lewat OutboxIs, tidak hilang saat offline`.
