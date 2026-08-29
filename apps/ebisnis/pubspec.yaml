@@ -137,6 +137,11 @@ flutter:
     - assets/images/petra/login-background.png
     - assets/images/help/apotik-workflow.png
     - assets/images/help/emedik-workflow.png
+    # Model wajah on-device (SFace+YuNet ONNX, diunduh
+    # tool/unduh_model_wajah.ps1 -- .onnx TIDAK di git). Entri DIREKTORI:
+    # berkas yang ada saat build ikut ter-bundle (Android memuat dari
+    # rootBundle); build tanpa model tetap sah dan fitur wajah fail-closed.
+    - assets/face/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

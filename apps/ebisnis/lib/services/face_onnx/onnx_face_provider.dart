@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' show Offset;
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
 
 import '../biometric_capture_bridge.dart';
@@ -62,6 +63,27 @@ class LokatorModelWajah {
   String? get pathSface => _cari(namaSface);
   String? get pathYunet => _cari(namaYunet);
   bool get lengkap => pathSface != null && pathYunet != null;
+
+  /// Bytes model: berkas filesystem lebih dulu (override operasional Desktop
+  /// via folder/env), lalu FALLBACK asset bundle `assets/face/` — jalur
+  /// distribusi Android (model ikut APK saat build; lihat pubspec). null =
+  /// tidak ada di mana pun -> pemanggil fail-closed.
+  Future<Uint8List?> bacaBytes(String nama) async {
+    final path = _cari(nama);
+    if (path != null) {
+      try {
+        return File(path).readAsBytes();
+      } on Object {
+        // Berkas hilang/terkunci di tengah -- coba bundle di bawah.
+      }
+    }
+    try {
+      final data = await rootBundle.load('assets/face/$nama');
+      return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    } on Object {
+      return null;
+    }
+  }
 }
 
 /// Sepasang foto tantangan liveness dari UI kamera.

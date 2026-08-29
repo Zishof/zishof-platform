@@ -68,9 +68,20 @@ ter-pin + verifikasi SHA-256 wajib cocok (berkas dibuang bila beda), aman
 diulang. `assets/face/*.onnx` masuk `.gitignore`; salinan LICENSE ikut git.
 
 Konsekuensi format: model ONNX (bukan TFLite), sehingga runtime inferensi
-gelombang 2 memakai **ONNX Runtime**, bukan `tflite_flutter`. Ukuran SFace
-fp32 juga menuntut keputusan bundling APK (kandidat: varian int8 opencv_zoo
-atau unduhan saat aktivasi fitur) — diputuskan di gelombang 2.
+gelombang 2 memakai **ONNX Runtime**, bukan `tflite_flutter`.
+
+**Distribusi (diputuskan 29 Agustus 2026): asset bundle Flutter.** pubspec
+mendeklarasikan direktori `assets/face/`; berkas yang ada saat build ikut
+ter-bundle (APK Android +-39 MB, dapat diterima utk APK 145 MB), build tanpa
+model tetap sah dan fitur wajah fail-closed. Pemuatan lewat
+`LokatorModelWajah.bacaBytes`: filesystem lebih dulu (override operasional
+Desktop via folder samping exe / cwd / env `AIS_FACE_MODEL_DIR`), lalu
+fallback `rootBundle` — jalur Android. `tool/build_apk_ebisnis.ps1`
+menjalankan `unduh_model_wajah.ps1` (verifikasi SHA-256) sebelum build
+supaya APK tidak diam-diam terbit tanpa fitur wajah; script build varian
+lain wajib melakukan hal yang sama bila fitur wajah diaktifkan utk varian
+itu. Penjaganya: test `distribusi model (asset bundle utk Android)` yang
+benar-benar membaca YuNet dari bundle.
 
 ## Yang DIBUTUHKAN untuk gelombang 2 (implementasi provider nyata)
 

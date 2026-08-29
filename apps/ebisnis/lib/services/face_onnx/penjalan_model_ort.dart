@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:onnxruntime/onnxruntime.dart';
@@ -23,9 +22,11 @@ class PenjalanModelOrt implements MesinInferensiWajah {
   @override
   Future<void> siapkan() async {
     if (_yunet != null && _sface != null) return;
-    final pathYunet = lokator.pathYunet;
-    final pathSface = lokator.pathSface;
-    if (pathYunet == null || pathSface == null) {
+    // bacaBytes: filesystem dulu (override Desktop), lalu asset bundle
+    // (jalur distribusi Android -- model ikut APK).
+    final bytesYunet = await lokator.bacaBytes(LokatorModelWajah.namaYunet);
+    final bytesSface = await lokator.bacaBytes(LokatorModelWajah.namaSface);
+    if (bytesYunet == null || bytesSface == null) {
       throw const PosBiometricUnavailable(
           'Berkas model wajah belum ada. Jalankan '
           'tool/unduh_model_wajah.ps1 (verifikasi SHA-256 otomatis).');
@@ -37,10 +38,8 @@ class PenjalanModelOrt implements MesinInferensiWajah {
       // dgn encoding sempit padahal ORT mengharapkan wide-char, sehingga
       // path terbaca sbg UTF-16 acak dan model tidak pernah termuat
       // (ditemukan lewat tool/diagnostik saat UAT webcam 2026-08-29).
-      _yunet ??= OrtSession.fromBuffer(
-          File(pathYunet).readAsBytesSync(), opsi);
-      _sface ??= OrtSession.fromBuffer(
-          File(pathSface).readAsBytesSync(), opsi);
+      _yunet ??= OrtSession.fromBuffer(bytesYunet, opsi);
+      _sface ??= OrtSession.fromBuffer(bytesSface, opsi);
     } on Object catch (e) {
       _yunet = null;
       _sface = null;

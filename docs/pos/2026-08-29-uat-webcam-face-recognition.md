@@ -7,9 +7,12 @@ Build: `flutter build windows --release` varian default, dari commit `1d45537`
 ## Prasyarat di mesin UAT
 
 1. Webcam terpasang (mesin ini: 2 kamera terdeteksi — PASS readiness).
-2. Model wajah tersedia di `assets\face` DI SAMPING exe (disalin otomatis
-   oleh persiapan ini; verifikasi ulang: dua berkas .onnx + dua LICENSE).
-   Bila pindah mesin: jalankan `tool\unduh_model_wajah.ps1` lalu salin.
+2. Model wajah. Sejak keputusan distribusi asset-bundle (29 Agustus 2026),
+   build yang dibuat DENGAN model di `assets/face` sudah membawa modelnya
+   di dalam bundle — tidak perlu salin manual. Folder `assets\face` di
+   samping exe / env `AIS_FACE_MODEL_DIR` tetap berfungsi sbg override
+   operasional. Bila build dibuat tanpa model: jalankan
+   `tool\unduh_model_wajah.ps1` sebelum build.
 3. Server AIS terjangkau dan akun UAT punya izin enrollment biometrik
    (`boleh_enroll_pengguna_lain`), master key biometrik server aktif
    (`server_encryption_ready` dari `biometrik_kemampuan`).

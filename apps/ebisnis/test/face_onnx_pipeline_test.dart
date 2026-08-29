@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show Offset, Rect;
@@ -100,6 +101,31 @@ OnnxFaceEmbeddingProvider _provider(_MesinPalsu mesin) =>
     );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('distribusi model (asset bundle utk Android)', () {
+    test('pubspec mendeklarasikan direktori assets/face', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(pubspec, contains('- assets/face/'),
+          reason: 'tanpa deklarasi ini model tidak ikut APK Android');
+    });
+
+    test('bacaBytes jatuh ke rootBundle saat filesystem kosong', () async {
+      // Kandidat direktori sengaja kosong -> satu-satunya jalur = bundle,
+      // persis kondisi Android. YuNet (232 KB) dipakai agar test ringan.
+      final lokator = LokatorModelWajah(direktoriKandidat: const []);
+      final bytes = await lokator.bacaBytes(LokatorModelWajah.namaYunet);
+      expect(bytes, isNotNull,
+          reason: 'model harus terbaca dari asset bundle');
+      expect(bytes!.length, 232589); // ukuran YuNet ter-pin
+    });
+
+    test('bacaBytes null utk nama yang tidak ada (fail-closed)', () async {
+      final lokator = LokatorModelWajah(direktoriKandidat: const []);
+      expect(await lokator.bacaBytes('tidak_ada.onnx'), isNull);
+    });
+  });
+
   group('TransformasiSerupa', () {
     test('memetakan titik referensi dgn tepat dan balik() konsisten', () {
       // rotasi 30 derajat + skala 1.5 + translasi.
