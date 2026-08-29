@@ -149,6 +149,7 @@ enum MenuEBisnis {
   produksiWaste,
   produksiCosting,
   produksiUnbuild,
+  produksiQualityAlert,
   kulakan,
   pengadaanPr,
   pengadaanPo,
@@ -332,6 +333,7 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   MenuEBisnis.produksiWaste: 'produksi_production_waste',
   MenuEBisnis.produksiCosting: 'produksi_production_cost',
   MenuEBisnis.produksiUnbuild: 'produksi_production_unbuild',
+  MenuEBisnis.produksiQualityAlert: 'produksi_quality_alert',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.pengadaanPr: 'pengadaan_pr',
   MenuEBisnis.pengadaanPo: 'pengadaan_po',
@@ -651,6 +653,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.produksiUnbuild, Icons.unarchive_outlined,
       'Unbuild / Bongkar Barang Jadi',
       builder: _bangunProduksiUnbuild),
+  _ItemMenuShell(MenuEBisnis.produksiQualityAlert, Icons.verified_outlined,
+      'Quality Alert (QC)',
+      builder: _bangunProduksiQualityAlert),
   _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan',
       builder: _bangunKulakan),
   _ItemMenuShell(MenuEBisnis.pengadaanPr, Icons.assignment_outlined,
@@ -885,6 +890,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.produksiWaste,
     MenuEBisnis.produksiCosting,
     MenuEBisnis.produksiUnbuild,
+    MenuEBisnis.produksiQualityAlert,
   ]),
   _GrupMenuShell(
     'Pengadaan',
@@ -1013,6 +1019,8 @@ Widget _bangunProduksiCosting(BuildContext c) =>
     const ProduksiScreen(bagian: BagianProduksi.productionCost);
 Widget _bangunProduksiUnbuild(BuildContext c) =>
     const ProduksiScreen(bagian: BagianProduksi.productionUnbuild);
+Widget _bangunProduksiQualityAlert(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.qualityAlert);
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunPengadaanPr(BuildContext c) => const PengadaanPrScreen();
 Widget _bangunPengadaanPo(BuildContext c) => const PengadaanPoScreen();
@@ -1461,6 +1469,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Costing Produksi';
     case MenuEBisnis.produksiUnbuild:
       return 'Unbuild / Bongkar Barang Jadi';
+    case MenuEBisnis.produksiQualityAlert:
+      return 'Quality Alert (QC)';
     case MenuEBisnis.kulakan:
       return 'Kulakan';
     case MenuEBisnis.pengadaanPr:
@@ -1673,6 +1683,8 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.produksiCosting;
     case 'Unbuild / Bongkar Barang Jadi':
       return MenuEBisnis.produksiUnbuild;
+    case 'Quality Alert (QC)':
+      return MenuEBisnis.produksiQualityAlert;
     case 'Kulakan':
       return MenuEBisnis.kulakan;
     case 'Aturan Diskon':
