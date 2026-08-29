@@ -6,6 +6,7 @@ import '../sesi.dart';
 import '../services/pesanan_poller.dart';
 import '../services/layar_pelanggan_launcher.dart';
 import '../services/toko_aktif_lokal.dart';
+import 'penawaran_sinkronisasi_versi.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'app_drawer.dart';
@@ -1888,6 +1889,10 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Satu titik bersama seluruh layar/varian yang sudah login. Servis di
+      // balik pemanggilan ini menjaga agar dialog hanya muncul sekali per
+      // versi/build dan tenant, serta menundanya bila server masih offline.
+      PenawaranSinkronisasiVersi.tawarkanJikaPerlu(context);
       if (_menuAktifNotifier.value != widget.menuAktif) {
         _menuAktifNotifier.value = widget.menuAktif;
       }

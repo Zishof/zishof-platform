@@ -19,6 +19,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../services/pencarian_produk_lokal.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
@@ -267,7 +268,23 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       });
     } catch (e) {
       if (!mounted) return;
-      _setStateEntri(() => _errorForm = terapkanGalat(e));
+      final lokal = await cariProdukLokalPersis(kode);
+      if (!mounted) return;
+      if (lokal != null) {
+        _setStateEntri(() {
+          _produkDitemukan = lokal;
+          _qtyController.clear();
+          _hargaController.clear();
+          _errorForm = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Produk ditemukan dari cache lokal. Isi harga beli '
+              'sesuai faktur, lalu tekan Sinkronkan agar master server '
+              'diperbarui.'),
+        ));
+      } else {
+        _setStateEntri(() => _errorForm = terapkanGalat(e));
+      }
     } finally {
       if (mounted) _setStateEntri(() => _mencari = false);
     }
@@ -951,15 +968,15 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
       detail = await ApiClient.instance
           .aksi('kulakan_faktur_detail', {'faktur_id': f['fakturId']});
     } catch (e) {
-      if (mounted) {
-        snackbarGalat(context, e, aktivitas: 'memuat detail faktur kulakan');
-      }
+      if (mounted) await _bukaRingkasanDetailTerbatas(f, e);
       return;
     }
     if (!mounted) return;
     final header = (detail['header'] as Map?)?.cast<String, dynamic>() ?? {};
     final items =
         ((detail['items'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final referensiMasterLengkap = header['masterSupplierTersedia'] != false &&
+        items.every((it) => it['masterProdukTersedia'] != false);
     await showDialog<void>(
       context: context,
       builder: (_) => AppDetailDialogShell(
@@ -979,9 +996,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
             ),
           // Perbaikan faktur yang sudah terlanjur diinput. Butuh hak HAPUS (faktur
           // lama dibatalkan) sekaligus hak TAMBAH (faktur pengganti disimpan).
-          if (Sesi.instance.bolehKelola ||
-              (Sesi.instance.bolehAksiPos('kulakan', 'delete') &&
-                  Sesi.instance.bolehAksiPos('kulakan', 'create')))
+          if ((Sesi.instance.bolehKelola ||
+                  (Sesi.instance.bolehAksiPos('kulakan', 'delete') &&
+                      Sesi.instance.bolehAksiPos('kulakan', 'create'))) &&
+              referensiMasterLengkap)
             OutlinedButton.icon(
               onPressed: () => _editFaktur(f, header, items),
               icon: const Icon(Icons.edit_outlined, size: 18),
@@ -1092,6 +1110,72 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                     tebal: true),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Faktur adalah jurnal historis dan tidak boleh terlihat seolah hilang hanya
+  /// karena endpoint detail atau relasi master lama sedang bermasalah. Tampilkan
+  /// kepala faktur yang sudah ada di daftar, lengkap dengan langkah pemulihan;
+  /// rincian item tetap dinyatakan belum tersedia agar pengguna tidak mengira
+  /// data ringkasan ini sebagai detail penuh.
+  Future<void> _bukaRingkasanDetailTerbatas(
+      Map<String, dynamic> faktur, Object error) async {
+    final info = infoGalat(error, aktivitas: 'memuat detail faktur kulakan');
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AppDetailDialogShell(
+        title: 'Ringkasan Faktur ${faktur['nomorFaktur'] ?? ''}',
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup')),
+        ],
+        children: [
+          AppInfoBanner(
+            icon: Icons.warning_amber_outlined,
+            color: AppColors.warning,
+            text: 'Rincian item belum dapat dimuat, tetapi faktur tidak '
+                'dihapus atau diubah. Tekan Sinkronkan dan Muat Ulang, lalu '
+                'buka Detail kembali. Jika tetap gagal, salin Detail Error '
+                'di bawah dan kirim bersama nomor faktur kepada admin; jangan '
+                'membuat faktur pengganti.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              AppDetailChip(
+                  icon: Icons.schedule_outlined,
+                  label: 'Tanggal: ${faktur['tanggalFaktur'] ?? '-'}'),
+              AppDetailChip(
+                  icon: Icons.local_shipping_outlined,
+                  label: 'Supplier: ${faktur['namaSupplier'] ?? '-'}'),
+              AppDetailChip(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Jumlah item: ${faktur['jumlahItem'] ?? '-'}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AppSectionCard(
+            judul: 'Total Faktur',
+            child: Text(
+              _formatRupiah.format(faktur['totalFakturFinal'] ??
+                  faktur['totalFakturManual'] ??
+                  faktur['totalHitung'] ??
+                  0),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppInfoBanner(
+            icon: Icons.info_outline,
+            color: AppColors.danger,
+            text: '${info.pesan}\n${info.solusi.join('\n')}',
+            detail: 'Referensi ${info.kodeReferensi}\n${info.teknis}',
           ),
         ],
       ),

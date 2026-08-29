@@ -107,6 +107,29 @@ class SinkronisasiTabelService {
     }
   }
 
+  /// Pemeriksaan ringan untuk menentukan apakah dialog sinkronisasi sesudah
+  /// instalasi/update layak ditampilkan. Penolakan bisnis berarti server tetap
+  /// terjangkau; hanya kegagalan jaringan yang menunda dialog sampai koneksi
+  /// pulih.
+  Future<bool> serverTerjangkau() async {
+    if (!ApiClient.instance.sudahLogin) return false;
+    try {
+      await ApiClient.instance.aksi('katalog', {
+        'page': 1,
+        'page_size': 1,
+        if (Sesi.instance.idTokoTerpilih != null)
+          'toko_id': Sesi.instance.idTokoTerpilih,
+        if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
+      });
+      return true;
+    } catch (e) {
+      // Respons 401 membuang token. Walau jaringan hidup, jangan membuka
+      // dialog sinkronisasi di atas layar dengan sesi yang sudah tidak sah.
+      if (!ApiClient.instance.sudahLogin) return false;
+      return e is! ApiException || !e.offline;
+    }
+  }
+
   Future<List<StatusSinkronTabel>> muat() async {
     final lokal = await CoreDb.instance.statistikSeluruhTabel();
     var hasil = lokal.map((row) {

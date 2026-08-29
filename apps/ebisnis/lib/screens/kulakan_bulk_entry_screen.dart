@@ -12,6 +12,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../models.dart';
 import '../parse_util.dart';
 import '../services/master_offline.dart';
+import '../services/pencarian_produk_lokal.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -50,6 +51,7 @@ class _BulkRow {
   String? pesan;
   bool mencari = false;
   bool produkBaru = true;
+  bool verifikasiGagal = false;
   int? kategoriId;
   String kategoriNama = '';
 
@@ -128,7 +130,8 @@ class _BulkValidation {
   bool get canPost => errors.isEmpty;
 }
 
-class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with JejakGalat {
+class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
+    with JejakGalat {
   /// Controller scroll horizontal tabel input -- dipakai Scrollbar agar
   /// gagangnya terlihat dan dapat diseret pada layar kecil.
   final _scrollTabel = ScrollController();
@@ -329,6 +332,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
         row.produkId = null;
         row.namaMaster = null;
         row.produkBaru = true;
+        row.verifikasiGagal = false;
         row.kategoriId = null;
         row.kategoriNama = '';
         row.pesan = null;
@@ -432,12 +436,16 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
     });
   }
 
-  Future<void> _cariProduk(_BulkRow row) async {
+  Future<void> _cariProduk(
+    _BulkRow row, {
+    bool paksaIsiNamaMaster = false,
+  }) async {
     final kode = row.kodeBersih;
     if (kode.isEmpty) return;
     setStateIfMounted(() {
       row.mencari = true;
       row.pesan = null;
+      row.verifikasiGagal = false;
     });
     try {
       final hasil =
@@ -446,7 +454,9 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
       setStateIfMounted(() {
         row.produkId = (hasil['produkId'] as num?)?.toInt();
         row.namaMaster = '${hasil['nama'] ?? ''}'.trim();
-        if (row.nama.text.trim().isEmpty) row.nama.text = row.namaMaster ?? '';
+        if (paksaIsiNamaMaster || row.nama.text.trim().isEmpty) {
+          row.nama.text = row.namaMaster ?? '';
+        }
         if (row.hargaBeli.text.trim().isEmpty) {
           // Prioritas: harga dari PENERIMAAN/KULAKAN TERAKHIR (server:
           // hargaBeliTerakhir), baru jatuh ke harga beli master bila produk
@@ -475,14 +485,52 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
             ? 'Produk belum ada, akan dibuat saat posting.'
             : 'Cocok: ${row.namaMaster}';
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final lokal = await cariProdukLokalPersis(kode);
+      if (!mounted) return;
+      if (lokal != null) {
+        setStateIfMounted(() {
+          row.produkId = (lokal['produkId'] as num?)?.toInt();
+          row.namaMaster = '${lokal['nama'] ?? ''}'.trim();
+          if (paksaIsiNamaMaster || row.nama.text.trim().isEmpty) {
+            row.nama.text = row.namaMaster ?? '';
+          }
+          if (row.hargaJual.text.trim().isEmpty) {
+            final hargaJual = (lokal['hargaJual'] as num?)?.toDouble() ?? 0;
+            if (hargaJual > 0) {
+              row.hargaJual.text = hargaJual.toStringAsFixed(0);
+            }
+          }
+          _setKategoriDariProduk(row, lokal);
+          row.produkBaru = false;
+          row.verifikasiGagal = false;
+          row.pesan = 'Cocok dari cache lokal: ${row.namaMaster}. '
+              'Isi harga beli sesuai faktur. Tekan Sinkronkan agar master '
+              'server diperbarui.';
+        });
+        return;
+      }
+
+      final pesanServer = e is ApiException ? e.pesan.toLowerCase() : '';
+      final benarTidakDitemukan = e is ApiException &&
+          !e.offline &&
+          (pesanServer.contains('tidak dikenal') ||
+              pesanServer.contains('tidak ditemukan'));
       setStateIfMounted(() {
         row.produkId = null;
         row.namaMaster = null;
-        row.produkBaru = true;
+        row.produkBaru = benarTidakDitemukan;
+        row.verifikasiGagal = !benarTidakDitemukan;
         _resolveKategoriDariNama(row);
-        row.pesan = 'Produk belum ditemukan, akan dibuat baru saat posting.';
+        row.pesan = benarTidakDitemukan
+            ? 'Kode/barcode tidak ditemukan pada toko aktif. Jika memang '
+                'produk baru, lengkapi nama, kategori, harga beli, dan harga '
+                'jual. Jika seharusnya master lama, pilih toko yang benar lalu '
+                'tekan Sinkronkan dan cek kembali.'
+            : 'Produk belum dapat diverifikasi karena server/cache tidak '
+                'tersedia. Data tidak akan diposting. Periksa koneksi, tekan '
+                'Sinkronkan, lalu klik Cek Produk Existing kembali.';
       });
     } finally {
       if (mounted) setStateIfMounted(() => row.mencari = false);
@@ -494,7 +542,12 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
     if (nilai.isEmpty) return;
     row.kode.text = nilai;
     row.nama.clear();
-    await _cariProduk(row);
+    // RawAutocomplete menulis displayString (kode/barcode) ke controller
+    // sesudah callback onSelected. Karena permintaan server bersifat async,
+    // nilai itu dapat terlihat sebagai "nama sudah terisi" dan mencegah nama
+    // master diterapkan. Jalur pilihan Banbox harus selalu memakai nama master
+    // yang benar; jalur impor tetap mempertahankan nama sumber untuk audit.
+    await _cariProduk(row, paksaIsiNamaMaster: true);
   }
 
   Future<void> _cekSemuaProduk() async {
@@ -527,6 +580,11 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
     }
     if (row.namaEfektif.isEmpty) {
       masalah.add('Baris $idx: nama produk wajib diisi.');
+    }
+    if (row.verifikasiGagal) {
+      masalah.add('Baris $idx: produk belum berhasil diverifikasi. Tekan '
+          'Sinkronkan lalu Cek Produk Existing kembali; jangan posting agar '
+          'master lama tidak dibuat menjadi produk baru.');
     }
     if (row.qtyNilai <= 0) {
       masalah.add('Baris $idx: qty harus lebih dari 0.');
@@ -603,6 +661,11 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
       }
       if (row.namaEfektif.isEmpty) {
         errors.add('Baris $idx: nama produk wajib diisi.');
+      }
+      if (row.verifikasiGagal) {
+        errors.add('Baris $idx: produk belum berhasil diverifikasi. Tekan '
+            'Sinkronkan lalu Cek Produk Existing kembali; jangan posting agar '
+            'master lama tidak dibuat menjadi produk baru.');
       }
       if (row.qtyNilai <= 0) errors.add('Baris $idx: qty harus lebih dari 0.');
       if (row.hargaBeliNilai <= 0) {
@@ -784,8 +847,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
           // (MasterOffline.tukarIdSementara) -- faktur yang masih menunjuk
           // produk yang belum terkirim DITAHAN flush, bukan dikirim rusak.
           final idLokal = MasterOffline.idSementaraBaru();
-          final kunci =
-              'produk:baru:${DateTime.now().microsecondsSinceEpoch}';
+          final kunci = 'produk:baru:${DateTime.now().microsecondsSinceEpoch}';
           final bodyProduk = <String, dynamic>{
             'kode': row.kodeBersih,
             'nama': row.namaBersih,
@@ -851,8 +913,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
       await prosesSimpanMaster(
         context,
         aksi: 'kulakan_faktur_simpan',
-        kunci:
-            'kulakan_faktur:bulk:${DateTime.now().microsecondsSinceEpoch}',
+        kunci: 'kulakan_faktur:bulk:${DateTime.now().microsecondsSinceEpoch}',
         cacheKey: 'master:kulakan_faktur',
         rowLokal: {
           'nomorFaktur': _faktur.text.trim(),
@@ -1072,8 +1133,8 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
               _bulkRp.format(parseDesimalAtau(controller.text)),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600),
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1217,227 +1278,234 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
               },
             ),
             child: SingleChildScrollView(
-          controller: _scrollTabel,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.only(bottom: 12),
-          child: SizedBox(
-            width: 1710,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  color: AppColors.pageBgOf(context),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(children: [
-                    _headerCell('NO', width: 44, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('KODE / BARCODE', width: 170),
-                    const SizedBox(width: 8),
-                    _headerCell('NAMA PRODUK', width: 202),
-                    const SizedBox(width: 8),
-                    _headerCell('JENIS PRODUK', width: 160),
-                    const SizedBox(width: 8),
-                    _headerCell('QTY', width: 72, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('HARGA BELI',
-                        width: 112, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('DISKON', width: 92, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('PPN', width: 92, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('HPP UNIT', width: 97, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('BATCH', width: 112),
-                    const SizedBox(width: 8),
-                    _headerCell('EXPIRED', width: 112),
-                    const SizedBox(width: 8),
-                    _headerCell('HARGA JUAL',
-                        width: 92, align: TextAlign.right),
-                    const SizedBox(width: 8),
-                    _headerCell('STATUS', width: 147),
-                    const SizedBox(width: 52),
-                  ]),
-                ),
-                ..._rows.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final row = entry.value;
-                  final errors = _masalahBaris(row, index);
-                  final warnings = _warningBaris(row, index);
-                  final rowColor = row.produkBaru && row.kodeBersih.isNotEmpty
-                      ? (AppColors.gelap(context)
-                          ? AppColors.primary.withValues(alpha: 0.18)
-                          : const Color(0xFFEAF2FF))
-                      : errors.isNotEmpty
-                          ? AppColors.latarLembut(AppColors.danger)
-                          : warnings.isNotEmpty
-                              ? AppColors.latarLembut(AppColors.warning)
-                              : AppColors.cardBgOf(context);
-                  return Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: rowColor,
-                      border: Border(
-                          top: BorderSide(color: AppColors.borderOf(context))),
+              controller: _scrollTabel,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 1710,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      color: AppColors.pageBgOf(context),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(children: [
+                        _headerCell('NO', width: 44, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('KODE / BARCODE', width: 170),
+                        const SizedBox(width: 8),
+                        _headerCell('NAMA PRODUK', width: 202),
+                        const SizedBox(width: 8),
+                        _headerCell('JENIS PRODUK', width: 160),
+                        const SizedBox(width: 8),
+                        _headerCell('QTY', width: 72, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('HARGA BELI',
+                            width: 112, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('DISKON',
+                            width: 92, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('PPN', width: 92, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('HPP UNIT',
+                            width: 97, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('BATCH', width: 112),
+                        const SizedBox(width: 8),
+                        _headerCell('EXPIRED', width: 112),
+                        const SizedBox(width: 8),
+                        _headerCell('HARGA JUAL',
+                            width: 92, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('STATUS', width: 147),
+                        const SizedBox(width: 52),
+                      ]),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 44,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Text('${index + 1}',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    color: errors.isNotEmpty
-                                        ? AppColors.danger
-                                        : warnings.isNotEmpty
-                                            ? AppColors.warning
-                                            : AppColors.textSecondaryOf(
-                                                context))),
-                          ),
+                    ..._rows.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final row = entry.value;
+                      final errors = _masalahBaris(row, index);
+                      final warnings = _warningBaris(row, index);
+                      final rowColor =
+                          row.produkBaru && row.kodeBersih.isNotEmpty
+                              ? (AppColors.gelap(context)
+                                  ? AppColors.primary.withValues(alpha: 0.18)
+                                  : const Color(0xFFEAF2FF))
+                              : errors.isNotEmpty
+                                  ? AppColors.latarLembut(AppColors.danger)
+                                  : warnings.isNotEmpty
+                                      ? AppColors.latarLembut(AppColors.warning)
+                                      : AppColors.cardBgOf(context);
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: rowColor,
+                          border: Border(
+                              top: BorderSide(
+                                  color: AppColors.borderOf(context))),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 170,
-                          child: Row(children: [
-                            Expanded(
-                                child:
-                                    _field(row.kode, hint: 'scan/ketik kode')),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Cek produk',
-                              onPressed:
-                                  row.mencari ? null : () => _cariProduk(row),
-                              icon: row.mencari
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2))
-                                  : const Icon(Icons.search, size: 18),
-                            ),
-                          ]),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 202,
-                          child: PencarianProdukBanbox(
-                            controller: row.nama,
-                            label: 'Nama Produk',
-                            icon: Icons.search,
-                            onPilih: (kode) => _pilihProdukDariNama(row, kode),
-                            decorationBuilder: (context) =>
-                                const InputDecoration(
-                              hintText: 'cari / ketik nama',
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 9),
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(width: 160, child: _kategoriCell(row)),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 72,
-                            child: _field(row.qty,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true))),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 112,
-                            child: Sesi.instance.bolehUbahHarga
-                                ? _field(row.hargaBeli,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                            decimal: true))
-                                : _selHargaTerkunci(row.hargaBeli)),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 92,
-                            child: _field(row.diskon,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true))),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 92,
-                            child: _field(row.ppn,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true))),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 97,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 9),
-                            child: Text(_bulkRp.format(row.hppUnit),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                    fontSize: 12, fontWeight: FontWeight.w700)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 112,
-                            child: _field(row.batch, hint: 'opsional')),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 112,
-                          child: TextField(
-                            controller: row.expired,
-                            onChanged: (_) => setStateIfMounted(() {}),
-                            style: const TextStyle(fontSize: 12.5),
-                            decoration: InputDecoration(
-                              hintText: 'yyyy-MM-dd',
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 9),
-                              border: const OutlineInputBorder(),
-                              suffixIcon: IconButton(
-                                tooltip: 'Pilih tanggal',
-                                icon:
-                                    const Icon(Icons.event_outlined, size: 16),
-                                onPressed: () => _pilihExpired(row),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 44,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Text('${index + 1}',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: errors.isNotEmpty
+                                            ? AppColors.danger
+                                            : warnings.isNotEmpty
+                                                ? AppColors.warning
+                                                : AppColors.textSecondaryOf(
+                                                    context))),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 170,
+                              child: Row(children: [
+                                Expanded(
+                                    child: _field(row.kode,
+                                        hint: 'scan/ketik kode')),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Cek produk',
+                                  onPressed: row.mencari
+                                      ? null
+                                      : () => _cariProduk(row),
+                                  icon: row.mencari
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
+                                      : const Icon(Icons.search, size: 18),
+                                ),
+                              ]),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 202,
+                              child: PencarianProdukBanbox(
+                                controller: row.nama,
+                                label: 'Nama Produk',
+                                icon: Icons.search,
+                                onPilih: (kode) =>
+                                    _pilihProdukDariNama(row, kode),
+                                decorationBuilder: (context) =>
+                                    const InputDecoration(
+                                  hintText: 'cari / ketik nama',
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 9),
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(width: 160, child: _kategoriCell(row)),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 72,
+                                child: _field(row.qty,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true))),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 112,
+                                child: Sesi.instance.bolehUbahHarga
+                                    ? _field(row.hargaBeli,
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true))
+                                    : _selHargaTerkunci(row.hargaBeli)),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 92,
+                                child: _field(row.diskon,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true))),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 92,
+                                child: _field(row.ppn,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true))),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 97,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 9),
+                                child: Text(_bulkRp.format(row.hppUnit),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 112,
+                                child: _field(row.batch, hint: 'opsional')),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 112,
+                              child: TextField(
+                                controller: row.expired,
+                                onChanged: (_) => setStateIfMounted(() {}),
+                                style: const TextStyle(fontSize: 12.5),
+                                decoration: InputDecoration(
+                                  hintText: 'yyyy-MM-dd',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 9),
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Pilih tanggal',
+                                    icon: const Icon(Icons.event_outlined,
+                                        size: 16),
+                                    onPressed: () => _pilihExpired(row),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                                width: 92,
+                                child: _field(row.hargaJual,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true))),
+                            const SizedBox(width: 8),
+                            SizedBox(width: 147, child: _statusRow(row)),
+                            SizedBox(
+                              width: 52,
+                              child: IconButton(
+                                tooltip: 'Hapus baris',
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
+                                onPressed: () => _hapusBaris(row),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 92,
-                            child: _field(row.hargaJual,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true))),
-                        const SizedBox(width: 8),
-                        SizedBox(width: 147, child: _statusRow(row)),
-                        SizedBox(
-                          width: 52,
-                          child: IconButton(
-                            tooltip: 'Hapus baris',
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed: () => _hapusBaris(row),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
         ),
       ),
     );
@@ -1666,7 +1734,8 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+                border:
+                    Border.all(color: Colors.orange.withValues(alpha: 0.45)),
               ),
               child: Row(children: [
                 const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
@@ -1714,8 +1783,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen> with Je
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_error!,
-                          style: TextStyle(color: AppColors.danger)),
+                      Text(_error!, style: TextStyle(color: AppColors.danger)),
                       AppDetailGalatOpsional(detail: detailUntuk(_error)),
                     ],
                   ),

@@ -29,6 +29,7 @@ Dokumen aktif:
 - [SQL preflight Fase 2 (read-only)](2026-08-25-fase-2-preflight-master-identitas-lokasi.sql)
 - [ADR bridge identitas item, UOM, dan lokasi lintas domain](2026-08-26-adr-bridge-identitas-item-uom-lokasi.md)
 - [ADR satuan dasar, pembelian, dan penjualan produk](2026-08-28-adr-satuan-produk-pembelian-penjualan.md)
+- [Rilis Desktop POS 1.34.04 — eBisnis, Al-Bahjah, dan Nahl](2026-08-29-release-desktop-pos-1.34.04.md)
 - [Rilis Desktop Al-Bahjah POS 1.34.03](2026-08-29-release-desktop-albahjah-1.34.03.md)
 - [Kesiapan produksi biometrik POS](2026-08-29-kesiapan-produksi-biometrik-pos.md)
 - [Verifikasi biometrik pembayaran saldo member](2026-08-26-verifikasi-biometrik-pembayaran-saldo.md)
