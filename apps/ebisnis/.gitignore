@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Model wajah ONNX diunduh tool/unduh_model_wajah.ps1 (38 MB -- jangan masuk git)
+assets/face/*.onnx

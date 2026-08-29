@@ -47,15 +47,37 @@ dengan provider palsu. Catatan test: integrasi bridge memakai `test()` biasa
 dengan endpoint SecuGen non-loopback — socket sungguhan menggantung di zona
 fake-async `testWidgets`.
 
+## Model terpilih (disetujui pemilik produk, diunduh 29 Agustus 2026)
+
+Sumber: **OpenCV Zoo** (repositori resmi organisasi OpenCV) — sumber paling
+defensibel secara lisensi. Teks LICENSE diverifikasi langsung dari repo dan
+salinannya disimpan di `apps/ebisnis/assets/face/`.
+
+| Peran | Berkas | Lisensi | Ukuran | SHA-256 |
+|---|---|---|---|---|
+| Embedding wajah (128-dim float32) | `face_recognition_sface_2021dec.onnx` | Apache-2.0 | 38,7 MB | `0BA9FBFA01B5270C96627C4EF784DA859931E02F04419C829E83484087C34E79` |
+| Deteksi wajah | `face_detection_yunet_2023mar.onnx` | MIT © 2020 Shiqi Yu | 232 KB | `8F2383E4DD3CFBB4553EA8718107FC0423210DC964F9F4280604804ED2552FA4` |
+
+Yang DITOLAK dan alasannya: bobot InsightFace/ArcFace (eksplisit
+non-komersial/research-only) dan `mobilefacenet.tflite` dari repo perorangan
+(provenance bobot tidak jelas).
+
+Binari model **tidak disimpan di git** (SFace 38,7 MB akan membengkakkan
+riwayat permanen). Sumber kebenarannya `tool/unduh_model_wajah.ps1`: URL
+ter-pin + verifikasi SHA-256 wajib cocok (berkas dibuang bila beda), aman
+diulang. `assets/face/*.onnx` masuk `.gitignore`; salinan LICENSE ikut git.
+
+Konsekuensi format: model ONNX (bukan TFLite), sehingga runtime inferensi
+gelombang 2 memakai **ONNX Runtime**, bukan `tflite_flutter`. Ukuran SFace
+fp32 juga menuntut keputusan bundling APK (kandidat: varian int8 opencv_zoo
+atau unduhan saat aktivasi fitur) — diputuskan di gelombang 2.
+
 ## Yang DIBUTUHKAN untuk gelombang 2 (implementasi provider nyata)
 
-1. **Aset model**: berkas `.tflite` MobileFaceNet (atau setara) beserta bukti
-   lisensinya — perlu keputusan/berkas dari pemilik produk; tidak diunduh
-   sembarangan.
-2. **Dependensi pub**: `tflite_flutter` (Android + Windows), deteksi wajah
-   (`google_mlkit_face_detection` untuk Android; Windows perlu detektor
-   TFLite mis. BlazeFace karena ML Kit tidak tersedia di desktop), dan
-   `camera`/`camera_windows` untuk aliran frame.
+1. ~~Aset model~~ — SELESAI (tabel di atas).
+2. **Dependensi pub**: runtime ONNX untuk Flutter (Windows + Android) dan
+   `camera`/`camera_windows` untuk aliran frame — persetujuan versi saat
+   integrasi.
 3. **Liveness aktif**: tantangan kedip/toleh dengan skor gabungan — bukan
    anti-spoof bersertifikat; keterbatasan ini wajib jujur di release notes.
 4. **Kalibrasi ambang**: `AIS_BIOMETRIC_FACE_THRESHOLD` dan ambang liveness
