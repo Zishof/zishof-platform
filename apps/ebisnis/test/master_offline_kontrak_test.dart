@@ -717,6 +717,37 @@ void main() {
         reason: 'daftar transitori dipilih utk posting -- harus data server');
   });
 
+  // P3 gelombang 4 (2026-08-29): daftar jurnal umum lokal-dulu. Kunci cache
+  // WAJIB sama dgn cacheKey editor draf ('master:jurnal_umum') supaya draf
+  // offline langsung tampil di daftar; filter periode/status/kata diterapkan
+  // ulang di klien karena emisi cache memuat semua baris yang pernah
+  // terlihat. Nominal debet/kredit dari salinan diberi penanda. Posting
+  // (jurnal_umum_posting) tetap online-only -- sudah dikunci di tetapOnline.
+  test('daftar jurnal umum lokal-dulu satu kunci dgn draf editor', () {
+    final source =
+        rapat(File('lib/screens/jurnal_umum_screen.dart').readAsStringSync());
+    expect(
+        source, contains(rapat("daftarCacheDulu('jurnal_umum_list'")),
+        reason: 'daftar jurnal harus lokal-dulu');
+    // Kunci yang sama dipakai daftarCacheDulu DAN prosesSimpanMaster draf.
+    expect(
+        RegExp(r"'master:jurnal_umum'")
+            .allMatches(File('lib/screens/jurnal_umum_screen.dart')
+                .readAsStringSync())
+            .length,
+        greaterThanOrEqualTo(2),
+        reason: 'kunci cache daftar & draf editor harus sama-sama '
+            "'master:jurnal_umum'");
+    expect(source, contains(rapat('_lolosFilterLokal')),
+        reason: 'emisi cache wajib disaring ulang mengikuti filter layar');
+    expect(source, contains('PenandaDataTersimpan('),
+        reason: 'nominal jurnal dari cache wajib ber-penanda');
+    expect(
+        source,
+        contains(rapat("daftarDenganCache('jurnal_umum_jenis_transaksi'")),
+        reason: 'dropdown jenis transaksi ikut ber-cache');
+  });
+
   test('indikator punya 4 wujud fase termasuk animasi sukses', () {
     final source =
         File('lib/widgets/indikator_sinkron_master.dart').readAsStringSync();

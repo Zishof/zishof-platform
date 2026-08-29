@@ -232,3 +232,23 @@ Setiap langkah harus disertai test kontrak (pola `*_contract_test.dart` yang sud
   dikunci test) dan `si_supplier_list` picker hutang (alur pembayarannya
   online-only, nilai offline rendah). Penjaganya: test `pelengkap alur
   offline: kategori biaya & pemilih customer`.
+- **Langkah 11 (P3 gelombang 4: daftar jurnal umum) — selesai 29 Agustus
+  2026.** Pemetaan ulang menunjukkan daftar utama pengadaan (PR/PO/BAST/
+  tagihan/bayar/pajak/BDP), hutang (`si_payable_list`), piutang
+  (`si_receivable_list`), dan item anggaran SUDAH `daftarCacheDulu` sejak
+  audit-audit sebelumnya — sisa terbesar yang nyata adalah `jurnal_umum_list`.
+  Kini: (1) daftar jurnal `daftarCacheDulu` dengan kunci cache SAMA dengan
+  cacheKey editor draf (`master:jurnal_umum`) sehingga draf yang diketik
+  offline langsung tampil di daftar; (2) filter periode/status/kata
+  diterapkan ulang di klien (`_lolosFilterLokal`) karena emisi cache memuat
+  semua baris yang pernah terlihat — tanggal non-ISO tidak disaring
+  (permisif, lebih baik baris ekstra ber-penanda daripada hilang diam-diam);
+  (3) `tanggalClosing` hanya diperbarui dari emisi server, dan guard closing
+  tetap ditegakkan server saat simpan/posting; (4) dropdown
+  `jurnal_umum_jenis_transaksi` ikut `daftarDenganCache`; (5) nominal
+  debet/kredit dari salinan diberi `PenandaDataTersimpan`. Posting tetap
+  online-only (sudah dikunci `tetapOnline`). Penjaganya: test `daftar jurnal
+  umum lokal-dulu satu kunci dgn draf editor`. Sisa P3 yang masih terbuka:
+  `anggaran_revisi_list`/`anggaran_realisasi_list` (parameterisasi konteks
+  anggaran) dan laporan ber-rentang-tanggal — keduanya online-only sampai
+  ada desain kunci yang aman.

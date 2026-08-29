@@ -7,6 +7,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pemilih_akun.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
 
@@ -39,6 +40,7 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
   List<Map<String, dynamic>> _jenisTransaksi = [];
   List<Map<String, dynamic>> _akun = [];
   String _tanggalClosing = '';
+  bool _dariCache = false;
 
   late DateTime _mulai;
   late DateTime _sampai;
@@ -54,30 +56,76 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     _muat();
   }
 
+  static final _polaTanggalIso = RegExp(r'^\d{4}-\d{2}-\d{2}');
+
+  /// Filter layar diterapkan ulang di sisi klien: emisi cache
+  /// [MasterOffline.daftarCacheDulu] berisi SEMUA baris yang pernah terlihat,
+  /// bukan hanya periode/status/kata yang sedang dipilih. Tanggal yang tidak
+  /// berformat yyyy-MM-dd tidak disaring (permisif -- lebih baik baris ekstra
+  /// ber-penanda daripada baris hilang diam-diam).
+  bool _lolosFilterLokal(Map<String, dynamic> j) {
+    final tanggal = '${j['tanggal'] ?? ''}';
+    if (_polaTanggalIso.hasMatch(tanggal)) {
+      if (tanggal.compareTo(_fmtTanggal.format(_mulai)) < 0 ||
+          tanggal.compareTo(_fmtTanggal.format(_sampai)) > 0) {
+        return false;
+      }
+    }
+    if (_status == 'draf' && j['terposting'] == true) return false;
+    if (_status == 'terposting' && j['terposting'] != true) return false;
+    final cari = _cari.trim().toLowerCase();
+    if (cari.isNotEmpty &&
+        !'${j['kode'] ?? ''} ${j['keterangan'] ?? ''}'
+            .toLowerCase()
+            .contains(cari)) {
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _galat = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('jurnal_umum_list', {
-        'mulai': _fmtTanggal.format(_mulai),
-        'sampai': _fmtTanggal.format(_sampai),
-        'cari': _cari,
-        'status': _status,
+      // Baca lokal-dulu. Kunci cache SAMA dengan cacheKey editor draf
+      // ('master:jurnal_umum', lihat prosesSimpanMaster di bawah) supaya draf
+      // yang diketik saat offline langsung tampil di daftar. Guard tanggal
+      // closing tetap ditegakkan server saat simpan/posting.
+      await MasterOffline.daftarCacheDulu(
+          'jurnal_umum_list',
+          {
+            'mulai': _fmtTanggal.format(_mulai),
+            'sampai': _fmtTanggal.format(_sampai),
+            'cari': _cari,
+            'status': _status,
+          },
+          'master:jurnal_umum', onData: (hasil) {
+        if (!mounted) return;
+        final baris =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        setStateIfMounted(() {
+          _jurnal = baris.where(_lolosFilterLokal).toList();
+          _dariCache = hasil['offline'] == true;
+          if (hasil['dariServer'] == true) {
+            _tanggalClosing = '${hasil['tanggalClosing'] ?? ''}';
+          }
+          _memuat = false;
+        });
       });
-      final jenis =
-          await ApiClient.instance.aksi('jurnal_umum_jenis_transaksi', {});
+      final jenis = await MasterOffline.daftarDenganCache(
+          'jurnal_umum_jenis_transaksi',
+          const {},
+          'master:jurnal_jenis_transaksi');
       // Daftar akun dipakai pemilih akun di editor; sekali muat, dipakai semua baris.
       final akun = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 5000}, 'master:akun');
       if (!mounted) return;
       setStateIfMounted(() {
-        _jurnal = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _jenisTransaksi =
             ((jenis['data'] as List?) ?? []).cast<Map<String, dynamic>>();
         _akun = ((akun['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _tanggalClosing = '${hasil['tanggalClosing'] ?? ''}';
         _memuat = false;
       });
     } catch (e) {
@@ -315,6 +363,9 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2)),
             ]),
         const SizedBox(height: 8),
+        // Nominal debet/kredit dari salinan tersimpan wajib dinyatakan
+        // terang-terangan.
+        PenandaDataTersimpan(tampil: _dariCache),
         if (_tanggalClosing.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
