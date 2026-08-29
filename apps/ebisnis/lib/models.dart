@@ -326,6 +326,13 @@ class ItemEkstra {
 class ItemKeranjang {
   final Produk produk;
   int jumlah;
+
+  /// Harga satuan grosir dari server (peta `hargaGrosir` pada respons
+  /// `diskon_evaluasi`); null = harga katalog berlaku. HANYA server yang
+  /// mengisinya -- klien tidak menghitung ambang sendiri, supaya pratinjau
+  /// dan struk (yang dihitung ulang server saat bayar) tidak pernah beda
+  /// pendapat (Fase A dok. 48/49).
+  double? hargaGrosir;
   double diskon;
   double cashback;
   int? aturanDiskonId;
@@ -353,7 +360,11 @@ class ItemKeranjang {
   /// [ItemEkstra]) -- jadi total di layar (subtotal/total/kembalian) SELALU
   /// cocok dgn yang akan dihitung ulang server, bukan cuma harga produk dasar.
   double get _hargaEkstraPerUnit => ekstra.fold(0.0, (s, e) => s + e.harga);
-  double get subtotal => (produk.hargaJual + _hargaEkstraPerUnit) * jumlah;
+
+  /// Harga satuan yang benar-benar berlaku: grosir bila server menetapkannya,
+  /// selain itu harga katalog.
+  double get hargaSatuanEfektif => hargaGrosir ?? produk.hargaJual;
+  double get subtotal => (hargaSatuanEfektif + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }
 

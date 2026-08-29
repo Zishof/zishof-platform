@@ -329,7 +329,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           .map((i) => {
                 'nama': i.produk.nama,
                 'jumlah': i.jumlah,
-                'harga': i.produk.hargaJual,
+                'harga': i.hargaSatuanEfektif,
                 'subtotal': i.subtotalSetelahDiskon,
               })
           .toList(),
@@ -583,7 +583,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         'items': widget.keranjang
             .map((i) => {
                   'id': i.produk.id,
-                  'harga': i.produk.hargaJual,
+                  'harga': i.hargaSatuanEfektif,
                   'jumlah': i.jumlah,
                   if (i.promoManual && i.promoManualAturanId != null)
                     'hanya_aturan_id': i.promoManualAturanId,
@@ -591,8 +591,18 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             .toList(),
       });
       final items = (hasil['items'] as List?) ?? [];
+      // Fase A: peta produkId->harga satuan grosir dari mesin server yang SAMA
+      // dengan checkout. Aman diterapkan per produk.id (bukan per-indeks seperti
+      // diskon) karena aturan grosir berlaku per PRODUK -- dua baris berproduk
+      // sama memang harus berharga sama.
+      final petaGrosir = (hasil['hargaGrosir'] as Map?)?.map(
+              (k, v) => MapEntry('$k', (v as num).toDouble())) ??
+          const <String, double>{};
       if (!mounted) return;
       setStateIfMounted(() {
+        for (final baris in widget.keranjang) {
+          baris.hargaGrosir = petaGrosir['${baris.produk.id}'];
+        }
         // Dipetakan per-INDEKS (BUKAN per produk.id) -- respons server `items`
         // SEJAJAR urutan `items` yg dikirim di request (index i <-> keranjang[i]
         // krn dibangun dari `widget.keranjang.map(...)` di atas, urutan sama).
@@ -712,7 +722,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         'items': [
           {
             'id': target.produk.id,
-            'harga': target.produk.hargaJual,
+            'harga': target.hargaSatuanEfektif,
             'jumlah': target.jumlah,
           }
         ],
@@ -849,7 +859,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         'items': [
           {
             'id': target.produk.id,
-            'harga': target.produk.hargaJual,
+            'harga': target.hargaSatuanEfektif,
             'jumlah': target.jumlah,
             'hanya_aturan_id': aturanId,
           }
@@ -1345,7 +1355,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 'id': i.produk.id,
                 'kode': i.produk.kode,
                 'nama': i.produk.nama,
-                'harga': i.produk.hargaJual,
+                'harga': i.hargaSatuanEfektif,
                 'jumlah': i.jumlah,
                 'diskon': i.diskon,
                 'aturanDiskon': i.aturanDiskonId,
@@ -1660,7 +1670,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         itemStruk.add({
           'nama': i.produk.nama,
           'qty': i.jumlah,
-          'harga': i.produk.hargaJual,
+          'harga': i.hargaSatuanEfektif,
           'diskon': i.diskon,
           'cashback': i.cashback,
         });
