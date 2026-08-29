@@ -66,8 +66,28 @@ dan match-salah dari beberapa subjek berizin sebelum mengubah ambang.
   default ini; kalibrasi berbasis kumpulan skor cosine multi-subjek tetap
   disarankan sebelum produksi bila populasi member besar.
 
+## UAT kamera Android (menyusul; APK model-termasuk sudah siap)
+
+Pasang `app-ebisnis-release.apk` via `adb install -r`. Matriks = cermin
+langkah 1–10 Desktop, ditambah perhatian khusus Android:
+
+- **Izin kamera runtime**: dialog permission harus muncul saat layar kamera
+  pertama dibuka (manifest sudah punya `android.permission.CAMERA`); tolak
+  izin -> perekaman gagal dgn pesan jelas, bukan crash.
+- **Orientasi**: uji perekaman dgn HP PORTRAIT — JPEG kamera Android membawa
+  rotasi via EXIF; pipeline menegakkannya (`bakeOrientation`, ditambahkan
+  sebelum UAT Android setelah gap ini teridentifikasi). Uji juga landscape.
+- **Kamera depan**: provider memprioritaskan lensa depan; pratinjau mirror
+  adalah tampilan saja. Enrollment dan verifikasi pada perangkat yang sama
+  harus konsisten; cocokkan juga lintas perangkat (enroll Desktop ->
+  verifikasi Android) dan catat skor cosine-nya.
+- **Waktu inferensi ARM**: catat lama deteksi+embedding per pose; bila
+  > beberapa detik pada HP kasir, pertimbangkan varian int8.
+- **Model dari bundle**: pemuatan lewat rootBundle (bukan folder) — bila
+  fail-closed "model belum ada" muncul padahal APK benar, itu bug jalur
+  bundle, laporkan.
+
 ## Yang secara sadar BELUM diuji di gelombang ini
 
-- Android (distribusi model 38,7 MB belum diputuskan).
 - Anti-spoof bersertifikat (liveness kita = tantangan aktif).
 - Kinerja inferensi pada mesin kasir kelas rendah.

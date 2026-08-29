@@ -164,10 +164,15 @@ class OnnxFaceEmbeddingProvider implements FaceEmbeddingProvider {
   }
 
   Future<_HasilPose> _prosesSatuPose(Uint8List jpeg, String label) async {
-    final gambar = img.decodeImage(jpeg);
-    if (gambar == null) {
+    final mentah = img.decodeImage(jpeg);
+    if (mentah == null) {
       throw PosBiometricUnavailable('Foto $label tidak dapat dibaca.');
     }
+    // JPEG kamera Android menyimpan rotasi sbg metadata EXIF (HP portrait ->
+    // piksel landscape + tag "putar 90"); decoder TIDAK menerapkannya
+    // otomatis, dan YuNet dilatih utk wajah tegak. bakeOrientation
+    // menegakkan piksel sesuai EXIF; tanpa EXIF (webcam Desktop) = no-op.
+    final gambar = img.bakeOrientation(mentah);
     final deteksi = letterboxUntukDeteksi(gambar);
     final keluaran = await mesin.deteksi(
         blobBgrNchw(deteksi.gambar),

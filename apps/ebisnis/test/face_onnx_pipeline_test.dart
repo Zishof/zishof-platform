@@ -126,6 +126,26 @@ void main() {
     });
   });
 
+  group('orientasi EXIF (kamera Android)', () {
+    test('bakeOrientation menegakkan piksel sesuai tag Orientation', () {
+      final asli = img.Image(width: 100, height: 50);
+      asli.exif.imageIfd['Orientation'] = 6; // putar 90 searah jarum jam
+      final jpg = img.encodeJpg(asli);
+      final decoded = img.decodeImage(Uint8List.fromList(jpg))!;
+      final tegak = img.bakeOrientation(decoded);
+      expect(tegak.width, 50);
+      expect(tegak.height, 100);
+    });
+
+    test('provider memanggil bakeOrientation sebelum deteksi', () {
+      final source = File('lib/services/face_onnx/onnx_face_provider.dart')
+          .readAsStringSync();
+      expect(source, contains('img.bakeOrientation('),
+          reason: 'tanpa ini foto portrait Android terbaca rebahan 90 derajat '
+              'dan YuNet gagal mendeteksi wajah');
+    });
+  });
+
   group('TransformasiSerupa', () {
     test('memetakan titik referensi dgn tepat dan balik() konsisten', () {
       // rotasi 30 derajat + skala 1.5 + translasi.
