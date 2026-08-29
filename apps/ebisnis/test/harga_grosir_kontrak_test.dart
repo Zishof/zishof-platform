@@ -41,6 +41,19 @@ void main() {
     expect(baris.hargaSatuanEfektif, 1000);
   });
 
+  test('label kemasan: kelipatan bulat vs qty diubah kasir', () {
+    final baris = ItemKeranjang(produk: produk(), jumlah: 100)
+      ..kemasanNama = 'Karung 50kg'
+      ..kemasanQtyDasar = 50;
+    expect(baris.labelKemasan, '2 x Karung 50kg');
+    // Kasir mengubah qty hingga tidak bulat: label tidak boleh berbohong
+    // mengaku kelipatan -- jatuh ke bentuk informatif.
+    baris.jumlah = 120;
+    expect(baris.labelKemasan, 'Karung 50kg (isi 50)');
+    // Tanpa snapshot kemasan, tidak ada label.
+    expect(ItemKeranjang(produk: produk(), jumlah: 50).labelKemasan, isNull);
+  });
+
   test('ekstra tetap dijumlah di atas harga efektif', () {
     final baris = ItemKeranjang(
       produk: produk(),

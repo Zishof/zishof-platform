@@ -1075,7 +1075,8 @@ class _KasirScreenState extends State<KasirScreen> {
   /// (checkbox, lihat [_bukaPickerEkstra]) SEBELUM masuk keranjang -- gerbang
   /// dilewati (jalur lama persis, tanpa perubahan) utk mayoritas produk tanpa
   /// ekstra sama sekali.
-  void _tambahKeKeranjang(Produk p, {int jumlahAwal = 1}) {
+  void _tambahKeKeranjang(Produk p,
+      {int jumlahAwal = 1, Map<String, dynamic>? kemasan}) {
     if (!produkBolehDijualMenurutStok(
       p,
       paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
@@ -1100,9 +1101,21 @@ class _KasirScreenState extends State<KasirScreen> {
       if (existing.isNotEmpty) {
         final item = existing.first;
         item.jumlah += jumlahAwal;
+        // Baris lama yang belum ber-kemasan mewarisi snapshot dari
+        // penambahan kemasan ini; yang sudah ber-kemasan dipertahankan
+        // (penambahan satuan tidak menghapus label kemasannya).
+        if (kemasan != null && item.kemasanNama == null) {
+          item.kemasanNama = '${kemasan['nama'] ?? ''}';
+          item.kemasanQtyDasar = (kemasan['qtyDasar'] as num?)?.round();
+        }
         tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
       } else {
-        _keranjang.insert(0, ItemKeranjang(produk: p, jumlah: jumlahAwal));
+        final barisBaru = ItemKeranjang(produk: p, jumlah: jumlahAwal);
+        if (kemasan != null) {
+          barisBaru.kemasanNama = '${kemasan['nama'] ?? ''}';
+          barisBaru.kemasanQtyDasar = (kemasan['qtyDasar'] as num?)?.round();
+        }
+        _keranjang.insert(0, barisBaru);
       }
       if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
         _kataKunciController.clear();
@@ -1112,6 +1125,58 @@ class _KasirScreenState extends State<KasirScreen> {
     _siarkanKeranjangKasir();
     _jadwalkanFokusCariItem();
     _jadwalkanEvaluasiHargaCoret();
+  }
+
+  /// Pemilih kemasan SEKALI-KETUK (Fase A dok. 48): kasir tanpa scanner bisa
+  /// menjual per kemasan lewat TEKAN-LAMA kartu produk. Memilih kemasan
+  /// menambah qty dasar sebanyak isinya -- jalur yang SAMA dengan scan
+  /// barcode kemasan, termasuk snapshot label untuk baris & struk.
+  Future<void> _pilihKemasan(Produk p) async {
+    final aktif = p.kemasan
+        .where((k) => k['aktif'] != false && '${k['nama'] ?? ''}'.isNotEmpty)
+        .toList();
+    if (aktif.isEmpty) {
+      _tambahKeKeranjang(p);
+      return;
+    }
+    final pilihan = await showModalBottomSheet<Map<String, dynamic>?>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text('Tambah ${p.nama} sebagai:',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.looks_one_outlined),
+            title: Text('Satuan (1 ${p.satuanNama.isEmpty ? 'unit' : p.satuanNama})'),
+            onTap: () => Navigator.pop(c, const <String, dynamic>{}),
+          ),
+          for (final k in aktif)
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text('${k['nama']}'),
+              subtitle: Text('isi ${(k['qtyDasar'] as num?)?.round() ?? 1} '
+                  '${p.satuanNama.isEmpty ? 'unit' : p.satuanNama}'),
+              onTap: () => Navigator.pop(c, k),
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!mounted || pilihan == null) return;
+    if (pilihan.isEmpty) {
+      _tambahKeKeranjang(p);
+      return;
+    }
+    final qtyDasar = (pilihan['qtyDasar'] as num?)?.round() ?? 1;
+    _tambahKeKeranjang(p, jumlahAwal: qtyDasar, kemasan: pilihan);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${pilihan['nama']} ditambahkan sebagai $qtyDasar '
+          '${p.satuanNama.isEmpty ? 'unit stok' : p.satuanNama} ${p.nama}.'),
+      duration: const Duration(milliseconds: 1200),
+    ));
   }
 
   /// Alur "Pilih Ekstra" -- buka bottom sheet checkbox (batal = tidak ada apa
@@ -1246,7 +1311,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (!mounted) return;
     if (produkKemasan != null && kemasanCocok != null) {
       final qtyDasar = (kemasanCocok['qtyDasar'] as num?)?.round() ?? 1;
-      _tambahKeKeranjang(produkKemasan, jumlahAwal: qtyDasar);
+      _tambahKeKeranjang(produkKemasan,
+          jumlahAwal: qtyDasar, kemasan: kemasanCocok);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
             '${kemasanCocok['nama']} ditambahkan sebagai $qtyDasar ${produkKemasan.satuanNama.isEmpty ? 'unit stok' : produkKemasan.satuanNama} ${produkKemasan.nama}.'),
@@ -2282,6 +2348,14 @@ class _KasirScreenState extends State<KasirScreen> {
                     paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
                   ),
                   onTap: () => _tambahKeKeranjang(produkTampil[i]),
+                  // Tekan-lama membuka pemilih kemasan -- hanya bila produk
+                  // punya preset; selain itu null supaya gestur tidak
+                  // menelan long-press default (tidak ada).
+                  onPilihKemasan: produkTampil[i]
+                          .kemasan
+                          .any((k) => k['aktif'] != false)
+                      ? () => _pilihKemasan(produkTampil[i])
+                      : null,
                   diskon: _diskonKatalog[produkTampil[i].id],
                   cashback: _cashbackKatalog[produkTampil[i].id],
                 ),
@@ -2638,12 +2712,16 @@ class _KartuProduk extends StatefulWidget {
   /// gerbang `> 0` supaya aman dipanggil apa adanya.
   final double? diskon;
   final double? cashback;
+
+  /// Tekan-lama = pemilih kemasan (Fase A); null bila produk tanpa preset.
+  final VoidCallback? onPilihKemasan;
   const _KartuProduk(
       {required this.produk,
       required this.bolehDijual,
       required this.onTap,
       this.diskon,
-      this.cashback});
+      this.cashback,
+      this.onPilihKemasan});
 
   @override
   State<_KartuProduk> createState() => _KartuProdukState();
@@ -2730,6 +2808,7 @@ class _KartuProdukState extends State<_KartuProduk> {
         opacity: diblokirStok ? 0.55 : 1,
         child: InkWell(
           onTap: diblokirStok ? null : onTap,
+          onLongPress: diblokirStok ? null : widget.onPilihKemasan,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

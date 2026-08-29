@@ -333,6 +333,13 @@ class ItemKeranjang {
   /// dan struk (yang dihitung ulang server saat bayar) tidak pernah beda
   /// pendapat (Fase A dok. 48/49).
   double? hargaGrosir;
+
+  /// Snapshot kemasan yang dipakai MENAMBAH baris ini (nama + isi per
+  /// kemasan) -- arsip, bukan rujukan: preset kemasan yang diubah di master
+  /// produk kemudian hari tidak boleh mengubah arti baris/struk lama.
+  /// Stok dan qty TETAP dalam satuan dasar; ini murni label tampilan.
+  String? kemasanNama;
+  int? kemasanQtyDasar;
   double diskon;
   double cashback;
   int? aturanDiskonId;
@@ -364,6 +371,18 @@ class ItemKeranjang {
   /// Harga satuan yang benar-benar berlaku: grosir bila server menetapkannya,
   /// selain itu harga katalog.
   double get hargaSatuanEfektif => hargaGrosir ?? produk.hargaJual;
+
+  /// Label kemasan untuk baris & struk: "2 x Karung 50kg" bila qty habis
+  /// dibagi isi kemasan; bila kasir mengubah qty hingga tidak bulat lagi,
+  /// jatuh ke bentuk informatif "Karung 50kg (isi N)" -- tidak berbohong
+  /// mengaku kelipatan yang bukan.
+  String? get labelKemasan {
+    final nama = kemasanNama;
+    final isi = kemasanQtyDasar ?? 0;
+    if (nama == null || nama.isEmpty || isi <= 0) return null;
+    if (jumlah % isi == 0 && jumlah >= isi) return '${jumlah ~/ isi} x $nama';
+    return '$nama (isi $isi)';
+  }
   double get subtotal => (hargaSatuanEfektif + _hargaEkstraPerUnit) * jumlah;
   double get subtotalSetelahDiskon => subtotal - diskon;
 }

@@ -13,6 +13,7 @@ import 'package:core_hw/core_hw.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../services/dynamic_report.dart';
+import 'harga_grosir_editor.dart';
 import 'produk_stok_tanggal.dart';
 import '../services/kompresi_gambar.dart';
 import '../services/master_offline.dart';
@@ -3184,6 +3185,16 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       ),
               ),
               const SizedBox(height: 12),
+              // Fase A: aturan harga grosir per produk. Hanya untuk produk
+              // TERSIMPAN (butuh id server) dan pemegang izin ubah harga --
+              // aturan grosir adalah keputusan harga.
+              if (widget.produk?.id != null && Sesi.instance.bolehUbahHarga) ...[
+                HargaGrosirEditor(
+                  produkId: widget.produk!.id,
+                  satuanNama: _namaUom(_satuanId),
+                ),
+                const SizedBox(height: 12),
+              ],
               AppFormSection(
                 judul: 'Harga & Stok',
                 children: [

@@ -49,13 +49,27 @@ Flutter: `lib/models.dart` (hargaGrosir + hargaSatuanEfektif),
 biometrik sesi lain yang belum di-commit — saat commit, pisahkan hunk (teknik
 blob `git hash-object` + `git update-index`, commit TANPA pathspec).
 
-## Belum termasuk (kelanjutan Fase A)
+## Pelengkap 29-08 (sesi yang sama): sisa Fase A terlaksana
 
-1. Pemilih kemasan sekali-ketuk di kartu produk kasir (tanpa scanner) +
-   snapshot `kemasanNama/qtyDasar` pada baris supaya struk mencetak
-   "2 Karung 50kg (100 kg)".
-2. Layar kelola `AturanHargaProduk` (CRUD sudah ada di API).
-3. Tampilan harga grosir di keranjang _pos.jsp (otoritas harga FINAL sudah
+- **Pemilih kemasan sekali-ketuk**: TEKAN-LAMA kartu produk kasir membuka
+  lembar pilihan (satuan / tiap kemasan aktif) -- jalur yang SAMA dengan scan
+  barcode kemasan, termasuk snapshot label.
+- **Snapshot kemasan di baris**: `ItemKeranjang.kemasanNama/kemasanQtyDasar`
+  (arsip, bukan rujukan); label "2 x Karung 50kg" di baris keranjang DAN struk;
+  bila kasir mengubah qty hingga tidak bulat, label jatuh ke bentuk informatif
+  "Karung 50kg (isi 50)" -- tidak berbohong mengaku kelipatan.
+- **Editor aturan harga** (`harga_grosir_editor.dart`) di form Produk, di bawah
+  seksi Kemasan: daftar + tambah + nonaktifkan lewat API; hanya untuk produk
+  tersimpan dan pemegang izin ubah harga; ONLINE-ONLY disengaja (aturan
+  komersial wajib serentak di semua kasir).
+
+Uji: label kemasan masuk `harga_grosir_kontrak_test` (kelipatan bulat, qty
+diubah, tanpa snapshot); suite penuh **460 lulus / 0 gagal**; analyze bersih
+di kelima berkas tersentuh.
+
+## Belum termasuk (di luar Fase A)
+
+1. Tampilan harga grosir di keranjang _pos.jsp (otoritas harga FINAL sudah
    ikut lewat bayar; yang tertinggal hanya pratinjau di kanal web).
-4. Keputusan terbuka dok. 48 §6: kelipatan wajib kemasan, dan harga tetap
+2. Keputusan terbuka dok. 48 §6: kelipatan wajib kemasan, dan harga tetap
    per-kemasan (Metode 2) bila diminta.

@@ -1684,7 +1684,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final itemStruk = <Map<String, dynamic>>[];
       for (final i in widget.keranjang) {
         itemStruk.add({
-          'nama': i.produk.nama,
+          // Label kemasan ikut ke struk: "Beras (2 x Karung 50kg)" --
+          // pembeli grosir memeriksa struknya dalam hitungan kemasan.
+          'nama': i.labelKemasan == null
+              ? i.produk.nama
+              : '${i.produk.nama} (${i.labelKemasan})',
           'qty': i.jumlah,
           'harga': i.hargaSatuanEfektif,
           'diskon': i.diskon,
@@ -2335,6 +2339,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      // Label kemasan (snapshot saat baris ditambah) --
+                      // qty tetap satuan dasar, ini murni keterbacaan.
+                      if (item.labelKemasan != null)
+                        Text(item.labelKemasan!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.textSecondaryOf(context),
+                                fontSize: 11.5)),
                       // Sub-baris ekstra terpilih -- gaya sama dgn sub-baris
                       // Diskon di bawah ini (indentasi via prefiks "+", warna
                       // sekunder supaya tetap kalah tonjol drpd nama produk).
