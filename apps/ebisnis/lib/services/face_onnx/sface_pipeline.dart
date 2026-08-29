@@ -38,17 +38,23 @@ class GambarDeteksi {
   final double faktor;
 }
 
-/// Susutkan sisi terpanjang ke <= [sisiMaks] (YuNet menerima ukuran masukan
-/// dinamis; gambar kamera penuh terlalu besar dan lambat).
-GambarDeteksi skalakanUntukDeteksi(img.Image sumber, {int sisiMaks = 320}) {
-  final terpanjang = math.max(sumber.width, sumber.height);
-  if (terpanjang <= sisiMaks) return GambarDeteksi(sumber, 1);
-  final faktor = terpanjang / sisiMaks;
-  final w = (sumber.width / faktor).round();
-  final h = (sumber.height / faktor).round();
+/// Ukuran masukan TETAP YuNet ONNX opencv_zoo 2023mar (dibuktikan
+/// tool/diagnostik: model menolak dimensi lain).
+const sisiYunet = 640;
+
+/// Letterbox ke kanvas [sisi]x[sisi]: skalakan agar muat (aspek terjaga),
+/// tempel di pojok kiri-atas kanvas hitam. Padding hanya di kanan/bawah
+/// sehingga koordinat deteksi cukup dikali [GambarDeteksi.faktor] utk
+/// kembali ke gambar asli.
+GambarDeteksi letterboxUntukDeteksi(img.Image sumber, {int sisi = sisiYunet}) {
+  final skala = sisi / math.max(sumber.width, sumber.height);
+  final w = math.max(1, (sumber.width * skala).round());
+  final h = math.max(1, (sumber.height * skala).round());
   final kecil = img.copyResize(sumber,
       width: w, height: h, interpolation: img.Interpolation.linear);
-  return GambarDeteksi(kecil, sumber.width / kecil.width);
+  final kanvas = img.Image(width: sisi, height: sisi);
+  img.compositeImage(kanvas, kecil);
+  return GambarDeteksi(kanvas, sumber.width / w);
 }
 
 /// Align-crop 112x112 ala `FaceRecognizerSF.alignCrop`: transformasi

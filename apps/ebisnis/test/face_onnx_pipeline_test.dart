@@ -210,6 +210,28 @@ void main() {
     });
   });
 
+  group('letterboxUntukDeteksi', () {
+    test('kanvas selalu 640x640, faktor memetakan balik ke asli', () {
+      final sumber = img.Image(width: 1280, height: 720);
+      sumber.setPixelRgb(1279, 719, 200, 0, 0);
+      final hasil = letterboxUntukDeteksi(sumber);
+      expect(hasil.gambar.width, sisiYunet);
+      expect(hasil.gambar.height, sisiYunet);
+      expect(hasil.faktor, closeTo(2.0, 1e-9)); // 1280 -> 640
+      // Konten tertempel kiri-atas: piksel di luar 640x360 harus hitam.
+      expect(hasil.gambar.getPixel(0, 400).r.toInt(), 0);
+      // Titik (639, 359) kanvas ~ (1278, 718) asli.
+      expect((639 * hasil.faktor).round(), 1278);
+    });
+
+    test('gambar kecil di-skala NAIK ke 640 (bukan dibiarkan)', () {
+      final hasil =
+          letterboxUntukDeteksi(img.Image(width: 160, height: 120));
+      expect(hasil.gambar.width, sisiYunet);
+      expect(hasil.faktor, closeTo(0.25, 1e-9));
+    });
+  });
+
   group('potongSejajarSface', () {
     test('landmark tepat di titik referensi -> warp identitas', () {
       final gambar = img.Image(width: 112, height: 112);

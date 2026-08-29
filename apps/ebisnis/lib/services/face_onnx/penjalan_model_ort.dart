@@ -33,8 +33,14 @@ class PenjalanModelOrt implements MesinInferensiWajah {
     try {
       OrtEnv.instance.init();
       final opsi = OrtSessionOptions();
-      _yunet ??= OrtSession.fromFile(File(pathYunet), opsi);
-      _sface ??= OrtSession.fromFile(File(pathSface), opsi);
+      // fromBuffer, BUKAN fromFile: fromFile pada Windows meneruskan path
+      // dgn encoding sempit padahal ORT mengharapkan wide-char, sehingga
+      // path terbaca sbg UTF-16 acak dan model tidak pernah termuat
+      // (ditemukan lewat tool/diagnostik saat UAT webcam 2026-08-29).
+      _yunet ??= OrtSession.fromBuffer(
+          File(pathYunet).readAsBytesSync(), opsi);
+      _sface ??= OrtSession.fromBuffer(
+          File(pathSface).readAsBytesSync(), opsi);
     } on Object catch (e) {
       _yunet = null;
       _sface = null;

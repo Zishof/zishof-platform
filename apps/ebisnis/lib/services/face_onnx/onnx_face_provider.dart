@@ -146,7 +146,7 @@ class OnnxFaceEmbeddingProvider implements FaceEmbeddingProvider {
     if (gambar == null) {
       throw PosBiometricUnavailable('Foto $label tidak dapat dibaca.');
     }
-    final deteksi = skalakanUntukDeteksi(gambar);
+    final deteksi = letterboxUntukDeteksi(gambar);
     final keluaran = await mesin.deteksi(
         blobBgrNchw(deteksi.gambar),
         deteksi.gambar.width,
