@@ -29,6 +29,8 @@ Dokumen aktif:
 - [ADR bridge identitas item, UOM, dan lokasi lintas domain](2026-08-26-adr-bridge-identitas-item-uom-lokasi.md)
 - [ADR satuan dasar, pembelian, dan penjualan produk](2026-08-28-adr-satuan-produk-pembelian-penjualan.md)
 - [Rilis Desktop Al-Bahjah POS 1.34.03](2026-08-29-release-desktop-albahjah-1.34.03.md)
+- [Kesiapan produksi biometrik POS](2026-08-29-kesiapan-produksi-biometrik-pos.md)
+- [Verifikasi biometrik pembayaran saldo member](2026-08-26-verifikasi-biometrik-pembayaran-saldo.md)
 - [Eksekusi lanjutan seluruh fase dan deployment gate](2026-08-26-eksekusi-lanjutan-semua-fase.md)
 - [ADR kontrak posting persediaan idempoten](2026-08-26-adr-inventory-posting-port-idempoten.md)
 - [SQL preflight Fase 3 inventory ledger (read-only)](2026-08-26-fase-3-preflight-inventory-ledger.sql)

@@ -1029,18 +1029,33 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<Map<String, int>?> _verifikasiMemberJikaPerlu(String kodeUnik) async {
     final member = _memberTerpilih;
     if (member == null) return <String, int>{};
+    if (!_biometrikWajibUntukSaldo && !_pinWajibUntukMetodeTerpilih) {
+      return <String, int>{};
+    }
     final bridge = PosBiometricCaptureBridge();
-    final capability = await bridge.capabilities();
+    final Map<String, dynamic> capability;
+    final Map<String, dynamic> serverCapability;
+    try {
+      capability = await bridge.capabilities();
+      serverCapability = await ApiClient.instance.aksi('biometrik_kemampuan');
+    } catch (error) {
+      if (mounted) snackbarGalat(context, error);
+      return null;
+    }
+    final readiness = PosBiometricReadiness(
+      device: capability,
+      server: serverCapability,
+    );
     if (!mounted) return null;
 
     if (_biometrikWajibUntukSaldo) {
       final kurang = <String>[];
-      if (member.wajibBiometricWajah && capability['face'] != true) {
-        kurang.add('kamera dengan face-liveness');
+      if (member.wajibBiometricWajah && !readiness.verificationReady('FACE')) {
+        kurang.add(readiness.reason('FACE', enrollment: false));
       }
       if (member.wajibBiometricFingerprint &&
-          capability['fingerprint'] != true) {
-        kurang.add('scanner fingerprint member');
+          !readiness.verificationReady('FINGERPRINT')) {
+        kurang.add(readiness.reason('FINGERPRINT', enrollment: false));
       }
       if (kurang.isNotEmpty) {
         if (mounted) {
@@ -1049,8 +1064,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             builder: (context) => AlertDialog(
               title: const Text('Perangkat biometrik belum siap'),
               content: Text(
-                  'Jenis member ini mewajibkan ${kurang.join(' dan ')} sebelum saldo dipotong. '
-                  'Pembayaran dihentikan; pilih metode lain atau sambungkan perangkat yang sesuai.'),
+                  'Pembayaran dihentikan karena verifikasi wajib belum siap:\n\n'
+                  '• ${kurang.join('\n• ')}\n\n'
+                  'Pilih metode lain atau lengkapi perangkat/konfigurasi server.'),
               actions: [
                 FilledButton(
                     onPressed: () => Navigator.pop(context),
@@ -1086,7 +1102,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       builder: (context) => SimpleDialog(
         title: const Text('Verifikasi member'),
         children: [
-          if (capability['fingerprint'] == true)
+          if (readiness.verificationReady('FINGERPRINT'))
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, 'FINGERPRINT'),
               child: const ListTile(
@@ -1095,7 +1111,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 subtitle: Text('Verifikasi melalui scanner institusi'),
               ),
             ),
-          if (capability['face'] == true)
+          if (readiness.verificationReady('FACE'))
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, 'FACE'),
               child: const ListTile(

@@ -11,9 +11,17 @@
 #   powershell -File tool\build_semua_varian.ps1 -SkipAndroid    # installer Windows saja
 #   powershell -File tool\build_semua_varian.ps1 -SkipWindows    # APK saja
 #   powershell -File tool\build_semua_varian.ps1 -Hanya ebisnis,petra
+#   powershell -File tool\build_semua_varian.ps1 -IzinkanDebugSigning # UAT internal saja
+#   powershell -File tool\build_semua_varian.ps1 -IzinkanUnsignedWindows # UAT internal saja
+#
+# Tanpa -IzinkanDebugSigning, setiap APK wajib memakai sertifikat produksi.
+# Tanpa -IzinkanUnsignedWindows, setiap installer wajib memiliki Authenticode valid.
+# Build dihentikan sebelum artefak disalin bila signature tidak memenuhi syarat.
 param(
     [switch]$SkipAndroid,
     [switch]$SkipWindows,
+    [switch]$IzinkanDebugSigning,
+    [switch]$IzinkanUnsignedWindows,
     [string[]]$Hanya
 )
 $ErrorActionPreference = 'Stop'
@@ -76,7 +84,11 @@ foreach ($variant in $variants) {
         Write-Host "==== APK $($variant.Kode) ===="
         & $flutter build apk --release --flavor $variant.Flavor -t $variant.Target @defineArgs
         if ($LASTEXITCODE -ne 0) { $gagal += "APK $($variant.Kode)"; continue }
-        Copy-Item -LiteralPath (Join-Path $appDir "build\app\outputs\flutter-apk\$($variant.Apk)") `
+        $apkHasil = Join-Path $appDir "build\app\outputs\flutter-apk\$($variant.Apk)"
+        & (Join-Path $PSScriptRoot 'verify_apk_signing.ps1') -Apk $apkHasil `
+            -AllowDebug:$IzinkanDebugSigning
+        if ($LASTEXITCODE -ne 0) { $gagal += "Signing APK $($variant.Kode)"; continue }
+        Copy-Item -LiteralPath $apkHasil `
             -Destination (Join-Path $artifactDir $variant.Apk) -Force
     }
 
@@ -86,7 +98,11 @@ foreach ($variant in $variants) {
         if ($LASTEXITCODE -ne 0) { $gagal += "Windows $($variant.Kode)"; continue }
         & $iscc "/DAppVersion=$versi" $variant.Iss
         if ($LASTEXITCODE -ne 0) { $gagal += "Installer $($variant.Kode)"; continue }
-        Copy-Item -LiteralPath (Join-Path $appDir "installer\dist\$($variant.Setup)") `
+        $setupHasil = Join-Path $appDir "installer\dist\$($variant.Setup)"
+        & (Join-Path $PSScriptRoot 'verify_windows_signing.ps1') -Executable $setupHasil `
+            -AllowUnsigned:$IzinkanUnsignedWindows
+        if ($LASTEXITCODE -ne 0) { $gagal += "Signing Windows $($variant.Kode)"; continue }
+        Copy-Item -LiteralPath $setupHasil `
             -Destination (Join-Path $artifactDir $variant.Setup) -Force
     }
 }

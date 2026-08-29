@@ -1,6 +1,8 @@
 param(
     [switch]$SkipAndroid,
-    [switch]$SkipWindows
+    [switch]$SkipWindows,
+    [switch]$IzinkanDebugSigning,
+    [switch]$IzinkanUnsignedWindows
 )
 $ErrorActionPreference = 'Stop'
 $appDir = Split-Path $PSScriptRoot -Parent
@@ -31,7 +33,11 @@ foreach ($variant in $variants) {
     if (-not $SkipAndroid) {
         & $flutter build apk --release --flavor $variant.Flavor -t $variant.Target @defineArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Copy-Item -LiteralPath (Join-Path $appDir "build\app\outputs\flutter-apk\$($variant.Apk)") `
+        $apkHasil = Join-Path $appDir "build\app\outputs\flutter-apk\$($variant.Apk)"
+        & (Join-Path $PSScriptRoot 'verify_apk_signing.ps1') -Apk $apkHasil `
+            -AllowDebug:$IzinkanDebugSigning
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Copy-Item -LiteralPath $apkHasil `
             -Destination (Join-Path $artifactDir $variant.Apk) -Force
     }
     if (-not $SkipWindows) {
@@ -39,7 +45,11 @@ foreach ($variant in $variants) {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $iscc "/DAppVersion=$versi" $variant.Iss
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Copy-Item -LiteralPath (Join-Path $appDir "installer\dist\$($variant.Setup)") `
+        $setupHasil = Join-Path $appDir "installer\dist\$($variant.Setup)"
+        & (Join-Path $PSScriptRoot 'verify_windows_signing.ps1') -Executable $setupHasil `
+            -AllowUnsigned:$IzinkanUnsignedWindows
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Copy-Item -LiteralPath $setupHasil `
             -Destination (Join-Path $artifactDir $variant.Setup) -Force
     }
 }

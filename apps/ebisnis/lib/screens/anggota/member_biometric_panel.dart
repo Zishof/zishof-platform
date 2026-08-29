@@ -50,12 +50,18 @@ class MemberBiometricPanel extends StatefulWidget {
 class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
   final _bridge = PosBiometricCaptureBridge();
   final Map<String, Map<String, dynamic>> _active = {};
-  Map<String, dynamic> _capabilities = const {};
+  Map<String, dynamic> _deviceCapabilities = const {};
+  Map<String, dynamic> _serverCapabilities = const {};
   String? _busySlot;
   String? _error;
   bool _loading = true;
 
   String get _cacheKey => 'secure:biometric-metadata:${widget.targetUserId}';
+
+  PosBiometricReadiness get _readiness => PosBiometricReadiness(
+        device: _deviceCapabilities,
+        server: _serverCapabilities,
+      );
 
   @override
   void initState() {
@@ -72,7 +78,9 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
       } catch (_) {}
     }
     try {
-      final capability = await _bridge.capabilities();
+      final deviceCapability = await _bridge.capabilities();
+      final serverCapability =
+          await ApiClient.instance.aksi('biometrik_kemampuan');
       final result = await ApiClient.instance.aksi('biometrik_daftar', {
         'target_user_id': widget.targetUserId,
       });
@@ -80,7 +88,8 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
       await CoreDb.instance.simpanCacheReferensi(_cacheKey, jsonEncode(rows));
       if (!mounted) return;
       setState(() {
-        _capabilities = capability;
+        _deviceCapabilities = deviceCapability;
+        _serverCapabilities = serverCapability;
         _error = null;
       });
       _applyRows(rows);
@@ -134,6 +143,10 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
   }
 
   Future<void> _capture(_BiometricSlot slot, String modality) async {
+    if (!_readiness.enrollmentReady(modality)) {
+      setState(() => _error = _readiness.reason(modality, enrollment: true));
+      return;
+    }
     if (!await _confirmConsent(slot, modality)) return;
     final key = '$modality:${slot.code}';
     setState(() {
@@ -151,7 +164,8 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
         'provider': sample.provider,
         if (sample.livenessScore != null)
           'liveness_score': sample.livenessScore,
-        if (sample.livenessScore != null)
+        if (sample.qualityScore != null) 'quality': sample.qualityScore,
+        if (sample.qualityScore == null && sample.livenessScore != null)
           'quality': (sample.livenessScore! * 100).round(),
         'consent': true,
         'clientMutationId':
@@ -211,8 +225,10 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final fpReady = _capabilities['fingerprint'] == true;
-    final faceReady = _capabilities['face'] == true;
+    final fpReady = _readiness.enrollmentReady('FINGERPRINT');
+    final faceReady = _readiness.enrollmentReady('FACE');
+    final fpMatcherReady = _readiness.matcherReady('FINGERPRINT');
+    final faceMatcherReady = _readiness.matcherReady('FACE');
     return AppFormSection(
       judul: 'Biometrik Member',
       deskripsi:
@@ -232,24 +248,118 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              'SDK perangkat belum terdeteksi: '
-              '${!fpReady ? 'scanner fingerprint eksternal' : ''}'
-              '${!fpReady && !faceReady ? ' dan ' : ''}'
-              '${!faceReady ? 'kamera face-liveness' : ''}. '
-              'Slot tetap tampil; tombol Rekam akan aktif setelah SDK vendor dipasang.',
+              'Perekaman belum sepenuhnya siap. '
+              '${!fpReady ? 'Fingerprint: ${_readiness.reason('FINGERPRINT', enrollment: true)} ' : ''}'
+              '${!faceReady ? 'Wajah: ${_readiness.reason('FACE', enrollment: true)}' : ''} '
+              'Slot tetap tampil, tetapi Rekam dinonaktifkan agar tidak ada '
+              'template palsu atau data yang tidak dapat diverifikasi.',
               style: const TextStyle(fontSize: 12),
             ),
           ),
+        if ((fpReady && !fpMatcherReady) ||
+            (faceReady && !faceMatcherReady)) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Perekaman dapat dilakukan, tetapi verifikasi belum aktif untuk '
+              '${[
+                if (fpReady && !fpMatcherReady) 'fingerprint',
+                if (faceReady && !faceMatcherReady) 'wajah',
+              ].join(' dan ')} karena matcher server belum siap. '
+              'Data boleh direkam untuk persiapan, namun kasir tetap menolak '
+              'transaksi yang mewajibkan modalitas tersebut.',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
         if (_error != null) ...[
           const SizedBox(height: 10),
           Text(_error!,
               style: const TextStyle(color: Colors.red, fontSize: 12)),
         ],
         if (_loading) const LinearProgressIndicator(),
+        const SizedBox(height: 10),
+        _diagnosticCard(),
         const SizedBox(height: 14),
         _slotGroup('Sidik jari', 'FINGERPRINT', _fingerprintSlots),
         const SizedBox(height: 16),
         _slotGroup('Pengenalan wajah', 'FACE', _faceSlots),
+      ],
+    );
+  }
+
+  Widget _diagnosticCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: !_readiness.verificationReady('FINGERPRINT') ||
+            !_readiness.verificationReady('FACE'),
+        leading: const Icon(Icons.health_and_safety_outlined),
+        title: const Text('Diagnostik kesiapan biometrik'),
+        subtitle: const Text(
+          'Perangkat, enkripsi, matcher, dan hak akses diperiksa terpisah.',
+          style: TextStyle(fontSize: 11),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        children: [
+          _diagnosticGroup('Fingerprint', 'FINGERPRINT'),
+          const Divider(height: 22),
+          _diagnosticGroup('Pengenalan wajah', 'FACE'),
+        ],
+      ),
+    );
+  }
+
+  Widget _diagnosticGroup(String title, String modality) {
+    final items = _readiness.diagnostics(modality);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(height: 6),
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  item.ready ? Icons.check_circle : Icons.cancel,
+                  size: 17,
+                  color: item.ready ? Colors.green : Colors.red,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.label,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text(item.detail,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondaryOf(context))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -274,6 +384,7 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
     final row = _active[key];
     final active = row != null;
     final busy = _busySlot == key;
+    final ready = _readiness.enrollmentReady(modality);
     return Container(
       width: 210,
       padding: const EdgeInsets.all(10),
@@ -309,8 +420,9 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed:
-                    _busySlot == null ? () => _capture(slot, modality) : null,
+                onPressed: _busySlot == null && ready
+                    ? () => _capture(slot, modality)
+                    : null,
                 icon: busy
                     ? const SizedBox(
                         width: 14,
@@ -321,6 +433,15 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
                 label: Text(active ? 'Rekam ulang' : 'Rekam'),
               ),
             ),
+            if (!ready)
+              Tooltip(
+                message: _readiness.reason(modality, enrollment: true),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child:
+                      Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                ),
+              ),
             if (active)
               IconButton(
                 tooltip: 'Nonaktifkan slot',

@@ -12,6 +12,7 @@ import java.io.InputStreamReader
 
 class MainActivity: FlutterActivity() {
     private val backupChannel = "id.zishof.ebisnis/persistent_transaction_backup"
+    private val biometricChannel = "ais_mobile/biometric_capture"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -33,6 +34,30 @@ class MainActivity: FlutterActivity() {
                     }
                 } catch (e: Exception) {
                     result.error("BACKUP_IO", e.message, null)
+                }
+            }
+
+        // Sensor biometrik bawaan Android (BiometricPrompt) hanya boleh
+        // mengautentikasi pemilik perangkat. Sensor tersebut tidak dapat
+        // mengekspor template sidik jari member lain untuk dicocokkan di AIS.
+        // Channel ini sengaja fail-closed sampai integrator memasang SDK
+        // scanner USB/OTG dan/atau face embedding + liveness yang disetujui.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, biometricChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "capabilities" -> result.success(mapOf(
+                        "fingerprint" to false,
+                        "face" to false,
+                        "fingerprint_provider" to null,
+                        "face_provider" to null,
+                        "reason" to "Scanner biometrik eksternal USB/OTG dan SDK vendor belum dipasang pada build Android ini. BiometricPrompt bawaan tidak digunakan untuk membaca biometrik member lain."
+                    ))
+                    "captureProbe" -> result.error(
+                        "BIOMETRIC_VENDOR_SDK_REQUIRED",
+                        "Pasang scanner eksternal USB/OTG beserta SDK vendor, atau provider kamera face-liveness, lalu integrasikan hasil template ke channel ais_mobile/biometric_capture.",
+                        mapOf("modality" to call.argument<String>("modality"))
+                    )
+                    else -> result.notImplemented()
                 }
             }
     }

@@ -2,7 +2,10 @@
 # KEDUA parameter (-t + --dart-define) wajib konsisten -- lihat lib/main_inventory_sales.dart.
 # Hasil: build\windows\x64\runner\Release\ berisi ebisnis.exe + ebisnis_inventory_sales.exe;
 # installer memakai installer\inventory_sales.iss (exclude ebisnis.exe).
-param([switch]$Installer)
+param(
+    [switch]$Installer,
+    [switch]$IzinkanUnsignedWindows
+)
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 flutter build windows --release -t lib/main_inventory_sales.dart --dart-define=EBISNIS_VARIANT=inventory_sales
@@ -17,5 +20,9 @@ if ($Installer) {
     if (-not $iscc) { throw 'ISCC.exe (Inno Setup 6) tidak ditemukan.' }
     & $iscc "/DAppVersion=$versi" installer\inventory_sales.iss
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "Installer: installer\dist\eBisnis-Inventory-Sales-Setup-$versi.exe"
+    $setup = "installer\dist\eBisnis-Inventory-Sales-Setup-$versi.exe"
+    & (Join-Path $PSScriptRoot 'verify_windows_signing.ps1') -Executable $setup `
+        -AllowUnsigned:$IzinkanUnsignedWindows
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "Installer: $setup"
 }
