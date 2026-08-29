@@ -17,6 +17,7 @@ import 'screens/layar_pelanggan_screen.dart';
 import 'screens/layar_kunci_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
+import 'services/face_onnx/pasang_provider_wajah.dart';
 import 'services/master_offline.dart';
 import 'services/pengaturan_update.dart';
 import 'services/pengaturan_sesi_lokal.dart';
@@ -169,6 +170,9 @@ class _EBisnisAppState extends State<EBisnisApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Provider wajah on-device (YuNet+SFace/ONNX) -- fail-closed bila model
+    // belum diunduh; lihat pasang_provider_wajah.dart.
+    pasangProviderWajahOnDevice();
   }
 
   @override
@@ -194,6 +198,7 @@ class _EBisnisAppState extends State<EBisnisApp> with WidgetsBindingObserver {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppThemeController.instance.mode,
       builder: (context, mode, _) => MaterialApp(
+        navigatorKey: kunciNavigatorUtama,
         title: AppProductProfile.aktif.namaAplikasi,
         debugShowCheckedModeBanner: false,
         themeMode: mode,

@@ -85,3 +85,54 @@ atau unduhan saat aktivasi fitur) — diputuskan di gelombang 2.
 
 Sampai provider nyata terpasang, seluruh jalur wajah tetap fail-closed —
 tidak ada gate yang dipalsukan.
+
+## Gelombang 2 — provider nyata terimplementasi (29 Agustus 2026)
+
+Dependensi baru: `onnxruntime ^1.4.1` (Android+Windows), `camera 0.11.0+2` +
+`camera_windows 0.2.6+2` (pin sama dgn core_hw yang sudah terbukti di webcam
+Desktop).
+
+Arsitektur `lib/services/face_onnx/` — SEMUA logika pipeline murni Dart dan
+teruji tanpa runtime native; hanya `penjalan_model_ort.dart` yang menyentuh
+ONNX Runtime:
+
+- `geometri_wajah.dart` — transformasi kesebangunan 5-landmark ke referensi
+  ArcFace/SFace 112x112 (least-squares bentuk tertutup), perkiraan yaw dari
+  landmark, dan `skorLivenessTantangan` dua pose: gerakan yaw minimal DAN
+  konsistensi identitas antar-pose (cosine antar-embedding) — menangkal foto
+  diam maupun ganti orang di tengah tantangan.
+- `yunet_decoder.dart` — decode keluaran YuNet (stride 8/16/32, rumus
+  referensi `FaceDetectorYN` OpenCV) + NMS. Test mengunci kontraknya dgn
+  decode(encode(x)) == x.
+- `sface_pipeline.dart` — blob NCHW BGR 0..255 (kontrak `blobFromImage`
+  OpenCV), penyusutan gambar detektor, align-crop bilinear 112x112,
+  embedding->bytes float32 LE, cosine.
+- `onnx_face_provider.dart` — `OnnxFaceEmbeddingProvider`
+  (`AIS_ONDEVICE_SFACE_V1`): foto dua pose -> deteksi (wajib TEPAT satu
+  wajah) -> align -> embedding frontal + skor liveness; embedding tervalidasi
+  kontrak server sebelum dikirim. `LokatorModelWajah` mencari model di
+  `assets/face` (cwd + samping exe + env `AIS_FACE_MODEL_DIR`) — absen =
+  fail-closed dgn petunjuk menjalankan `tool/unduh_model_wajah.ps1`.
+- `penjalan_model_ort.dart` — pemuat sesi ORT; nama tensor dibaca dari sesi
+  (bukan hardcode).
+- `pasang_provider_wajah.dart` + `screens/anggota/face_capture_screen.dart` —
+  registrasi di initState EBisnisApp (main.dart & bootstrap.dart, dengan
+  `navigatorKey` pada MaterialApp utama) dan layar kamera tantangan dua pose
+  (pola CameraController pemindai barcode Windows core_hw).
+
+Pengujian: 12 test pipeline (`test/face_onnx_pipeline_test.dart`) + 14 test
+seam — 26 hijau. Provider diuji ujung-ke-ujung dgn mesin inferensi palsu:
+tantangan sah menghasilkan sampel FACE valid ber-liveness; pose identik
+(foto diam) dan pembatalan kamera gagal dgn benar.
+
+### Batas yang JUJUR — belum tervalidasi di perangkat (gelombang 2b)
+
+1. Decoder YuNet & pemetaan tensor ORT ditulis mengikuti referensi OpenCV
+   tetapi BELUM dijalankan terhadap model nyata — wajib validasi
+   `flutter run -d windows` dgn webcam sebelum diklaim bekerja.
+2. Distribusi model: Desktop memakai `assets/face` di samping exe (installer
+   perlu menyalinnya); Android belum punya jalur distribusi model (38,7 MB)
+   — keputusan bundling/unduhan menyusul.
+3. Liveness = tantangan aktif, bukan anti-spoof bersertifikat.
+4. Ambang (`AIS_BIOMETRIC_FACE_THRESHOLD`, ambang liveness) wajib kalibrasi
+   UAT dgn subjek berizin.
