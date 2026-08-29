@@ -29,6 +29,10 @@ class Produk {
   /// Hanya dibaca penjadwal server; klien sekadar menyunting konfigurasi.
   final String rute;
 
+  /// QC hasil produksi (Fase E): true = tiap OUTPUT POSTED produk ini
+  /// otomatis menerbitkan Quality Alert + karantina batch di server.
+  final bool perluQc;
+
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -89,6 +93,7 @@ class Produk {
     this.satuanPembelianId,
     this.satuanPembelianNama = '',
     this.rute = '',
+    this.perluQc = false,
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -119,6 +124,7 @@ class Produk {
         satuanPembelianId: (j['satuanPembelianId'] as num?)?.toInt(),
         satuanPembelianNama: (j['satuanPembelianNama'] ?? '') as String,
         rute: (j['rute'] ?? '') as String,
+        perluQc: j['perluQc'] == true,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,

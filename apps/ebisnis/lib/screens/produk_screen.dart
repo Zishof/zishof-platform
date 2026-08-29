@@ -2350,6 +2350,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   bool _aktif = true;
   String _jenisItem = 'JUAL';
   String _rute = '';
+  bool _perluQc = false;
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
@@ -2401,6 +2402,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _aktif = p?.aktif ?? true;
     _jenisItem = p?.jenisItem ?? 'JUAL';
     _rute = p?.rute ?? '';
+    _perluQc = p?.perluQc ?? false;
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
         produkId: (b['produkId'] as num?)?.toInt(),
@@ -2856,6 +2858,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'aktif': _aktif,
           'jenis_item': _jenisItem,
           'rute': _rute.isEmpty ? null : _rute,
+          'perlu_qc': _perluQc,
           'bahan_baku': _bahanBaku
               .map((b) => {
                     'produk_id': b.produkId,
@@ -2904,6 +2907,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 'aktif': _aktif,
                 'jenisItem': _jenisItem,
                 'rute': _rute,
+                'perluQc': _perluQc,
                 'kemasan': _kemasan
                     .map((k) => {
                           'nama': k.nama.text.trim(),
@@ -3109,17 +3113,36 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                             color: AppColors.textSecondaryOf(context))),
                   ),
                   const SizedBox(height: 6),
-                  // Fase C: dibaca penjadwal ambang stok server -- BELI
-                  // membuat pengajuan pembelian, PRODUKSI membuat draf WO.
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: '', label: Text('Beli (bawaan)')),
-                      ButtonSegment(
-                          value: 'PRODUKSI', label: Text('Produksi Sendiri')),
+                  // Fase C/E: dibaca server -- BELI/PRODUKSI oleh penjadwal
+                  // ambang stok; MTO_* oleh konfirmasi Sales Order lapangan.
+                  DropdownButtonFormField<String>(
+                    value: _rute,
+                    isExpanded: true,
+                    items: const [
+                      DropdownMenuItem(
+                          value: '', child: Text('Beli (bawaan)')),
+                      DropdownMenuItem(
+                          value: 'PRODUKSI', child: Text('Produksi Sendiri')),
+                      DropdownMenuItem(
+                          value: 'MTO_BELI',
+                          child: Text('MTO Beli (pesan dulu, beli saat SO)')),
+                      DropdownMenuItem(
+                          value: 'MTO_PRODUKSI',
+                          child:
+                              Text('MTO Produksi (pesan dulu, WO saat SO)')),
                     ],
-                    selected: {_rute},
-                    onSelectionChanged: (s) =>
-                        setStateIfMounted(() => _rute = s.first),
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _rute = v ?? ''),
+                  ),
+                  const SizedBox(height: 6),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Perlu QC saat hasil produksi'),
+                    subtitle: const Text(
+                        'OUTPUT yang diposting otomatis membuat Quality Alert dan mengkarantina batch sampai didisposisi.'),
+                    value: _perluQc,
+                    onChanged: (v) => setStateIfMounted(() => _perluQc = v),
                   ),
                 ],
               ),
