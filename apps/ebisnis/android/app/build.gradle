@@ -87,7 +87,7 @@ android {
         nahl {
             dimension "product"
             applicationId "id.zishof.ebisnis.nahl"
-            resValue "string", "app_name", "FF (Fajrul Falah) Mart"
+            resValue "string", "app_name", "TokoQu Al-Bahjah An Nahl"
         }
         mitrainap {
             dimension "product"

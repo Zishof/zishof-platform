@@ -1,4 +1,4 @@
-# Rilis Desktop POS 1.34.06 — eBisnis, Al-Bahjah, dan Nahl
+# Rilis POS Desktop dan Android 1.34.06 — eBisnis, Al-Bahjah, dan Nahl
 
 Tanggal: 29 Agustus 2026
 
@@ -26,6 +26,8 @@ Tag GitHub: `v1.34.06-build169`
 - Seluruh `528` pengujian aplikasi eBisnis/Al-Bahjah/Nahl lulus.
 - Analisis penuh menemukan `0` error kompilasi. Terdapat `53` temuan lama di modul lain: `52` saran lint/depresiasi dan `1` warning cast tidak perlu.
 - Ketiga build Windows release dan kompilasi installer Inno Setup berhasil dari snapshot source yang sama.
+- Ketiga build APK Android berhasil dengan `versionName 1.34.06` dan `versionCode 169`.
+- APK Android menggunakan sertifikat **Android Debug** atas persetujuan eksplisit untuk UAT internal; APK ini bukan artefak produksi/Play Store.
 - Metadata `ProductVersion` ketiga installer adalah `1.34.06`.
 - SHA-256 dihitung ulang dari artefak final.
 - Seluruh installer berstatus Authenticode `NotSigned`; rilis ini ditujukan untuk distribusi internal/UAT seperti rilis sebelumnya.
@@ -38,11 +40,21 @@ Tag GitHub: `v1.34.06-build169`
 | Al-Bahjah | `Al-Bahjah-POS-Setup-1.34.06.exe` | 85.825.059 byte | `A7E9D7CCB26CA46E3A2322550198B1985F20D3478FF5EE5971D2458AE76AAB8A` |
 | Nahl | `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.06.exe` | 85.889.156 byte | `73F0338C95704EC30298BF355DDA019BF5A428290D13EFBC06A0892C1C7D4C25` |
 
+| Varian Android | Package ID | APK Debug/UAT | Ukuran | SHA-256 |
+|---|---|---|---:|---|
+| eBisnis | `id.zishof.ebisnis` | `app-ebisnis-release.apk` | 188.903.665 byte | `FD2E1F07A0820CDCC41CDD6548BA696B594042DEE0774C3A09A9F00EB4518AF7` |
+| Al-Bahjah | `id.zishof.ebisnis.albahjah` | `app-albahjah-release.apk` | 188.964.690 byte | `C89E1FE902D37CE7AAAF2DAD3964458FF8DF53930EF54412E1D53EA062FC59C8` |
+| Nahl | `id.zishof.ebisnis.nahl` | `app-nahl-release.apk` | 188.429.035 byte | `33EC53A9A24944D994162B133352DF55DD2D51FE0AFD7743268DFC91B093D717` |
+
+APK Nahl terverifikasi mempunyai label **TokoQu Al-Bahjah An Nahl** dan launcher icon TokoQu.
+
 Lokasi artefak lokal:
 
 `apps/ebisnis/release-artifacts/semua-varian/1.34.06/`
 
 ## UAT pengguna setelah pembaruan
+
+> APK Android pada rilis ini khusus UAT internal. Jika perangkat sudah memiliki aplikasi dengan package ID sama tetapi sertifikat berbeda, Android akan menolak pembaruan langsung. Jangan menghapus aplikasi/data operasional sebelum memastikan transaksi pending sudah aman; gunakan signing produksi untuk rollout resmi.
 
 1. Jangan menghapus database atau folder data lokal. Pastikan transaksi pending dicoba sinkron sebelum memasang pembaruan.
 2. Pasang installer sesuai toko. Dialog penyiapan data lokal tetap berfokus pada pilihan aman **Nanti**, sehingga sinkronisasi penuh tidak berjalan tanpa persetujuan pengguna.
