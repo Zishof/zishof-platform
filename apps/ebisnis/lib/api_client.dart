@@ -191,6 +191,10 @@ class ApiClient {
     'layar_pelanggan_slide_untuk_tampil',
     'layar_pelanggan_screensaver_config_ambil',
     'layar_pelanggan_screensaver_config_simpan',
+    'distribusi_list',
+    'distribusi_detail',
+    'distribusi_simpan',
+    'distribusi_status',
   };
 
   static bool _nilaiTokoValid(Object? nilai) {

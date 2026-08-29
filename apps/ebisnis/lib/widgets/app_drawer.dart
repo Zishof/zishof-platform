@@ -11,6 +11,7 @@ import '../screens/pesanan_screen.dart';
 import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
+import '../screens/pengiriman_screen.dart';
 import '../screens/jenis_produk_screen.dart';
 import '../screens/grup_produk_screen.dart';
 import '../screens/toko_kelola_screen.dart';
@@ -256,8 +257,7 @@ class AppDrawer extends StatelessWidget {
                         ),
                       if (AppProductProfile.aktif.isMitraInap &&
                           (Sesi.instance.isAdmin ||
-                              Sesi.instance
-                                  .bolehMenuVarianBaru('hotel_kamar')))
+                              Sesi.instance.bolehMenuVarianBaru('hotel_kamar')))
                         _ItemMenu(
                           icon: Icons.meeting_room_outlined,
                           label: 'Kamar & Tipe Kamar',
@@ -286,8 +286,7 @@ class AppDrawer extends StatelessWidget {
                           (Sesi.instance.isAdmin ||
                               Sesi.instance
                                   .bolehMenuVarianBaru('hotel_checkin') ||
-                              Sesi.instance
-                                  .bolehMenuVarianBaru('hotel_folio')))
+                              Sesi.instance.bolehMenuVarianBaru('hotel_folio')))
                         _ItemMenu(
                           icon: Icons.luggage_outlined,
                           label: 'Check-in / Check-out',
@@ -603,16 +602,148 @@ class AppDrawer extends StatelessWidget {
                             builder: (_) => const KedaluwarsaScreen(),
                           ),
                         ),
-                      if (Sesi.instance.bolehMenu('mutasistokantaroutlet'))
-                        _ItemMenu(
-                          icon: Icons.compare_arrows,
-                          label: 'Mutasi Antar Outlet',
-                          aktif: menuAktif == 'Mutasi Antar Outlet',
-                          onTap: () => _pindahMenu(
-                            context,
-                            label: 'Mutasi Antar Outlet',
-                            builder: (_) => const MutasiAntarOutletScreen(),
-                          ),
+                      if (Sesi.instance
+                              .bolehMenuVarianBaru('transfer_antar_lokasi') ||
+                          Sesi.instance.bolehMenuVarianBaru('delivery_order') ||
+                          Sesi.instance.bolehMenuVarianBaru('freight_order') ||
+                          Sesi.instance
+                              .bolehMenuVarianBaru('shipment_tracking') ||
+                          Sesi.instance
+                              .bolehMenuVarianBaru('proof_of_delivery') ||
+                          Sesi.instance.bolehMenuVarianBaru(
+                              'penerimaan_transfer_outlet') ||
+                          Sesi.instance
+                              .bolehMenuVarianBaru('klaim_distribusi') ||
+                          Sesi.instance
+                              .bolehMenuVarianBaru('reverse_logistics'))
+                        _GrupMenu(
+                          icon: Icons.local_shipping_outlined,
+                          label: 'Distribusi & Pengiriman',
+                          adaYangAktif: const [
+                            'Transfer Antar Lokasi',
+                            'Delivery Order',
+                            'Freight Order/Rute/Muatan',
+                            'Shipment & Tracking',
+                            'Proof of Delivery',
+                            'Penerimaan Transfer Outlet',
+                            'Selisih/Kerusakan/Klaim',
+                            'Retur & Reverse Logistics',
+                          ].contains(menuAktif),
+                          anak: [
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('transfer_antar_lokasi'))
+                              _ItemMenu(
+                                icon: Icons.compare_arrows,
+                                label: 'Transfer Antar Lokasi',
+                                aktif: menuAktif == 'Transfer Antar Lokasi',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Transfer Antar Lokasi',
+                                  builder: (_) =>
+                                      const MutasiAntarOutletScreen(),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('delivery_order'))
+                              _ItemMenu(
+                                icon: Icons.receipt_long_outlined,
+                                label: 'Delivery Order',
+                                aktif: menuAktif == 'Delivery Order',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Delivery Order',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.deliveryOrder,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('freight_order'))
+                              _ItemMenu(
+                                icon: Icons.route_outlined,
+                                label: 'Freight Order/Rute/Muatan',
+                                aktif: menuAktif == 'Freight Order/Rute/Muatan',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Freight Order/Rute/Muatan',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.freightOrder,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('shipment_tracking'))
+                              _ItemMenu(
+                                icon: Icons.location_searching_outlined,
+                                label: 'Shipment & Tracking',
+                                aktif: menuAktif == 'Shipment & Tracking',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Shipment & Tracking',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.shipmentTracking,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('proof_of_delivery'))
+                              _ItemMenu(
+                                icon: Icons.task_alt_outlined,
+                                label: 'Proof of Delivery',
+                                aktif: menuAktif == 'Proof of Delivery',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Proof of Delivery',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.proofOfDelivery,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance.bolehMenuVarianBaru(
+                                'penerimaan_transfer_outlet'))
+                              _ItemMenu(
+                                icon: Icons.inventory_outlined,
+                                label: 'Penerimaan Transfer Outlet',
+                                aktif:
+                                    menuAktif == 'Penerimaan Transfer Outlet',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Penerimaan Transfer Outlet',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman
+                                        .penerimaanTransferOutlet,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('klaim_distribusi'))
+                              _ItemMenu(
+                                icon: Icons.report_problem_outlined,
+                                label: 'Selisih/Kerusakan/Klaim',
+                                aktif: menuAktif == 'Selisih/Kerusakan/Klaim',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Selisih/Kerusakan/Klaim',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.klaimDistribusi,
+                                  ),
+                                ),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('reverse_logistics'))
+                              _ItemMenu(
+                                icon: Icons.assignment_return_outlined,
+                                label: 'Retur & Reverse Logistics',
+                                aktif: menuAktif == 'Retur & Reverse Logistics',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Retur & Reverse Logistics',
+                                  builder: (_) => const PengirimanScreen(
+                                    bagian: BagianPengiriman.reverseLogistics,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       if (Sesi.instance.bolehMenu('kulakan'))
                         _ItemMenu(
@@ -750,7 +881,8 @@ class AppDrawer extends StatelessWidget {
                             'Laporan-Laporan Keuangan',
                           ].contains(menuAktif),
                           anak: [
-                            if (Sesi.instance.bolehMenuVarianBaru('draft_jurnal'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('draft_jurnal'))
                               _ItemMenu(
                                 icon: Icons.fact_check_outlined,
                                 label: 'Draft Jurnal',
@@ -759,7 +891,8 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Draft Jurnal',
                                     builder: (_) => const DraftJurnalScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('jurnal_umum'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('jurnal_umum'))
                               _ItemMenu(
                                 icon: Icons.edit_note,
                                 label: 'Jurnal Umum',
@@ -768,7 +901,8 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Jurnal Umum',
                                     builder: (_) => const JurnalUmumScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('posting_hpp'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('posting_hpp'))
                               _ItemMenu(
                                 icon: Icons.inventory_2_outlined,
                                 label: 'Posting HPP',
@@ -785,7 +919,8 @@ class AppDrawer extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('posting_penjualan'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('posting_penjualan'))
                               _ItemMenu(
                                 icon: Icons.point_of_sale_outlined,
                                 label: 'Posting Penjualan',
@@ -824,7 +959,8 @@ class AppDrawer extends StatelessWidget {
                                         'Grup Akun',
                                         const KodeAkunScreen(tabAwal: 4))),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('jenis_transaksi'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('jenis_transaksi'))
                               _ItemMenu(
                                 icon: Icons.swap_horiz,
                                 label: 'Jenis Transaksi',
@@ -842,34 +978,36 @@ class AppDrawer extends StatelessWidget {
                                 aktif: menuAktif == 'Bank',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Bank',
-                                    builder: (_) => _halamanAkuntansi(
-                                        'Bank',
+                                    builder: (_) => _halamanAkuntansi('Bank',
                                         const KodeAkunScreen(tabAwal: 2))),
                               ),
                             // Enam layar berikut sebelumnya hanya tab di dalam layar
                             // Laporan Keuangan; kini tiap layar punya kunci menunya
                             // sendiri di EbisnisMenuKatalog sehingga admin bisa
                             // membatasinya per peran lewat grid CRUD TbmroleAction.
-                            if (Sesi.instance.bolehMenuVarianBaru('saldo_awal_akun'))
-                            _ItemMenu(
-                              icon: Icons.play_circle_outline,
-                              label: 'Saldo Awal (Neraca Awal)',
-                              aktif: menuAktif == 'Saldo Awal (Neraca Awal)',
-                              onTap: () => _pindahMenu(context,
-                                  label: 'Saldo Awal (Neraca Awal)',
-                                  builder: (_) => _halamanSiklus(
-                                      'Saldo Awal (Neraca Awal)', 0)),
-                            ),
-                            if (Sesi.instance.bolehMenuVarianBaru('jurnal_penyesuaian'))
-                            _ItemMenu(
-                              icon: Icons.rule_folder_outlined,
-                              label: 'Jurnal Penyesuaian Berkala',
-                              aktif: menuAktif == 'Jurnal Penyesuaian Berkala',
-                              onTap: () => _pindahMenu(context,
-                                  label: 'Jurnal Penyesuaian Berkala',
-                                  builder: (_) => _halamanSiklus(
-                                      'Jurnal Penyesuaian Berkala', 1)),
-                            ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('saldo_awal_akun'))
+                              _ItemMenu(
+                                icon: Icons.play_circle_outline,
+                                label: 'Saldo Awal (Neraca Awal)',
+                                aktif: menuAktif == 'Saldo Awal (Neraca Awal)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Saldo Awal (Neraca Awal)',
+                                    builder: (_) => _halamanSiklus(
+                                        'Saldo Awal (Neraca Awal)', 0)),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('jurnal_penyesuaian'))
+                              _ItemMenu(
+                                icon: Icons.rule_folder_outlined,
+                                label: 'Jurnal Penyesuaian Berkala',
+                                aktif:
+                                    menuAktif == 'Jurnal Penyesuaian Berkala',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Jurnal Penyesuaian Berkala',
+                                    builder: (_) => _halamanSiklus(
+                                        'Jurnal Penyesuaian Berkala', 1)),
+                              ),
                             if (Sesi.instance.bolehMenuVarianBaru('closing'))
                               _ItemMenu(
                                 icon: Icons.event_available_outlined,
@@ -880,82 +1018,87 @@ class AppDrawer extends StatelessWidget {
                                     builder: (_) => const ClosingScreen()),
                               ),
                             if (Sesi.instance.bolehMenuVarianBaru('tutup_buku'))
-                            _ItemMenu(
-                              icon: Icons.lock_outline,
-                              label: 'Tutup Buku (Laba Ditahan)',
-                              aktif: menuAktif == 'Tutup Buku (Laba Ditahan)',
-                              onTap: () => _pindahMenu(context,
-                                  label: 'Tutup Buku (Laba Ditahan)',
-                                  builder: (_) => _halamanSiklus(
-                                      'Tutup Buku (Laba Ditahan)', 2)),
-                            ),
-                            if (Sesi.instance.bolehMenuVarianBaru('posting_kulakan'))
-                            _ItemMenu(
-                              icon: Icons.local_shipping_outlined,
-                              label: 'Posting Kulakan',
-                              aktif: menuAktif == 'Posting Kulakan',
-                              onTap: () => _pindahMenu(
-                                context,
+                              _ItemMenu(
+                                icon: Icons.lock_outline,
+                                label: 'Tutup Buku (Laba Ditahan)',
+                                aktif: menuAktif == 'Tutup Buku (Laba Ditahan)',
+                                onTap: () => _pindahMenu(context,
+                                    label: 'Tutup Buku (Laba Ditahan)',
+                                    builder: (_) => _halamanSiklus(
+                                        'Tutup Buku (Laba Ditahan)', 2)),
+                              ),
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('posting_kulakan'))
+                              _ItemMenu(
+                                icon: Icons.local_shipping_outlined,
                                 label: 'Posting Kulakan',
-                                builder: (_) => const LaporanScreen(
-                                  aksiKatalog: 'laporan_keuangan_katalog',
-                                  judul: 'Posting Kulakan',
-                                  subjudul:
-                                      'Membukukan pembelian barang toko (persediaan & utang supplier)',
-                                  bukaPosting: 'posting_kulakan',
+                                aktif: menuAktif == 'Posting Kulakan',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Posting Kulakan',
+                                  builder: (_) => const LaporanScreen(
+                                    aksiKatalog: 'laporan_keuangan_katalog',
+                                    judul: 'Posting Kulakan',
+                                    subjudul:
+                                        'Membukukan pembelian barang toko (persediaan & utang supplier)',
+                                    bukaPosting: 'posting_kulakan',
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (Sesi.instance.bolehMenuVarianBaru('posting_bayar_hutang'))
-                            _ItemMenu(
-                              icon: Icons.payments_outlined,
-                              label: 'Posting Bayar Hutang',
-                              aktif: menuAktif == 'Posting Bayar Hutang',
-                              onTap: () => _pindahMenu(
-                                context,
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('posting_bayar_hutang'))
+                              _ItemMenu(
+                                icon: Icons.payments_outlined,
                                 label: 'Posting Bayar Hutang',
-                                builder: (_) => const LaporanScreen(
-                                  aksiKatalog: 'laporan_keuangan_katalog',
-                                  judul: 'Posting Bayar Hutang',
-                                  subjudul:
-                                      'Membukukan pembayaran hutang ke supplier toko',
-                                  bukaPosting: 'posting_bayar_hutang',
+                                aktif: menuAktif == 'Posting Bayar Hutang',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Posting Bayar Hutang',
+                                  builder: (_) => const LaporanScreen(
+                                    aksiKatalog: 'laporan_keuangan_katalog',
+                                    judul: 'Posting Bayar Hutang',
+                                    subjudul:
+                                        'Membukukan pembayaran hutang ke supplier toko',
+                                    bukaPosting: 'posting_bayar_hutang',
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (Sesi.instance.bolehMenuVarianBaru('posting_terima_piutang'))
-                            _ItemMenu(
-                              icon: Icons.savings_outlined,
-                              label: 'Posting Terima Piutang',
-                              aktif: menuAktif == 'Posting Terima Piutang',
-                              onTap: () => _pindahMenu(
-                                context,
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('posting_terima_piutang'))
+                              _ItemMenu(
+                                icon: Icons.savings_outlined,
                                 label: 'Posting Terima Piutang',
-                                builder: (_) => const LaporanScreen(
-                                  aksiKatalog: 'laporan_keuangan_katalog',
-                                  judul: 'Posting Terima Piutang',
-                                  subjudul:
-                                      'Membukukan penerimaan piutang dari pelanggan toko',
-                                  bukaPosting: 'posting_terima_piutang',
+                                aktif: menuAktif == 'Posting Terima Piutang',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Posting Terima Piutang',
+                                  builder: (_) => const LaporanScreen(
+                                    aksiKatalog: 'laporan_keuangan_katalog',
+                                    judul: 'Posting Terima Piutang',
+                                    subjudul:
+                                        'Membukukan penerimaan piutang dari pelanggan toko',
+                                    bukaPosting: 'posting_terima_piutang',
+                                  ),
                                 ),
                               ),
-                            ),
                             // Anggaran/RAB bulanan: satu layar bertab (Rencana Bulanan,
                             // Realisasi, Penggunaan Anggaran) -- padanan empat layar ZK.
                             if (Sesi.instance.bolehMenuVarianBaru('anggaran'))
-                            _ItemMenu(
-                              icon: Icons.savings_outlined,
-                              label: 'Anggaran (RAB Bulanan)',
-                              aktif: menuAktif == 'Anggaran (RAB Bulanan)',
-                              onTap: () => _pindahMenu(
-                                context,
+                              _ItemMenu(
+                                icon: Icons.savings_outlined,
                                 label: 'Anggaran (RAB Bulanan)',
-                                builder: (_) => Scaffold(
-                                  appBar: AppBar(title: const Text('Anggaran (RAB Bulanan)')),
-                                  body: const AnggaranScreen(),
+                                aktif: menuAktif == 'Anggaran (RAB Bulanan)',
+                                onTap: () => _pindahMenu(
+                                  context,
+                                  label: 'Anggaran (RAB Bulanan)',
+                                  builder: (_) => Scaffold(
+                                    appBar: AppBar(
+                                        title: const Text(
+                                            'Anggaran (RAB Bulanan)')),
+                                    body: const AnggaranScreen(),
+                                  ),
                                 ),
                               ),
-                            ),
                             _ItemMenu(
                               icon: Icons.folder_open_outlined,
                               label: 'Laporan-Laporan',
@@ -1020,11 +1163,13 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Uang Muka (Cash Advance)',
                                     builder: (_) => const UangMukaScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pj_uang_muka'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pj_uang_muka'))
                               _ItemMenu(
                                 icon: Icons.fact_check_outlined,
                                 label: 'Pertanggungjawaban Uang Muka',
-                                aktif: menuAktif == 'Pertanggungjawaban Uang Muka',
+                                aktif:
+                                    menuAktif == 'Pertanggungjawaban Uang Muka',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Pertanggungjawaban Uang Muka',
                                     builder: (_) => const PjUangMukaScreen()),
@@ -1038,11 +1183,13 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Kas Besar',
                                     builder: (_) => const KasBesarScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pj_kas_besar'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pj_kas_besar'))
                               _ItemMenu(
                                 icon: Icons.assignment_turned_in_outlined,
                                 label: 'Pertanggungjawaban Kas Besar',
-                                aktif: menuAktif == 'Pertanggungjawaban Kas Besar',
+                                aktif:
+                                    menuAktif == 'Pertanggungjawaban Kas Besar',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Pertanggungjawaban Kas Besar',
                                     builder: (_) => const PjKasBesarScreen()),
@@ -1056,16 +1203,21 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Kas Kecil',
                                     builder: (_) => const KasKecilScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('penggantian_kas_kecil'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('penggantian_kas_kecil'))
                               _ItemMenu(
                                 icon: Icons.autorenew,
                                 label: 'Penggantian Kas Kecil (Reimbursement)',
-                                aktif: menuAktif == 'Penggantian Kas Kecil (Reimbursement)',
+                                aktif: menuAktif ==
+                                    'Penggantian Kas Kecil (Reimbursement)',
                                 onTap: () => _pindahMenu(context,
-                                    label: 'Penggantian Kas Kecil (Reimbursement)',
-                                    builder: (_) => const PenggantianKasKecilScreen()),
+                                    label:
+                                        'Penggantian Kas Kecil (Reimbursement)',
+                                    builder: (_) =>
+                                        const PenggantianKasKecilScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('dana_talangan'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('dana_talangan'))
                               _ItemMenu(
                                 icon: Icons.handshake_outlined,
                                 label: 'Dana Talangan',
@@ -1074,55 +1226,66 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Dana Talangan',
                                     builder: (_) => const DanaTalanganScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('reimbursement'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('reimbursement'))
                               _ItemMenu(
                                 icon: Icons.receipt_outlined,
                                 label: 'Reimbursement Pegawai',
                                 aktif: menuAktif == 'Reimbursement Pegawai',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Reimbursement Pegawai',
-                                    builder: (_) => const ReimbursementScreen()),
+                                    builder: (_) =>
+                                        const ReimbursementScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('master_keuangan'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('master_keuangan'))
                               _ItemMenu(
                                 icon: Icons.tune_outlined,
                                 label: 'Master Data Keuangan',
                                 aktif: menuAktif == 'Master Data Keuangan',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Master Data Keuangan',
-                                    builder: (_) => const MasterKeuanganScreen()),
+                                    builder: (_) =>
+                                        const MasterKeuanganScreen()),
                               ),
                             // Satu menu untuk seluruh rangkaian pencairan:
                             // Pembayaran Vendor & Proses Transitori kini menjadi
                             // TAB di dalam layar ini, bukan menu sendiri. Kunci
                             // hak aksesnya tetap dipakai, hanya pindah tempat
                             // penegakannya ke deret tab.
-                            if (Sesi.instance.bolehMenuVarianBaru('proses_transfer'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('proses_transfer'))
                               _ItemMenu(
                                 icon: Icons.account_balance_wallet_outlined,
                                 label: 'Proses Transfer',
                                 aktif: menuAktif == 'Proses Transfer',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Proses Transfer',
-                                    builder: (_) => const ProsesTransferScreen()),
+                                    builder: (_) =>
+                                        const ProsesTransferScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('nomor_surat_keuangan'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('nomor_surat_keuangan'))
                               _ItemMenu(
                                 icon: Icons.numbers_outlined,
                                 label: 'Penomoran Dokumen Keuangan',
-                                aktif: menuAktif == 'Penomoran Dokumen Keuangan',
+                                aktif:
+                                    menuAktif == 'Penomoran Dokumen Keuangan',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Penomoran Dokumen Keuangan',
-                                    builder: (_) => const NomorSuratKeuanganScreen()),
+                                    builder: (_) =>
+                                        const NomorSuratKeuanganScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pajak'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_pajak'))
                               _ItemMenu(
                                 icon: Icons.account_balance,
                                 label: 'Bayar Pajak',
                                 aktif: menuAktif == 'Bayar Pajak',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Bayar Pajak',
-                                    builder: (_) => const PengadaanPajakScreen()),
+                                    builder: (_) =>
+                                        const PengadaanPajakScreen()),
                               ),
                           ],
                         ),
@@ -1132,7 +1295,8 @@ class AppDrawer extends StatelessWidget {
                       if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pr') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_po') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_bast') ||
-                          Sesi.instance.bolehMenuVarianBaru('pengadaan_tagihan') ||
+                          Sesi.instance
+                              .bolehMenuVarianBaru('pengadaan_tagihan') ||
                           Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
                         _GrupMenu(
                           icon: Icons.assignment_outlined,
@@ -1145,7 +1309,8 @@ class AppDrawer extends StatelessWidget {
                             'Barang Dalam Proses',
                           ].contains(menuAktif),
                           anak: [
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_pr'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_pr'))
                               _ItemMenu(
                                 icon: Icons.assignment_outlined,
                                 label: 'Permintaan Pembelian (PR)',
@@ -1154,7 +1319,8 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Permintaan Pembelian (PR)',
                                     builder: (_) => const PengadaanPrScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_po'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_po'))
                               _ItemMenu(
                                 icon: Icons.receipt_long_outlined,
                                 label: 'Pemesanan Pembelian (PO)',
@@ -1163,25 +1329,30 @@ class AppDrawer extends StatelessWidget {
                                     label: 'Pemesanan Pembelian (PO)',
                                     builder: (_) => const PengadaanPoScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_bast'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_bast'))
                               _ItemMenu(
                                 icon: Icons.inventory_2_outlined,
                                 label: 'Penerimaan Barang (BAST)',
                                 aktif: menuAktif == 'Penerimaan Barang (BAST)',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Penerimaan Barang (BAST)',
-                                    builder: (_) => const PengadaanBastScreen()),
+                                    builder: (_) =>
+                                        const PengadaanBastScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_tagihan'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_tagihan'))
                               _ItemMenu(
                                 icon: Icons.request_quote_outlined,
                                 label: 'Terima Tagihan Vendor',
                                 aktif: menuAktif == 'Terima Tagihan Vendor',
                                 onTap: () => _pindahMenu(context,
                                     label: 'Terima Tagihan Vendor',
-                                    builder: (_) => const PengadaanTagihanScreen()),
+                                    builder: (_) =>
+                                        const PengadaanTagihanScreen()),
                               ),
-                            if (Sesi.instance.bolehMenuVarianBaru('pengadaan_bdp'))
+                            if (Sesi.instance
+                                .bolehMenuVarianBaru('pengadaan_bdp'))
                               _ItemMenu(
                                 icon: Icons.local_shipping_outlined,
                                 label: 'Barang Dalam Proses',

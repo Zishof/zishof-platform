@@ -55,8 +55,14 @@ void main() {
         body: ListView(children: const [Text('isi')]),
       ),
     ));
-    expect(tester.takeException(), isNotNull,
+    final galatPertama = tester.takeException();
+    expect(galatPertama, isNotNull,
         reason: 'badan menggulir di dalam penggulir harus melempar galat');
+
+    // RenderFlex/viewport dapat melaporkan lebih dari satu exception turunan
+    // untuk akar masalah yang sama. Bersihkan semuanya agar test penjaga ini
+    // tidak meninggalkan exception yang dianggap gagal oleh test berikutnya.
+    while (tester.takeException() != null) {}
   });
 
   testWidgets('dengan scrollable: false, isinya tergambar normal', (tester) async {

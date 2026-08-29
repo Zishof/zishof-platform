@@ -22,6 +22,8 @@ import '../screens/produk_screen.dart';
 import '../screens/stok_opname_screen.dart';
 import '../screens/kedaluwarsa_screen.dart';
 import '../screens/mutasi_antar_outlet_screen.dart';
+import '../screens/pengiriman_screen.dart';
+import '../screens/produksi_screen.dart';
 import '../screens/kulakan_screen.dart';
 import '../screens/pengadaan_bast_screen.dart';
 import '../screens/pengadaan_bayar_screen.dart';
@@ -132,6 +134,20 @@ enum MenuEBisnis {
   stokOpname,
   kedaluwarsa,
   mutasiAntarOutlet,
+  deliveryOrder,
+  freightOrder,
+  shipmentTracking,
+  proofOfDelivery,
+  penerimaanTransferOutlet,
+  klaimDistribusi,
+  reverseLogistics,
+  produksiBom,
+  produksiWorkOrder,
+  produksiMaterialIssue,
+  produksiMaterialReturn,
+  produksiOutput,
+  produksiWaste,
+  produksiCosting,
   kulakan,
   pengadaanPr,
   pengadaanPo,
@@ -299,7 +315,21 @@ const _kunciAksesMenu = <MenuEBisnis, String>{
   // Hak kelola mengikuti Stok Opname agar role lama langsung mendapat akses
   // tanpa menunggu migrasi matriks RBAC di server.
   MenuEBisnis.kedaluwarsa: 'stokopname',
-  MenuEBisnis.mutasiAntarOutlet: 'mutasistokantaroutlet',
+  MenuEBisnis.mutasiAntarOutlet: 'transfer_antar_lokasi',
+  MenuEBisnis.deliveryOrder: 'delivery_order',
+  MenuEBisnis.freightOrder: 'freight_order',
+  MenuEBisnis.shipmentTracking: 'shipment_tracking',
+  MenuEBisnis.proofOfDelivery: 'proof_of_delivery',
+  MenuEBisnis.penerimaanTransferOutlet: 'penerimaan_transfer_outlet',
+  MenuEBisnis.klaimDistribusi: 'klaim_distribusi',
+  MenuEBisnis.reverseLogistics: 'reverse_logistics',
+  MenuEBisnis.produksiBom: 'produksi_bill_of_material',
+  MenuEBisnis.produksiWorkOrder: 'produksi_work_order',
+  MenuEBisnis.produksiMaterialIssue: 'produksi_material_issue',
+  MenuEBisnis.produksiMaterialReturn: 'produksi_material_return',
+  MenuEBisnis.produksiOutput: 'produksi_production_output',
+  MenuEBisnis.produksiWaste: 'produksi_production_waste',
+  MenuEBisnis.produksiCosting: 'produksi_production_cost',
   MenuEBisnis.kulakan: 'kulakan',
   MenuEBisnis.pengadaanPr: 'pengadaan_pr',
   MenuEBisnis.pengadaanPo: 'pengadaan_po',
@@ -572,8 +602,50 @@ const _daftarMenu = <_ItemMenuShell>[
       MenuEBisnis.kedaluwarsa, Icons.event_busy_outlined, 'Kedaluwarsa',
       builder: _bangunKedaluwarsa),
   _ItemMenuShell(MenuEBisnis.mutasiAntarOutlet, Icons.compare_arrows,
-      'Mutasi Antar Outlet',
+      'Transfer Antar Lokasi',
       builder: _bangunMutasiAntarOutlet),
+  _ItemMenuShell(
+      MenuEBisnis.deliveryOrder, Icons.assignment_outlined, 'Delivery Order',
+      builder: _bangunDeliveryOrder),
+  _ItemMenuShell(MenuEBisnis.freightOrder, Icons.route_outlined,
+      'Freight Order/Rute/Muatan',
+      builder: _bangunFreightOrder),
+  _ItemMenuShell(MenuEBisnis.shipmentTracking, Icons.local_shipping_outlined,
+      'Shipment & Tracking',
+      builder: _bangunShipmentTracking),
+  _ItemMenuShell(MenuEBisnis.proofOfDelivery, Icons.fact_check_outlined,
+      'Proof of Delivery',
+      builder: _bangunProofOfDelivery),
+  _ItemMenuShell(MenuEBisnis.penerimaanTransferOutlet,
+      Icons.inventory_2_outlined, 'Penerimaan Transfer Outlet',
+      builder: _bangunPenerimaanTransferOutlet),
+  _ItemMenuShell(MenuEBisnis.klaimDistribusi, Icons.report_problem_outlined,
+      'Selisih/Kerusakan/Klaim',
+      builder: _bangunKlaimDistribusi),
+  _ItemMenuShell(MenuEBisnis.reverseLogistics, Icons.assignment_return_outlined,
+      'Retur & Reverse Logistics',
+      builder: _bangunReverseLogistics),
+  _ItemMenuShell(MenuEBisnis.produksiBom, Icons.account_tree_outlined,
+      'Bill of Material (BOM)',
+      builder: _bangunProduksiBom),
+  _ItemMenuShell(MenuEBisnis.produksiWorkOrder,
+      Icons.precision_manufacturing_outlined, 'Work Order Produksi',
+      builder: _bangunProduksiWorkOrder),
+  _ItemMenuShell(MenuEBisnis.produksiMaterialIssue,
+      Icons.move_to_inbox_outlined, 'Pengeluaran Bahan',
+      builder: _bangunProduksiMaterialIssue),
+  _ItemMenuShell(MenuEBisnis.produksiMaterialReturn,
+      Icons.assignment_return_outlined, 'Retur Bahan Produksi',
+      builder: _bangunProduksiMaterialReturn),
+  _ItemMenuShell(
+      MenuEBisnis.produksiOutput, Icons.inventory_2_outlined, 'Hasil Produksi',
+      builder: _bangunProduksiOutput),
+  _ItemMenuShell(MenuEBisnis.produksiWaste, Icons.delete_sweep_outlined,
+      'Waste & Susut Produksi',
+      builder: _bangunProduksiWaste),
+  _ItemMenuShell(
+      MenuEBisnis.produksiCosting, Icons.calculate_outlined, 'Costing Produksi',
+      builder: _bangunProduksiCosting),
   _ItemMenuShell(MenuEBisnis.kulakan, Icons.local_shipping_outlined, 'Kulakan',
       builder: _bangunKulakan),
   _ItemMenuShell(MenuEBisnis.pengadaanPr, Icons.assignment_outlined,
@@ -784,11 +856,29 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.grupProduk,
     MenuEBisnis.stokOpname,
     MenuEBisnis.kedaluwarsa,
-    MenuEBisnis.mutasiAntarOutlet,
     MenuEBisnis.kulakan,
     MenuEBisnis.penyedia,
     MenuEBisnis.diskon,
     MenuEBisnis.caraBayar,
+  ]),
+  _GrupMenuShell('Distribusi & Pengiriman', [
+    MenuEBisnis.mutasiAntarOutlet,
+    MenuEBisnis.deliveryOrder,
+    MenuEBisnis.freightOrder,
+    MenuEBisnis.shipmentTracking,
+    MenuEBisnis.proofOfDelivery,
+    MenuEBisnis.penerimaanTransferOutlet,
+    MenuEBisnis.klaimDistribusi,
+    MenuEBisnis.reverseLogistics,
+  ]),
+  _GrupMenuShell('Produksi', [
+    MenuEBisnis.produksiBom,
+    MenuEBisnis.produksiWorkOrder,
+    MenuEBisnis.produksiMaterialIssue,
+    MenuEBisnis.produksiMaterialReturn,
+    MenuEBisnis.produksiOutput,
+    MenuEBisnis.produksiWaste,
+    MenuEBisnis.produksiCosting,
   ]),
   _GrupMenuShell(
     'Pengadaan',
@@ -887,6 +977,34 @@ Widget _bangunStok(BuildContext c) => const StokOpnameScreen();
 Widget _bangunKedaluwarsa(BuildContext c) => const KedaluwarsaScreen();
 Widget _bangunMutasiAntarOutlet(BuildContext c) =>
     const MutasiAntarOutletScreen();
+Widget _bangunDeliveryOrder(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.deliveryOrder);
+Widget _bangunFreightOrder(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.freightOrder);
+Widget _bangunShipmentTracking(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.shipmentTracking);
+Widget _bangunProofOfDelivery(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.proofOfDelivery);
+Widget _bangunPenerimaanTransferOutlet(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.penerimaanTransferOutlet);
+Widget _bangunKlaimDistribusi(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.klaimDistribusi);
+Widget _bangunReverseLogistics(BuildContext c) =>
+    const PengirimanScreen(bagian: BagianPengiriman.reverseLogistics);
+Widget _bangunProduksiBom(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.billOfMaterial);
+Widget _bangunProduksiWorkOrder(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.workOrder);
+Widget _bangunProduksiMaterialIssue(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.materialIssue);
+Widget _bangunProduksiMaterialReturn(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.materialReturn);
+Widget _bangunProduksiOutput(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.productionOutput);
+Widget _bangunProduksiWaste(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.productionWaste);
+Widget _bangunProduksiCosting(BuildContext c) =>
+    const ProduksiScreen(bagian: BagianProduksi.productionCost);
 Widget _bangunKulakan(BuildContext c) => const KulakanScreen();
 Widget _bangunPengadaanPr(BuildContext c) => const PengadaanPrScreen();
 Widget _bangunPengadaanPo(BuildContext c) => const PengadaanPoScreen();
@@ -1304,7 +1422,35 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.kedaluwarsa:
       return 'Kedaluwarsa';
     case MenuEBisnis.mutasiAntarOutlet:
-      return 'Mutasi Antar Outlet';
+      return 'Transfer Antar Lokasi';
+    case MenuEBisnis.deliveryOrder:
+      return 'Delivery Order';
+    case MenuEBisnis.freightOrder:
+      return 'Freight Order/Rute/Muatan';
+    case MenuEBisnis.shipmentTracking:
+      return 'Shipment & Tracking';
+    case MenuEBisnis.proofOfDelivery:
+      return 'Proof of Delivery';
+    case MenuEBisnis.penerimaanTransferOutlet:
+      return 'Penerimaan Transfer Outlet';
+    case MenuEBisnis.klaimDistribusi:
+      return 'Selisih/Kerusakan/Klaim';
+    case MenuEBisnis.reverseLogistics:
+      return 'Retur & Reverse Logistics';
+    case MenuEBisnis.produksiBom:
+      return 'Bill of Material (BOM)';
+    case MenuEBisnis.produksiWorkOrder:
+      return 'Work Order Produksi';
+    case MenuEBisnis.produksiMaterialIssue:
+      return 'Pengeluaran Bahan';
+    case MenuEBisnis.produksiMaterialReturn:
+      return 'Retur Bahan Produksi';
+    case MenuEBisnis.produksiOutput:
+      return 'Hasil Produksi';
+    case MenuEBisnis.produksiWaste:
+      return 'Waste & Susut Produksi';
+    case MenuEBisnis.produksiCosting:
+      return 'Costing Produksi';
     case MenuEBisnis.kulakan:
       return 'Kulakan';
     case MenuEBisnis.pengadaanPr:
@@ -1485,7 +1631,36 @@ MenuEBisnis? _menuDariLabel(String label) {
     case 'Kedaluwarsa':
       return MenuEBisnis.kedaluwarsa;
     case 'Mutasi Antar Outlet':
+    case 'Transfer Antar Lokasi':
       return MenuEBisnis.mutasiAntarOutlet;
+    case 'Delivery Order':
+      return MenuEBisnis.deliveryOrder;
+    case 'Freight Order/Rute/Muatan':
+      return MenuEBisnis.freightOrder;
+    case 'Shipment & Tracking':
+      return MenuEBisnis.shipmentTracking;
+    case 'Proof of Delivery':
+      return MenuEBisnis.proofOfDelivery;
+    case 'Penerimaan Transfer Outlet':
+      return MenuEBisnis.penerimaanTransferOutlet;
+    case 'Selisih/Kerusakan/Klaim':
+      return MenuEBisnis.klaimDistribusi;
+    case 'Retur & Reverse Logistics':
+      return MenuEBisnis.reverseLogistics;
+    case 'Bill of Material (BOM)':
+      return MenuEBisnis.produksiBom;
+    case 'Work Order Produksi':
+      return MenuEBisnis.produksiWorkOrder;
+    case 'Pengeluaran Bahan':
+      return MenuEBisnis.produksiMaterialIssue;
+    case 'Retur Bahan Produksi':
+      return MenuEBisnis.produksiMaterialReturn;
+    case 'Hasil Produksi':
+      return MenuEBisnis.produksiOutput;
+    case 'Waste & Susut Produksi':
+      return MenuEBisnis.produksiWaste;
+    case 'Costing Produksi':
+      return MenuEBisnis.produksiCosting;
     case 'Kulakan':
       return MenuEBisnis.kulakan;
     case 'Aturan Diskon':

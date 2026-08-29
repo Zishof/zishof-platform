@@ -952,8 +952,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           .aksi('kulakan_faktur_detail', {'faktur_id': f['fakturId']});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal memuat detail: $e')));
+        snackbarGalat(context, e, aktivitas: 'memuat detail faktur kulakan');
       }
       return;
     }
@@ -1008,6 +1007,20 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
               child: const Text('Tutup'))
         ],
         children: [
+          if ('${header['peringatan'] ?? ''}'.trim().isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Text('${header['peringatan']}',
+                  style: TextStyle(color: Colors.amber.shade900)),
+            ),
+            const SizedBox(height: 12),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1031,8 +1044,21 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                         child: Row(
                           children: [
                             Expanded(
-                                child: Text('${it['namaProduk']}',
-                                    style: const TextStyle(fontSize: 13))),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${it['namaProduk']}',
+                                      style: const TextStyle(fontSize: 13)),
+                                  if ('${it['peringatan'] ?? ''}'
+                                      .trim()
+                                      .isNotEmpty)
+                                    Text('${it['peringatan']}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.amber.shade900)),
+                                ],
+                              ),
+                            ),
                             Text('${_formatAngka.format(it['qty'] ?? 0)}x',
                                 style: const TextStyle(fontSize: 12)),
                             const SizedBox(width: 10),

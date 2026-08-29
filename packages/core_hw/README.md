@@ -1,39 +1,41 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# core_hw
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Adapter perangkat keras bersama untuk aplikasi POS Flutter. Paket ini menjaga
+kode layar tetap lintas-platform dan memusatkan perbedaan implementasi Android,
+iOS, dan Windows.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+## Fitur
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+- Pemindaian barcode/QR melalui kamera Android/iOS.
+- Pemindaian barcode/QR melalui webcam Windows.
+- Dukungan scanner barcode USB yang berperilaku sebagai keyboard.
+- Cetak RAW dan buka laci kasir pada Windows.
 
-## Features
+## Penggunaan
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+Panggil `BarcodeScannerScreen.pindai(context)` untuk membuka scanner kamera.
+Nilai pertama yang valid dikembalikan sebagai `String`; pembatalan menghasilkan
+`null`. Untuk scanner USB keyboard-wedge, fokuskan input barcode biasa.
 
 ```dart
-const like = 'sample';
+final kode = await BarcodeScannerScreen.pindai(
+  context,
+  judul: 'Pindai produk',
+);
 ```
 
-## Additional information
+## Batas biometrik
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Perekaman fingerprint dan face recognition POS tidak berada dalam `core_hw`.
+Kontrak dan kebijakan sensitifnya berada di
+`apps/ebisnis/lib/services/biometric_capture_bridge.dart`. Fingerprint Windows
+menggunakan SecuGen WebAPI lokal; Android memerlukan SDK scanner eksternal.
+Face recognition wajib menghasilkan embedding dan liveness, bukan foto mentah.
+
+## Keamanan
+
+- Jangan menyimpan template biometrik, foto wajah, token, atau secret vendor di
+  paket ini.
+- Permission kamera diminta hanya saat pengguna membuka scanner.
+- Kegagalan membuka kamera mengembalikan pesan yang dapat ditindaklanjuti dan
+  tidak mengubah data transaksi.

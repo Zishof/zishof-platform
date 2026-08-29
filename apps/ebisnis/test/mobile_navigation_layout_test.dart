@@ -52,25 +52,29 @@ void main() {
   testWidgets('drawer dapat digulir dan memuat seluruh menu mobile baru',
       (tester) async {
     pakaiUkuranPonsel(tester);
+    final adminSebelumnya = Sesi.instance.isAdmin;
+    Sesi.instance.isAdmin = true;
+    addTearDown(() => Sesi.instance.isAdmin = adminSebelumnya);
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: AppDrawer()),
     ));
     await tester.pump();
 
     expect(find.byType(Scrollbar), findsOneWidget);
-    final daftar = find.byType(Scrollable).first;
+    final daftar = find.byType(ListView);
     for (final label in [
       'Jenis Produk',
       'Kedaluwarsa',
-      'Mutasi Antar Outlet',
+      'Distribusi & Pengiriman',
       'Cara Pembayaran',
       'Konfigurasi',
     ]) {
-      await tester.scrollUntilVisible(
-        find.text(label),
-        260,
-        scrollable: daftar,
-      );
+      for (var percobaan = 0;
+          find.text(label).evaluate().isEmpty && percobaan < 20;
+          percobaan++) {
+        await tester.drag(daftar, const Offset(0, -260));
+        await tester.pump();
+      }
       expect(find.text(label), findsOneWidget);
     }
     // Grup "Akuntansi" SENGAJA tidak ikut diuji di sini: menunya fail-closed
@@ -82,6 +86,7 @@ void main() {
   testWidgets('menu Akuntansi tersembunyi tanpa hak, muncul setelah diberi hak',
       (tester) async {
     pakaiUkuranPonsel(tester);
+    Sesi.instance.isAdmin = false;
     Sesi.instance.aksesMenu = {};
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: AppDrawer()),

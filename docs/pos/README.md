@@ -6,6 +6,7 @@ berhubungan dengan POS harus dicatat di sini sebelum pekerjaan dinyatakan selesa
 
 Dokumen aktif:
 
+- [Handover lanjutan Local-First dan runtime Produksi — 29 Agustus 2026](2026-08-29-handover-lanjutan-local-first-dan-runtime-produksi.md)
 - [Standar wajib pesan error dan penolakan yang edukatif](2026-08-26-standar-wajib-pesan-error-edukatif.md)
 - [Handover 24 Agustus 2026](handover-2026-08-24.md)
 - [Analisis implementasi modul Pergudangan](2026-08-25-analisis-modul-pergudangan.md)
@@ -41,6 +42,7 @@ Dokumen aktif:
 - [Fase 4: fondasi replenishment outlet](2026-08-26-fase-4-replenishment-outlet.md)
 - [Fase 5: konsolidasi replenishment ke procurement existing](2026-08-26-fase-5-konsolidasi-procurement.md)
 - [Fase 9: fondasi produksi](2026-08-26-fase-9-production.md)
+- [Fase 9: runtime Produksi Desktop dan Android](2026-08-29-fase-9-runtime-produksi.md)
 - [Draft skema Fase 9 produksi](2026-08-26-fase-9-schema-production.sql)
 - [Fase 10: Accounts Payable dan akuntansi](2026-08-26-fase-10-ap-akuntansi.md)
 - [Draft skema Fase 10 Accounts Payable dan akuntansi](2026-08-26-fase-10-schema-ap-akuntansi.sql)
@@ -53,3 +55,5 @@ Dokumen aktif:
 - [Fase 14 — Stabilisasi dan Dekomisioning Legacy](2026-08-27-fase-14-stabilisasi-dan-dekomisioning-legacy.md)
 - [Fase 15 — Journal Evidence Migrasi Immutable](2026-08-27-fase-15-journal-evidence-migrasi-immutable.md)
 - [Fase 16 — Repository Durable dan Evidence Gate Fail-Closed](2026-08-27-fase-16-repository-durable-dan-evidence-gate.md)
+- [Implementasi menu Pengiriman Desktop dan Android](2026-08-28-implementasi-menu-pengiriman-desktop-android.md)
+- [Kebijakan perubahan skema melalui Hibernate](2026-08-29-kebijakan-perubahan-skema-melalui-hibernate.md)
