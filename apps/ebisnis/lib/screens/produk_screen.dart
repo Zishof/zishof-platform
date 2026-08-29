@@ -2349,6 +2349,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   Future<Map<String, dynamic>>? _grupProdukFuture;
   bool _aktif = true;
   String _jenisItem = 'JUAL';
+  String _rute = '';
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
@@ -2399,6 +2400,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _grupProdukPilihan = -1;
     _aktif = p?.aktif ?? true;
     _jenisItem = p?.jenisItem ?? 'JUAL';
+    _rute = p?.rute ?? '';
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
         produkId: (b['produkId'] as num?)?.toInt(),
@@ -2853,6 +2855,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 _grupProdukPilihan == 0 ? null : _grupProdukPilihan,
           'aktif': _aktif,
           'jenis_item': _jenisItem,
+          'rute': _rute.isEmpty ? null : _rute,
           'bahan_baku': _bahanBaku
               .map((b) => {
                     'produk_id': b.produkId,
@@ -2900,6 +2903,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 'izinkanJualMinusStok': _izinkanJualMinusStok,
                 'aktif': _aktif,
                 'jenisItem': _jenisItem,
+                'rute': _rute,
                 'kemasan': _kemasan
                     .map((k) => {
                           'nama': k.nama.text.trim(),
@@ -3094,6 +3098,28 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                     selected: {_jenisItem},
                     onSelectionChanged: (s) =>
                         setStateIfMounted(() => _jenisItem = s.first),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Rute Pemenuhan Ulang Stok',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondaryOf(context))),
+                  ),
+                  const SizedBox(height: 6),
+                  // Fase C: dibaca penjadwal ambang stok server -- BELI
+                  // membuat pengajuan pembelian, PRODUKSI membuat draf WO.
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: '', label: Text('Beli (bawaan)')),
+                      ButtonSegment(
+                          value: 'PRODUKSI', label: Text('Produksi Sendiri')),
+                    ],
+                    selected: {_rute},
+                    onSelectionChanged: (s) =>
+                        setStateIfMounted(() => _rute = s.first),
                   ),
                 ],
               ),
