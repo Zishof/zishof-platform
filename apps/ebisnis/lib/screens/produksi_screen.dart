@@ -11,6 +11,7 @@ enum BagianProduksi {
   productionWaste,
   productionCost,
   productionUnbuild,
+  qualityAlert,
 }
 
 class ProduksiScreen extends StatefulWidget {
@@ -70,6 +71,9 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
       if (aksi != null && aksi.startsWith('status:')) {
         await _status(d, aksi.substring(7));
       }
+      if (aksi != null && aksi.startsWith('disposisi:')) {
+        await _disposisi(d, aksi.substring(10));
+      }
     } catch (e) {
       if (mounted) _pesan('Gagal memuat rincian: $e');
     }
@@ -81,6 +85,21 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
         barrierDismissible: false,
         builder: (_) => _Form(cfg: cfg, awal: awal));
     if (berubah == true) _muat();
+  }
+
+  /// Fase E: disposisi Quality Alert -- server membuat dokumen turunan
+  /// (REWORK=WO, UNBUILD, SCRAP=WASTE) dan mengelola karantina batch.
+  Future<void> _disposisi(Map<String, dynamic> d, String disposisi) async {
+    try {
+      final r = await ApiClient.instance.aksi('produksi_qc_disposisi',
+          <String, dynamic>{'jenis': cfg.kode, 'id': d['id'], 'disposisi': disposisi});
+      final turunan = (r['turunan'] as List?)?.length ?? 0;
+      _pesan('Disposisi $disposisi diterapkan'
+          '${turunan > 0 ? " ($turunan dokumen turunan draf dibuat)" : ""}.');
+      _muat();
+    } catch (e) {
+      if (mounted) _pesan('Gagal disposisi: $e');
+    }
   }
 
   Future<void> _status(Map<String, dynamic> d, String status) async {
@@ -483,7 +502,16 @@ class _Detail extends StatelessWidget {
                                 onPressed: () => Navigator.pop(context, 'ubah'),
                                 icon: const Icon(Icons.edit),
                                 label: const Text('Ubah')),
-                          if (hak['setujui'] == true && status == 'DRAFT')
+                          // Fase E: Quality Alert didisposisi, bukan disetujui.
+                          if (cfg.kode == 'quality_alert' && status == 'DRAFT')
+                            ...['REWORK', 'UNBUILD', 'SCRAP', 'RELEASE'].map(
+                                (dsp) => OutlinedButton(
+                                    onPressed: () => Navigator.pop(
+                                        context, 'disposisi:$dsp'),
+                                    child: Text(dsp))),
+                          if (cfg.kode != 'quality_alert' &&
+                              hak['setujui'] == true &&
+                              status == 'DRAFT')
                             FilledButton(
                                 onPressed: () =>
                                     Navigator.pop(context, 'status:APPROVED'),
@@ -566,6 +594,11 @@ class _Konfigurasi {
         // dokumen (jadi keluar, komponen BOM kembali); arah per-baris di server.
         return const _Konfigurasi('production_unbuild', 'Unbuild / Bongkar',
             Icons.unarchive_outlined);
+      case BagianProduksi.qualityAlert:
+        // Fase E: terbit otomatis saat OUTPUT produk ber-QC diposting;
+        // disposisi REWORK/UNBUILD/SCRAP/RELEASE lewat tombol di rincian.
+        return const _Konfigurasi('quality_alert', 'Quality Alert (QC)',
+            Icons.verified_outlined);
     }
   }
 }
