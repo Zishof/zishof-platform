@@ -51,8 +51,17 @@ dan match-salah dari beberapa subjek berizin sebelum mengubah ambang.
   berjalan, dan **enrollment sampai ke server** — membuktikan rantai penuh
   kamera -> YuNet -> alignment -> SFace -> liveness -> `biometrik_simpan` ->
   enkripsi server bekerja (master key server aktif).
-- Langkah 3–10 (uji negatif, verifikasi checkout, pemeriksaan tanpa-template
-  di lokal, kalibrasi ambang) BELUM dijalankan.
+- **29 Agustus 2026 — langkah 3–10 LULUS SEMUA** (dinyatakan pemilik produk
+  setelah menjalankan matriks): pose kedua identik ditolak liveness (3),
+  lebih dari satu wajah ditolak (4), tanpa wajah ditolak (5), verifikasi
+  checkout wajah pemilik MATCH (6), wajah orang lain TIDAK match dan
+  transaksi berhenti fail-closed (7), model dicabut -> fail-closed dgn
+  petunjuk unduh (8), offline -> berhenti dgn pesan jelas (9), dan tidak
+  ada embedding/foto mentah di SQLite/outbox/log lokal (10).
+- **Matriks UAT webcam Desktop LENGKAP.** Ambang masih default server
+  (`AIS_BIOMETRIC_FACE_THRESHOLD` 0.82) — perilaku match/tolak lulus pada
+  default ini; kalibrasi berbasis kumpulan skor cosine multi-subjek tetap
+  disarankan sebelum produksi bila populasi member besar.
 
 ## Yang secara sadar BELUM diuji di gelombang ini
 

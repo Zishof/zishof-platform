@@ -131,7 +131,9 @@ tantangan sah menghasilkan sampel FACE valid ber-liveness; pose identik
    SELESAI 29 Agustus 2026: diagnostik headless memvalidasi nama+bentuk
    tensor, dua bug diperbaiki (`fromBuffer` utk encoding path Windows;
    letterbox 640x640 utk masukan tetap YuNet — commit `b2d8f20`), dan UAT
-   webcam Desktop LULUS sampai enrollment tersimpan di server (lihat
+   webcam Desktop LULUS sampai enrollment tersimpan di server; matriks UAT
+   langkah 3–10 (uji negatif, verifikasi checkout match/tolak, pemeriksaan
+   tanpa-template lokal) juga LULUS SEMUA pada hari yang sama (lihat
    `2026-08-29-uat-webcam-face-recognition.md`).
 2. Distribusi model: Desktop memakai `assets/face` di samping exe (installer
    perlu menyalinnya); Android belum punya jalur distribusi model (38,7 MB)
