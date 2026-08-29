@@ -40,6 +40,20 @@ Catat skor cosine yang muncul di sisi server utk kalibrasi
 `AIS_BIOMETRIC_FACE_THRESHOLD` (default 0.82) — kumpulkan skor match-benar
 dan match-salah dari beberapa subjek berizin sebelum mengubah ambang.
 
+## Hasil UAT (berjalan)
+
+- **29 Agustus 2026 — langkah 1–2 LULUS.** Percobaan pertama gagal ("wajah
+  tidak terdeteksi"); dua akar masalah ditemukan lewat diagnostik headless
+  (`tool/diagnostik/face_onnx_diagnostik_test.dart`) dan diperbaiki di commit
+  `b2d8f20`: (1) `OrtSession.fromFile` salah encoding path di Windows —
+  model tidak pernah termuat; (2) YuNet ONNX bermasukan TETAP 640x640 —
+  kini di-letterbox. Setelah rebuild: wajah terdeteksi, tantangan dua pose
+  berjalan, dan **enrollment sampai ke server** — membuktikan rantai penuh
+  kamera -> YuNet -> alignment -> SFace -> liveness -> `biometrik_simpan` ->
+  enkripsi server bekerja (master key server aktif).
+- Langkah 3–10 (uji negatif, verifikasi checkout, pemeriksaan tanpa-template
+  di lokal, kalibrasi ambang) BELUM dijalankan.
+
 ## Yang secara sadar BELUM diuji di gelombang ini
 
 - Android (distribusi model 38,7 MB belum diputuskan).

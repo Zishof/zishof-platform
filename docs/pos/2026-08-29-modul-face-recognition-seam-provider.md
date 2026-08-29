@@ -127,9 +127,12 @@ tantangan sah menghasilkan sampel FACE valid ber-liveness; pose identik
 
 ### Batas yang JUJUR — belum tervalidasi di perangkat (gelombang 2b)
 
-1. Decoder YuNet & pemetaan tensor ORT ditulis mengikuti referensi OpenCV
-   tetapi BELUM dijalankan terhadap model nyata — wajib validasi
-   `flutter run -d windows` dgn webcam sebelum diklaim bekerja.
+1. ~~Decoder YuNet & pemetaan tensor ORT belum tervalidasi model nyata~~ —
+   SELESAI 29 Agustus 2026: diagnostik headless memvalidasi nama+bentuk
+   tensor, dua bug diperbaiki (`fromBuffer` utk encoding path Windows;
+   letterbox 640x640 utk masukan tetap YuNet — commit `b2d8f20`), dan UAT
+   webcam Desktop LULUS sampai enrollment tersimpan di server (lihat
+   `2026-08-29-uat-webcam-face-recognition.md`).
 2. Distribusi model: Desktop memakai `assets/face` di samping exe (installer
    perlu menyalinnya); Android belum punya jalur distribusi model (38,7 MB)
    — keputusan bundling/unduhan menyusul.
