@@ -1,0 +1,7 @@
+warning: in the working copy of 'apps/ebisnis/pubspec.yaml', LF will be replaced by CRLF the next time Git touches it
+[main d1bc7ae] release(pos): desktop albahjah dan ebisnis 1.33.83
+ 2 files changed, 40 insertions(+), 1 deletion(-)
+ create mode 100644 docs/pos/2026-08-26-release-desktop-albahjah-ebisnis-1.33.83.md
+To https://github.com/Zishof/zishof-platform.git
+   0e2c2b7..d1bc7ae  HEAD -> main
+https://github.com/Zishof/zishof-platform/releases/tag/v1.33.83-build141

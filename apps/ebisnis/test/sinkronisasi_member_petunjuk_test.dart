@@ -64,7 +64,7 @@ void main() {
     expect(host, contains('_versiDataMember++'));
     expect(data, contains('didUpdateWidget'));
     expect(data, contains("label: const Text('Buat dari Sivitas')"));
-    expect(service, contains('Future<int> sinkronkanAnggota()'));
+    expect(service, contains('Future<int> sinkronkanAnggota({'));
     expect(service, contains('replaceAnggotaCache'));
   });
 }

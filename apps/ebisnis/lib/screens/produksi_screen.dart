@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import '../widgets/app_error_info.dart';
+import '../widgets/app_shell.dart';
 
 enum BagianProduksi {
   billOfMaterial,
@@ -25,6 +27,7 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
   bool memuat = false;
   List<Map<String, dynamic>> dokumen = <Map<String, dynamic>>[];
   Map<String, dynamic> hak = <String, dynamic>{};
+  AppErrorInfo? galatMuat;
   String pencarian = '';
 
   _Konfigurasi get cfg => _Konfigurasi.dari(widget.bagian);
@@ -42,7 +45,10 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
   }
 
   Future<void> _muat() async {
-    setState(() => memuat = true);
+    setState(() {
+      memuat = true;
+      galatMuat = null;
+    });
     try {
       final r = await ApiClient.instance.aksi(
           'produksi_list', <String, dynamic>{'jenis': cfg.kode, 'limit': 200});
@@ -52,7 +58,9 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
         hak = _peta(r['hakAkses']);
       });
     } catch (e) {
-      if (mounted) _pesan('Gagal memuat ${cfg.judul}: $e');
+      if (mounted) {
+        setState(() => galatMuat = _infoGalatProduksi(e, cfg.judul));
+      }
     } finally {
       if (mounted) setState(() => memuat = false);
     }
@@ -91,8 +99,12 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
   /// (REWORK=WO, UNBUILD, SCRAP=WASTE) dan mengelola karantina batch.
   Future<void> _disposisi(Map<String, dynamic> d, String disposisi) async {
     try {
-      final r = await ApiClient.instance.aksi('produksi_qc_disposisi',
-          <String, dynamic>{'jenis': cfg.kode, 'id': d['id'], 'disposisi': disposisi});
+      final r = await ApiClient.instance.aksi(
+          'produksi_qc_disposisi', <String, dynamic>{
+        'jenis': cfg.kode,
+        'id': d['id'],
+        'disposisi': disposisi
+      });
       final turunan = (r['turunan'] as List?)?.length ?? 0;
       _pesan('Disposisi $disposisi diterapkan'
           '${turunan > 0 ? " ($turunan dokumen turunan draf dibuat)" : ""}.');
@@ -129,12 +141,21 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
                 .toLowerCase()
                 .contains(q))
         .toList();
-    return Scaffold(
-      appBar: AppBar(title: Text(cfg.judul), actions: <Widget>[
+    return AppShell(
+      menuAktif: _menuProduksi(widget.bagian),
+      judul: cfg.judul,
+      subjudul: 'Kelola dokumen ${cfg.judul.toLowerCase()}',
+      scrollable: false,
+      aksiHeader: Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
         IconButton(
-            onPressed: memuat ? null : _muat, icon: const Icon(Icons.refresh)),
+            onPressed: memuat ? null : _muat,
+            tooltip: 'Muat ulang',
+            icon: const Icon(Icons.refresh)),
         if (hak['buat'] == true)
-          IconButton(onPressed: () => _form(), icon: const Icon(Icons.add)),
+          FilledButton.icon(
+              onPressed: () => _form(),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah')),
       ]),
       body: Column(children: <Widget>[
         Padding(
@@ -147,25 +168,43 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
         Expanded(
             child: memuat
                 ? const Center(child: CircularProgressIndicator())
-                : tampil.isEmpty
-                    ? Center(
-                        child: Text('Belum ada ${cfg.judul.toLowerCase()}.'))
-                    : ListView.separated(
+                : galatMuat != null
+                    ? ListView(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                        itemCount: tampil.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) {
-                          final d = tampil[i];
-                          return Card(
-                              child: ListTile(
-                                  leading: Icon(cfg.ikon),
-                                  title: Text('${d['nomor'] ?? '-'}'),
-                                  subtitle: Text(
-                                      '${d['statusDokumen'] ?? 'DRAFT'} · Qty ${d['qtyAktual'] ?? d['qtyRencana'] ?? 0} ${d['uom'] ?? ''}\n${d['referensi'] ?? ''}'),
-                                  isThreeLine: true,
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () => _detail(d)));
-                        })),
+                        children: <Widget>[
+                          AppErrorPanel(info: galatMuat!),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: _muat,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Periksa Kembali'),
+                            ),
+                          ),
+                        ],
+                      )
+                    : tampil.isEmpty
+                        ? Center(
+                            child:
+                                Text('Belum ada ${cfg.judul.toLowerCase()}.'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                            itemCount: tampil.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final d = tampil[i];
+                              return Card(
+                                  child: ListTile(
+                                      leading: Icon(cfg.ikon),
+                                      title: Text('${d['nomor'] ?? '-'}'),
+                                      subtitle: Text(
+                                          '${d['statusDokumen'] ?? 'DRAFT'} · Qty ${d['qtyAktual'] ?? d['qtyRencana'] ?? 0} ${d['uom'] ?? ''}\n${d['referensi'] ?? ''}'),
+                                      isThreeLine: true,
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () => _detail(d)));
+                            })),
       ]),
       floatingActionButton: hak['buat'] == true
           ? FloatingActionButton.extended(
@@ -175,6 +214,57 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
           : null,
     );
   }
+}
+
+MenuEBisnis _menuProduksi(BagianProduksi bagian) {
+  switch (bagian) {
+    case BagianProduksi.billOfMaterial:
+      return MenuEBisnis.produksiBom;
+    case BagianProduksi.workOrder:
+      return MenuEBisnis.produksiWorkOrder;
+    case BagianProduksi.materialIssue:
+      return MenuEBisnis.produksiMaterialIssue;
+    case BagianProduksi.materialReturn:
+      return MenuEBisnis.produksiMaterialReturn;
+    case BagianProduksi.productionOutput:
+      return MenuEBisnis.produksiOutput;
+    case BagianProduksi.productionWaste:
+      return MenuEBisnis.produksiWaste;
+    case BagianProduksi.productionCost:
+      return MenuEBisnis.produksiCosting;
+    case BagianProduksi.productionUnbuild:
+      return MenuEBisnis.produksiUnbuild;
+    case BagianProduksi.qualityAlert:
+      return MenuEBisnis.produksiQualityAlert;
+  }
+}
+
+AppErrorInfo _infoGalatProduksi(Object error, String judulDokumen) {
+  final dasar = error is ApiException
+      ? error.info
+      : AppErrorInfo.dari(error, aktivitas: 'memuat $judulDokumen');
+  final jejak = error is ApiException
+      ? '${error.pesan}\n${error.teknis}'.toLowerCase()
+      : error.toString().toLowerCase();
+  if (jejak.contains('inventory_production.production_document') &&
+      (jejak.contains('does not exist') ||
+          jejak.contains('tidak ada') ||
+          jejak.contains('sqlgrammar'))) {
+    return AppErrorInfo(
+      judul: 'Modul Produksi belum siap di server',
+      pesan:
+          'Struktur penyimpanan Produksi belum selesai dipasang di server. Data tidak berubah dan menu lain tetap dapat digunakan.',
+      solusi: const <String>[
+        'Tidak perlu menekan Muat Ulang berulang atau memasang ulang aplikasi; tindakan tersebut tidak membuat struktur server.',
+        'Kasir dapat melanjutkan pekerjaan pada menu lain. Catat kode referensi di bawah dan kirimkan kepada admin aplikasi.',
+        'Admin perlu memastikan deployment backend memuat seluruh entity dan konfigurasi Hibernate Produksi, kemudian menjalankan ulang server agar pembaruan skema selesai.',
+        'Setelah admin menyatakan server siap, kembali ke menu Produksi lalu tekan Periksa Kembali satu kali.',
+      ],
+      teknis: dasar.teknis,
+      kodeReferensi: dasar.kodeReferensi,
+    );
+  }
+  return dasar;
 }
 
 class _Form extends StatefulWidget {
@@ -504,11 +594,15 @@ class _Detail extends StatelessWidget {
                                 label: const Text('Ubah')),
                           // Fase E: Quality Alert didisposisi, bukan disetujui.
                           if (cfg.kode == 'quality_alert' && status == 'DRAFT')
-                            ...['REWORK', 'UNBUILD', 'SCRAP', 'RELEASE'].map(
-                                (dsp) => OutlinedButton(
-                                    onPressed: () => Navigator.pop(
-                                        context, 'disposisi:$dsp'),
-                                    child: Text(dsp))),
+                            ...[
+                              'REWORK',
+                              'UNBUILD',
+                              'SCRAP',
+                              'RELEASE'
+                            ].map((dsp) => OutlinedButton(
+                                onPressed: () =>
+                                    Navigator.pop(context, 'disposisi:$dsp'),
+                                child: Text(dsp))),
                           if (cfg.kode != 'quality_alert' &&
                               hak['setujui'] == true &&
                               status == 'DRAFT')
@@ -597,8 +691,8 @@ class _Konfigurasi {
       case BagianProduksi.qualityAlert:
         // Fase E: terbit otomatis saat OUTPUT produk ber-QC diposting;
         // disposisi REWORK/UNBUILD/SCRAP/RELEASE lewat tombol di rincian.
-        return const _Konfigurasi('quality_alert', 'Quality Alert (QC)',
-            Icons.verified_outlined);
+        return const _Konfigurasi(
+            'quality_alert', 'Quality Alert (QC)', Icons.verified_outlined);
     }
   }
 }

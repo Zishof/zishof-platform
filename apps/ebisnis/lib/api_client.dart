@@ -169,6 +169,7 @@ class ApiClient {
     'produk_mutasi_ringkasan',
     'produk_statistik',
     'produk_statistik_detail',
+    'price_tag_list_produk',
     'so_simpan',
     'so_ringkasan',
     'so_ekspor_excel',

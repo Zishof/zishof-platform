@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_db/core_db.dart';
 
 import '../api_client.dart';
@@ -62,6 +64,80 @@ class StatusSinkronTabel {
       );
 }
 
+/// Snapshot kemajuan satu rangkaian sinkronisasi seluruh tabel.
+///
+/// Persentase berasal dari jumlah adapter yang benar-benar telah selesai,
+/// bukan timer semu. [sedangBerjalan] membedakan laporan sebelum dan sesudah
+/// satu adapter diproses sehingga UI dapat menampilkan nama data yang aktif.
+class KemajuanSinkronisasiTabel {
+  const KemajuanSinkronisasiTabel({
+    required this.nama,
+    required this.label,
+    required this.jumlahSelesai,
+    required this.total,
+    required this.sedangBerjalan,
+    this.gagal = false,
+    this.pesan,
+    this.detail,
+    this.fraksiTahap,
+  });
+
+  final String nama;
+  final String label;
+  final int jumlahSelesai;
+  final int total;
+  final bool sedangBerjalan;
+  final bool gagal;
+  final String? pesan;
+  final String? detail;
+
+  /// Kemajuan di dalam adapter aktif (0..1). Tanpa nilai ini persentase tetap
+  /// dihitung dari jumlah tabel yang selesai, sehingga tidak pernah berpura-
+  /// pura maju berdasarkan timer.
+  final double? fraksiTahap;
+
+  double get fraksi {
+    if (total <= 0) return 0;
+    final bagianAktif =
+        sedangBerjalan ? (fraksiTahap ?? 0).clamp(0.0, 1.0).toDouble() : 0.0;
+    return ((jumlahSelesai + bagianAktif) / total).clamp(0.0, 1.0).toDouble();
+  }
+
+  int get persen => (fraksi * 100).round();
+}
+
+typedef PelaporKemajuanSinkronisasi = void Function(
+  KemajuanSinkronisasiTabel kemajuan,
+);
+
+typedef PelaporRincianSinkronisasi = void Function(
+  String detail,
+  int jumlahDiproses,
+  int? total,
+);
+
+class SinkronisasiDibatalkan implements Exception {
+  const SinkronisasiDibatalkan();
+
+  @override
+  String toString() =>
+      'Dibatalkan pengguna. Data lokal yang sudah ada tetap dipertahankan.';
+}
+
+/// Token pembatalan kooperatif. Permintaan HTTP yang sudah berada di server
+/// tidak diputus paksa; setelah respons/batas waktu kembali, proses berhenti
+/// sebelum halaman berikutnya atau sebelum cache atomik diganti.
+class PembatalanSinkronisasi {
+  bool _dibatalkan = false;
+
+  bool get dibatalkan => _dibatalkan;
+  void batalkan() => _dibatalkan = true;
+
+  void pastikanLanjut() {
+    if (_dibatalkan) throw const SinkronisasiDibatalkan();
+  }
+}
+
 /// Audit dan sinkron tabel lokal yang aman.
 ///
 /// Inventaris tabel selalu dinamis dari SQLite. Hanya tabel pada registry ini
@@ -78,6 +154,23 @@ class SinkronisasiTabelService {
     'outbox_master': 'outbox_master',
     'outbox_is': 'outbox_is',
   };
+
+  static String labelTabel(String nama) {
+    switch (nama) {
+      case 'produk_cache':
+        return 'Katalog produk';
+      case 'anggota_cache':
+        return 'Data member';
+      case 'transaksi_pending':
+        return 'Transaksi lokal & pending';
+      case 'outbox_master':
+        return 'Perubahan data master';
+      case 'outbox_is':
+        return 'Perintah Inventory & Sales';
+      default:
+        return nama;
+    }
+  }
 
   static String _keterangan(String nama) {
     switch (nama) {
@@ -192,23 +285,40 @@ class SinkronisasiTabelService {
     return hasil;
   }
 
-  Future<String> sinkronkan(String nama) async {
+  Future<String> sinkronkan(
+    String nama, {
+    PelaporRincianSinkronisasi? onDetail,
+    PembatalanSinkronisasi? pembatalan,
+    bool kirimMasterLebihDulu = true,
+  }) async {
+    pembatalan?.pastikanLanjut();
     switch (_adapter[nama]) {
       case 'produk':
-        final jumlah = await _sinkronProduk();
+        final jumlah = await _sinkronProduk(
+          onDetail: onDetail,
+          pembatalan: pembatalan,
+          kirimMasterLebihDulu: kirimMasterLebihDulu,
+        );
         return '$jumlah produk berhasil dicocokkan dengan server.';
       case 'anggota':
-        final jumlah = await sinkronkanAnggota();
+        final jumlah = await sinkronkanAnggota(
+          onDetail: onDetail,
+          pembatalan: pembatalan,
+          kirimMasterLebihDulu: kirimMasterLebihDulu,
+        );
         return '$jumlah member berhasil diunduh dari server.';
       case 'transaksi':
         final hasil = await TransaksiOutboxService.instance
             .sinkronkan(sertakanGagal: true);
+        pembatalan?.pastikanLanjut();
         return '${hasil.berhasil} dari ${hasil.total} transaksi berhasil dikirim.';
       case 'outbox_master':
         final jumlah = await MasterOffline.flush();
+        pembatalan?.pastikanLanjut();
         return '$jumlah perubahan data master berhasil dikirim.';
       case 'outbox_is':
         final jumlah = await OutboxIs.flush();
+        pembatalan?.pastikanLanjut();
         return '$jumlah perintah Inventory & Sales berhasil dikirim.';
       default:
         throw StateError(
@@ -216,31 +326,145 @@ class SinkronisasiTabelService {
     }
   }
 
-  Future<List<String>> sinkronkanSemua() async {
-    final pesan = <String>[];
-    for (final nama in _adapter.keys) {
-      try {
-        pesan.add('$nama: ${await sinkronkan(nama)}');
-      } catch (e) {
-        pesan.add('$nama: ${_pesanPeriksa(e)}');
-      }
+  Future<List<String>> sinkronkanSemua({
+    PelaporKemajuanSinkronisasi? onProgress,
+    PembatalanSinkronisasi? pembatalan,
+  }) async {
+    final daftar = _adapter.keys.toList(growable: false);
+    final pesanPerTabel = <String, String>{};
+    var jumlahSelesai = 0;
+
+    void lapor(
+      String nama, {
+      required bool sedangBerjalan,
+      bool gagal = false,
+      String? pesan,
+      String? detail,
+      double? fraksiTahap,
+    }) {
+      final label = labelTabel(nama);
+      onProgress?.call(KemajuanSinkronisasiTabel(
+        nama: nama,
+        label: label,
+        jumlahSelesai: jumlahSelesai,
+        total: daftar.length,
+        sedangBerjalan: sedangBerjalan,
+        gagal: gagal,
+        pesan: pesan,
+        detail: detail,
+        fraksiTahap: fraksiTahap,
+      ));
     }
-    return pesan;
+
+    Future<String> jalankan(
+      String nama, {
+      Future<int>? tungguMaster,
+      bool hasilMaster = false,
+    }) async {
+      final label = labelTabel(nama);
+      lapor(
+        nama,
+        sedangBerjalan: true,
+        detail: tungguMaster == null
+            ? 'Menyiapkan ${label.toLowerCase()}…'
+            : 'Menunggu perubahan data master selesai agar cache tidak tertimpa…',
+      );
+      var gagal = false;
+      late String hasil;
+      try {
+        if (tungguMaster != null) await tungguMaster;
+        pembatalan?.pastikanLanjut();
+        if (hasilMaster) {
+          final jumlah = await (tungguMaster ?? Future<int>.value(0));
+          hasil = '$jumlah perubahan data master berhasil dikirim.';
+        } else {
+          hasil = await sinkronkan(
+            nama,
+            pembatalan: pembatalan,
+            kirimMasterLebihDulu: tungguMaster == null,
+            onDetail: (detail, jumlahDiproses, totalData) {
+              final fraksiTahap = totalData == null || totalData <= 0
+                  ? null
+                  : jumlahDiproses / totalData;
+              lapor(
+                nama,
+                sedangBerjalan: true,
+                detail: detail,
+                fraksiTahap: fraksiTahap,
+              );
+            },
+          );
+        }
+      } on SinkronisasiDibatalkan catch (e) {
+        hasil = '$e';
+      } catch (e) {
+        gagal = true;
+        hasil = _pesanPeriksa(e);
+      }
+      final pesanTabel = '$nama: $hasil';
+      pesanPerTabel[nama] = pesanTabel;
+      jumlahSelesai++;
+      lapor(
+        nama,
+        sedangBerjalan: false,
+        gagal: gagal,
+        pesan: pesanTabel,
+        detail: hasil,
+      );
+      return hasil;
+    }
+
+    // Satu flush master menjadi prasyarat bersama katalog+member. Future yang
+    // sama mencegah tiga flush bersaing dan mencegah laporan "0 terkirim"
+    // palsu ketika guard MasterOffline._sedangFlush aktif.
+    final futureMaster = (() async {
+      lapor(
+        'outbox_master',
+        sedangBerjalan: true,
+        detail: 'Mengirim perubahan data master lokal…',
+      );
+      pembatalan?.pastikanLanjut();
+      return MasterOffline.flush();
+    })();
+
+    await Future.wait<String>([
+      jalankan('outbox_master', tungguMaster: futureMaster, hasilMaster: true),
+      jalankan('produk_cache', tungguMaster: futureMaster),
+      jalankan('anggota_cache', tungguMaster: futureMaster),
+      jalankan('transaksi_pending'),
+      jalankan('outbox_is'),
+    ]);
+
+    // Urutan hasil stabil sesuai grid, walaupun penyelesaiannya paralel.
+    return daftar.map((nama) => pesanPerTabel[nama]!).toList(growable: false);
   }
 
   /// Unduh ulang seluruh member aktif dari server dan ganti cache lokal secara
   /// atomik. Dipublikasikan agar alur "Sinkronkan Semua Sivitas" dapat langsung
   /// menutup langkah kedua tanpa meminta pengguna menekan tombol lain.
-  Future<int> sinkronkanAnggota() async {
-    await MasterOffline.flush();
+  Future<int> sinkronkanAnggota({
+    PelaporRincianSinkronisasi? onDetail,
+    PembatalanSinkronisasi? pembatalan,
+    bool kirimMasterLebihDulu = true,
+  }) async {
+    if (kirimMasterLebihDulu) {
+      onDetail?.call(
+          'Mengirim perubahan master lokal sebelum mengunduh member…', 0, null);
+      await MasterOffline.flush();
+    }
+    pembatalan?.pastikanLanjut();
     var sejakId = 0;
     final perId = <int, Map<String, Object?>>{};
     while (true) {
+      pembatalan?.pastikanLanjut();
+      onDetail?.call(
+          'Mengunduh data member setelah ID $sejakId…', perId.length, null);
       final hasil = await ApiClient.instance.aksi('anggota_sync_list', {
         'sejak_id': sejakId,
         'page_size': 500,
         'id_toko': Sesi.instance.idTokoTerpilih,
       });
+      pembatalan?.pastikanLanjut();
       final data = (hasil['data'] as List?) ?? const [];
       for (final nilai in data.whereType<Map>()) {
         final row = Map<String, dynamic>.from(nilai);
@@ -259,24 +483,50 @@ class SinkronisasiTabelService {
       }
       sejakId = berikutnya;
     }
+    onDetail?.call('Menyimpan ${perId.length} member ke database lokal…',
+        perId.length, perId.length);
+    pembatalan?.pastikanLanjut();
     await CoreDb.instance.replaceAnggotaCache(perId.values.toList());
     return perId.length;
   }
 
-  Future<int> _sinkronProduk() async {
-    await MasterOffline.flush();
+  Future<int> _sinkronProduk({
+    PelaporRincianSinkronisasi? onDetail,
+    PembatalanSinkronisasi? pembatalan,
+    bool kirimMasterLebihDulu = true,
+  }) async {
+    if (kirimMasterLebihDulu) {
+      onDetail?.call(
+          'Mengirim perubahan master lokal sebelum mengunduh katalog…',
+          0,
+          null);
+      await MasterOffline.flush();
+    }
+    pembatalan?.pastikanLanjut();
     const ukuran = 100;
     final perId = <int, Map<String, dynamic>>{};
     var halaman = 1;
     int? total;
     while (true) {
-      final hasil = await ApiClient.instance.aksi('katalog', {
-        'page': halaman,
-        'page_size': ukuran,
-        if (Sesi.instance.idTokoTerpilih != null)
-          'toko_id': Sesi.instance.idTokoTerpilih,
-        if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
-      });
+      pembatalan?.pastikanLanjut();
+      onDetail?.call(
+        total == null
+            ? 'Mengunduh halaman $halaman katalog produk…'
+            : 'Mengunduh halaman $halaman — ${perId.length} dari $total produk…',
+        perId.length,
+        total,
+      );
+      final hasil = await _ambilHalamanKatalogDenganRetry(
+        halaman: halaman,
+        ukuran: ukuran,
+        onMencobaUlang: (percobaan) => onDetail?.call(
+          'Server sempat sibuk di halaman $halaman. Mencoba ulang $percobaan dari 3 tanpa mengulang dari awal…',
+          perId.length,
+          total,
+        ),
+        pembatalan: pembatalan,
+      );
+      pembatalan?.pastikanLanjut();
       final data = ((hasil['produk'] as List?) ?? const [])
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
@@ -291,6 +541,11 @@ class SinkronisasiTabelService {
         }
         perId[id] = row;
       }
+      onDetail?.call(
+        'Halaman $halaman selesai — ${perId.length} dari ${total ?? '?'} produk diterima.',
+        perId.length,
+        total,
+      );
       if (data.length < ukuran || (total != null && perId.length >= total)) {
         break;
       }
@@ -304,11 +559,81 @@ class SinkronisasiTabelService {
       throw StateError(
           'Unduhan katalog belum lengkap (${perId.length}/$total). Cache lama dipertahankan dan aman dipakai.');
     }
+    onDetail?.call(
+      'Menyimpan ${perId.length} produk ke database lokal…',
+      perId.length,
+      total ?? perId.length,
+    );
+    pembatalan?.pastikanLanjut();
     await CoreDb.instance
         .replaceProdukCache(perId.values.map(Produk.baseKeCacheRow).toList());
     await MasterOffline.simpanDaftarLengkapDariServer(
         'master:produk_list', perId.values.toList());
     return perId.length;
+  }
+
+  /// Gateway produksi sesekali mengembalikan 502 ketika offset katalog sudah
+  /// sangat dalam. Satu halaman boleh dicoba ulang tanpa membuang halaman yang
+  /// telah diterima; cache aktif tetap baru diganti setelah katalog lengkap.
+  Future<Map<String, dynamic>> _ambilHalamanKatalogDenganRetry({
+    required int halaman,
+    required int ukuran,
+    void Function(int percobaan)? onMencobaUlang,
+    PembatalanSinkronisasi? pembatalan,
+  }) async {
+    const jeda = <Duration>[
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+    ];
+    for (var percobaan = 1; percobaan <= 3; percobaan++) {
+      pembatalan?.pastikanLanjut();
+      try {
+        return await ApiClient.instance.aksi('katalog', {
+          'page': halaman,
+          'page_size': ukuran,
+          if (Sesi.instance.idTokoTerpilih != null)
+            'toko_id': Sesi.instance.idTokoTerpilih,
+          if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
+        });
+      } on ApiException catch (e) {
+        final sementara = e.offline ||
+            e.statusHttp == 502 ||
+            e.statusHttp == 503 ||
+            e.statusHttp == 504;
+        if (!sementara || percobaan >= 3) {
+          if (e.statusHttp == 502 ||
+              e.statusHttp == 503 ||
+              e.statusHttp == 504) {
+            throw StateError(
+              'Server masih sibuk pada halaman $halaman setelah 3 percobaan '
+              '(HTTP ${e.statusHttp}, referensi ${e.kodeReferensi ?? '-'}). '
+              'Cache lama tetap aman. Tunggu 2–5 menit, lalu tekan Sinkronkan '
+              'Tabel pada produk_cache; bila berulang, admin server perlu '
+              'memeriksa permintaan katalog halaman $halaman.',
+            );
+          }
+          rethrow;
+        }
+        onMencobaUlang?.call(percobaan + 1);
+        await _tungguDapatDibatalkan(jeda[percobaan - 1], pembatalan);
+      }
+    }
+    throw StateError('Percobaan katalog berhenti tanpa hasil.');
+  }
+
+  static Future<void> _tungguDapatDibatalkan(
+    Duration durasi,
+    PembatalanSinkronisasi? pembatalan,
+  ) async {
+    const irisan = Duration(milliseconds: 200);
+    var tersisa = durasi;
+    while (tersisa > Duration.zero) {
+      pembatalan?.pastikanLanjut();
+      final tunggu = tersisa < irisan ? tersisa : irisan;
+      await Future<void>.delayed(tunggu);
+      tersisa -= tunggu;
+    }
+    pembatalan?.pastikanLanjut();
   }
 
   static String _pesanPeriksa(Object e) {

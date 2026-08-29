@@ -1,0 +1,6 @@
+OK
+HEAD=d1bc7ae
+TAG=v1.33.83-build141
+ALBAHJAH=46164098
+EBISNIS=46103875
+URL=https://github.com/Zishof/zishof-platform/releases/tag/v1.33.83-build141

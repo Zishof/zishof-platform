@@ -166,6 +166,7 @@ void main() {
       'produk_mutasi_ringkasan',
       'produk_statistik',
       'produk_statistik_detail',
+      'price_tag_list_produk',
       'so_simpan',
       'so_ringkasan',
       'so_ekspor_excel',
@@ -181,6 +182,13 @@ void main() {
     ]) {
       expect(ApiClient.aksiMemakaiTokoId(aksi), isTrue, reason: aksi);
     }
+  });
+
+  test('price tag selalu membawa toko aktif agar profil dan produk dapat dimuat',
+      () {
+    Sesi.instance.tokoId = 7;
+    final payload = ApiClient.susunPayload('price_tag_list_produk', null);
+    expect(payload['toko_id'], 7);
   });
 
   group('aksi transaksi dari layar agregat', () {

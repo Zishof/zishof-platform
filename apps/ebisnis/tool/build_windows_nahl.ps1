@@ -8,7 +8,7 @@ $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
 if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 tidak ditemukan.' }
 & $iscc "/DAppVersion=$version" installer\nahl.iss
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$setup = "installer\dist\FF-Fajrul-Falah-Mart-Setup-$version.exe"
+$setup = "installer\dist\TokoQu-Al-Bahjah-An-Nahl-Setup-$version.exe"
 & (Join-Path $PSScriptRoot 'verify_windows_signing.ps1') -Executable $setup `
     -AllowUnsigned:$IzinkanUnsignedWindows
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

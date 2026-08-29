@@ -72,4 +72,37 @@ void main() {
     expect(screen, contains('LayoutBuilder'));
     expect(screen, contains('Wrap('));
   });
+
+  test('seluruh halaman pengiriman mempertahankan shell dan sidebar utama', () {
+    expect(screen, contains('return AppShell('));
+    expect(screen, contains('menuAktif: _menuPengiriman(widget.bagian)'));
+    for (final menu in <String>[
+      'deliveryOrder',
+      'freightOrder',
+      'shipmentTracking',
+      'proofOfDelivery',
+      'penerimaanTransferOutlet',
+      'klaimDistribusi',
+      'reverseLogistics',
+    ]) {
+      expect(screen, contains('MenuEBisnis.$menu'));
+    }
+  });
+
+  test('menu lama MitraInap yang memakai Scaffold tetap dibungkus shell', () {
+    expect(shell, contains('Widget _halamanMitraInap('));
+    for (final pasangan in <String, String>{
+      'PropertiHotel': 'propertiHotel',
+      'KamarHotel': 'kamarHotel',
+      'ReservasiHotel': 'reservasiHotel',
+      'ResepsionisHotel': 'resepsionisHotel',
+      'TiketDapur': 'tiketDapur',
+      'KontrakPemilik': 'kontrakPemilik',
+      'LaporanPemilikHotel': 'laporanPemilikHotel',
+    }.entries) {
+      expect(
+          shell, contains('Widget _bangun${pasangan.key}(BuildContext c) =>'));
+      expect(shell, contains('MenuEBisnis.${pasangan.value}'));
+    }
+  });
 }

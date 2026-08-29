@@ -75,4 +75,32 @@ void main() {
     }
     expect(screen, isNot(contains('distribusi_')));
   });
+
+  test('kegagalan schema Produksi memberi edukasi yang dapat ditindaklanjuti',
+      () {
+    expect(screen, contains('Modul Produksi belum siap di server'));
+    expect(screen, contains('Tidak perlu menekan Muat Ulang berulang'));
+    expect(screen, contains('konfigurasi Hibernate Produksi'));
+    expect(screen, contains("const Text('Periksa Kembali')"));
+    expect(screen, contains('AppErrorPanel(info: galatMuat!)'));
+  });
+
+  test('seluruh halaman produksi mempertahankan shell dan sidebar utama', () {
+    expect(screen, contains('return AppShell('));
+    expect(screen, contains('menuAktif: _menuProduksi(widget.bagian)'));
+    expect(screen, isNot(contains('return Scaffold(')));
+    for (final menu in <String>[
+      'produksiBom',
+      'produksiWorkOrder',
+      'produksiMaterialIssue',
+      'produksiMaterialReturn',
+      'produksiOutput',
+      'produksiWaste',
+      'produksiCosting',
+      'produksiUnbuild',
+      'produksiQualityAlert',
+    ]) {
+      expect(screen, contains('MenuEBisnis.$menu'));
+    }
+  });
 }

@@ -68,8 +68,8 @@ void main() {
   test('profil nahl terisolasi dan hanya merakit POS', () {
     const nahl = AppProductProfile.nahl();
     expect(nahl.kode, 'nahl');
-    expect(nahl.namaAplikasi, 'FF (Fajrul Falah) Mart');
-    expect(nahl.namaSidebar, 'FF Mart');
+    expect(nahl.namaAplikasi, 'TokoQu Al-Bahjah An Nahl');
+    expect(nahl.namaSidebar, 'TokoQu An Nahl');
     expect(nahl.updateAssetKeyword, 'nahl');
     expect(nahl.logoAsset, 'assets/images/nahl/icon.png');
     expect(nahl.fiturGrup, const {FiturGrup.pos});

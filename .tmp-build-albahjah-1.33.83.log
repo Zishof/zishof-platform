@@ -1,0 +1,109 @@
+==== Windows albahjah ====
+
+Building Windows application...                                    11,7s
+√ Built build\windows\x64\runner\Release\ebisnis.exe
+Inno Setup 6 Command-Line Compiler
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 6.7.3
+Non-commercial use only
+
+Preprocessing
+   Reading file: C:\Users\Admin1\AppData\Local\Programs\Inno Setup 6\ISPPBuiltins.iss
+Parsing [Setup] section, line 9
+Parsing [Setup] section, line 10
+Parsing [Setup] section, line 11
+Parsing [Setup] section, line 12
+Parsing [Setup] section, line 13
+Parsing [Setup] section, line 14
+Parsing [Setup] section, line 15
+Parsing [Setup] section, line 16
+Parsing [Setup] section, line 17
+Parsing [Setup] section, line 18
+Parsing [Setup] section, line 19
+Parsing [Setup] section, line 20
+Parsing [Setup] section, line 21
+Parsing [Setup] section, line 22
+Parsing [Setup] section, line 23
+Parsing [Setup] section, line 24
+Reading file (WizardImageFile)
+Reading file (WizardSmallImageFile)
+Preparing Setup program executable
+   Verification successful
+   Updating icons (Setup.e32)
+   Updating version info (Setup.e32)
+Determining language code pages
+Parsing [Languages] section, line 27
+   Reading file: C:\Users\Admin1\AppData\Local\Programs\Inno Setup 6\Default.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [Languages] section, line 27
+   Reading file: C:\Users\Admin1\AppData\Local\Programs\Inno Setup 6\Default.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Messages in script file
+Reading [Code] section
+Parsing [Tasks] section, line 30
+Parsing [Icons] section, line 39
+Parsing [Icons] section, line 40
+Parsing [Icons] section, line 41
+Parsing [Run] section, line 44
+Parsing [Run] section, line 45
+Parsing [Files] section, line 35
+Parsing [Files] section, line 36
+   Reading version info: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\vc_redist.x64.exe
+Compiling [Code] section
+Deleting Al-Bahjah-POS-Setup-1.33.83.exe from output directory
+Creating setup files
+   Verification successful
+   Updating icons (Setup.exe)
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\desktop_multi_window_plugin.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\ebisnis_albahjah.exe
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\file_selector_windows_plugin.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\flutter_windows.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\native_assets.yaml
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\pdfium.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\printing_plugin.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\screen_retriever_windows_plugin.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\url_launcher_windows_plugin.dll
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\app.so
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\icudtl.dat
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\AssetManifest.bin
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\AssetManifest.json
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\FontManifest.json
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\NOTICES.Z
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\albahjah\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\albahjah\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\apotik\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\apotik\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\ebisnis\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\ebisnis\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\emedik\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\emedik\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\help\apotik-workflow.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\help\emedik-workflow.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\inventory_sales\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\inventory_sales\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\petra\icon.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\assets\images\petra\login-background.png
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\fonts\MaterialIcons-Regular.otf
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\packages\cupertino_icons\assets\CupertinoIcons.ttf
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\..\build\windows\x64\runner\Release\data\flutter_assets\shaders\ink_sparkle.frag
+   Compressing: C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\vc_redist.x64.exe   (14.51.36247.0)
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (15,125 sec). Resulting Setup program filename is:
+C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\installer\dist\Al-Bahjah-POS-Setup-1.33.83.exe
+
+==== RINGKASAN ====
+versi   : 1.33.83
+folder  : C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.33.83
+durasi  : 0.5 menit
+  Al-Bahjah-POS-Setup-1.33.83.exe                    44,0 MB
+  eBisnis-Setup-1.33.83.exe                          44,0 MB
+SEMUA VARIAN BERHASIL (2 artefak)

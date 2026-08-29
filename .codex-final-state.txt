@@ -1,0 +1,5 @@
+SCRIPT=True
+VERSION=version: 1.33.83+141
+GIT= M apps/ebisnis/pubspec.yaml|?? .tmp-build-albahjah-1.33.83.log|?? .tmp-release-1.33.83.ps1|?? docs/pos/2026-08-26-release-desktop-albahjah-ebisnis-1.33.83.md
+ASSET=C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.33.83\Al-Bahjah-POS-Setup-1.33.83.exe;46164098
+ASSET=C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.33.83\eBisnis-Setup-1.33.83.exe;46103875

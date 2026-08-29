@@ -1188,15 +1188,39 @@ Widget _bangunPersediaanApotik(BuildContext c) =>
 Widget _bangunLaporanApotik(BuildContext c) => const LaporanApotikScreen();
 Widget _bangunBerandaMitraInap(BuildContext c) =>
     const BerandaMitraInapScreen();
-Widget _bangunPropertiHotel(BuildContext c) => const PropertiHotelScreen();
-Widget _bangunKamarHotel(BuildContext c) => const KamarHotelScreen();
-Widget _bangunReservasiHotel(BuildContext c) => const ReservasiHotelScreen();
-Widget _bangunResepsionisHotel(BuildContext c) =>
-    const ResepsionisHotelScreen();
-Widget _bangunTiketDapur(BuildContext c) => const TiketDapurScreen();
-Widget _bangunKontrakPemilik(BuildContext c) => const KontrakPemilikScreen();
-Widget _bangunLaporanPemilikHotel(BuildContext c) =>
-    const LaporanPemilikScreen();
+Widget _bangunPropertiHotel(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.propertiHotel, 'Properti Hotel', const PropertiHotelScreen());
+Widget _bangunKamarHotel(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.kamarHotel, 'Kamar & Tipe Kamar', const KamarHotelScreen());
+Widget _bangunReservasiHotel(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.reservasiHotel, 'Reservasi', const ReservasiHotelScreen());
+Widget _bangunResepsionisHotel(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.resepsionisHotel,
+    'Resepsionis / Front Desk',
+    const ResepsionisHotelScreen());
+Widget _bangunTiketDapur(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.tiketDapur, 'Tiket Dapur', const TiketDapurScreen());
+Widget _bangunKontrakPemilik(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.kontrakPemilik,
+    'Kontrak Pemilik',
+    const KontrakPemilikScreen());
+Widget _bangunLaporanPemilikHotel(BuildContext c) => _halamanMitraInap(
+    MenuEBisnis.laporanPemilikHotel,
+    'Laporan Pemilik',
+    const LaporanPemilikScreen());
+
+/// Layar lama MitraInap masih memiliki Scaffold/AppBar internal. Saat dipilih
+/// dari sidebar, layar tersebut tetap harus berada di dalam shell utama agar
+/// navigasi toko, sidebar, dan aksi global tidak ikut terganti.
+Widget _halamanMitraInap(MenuEBisnis menu, String judul, Widget badan) =>
+    AppShell(
+      menuAktif: menu,
+      judul: judul,
+      tampilkanJudul: false,
+      tampilkanBantuanHeader: false,
+      scrollable: false,
+      body: badan,
+    );
 
 _ItemMenuShell? _itemMenu(MenuEBisnis kunci) {
   for (final item in _daftarMenu) {
@@ -2466,24 +2490,15 @@ class _AppTopbarState extends State<_AppTopbar> {
     }
   }
 
-  /// Sinkronisasi MANUAL: mengembalikan nota GAGAL ke antrean lalu mengirim
-  /// semuanya. Dipisahkan dari timer otomatis supaya pengiriman ulang atas
-  /// nota yang pernah ditolak selalu merupakan keputusan pengguna.
+  /// Sinkronisasi manual seluruh tabel yang didukung. Termasuk katalog,
+  /// member, transaksi lokal/pending (termasuk GAGAL atas keputusan manual),
+  /// perubahan master, dan antrean Inventory & Sales.
   Future<void> _sinkronkanManual() async {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      final hasil =
-          await TransaksiOutboxService.instance.sinkronkan(sertakanGagal: true);
+      await tampilkanSinkronisasiSeluruhTabel(context);
       await _muat();
-      if (!mounted) return;
-      final sisa = _pendingSync + _gagalSync;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(hasil.total == 0
-            ? 'Tidak ada transaksi tertahan.'
-            : '${hasil.berhasil} dari ${hasil.total} transaksi terkirim.'
-                '${sisa > 0 ? ' Sisa $sisa masih tertahan.' : ''}'),
-      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -2672,8 +2687,8 @@ class _AppTopbarState extends State<_AppTopbar> {
               message: _sinkronBerjalan
                   ? 'Sedang menyinkronkan...'
                   : tertahan == 0
-                      ? 'Semua transaksi sudah terkirim. Klik untuk memeriksa lagi.'
-                      : 'Klik untuk mengirim ulang sekarang'
+                      ? 'Sinkronkan seluruh tabel lokal, termasuk transaksi.'
+                      : 'Sinkronkan seluruh tabel dan kirim ulang $tertahan transaksi'
                           '${adaGagal ? ' ($_gagalSync perlu ditinjau)' : ''}',
               child: InkWell(
                 onTap: _sinkronBerjalan ? null : _sinkronkanManual,

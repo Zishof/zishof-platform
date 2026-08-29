@@ -84,6 +84,7 @@ class PenawaranSinkronisasiVersi {
           ),
           actions: [
             TextButton(
+              autofocus: true,
               onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Nanti'),
             ),
@@ -105,16 +106,25 @@ class PenawaranSinkronisasiVersi {
         await prefs.setString(kunci, versi);
       }
       if (sinkronSekarang && context.mounted) {
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => const _DialogSinkronisasiVersi(),
-        );
+        await tampilkanSinkronisasiSeluruhTabel(context);
       }
     } finally {
       _sedangMemeriksa = false;
     }
   }
+}
+
+/// Membuka sinkronisasi seluruh adapter lokal yang didukung dari pemicu mana
+/// pun (penawaran sesudah update maupun tombol Sinkronkan di header). Dengan
+/// satu entry point, transaksi pending tidak lagi tertinggal karena tombol
+/// header menjalankan alur yang lebih sempit daripada dialog instalasi.
+Future<void> tampilkanSinkronisasiSeluruhTabel(BuildContext context) async {
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const _DialogSinkronisasiVersi(),
+  );
 }
 
 class _DialogSinkronisasiVersi extends StatefulWidget {
@@ -127,10 +137,18 @@ class _DialogSinkronisasiVersi extends StatefulWidget {
 
 class _DialogSinkronisasiVersiState extends State<_DialogSinkronisasiVersi> {
   List<String>? _hasil;
+  final List<String> _hasilBerjalan = <String>[];
+  final Map<String, KemajuanSinkronisasiTabel> _kemajuanPerTabel =
+      <String, KemajuanSinkronisasiTabel>{};
+  final PembatalanSinkronisasi _pembatalan = PembatalanSinkronisasi();
+  KemajuanSinkronisasiTabel? _kemajuan;
+  int _jumlahGagal = 0;
+  bool _sedangMembatalkan = false;
   Object? _galat;
 
   bool get _adaKendala =>
       _galat != null ||
+      _jumlahGagal > 0 ||
       (_hasil?.any((pesan) {
             final teks = pesan.toLowerCase();
             return teks.contains('belum dapat dihubungi') ||
@@ -147,11 +165,170 @@ class _DialogSinkronisasiVersiState extends State<_DialogSinkronisasiVersi> {
 
   Future<void> _jalankan() async {
     try {
-      final hasil = await SinkronisasiTabelService.instance.sinkronkanSemua();
+      final hasil = await SinkronisasiTabelService.instance.sinkronkanSemua(
+        onProgress: _laporKemajuan,
+        pembatalan: _pembatalan,
+      );
       if (mounted) setState(() => _hasil = hasil);
     } catch (e) {
       if (mounted) setState(() => _galat = e);
     }
+  }
+
+  void _laporKemajuan(KemajuanSinkronisasiTabel kemajuan) {
+    if (!mounted) return;
+    setState(() {
+      _kemajuan = kemajuan;
+      _kemajuanPerTabel[kemajuan.nama] = kemajuan;
+      if (!kemajuan.sedangBerjalan && kemajuan.pesan != null) {
+        _hasilBerjalan.add(kemajuan.pesan!);
+        if (kemajuan.gagal) _jumlahGagal++;
+      }
+    });
+  }
+
+  Widget _progressBerjalan() {
+    final kemajuan = _kemajuan;
+    final tahapan = _kemajuanPerTabel.values.toList(growable: false);
+    final tahapanAktif =
+        tahapan.where((e) => e.sedangBerjalan).toList(growable: false);
+    final total = kemajuan?.total ?? 0;
+    final selesai = tahapan.where((e) => !e.sedangBerjalan).length;
+    final jumlahBagian = tahapan.fold<double>(0, (nilai, tahap) {
+      if (!tahap.sedangBerjalan) return nilai + 1;
+      return nilai + (tahap.fraksiTahap ?? 0).clamp(0.0, 1.0);
+    });
+    final fraksi =
+        total <= 0 ? 0.0 : (jumlahBagian / total).clamp(0.0, 1.0).toDouble();
+    final persen = (fraksi * 100).round();
+    final aktif = tahapan.where((e) => e.sedangBerjalan).length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _sedangMembatalkan
+              ? 'Menghentikan sinkronisasi dengan aman…'
+              : aktif <= 1
+                  ? 'Sedang memproses ${aktif == 0 ? 1 : aktif} tabel'
+                  : 'Sedang memproses $aktif tabel secara paralel',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        Semantics(
+          label: 'Kemajuan sinkronisasi $persen persen',
+          value: '$selesai dari $total tahap selesai',
+          child: LinearProgressIndicator(
+            value: fraksi,
+            minHeight: 12,
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(
+              '$persen%',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const Spacer(),
+            Text('$selesai dari $total tahap selesai'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _sedangMembatalkan
+              ? 'Menunggu permintaan server yang sedang aktif selesai. Cache '
+                  'tidak akan diganti dengan data setengah lengkap.'
+              : 'Jangan tutup aplikasi atau mematikan perangkat. Data lokal '
+                  'yang sudah ada tetap dipertahankan bila salah satu tabel gagal.',
+        ),
+        if (tahapanAktif.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 230),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: tahapanAktif.length,
+              separatorBuilder: (_, __) => const Divider(height: 14),
+              itemBuilder: (context, index) {
+                final tahap = tahapanAktif[index];
+                final berjalan = tahap.sedangBerjalan;
+                final persenTahap = berjalan && tahap.fraksiTahap != null
+                    ? ' ${(tahap.fraksiTahap! * 100).round()}%'
+                    : '';
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: berjalan
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              tahap.gagal
+                                  ? Icons.warning_amber
+                                  : Icons.check_circle,
+                              size: 18,
+                              color: tahap.gagal ? Colors.orange : Colors.green,
+                            ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${tahap.label}$persenTahap',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          if (tahap.detail?.trim().isNotEmpty == true)
+                            Text(
+                              tahap.detail!,
+                              key: ValueKey(
+                                  'detail-kemajuan-sinkronisasi-${tahap.nama}'),
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.black87),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+        if (_hasilBerjalan.isNotEmpty && tahapanAktif.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            '${_hasilBerjalan.length} dari $total tabel sudah selesai dan '
+            'dikeluarkan dari daftar aktif.',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
+        if (_jumlahGagal > 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            '$_jumlahGagal tahap mengalami kendala. Proses tabel lain tetap '
+            'dilanjutkan dan data lokal tetap aman.',
+            style: const TextStyle(
+              color: Colors.orange,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _batalkan() {
+    if (_sedangMembatalkan || _hasil != null || _galat != null) return;
+    setState(() => _sedangMembatalkan = true);
+    _pembatalan.batalkan();
   }
 
   @override
@@ -180,11 +357,7 @@ class _DialogSinkronisasiVersiState extends State<_DialogSinkronisasiVersi> {
         content: SizedBox(
           width: 680,
           child: !selesai
-              ? const Text(
-                  'Sedang menyinkronkan seluruh tabel yang didukung. Jangan '
-                  'tutup aplikasi atau mematikan perangkat. Data lokal yang '
-                  'sudah ada tetap dipertahankan bila salah satu adapter gagal.',
-                )
+              ? _progressBerjalan()
               : SelectableText(
                   _galat != null
                       ? 'Sinkronisasi belum selesai: $_galat\n\nData lokal '
@@ -198,6 +371,13 @@ class _DialogSinkronisasiVersiState extends State<_DialogSinkronisasiVersi> {
                 ),
         ),
         actions: [
+          if (!selesai)
+            TextButton.icon(
+              onPressed: _sedangMembatalkan ? null : _batalkan,
+              icon: const Icon(Icons.stop_circle_outlined),
+              label:
+                  Text(_sedangMembatalkan ? 'Sedang membatalkan…' : 'Batalkan'),
+            ),
           if (selesai)
             FilledButton(
               onPressed: () => Navigator.pop(context),

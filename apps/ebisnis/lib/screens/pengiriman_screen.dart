@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import '../widgets/app_shell.dart';
 
 enum BagianPengiriman {
   deliveryOrder,
@@ -180,85 +181,68 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints batas) {
-        final ringkas = batas.maxWidth < 760;
-        return RefreshIndicator(
-          onRefresh: _muat,
-          child: ListView(
-            padding: EdgeInsets.all(ringkas ? 12 : 24),
-            children: <Widget>[
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  SizedBox(
-                    width: ringkas ? batas.maxWidth : 560,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          konfigurasi.judul,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(konfigurasi.subjudul),
-                      ],
-                    ),
-                  ),
-                  Wrap(spacing: 8, children: <Widget>[
-                    IconButton(
-                        onPressed: _muat,
-                        tooltip: 'Muat ulang',
-                        icon: const Icon(Icons.refresh)),
-                    if (_hak['create'] == true)
-                      FilledButton.icon(
-                        onPressed: () => _form(),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Buat Dokumen'),
-                      ),
-                  ]),
-                ],
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _cari,
-                onSubmitted: (_) => _muat(),
-                decoration: InputDecoration(
-                  hintText:
-                      'Cari nomor, referensi, asal, tujuan, atau pengangkut...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                      onPressed: _muat, icon: const Icon(Icons.arrow_forward)),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (_pesan != null)
-                Card(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                      padding: const EdgeInsets.all(16), child: Text(_pesan!)),
-                ),
-              if (_memuat)
-                const Padding(
-                    padding: EdgeInsets.all(48),
-                    child: Center(child: CircularProgressIndicator()))
-              else if (_data.isEmpty)
-                const Card(
-                    child: Padding(
-                        padding: EdgeInsets.all(48),
-                        child: Center(child: Text('Belum ada dokumen.'))))
-              else
-                ..._data.map(_kartu),
-            ],
+    return AppShell(
+      menuAktif: _menuPengiriman(widget.bagian),
+      judul: konfigurasi.judul,
+      subjudul: konfigurasi.subjudul,
+      scrollable: false,
+      aksiHeader: Wrap(spacing: 8, children: <Widget>[
+        IconButton(
+            onPressed: _memuat ? null : _muat,
+            tooltip: 'Muat ulang',
+            icon: const Icon(Icons.refresh)),
+        if (_hak['create'] == true)
+          FilledButton.icon(
+            onPressed: () => _form(),
+            icon: const Icon(Icons.add),
+            label: const Text('Buat Dokumen'),
           ),
-        );
-      },
+      ]),
+      body: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints batas) {
+          final ringkas = batas.maxWidth < 760;
+          return RefreshIndicator(
+            onRefresh: _muat,
+            child: ListView(
+              padding: EdgeInsets.all(ringkas ? 12 : 24),
+              children: <Widget>[
+                TextField(
+                  controller: _cari,
+                  onSubmitted: (_) => _muat(),
+                  decoration: InputDecoration(
+                    hintText:
+                        'Cari nomor, referensi, asal, tujuan, atau pengangkut...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                        onPressed: _muat,
+                        icon: const Icon(Icons.arrow_forward)),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (_pesan != null)
+                  Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(_pesan!)),
+                  ),
+                if (_memuat)
+                  const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Center(child: CircularProgressIndicator()))
+                else if (_data.isEmpty)
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(48),
+                          child: Center(child: Text('Belum ada dokumen.'))))
+                else
+                  ..._data.map(_kartu),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -287,6 +271,25 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
         onTap: () => _detail(item),
       ),
     );
+  }
+}
+
+MenuEBisnis _menuPengiriman(BagianPengiriman bagian) {
+  switch (bagian) {
+    case BagianPengiriman.deliveryOrder:
+      return MenuEBisnis.deliveryOrder;
+    case BagianPengiriman.freightOrder:
+      return MenuEBisnis.freightOrder;
+    case BagianPengiriman.shipmentTracking:
+      return MenuEBisnis.shipmentTracking;
+    case BagianPengiriman.proofOfDelivery:
+      return MenuEBisnis.proofOfDelivery;
+    case BagianPengiriman.penerimaanTransferOutlet:
+      return MenuEBisnis.penerimaanTransferOutlet;
+    case BagianPengiriman.klaimDistribusi:
+      return MenuEBisnis.klaimDistribusi;
+    case BagianPengiriman.reverseLogistics:
+      return MenuEBisnis.reverseLogistics;
   }
 }
 

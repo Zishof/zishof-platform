@@ -2563,7 +2563,9 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             setStateIfMounted(() => _tampilBarcode = v ?? false);
             unawaited(_simpanPengaturanModel(_model));
           },
-          title: const Text('Tampilkan Barcode'),
+          title: const Text('Tampilkan Barcode (Bisa Dipindai)'),
+          subtitle: const Text(
+              'Mencetak garis barcode dan angkanya untuk dipindai di kasir.'),
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
@@ -2584,11 +2586,35 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
               setStateIfMounted(() => _tampilBarcodeTeks = v ?? false);
               unawaited(_simpanPengaturanModel(_model));
             },
-            title: const Text('Tampilkan Barcode dalam Teks'),
+            title: const Text('Tampilkan Nomor Barcode Saja'),
             subtitle: const Text(
-                'Barcode produk sbg teks; kosong = pakai Kode Produk'),
+                'Hanya mencetak angka tanpa garis barcode; tidak dapat dipindai. Jika barcode produk kosong, digunakan Kode Produk.'),
             contentPadding: EdgeInsets.zero,
             dense: true,
+          ),
+        if (_model != ModelPriceTag.produk &&
+            !_tampilBarcode &&
+            _tampilBarcodeTeks)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.latarLembut(AppColors.warning),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.warning),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.info_outline, color: AppColors.warning, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Hasil saat ini hanya berupa angka barcode. Aktifkan “Tampilkan Barcode (Bisa Dipindai)” jika price tag perlu dipindai dengan scanner.',
+                  ),
+                ),
+              ],
+            ),
           ),
         if (_model != ModelPriceTag.produk)
           CheckboxListTile(
