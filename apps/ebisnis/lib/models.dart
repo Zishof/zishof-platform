@@ -24,6 +24,11 @@ class Produk {
   final int? satuanPembelianId;
   final String satuanPembelianNama;
 
+  /// Rute pemenuhan ulang stok (Fase C dok. 48 P3): '' = BELI (bawaan),
+  /// 'PRODUKSI' = ambang stok memicu draf Work Order, bukan pengajuan beli.
+  /// Hanya dibaca penjadwal server; klien sekadar menyunting konfigurasi.
+  final String rute;
+
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -83,6 +88,7 @@ class Produk {
     this.satuanNama = '',
     this.satuanPembelianId,
     this.satuanPembelianNama = '',
+    this.rute = '',
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -112,6 +118,7 @@ class Produk {
         satuanNama: (j['satuanNama'] ?? '') as String,
         satuanPembelianId: (j['satuanPembelianId'] as num?)?.toInt(),
         satuanPembelianNama: (j['satuanPembelianNama'] ?? '') as String,
+        rute: (j['rute'] ?? '') as String,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
