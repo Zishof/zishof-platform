@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import 'face_embedding_provider.dart';
+
 class PosBiometricSample {
   const PosBiometricSample(this.modality, this.templateBase64,
       this.templateFormat, this.provider, this.livenessScore,
@@ -154,17 +156,24 @@ class PosBiometricCaptureBridge {
 
   Future<Map<String, dynamic>> capabilities() async {
     final secuGenReady = await _secuGen.serviceAvailable();
+    // Provider wajah on-device (FaceOnDeviceCapture) diperiksa di sisi Dart,
+    // sejajar dgn SecuGen utk fingerprint: keduanya menimpa jawaban channel
+    // native karena hidup di luar plugin.
+    final faceReady = await FaceOnDeviceCapture.tersedia();
+    final faceProvider =
+        faceReady ? FaceOnDeviceCapture.provider?.providerName : null;
     try {
       final map =
           await _channel.invokeMapMethod<dynamic, dynamic>('capabilities');
       if (map == null) {
         return {
           'fingerprint': secuGenReady,
-          'face': false,
+          'face': faceReady,
           'fingerprint_provider':
               secuGenReady ? SecuGenWebApiCapture.provider : null,
-          'reason': secuGenReady
-              ? 'Layanan SecuGen terdeteksi; kesiapan scanner diperiksa saat perekaman. Adapter face-liveness belum dipasang.'
+          'face_provider': faceProvider,
+          'reason': secuGenReady || faceReady
+              ? 'Kesiapan perangkat diperiksa ulang saat perekaman.'
               : 'Plugin biometrik tidak mengembalikan kemampuan.',
         };
       }
@@ -173,21 +182,27 @@ class PosBiometricCaptureBridge {
         result['fingerprint'] = true;
         result['fingerprint_provider'] = SecuGenWebApiCapture.provider;
       }
+      if (faceReady) {
+        result['face'] = true;
+        result['face_provider'] = faceProvider;
+      }
       return result;
     } on MissingPluginException {
       return {
         'fingerprint': secuGenReady,
-        'face': false,
+        'face': faceReady,
         'fingerprint_provider':
             secuGenReady ? SecuGenWebApiCapture.provider : null,
-        'reason': secuGenReady
-            ? 'Layanan SecuGen terdeteksi; kesiapan scanner diperiksa saat perekaman. Adapter face-liveness belum dipasang.'
+        'face_provider': faceProvider,
+        'reason': secuGenReady || faceReady
+            ? 'Kesiapan perangkat diperiksa ulang saat perekaman.'
             : 'Adapter SDK scanner fingerprint/face-liveness belum dipasang.',
       };
     } on PlatformException catch (error) {
       return {
         'fingerprint': false,
-        'face': false,
+        'face': faceReady,
+        'face_provider': faceProvider,
         'reason': error.message ?? 'Perangkat biometrik tidak dapat diperiksa.',
       };
     }
@@ -197,6 +212,10 @@ class PosBiometricCaptureBridge {
     if (modality.toUpperCase() == 'FINGERPRINT' &&
         await _secuGen.serviceAvailable()) {
       return _secuGen.capture();
+    }
+    if (modality.toUpperCase() == 'FACE' &&
+        await FaceOnDeviceCapture.tersedia()) {
+      return FaceOnDeviceCapture.capture();
     }
     try {
       final map = await _channel.invokeMapMethod<dynamic, dynamic>(
