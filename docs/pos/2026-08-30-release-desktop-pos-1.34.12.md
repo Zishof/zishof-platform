@@ -1,4 +1,4 @@
-# Rilis Desktop POS 1.34.12 — eBisnis, Al-Bahjah, dan TokoQu An-Nahl
+# Rilis POS 1.34.12 — eBisnis, Al-Bahjah, dan TokoQu An-Nahl
 
 Tanggal: 30 Agustus 2026  
 Versi aplikasi: `1.34.12+174`  
@@ -6,6 +6,9 @@ Varian: `ebisnis`, `albahjah`, `nahl`
 Tag GitHub: `v1.34.12`  
 Commit sumber aplikasi: `c571455`  
 Prasyarat SO Harian: backend AIS SVN `r78609`
+
+Cakupan artefak: Desktop Windows untuk ketiga varian dan Android Nahl untuk
+UAT internal.
 
 ## Ringkasan perubahan
 
@@ -42,6 +45,20 @@ Prasyarat SO Harian: backend AIS SVN `r78609`
 | Al-Bahjah POS | `Al-Bahjah-POS-Setup-1.34.12.exe` | 85.870.464 byte | `CA7D0AA20374C2A4A1C54E7F515E4C81BC5EC28FCDCC98FFDDFF0603624D3B1A` |
 | TokoQu Al-Bahjah An-Nahl | `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.12.exe` | 86.048.522 byte | `94FAA5673ED0E6F854095944F32422CCF6A6BDFFB8382942BA0D2C4849918F66` |
 
+## Artefak Android Nahl (Debug/UAT)
+
+| Varian | APK | Ukuran | SHA-256 |
+|---|---|---:|---|
+| TokoQu Al-Bahjah An-Nahl | `TokoQu-Al-Bahjah-An-Nahl-Android-1.34.12-debug-signed.apk` | 189.592.836 byte | `509BC678A6E35959D857D29C7105CAFFF319BE35790E6524AF4643ABA5EE480C` |
+
+Identitas APK yang diverifikasi:
+
+- application ID: `id.zishof.ebisnis.nahl`
+- version name/code: `1.34.12` / `174`
+- minimum/target SDK: `23` / `35`
+- penandatangan: Android Debug; hanya untuk pengujian internal, bukan rilis
+  produksi atau Play Store.
+
 Lokasi artefak lokal:
 
 `apps/ebisnis/release-artifacts/semua-varian/1.34.12/`
@@ -58,6 +75,10 @@ Lokasi artefak lokal:
    tambah produk cepat; pastikan data tersimpan di perangkat dan antrean sinkron.
 6. Periksa **Sistem > Riwayat Sinkronisasi**. Jangan menginput ulang data yang
    berstatus menunggu kirim.
+7. Android Nahl: pasang APK debug pada perangkat UAT yang menerima sertifikat
+   debug. Jangan menghapus data aplikasi ketika memperbarui versi. Bila Android
+   produksi sebelumnya memakai sertifikat berbeda, APK ini tidak dapat dipasang
+   sebagai pembaruan langsung; gunakan perangkat/profil UAT terpisah.
 
 ## Rollback
 
@@ -66,4 +87,3 @@ Lokasi artefak lokal:
 - Bila hanya SO Harian yang gagal, pertahankan data lokal dan periksa deployment
   backend r78609; jangan menghapus antrean atau mengulang input.
 - Hentikan rollout bila checksum installer tidak cocok dengan tabel di atas.
-
