@@ -5,7 +5,6 @@ import 'package:core_hw/core_hw.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_client.dart';
@@ -24,6 +23,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
 import 'kulakan_bulk_entry_screen.dart';
+import 'pengadaan_cetak_util.dart';
 import '../widgets/jejak_galat.dart';
 
 final _formatRupiah =
@@ -1018,7 +1018,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
           OutlinedButton.icon(
             onPressed: () => _cetakFaktur(header, items),
             icon: const Icon(Icons.print_outlined, size: 18),
-            label: const Text('Print'),
+            label: const Text('Pratinjau & Print'),
           ),
           TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -1397,7 +1397,10 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
+        // Faktur pembelian menggunakan A4 potret. Byte yang sama dipakai oleh
+        // unduh PDF dan pratinjau cetak agar bentuk dokumen tidak berubah saat
+        // pengguna melanjutkan dari preview ke dialog printer.
+        pageFormat: PdfPageFormat.a4.portrait,
         margin: const pw.EdgeInsets.all(24),
         footer: (ctx) => pw.Align(
           alignment: pw.Alignment.centerRight,
@@ -1575,16 +1578,21 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     }
   }
 
-  /// Kirim faktur langsung ke printer, memakai tata letak yang PERSIS SAMA
-  /// dengan tombol Pdf.
+  /// Tampilkan faktur lebih dahulu di pratinjau aplikasi. Dialog printer baru
+  /// dibuka setelah pengguna menekan tombol cetak di dalam pratinjau. Ini
+  /// menghindari dialog Print Setup Windows yang tidak memperlihatkan isi dan
+  /// tetap memakai tata letak yang PERSIS SAMA dengan tombol Pdf.
   Future<void> _cetakFaktur(
       Map<String, dynamic> header, List<Map<String, dynamic>> items) async {
     try {
       final doc = _dokumenFakturPdf(header, items);
       final aman = _namaFileAman(_buatLaporanFaktur(header, items).nomorFaktur);
-      await Printing.layoutPdf(
-        name: 'Faktur-Pembelian-$aman',
-        onLayout: (format) async => doc.save(),
+      final isi = await doc.save();
+      if (!mounted) return;
+      await tampilkanPratinjauPdf(
+        context,
+        judul: 'Faktur-Pembelian-$aman',
+        isi: isi,
       );
     } catch (e) {
       if (!mounted) return;

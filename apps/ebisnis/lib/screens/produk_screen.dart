@@ -2072,7 +2072,7 @@ class _BarisProduk extends StatelessWidget {
 }
 
 /// Tampilan tabel padat (Desktop, lebar >= [kAmbangLebarDesktop]) -- padanan
-/// visual DataTable pada referensi (Produk|SKU/Barcode|Kategori|Harga
+/// visual DataTable pada referensi (Produk|SKU/Barcode|Kategori|HPP|Harga
 /// Jual|Stok|Status), TANPA kolom Brand/Outlet/Channel krn data itu tak ada
 /// di model kita (single-outlet) -- lihat keputusan "visual style only" saat
 /// diminta menyamakan tampilan dgn mockup multi-outlet.
@@ -2117,6 +2117,10 @@ class _TabelProduk extends StatelessWidget {
                     child: Text('SKU / BARCODE', style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2, child: Text('KATEGORI', style: gayaHeaderTabel)),
+                Expanded(
+                    flex: 2,
+                    child: Text('HPP',
+                        textAlign: TextAlign.right, style: gayaHeaderTabel)),
                 Expanded(
                     flex: 2,
                     child: Text('HARGA JUAL',
@@ -2240,6 +2244,14 @@ class _BarisTabelProduk extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12.5))),
+            Expanded(
+                flex: 2,
+                child: Text(_formatRupiah.format(produk.hargaBeli),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        color: AppColors.textSecondaryOf(context),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5))),
             Expanded(
                 flex: 2,
                 child: Text(_formatRupiah.format(produk.hargaJual),
