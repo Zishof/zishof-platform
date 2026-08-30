@@ -2237,60 +2237,61 @@ class _KasirScreenState extends State<KasirScreen> {
       final jadi = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Tambah Produk Cepat'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: TextEditingController(text: barcode),
-                  readOnly: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Barcode (hasil scan)', isDense: true),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: namaC,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Nama produk *', isDense: true),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: hargaC,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Harga jual *', prefixText: 'Rp ',
-                      isDense: true),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<int?>(
-                  value: kategoriId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Kategori', isDense: true),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                        value: null, child: Text('Tanpa kategori')),
-                    ..._kategori.map((k) => DropdownMenuItem<int?>(
-                        value: k.id, child: Text(k.nama))),
-                  ],
-                  onChanged: (v) => setDialogState(() => kategoriId = v),
-                ),
-              ],
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Tambah Produk Cepat'),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: TextEditingController(text: barcode),
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Barcode (hasil scan)', isDense: true),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: namaC,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Nama produk *', isDense: true),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: hargaC,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Harga jual *',
+                        prefixText: 'Rp ',
+                        isDense: true),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int?>(
+                    value: kategoriId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Kategori', isDense: true),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                          value: null, child: Text('Tanpa kategori')),
+                      ..._kategori.map((k) => DropdownMenuItem<int?>(
+                          value: k.id, child: Text(k.nama))),
+                    ],
+                    onChanged: (v) => setDialogState(() => kategoriId = v),
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Simpan & Masukkan Keranjang')),
+            ],
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Simpan & Masukkan Keranjang')),
-          ],
-        ),
         ),
       );
       if (jadi != true || !mounted) return;
@@ -2445,8 +2446,8 @@ class _KasirScreenState extends State<KasirScreen> {
                             ? const SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2))
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.sync, size: 16),
                         label: const Text('Sinkronkan Produk'),
                       ),

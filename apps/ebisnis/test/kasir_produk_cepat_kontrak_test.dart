@@ -21,8 +21,10 @@ void main() {
         rapat(File('lib/screens/kasir_screen.dart').readAsStringSync());
     expect(source, contains(rapat("const Text('Sinkronkan Produk')")));
     expect(source, contains(rapat("const Text('Tambah produk ini')")));
-    expect(source,
-        contains(rapat("SinkronisasiTabelService.instance.sinkronkan('produk_cache')")),
+    expect(
+        source,
+        contains(rapat(
+            "SinkronisasiTabelService.instance.sinkronkan('produk_cache')")),
         reason: 'sinkron produk kasir harus lewat jalur service yang sama '
             'dgn menu Sinkronisasi');
     // Tambah cepat wajib memakai alur local-first generik. Id sementara tidak
@@ -38,8 +40,7 @@ void main() {
   test('sheet split punya tombol sinkron metode pembayaran', () {
     final source =
         rapat(File('lib/screens/keranjang_screen.dart').readAsStringSync());
-    expect(source,
-        contains(rapat("const Text('Sinkronkan cara pembayaran')")));
+    expect(source, contains(rapat("const Text('Sinkronkan cara pembayaran')")));
     // Muat ulang lewat jalur izin-member yang sama dgn pembukaan sheet.
     expect(source, contains(rapat('muatUlang: () async {')));
     expect(source, contains(rapat('_muatCaraBayarUntukMember(')));

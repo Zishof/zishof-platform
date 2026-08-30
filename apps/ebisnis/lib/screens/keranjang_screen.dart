@@ -598,8 +598,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       // dengan checkout. Aman diterapkan per produk.id (bukan per-indeks seperti
       // diskon) karena aturan grosir berlaku per PRODUK -- dua baris berproduk
       // sama memang harus berharga sama.
-      final petaGrosir = (hasil['hargaGrosir'] as Map?)?.map(
-              (k, v) => MapEntry('$k', (v as num).toDouble())) ??
+      final petaGrosir = (hasil['hargaGrosir'] as Map?)
+              ?.map((k, v) => MapEntry('$k', (v as num).toDouble())) ??
           const <String, double>{};
       if (!mounted) return;
       setStateIfMounted(() {
@@ -2369,7 +2369,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                                 fontSize: 11.5)),
                       // Label kemasan (snapshot saat baris ditambah) --
                       // qty tetap satuan dasar, ini murni keterbacaan.
-                      if (item.labelKemasan != null && item.labelSatuanJual == null)
+                      if (item.labelKemasan != null &&
+                          item.labelSatuanJual == null)
                         Text(item.labelKemasan!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -2880,9 +2881,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         icon: const Icon(Icons.straighten, size: 15),
         style: IconButton.styleFrom(
           backgroundColor: AppColors.pageBgOf(context),
-          foregroundColor: item.satuanJualKonsisten
-              ? AppColors.success
-              : AppColors.primary,
+          foregroundColor:
+              item.satuanJualKonsisten ? AppColors.success : AppColors.primary,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         onPressed: () => _pilihSatuanJual(item),
@@ -2898,8 +2898,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _pilihSatuanJual(ItemKeranjang item) async {
     List<Map<String, dynamic>> uom;
     try {
-      final r = await ApiClient.instance.aksi('uom_list',
-          {'keyword': '', 'page': 1, 'page_size': 500});
+      final r = await ApiClient.instance
+          .aksi('uom_list', {'keyword': '', 'page': 1, 'page_size': 500});
       uom = ((r['data'] as List?) ?? const [])
           .whereType<Map>()
           .map((e) => e.cast<String, dynamic>())
@@ -2937,8 +2937,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
           double? faktor;
           double? hasilDasar;
           try {
-            faktor = UomKonversi.konversi(
-                jumlah: 1, dari: terpilih!, ke: dasar!);
+            faktor =
+                UomKonversi.konversi(jumlah: 1, dari: terpilih!, ke: dasar!);
             final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.'));
             if (q != null && q > 0) hasilDasar = q * faktor;
           } catch (_) {}
@@ -2949,8 +2949,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 value: terpilih,
                 isExpanded: true,
                 items: pilihanSatuan
-                    .map((u) => DropdownMenuItem(
-                        value: u, child: Text('${u['nama']}')))
+                    .map((u) =>
+                        DropdownMenuItem(value: u, child: Text('${u['nama']}')))
                     .toList(),
                 onChanged: (v) => setDialog(() => terpilih = v),
                 decoration: const InputDecoration(labelText: 'Satuan'),
@@ -2990,8 +2990,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     try {
       faktor = UomKonversi.konversi(jumlah: 1, dari: terpilih!, ke: dasar);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       return;
     }
     setStateIfMounted(() {
@@ -3201,8 +3200,8 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
         _metode = List<CaraBayar>.of(baru);
         // Slot yang metodenya sudah dicabut admin ikut dibuang -- jangan
         // biarkan kasir membayar dgn metode yang tidak lagi diizinkan.
-        _terpilih.removeWhere(
-            (s) => !_metode.any((c) => c.id == s.caraBayar.id));
+        _terpilih
+            .removeWhere((s) => !_metode.any((c) => c.id == s.caraBayar.id));
       });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Daftar metode pembayaran diperbarui dari server.')));
@@ -3275,8 +3274,7 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2))
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.sync, size: 16),
                       label: const Text('Sinkronkan cara pembayaran'),
                     ),
