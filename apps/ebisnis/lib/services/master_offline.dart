@@ -249,6 +249,7 @@ class MasterOffline {
     pastikanTimer();
     try {
       final hasil = await ApiClient.instance.aksi(aksi, body);
+      await _terapkanEfekRespons(aksi, body, hasil);
       // Baris ini TERBUKTI sampai server -> centang animasi per-baris.
       _tandaiBarisSukses(kunci);
       // Kesempatan bagus utk mengosongkan antrean lama begitu server terbukti
@@ -334,6 +335,7 @@ class MasterOffline {
             aktivitas: aksi);
       }
       final hasil = await ApiClient.instance.aksi(aksi, siap);
+      await _terapkanEfekRespons(aksi, siap, hasil);
       await _catatPemetaan(siap, hasil);
       final idHasil = hasil['id'];
       if (idHasil != null) {
@@ -1027,6 +1029,7 @@ class MasterOffline {
         }
         try {
           final hasil = await ApiClient.instance.aksi(aksi, siap);
+          await _terapkanEfekRespons(aksi, siap, hasil);
           await _catatPemetaan(siap, hasil);
           await CoreDb.instance.outboxMasterTandaiSukses(id);
           _tandaiBarisSukses(kunci);
@@ -1064,5 +1067,19 @@ class MasterOffline {
       }
     }
     return terkirim;
+  }
+
+  /// Terapkan efek server yang harus langsung terlihat oleh pembaca SQLite.
+  /// Khusus Stok Opname, respons server adalah sumber stok akhir otoritatif.
+  static Future<void> _terapkanEfekRespons(String aksi,
+      Map<String, dynamic> body, Map<String, dynamic> hasil) async {
+    if (aksi != 'so_simpan' && aksi != 'so_batalkan') return;
+    final produkMentah = hasil['produkId'] ?? body['produk_id'];
+    final stokMentah = hasil['stokAkhir'];
+    if (produkMentah is num && stokMentah is num) {
+      await CoreDb.instance
+          .produkCachePerbaruiStok(produkMentah.toInt(), stokMentah);
+      revisiBaris.value++;
+    }
   }
 }

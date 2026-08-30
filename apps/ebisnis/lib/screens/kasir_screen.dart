@@ -22,6 +22,7 @@ import '../services/layar_pelanggan_launcher.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../services/simpan_gambar_local_first.dart';
+import '../services/sinkron_stok_opname.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/url_media.dart';
@@ -203,6 +204,8 @@ class _KasirScreenState extends State<KasirScreen> {
     _timerSinkronSesiKas = Timer.periodic(
         const Duration(seconds: 30), (_) => _cobaSinkronBukaKasPending());
     TransaksiOutboxService.instance.mulai();
+    MasterOffline.revisiBaris.addListener(_saatStokLokalBerubah);
+    SinkronStokOpname.mulai();
   }
 
   @override
@@ -222,12 +225,29 @@ class _KasirScreenState extends State<KasirScreen> {
 
   @override
   void dispose() {
+    MasterOffline.revisiBaris.removeListener(_saatStokLokalBerubah);
     _debounceHargaCoret?.cancel();
     _debounceCariProduk?.cancel();
     _timerSinkronSesiKas?.cancel();
     _kataKunciController.dispose();
     _fokusKataKunci.dispose();
     super.dispose();
+  }
+
+  void _saatStokLokalBerubah() {
+    if (!mounted) return;
+    unawaited(_muatProdukDariCacheAktif());
+  }
+
+  Future<void> _muatProdukDariCacheAktif() async {
+    final kata = _kataKunci.trim();
+    final cache = await CoreDb.instance.produkCache(
+      keyword: kata,
+      limit: kata.isEmpty ? _batasProdukAwal : _batasHasilPencarian,
+    );
+    if (!mounted) return;
+    setStateIfMounted(
+        () => _semuaProduk = cache.map(_produkDariCache).toList());
   }
 
   Future<void> _muatAwal() async {

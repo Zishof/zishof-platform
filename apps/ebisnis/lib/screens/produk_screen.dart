@@ -18,6 +18,7 @@ import 'produk_stok_tanggal.dart';
 import '../services/kompresi_gambar.dart';
 import '../services/master_offline.dart';
 import '../services/simpan_gambar_local_first.dart';
+import '../services/sinkron_stok_opname.dart';
 import '../services/url_media.dart';
 import '../services/uom_konversi.dart';
 import '../widgets/indikator_baris_sinkron.dart';
@@ -139,13 +140,43 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
   @override
   void initState() {
     super.initState();
+    MasterOffline.revisiBaris.addListener(_saatCacheBerubah);
+    SinkronStokOpname.mulai();
     _muatSemua();
   }
 
   @override
   void dispose() {
+    MasterOffline.revisiBaris.removeListener(_saatCacheBerubah);
     _controllerCariProduk.dispose();
     super.dispose();
+  }
+
+  void _saatCacheBerubah() {
+    if (mounted) unawaited(_muatHalamanLokal());
+  }
+
+  Future<void> _muatHalamanLokal() async {
+    final baris = await CoreDb.instance.produkCacheMaster(
+      keyword: _kataKunci.trim(),
+      kategoriId: _kategoriTerpilih,
+      jenisItem: _filterJenisItem,
+      limit: _itemPerHalaman,
+      offset: _halaman * _itemPerHalaman,
+    );
+    final total = await CoreDb.instance.jumlahProdukCacheMaster(
+      keyword: _kataKunci.trim(),
+      kategoriId: _kategoriTerpilih,
+      jenisItem: _filterJenisItem,
+    );
+    if (!mounted) return;
+    setStateIfMounted(() {
+      _semuaProduk = baris
+          .map(Produk.cacheRowKeJson)
+          .map(Produk.fromJson)
+          .toList(growable: false);
+      _totalProduk = total;
+    });
   }
 
   Future<void> _muatSemua() async {

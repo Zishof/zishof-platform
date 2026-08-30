@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_hw/core_hw.dart';
+import 'package:core_db/core_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +13,7 @@ import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../services/sinkron_stok_opname.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
@@ -841,6 +844,12 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
       final offline = hasil['offline'] == true;
       final selisih = (hasil['selisih'] as num?)?.toDouble() ??
           (stokFisik - ((p['stokSistem'] as num?)?.toDouble() ?? 0));
+      if (offline) {
+        await CoreDb.instance
+            .produkCachePerbaruiStok((p['produkId'] as num).toInt(), stokFisik);
+        MasterOffline.revisiBaris.value++;
+      }
+      unawaited(SinkronStokOpname.jalankan());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -882,7 +891,7 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
 
   Widget _riwayatTabelData() {
     return AppDataTable(
-      minWidth: 820,
+      minWidth: 1040,
       emptyText: 'Belum ada catatan hari ini.',
       columns: const [
         AppTableColumn('Waktu', flex: 2),
@@ -892,12 +901,15 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
         AppTableColumn('Fisik', flex: 1, align: TextAlign.right),
         AppTableColumn('Selisih', flex: 1, align: TextAlign.right),
         AppTableColumn('Keterangan', flex: 2),
+        AppTableColumn('Status / Aksi', flex: 2),
       ],
       rows: _riwayatHariIni.map((k) {
         final selisih = (k['selisih'] as num?)?.toDouble() ?? 0;
         final warnaSelisih = selisih == 0
             ? AppColors.textSecondaryOf(context)
             : (selisih > 0 ? AppColors.success : AppColors.danger);
+        final dibatalkan = k['dibatalkan'] == true;
+        final jurnalPembatalan = k['jurnalPembatalan'] == true;
         return AppTableRowData(
           cells: [
             AppTableCell(
@@ -931,10 +943,104 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
                   TextStyle(fontWeight: FontWeight.w700, color: warnaSelisih),
             ),
             AppTableCell.text('${k['keterangan'] ?? ''}', flex: 2, maxLines: 2),
+            AppTableCell(
+              flex: 2,
+              child: dibatalkan || jurnalPembatalan
+                  ? Text(
+                      jurnalPembatalan ? 'Jurnal pembatalan' : 'Dibatalkan',
+                      style: TextStyle(
+                          color: jurnalPembatalan
+                              ? AppColors.warning
+                              : AppColors.textSecondaryOf(context),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12),
+                    )
+                  : TextButton.icon(
+                      onPressed: Sesi.instance.bolehKelola
+                          ? () => _batalkanOpname(k)
+                          : null,
+                      icon: const Icon(Icons.undo, size: 16),
+                      label: const Text('Batalkan'),
+                    ),
+            ),
           ],
         );
       }).toList(),
     );
+  }
+
+  Future<void> _batalkanOpname(Map<String, dynamic> opname) async {
+    final alasan = TextEditingController();
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan Stok Opname?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${opname['kode'] ?? ''} · ${opname['nama'] ?? ''}'),
+            const SizedBox(height: 8),
+            const Text(
+              'Catatan awal tidak dihapus. Sistem membuat jurnal pembalik dan menyamakan kembali stok seluruh kasir dengan server.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: alasan,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Alasan pembatalan (minimal 5 karakter) *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Kembali')),
+          FilledButton.icon(
+            onPressed: () {
+              if (alasan.text.trim().length < 5) return;
+              Navigator.pop(dialogContext, true);
+            },
+            icon: const Icon(Icons.undo),
+            label: const Text('Buat Jurnal Pembatalan'),
+          ),
+        ],
+      ),
+    );
+    final teksAlasan = alasan.text.trim();
+    alasan.dispose();
+    if (setuju != true || teksAlasan.length < 5) return;
+    setStateIfMounted(() => _menyimpan = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('so_batalkan', {
+        'opname_id': opname['id'],
+        'alasan': teksAlasan,
+      });
+      final produkId = (hasil['produkId'] as num?)?.toInt();
+      final stokAkhir = hasil['stokAkhir'] as num?;
+      if (produkId != null && stokAkhir != null) {
+        await CoreDb.instance.produkCachePerbaruiStok(produkId, stokAkhir);
+        MasterOffline.revisiBaris.value++;
+      }
+      await SinkronStokOpname.jalankan();
+      await _muatRiwayat();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Opname dibatalkan dengan jurnal koreksi. Stok akhir: ${_formatAngka.format(stokAkhir ?? 0)}.'),
+        ));
+      }
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _menyimpan = false);
+    }
   }
 
   @override
@@ -1206,6 +1312,11 @@ class _TabSoByScanState extends State<_TabSoByScan>
           },
           kunci: 'so:${a.produk['produkId']}',
         );
+        if (r['offline'] == true) {
+          await CoreDb.instance.produkCachePerbaruiStok(
+              (a.produk['produkId'] as num).toInt(), stok);
+          MasterOffline.revisiBaris.value++;
+        }
         // Baris yang baru mengantre TIDAK diakui "ok" -- statusnya dibedakan
         // supaya petugas tahu mana yang benar-benar sudah sampai server.
         setStateIfMounted(

@@ -1370,6 +1370,19 @@ class CoreDb {
     return (hasil.first['n'] as int?) ?? 0;
   }
 
+  /// Perbarui stok satu produk tanpa mengganti metadata/foto katalog lainnya.
+  /// Dipakai sesaat sesudah Stok Opname dan oleh polling perubahan stok dari
+  /// kasir lain, sehingga semua layar local-first membaca angka yang sama.
+  Future<int> produkCachePerbaruiStok(int produkId, num stok) async {
+    final database = await db;
+    return database.update(
+      'produk_cache',
+      <String, Object?>{'stok': stok.toDouble()},
+      where: 'id = ?',
+      whereArgs: <Object?>[produkId],
+    );
+  }
+
   // ============================== ANGGOTA CACHE ==============================
 
   /// Ganti cache member secara atomik setelah seluruh halaman server berhasil
