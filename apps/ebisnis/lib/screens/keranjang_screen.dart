@@ -235,7 +235,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// bila kasir mengganti member ketika permintaan sebelumnya masih berjalan.
   /// Saat offline daftar terakhir dipertahankan, mengikuti perilaku POS desktop
   /// agar checkout offline tidak kehilangan metode yang sudah tersedia.
-  Future<void> _muatCaraBayarUntukMember(int? memberId) async {
+  Future<bool> _muatCaraBayarUntukMember(int? memberId) async {
     final versi = ++_versiPermintaanCaraBayar;
     if (mounted) setStateIfMounted(() => _memuatCaraBayar = true);
     try {
@@ -249,7 +249,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final daftar = ((hasil['caraBayar'] as List?) ?? const [])
           .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
           .toList();
-      if (!mounted || versi != _versiPermintaanCaraBayar) return;
+      if (!mounted || versi != _versiPermintaanCaraBayar) return false;
 
       final idTerpilih = _caraBayarTerpilih?.id;
       CaraBayar? pilihan;
@@ -303,13 +303,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         _memuatCaraBayar = false;
         _sinkronkanUangDiterima();
       });
+      return true;
     } catch (_) {
-      if (!mounted || versi != _versiPermintaanCaraBayar) return;
+      if (!mounted || versi != _versiPermintaanCaraBayar) return false;
       // Gagal jaringan: pertahankan snapshot terakhir untuk mode offline.
       setStateIfMounted(() {
         _memuatCaraBayar = false;
         _izinCaraBayarMemberTidakDisetel = false;
       });
+      return false;
     }
   }
 
@@ -1813,6 +1815,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         daftarMetode: _caraBayarTersedia,
         terpilihAwal: awal,
         total: _total,
+        // Tombol "Sinkronkan cara pembayaran" DI DALAM sheet (permintaan
+        // lapangan): admin bisa mengubah izin metode member ketika sheet
+        // sedang terbuka -- kasir tidak perlu menutup lalu membuka ulang.
+        muatUlang: () async {
+          final berhasil = await _muatCaraBayarUntukMember(
+              _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
+          return berhasil ? _caraBayarTersedia : null;
+        },
       ),
     );
     if (hasil == null || hasil.isEmpty) return;
@@ -3145,10 +3155,16 @@ class _SheetPilihMetodeSplit extends StatefulWidget {
   final List<CaraBayar> daftarMetode;
   final List<_SlotBayar> terpilihAwal;
   final double total;
+
+  /// Muat ulang daftar metode dari server (izin member terbaru) tanpa
+  /// menutup sheet; null = tombol sinkron tidak ditampilkan.
+  final Future<List<CaraBayar>?> Function()? muatUlang;
+
   const _SheetPilihMetodeSplit({
     required this.daftarMetode,
     required this.terpilihAwal,
     required this.total,
+    this.muatUlang,
   });
 
   @override
@@ -3157,13 +3173,42 @@ class _SheetPilihMetodeSplit extends StatefulWidget {
 
 class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
   late List<_SlotBayar> _terpilih;
+  late List<CaraBayar> _metode;
+  bool _menyinkron = false;
 
   @override
   void initState() {
     super.initState();
+    _metode = List<CaraBayar>.of(widget.daftarMetode);
     _terpilih = widget.terpilihAwal
         .map((s) => _SlotBayar(s.caraBayar, s.nominal))
         .toList();
+  }
+
+  Future<void> _sinkronkanMetode() async {
+    if (_menyinkron) return;
+    setState(() => _menyinkron = true);
+    try {
+      final baru = await widget.muatUlang!.call();
+      if (!mounted) return;
+      if (baru == null || baru.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Metode pembayaran tidak dapat dimuat. Periksa koneksi lalu coba lagi.')));
+        return;
+      }
+      setState(() {
+        _metode = List<CaraBayar>.of(baru);
+        // Slot yang metodenya sudah dicabut admin ikut dibuang -- jangan
+        // biarkan kasir membayar dgn metode yang tidak lagi diizinkan.
+        _terpilih.removeWhere(
+            (s) => !_metode.any((c) => c.id == s.caraBayar.id));
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Daftar metode pembayaran diperbarui dari server.')));
+    } finally {
+      if (mounted) setState(() => _menyinkron = false);
+    }
   }
 
   void _toggle(CaraBayar c) {
@@ -3219,7 +3264,25 @@ class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
                     'Ketuk baris utk bayar penuh 1 metode, atau centang kotak utk gabungkan s/d 5 metode (split bayar).',
                     style: TextStyle(fontSize: 12, color: Colors.grey)),
               ),
-              ...widget.daftarMetode.map((c) {
+              if (widget.muatUlang != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _menyinkron ? null : _sinkronkanMetode,
+                      icon: _menyinkron
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.sync, size: 16),
+                      label: const Text('Sinkronkan cara pembayaran'),
+                    ),
+                  ),
+                ),
+              ..._metode.map((c) {
                 final aktif = _terpilih.any((s) => s.caraBayar.id == c.id);
                 return ListTile(
                   leading: Checkbox(

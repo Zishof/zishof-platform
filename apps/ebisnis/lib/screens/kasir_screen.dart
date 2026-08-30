@@ -23,12 +23,14 @@ import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
 import '../services/simpan_gambar_local_first.dart';
 import '../services/sinkron_stok_opname.dart';
+import '../services/sinkronisasi_tabel_service.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/url_media.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/app_error_info.dart';
+import '../widgets/proses_simpan_master.dart';
 import 'login_screen.dart';
 import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
@@ -103,6 +105,7 @@ class _KasirScreenState extends State<KasirScreen> {
   int? _kategoriTerpilih; // null = "Semua"
   String _kataKunci = '';
   final _kataKunciController = TextEditingController();
+  bool _sinkronProdukKasirBerjalan = false;
   final _fokusKataKunci = FocusNode();
 
   final List<ItemKeranjang> _keranjang = [];
@@ -2196,6 +2199,185 @@ class _KasirScreenState extends State<KasirScreen> {
     );
   }
 
+  /// Tombol "Sinkronkan Produk" pada dropdown pencarian kosong: tarik ulang
+  /// katalog server ke cache lokal (jalur sama dgn menu Sinkronisasi) lalu
+  /// ulangi pencarian kata yang sedang diketik/discan -- utk kasus produk
+  /// baru dibuat admin tetapi cache perangkat kasir belum tahu.
+  Future<void> _sinkronkanProdukDariKasir() async {
+    if (_sinkronProdukKasirBerjalan) return;
+    setStateIfMounted(() => _sinkronProdukKasirBerjalan = true);
+    try {
+      final pesan =
+          await SinkronisasiTabelService.instance.sinkronkan('produk_cache');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(pesan)));
+      _cariProdukLazy(_kataKunciController.text);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menyinkron produk: $e')));
+      }
+    } finally {
+      setStateIfMounted(() => _sinkronProdukKasirBerjalan = false);
+    }
+  }
+
+  /// Tombol "Tambah produk ini": simpan produk LOKAL lebih dahulu, lalu coba
+  /// kirim ke server. Produk hanya langsung masuk keranjang bila server sudah
+  /// memberi id positif; bila offline/bermasalah, draf tetap aman di menu
+  /// Produk dan pengiriman diulang otomatis tanpa memasukkan id sementara ke
+  /// payload penjualan.
+  Future<void> _tambahProdukCepat(String barcodeAwal) async {
+    final barcode = barcodeAwal.trim();
+    final namaC = TextEditingController();
+    final hargaC = TextEditingController();
+    int? kategoriId;
+    try {
+      final jadi = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Tambah Produk Cepat'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: TextEditingController(text: barcode),
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Barcode (hasil scan)', isDense: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: namaC,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Nama produk *', isDense: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: hargaC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Harga jual *', prefixText: 'Rp ',
+                      isDense: true),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int?>(
+                  value: kategoriId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'Kategori', isDense: true),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                        value: null, child: Text('Tanpa kategori')),
+                    ..._kategori.map((k) => DropdownMenuItem<int?>(
+                        value: k.id, child: Text(k.nama))),
+                  ],
+                  onChanged: (v) => setDialogState(() => kategoriId = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Simpan & Masukkan Keranjang')),
+          ],
+        ),
+        ),
+      );
+      if (jadi != true || !mounted) return;
+      final nama = namaC.text.trim();
+      final harga = double.tryParse(
+              hargaC.text.replaceAll('.', '').replaceAll(',', '.')) ??
+          0;
+      if (nama.isEmpty || harga <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Nama dan harga jual (> 0) wajib diisi.')));
+        return;
+      }
+      final idLokal = MasterOffline.idSementaraBaru();
+      final body = <String, dynamic>{
+        'kode': '',
+        'nama': nama,
+        'barcode': barcode,
+        'harga_beli': 0,
+        'harga_jual': harga,
+        'stok': 0,
+        'keterangan': 'Ditambahkan cepat dari Kasir',
+        'kategori_id': kategoriId,
+        'jenis_produk_id': kategoriId,
+        'kebijakan_retur_id': null,
+        'izinkan_jual_minus_stok': false,
+        'aktif': true,
+        'jenis_item': 'JUAL',
+        'bahan_baku': const [],
+        'ekstra_pilihan': const [],
+      };
+      var kategoriNama = '';
+      for (final kategori in _kategori) {
+        if (kategori.id == kategoriId) {
+          kategoriNama = kategori.nama;
+          break;
+        }
+      }
+      final rowLokal = <String, dynamic>{
+        'id': idLokal,
+        'kode': '',
+        'barcode': barcode,
+        'nama': nama,
+        'hargaJual': harga,
+        'stok': 0,
+        'kategoriId': kategoriId,
+        'kategoriNama': kategoriNama,
+        'aktif': true,
+        'jenisItem': 'JUAL',
+      };
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'produk_simpan',
+        body: body,
+        kunci: 'produk:$idLokal',
+        cacheKey: 'master:produk_list',
+        rowLokal: rowLokal,
+        idLokal: idLokal,
+        entitas: 'produk',
+      );
+      final idServer = (hasil['id'] as num?)?.toInt();
+      if (!mounted) return;
+      if (idServer == null || idServer <= 0 || hasil['offline'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Produk "$nama" sudah aman tersimpan lokal dan '
+                'akan dikirim otomatis. Produk belum dimasukkan ke keranjang '
+                'sampai server memberikan ID; periksa status Sinkronisasi.')));
+        return;
+      }
+      final jsonProduk = <String, dynamic>{...rowLokal, 'id': idServer};
+      await CoreDb.instance
+          .upsertProdukCache([Produk.baseKeCacheRow(jsonProduk)]);
+      if (!mounted) return;
+      _pilihHasilPencarian(Produk.fromJson(jsonProduk));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Produk "$nama" tersimpan dan dimasukkan ke '
+              'keranjang. Stok awal 0 -- catat stok lewat Produk/Kulakan.')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      namaC.dispose();
+      hargaC.dispose();
+    }
+  }
+
   Widget _kotakPencarian() {
     return TextField(
       controller: _kataKunciController,
@@ -2246,9 +2428,37 @@ class _KasirScreenState extends State<KasirScreen> {
         child: hasil.isEmpty
             ? Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Tidak ada produk cocok.',
-                    style:
-                        TextStyle(color: AppColors.textSecondaryOf(context))),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tidak ada produk cocok.',
+                        style: TextStyle(
+                            color: AppColors.textSecondaryOf(context))),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      OutlinedButton.icon(
+                        onPressed: _sinkronProdukKasirBerjalan
+                            ? null
+                            : _sinkronkanProdukDariKasir,
+                        icon: _sinkronProdukKasirBerjalan
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))
+                            : const Icon(Icons.sync, size: 16),
+                        label: const Text('Sinkronkan Produk'),
+                      ),
+                      if (_kataKunci.trim().isNotEmpty)
+                        FilledButton.icon(
+                          onPressed: () => _tambahProdukCepat(_kataKunci),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Tambah produk ini'),
+                        ),
+                    ]),
+                  ],
+                ),
               )
             : ListView.separated(
                 shrinkWrap: true,
