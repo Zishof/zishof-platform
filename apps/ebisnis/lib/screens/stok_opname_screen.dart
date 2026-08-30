@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api_client.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
@@ -30,7 +31,8 @@ final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
 /// Layar Stok Opname (padanan stokopname.html/stokopname-renderer.js Electron)
-/// -- 3 sub-tab: Kartu Mutasi Stok (dasbor), Input Opname (satu produk per
+/// -- sub-tab: Kartu Mutasi Stok (dasbor), SO Harian (barang terjual pada
+/// tanggal pilihan), Input Opname (satu produk per
 /// simpan), SO by Scan (antrean batch -- scan banyak produk berturut-turut,
 /// baru disimpan SEMUA sekaligus lewat tombol "Simpan Semua", padanan mode
 /// cepat versi Electron utk opname banyak barang tanpa menunggu round-trip
@@ -51,7 +53,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
     _tab.addListener(_saatTabBerubah);
   }
 
@@ -247,6 +249,7 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             tabs: const [
               Tab(text: 'Kartu Mutasi Stok'),
               Tab(text: 'Monitor Keluar/Masuk'),
+              Tab(text: 'SO Harian'),
               Tab(text: 'Input Opname'),
               Tab(text: 'SO by Scan'),
             ],
@@ -255,8 +258,9 @@ class _StokOpnameScreenState extends State<StokOpnameScreen>
             child: TabBarView(controller: _tab, children: [
               const _TabMutasiStok(),
               const _TabMonitorBarang(),
+              const _TabSoHarian(),
               const _TabInputOpname(),
-              _TabSoByScan(aktif: _tab.index == 3),
+              _TabSoByScan(aktif: _tab.index == 4),
             ]),
           ),
         ],
@@ -726,6 +730,492 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Daftar kerja hitung harian berdasarkan barang yang benar-benar terjual.
+/// Checklist disimpan lokal per toko+tanggal agar petugas tidak kehilangan
+/// progres ketika berpindah tab. Angka stok tetap merupakan snapshot server;
+/// koreksi stok dilakukan melalui Input Opname/SO by Scan supaya audit utuh.
+class _TabSoHarian extends StatefulWidget {
+  const _TabSoHarian();
+
+  @override
+  State<_TabSoHarian> createState() => _TabSoHarianState();
+}
+
+class _TabSoHarianState extends State<_TabSoHarian> with JejakGalat {
+  DateTime _tanggal = DateTime.now();
+  bool _memuat = true;
+  bool _mengunduh = false;
+  bool _mengunggah = false;
+  String? _pesanError;
+  String _dibuatPada = '';
+  bool _dariCache = false;
+  List<Map<String, dynamic>> _data = [];
+  Set<int> _selesai = <int>{};
+
+  String get _tanggalTeks => DateFormat('yyyy-MM-dd').format(_tanggal);
+  String get _kunciChecklist =>
+      'so_harian_cek_${Sesi.instance.idTokoTerpilih ?? 0}_$_tanggalTeks';
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muatChecklist() async {
+    final prefs = await SharedPreferences.getInstance();
+    final nilai = prefs.getStringList(_kunciChecklist) ?? const <String>[];
+    _selesai = nilai.map(int.tryParse).whereType<int>().toSet();
+  }
+
+  Future<void> _simpanChecklist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        _kunciChecklist, _selesai.map((e) => '$e').toList());
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _pesanError = null;
+    });
+    try {
+      await _muatChecklist();
+      final tokoId = Sesi.instance.idTokoTerpilih ?? 0;
+      final hasil = await MasterOffline.objekDenganCache(
+        'so_harian',
+        {'tanggal': _tanggalTeks},
+        'so_harian:$tokoId:$_tanggalTeks',
+      );
+      final raw = (hasil['data'] as List?) ?? const [];
+      final data = raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _data = data;
+        _dibuatPada = '${hasil['dibuatPada'] ?? ''}';
+        _dariCache = hasil['offline'] == true;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _pilihTanggal() async {
+    final tanggal = await showDatePicker(
+      context: context,
+      initialDate: _tanggal,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Pilih tanggal SO Harian',
+    );
+    if (tanggal == null || tanggal == _tanggal) return;
+    setStateIfMounted(() => _tanggal = tanggal);
+    await _muat();
+  }
+
+  Future<void> _ubahChecklist(int produkId, bool nilai) async {
+    setStateIfMounted(() {
+      if (nilai) {
+        _selesai.add(produkId);
+      } else {
+        _selesai.remove(produkId);
+      }
+    });
+    await _simpanChecklist();
+  }
+
+  Future<void> _unduhExcel() async {
+    setStateIfMounted(() => _mengunduh = true);
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('so_harian_download_excel', {'tanggal': _tanggalTeks});
+      final b64 = hasil['fileBase64'] as String?;
+      if (b64 == null || b64.isEmpty) {
+        throw Exception('Server tidak mengembalikan berkas SO Harian.');
+      }
+      final bytes = base64Decode(b64);
+      final nama = '${hasil['namaFile'] ?? 'SO-Harian-$_tanggalTeks.xlsx'}';
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan Form SO Harian',
+        fileName: nama,
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+      );
+      if (path == null) return;
+      await File(path).writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Form SO Harian disimpan: $path')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengunduh SO Harian: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _mengunduh = false);
+    }
+  }
+
+  Future<void> _unggahExcel() async {
+    final hasilPilih = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    if (hasilPilih == null || hasilPilih.files.isEmpty) return;
+    final bytes = hasilPilih.files.first.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('File Excel tidak dapat dibaca dari perangkat.')));
+      }
+      return;
+    }
+
+    setStateIfMounted(() => _mengunggah = true);
+    try {
+      final payload = <String, dynamic>{
+        'tanggal': _tanggalTeks,
+        'file_base64': base64Encode(bytes),
+      };
+      final preview = await ApiClient.instance
+          .aksi('so_harian_upload_excel_preview', payload);
+      final siap = (preview['siap'] as num?)?.toInt() ?? 0;
+      final dilewati = (preview['dilewati'] as num?)?.toInt() ?? 0;
+      final gagal = (preview['gagal'] as num?)?.toInt() ?? 0;
+      final masalah = ((preview['masalah'] as List?) ?? const <dynamic>[])
+          .map((e) => '$e')
+          .toList();
+      final baris = ((preview['data'] as List?) ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted) return;
+      final setuju = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Pratinjau Unggah SO Harian'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Tanggal: $_tanggalTeks'),
+                  Text(
+                      '$siap baris siap disimpan · $dilewati belum diisi/dilewati · $gagal bermasalah'),
+                  const SizedBox(height: 12),
+                  if (masalah.isNotEmpty) ...[
+                    const Text('Perlu diperbaiki:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...masalah.take(10).map((e) => Text('• $e')),
+                    const SizedBox(height: 12),
+                  ],
+                  if (baris.isNotEmpty) ...[
+                    const Text('Perubahan stok yang akan disimpan:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...baris.take(12).map((r) =>
+                        Text('• ${r['kode'] ?? '-'} · ${r['nama'] ?? '-'}: '
+                            '${r['stokSistem'] ?? 0} → ${r['stokFisik'] ?? 0} '
+                            '(selisih ${r['selisih'] ?? 0})')),
+                    if (baris.length > 12)
+                      Text('…dan ${baris.length - 12} baris lainnya.'),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text(
+                      'Penyimpanan bersifat satu batch: bila satu baris gagal, seluruh perubahan dibatalkan.'),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton.icon(
+              onPressed: gagal == 0 && siap > 0
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: Text('Simpan $siap Baris'),
+            ),
+          ],
+        ),
+      );
+      if (setuju != true) return;
+
+      final hasil =
+          await ApiClient.instance.aksi('so_harian_upload_excel', payload);
+      final disimpan = (hasil['disimpan'] as num?)?.toInt() ?? 0;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '$disimpan hasil hitung tersimpan. Stok server sudah dihitung ulang; perangkat lain akan mengikuti saat sinkronisasi.'),
+      ));
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal mengunggah SO Harian: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _mengunggah = false);
+    }
+  }
+
+  Future<void> _cetakPdf() async {
+    if (_data.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tidak ada produk terjual pada tanggal tersebut.')));
+      return;
+    }
+    final doc = pw.Document();
+    doc.addPage(pw.MultiPage(
+      pageFormat: const PdfPageFormat(842, 595.2, marginAll: 22),
+      header: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('Form Stok Opname Harian',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Tanggal: $_tanggalTeks · Snapshot: $_dibuatPada',
+              style: const pw.TextStyle(fontSize: 8)),
+          pw.SizedBox(height: 8),
+        ],
+      ),
+      build: (_) => [
+        pw.TableHelper.fromTextArray(
+          headers: const [
+            'Cek',
+            'Kode/Barcode',
+            'Produk',
+            'Sat.',
+            'Terjual',
+            'Retur',
+            'Bersih',
+            'Sisa Stok Saat Ini',
+            'Stok Fisik',
+            'Selisih',
+            'Petugas'
+          ],
+          data: _data
+              .map((r) => [
+                    '[ ]',
+                    '${r['kode'] ?? ''}${('${r['barcode'] ?? ''}').isEmpty ? '' : '\n${r['barcode']}'}',
+                    '${r['nama'] ?? ''}',
+                    '${r['satuan'] ?? ''}',
+                    '${r['qtyTerjual'] ?? 0}',
+                    '${r['qtyRetur'] ?? 0}',
+                    '${r['qtyTerjualBersih'] ?? 0}',
+                    '${r['stokSistem'] ?? 0}',
+                    '',
+                    '',
+                    '',
+                  ])
+              .toList(),
+          cellStyle: const pw.TextStyle(fontSize: 7),
+          headerStyle:
+              pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+        ),
+      ],
+    ));
+    await Printing.layoutPdf(
+        onLayout: (_) async => doc.save(), name: 'SO-Harian-$_tanggalTeks.pdf');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final jumlahSelesai = _data
+        .where((r) => _selesai.contains((r['produkId'] as num?)?.toInt()))
+        .length;
+    final totalBersih = _data.fold<double>(
+        0,
+        (nilai, r) =>
+            nilai + ((r['qtyTerjualBersih'] as num?)?.toDouble() ?? 0));
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        PenandaDataTersimpan(tampil: _dariCache),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _pilihTanggal,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(_tanggal)),
+            ),
+            OutlinedButton.icon(
+              onPressed: _memuat ? null : _muat,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Muat Ulang'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _mengunduh ? null : _unduhExcel,
+              icon: _mengunduh
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.download_outlined),
+              label: const Text('Unduh Excel'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _mengunggah ? null : _unggahExcel,
+              icon: _mengunggah
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.upload_file_outlined),
+              label: const Text('Unggah Excel'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _data.isEmpty ? null : _cetakPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Cetak PDF'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.info),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'Sebelum mulai, tekan Sinkronkan dan pastikan seluruh transaksi pending sudah terkirim; transaksi yang masih pending belum masuk laporan server. '
+            'Daftar ini hanya memuat produk yang terjual pada tanggal pilihan. '
+            'Terjual adalah penjualan bruto; Retur adalah barang yang kembali ke stok pada tanggal tersebut; Bersih adalah Terjual dikurangi Retur. '
+            'Sisa Stok Saat Ini adalah snapshot saat daftar dimuat (${_dibuatPada.isEmpty ? '-' : _dibuatPada}), termasuk ketika tanggal yang dipilih adalah tanggal lampau. '
+            'Checklist tersimpan di perangkat ini. Jika ditemukan selisih, catat koreksi melalui Input Opname atau SO by Scan agar audit stok tetap lengkap.',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          SizedBox(
+            width: 190,
+            height: 96,
+            child: AppKpiCard(
+              icon: Icons.inventory_2_outlined,
+              warna: AppColors.info,
+              nilai: '${_data.length}',
+              label: 'Produk Terjual',
+            ),
+          ),
+          SizedBox(
+            width: 190,
+            height: 96,
+            child: AppKpiCard(
+              icon: Icons.shopping_cart_outlined,
+              warna: AppColors.success,
+              nilai: _formatAngka.format(totalBersih),
+              label: 'Qty Bersih',
+            ),
+          ),
+          SizedBox(
+            width: 190,
+            height: 96,
+            child: AppKpiCard(
+              icon: Icons.task_alt,
+              warna: AppColors.warning,
+              nilai: '$jumlahSelesai/${_data.length}',
+              label: 'Sudah Dicek',
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        if (_memuat) const Center(child: CircularProgressIndicator()),
+        if (_pesanError != null)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: AppColors.latarLembut(AppColors.danger),
+                borderRadius: BorderRadius.circular(8)),
+            child: Text(_pesanError!,
+                style: const TextStyle(color: AppColors.danger)),
+          ),
+        if (!_memuat && _pesanError == null && _data.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+                child: Text('Tidak ada produk terjual pada tanggal ini.')),
+          ),
+        if (!_memuat && _data.isNotEmpty)
+          AppDataTable(
+            minWidth: 1050,
+            emptyText: 'Tidak ada produk terjual.',
+            columns: const [
+              AppTableColumn('Cek', flex: 1),
+              AppTableColumn('Kode / Barcode', flex: 2),
+              AppTableColumn('Produk', flex: 4),
+              AppTableColumn('Satuan', flex: 1),
+              AppTableColumn('Terjual', flex: 1, align: TextAlign.right),
+              AppTableColumn('Retur', flex: 1, align: TextAlign.right),
+              AppTableColumn('Bersih', flex: 1, align: TextAlign.right),
+              AppTableColumn('Sisa Stok Saat Ini',
+                  flex: 1, align: TextAlign.right),
+              AppTableColumn('Status', flex: 2),
+            ],
+            rows: _data.map((r) {
+              final produkId = (r['produkId'] as num).toInt();
+              final dicek = _selesai.contains(produkId);
+              return AppTableRowData(cells: [
+                AppTableCell(
+                  flex: 1,
+                  child: Checkbox(
+                    value: dicek,
+                    onChanged: (v) => _ubahChecklist(produkId, v == true),
+                  ),
+                ),
+                AppTableCell.text(
+                    '${r['kode'] ?? ''}${('${r['barcode'] ?? ''}').isEmpty ? '' : '\n${r['barcode']}'}',
+                    flex: 2,
+                    maxLines: 2),
+                AppTableCell.text('${r['nama'] ?? ''}', flex: 4, maxLines: 2),
+                AppTableCell.text('${r['satuan'] ?? '-'}', flex: 1),
+                AppTableCell.text(_formatAngka.format(r['qtyTerjual'] ?? 0),
+                    flex: 1, align: TextAlign.right),
+                AppTableCell.text(_formatAngka.format(r['qtyRetur'] ?? 0),
+                    flex: 1, align: TextAlign.right),
+                AppTableCell.text(
+                    _formatAngka.format(r['qtyTerjualBersih'] ?? 0),
+                    flex: 1,
+                    align: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                AppTableCell.text(_formatAngka.format(r['stokSistem'] ?? 0),
+                    flex: 1,
+                    align: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                AppTableCell(
+                  flex: 2,
+                  child: Row(children: [
+                    Icon(dicek ? Icons.check_circle : Icons.pending_outlined,
+                        size: 17,
+                        color: dicek ? AppColors.success : AppColors.warning),
+                    const SizedBox(width: 6),
+                    Text(dicek ? 'Sudah dicek' : 'Belum dicek',
+                        style: const TextStyle(fontSize: 12)),
+                  ]),
+                ),
+              ]);
+            }).toList(),
+          ),
+      ],
     );
   }
 }

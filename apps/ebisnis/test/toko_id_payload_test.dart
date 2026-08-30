@@ -169,6 +169,11 @@ void main() {
       'price_tag_list_produk',
       'so_simpan',
       'so_ringkasan',
+      'so_harian',
+      'so_harian_download_excel',
+      'so_harian_upload_excel_preview',
+      'so_harian_upload_excel',
+      'so_harian_ekspor_excel',
       'so_ekspor_excel',
       'so_impor_excel',
       'stok_dashboard',
@@ -184,7 +189,8 @@ void main() {
     }
   });
 
-  test('price tag selalu membawa toko aktif agar profil dan produk dapat dimuat',
+  test(
+      'price tag selalu membawa toko aktif agar profil dan produk dapat dimuat',
       () {
     Sesi.instance.tokoId = 7;
     final payload = ApiClient.susunPayload('price_tag_list_produk', null);
