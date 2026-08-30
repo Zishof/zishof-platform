@@ -1,6 +1,6 @@
 # Aturan Wajib Local-First untuk Semua Modul
 
-Status: **WAJIB / gerbang rilis (fail-closed)**  
+Status: **WAJIB / gerbang rilis (fail-closed)**
 Cakupan: POS Desktop, Android, JSP/ZK yang berbagi kontrak API, seluruh varian,
 seluruh modul master, operasional, inventori, pengadaan, produksi, distribusi,
 pelanggan, dan modul berikutnya.
@@ -89,4 +89,3 @@ Jika satu jawaban belum dapat dibuktikan, rilis **ditahan**.
 - Antrean master: `apps/ebisnis/lib/services/master_offline.dart`
 - Foto: `apps/ebisnis/lib/services/simpan_gambar_local_first.dart`
 - Audit kontrak: `docs/pos/2026-08-29-audit-crud-apiclient-langsung.md`
-
