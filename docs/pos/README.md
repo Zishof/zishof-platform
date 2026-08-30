@@ -32,6 +32,7 @@ Dokumen aktif:
 - [ADR satuan dasar, pembelian, dan penjualan produk](2026-08-28-adr-satuan-produk-pembelian-penjualan.md)
 - [Rilis Desktop POS 1.34.04 — eBisnis, Al-Bahjah, dan Nahl](2026-08-29-release-desktop-pos-1.34.04.md)
 - [Rilis POS Desktop dan Android 1.34.07 — eBisnis, Al-Bahjah, dan Nahl](2026-08-30-release-desktop-pos-1.34.07.md)
+- [Rilis Desktop POS 1.34.12 — eBisnis, Al-Bahjah, dan Nahl](2026-08-30-release-desktop-pos-1.34.12.md)
 - [Rilis Desktop Al-Bahjah POS 1.34.03](2026-08-29-release-desktop-albahjah-1.34.03.md)
 - [Kesiapan produksi biometrik POS](2026-08-29-kesiapan-produksi-biometrik-pos.md)
 - [Verifikasi biometrik pembayaran saldo member](2026-08-26-verifikasi-biometrik-pembayaran-saldo.md)
