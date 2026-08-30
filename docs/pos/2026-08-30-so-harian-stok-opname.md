@@ -61,6 +61,36 @@ penjualan dan retur dalam satu rentang hari `[00:00, 00:00 hari berikutnya)`,
 lalu membaca stok produk pada snapshot yang sama. Implementasi tidak memakai
 cast PostgreSQL `::TYPE`.
 
+### Aturan wajib tipe hasil native SQL
+
+Semua kolom hasil `createSQLQuery` pada alur Stok Opname dan SO Harian wajib
+memiliki alias unik dan tipe Hibernate eksplisit melalui `addScalar`. Jangan
+mengandalkan auto-discovery tipe Hibernate lama, khususnya untuk hasil campuran
+angka dan teks. Contoh kontrak daftar SO Harian:
+
+- `produk_id`: `Hibernate.LONG`;
+- kode, barcode, nama produk, dan satuan: `Hibernate.STRING`;
+- kuantitas terjual, retur, dan stok: `Hibernate.DOUBLE`.
+
+Aturan yang sama diterapkan pada ringkasan, riwayat, perubahan stok, pemeriksaan
+duplikasi unggahan, dan ekspor Excel. Alias SQL harus sama persis dengan nama
+yang diberikan kepada `addScalar`. Query DML yang tidak mengembalikan result
+set serta query entitas/HQL tidak memerlukan `addScalar`.
+
+Aturan ini mencegah regresi PostgreSQL/Hibernate `SQLState 22003`, misalnya saat
+nilai satuan teks `Pcs` keliru dibaca sebagai `DOUBLE` (`Bad value for type
+double`). Setiap native query baru dengan hasil skalar wajib mengikuti pola ini
+dan diverifikasi melalui kompilasi backend sebelum commit.
+
+### Inisialisasi locale klien
+
+Bootstrap seluruh varian Flutter wajib memanggil
+`initializeDateFormatting('id_ID', null)` sebelum `runApp`. Tanpa inisialisasi
+ini, format tanggal Indonesia pada tab SO Harian melempar
+`LocaleDataException`; pada build release, panel dapat terlihat abu-abu/kosong
+meskipun API server sudah sehat. Karena itu perbaikan insiden panel kosong
+memerlukan backend dan build klien yang sama-sama terbaru.
+
 Import hanya menerima template hasil unduhan SO Harian dan hanya menerima
 produk yang memang terjual pada toko/tanggal tersebut. Baris tanpa stok fisik
 dilewati. ID produk duplikat, stok fisik negatif/tidak valid, produk di luar
@@ -71,7 +101,8 @@ menjadi pelaku audit; nama petugas di lembar kerja hanya menjadi keterangan.
 
 ## Urutan deployment
 
-1. Deploy backend AIS SVN **r78607** yang memuat action di atas.
+1. Deploy backend AIS SVN **r78609** yang memuat action dan pemetaan tipe
+   hasil native SQL di atas.
 2. UAT `so_harian` dengan akun dan toko aktif; respons harus `status=00`.
 3. UAT unduh Excel dan pastikan formula selisih tersedia.
 4. Isi beberapa nilai `STOK_FISIK`, jalankan pratinjau unggah, lalu pastikan
@@ -87,7 +118,9 @@ action server tersedia. Karena itu backend sebaiknya dipasang terlebih dahulu.
 
 - Analisis terarah API client, layar Stok Opname, dan test terkait:
   **No issues found**.
-- Seluruh test Flutter: **569 lulus**.
-- Full compile backend Maven: **7.316 source Java, BUILD SUCCESS**.
-- Kedua working copy backend telah diselaraskan dan identik pada SVN
-  **r78607**.
+- Test kontrak SO Harian: **3 lulus**.
+- Kompilasi terarah `KantinHelper` dan `StokOpnameScanUtil` pada kedua working
+  copy backend: **lulus**.
+- Perbaikan backend telah di-commit pada SVN **r78609**. Working copy deployment
+  mempertahankan perubahan barcode dari sesi lain yang belum di-commit; bagian
+  SO Harian/Stok Opname sudah terselaraskan ke r78609 tanpa konflik.

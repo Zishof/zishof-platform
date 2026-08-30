@@ -7,6 +7,7 @@ import 'package:core_update/core_update.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -48,6 +49,11 @@ Future<void> bootstrap(AppProductProfile profil) async {
     WidgetsFlutterBinding.ensureInitialized();
     AppProductProfile.aktif = profil;
     CoreDb.configureStorage(AppVariant.storageNamespace);
+    // Semua varian modern (termasuk Nahl) masuk melalui bootstrap(), bukan
+    // main.dart lama. Muat data locale sebelum widget pertama dibangun agar
+    // DateFormat(..., 'id_ID') pada SO Harian dan layar lain tidak melempar
+    // LocaleDataException lalu berubah menjadi panel abu-abu kosong.
+    await initializeDateFormatting('id_ID', null);
     if (!profil.cocokDenganDartDefine()) {
       // Build salah kombinasi (entrypoint vs --dart-define) -- jangan diam:
       // branding compile-time (judul jendela/ikon/exe Windows) akan berbeda

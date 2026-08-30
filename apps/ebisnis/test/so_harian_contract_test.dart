@@ -3,6 +3,13 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('bootstrap varian menginisialisasi locale Indonesia sebelum UI', () {
+    final source = File('lib/bootstrap.dart').readAsStringSync();
+    expect(source, contains("initializeDateFormatting('id_ID', null)"));
+    expect(source.indexOf("initializeDateFormatting('id_ID', null)"),
+        lessThan(source.indexOf('runApp(const EBisnisApp())')));
+  });
+
   test('tab SO Harian memuat daftar terjual, checklist, ekspor, dan cache', () {
     final source =
         File('lib/screens/stok_opname_screen.dart').readAsStringSync();
