@@ -38,4 +38,12 @@ void main() {
   test('perluQc true dari server terbaca', () {
     expect(Produk.fromJson(katalog(perluQc: true)).perluQc, isTrue);
   });
+
+  test('hargaBeliManual: katalog lama false, nilai server terbaca', () {
+    // PDF stok & uom 30-08: false = harga beli ikut faktur (terkonversi
+    // ke satuan dasar); true = dikunci manual.
+    expect(Produk.fromJson(katalog()).hargaBeliManual, isFalse);
+    final j = katalog()..addAll({'hargaBeliManual': true});
+    expect(Produk.fromJson(j).hargaBeliManual, isTrue);
+  });
 }

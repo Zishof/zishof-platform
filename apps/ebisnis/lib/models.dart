@@ -33,6 +33,11 @@ class Produk {
   /// otomatis menerbitkan Quality Alert + karantina batch di server.
   final bool perluQc;
 
+  /// Kebijakan harga beli (PDF stok & uom 30-08): false = OTOMATIS ikut
+  /// faktur kulakan/BAST tervalidasi (per satuan dasar hasil konversi UOM
+  /// pembelian); true = dikunci manual, faktur tidak menimpa.
+  final bool hargaBeliManual;
+
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -94,6 +99,7 @@ class Produk {
     this.satuanPembelianNama = '',
     this.rute = '',
     this.perluQc = false,
+    this.hargaBeliManual = false,
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -125,6 +131,7 @@ class Produk {
         satuanPembelianNama: (j['satuanPembelianNama'] ?? '') as String,
         rute: (j['rute'] ?? '') as String,
         perluQc: j['perluQc'] == true,
+        hargaBeliManual: j['hargaBeliManual'] == true,
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,

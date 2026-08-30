@@ -2548,6 +2548,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   String _jenisItem = 'JUAL';
   String _rute = '';
   bool _perluQc = false;
+  bool _hargaBeliManual = false;
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
@@ -2602,6 +2603,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _jenisItem = p?.jenisItem ?? 'JUAL';
     _rute = p?.rute ?? '';
     _perluQc = p?.perluQc ?? false;
+    _hargaBeliManual = p?.hargaBeliManual ?? false;
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
         produkId: (b['produkId'] as num?)?.toInt(),
@@ -3218,6 +3220,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'jenis_item': _jenisItem,
           'rute': _rute.isEmpty ? null : _rute,
           'perlu_qc': _perluQc,
+          'harga_beli_manual': _hargaBeliManual,
           'bahan_baku': _bahanBaku
               .map((b) => {
                     'produk_id': b.produkId,
@@ -3266,6 +3269,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'jenisItem': _jenisItem,
           'rute': _rute,
           'perluQc': _perluQc,
+          'hargaBeliManual': _hargaBeliManual,
           'kemasan': _kemasan
               .map((k) => {
                     'nama': k.nama.text.trim(),
@@ -3507,6 +3511,17 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                     onChanged: (v) => setStateIfMounted(() => _rute = v ?? ''),
                   ),
                   const SizedBox(height: 6),
+                  // PDF stok & uom 30-08: kebijakan harga beli per produk.
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Harga beli manual (tidak ikut faktur)'),
+                    subtitle: const Text(
+                        'Mati = harga beli otomatis mengikuti faktur kulakan/BAST tervalidasi, terkonversi ke satuan dasar (Rp 1.200.000/DUS isi 6 menjadi Rp 200.000/botol).'),
+                    value: _hargaBeliManual,
+                    onChanged: (v) =>
+                        setStateIfMounted(() => _hargaBeliManual = v),
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
