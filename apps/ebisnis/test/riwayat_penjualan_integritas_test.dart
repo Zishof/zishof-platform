@@ -2,6 +2,25 @@ import 'package:ebisnis/screens/riwayat_penjualan_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('normalisasi barcode struk', () {
+    test('menerima kode transaksi mentah', () {
+      expect(normalisasiKodeTransaksiDariScan('  AB260830ABC123  '),
+          'AB260830ABC123');
+    });
+
+    test('mengambil nomor nota dari JSON dan URL', () {
+      expect(
+        normalisasiKodeTransaksiDariScan('{"nomorNota":"EB260830000123"}'),
+        'EB260830000123',
+      );
+      expect(
+        normalisasiKodeTransaksiDariScan(
+            'https://pos.example/struk?kodeTransaksi=AB260830XYZ987'),
+        'AB260830XYZ987',
+      );
+    });
+  });
+
   group('filter integritas riwayat penjualan', () {
     test('tidak memasukkan arsip lokal yang belum diaudit server', () {
       final hasil = saringArsipLokalUntukFilterIntegritas([

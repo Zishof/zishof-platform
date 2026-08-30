@@ -143,6 +143,11 @@ class AppSearchField extends StatefulWidget {
   /// sedangkan Windows memakai webcam internal atau USB melalui core_hw.
   final bool scanProduk;
 
+  /// Judul dialog pemindai. Nilai bawaan mempertahankan perilaku lama untuk
+  /// pemindaian produk, tetapi layar lain (mis. Riwayat Penjualan) dapat
+  /// menjelaskan bahwa yang dipindai adalah barcode struk.
+  final String scanJudul;
+
   /// Callback khusus sesudah kamera berhasil membaca kode. Jika null, hasil
   /// diteruskan ke [onSubmitted], lalu [onChanged] sebagai fallback.
   final ValueChanged<String>? onScanned;
@@ -164,6 +169,7 @@ class AppSearchField extends StatefulWidget {
     this.gayaForm = false,
     this.autofocus = false,
     this.scanProduk = false,
+    this.scanJudul = 'Scan Barcode / QR Produk',
     this.onScanned,
   });
 
@@ -200,7 +206,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
   Future<void> _scanProduk() async {
     final kode = await BarcodeScannerScreen.pindai(
       context,
-      judul: 'Scan Barcode / QR Produk',
+      judul: widget.scanJudul,
     );
     if (!mounted || kode == null || kode.trim().isEmpty) return;
     final nilai = kode.trim();
@@ -232,7 +238,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                tooltip: 'Scan barcode/QR dengan kamera',
+                tooltip: widget.scanJudul,
                 icon: const Icon(Icons.qr_code_scanner, size: 20),
                 onPressed: _scanProduk,
               ),

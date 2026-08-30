@@ -335,6 +335,13 @@ class MasterOffline {
       }
       final hasil = await ApiClient.instance.aksi(aksi, siap);
       await _catatPemetaan(siap, hasil);
+      final idHasil = hasil['id'];
+      if (idHasil != null) {
+        await CoreDb.instance.outboxMasterSimpanHasilServer(
+          idAntrean,
+          <String, Object?>{'id': idHasil},
+        );
+      }
       await CoreDb.instance.outboxMasterTandaiSukses(idAntrean);
       _tandaiBarisSukses(kunci);
       await _muatUlangHitungan();

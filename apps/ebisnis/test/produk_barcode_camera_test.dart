@@ -20,7 +20,8 @@ void main() {
     final kasir = File('lib/screens/kasir_screen.dart').readAsStringSync();
 
     expect(komponen, contains('final bool scanProduk;'));
-    expect(komponen, contains("judul: 'Scan Barcode / QR Produk'"));
+    expect(komponen, contains("this.scanJudul = 'Scan Barcode / QR Produk'"));
+    expect(komponen, contains('judul: widget.scanJudul'));
     expect(komponen, contains('BarcodeScannerScreen.pindai('));
     expect(banbox, contains('this.tampilkanScanner = true'));
     expect(banbox, contains('BarcodeScannerScreen.pindai('));

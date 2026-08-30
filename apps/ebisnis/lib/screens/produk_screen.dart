@@ -2876,18 +2876,59 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       final fotoLokal = await muatGambarLokalTertunda(
         aksi: 'produk_foto_upload',
         awalanKunci: 'produk_foto:${widget.produk!.id}:',
+        termasukTersinkron: true,
       );
+      final lokalPerId = <int, GambarLokalTertunda>{
+        for (final foto in fotoLokal)
+          if (foto.idServer != null) foto.idServer!: foto,
+      };
+      final terpakai = <int>{};
+      for (final server in fotoServer) {
+        final lokal = server.id == null ? null : lokalPerId[server.id!];
+        if (lokal == null) continue;
+        server
+          ..bytes = lokal.bytes
+          ..namaFile = lokal.namaFile
+          ..idAntreanLokal = lokal.idAntrean;
+        terpakai.add(lokal.idAntrean);
+      }
+
+      // Migrasi antrean versi lama yang belum menyimpan id hasil server.
+      // Upload ditambahkan di akhir daftar, sehingga pasangan lama diambil
+      // dari belakang. Antrean baru selalu memakai idServer eksak di atas.
+      final lamaTanpaId = fotoLokal
+          .where((e) =>
+              e.status == 'SYNCED' &&
+              e.idServer == null &&
+              !terpakai.contains(e.idAntrean))
+          .toList();
+      final serverTanpaBytes =
+          fotoServer.where((e) => e.bytes == null).toList(growable: false);
+      var indeksServer = serverTanpaBytes.length - 1;
+      for (var i = lamaTanpaId.length - 1;
+          i >= 0 && indeksServer >= 0;
+          i--, indeksServer--) {
+        final lokal = lamaTanpaId[i];
+        serverTanpaBytes[indeksServer]
+          ..bytes = lokal.bytes
+          ..namaFile = lokal.namaFile
+          ..idAntreanLokal = lokal.idAntrean;
+        terpakai.add(lokal.idAntrean);
+      }
       if (mounted) {
         setStateIfMounted(() {
           _foto
             ..clear()
             ..addAll(fotoServer)
-            ..addAll(fotoLokal.map((foto) => _FotoBaris(
-                  bytes: foto.bytes,
-                  namaFile: foto.namaFile,
-                  idAntreanLokal: foto.idAntrean,
-                  kunciLokal: foto.kunci,
-                )));
+            ..addAll(fotoLokal
+                .where((foto) => foto.status != 'SYNCED')
+                .where((foto) => !terpakai.contains(foto.idAntrean))
+                .map((foto) => _FotoBaris(
+                      bytes: foto.bytes,
+                      namaFile: foto.namaFile,
+                      idAntreanLokal: foto.idAntrean,
+                      kunciLokal: foto.kunci,
+                    )));
           _memuatFoto = false;
         });
       }
@@ -3004,10 +3045,16 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         }
         return;
       }
-      // Muat ulang daftar dari server supaya baris ini dapat urlGambar yg
-      // benar (produk_foto_upload sendiri cuma balas {status,id}) -- ukuran
-      // daftar kecil (maks 10), round-trip tambahan ini murah.
-      await _muatFoto();
+      // Bytes preview tidak dibuang setelah server menerima foto. URL media
+      // dapat belum tersedia sesaat atau servlet server belum diperbarui.
+      final idServer = (hasil.respons['id'] as num?)?.toInt();
+      setStateIfMounted(() {
+        baris
+          ..id = idServer
+          ..url = idServer == null ? null : urlFotoProdukDariId(idServer)
+          ..idAntreanLokal = hasil.idAntrean
+          ..mengunggah = false;
+      });
     } catch (e) {
       // Preview dipertahankan. Pengguna dapat melihat foto yang dipilih dan
       // memperbaiki penolakan bisnis tanpa harus memilih berkas dari awal.

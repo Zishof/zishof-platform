@@ -66,6 +66,37 @@ Local-first menjamin perubahan tetap tercatat di perangkat, tetapi penerimaan ak
 
 Backend tidak dikemas menjadi WAR dalam rilis aplikasi ini dan dideploy terpisah oleh admin.
 
+## Koreksi UAT foto produk POS setelah build 170
+
+- Kartu produk POS Flutter (satu source untuk Desktop Windows dan Android) membaca `fotoUrls` server serta foto `PENDING`, `GAGAL`, dan `SYNCED` dari antrean lokal. Foto lokal tetap tampil ketika servlet media server belum diperbarui.
+- Jika satu produk mempunyai lebih dari satu foto, kartu mengganti foto otomatis setiap `3 detik`. Satu foto ditampilkan statis; tanpa foto memakai inisial produk.
+- JSP Kasir mengambil seluruh id `public.foto_gambar_produk` untuk produk pada halaman dengan satu kueri, menampilkan media lewat `AmbilMediaProduk?fotoId=...`, dan menjalankan slideshow `3 detik` tanpa menumpuk timer ketika katalog dimuat ulang.
+- ZKoss `PosKantinAction` mengambil foto seluruh produk pada halaman dengan satu criteria query, memakai endpoint per `fotoId`, dan mengganti sumber `Image` melalui ZK `Timer` setiap `3 detik`.
+- API katalog `PosApi` wajib menyertakan array `fotoUrls` terurut untuk Desktop/Android. Servlet `AmbilMediaProduk` wajib mendukung parameter `fotoId`; deployment backend lama yang masih mengembalikan ikon paket harus diperbarui sebelum URL server dapat menjadi sumber utama.
+
+### Bukti verifikasi koreksi
+
+- Analyzer terarah Flutter untuk Kasir, Produk, local-first, dan URL media: `0` masalah.
+- Uji URL media dan unggahan local-first: `9/9` lulus.
+- Uji database/cache/outbox: `2/2` lulus.
+- Debug build Windows berhasil: `build/windows/x64/runner/Debug/ebisnis.exe`.
+- Debug build Android per-flavor `ebisnis`, `albahjah`, dan `nahl` masing-masing selesai dengan status `Built`.
+- Kompilasi backend penuh: `7.316` source Java, `BUILD SUCCESS`. Tidak dibuat WAR dan tidak dilakukan deployment.
+
+## Koreksi UAT pencarian struk dan label 50 × 18 mm
+
+- Pencarian cepat pada **Riwayat Penjualan** menerima pemindaian barcode/QR struk dari kamera maupun scanner USB yang mengirim Enter. Kode mentah, JSON, dan URL berparameter nomor nota dinormalisasi menjadi kode transaksi sebelum pencarian.
+- Model **Produk** sekarang mempunyai preset **Label Produk 50 × 18 mm**. Pada A4 potret dengan margin kiri/kanan 5 mm dan jarak label 2 mm, preview dan PDF sama-sama menghasilkan tepat `3` kolom.
+- Ukuran stiker dapat diisi manual. Media cetak dapat dipilih A4, F4, thermal, atau ukuran kertas kustom dengan orientasi potret/landscape.
+- Margin kiri, atas/header, kanan, bawah, serta jarak horizontal dan vertikal antarkotak dapat diatur dan disimpan per model price tag. Margin atas menggeser grid ke bawah dan margin kiri menggeser grid ke kanan.
+- Perhitungan jumlah baris/kolom preview dan PDF memakai fungsi yang sama agar hasil layar tidak berbeda dari dokumen cetak.
+
+### Bukti verifikasi koreksi
+
+- Analyzer terarah untuk komponen pemindai, Riwayat Penjualan, Price Tag, dan test: `0` masalah.
+- Uji normalisasi barcode struk, integritas riwayat, preset 50 × 18 mm, tiga kolom A4 potret, pengaturan kertas/margin, dan petunjuk barcode: `12/12` lulus.
+- Debug build Windows varian Nahl berhasil: `build/windows/x64/runner/Debug/ebisnis.exe`.
+
 ## Rollback
 
 - Hentikan rollout bila aplikasi tidak dapat dibuka, data lokal tidak dapat dibaca, atau fungsi kasir utama terganggu.

@@ -28,6 +28,7 @@ class GambarLokalTertunda {
   final String namaFile;
   final Uint8List bytes;
   final String status;
+  final int? idServer;
 
   const GambarLokalTertunda({
     required this.idAntrean,
@@ -36,6 +37,7 @@ class GambarLokalTertunda {
     required this.namaFile,
     required this.bytes,
     required this.status,
+    this.idServer,
   });
 }
 
@@ -46,11 +48,13 @@ Future<List<GambarLokalTertunda>> muatGambarLokalTertunda({
   required String aksi,
   required String awalanKunci,
   String fieldBase64 = 'file_base64',
+  bool termasukTersinkron = false,
 }) async {
-  final baris = await CoreDb.instance.outboxMasterAktif(
-    aksi: aksi,
-    awalanKunci: awalanKunci,
-  );
+  final baris = termasukTersinkron
+      ? await CoreDb.instance
+          .outboxMasterUntukPreview(aksi: aksi, awalanKunci: awalanKunci)
+      : await CoreDb.instance
+          .outboxMasterAktif(aksi: aksi, awalanKunci: awalanKunci);
   final hasil = <GambarLokalTertunda>[];
   for (final antrean in baris) {
     try {
@@ -58,6 +62,8 @@ Future<List<GambarLokalTertunda>> muatGambarLokalTertunda({
           as Map<String, dynamic>;
       final encoded = '${payload[fieldBase64] ?? ''}'.trim();
       if (encoded.isEmpty) continue;
+      final hasilServer = payload['_hasil_server'];
+      final idServerMentah = hasilServer is Map ? hasilServer['id'] : null;
       hasil.add(GambarLokalTertunda(
         idAntrean: (antrean['id'] as num).toInt(),
         aksi: '${antrean['aksi'] ?? aksi}',
@@ -65,6 +71,9 @@ Future<List<GambarLokalTertunda>> muatGambarLokalTertunda({
         namaFile: '${payload['nama_file'] ?? 'foto.jpg'}',
         bytes: base64Decode(encoded),
         status: '${antrean['status'] ?? 'PENDING'}',
+        idServer: idServerMentah is num
+            ? idServerMentah.toInt()
+            : int.tryParse('$idServerMentah'),
       ));
     } catch (_) {
       // Payload diagnostik lama/rusak tidak boleh memblokir form.

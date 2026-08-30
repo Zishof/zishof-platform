@@ -976,6 +976,43 @@ class CoreDb {
     );
   }
 
+  /// Salinan mutasi media untuk preview, termasuk yang sudah tersinkron.
+  /// Pemanggil wajib membatasi aksi+kunci supaya payload CRUD biasa tidak
+  /// ikut dimuat ke memori.
+  Future<List<Map<String, Object?>>> outboxMasterUntukPreview({
+    required String aksi,
+    required String awalanKunci,
+  }) async {
+    final database = await db;
+    return database.query(
+      'outbox_master',
+      where:
+          "status IN ('PENDING','GAGAL','SYNCED') AND aksi = ? AND kunci LIKE ?",
+      whereArgs: [aksi, '$awalanKunci%'],
+      orderBy: 'id ASC',
+    );
+  }
+
+  /// Simpan hasil minimal server pada jurnal mutasi yang sama. Media memakai
+  /// pasangan id server dengan bytes lokal sebagai fallback preview.
+  Future<void> outboxMasterSimpanHasilServer(
+      int id, Map<String, Object?> hasilServer) async {
+    final database = await db;
+    final baris = await database.query('outbox_master',
+        columns: ['payload_json'], where: 'id = ?', whereArgs: [id], limit: 1);
+    if (baris.isEmpty) return;
+    try {
+      final payload = Map<String, dynamic>.from(
+          jsonDecode('${baris.first['payload_json'] ?? '{}'}') as Map);
+      payload['_hasil_server'] = hasilServer;
+      await database.update(
+          'outbox_master', {'payload_json': jsonEncode(payload)},
+          where: 'id = ?', whereArgs: [id]);
+    } catch (_) {
+      // Payload lama/rusak dipertahankan untuk diagnosis.
+    }
+  }
+
   Future<void> outboxMasterTandaiSukses(int id) async {
     final database = await db;
     await database.update(

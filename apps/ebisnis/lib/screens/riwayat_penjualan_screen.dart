@@ -60,6 +60,47 @@ List<Map<String, dynamic>> _normalisasiDaftarTransaksi(
       .toList();
 }
 
+/// Hasil pemindai struk umumnya berupa kode transaksi mentah. Beberapa
+/// pencetak/QR lama menyimpan kode di URL, query-string, atau JSON; ambil kode
+/// stabilnya agar kasir tidak perlu menghapus pembungkus hasil scan manual.
+@visibleForTesting
+String normalisasiKodeTransaksiDariScan(String raw) {
+  final nilai = raw.trim();
+  if (nilai.isEmpty) return '';
+  try {
+    final decoded = jsonDecode(nilai);
+    if (decoded is Map) {
+      for (final key in const [
+        'kodeTransaksi',
+        'kode_transaksi',
+        'nomorNota',
+        'nomor_nota',
+        'kode',
+      ]) {
+        final kandidat = '${decoded[key] ?? ''}'.trim();
+        if (kandidat.isNotEmpty) return kandidat;
+      }
+    }
+  } catch (_) {}
+  final uri = Uri.tryParse(nilai);
+  if (uri != null && uri.hasQuery) {
+    for (final key in const [
+      'kodeTransaksi',
+      'kode_transaksi',
+      'nomorNota',
+      'nomor_nota',
+      'kode',
+    ]) {
+      final kandidat = uri.queryParameters[key]?.trim() ?? '';
+      if (kandidat.isNotEmpty) return kandidat;
+    }
+  }
+  final kode = RegExp(r'\b[A-Z]{1,6}[A-Z0-9-]{7,}\b', caseSensitive: false)
+      .firstMatch(nilai)
+      ?.group(0);
+  return kode?.trim() ?? nilai;
+}
+
 /// Filter "transaksi tidak valid" adalah audit konsistensi data di server:
 /// total master dibandingkan dengan agregat rincian yang tersimpan di DB.
 /// Arsip lokal tidak boleh ikut hanya karena tidak mempunyai kolom agregat
@@ -2369,10 +2410,21 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final pencarian = AppSearchField(
-                        hintText: 'Pencarian cepat pelanggan / nomor nota...',
+                        hintText:
+                            'Pelanggan / nomor nota / scan barcode struk...',
                         debounce: const Duration(milliseconds: 450),
+                        scanProduk: true,
+                        scanJudul: 'Scan Barcode / QR Struk',
                         onChanged: (v) {
                           _cariPembeli = v;
+                          _terapkan();
+                        },
+                        onSubmitted: (v) {
+                          _cariPembeli = normalisasiKodeTransaksiDariScan(v);
+                          _terapkan();
+                        },
+                        onScanned: (v) {
+                          _cariPembeli = normalisasiKodeTransaksiDariScan(v);
                           _terapkan();
                         },
                       );

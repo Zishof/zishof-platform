@@ -21,6 +21,7 @@ import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/layar_pelanggan_launcher.dart';
 import '../services/pengaturan_laci.dart';
 import '../services/pesanan_poller.dart';
+import '../services/simpan_gambar_local_first.dart';
 import '../services/toko_aktif_lokal.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/url_media.dart';
@@ -2344,6 +2345,7 @@ class _KasirScreenState extends State<KasirScreen> {
                 ),
                 itemCount: produkTampil.length,
                 itemBuilder: (context, i) => _KartuProduk(
+                  key: ValueKey<int>(produkTampil[i].id),
                   produk: produkTampil[i],
                   bolehDijual: produkBolehDijualMenurutStok(
                     produkTampil[i],
@@ -2717,7 +2719,8 @@ class _KartuProduk extends StatefulWidget {
   /// Tekan-lama = pemilih kemasan (Fase A); null bila produk tanpa preset.
   final VoidCallback? onPilihKemasan;
   const _KartuProduk(
-      {required this.produk,
+      {super.key,
+      required this.produk,
       required this.bolehDijual,
       required this.onTap,
       this.diskon,
@@ -2738,11 +2741,12 @@ class _KartuProduk extends StatefulWidget {
 class _KartuProdukState extends State<_KartuProduk> {
   int _indeksFoto = 0;
   Timer? _timer;
+  List<_SumberFotoKartu> _sumberFoto = const [];
 
   @override
   void initState() {
     super.initState();
-    _aturTimer();
+    _susunSumberFoto();
   }
 
   @override
@@ -2751,20 +2755,112 @@ class _KartuProdukState extends State<_KartuProduk> {
     // Grid Kasir bisa memuat ulang produk (sinkron katalog) sementara kartu
     // yang sama tetap hidup di posisi GridView yg sama -- reset indeks+timer
     // kalau daftar foto produk ini berubah, supaya tak nunjuk indeks basi.
-    if (!listEquals(old.produk.fotoUrls, widget.produk.fotoUrls)) {
+    if (old.produk.id != widget.produk.id ||
+        !listEquals(old.produk.fotoUrls, widget.produk.fotoUrls)) {
+      _susunSumberFoto();
+    }
+  }
+
+  /// Gabungkan URL server dengan salinan foto local-first. Kartu yang sedang
+  /// terlihat saja yang membaca outbox SQLite; 50 ribu produk tidak pernah
+  /// dimuat sekaligus. Foto lokal menimpa URL server yang ber-ID sama agar
+  /// tetap tampil ketika servlet media belum ter-deploy, sedangkan unggahan
+  /// pending ditambahkan ke slideshow tanpa menunggu server pulih.
+  Future<void> _susunSumberFoto() async {
+    final produkId = widget.produk.id;
+    final server = widget.produk.fotoUrls
+        .where((e) => e.trim().isNotEmpty)
+        .map((url) => _SumberFotoKartu(
+              url: normalisasiUrlMedia(url),
+              idServer: _idFotoDariUrl(url),
+              kunci: 'server:$url',
+            ))
+        .toList();
+    var gabungan = server;
+    try {
+      final lokal = await muatGambarLokalTertunda(
+        aksi: 'produk_foto_upload',
+        awalanKunci: 'produk_foto:$produkId:',
+        termasukTersinkron: true,
+      );
+      if (!mounted || widget.produk.id != produkId) return;
+      final terpakai = <int>{};
+      final lokalPerId = <int, GambarLokalTertunda>{
+        for (final foto in lokal)
+          if (foto.idServer != null) foto.idServer!: foto,
+      };
+      for (var i = 0; i < server.length; i++) {
+        final foto = server[i];
+        final lokalSama =
+            foto.idServer == null ? null : lokalPerId[foto.idServer!];
+        if (lokalSama == null) continue;
+        server[i] = _SumberFotoKartu(
+          bytes: lokalSama.bytes,
+          idServer: foto.idServer,
+          kunci: 'lokal:${lokalSama.idAntrean}',
+        );
+        terpakai.add(lokalSama.idAntrean);
+      }
+
+      // Migrasi 1.34.07: hasil upload lama belum menyimpan id foto server.
+      // Pasangkan dari belakang (urutan upload), sama dengan form Produk.
+      final lama = lokal
+          .where((e) =>
+              e.status == 'SYNCED' &&
+              e.idServer == null &&
+              !terpakai.contains(e.idAntrean))
+          .toList();
+      var indeksServer = server.length - 1;
+      for (var i = lama.length - 1; i >= 0 && indeksServer >= 0; i--) {
+        while (indeksServer >= 0 && server[indeksServer].bytes != null) {
+          indeksServer--;
+        }
+        if (indeksServer < 0) break;
+        final foto = lama[i];
+        server[indeksServer] = _SumberFotoKartu(
+          bytes: foto.bytes,
+          idServer: server[indeksServer].idServer,
+          kunci: 'lokal:${foto.idAntrean}',
+        );
+        terpakai.add(foto.idAntrean);
+        indeksServer--;
+      }
+      gabungan = <_SumberFotoKartu>[
+        ...server,
+        ...lokal
+            .where((e) => !terpakai.contains(e.idAntrean))
+            .map((e) => _SumberFotoKartu(
+                  bytes: e.bytes,
+                  idServer: e.idServer,
+                  kunci: 'lokal:${e.idAntrean}',
+                )),
+      ];
+    } catch (_) {
+      // Kegagalan membaca preview lokal tidak boleh memblokir Kasir.
+    }
+    if (!mounted || widget.produk.id != produkId) return;
+    setState(() {
+      _sumberFoto = gabungan;
       _indeksFoto = 0;
-      _aturTimer();
+    });
+    _aturTimer();
+  }
+
+  static int? _idFotoDariUrl(String url) {
+    try {
+      return int.tryParse(Uri.parse(url).queryParameters['fotoId'] ?? '');
+    } catch (_) {
+      return null;
     }
   }
 
   void _aturTimer() {
     _timer?.cancel();
     _timer = null;
-    if (widget.produk.fotoUrls.length > 1) {
+    if (_sumberFoto.length > 1) {
       _timer = Timer.periodic(const Duration(seconds: 3), (_) {
         if (!mounted) return;
-        setState(() =>
-            _indeksFoto = (_indeksFoto + 1) % widget.produk.fotoUrls.length);
+        setState(() => _indeksFoto = (_indeksFoto + 1) % _sumberFoto.length);
       });
     }
   }
@@ -2789,7 +2885,9 @@ class _KartuProdukState extends State<_KartuProduk> {
         : produk.nama.codeUnitAt(0) % _paletKartuProduk.length];
     final adaPromo = (diskon ?? 0) > 0;
     final hargaPromo = adaPromo ? produk.hargaJual - diskon! : produk.hargaJual;
-    final adaFoto = produk.fotoUrls.isNotEmpty;
+    final adaFoto = _sumberFoto.isNotEmpty;
+    final sumberFoto =
+        adaFoto ? _sumberFoto[_indeksFoto % _sumberFoto.length] : null;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -2823,27 +2921,47 @@ class _KartuProdukState extends State<_KartuProduk> {
                       child: adaFoto
                           ? AnimatedSwitcher(
                               duration: const Duration(milliseconds: 400),
-                              child: Image.network(
-                                normalisasiUrlMedia(produk.fotoUrls[
-                                    _indeksFoto % produk.fotoUrls.length]),
-                                key: ValueKey(
-                                    _indeksFoto % produk.fotoUrls.length),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: AppColors.latarLembut(warnaAvatar),
-                                  child: Center(
-                                    child: Text(
-                                      produk.nama.isNotEmpty
-                                          ? produk.nama[0].toUpperCase()
-                                          : '?',
-                                      style: TextStyle(
-                                          color: warnaAvatar,
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w800),
+                              child: sumberFoto!.bytes != null
+                                  ? Image.memory(
+                                      sumberFoto.bytes!,
+                                      key: ValueKey(sumberFoto.kunci),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color:
+                                            AppColors.latarLembut(warnaAvatar),
+                                        child: Center(
+                                          child: Text(
+                                            produk.nama.isNotEmpty
+                                                ? produk.nama[0].toUpperCase()
+                                                : '?',
+                                            style: TextStyle(
+                                                color: warnaAvatar,
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w800),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : Image.network(
+                                      sumberFoto.url!,
+                                      key: ValueKey(sumberFoto.kunci),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color:
+                                            AppColors.latarLembut(warnaAvatar),
+                                        child: Center(
+                                          child: Text(
+                                            produk.nama.isNotEmpty
+                                                ? produk.nama[0].toUpperCase()
+                                                : '?',
+                                            style: TextStyle(
+                                                color: warnaAvatar,
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w800),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
                             )
                           : Container(
                               color: AppColors.latarLembut(warnaAvatar),
@@ -2991,6 +3109,20 @@ class _KartuProdukState extends State<_KartuProduk> {
       ),
     );
   }
+}
+
+class _SumberFotoKartu {
+  final Uint8List? bytes;
+  final String? url;
+  final int? idServer;
+  final String kunci;
+
+  const _SumberFotoKartu({
+    this.bytes,
+    this.url,
+    this.idServer,
+    required this.kunci,
+  }) : assert(bytes != null || url != null);
 }
 
 /// Form Tutup Kas -- KPI sesi (dari `sesi_kas_status`) + input Uang Fisik

@@ -18,13 +18,26 @@ String normalisasiUrlMedia(String? nilai) {
       path.contains('/AmbilMedia') ||
       path.contains('/AmbilLampiran');
   if (mediaMilikPos) {
-    return basis
-        .replace(
-          path: path,
-          query: media.hasQuery ? media.query : null,
-          fragment: null,
-        )
-        .toString();
+    final basisSegmen = basis.pathSegments.where((e) => e.isNotEmpty).toList();
+    if (basisSegmen.isNotEmpty) basisSegmen.removeLast();
+    const endpointMedia = <String>{
+      'AmbilMediaProduk',
+      'AmbilMediaLayarPelangganSlide',
+      'AmbilMedia',
+      'AmbilLampiran',
+    };
+    final mediaSegmen = media.pathSegments.where((e) => e.isNotEmpty).toList();
+    final indeksEndpoint =
+        mediaSegmen.indexWhere((e) => endpointMedia.contains(e));
+    final endpointSegmen =
+        indeksEndpoint < 0 ? mediaSegmen : mediaSegmen.sublist(indeksEndpoint);
+    return basis.replace(
+      // URL internal kadang tidak membawa context aplikasi. Endpoint
+      // media selalu dipasang kembali ke context Api_eBisnis aktif.
+      pathSegments: [...basisSegmen, ...endpointSegmen],
+      query: media.hasQuery ? media.query : null,
+      fragment: null,
+    ).toString();
   }
   if (!media.hasScheme && !media.hasAuthority) {
     return basis.origin + (teks.startsWith('/') ? teks : '/$teks');

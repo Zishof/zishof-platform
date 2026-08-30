@@ -53,7 +53,7 @@ extension _LabelModelPriceTag on ModelPriceTag {
 /// ATAU ditata sbg grid di atas kertas umum ([a4]/[f4]) yg dipotong manual.
 /// Promo juga memakai pilihan ini sekarang: ukuran Promo menentukan ukuran
 /// panel/tag, sedangkan [KertasCetak] menentukan media kertas/roll.
-enum KertasCetak { thermal, a4, f4 }
+enum KertasCetak { thermal, a4, f4, kustom }
 
 extension _LabelKertasCetak on KertasCetak {
   String get label {
@@ -64,6 +64,8 @@ extension _LabelKertasCetak on KertasCetak {
         return 'A4';
       case KertasCetak.f4:
         return 'F4';
+      case KertasCetak.kustom:
+        return 'Kustom';
     }
   }
 
@@ -78,6 +80,8 @@ extension _LabelKertasCetak on KertasCetak {
         return PdfPageFormat.a4;
       case KertasCetak.f4:
         return PdfPageFormat(210 * PdfPageFormat.mm, 330 * PdfPageFormat.mm);
+      case KertasCetak.kustom:
+        return null;
     }
   }
 }
@@ -161,6 +165,23 @@ class _UkuranTag {
 /// dgan printer kertas umum. 5mm dipilih spy konsisten dgn margin Promo
 /// (Promo kini ikut jalur grid yang sama).
 const _marginCetakAmanMm = 5.0;
+
+/// Menghitung jumlah label yang benar-benar muat pada satu sumbu kertas.
+/// Preview dan PDF memakai fungsi yang sama supaya preset media fisik dapat
+/// diverifikasi tanpa bergantung pada rendering visual.
+@visibleForTesting
+int hitungJumlahLabelPadaSumbu({
+  required double panjangTersediaMm,
+  required double ukuranLabelMm,
+  required double jarakAntarLabelMm,
+}) {
+  if (panjangTersediaMm <= 0 || ukuranLabelMm <= 0) return 1;
+  final jarak = max(0, jarakAntarLabelMm);
+  return max(
+    1,
+    ((panjangTersediaMm + jarak) / (ukuranLabelMm + jarak)).floor(),
+  );
+}
 
 const _kategoriRakUtama = 'Rak / Gondola';
 const _kategoriTscRoll = 'Roll TSC TTP-244 Pro (Rekomendasi)';
@@ -250,6 +271,14 @@ const _ukuranProduk = [
   // lebar cetak maksimal printer ini 104 mm, jadi semua ukuran di bawah
   // aman dipakai. Ditaruh di kategori sendiri paling atas supaya jadi
   // pilihan utama saat mencetak stiker produk lewat roll thermal.
+  _UkuranTag(
+      id: 'produk_50x18',
+      label: 'Label Produk 50 × 18 mm',
+      detail: '50 x 18 mm - 3 kolom pada A4 potret',
+      kategori: _kategoriTscRoll,
+      lebarMm: 50,
+      tinggiMm: 18,
+      populer: true),
   _UkuranTag(
       id: 'produk_33x15',
       label: 'Barcode Rak 2 Baris',
@@ -408,6 +437,13 @@ const _ukuranProduk = [
       kategori: _kategoriBulatKotak,
       lebarMm: 40,
       tinggiMm: 30),
+  _UkuranTag(
+      id: 'produk_kustom',
+      label: 'Ukuran Stiker Kustom',
+      detail: 'Lebar dan tinggi diatur manual',
+      kategori: 'Ukuran Kustom',
+      lebarMm: 50,
+      tinggiMm: 18),
 ];
 
 final _ukuranPromo = [
@@ -515,6 +551,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   final _controllerPromoHeaderTinggi = TextEditingController();
   final _controllerPromoStripTinggi = TextEditingController();
   final _controllerLogoWrapBg = TextEditingController(text: '#FFFFFF');
+  final _controllerLebarStiker = TextEditingController(text: '50');
+  final _controllerTinggiStiker = TextEditingController(text: '18');
+  final _controllerLebarKertas = TextEditingController(text: '210');
+  final _controllerTinggiKertas = TextEditingController(text: '297');
+  final _controllerMarginKiri = TextEditingController(text: '5');
+  final _controllerMarginAtas = TextEditingController(text: '5');
+  final _controllerMarginKanan = TextEditingController(text: '5');
+  final _controllerMarginBawah = TextEditingController(text: '5');
   final Map<int, String> _promoTeksPerProduk = {};
   final Map<int, String> _promoHargaAsliPerProduk = {};
   final Map<int, String> _promoHargaPromoPerProduk = {};
@@ -553,6 +597,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
   // spy tetap muat kolom yang diinginkan tanpa mengubah margin vertikal).
   double _marginHorizontalMm = 2;
   double _marginVerticalMm = 2;
+  bool _kertasLandscape = false;
   Timer? _debounceSimpanPengaturan;
 
   /// Controller yang isinya ikut disimpan sbg "pengaturan print" per model
@@ -595,6 +640,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         _controllerPromoHeaderTinggi,
         _controllerPromoStripTinggi,
         _controllerLogoWrapBg,
+        _controllerLebarStiker,
+        _controllerTinggiStiker,
+        _controllerLebarKertas,
+        _controllerTinggiKertas,
+        _controllerMarginKiri,
+        _controllerMarginAtas,
+        _controllerMarginKanan,
+        _controllerMarginBawah,
       ];
 
   @override
@@ -651,6 +704,14 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     _controllerPromoHeaderTinggi.dispose();
     _controllerPromoStripTinggi.dispose();
     _controllerLogoWrapBg.dispose();
+    _controllerLebarStiker.dispose();
+    _controllerTinggiStiker.dispose();
+    _controllerLebarKertas.dispose();
+    _controllerTinggiKertas.dispose();
+    _controllerMarginKiri.dispose();
+    _controllerMarginAtas.dispose();
+    _controllerMarginKanan.dispose();
+    _controllerMarginBawah.dispose();
     for (final controller in _controllerPromoItem.values) {
       controller.dispose();
     }
@@ -1055,9 +1116,30 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
 
   _UkuranTag get _ukuranAktif {
     final daftar = _ukuranTersedia;
-    return daftar.firstWhere((u) => u.id == _ukuranId,
-        orElse: () => daftar.first);
+    final terpilih =
+        daftar.firstWhere((u) => u.id == _ukuranId, orElse: () => daftar.first);
+    if (terpilih.id != 'produk_kustom') return terpilih;
+    final lebar = _angkaMm(_controllerLebarStiker, 50, min: 5, max: 500);
+    final tinggi = _angkaMm(_controllerTinggiStiker, 18, min: 5, max: 500);
+    return _UkuranTag(
+      id: terpilih.id,
+      label: terpilih.label,
+      detail: '${_teksMm(lebar)} x ${_teksMm(tinggi)} mm',
+      kategori: terpilih.kategori,
+      lebarMm: lebar,
+      tinggiMm: tinggi,
+    );
   }
+
+  double _angkaMm(TextEditingController controller, double fallback,
+      {double min = 0, double max = 1000}) {
+    final nilai = double.tryParse(controller.text.trim().replaceAll(',', '.'));
+    return (nilai ?? fallback).clamp(min, max).toDouble();
+  }
+
+  String _teksMm(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toStringAsFixed(1);
 
   _LebarRoll get _lebarRollAktif =>
       _daftarLebarRoll.firstWhere((r) => r.id == _lebarRollId,
@@ -1071,10 +1153,20 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         marginAll: 0,
       );
     }
+    PdfPageFormat format;
     if (_model == ModelPriceTag.promo && _ukuranAktif.pageFormat != null) {
-      return _ukuranAktif.pageFormat!;
+      format = _ukuranAktif.pageFormat!;
+    } else if (_kertasCetak == KertasCetak.kustom) {
+      format = PdfPageFormat(
+        _angkaMm(_controllerLebarKertas, 210, min: 20, max: 1000) *
+            PdfPageFormat.mm,
+        _angkaMm(_controllerTinggiKertas, 297, min: 20, max: 2000) *
+            PdfPageFormat.mm,
+      );
+    } else {
+      format = _kertasCetak.pageFormat ?? PdfPageFormat.a4;
     }
-    return _kertasCetak.pageFormat ?? PdfPageFormat.a4;
+    return _kertasLandscape ? format.landscape : format.portrait;
   }
 
   double get _lebarKertasAktifMm => _kertasCetak == KertasCetak.thermal
@@ -1095,8 +1187,18 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     if (_model == ModelPriceTag.promo && ukuran.pageFormat != null) {
       return '${ukuran.label} pada $lebar x $tinggi mm - panel ${ukuran.detail}';
     }
-    return '${_kertasCetak.label} ($lebar x $tinggi mm) - tag ${ukuran.detail}';
+    final orientasi = _kertasLandscape ? 'landscape' : 'potret';
+    return '${_kertasCetak.label} ($lebar x $tinggi mm, $orientasi) - tag ${ukuran.detail}';
   }
+
+  double get _marginKiriMm =>
+      _angkaMm(_controllerMarginKiri, _marginCetakAmanMm, max: 100);
+  double get _marginAtasMm =>
+      _angkaMm(_controllerMarginAtas, _marginCetakAmanMm, max: 100);
+  double get _marginKananMm =>
+      _angkaMm(_controllerMarginKanan, _marginCetakAmanMm, max: 100);
+  double get _marginBawahMm =>
+      _angkaMm(_controllerMarginBawah, _marginCetakAmanMm, max: 100);
 
   /// Margin horizontal/vertikal yang benar-benar dipakai saat ini. Semua
   /// model yang dicetak sebagai grid memakai nilai independen ini supaya
@@ -1374,6 +1476,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
       'ukuranId': _ukuranId,
       'copies': _copies,
       'salinanBerbedaPerProduk': _salinanBerbedaPerProduk,
+      'kertasLandscape': _kertasLandscape,
+      'lebarStikerMm': _controllerLebarStiker.text,
+      'tinggiStikerMm': _controllerTinggiStiker.text,
+      'lebarKertasMm': _controllerLebarKertas.text,
+      'tinggiKertasMm': _controllerTinggiKertas.text,
+      'marginKiriMm': _controllerMarginKiri.text,
+      'marginAtasMm': _controllerMarginAtas.text,
+      'marginKananMm': _controllerMarginKanan.text,
+      'marginBawahMm': _controllerMarginBawah.text,
     };
     switch (model) {
       case ModelPriceTag.rak:
@@ -1483,6 +1594,15 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     _copies = ((data?['copies'] as num?)?.toInt() ?? 1).clamp(1, 999);
     _salinanBerbedaPerProduk = boolean('salinanBerbedaPerProduk', false);
     _controllerCopies.text = _copies.toString();
+    _kertasLandscape = boolean('kertasLandscape', false);
+    _controllerLebarStiker.text = teks('lebarStikerMm', '50');
+    _controllerTinggiStiker.text = teks('tinggiStikerMm', '18');
+    _controllerLebarKertas.text = teks('lebarKertasMm', '210');
+    _controllerTinggiKertas.text = teks('tinggiKertasMm', '297');
+    _controllerMarginKiri.text = teks('marginKiriMm', '5');
+    _controllerMarginAtas.text = teks('marginAtasMm', '5');
+    _controllerMarginKanan.text = teks('marginKananMm', '5');
+    _controllerMarginBawah.text = teks('marginBawahMm', '5');
 
     _tampilBarcode = boolean('tampilBarcode', true);
     _tampilKode = boolean('tampilKode', true);
@@ -1674,6 +1794,7 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         model: _model,
         ukuran: _ukuranAktif,
         kertasCetak: _kertasCetak,
+        pageFormat: _formatKertasPdfAktif,
         lebarRollMm: _lebarRollAktif.lebarMm,
         tag: semuaTag,
         tampilBarcode: _tampilBarcode,
@@ -1714,6 +1835,10 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
         logoWrapBgHex: _hexPdf(_controllerLogoWrapBg, '#FFFFFF'),
         marginHorizontalMm: _marginHorizontalAktifMm,
         marginVerticalMm: _marginVerticalAktifMm,
+        marginKiriMm: _marginKiriMm,
+        marginAtasMm: _marginAtasMm,
+        marginKananMm: _marginKananMm,
+        marginBawahMm: _marginBawahMm,
         rakHeaderSize: _ukuranTeks(_controllerRakHeaderSize, 8),
         rakProdukSize: _ukuranTeks(_controllerRakProdukSize, 5.8),
         rakKodeSize: _ukuranTeks(_controllerRakKodeSize, 7),
@@ -2360,6 +2485,17 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
             style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _tombolPilihUkuran(),
+        if (_ukuranId == 'produk_kustom') ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _fieldMm('Lebar stiker', _controllerLebarStiker),
+              _fieldMm('Tinggi stiker', _controllerTinggiStiker),
+            ],
+          ),
+        ],
         ...[
           const SizedBox(height: 16),
           Row(
@@ -2425,6 +2561,52 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                 style: const TextStyle(fontSize: 11.5, color: AppColors.danger),
               ),
             ],
+          ] else ...[
+            const SizedBox(height: 12),
+            const Text('Orientasi Kertas',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Potret')),
+                ButtonSegment(value: true, label: Text('Landscape')),
+              ],
+              selected: {_kertasLandscape},
+              onSelectionChanged: (s) {
+                setStateIfMounted(() => _kertasLandscape = s.first);
+                unawaited(_simpanPengaturanModel(_model));
+              },
+            ),
+            if (_kertasCetak == KertasCetak.kustom) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _fieldMm('Lebar kertas', _controllerLebarKertas),
+                  _fieldMm('Tinggi kertas', _controllerTinggiKertas),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Text('Margin Tepi Kertas',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text(
+              'Margin atas/header menggeser seluruh label ke bawah; margin kiri menggeser label ke kanan.',
+              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _fieldMm('Kiri', _controllerMarginKiri),
+                _fieldMm('Atas / header', _controllerMarginAtas),
+                _fieldMm('Kanan', _controllerMarginKanan),
+                _fieldMm('Bawah', _controllerMarginBawah),
+              ],
+            ),
           ],
         ],
         if (_modelBolehMarginIndependen) ...[
@@ -2774,6 +2956,29 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
                   fontSize: 12, color: AppColors.textSecondary)),
         ),
       ],
+    );
+  }
+
+  Widget _fieldMm(String label, TextEditingController controller) {
+    return SizedBox(
+      width: 132,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          suffixText: 'mm',
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (_) {
+          setStateIfMounted(() {});
+          _jadwalkanSimpanPengaturan();
+        },
+      ),
     );
   }
 
@@ -3158,21 +3363,28 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     // sesungguhnya (yang jg sudah pakai margin aman itu, bukan 0).
     final lebarKertas = _kertasCetak == KertasCetak.thermal
         ? _lebarKertasAktifMm
-        : _lebarKertasAktifMm - 2 * _marginCetakAmanMm;
+        : _lebarKertasAktifMm - _marginKiriMm - _marginKananMm;
     final tinggiKertas = _kertasCetak == KertasCetak.thermal
         ? _tinggiKertasAktifMm
-        : _tinggiKertasAktifMm - 2 * _marginCetakAmanMm;
+        : _tinggiKertasAktifMm - _marginAtasMm - _marginBawahMm;
     // Pakai margin H/V sungguhan (bukan hardcode) supaya preview ini benar-
     // benar mencerminkan slider Margin Antar Kotak -- kalau tidak, user
     // menggeser slider tapi preview-nya diam saja, jadi tidak berguna utk
     // menyesuaikan ke ketersediaan kertas di lapangan.
     final gutterHMm = _marginHorizontalAktifMm;
     final gutterVMm = _marginVerticalAktifMm;
-    final kolom =
-        max(1, (lebarKertas + gutterHMm) ~/ (ukuran.lebarMm + gutterHMm));
+    final kolom = hitungJumlahLabelPadaSumbu(
+      panjangTersediaMm: lebarKertas,
+      ukuranLabelMm: ukuran.lebarMm,
+      jarakAntarLabelMm: gutterHMm,
+    );
     final baris = _kertasCetak == KertasCetak.thermal
         ? 4
-        : max(1, (tinggiKertas + gutterVMm) ~/ (ukuran.tinggiMm + gutterVMm));
+        : hitungJumlahLabelPadaSumbu(
+            panjangTersediaMm: tinggiKertas,
+            ukuranLabelMm: ukuran.tinggiMm,
+            jarakAntarLabelMm: gutterVMm,
+          );
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
@@ -3808,6 +4020,7 @@ class _PriceTagPdfBuilder {
   final ModelPriceTag model;
   final _UkuranTag ukuran;
   final KertasCetak kertasCetak;
+  final PdfPageFormat pageFormat;
   final double lebarRollMm;
   final List<Map<String, dynamic>> tag;
   final bool tampilBarcode;
@@ -3845,6 +4058,10 @@ class _PriceTagPdfBuilder {
   final String logoWrapBgHex;
   final double marginHorizontalMm;
   final double marginVerticalMm;
+  final double marginKiriMm;
+  final double marginAtasMm;
+  final double marginKananMm;
+  final double marginBawahMm;
   final double rakHeaderSize;
   final double rakProdukSize;
   final double rakKodeSize;
@@ -3864,6 +4081,7 @@ class _PriceTagPdfBuilder {
     required this.model,
     required this.ukuran,
     required this.kertasCetak,
+    required this.pageFormat,
     required this.lebarRollMm,
     required this.tag,
     required this.tampilBarcode,
@@ -3901,6 +4119,10 @@ class _PriceTagPdfBuilder {
     required this.logoWrapBgHex,
     required this.marginHorizontalMm,
     required this.marginVerticalMm,
+    required this.marginKiriMm,
+    required this.marginAtasMm,
+    required this.marginKananMm,
+    required this.marginBawahMm,
     required this.rakHeaderSize,
     required this.rakProdukSize,
     required this.rakKodeSize,
@@ -4026,20 +4248,24 @@ class _PriceTagPdfBuilder {
     // Margin halaman aman (lihat JavaDoc [_marginCetakAmanMm]) -- BUKAN
     // margin 0 spt sebelumnya, supaya grid tag tak nempel ke tepi mutlak
     // kertas & tak terpotong saat dicetak langsung ke printer fisik umum.
-    final marginAman = _marginCetakAmanMm * PdfPageFormat.mm;
-    final basePage = model == ModelPriceTag.promo && ukuran.pageFormat != null
-        ? ukuran.pageFormat!
-        : (kertasCetak.pageFormat ?? PdfPageFormat.a4);
-    final page = basePage.copyWith(
-      marginLeft: marginAman,
-      marginTop: marginAman,
-      marginRight: marginAman,
-      marginBottom: marginAman,
+    final page = pageFormat.copyWith(
+      marginLeft: marginKiriMm.clamp(0, 100) * PdfPageFormat.mm,
+      marginTop: marginAtasMm.clamp(0, 100) * PdfPageFormat.mm,
+      marginRight: marginKananMm.clamp(0, 100) * PdfPageFormat.mm,
+      marginBottom: marginBawahMm.clamp(0, 100) * PdfPageFormat.mm,
     );
     final usableWidth = page.availableWidth;
     final usableHeight = page.availableHeight;
-    final kolom = max(1, (usableWidth + gutterH) ~/ (lebar + gutterH));
-    final baris = max(1, (usableHeight + gutterV) ~/ (tinggi + gutterV));
+    final kolom = hitungJumlahLabelPadaSumbu(
+      panjangTersediaMm: usableWidth / PdfPageFormat.mm,
+      ukuranLabelMm: ukuran.lebarMm,
+      jarakAntarLabelMm: marginHorizontalMm,
+    );
+    final baris = hitungJumlahLabelPadaSumbu(
+      panjangTersediaMm: usableHeight / PdfPageFormat.mm,
+      ukuranLabelMm: ukuran.tinggiMm,
+      jarakAntarLabelMm: marginVerticalMm,
+    );
     final perHalaman = max(1, kolom * baris);
 
     for (var start = 0; start < tag.length; start += perHalaman) {

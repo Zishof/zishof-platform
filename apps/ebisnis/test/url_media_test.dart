@@ -28,6 +28,13 @@ void main() {
     );
   });
 
+  test('URL media tanpa context dipasang ke context server aktif', () {
+    expect(
+      normalisasiUrlMedia('http://127.0.0.1:8080/AmbilMediaProduk?fotoId=18'),
+      'https://an-nahl.santri.info/nahl/AmbilMediaProduk?fotoId=18',
+    );
+  });
+
   test('foto profil eCampus mengikuti origin server aktif', () {
     expect(
       normalisasiUrlMedia(

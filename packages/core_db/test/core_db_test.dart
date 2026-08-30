@@ -332,6 +332,43 @@ void main() {
     expect(memberLimit.single['maksimal_transaksi_mingguan'], 200000.0);
     expect(memberLimit.single['maksimal_transaksi_bulanan'], 600000.0);
 
+    // Foto yang sudah diterima server tetap menyimpan bytes lokal sebagai
+    // fallback. Ini penting ketika endpoint media server belum terbarui atau
+    // sedang bermasalah: form edit tidak boleh berubah menjadi ikon rusak.
+    final fotoOutboxId = await CoreDb.instance.outboxMasterTambah(
+      'produk_foto_upload',
+      'produk_foto:8942:uat',
+      jsonEncode(<String, Object?>{
+        'idProduk': 8942,
+        'namaFile': 'foto-uat.jpg',
+        'base64': 'Zm90by11YXQ=',
+      }),
+    );
+    await CoreDb.instance.outboxMasterSimpanHasilServer(
+      fotoOutboxId,
+      <String, Object?>{'id': 2},
+    );
+    await CoreDb.instance.outboxMasterTandaiSukses(fotoOutboxId);
+    expect(
+      await CoreDb.instance.outboxMasterAktif(
+        aksi: 'produk_foto_upload',
+        awalanKunci: 'produk_foto:8942:',
+      ),
+      isEmpty,
+      reason: 'baris SYNCED tidak boleh dikirim ulang',
+    );
+    final previewFoto = await CoreDb.instance.outboxMasterUntukPreview(
+      aksi: 'produk_foto_upload',
+      awalanKunci: 'produk_foto:8942:',
+    );
+    expect(previewFoto, hasLength(1));
+    expect(previewFoto.single['status'], 'SYNCED');
+    final payloadPreview = jsonDecode(
+      previewFoto.single['payload_json']! as String,
+    ) as Map<String, dynamic>;
+    expect(payloadPreview['base64'], 'Zm90by11YXQ=');
+    expect((payloadPreview['_hasil_server'] as Map)['id'], 2);
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     try {
