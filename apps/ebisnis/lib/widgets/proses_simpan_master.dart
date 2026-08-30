@@ -5,6 +5,15 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../services/master_offline.dart';
 
+// KONTRAK ARSITEKTUR WAJIB:
+// Semua CRUD yang aman ditunda harus masuk ke penyimpanan lokal + outbox sebelum
+// jaringan dicoba. Jangan mengganti helper ini dengan ApiClient.aksi langsung
+// hanya karena endpoint sedang online. Gangguan server tidak boleh menghilangkan
+// input pengguna. Pengecualian hanya untuk aksi yang wajib fail-closed demi
+// integritas (auth/rahasia, saldo, approval, posting/closing, pembatalan final,
+// impor massal) dan wajib didokumentasikan sebagai online-only.
+// Lihat docs/pos/ATURAN-WAJIB-LOCAL-FIRST.md dan AGENTS.md.
+
 /// <h3>Alur "Simpan" ber-indikator animasi utk SEMUA form CRUD master
 /// (Desktop & Android).</h3>
 ///
