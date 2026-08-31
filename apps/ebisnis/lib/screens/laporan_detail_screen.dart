@@ -1081,7 +1081,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     final totalHalaman = _totalHalaman(semuaBaris.length);
     if (_halaman > totalHalaman) _halaman = totalHalaman;
     final mulai = (_halaman - 1) * _pageSize;
-    final sampai = (mulai + _pageSize).clamp(0, semuaBaris.length) as int;
+    final sampai = (mulai + _pageSize).clamp(0, semuaBaris.length);
     final rows = mulai >= semuaBaris.length
         ? <AppTableRowData>[]
         : semuaBaris.sublist(mulai, sampai);

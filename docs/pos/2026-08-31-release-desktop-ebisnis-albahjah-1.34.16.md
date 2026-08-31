@@ -33,8 +33,8 @@ fitur Pack/Combo (dok. 61) yang sebelumnya belum pernah masuk build:
 
 ## Bukti pengujian sebelum build
 
-- `flutter analyze --no-pub`: **0 error** (52 info/warning gaya lama yang
-  sudah ada sebelum rilis ini).
+- `flutter analyze --no-pub --no-fatal-infos`: **0 error, 0 warning**
+  (51 saran gaya/informasi lama tidak memblokir build).
 - `flutter test --no-pub`: **586 lulus / 0 gagal**.
 - Sisi server pada UAT lokal: `TesGrosirEditUat` 11/11 (aturan tampil di
   daftar, Ubah tidak menggandakan, 1 Dus = persis Rp 1.200.000, kelipatan
@@ -45,8 +45,9 @@ fitur Pack/Combo (dok. 61) yang sebelumnya belum pernah masuk build:
 
 - Commit sumber: lihat commit `release(pos): desktop ebisnis dan albahjah
   1.34.16` pada `main`.
-- eBisnis Desktop: `eBisnis-Setup-1.34.16.exe` (85.857.977 byte).
-  - SHA-256: `651146774F4EDF542A3F9EF535AC30943FD8858991AE7BBA5637AA111BA5D25B`.
+- eBisnis Desktop: `eBisnis-Setup-1.34.16.exe` (85.852.643 byte), dibangun
+  ulang dari seluruh source terbaru pada 1 September 2026.
+  - SHA-256: `D28569021DDBD79D1E57145BF2FD27A0555ADB17B683D5C8A06F00C6314759D6`.
 - Al-Bahjah POS Desktop: `Al-Bahjah-POS-Setup-1.34.16.exe` (85.908.633 byte).
   - SHA-256: `67DBB90EFAFACC99E74DDC832FDED3B4D276246EBA812D187DCD59F2708A20E5`.
 
@@ -55,6 +56,10 @@ pohon kerja yang sama. Installer Windows belum ditandatangani sertifikat
 publik dan ditandai `UNSIGNED/UAT` oleh pipeline; pengguna Windows mungkin
 menerima peringatan SmartScreen.
 
+Pada publikasi 1 September 2026 hanya installer **eBisnis Desktop** yang
+diunggah sebagai rilis GitHub. Artefak Al-Bahjah di atas tetap merupakan hasil
+build 31 Agustus dan tidak dipublikasikan ulang pada proses tersebut.
+
 ## Prasyarat sisi server
 
 Perbaikan layar di atas memakai kontrak API yang sudah ada, KECUALI
@@ -62,3 +67,11 @@ Perbaikan layar di atas memakai kontrak API yang sudah ada, KECUALI
 `pack_aktif`, `satuan_pack`, `harga_pack` dibuat `hbm2ddl` saat boot — tanpa
 DDL manual). Deploy build server terbaru lalu restart sebelum mengaktifkan
 Pack pada master produk.
+
+## Batas kompatibilitas dokumen BAST lama
+
+BAST lama tidak menyimpan snapshot UOM/faktor konversi tersendiri. Jika payload
+sinkron dokumen lama tidak membawa satuan input, server memakai UOM pembelian
+produk yang aktif saat sinkronisasi. Karena itu perubahan UOM produk setelah
+dokumen lama dibuat perlu diperiksa supervisor sebelum validasi; rilis Desktop
+ini tidak menebak atau memigrasikan histori tersebut secara otomatis.
