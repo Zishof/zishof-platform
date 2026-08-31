@@ -183,6 +183,7 @@ class ApiClient {
     'so_ekspor_excel',
     'so_impor_excel',
     'stok_dashboard',
+    'stok_mutasi_ledger',
     'kulakan_faktur_simpan',
     'peringkat_mitra',
     'diskon_simpan',

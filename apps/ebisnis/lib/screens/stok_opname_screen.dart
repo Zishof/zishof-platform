@@ -505,16 +505,30 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
       _memuat = true;
       _pesanError = null;
     });
+    final tokoId = Sesi.instance.idTokoTerpilih;
+    if (tokoId == null) {
+      setStateIfMounted(() {
+        _memuat = false;
+        _data = [];
+        _adaLagi = false;
+        _pesanError = 'Pilih satu toko terlebih dahulu pada bagian kiri atas. '
+            'Monitor keluar/masuk barang tidak dapat digabungkan untuk pilihan '
+            'Semua Toko karena setiap mutasi wajib mempunyai toko yang jelas. '
+            'Setelah toko dipilih, buka ulang tab ini atau tekan Muat Ulang.';
+      });
+      return;
+    }
     try {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Cache dipisah
-      // per PERIODE supaya rentang 7/30/90/365 hari tidak saling menimpa.
+      // per TOKO dan PERIODE supaya outlet maupun rentang 7/30/90/365 hari
+      // tidak saling menimpa.
       // "Muat Lebih Banyak" (offset >0) TETAP online -- hanya halaman pertama
       // yang punya snapshot lokal.
       await MasterOffline.daftarCacheDulu(
           'stok_mutasi_ledger',
-          {'hari': _hari, 'limit': 100, 'offset': 0},
-          'master:stok_mutasi_ledger:$_hari', onData: (hasil) {
+          {'toko_id': tokoId, 'hari': _hari, 'limit': 100, 'offset': 0},
+          'master:stok_mutasi_ledger:$tokoId:$_hari', onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _data = _diff.terapkan(hasil);
@@ -532,10 +546,22 @@ class _TabMonitorBarangState extends State<_TabMonitorBarang> with JejakGalat {
   }
 
   Future<void> _muatLebihBanyak() async {
+    final tokoId = Sesi.instance.idTokoTerpilih;
+    if (tokoId == null) {
+      setStateIfMounted(() {
+        _pesanError = 'Pilih satu toko terlebih dahulu pada bagian kiri atas, '
+            'kemudian coba kembali.';
+      });
+      return;
+    }
     setStateIfMounted(() => _memuatLagi = true);
     try {
-      final hasil = await ApiClient.instance.aksi('stok_mutasi_ledger',
-          {'hari': _hari, 'limit': 100, 'offset': _data.length});
+      final hasil = await ApiClient.instance.aksi('stok_mutasi_ledger', {
+        'toko_id': tokoId,
+        'hari': _hari,
+        'limit': 100,
+        'offset': _data.length
+      });
       setStateIfMounted(() {
         _data.addAll(
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());

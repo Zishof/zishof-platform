@@ -177,6 +177,7 @@ void main() {
       'so_ekspor_excel',
       'so_impor_excel',
       'stok_dashboard',
+      'stok_mutasi_ledger',
       'kulakan_faktur_simpan',
       'peringkat_mitra',
       'layani_transaksi',
@@ -187,6 +188,17 @@ void main() {
     ]) {
       expect(ApiClient.aksiMemakaiTokoId(aksi), isTrue, reason: aksi);
     }
+  });
+
+  test('ledger mutasi stok selalu membawa toko yang sedang dipilih', () {
+    Sesi.instance
+      ..bolehSemuaToko = true
+      ..tokoFilter = 22
+      ..tokoId = 7;
+    final payload = ApiClient.susunPayload(
+        'stok_mutasi_ledger', {'hari': 30, 'limit': 100, 'offset': 0});
+    expect(payload['toko_id'], 22);
+    expect(payload['hari'], 30);
   });
 
   test(
