@@ -38,6 +38,15 @@ class Produk {
   /// pembelian); true = dikunci manual, faktur tidak menimpa.
   final bool hargaBeliManual;
 
+  /// Pack/Combo (PDF 31-08): produk boleh dijual per PACK di POS dengan
+  /// harga TETAP per pack (65.000/Dus, sengaja bukan isi x harga satuan).
+  /// Server berwenang menimpa harga saat bayar; klien hanya pratinjau.
+  final bool packAktif;
+  final int? satuanPackId;
+  final String satuanPackNama;
+  final double? hargaPack;
+  final double? faktorPackKeDasar;
+
   final String? gambarUrl;
   final double hargaBeli;
   final String keterangan;
@@ -100,6 +109,11 @@ class Produk {
     this.rute = '',
     this.perluQc = false,
     this.hargaBeliManual = false,
+    this.packAktif = false,
+    this.satuanPackId,
+    this.satuanPackNama = '',
+    this.hargaPack,
+    this.faktorPackKeDasar,
     required this.gambarUrl,
     this.hargaBeli = 0,
     this.keterangan = '',
@@ -132,6 +146,11 @@ class Produk {
         rute: (j['rute'] ?? '') as String,
         perluQc: j['perluQc'] == true,
         hargaBeliManual: j['hargaBeliManual'] == true,
+        packAktif: j['packAktif'] == true,
+        satuanPackId: (j['satuanPackId'] as num?)?.toInt(),
+        satuanPackNama: (j['satuanPackNama'] ?? '') as String,
+        hargaPack: (j['hargaPack'] as num?)?.toDouble(),
+        faktorPackKeDasar: (j['faktorPackKeDasar'] as num?)?.toDouble(),
         gambarUrl: j['gambarUrl'] as String?,
         hargaBeli: (j['hargaBeli'] as num?)?.toDouble() ?? 0,
         keterangan: (j['keterangan'] ?? '') as String,
@@ -439,9 +458,18 @@ class ItemKeranjang {
   /// cocok dgn yang akan dihitung ulang server, bukan cuma harga produk dasar.
   double get _hargaEkstraPerUnit => ekstra.fold(0.0, (s, e) => s + e.harga);
 
-  /// Harga satuan yang benar-benar berlaku: grosir bila server menetapkannya,
-  /// selain itu harga katalog.
-  double get hargaSatuanEfektif => hargaGrosir ?? produk.hargaJual;
+  /// Harga pack per satuan DASAR (hargaPack/faktor) -- diisi saat kasir
+  /// memilih menu pack; hanya berlaku selama snapshot satuan jual masih
+  /// sejalan (pola swa-batal Fase B). Server tetap menimpa saat bayar.
+  double? hargaPackPerDasar;
+
+  /// Harga satuan yang benar-benar berlaku: grosir dari server menang,
+  /// lalu harga pack (selama baris masih konsisten pack), lalu katalog.
+  double get hargaSatuanEfektif =>
+      hargaGrosir ??
+      (satuanJualKonsisten && hargaPackPerDasar != null
+          ? hargaPackPerDasar!
+          : produk.hargaJual);
 
   /// Label kemasan untuk baris & struk: "2 x Karung 50kg" bila qty habis
   /// dibagi isi kemasan; bila kasir mengubah qty hingga tidak bulat lagi,
