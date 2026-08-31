@@ -919,6 +919,11 @@ class _BarisPo {
   int? masterAssetId;
   String namaBarang;
 
+  /// Nama satuan PEMBELIAN produk padanan (PDF stok & uom butir 3):
+  /// qty & harga PR/PO bersemantik satuan pembelian -- label kolom
+  /// menampilkannya; kosong utk barang tanpa padanan/satuan.
+  String satuan;
+
   /// Id baris PR asal bila PO ini dibuat dari permintaan -- dikirim balik ke server
   /// supaya sisa yang belum dipesan terhitung benar pada PO berikutnya.
   final int? prDetailId;
@@ -929,6 +934,7 @@ class _BarisPo {
     this.barangId,
     this.masterAssetId,
     required this.namaBarang,
+    this.satuan = '',
     this.prDetailId,
     String jumlahAwal = '1',
     String hargaAwal = '0',
@@ -1211,6 +1217,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
     setState(() => _baris.add(_BarisPo(
           barangId: (dipilih['id'] as num?)?.toInt(),
           namaBarang: '${dipilih['nama'] ?? '-'}',
+          satuan: '${dipilih['satuanPembelianNama'] ?? ''}',
         )));
   }
 
@@ -1506,8 +1513,11 @@ class _FormPoDialogState extends State<_FormPoDialog> {
                             enabled: !_terkunci,
                             keyboardType: TextInputType.number,
                             onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                                labelText: 'Jumlah', isDense: true))),
+                            decoration: InputDecoration(
+                                labelText: b.satuan.isEmpty
+                                    ? 'Jumlah'
+                                    : 'Jumlah (${b.satuan})',
+                                isDense: true))),
                     const SizedBox(width: 6),
                     SizedBox(
                         width: 120,
@@ -1516,8 +1526,11 @@ class _FormPoDialogState extends State<_FormPoDialog> {
                             enabled: !_terkunci,
                             keyboardType: TextInputType.number,
                             onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                                labelText: 'Harga Beli', isDense: true))),
+                            decoration: InputDecoration(
+                                labelText: b.satuan.isEmpty
+                                    ? 'Harga Beli'
+                                    : 'Harga Beli /${b.satuan}',
+                                isDense: true))),
                     const SizedBox(width: 6),
                     SizedBox(
                         width: 110,

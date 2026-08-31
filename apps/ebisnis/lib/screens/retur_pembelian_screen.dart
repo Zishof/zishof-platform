@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../api_client.dart';
 import '../parse_util.dart';
 import '../services/diff_daftar_lokal.dart';
@@ -13,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/proses_simpan_master.dart';
+import 'pengadaan_cetak_util.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -29,15 +34,21 @@ const _daftarAlasanRetur = [
 class _ItemReturPembelian {
   final int produkId;
   final String nama;
-  final double qty;
+  final String kode;
+  double qty;
   final double harga;
-  final String alasan;
+  String alasan;
+  final double? qtyMaksimal;
+  bool dipilih;
   _ItemReturPembelian(
       {required this.produkId,
       required this.nama,
+      this.kode = '',
       required this.qty,
       required this.harga,
-      required this.alasan});
+      required this.alasan,
+      this.qtyMaksimal,
+      this.dipilih = true});
   double get total => qty * harga;
 }
 
@@ -63,6 +74,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
   String? _errorForm;
   Map<String, dynamic>? _produkDitemukan;
   final List<_ItemReturPembelian> _items = [];
+  Map<String, dynamic>? _fakturTerpilih;
   bool _menyimpan = false;
   String? _idempotencyKey;
 
@@ -144,6 +156,105 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
     }
   }
 
+  Future<void> _pilihFakturAsal() async {
+    setStateIfMounted(() {
+      _mencari = true;
+      _errorForm = null;
+    });
+    try {
+      List<Map<String, dynamic>> faktur = [];
+      await MasterOffline.daftarCacheDulu(
+        'kulakan_faktur_list',
+        const {'page': 1, 'page_size': 100},
+        'master:kulakan_faktur',
+        kolomKunci: 'fakturId',
+        onData: (hasil) {
+          faktur = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((baris) => baris.cast<String, dynamic>())
+              .toList();
+        },
+      );
+      if (!mounted) return;
+      if (faktur.isEmpty) {
+        setStateIfMounted(() => _errorForm =
+            'Belum ada faktur pembelian yang dapat dipilih. Sinkronkan data Kulakan, lalu coba lagi.');
+        return;
+      }
+      final dipilih = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Pilih Faktur Pembelian'),
+          content: SizedBox(
+            width: 680,
+            height: 480,
+            child: ListView.separated(
+              itemCount: faktur.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, index) {
+                final f = faktur[index];
+                return ListTile(
+                  title: Text('${f['nomorFaktur'] ?? '-'}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(
+                      '${f['tanggalFaktur'] ?? '-'} · ${f['namaSupplier'] ?? 'Tanpa supplier'} · ${f['jumlahItem'] ?? 0} item'),
+                  trailing: Text(_formatRupiah
+                      .format(f['totalFakturFinal'] ?? f['totalHitung'] ?? 0)),
+                  onTap: () => Navigator.of(dialogContext).pop(f),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Batal')),
+          ],
+        ),
+      );
+      if (dipilih == null || !mounted) return;
+      final detail = await MasterOffline.objekDenganCache(
+        'kulakan_faktur_detail',
+        {'faktur_id': dipilih['fakturId']},
+        'master:kulakan_faktur:detail:${dipilih['fakturId']}',
+      );
+      final header =
+          (detail['header'] as Map?)?.cast<String, dynamic>() ?? dipilih;
+      final baris = ((detail['items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .where((e) => e['masterProdukTersedia'] != false)
+          .toList();
+      if (baris.isEmpty) {
+        throw StateError(
+            'Faktur tidak memiliki item produk yang dapat diretur. Periksa detail faktur asal.');
+      }
+      setStateIfMounted(() {
+        _fakturTerpilih = {...dipilih, ...header};
+        _items
+          ..clear()
+          ..addAll(baris.map((it) {
+            final qty = (it['qty'] as num?)?.toDouble() ?? 0;
+            return _ItemReturPembelian(
+              produkId: (it['produkId'] as num).toInt(),
+              kode: '${it['kodeProduk'] ?? ''}',
+              nama: '${it['namaProduk'] ?? '-'}',
+              qty: qty,
+              qtyMaksimal: qty,
+              harga: (it['hargaBeliSatuan'] as num?)?.toDouble() ?? 0,
+              alasan: _daftarAlasanRetur.first,
+              dipilih: false,
+            );
+          }));
+        _idempotencyKey = null;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _errorForm = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _mencari = false);
+    }
+  }
+
   Future<void> _scanKamera() async {
     final kode = await BarcodeScannerScreen.pindai(context,
         judul: 'Scan Barcode Produk');
@@ -166,6 +277,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
     setStateIfMounted(() {
       _items.add(_ItemReturPembelian(
           produkId: p['produkId'] as int,
+          kode: '${p['kode'] ?? p['kodeProduk'] ?? ''}',
           nama: '${p['nama'] ?? ''}',
           qty: qty,
           harga: harga,
@@ -181,10 +293,78 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
   void _hapusDariDaftar(int index) =>
       setStateIfMounted(() => _items.removeAt(index));
 
-  double get _totalNilai => _items.fold<double>(0, (a, it) => a + it.total);
+  List<_ItemReturPembelian> get _itemsAktif =>
+      _items.where((it) => it.dipilih && it.qty > 0).toList();
+
+  double get _totalNilai =>
+      _itemsAktif.fold<double>(0, (a, it) => a + it.total);
+
+  Future<Uint8List> _buatPdfRetur({
+    required String nomor,
+    required String supplier,
+    required List<_ItemReturPembelian> items,
+  }) async {
+    final dokumen = pw.Document();
+    dokumen.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      orientation: pw.PageOrientation.portrait,
+      margin: const pw.EdgeInsets.all(32),
+      build: (_) => [
+        pw.Text('RETUR PEMBELIAN',
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Text('Faktur asal: $nomor'),
+        pw.Text('Supplier: $supplier'),
+        pw.Text(
+            'Tanggal cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}'),
+        pw.SizedBox(height: 14),
+        pw.TableHelper.fromTextArray(
+          headers: const ['Kode', 'Produk', 'Qty', 'Harga', 'Alasan', 'Total'],
+          data: items
+              .map((it) => [
+                    it.kode,
+                    it.nama,
+                    _formatAngka.format(it.qty),
+                    _formatRupiah.format(it.harga),
+                    it.alasan,
+                    _formatRupiah.format(it.total),
+                  ])
+              .toList(),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          cellStyle: const pw.TextStyle(fontSize: 8),
+        ),
+        pw.SizedBox(height: 12),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+              'Total: ${_formatRupiah.format(items.fold<double>(0, (a, it) => a + it.total))}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        ),
+      ],
+    ));
+    return dokumen.save();
+  }
+
+  Future<void> _pratinjauItems(List<_ItemReturPembelian> items,
+      {Map<String, dynamic>? faktur}) async {
+    if (items.isEmpty) {
+      setStateIfMounted(() =>
+          _errorForm = 'Pilih minimal satu item sebelum membuka pratinjau.');
+      return;
+    }
+    final f = faktur ?? _fakturTerpilih ?? const <String, dynamic>{};
+    final nomor = '${f['nomorFaktur'] ?? f['kodeFakturAsal'] ?? 'Manual'}';
+    final supplier = '${f['namaSupplier'] ?? 'Belum ditentukan'}';
+    final bytes =
+        await _buatPdfRetur(nomor: nomor, supplier: supplier, items: items);
+    if (!mounted) return;
+    await tampilkanPratinjauPdf(context, judul: 'Retur-$nomor', isi: bytes);
+  }
 
   Future<void> _simpanRetur() async {
-    if (_items.isEmpty) {
+    final itemsSimpan = _itemsAktif;
+    if (itemsSimpan.isEmpty) {
       setStateIfMounted(
           () => _errorForm = 'Belum ada barang yang dipilih untuk diretur.');
       return;
@@ -205,12 +385,20 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
         cacheKey: 'master:retur_pembelian',
         rowLokal: {
           'id': -DateTime.now().millisecondsSinceEpoch,
-          'jumlahItem': _items.length,
-          'total': _items.fold<double>(0, (a, it) => a + it.qty * it.harga),
+          'jumlahItem': itemsSimpan.length,
+          'kodeFakturAsal': _fakturTerpilih?['nomorFaktur'],
+          'total':
+              itemsSimpan.fold<double>(0, (a, it) => a + it.qty * it.harga),
         },
         body: {
           'idempotency_key': _idempotencyKey,
-          'items': _items
+          if (_fakturTerpilih?['fakturId'] != null)
+            'faktur_pengadaan_id': _fakturTerpilih!['fakturId'],
+          if (_fakturTerpilih?['nomorFaktur'] != null)
+            'kode_faktur_asal': _fakturTerpilih!['nomorFaktur'],
+          if (_fakturTerpilih?['supplierId'] != null)
+            'supplier_id': _fakturTerpilih!['supplierId'],
+          'items': itemsSimpan
               .map((it) => {
                     'produk_id': it.produkId,
                     'qty': it.qty,
@@ -222,11 +410,12 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text('Retur Pembelian tersimpan (${_items.length} item).')));
+            content: Text(
+                'Retur Pembelian tersimpan (${itemsSimpan.length} item).')));
       }
       setStateIfMounted(() {
         _items.clear();
+        _fakturTerpilih = null;
         _idempotencyKey = null;
       });
       _halaman = 1;
@@ -269,10 +458,34 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       );
       await _muatRiwayat();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+      }
     }
+  }
+
+  Future<void> _cetakRiwayat(Map<String, dynamic> r) async {
+    final kodeFaktur = '${r['kodeFakturAsal'] ?? ''}';
+    final sumber = kodeFaktur.isEmpty
+        ? [r]
+        : _riwayat
+            .where((it) => '${it['kodeFakturAsal'] ?? ''}' == kodeFaktur)
+            .toList();
+    final items = sumber
+        .map((it) => _ItemReturPembelian(
+              produkId: (it['produkId'] as num?)?.toInt() ?? 0,
+              kode: '${it['kodeProduk'] ?? ''}',
+              nama: '${it['namaProduk'] ?? '-'}',
+              qty: (it['qty'] as num?)?.toDouble() ?? 0,
+              harga: (it['hargaSatuan'] as num?)?.toDouble() ?? 0,
+              alasan: '${it['alasan'] ?? '-'}',
+            ))
+        .toList();
+    await _pratinjauItems(items, faktur: {
+      'nomorFaktur': kodeFaktur.isEmpty ? 'Manual-${r['id']}' : kodeFaktur,
+      'namaSupplier': r['namaSupplier'] ?? 'Supplier faktur asal',
+    });
   }
 
   int get _totalHalaman => (_total / _pageSize).ceil().clamp(1, 999999);
@@ -288,8 +501,69 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
             AppFormSection(
               judul: 'Retur Pembelian Baru',
               deskripsi:
-                  'Cari produk yang akan dikembalikan ke supplier, tambahkan berulang, lalu simpan.',
+                  'Utamakan pilih faktur asal agar seluruh item dapat diretur dalam satu permintaan dan dicetak. Pencarian produk manual tetap tersedia untuk data lama.',
               children: [
+                Row(children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _mencari ? null : _pilihFakturAsal,
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: Text(_fakturTerpilih == null
+                          ? 'Pilih Faktur Pembelian'
+                          : 'Ganti Faktur Pembelian'),
+                    ),
+                  ),
+                  if (_fakturTerpilih != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton.outlined(
+                      tooltip: 'Lepaskan faktur',
+                      onPressed: () => setStateIfMounted(() {
+                        _fakturTerpilih = null;
+                        _items.clear();
+                      }),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ]),
+                if (_fakturTerpilih != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.latarLembut(AppColors.primary),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.receipt_long_outlined, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${_fakturTerpilih!['nomorFaktur'] ?? '-'}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w800)),
+                          Text(
+                              '${_fakturTerpilih!['namaSupplier'] ?? 'Tanpa supplier'} · ${_fakturTerpilih!['tanggalFaktur'] ?? '-'}',
+                              style: const TextStyle(fontSize: 12)),
+                        ],
+                      )),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                      'Centang item yang benar-benar dikembalikan. Jumlah retur tidak boleh melebihi jumlah pada faktur.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54)),
+                ],
+                const SizedBox(height: 12),
+                const Divider(),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Tambahkan produk manual (opsional)',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     Expanded(
@@ -406,25 +680,89 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                     final it = e.value;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 6),
-                      child: ListTile(
-                        dense: true,
-                        title:
-                            Text(it.nama, style: const TextStyle(fontSize: 13)),
-                        subtitle: Text(
-                            '${_formatAngka.format(it.qty)}x · ${it.alasan}',
-                            style: const TextStyle(fontSize: 11.5)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_formatRupiah.format(it.total),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Row(children: [
+                          Checkbox(
+                            value: it.dipilih,
+                            onChanged: (v) => setStateIfMounted(
+                                () => it.dipilih = v ?? false),
+                          ),
+                          Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(it.nama,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                  if (it.kode.isNotEmpty)
+                                    Text(it.kode,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.black54)),
+                                ],
+                              )),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                              width: 100,
+                              child: TextFormField(
+                                initialValue: _formatAngka.format(it.qty),
+                                enabled: it.dipilih,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: it.qtyMaksimal == null
+                                        ? 'Qty'
+                                        : 'Qty (maks ${_formatAngka.format(it.qtyMaksimal)})',
+                                    isDense: true),
+                                onChanged: (v) {
+                                  final nilai = parseDesimal(v) ?? 0;
+                                  setStateIfMounted(() {
+                                    it.qty = it.qtyMaksimal == null
+                                        ? nilai
+                                        : nilai
+                                            .clamp(0, it.qtyMaksimal!)
+                                            .toDouble();
+                                  });
+                                },
+                              )),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                              width: 170,
+                              child: DropdownButtonFormField<String>(
+                                value: it.alasan,
+                                decoration: AppFormStyle.fieldDecoration(
+                                    context,
+                                    labelText: 'Alasan',
+                                    isDense: true),
+                                items: _daftarAlasanRetur
+                                    .map((a) => DropdownMenuItem(
+                                        value: a, child: Text(a)))
+                                    .toList(),
+                                onChanged: it.dipilih
+                                    ? (v) => setStateIfMounted(
+                                        () => it.alasan = v ?? it.alasan)
+                                    : null,
+                              )),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                              width: 110,
+                              child: Text(
+                                _formatRupiah.format(it.total),
+                                textAlign: TextAlign.right,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12.5)),
+                                    fontWeight: FontWeight.w700, fontSize: 12),
+                              )),
+                          if (_fakturTerpilih == null)
                             IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () => _hapusDariDaftar(e.key)),
-                          ],
-                        ),
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => _hapusDariDaftar(e.key),
+                            ),
+                        ]),
                       ),
                     );
                   }),
@@ -444,10 +782,19 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: _menyimpan ? null : _simpanRetur,
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    OutlinedButton.icon(
+                      onPressed: _itemsAktif.isEmpty
+                          ? null
+                          : () => _pratinjauItems(_itemsAktif),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: const Text('Pratinjau & Cetak'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _menyimpan || _itemsAktif.isEmpty
+                          ? null
+                          : _simpanRetur,
                       icon: _menyimpan
                           ? const SizedBox(
                               width: 18,
@@ -462,7 +809,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 12)),
                     ),
-                  ),
+                  ]),
                 ],
               ],
             ),
@@ -503,6 +850,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
               minWidth: 800,
               emptyText: 'Belum ada riwayat retur pembelian.',
               columns: const [
+                AppTableColumn('Faktur Asal', flex: 2),
                 AppTableColumn('Produk', flex: 3),
                 AppTableColumn('Waktu', flex: 2),
                 AppTableColumn('Qty', flex: 1, align: TextAlign.right),
@@ -512,6 +860,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
               ],
               rows: _riwayat.map((r) {
                 return AppTableRowData(cells: [
+                  AppTableCell.text('${r['kodeFakturAsal'] ?? '-'}', flex: 2),
                   AppTableCell(
                     flex: 3,
                     child: KilauBaris(
@@ -536,12 +885,18 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
                           fontWeight: FontWeight.bold, fontSize: 12.5)),
                   AppTableCell(
                     flex: 1,
-                    child: Sesi.instance.bolehKelola
-                        ? IconButton(
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        tooltip: 'Pratinjau & cetak retur',
+                        icon: const Icon(Icons.print_outlined, size: 18),
+                        onPressed: () => _cetakRiwayat(r),
+                      ),
+                      if (Sesi.instance.bolehKelola)
+                        IconButton(
                             icon: const Icon(Icons.delete_outline,
                                 size: 18, color: AppColors.danger),
-                            onPressed: () => _hapusBaris(r))
-                        : const SizedBox.shrink(),
+                            onPressed: () => _hapusBaris(r)),
+                    ]),
                   ),
                 ]);
               }).toList(),

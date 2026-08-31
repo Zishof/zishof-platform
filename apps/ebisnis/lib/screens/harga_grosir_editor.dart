@@ -73,6 +73,8 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
   Future<void> _tambah() async {
     final minQty = TextEditingController();
     final harga = TextEditingController();
+    final hargaPaket = TextEditingController();
+    bool kelipatanWajib = false;
     bool tokoIni = false;
     final simpan = await showDialog<bool>(
       context: context,
@@ -97,8 +99,32 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
               decoration: InputDecoration(
                 labelText:
                     'Harga per ${widget.satuanNama.isEmpty ? 'satuan dasar' : widget.satuanNama}',
-                helperText: 'BUKAN harga per kemasan.',
+                helperText:
+                    'Metode 1 (ambang). Kosongkan bila mengisi harga per paket.',
               ),
+            ),
+            const SizedBox(height: 10),
+            // Metode 2 (dok. 48 §6 no.1): harga TETAP per paket -- server
+            // menyimpan turunannya (paket / isi) sebagai harga satuan efektif.
+            TextField(
+              controller: hargaPaket,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'ATAU harga per paket/kemasan (Metode 2)',
+                helperText:
+                    'Contoh: 4.500.000 per karung isi 50. Total kelipatan paket selalu = harga paket x jumlah paket.',
+              ),
+            ),
+            const SizedBox(height: 6),
+            CheckboxListTile(
+              value: kelipatanWajib,
+              onChanged: (v) => setDialog(() => kelipatanWajib = v ?? false),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Wajib kelipatan kemasan',
+                  style: TextStyle(fontSize: 13)),
+              subtitle: const Text(
+                  'Checkout menolak qty nanggung (mis. 53) dengan saran pembulatan.',
+                  style: TextStyle(fontSize: 11)),
             ),
             const SizedBox(height: 6),
             CheckboxListTile(
@@ -126,11 +152,14 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
     if (simpan != true || !mounted) return;
     final qty = double.tryParse(minQty.text.replaceAll(',', '.')) ?? 0;
     final hrg = double.tryParse(harga.text.replaceAll(',', '.')) ?? 0;
+    final paket = double.tryParse(hargaPaket.text.replaceAll(',', '.')) ?? 0;
     try {
       final r = await ApiClient.instance.aksi('harga_grosir_simpan', {
         'produk_id': widget.produkId,
         'min_qty_dasar': qty,
         'harga': hrg,
+        if (paket > 0) 'harga_paket': paket,
+        'kelipatan_wajib': kelipatanWajib,
         if (tokoIni) 'toko_id': Sesi.instance.tokoId,
       });
       if (r['status'] != 'success' && r['status'] != '00') {

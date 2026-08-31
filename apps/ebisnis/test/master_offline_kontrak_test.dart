@@ -22,6 +22,17 @@ void main() {
       // diketik menyusul bisa langsung menunjuknya.
       'MasterOffline.idSementaraBaru()',
     ],
+    'lib/screens/retur_pembelian_screen.dart': [
+      "daftarCacheDulu('retur_pembelian_list'",
+      "daftarCacheDulu('kulakan_faktur_list'",
+      "objekDenganCache(",
+      "'master:kulakan_faktur:detail:",
+      "aksi: 'retur_pembelian_simpan'",
+      "aksi: 'retur_pembelian_hapus'",
+      "'faktur_pengadaan_id'",
+      "'kode_faktur_asal'",
+      "'Pratinjau & Cetak'",
+    ],
     'lib/screens/mutasi_antar_outlet_screen.dart': [
       "daftarCacheDulu('mutasi_stok_list'",
       "aksi: 'mutasi_stok_simpan'",
