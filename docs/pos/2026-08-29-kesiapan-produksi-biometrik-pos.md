@@ -94,12 +94,18 @@ Jangan mengganti nama artefak UAT menjadi produksi. Build produksi harus dibuat 
 
 Paket backend lokal yang telah lulus kompilasi, self-test, pemeriksaan isi, dan
 verifikasi checksum berada di
-`apps/ebisnis/release-artifacts/biometric-backend/ais-biometric-backend-20260829-015438.zip`.
+`apps/ebisnis/release-artifacts/biometric-backend/ais-biometric-backend-20260831-200044.zip`.
 SHA-256 ZIP tersebut adalah
-`9ed565afc4626e254510ab943ba03965dc6f4aa49ea677496a114188009bb24b`.
-Paket dibuat dari `PosApi` SVN BASE r78484 agar perubahan Pengiriman yang masih
-berada di working copy tidak ikut terbawa. Paket tidak memuat konfigurasi
+`6b45bd782bd21a754fac5e38cb193a8974ce2fe51fd1d756f419342494a72b44`.
+Paket dibuat dari SVN r78617 (working copy backend bersih) dan kini JUGA
+memuat `KantinHelper` — sebelumnya kelas itu hanya terkompilasi transitif dan
+tidak pernah disalin ke bundle, sehingga perbaikan di dalamnya (mis. validasi
+barcode unik per toko) tidak akan ter-deploy. Paket tidak memuat konfigurasi
 Hibernate server, kredensial, token, master key, template, atau probe biometrik.
+Langkah deployment rinci: `2026-08-31-deployment-backend-biometrik-ubuntu.md`.
+
+Paket lama `ais-biometric-backend-20260829-015438.zip` (r78484, SHA-256
+`9ed565af...bb24b`) USANG — jangan dipakai untuk deployment baru.
 
 ## Pemicu rollback
 

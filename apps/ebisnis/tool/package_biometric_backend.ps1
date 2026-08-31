@@ -105,6 +105,12 @@ try {
     (Join-Path $sourceRoot 'ais\action\servlet\api\BiometricApi.java'),
     (Join-Path $sourceRoot 'ais\action\servlet\api\GerbangPesantrenApi.java'),
     $posApiCompileSource,
+    # KantinHelper dipanggil PosApi (produk_simpan dll) sehingga selama ini
+    # ikut terkompilasi transitif TETAPI tidak pernah disalin ke bundle --
+    # akibatnya perbaikan di dalamnya (mis. validasi barcode unik per toko,
+    # 30 Agustus 2026) tidak pernah ter-deploy. Dijadikan source eksplisit
+    # dan disalin di bawah.
+    (Join-Path $sourceRoot 'ais\action\servlet\api\KantinHelper.java'),
     (Join-Path $sourceRoot 'ais\action\servlet\api\biometric\BiometricCrypto.java'),
     (Join-Path $sourceRoot 'ais\action\servlet\api\biometric\BiometricMatcherProvider.java'),
     (Join-Path $sourceRoot 'ais\action\servlet\api\biometric\BiometricMatcherRegistry.java'),
@@ -128,6 +134,7 @@ try {
   Copy-CompiledFamily $compiledRoot 'ais\action\servlet' 'PosApi*.class' $bundleClassesRoot
   Copy-CompiledFamily $compiledRoot 'ais\action\servlet\api' 'BiometricApi*.class' $bundleClassesRoot
   Copy-CompiledFamily $compiledRoot 'ais\action\servlet\api' 'GerbangPesantrenApi*.class' $bundleClassesRoot
+  Copy-CompiledFamily $compiledRoot 'ais\action\servlet\api' 'KantinHelper*.class' $bundleClassesRoot
   Copy-CompiledFamily $compiledRoot 'ais\action\servlet\api\biometric' '*.class' $bundleClassesRoot
   Copy-CompiledFamily $compiledRoot 'ais\database\model\biometric' '*.class' $bundleClassesRoot
   $hibernateChanges = @(
@@ -162,6 +169,7 @@ try {
     'ISI:',
     '- PosApi beserta seluruh inner class hasil kompilasi',
     '- BiometricApi dan GerbangPesantrenApi beserta inner class',
+    '- KantinHelper beserta inner class (helper POS yang dipanggil PosApi; memuat validasi barcode unik per toko)',
     '- primitive crypto/matcher biometrik',
     '- entity BiometricCredential, BiometricEvent, IzinGerbangPesantren',
     '- HIBERNATE_CHANGES.txt berisi mapping yang harus dipastikan pada konfigurasi server existing',
