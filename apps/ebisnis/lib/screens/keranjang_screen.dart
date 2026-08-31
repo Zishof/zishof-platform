@@ -2936,12 +2936,36 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         builder: (c, setDialog) {
           double? faktor;
           double? hasilDasar;
+          double? nominalPerSatuan;
+          double? totalPratinjau;
+          bool packCocok = false;
           try {
             faktor =
                 UomKonversi.konversi(jumlah: 1, dari: terpilih!, ke: dasar!);
             final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.'));
             if (q != null && q > 0) hasilDasar = q * faktor;
+            // Nominal per satuan jual (umpan balik 31-08): produk ber-Pack
+            // memakai harga TETAP per pack; satuan lain diperkirakan dari
+            // harga katalog. Harga grosir/pack FINAL tetap dihitung server
+            // saat bayar -- kalimat helper mengatakannya apa adanya.
+            packCocok = item.produk.packAktif &&
+                item.produk.satuanPackId != null &&
+                item.produk.satuanPackId ==
+                    (terpilih!['id'] as num?)?.toInt() &&
+                (item.produk.hargaPack ?? 0) > 0;
+            nominalPerSatuan =
+                packCocok ? item.produk.hargaPack! : faktor * item.produk.hargaJual;
+            if (q != null && q > 0) totalPratinjau = q * nominalPerSatuan;
           } catch (_) {}
+          final namaSatuanJual = '${terpilih?['nama'] ?? ''}';
+          final satuanDasar = item.produk.satuanNama.isEmpty
+              ? 'unit'
+              : item.produk.satuanNama;
+          final dasarTeks = hasilDasar == null
+              ? ''
+              : (hasilDasar == hasilDasar.roundToDouble()
+                  ? '${hasilDasar.round()}'
+                  : '$hasilDasar');
           return AlertDialog(
             title: Text('Satuan jual - ${item.produk.nama}'),
             content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -2962,12 +2986,41 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setDialog(() {}),
                 decoration: InputDecoration(
-                  labelText: 'Qty (${terpilih?['nama'] ?? ''})',
+                  labelText: 'Qty ($namaSatuanJual)',
                   helperText: hasilDasar == null
                       ? 'Masukkan qty lebih dari nol.'
-                      : '= $hasilDasar ${item.produk.satuanNama} (pratinjau; server menghitung ulang)',
+                      : '= $dasarTeks $satuanDasar',
                 ),
               ),
+              if (nominalPerSatuan != null) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    packCocok
+                        ? 'Harga pack: ${_formatRupiah.format(nominalPerSatuan)} / $namaSatuanJual'
+                            '${totalPratinjau == null ? '' : ' · total ${_formatRupiah.format(totalPratinjau)}'}'
+                        : 'Perkiraan ${_formatRupiah.format(nominalPerSatuan)} / $namaSatuanJual'
+                            '${totalPratinjau == null ? '' : ' · total ${_formatRupiah.format(totalPratinjau)}'}',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimaryOf(c)),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    packCocok
+                        ? 'Harga tetap per pack dari master produk; server menetapkan ulang saat bayar.'
+                        : 'Dari harga katalog. Bila ada aturan harga grosir untuk kuantitas ini, server memakai harga grosir saat keranjang dihitung ulang.',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondaryOf(c)),
+                  ),
+                ),
+              ],
             ]),
             actions: [
               TextButton(
