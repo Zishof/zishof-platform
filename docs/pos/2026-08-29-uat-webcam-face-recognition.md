@@ -66,10 +66,21 @@ dan match-salah dari beberapa subjek berizin sebelum mengubah ambang.
   default ini; kalibrasi berbasis kumpulan skor cosine multi-subjek tetap
   disarankan sebelum produksi bila populasi member besar.
 
-## UAT kamera Android (menyusul; APK model-termasuk sudah siap)
+## UAT kamera Android (menunggu perangkat; APK siap)
 
-Pasang `app-ebisnis-release.apk` via `adb install -r`. Matriks = cermin
-langkah 1–10 Desktop, ditambah perhatian khusus Android:
+Artefak (31 Agustus 2026, dibangun dari kode rilis 1.34.15):
+
+- `release-artifacts/semua-varian/1.34.15/eBisnis-Android-1.34.15-debug-signed.apk`
+  (189.641.455 byte)
+- SHA-256: `923878A2E805819386611C98A8F8B78A2AB419463EAC0EDCC74B84ED40D1236D`
+- Signing: **DEBUG/UAT** — untuk pengujian internal, dilarang dipublikasikan
+  sebagai rilis sampai keystore produksi tersedia.
+- Isi diverifikasi: kedua model ONNX + kedua LICENSE ada di
+  `assets/flutter_assets/assets/face/` dengan ukuran sesuai pin SHA-256.
+
+Pasang dengan `adb install -r <path apk>` (perangkat perlu USB debugging;
+kabel data, bukan kabel charge-only). Matriks = cermin langkah 1–10 Desktop,
+ditambah perhatian khusus Android:
 
 - **Izin kamera runtime**: dialog permission harus muncul saat layar kamera
   pertama dibuka (manifest sudah punya `android.permission.CAMERA`); tolak
