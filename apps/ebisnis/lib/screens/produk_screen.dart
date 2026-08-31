@@ -2549,6 +2549,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   String _rute = '';
   bool _perluQc = false;
   bool _hargaBeliManual = false;
+  bool _packAktif = false;
+  int? _satuanPackId;
+  late final TextEditingController _hargaPack;
   bool _menyimpan = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
@@ -2604,6 +2607,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _rute = p?.rute ?? '';
     _perluQc = p?.perluQc ?? false;
     _hargaBeliManual = p?.hargaBeliManual ?? false;
+    _packAktif = p?.packAktif ?? false;
+    _satuanPackId = p?.satuanPackId;
+    _hargaPack = TextEditingController(
+        text: p?.hargaPack == null ? '' : '${p!.hargaPack}');
     for (final b in p?.bahanBaku ?? const <Map<String, dynamic>>[]) {
       _bahanBaku.add(_BahanBakuBaris(
         produkId: (b['produkId'] as num?)?.toInt(),
@@ -2633,6 +2640,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
     _stok.dispose();
     _keterangan.dispose();
     _pemasok.dispose();
+    _hargaPack.dispose();
     for (final b in _bahanBaku) {
       b.dispose();
     }
@@ -3221,6 +3229,9 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'rute': _rute.isEmpty ? null : _rute,
           'perlu_qc': _perluQc,
           'harga_beli_manual': _hargaBeliManual,
+          'pack_aktif': _packAktif,
+          if (_packAktif) 'satuan_pack_id': _satuanPackId,
+          if (_packAktif) 'harga_pack': _angka(_hargaPack.text),
           'bahan_baku': _bahanBaku
               .map((b) => {
                     'produk_id': b.produkId,
@@ -3270,6 +3281,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'rute': _rute,
           'perluQc': _perluQc,
           'hargaBeliManual': _hargaBeliManual,
+                'packAktif': _packAktif,
+                'satuanPackId': _satuanPackId,
+                'satuanPackNama': _namaUom(_satuanPackId),
+                'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
           'kemasan': _kemasan
               .map((k) => {
                     'nama': k.nama.text.trim(),
@@ -3511,6 +3526,52 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                     onChanged: (v) => setStateIfMounted(() => _rute = v ?? ''),
                   ),
                   const SizedBox(height: 6),
+                  // PDF Pack 31-08: settingan Pack/Combo -- jual per pack di
+                  // POS dengan harga TETAP per pack.
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Dapat dijual berupa Pack (Combo) di POS'),
+                    subtitle: const Text(
+                        'Kasir mendapat pilihan satuan vs pack; harga pack tetap (mis. Rp 65.000/Dus, bukan isi x harga satuan). Stok tetap turun per satuan dasar.'),
+                    value: _packAktif,
+                    onChanged: (v) => setStateIfMounted(() => _packAktif = v),
+                  ),
+                  if (_packAktif) ...[
+                    DropdownButtonFormField<int>(
+                      value: _satuanPackId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'UOM Pack (sekategori satuan dasar) *'),
+                      items: widget.pilihanUom
+                          .where((u) {
+                            final dasar = _uom(_satuanId);
+                            final katDasar =
+                                '${dasar?['kategori'] ?? 'UNIT'}'.toUpperCase();
+                            return u['aktif'] != false &&
+                                (u['id'] as num?)?.toInt() != _satuanId &&
+                                '${u['kategori'] ?? 'UNIT'}'.toUpperCase() ==
+                                    katDasar;
+                          })
+                          .map((u) => DropdownMenuItem(
+                              value: (u['id'] as num?)?.toInt(),
+                              child: Text('${u['nama']}')))
+                          .toList(),
+                      onChanged: (v) =>
+                          setStateIfMounted(() => _satuanPackId = v),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _hargaPack,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Harga jual per pack *',
+                        helperText:
+                            'Harga TETAP per pack, mis. 65000 utk Dus isi 6 (bukan 6 x harga satuan).',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                   // PDF stok & uom 30-08: kebijakan harga beli per produk.
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
