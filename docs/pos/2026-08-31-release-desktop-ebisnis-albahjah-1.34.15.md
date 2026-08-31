@@ -1,7 +1,7 @@
 # Rilis POS Desktop 1.34.15 — eBisnis dan Al-Bahjah
 
 Tanggal: 31 Agustus 2026  
-Status: siap dibangun dan dipublikasikan dari satu commit sumber
+Status: dibangun, diverifikasi, dan dipublikasikan dari satu commit sumber
 
 ## Perubahan utama
 
@@ -23,4 +23,12 @@ Status: siap dibangun dan dipublikasikan dari satu commit sumber
 
 ## Artefak
 
-Artefak final, SHA-256, commit sumber, dan tautan unduh GitHub dicatat setelah build dan unggahan selesai.
+- Commit sumber: `572f008b052b5b72d8e235904c44961562e02e51`.
+- eBisnis Desktop: `eBisnis-Setup-1.34.15.exe` (85.841.896 byte).
+  - SHA-256: `d37feac970a0c80449f93248c7d79c5b9a68e01e27fb6a5bb39e133b86326c00`.
+  - Unduh: https://github.com/Zishof/zishof-platform/releases/download/v1.34.15/eBisnis-Setup-1.34.15.exe
+- Al-Bahjah POS Desktop: `Al-Bahjah-POS-Setup-1.34.15.exe` (85.902.468 byte).
+  - SHA-256: `31d9d0508e137d227f93ff869203f9b02743610537b1f1c08a865b07c2b1084f`.
+  - Unduh: https://github.com/Zishof/zishof-platform/releases/download/v1.34.15/Al-Bahjah-POS-Setup-1.34.15.exe
+
+Kedua installer dibangun oleh skrip multi-varian dalam satu proses selama sekitar 4,5 menit. Verifikasi packaging berhasil. Installer Windows belum ditandatangani sertifikat publik dan ditandai `UNSIGNED/UAT` oleh pipeline; pengguna Windows mungkin menerima peringatan SmartScreen.
