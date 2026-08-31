@@ -2999,7 +2999,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         ..satuanJualNama = '${terpilih!['nama'] ?? ''}'
         ..qtyInput = q
         ..faktorKeDasar = faktor
-        ..jumlah = (q * faktor).round();
+        ..jumlah = (q * faktor).round()
+        // PDF Pack 31-08: memilih satuan PACK produk ber-Pack memakai harga
+        // pack tetap sebagai pratinjau (server menimpa yang sama saat bayar).
+        ..hargaPackPerDasar = (item.produk.packAktif &&
+                item.produk.satuanPackId != null &&
+                item.produk.satuanPackId == (terpilih!['id'] as num?)?.toInt() &&
+                (item.produk.hargaPack ?? 0) > 0 &&
+                faktor > 0)
+            ? item.produk.hargaPack! / faktor
+            : null;
       _sinkronkanUangDiterima();
     });
     _evaluasiDiskon();
