@@ -54,6 +54,12 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
   bool _memuat = true;
   String? _pesanError;
   List<Map<String, dynamic>> _kategori = [];
+
+  /// Daftar unit usaha + unit bawaan dari respons katalog; diteruskan ke layar
+  /// detail supaya laporan berbasis jurnal bisa dipilih per unit atau
+  /// dikonsolidasi. Hanya ikut pada respons SERVER (sama seperti 'pendukung').
+  List<Map<String, dynamic>> _satuanKerja = [];
+  int _satuanKerjaDefault = 0;
   List<Map<String, dynamic>> _pendukung = [];
   final _controllerCari = TextEditingController();
   String _kategoriDipilih = '';
@@ -105,6 +111,11 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
               _pendukung = ((hasil['pendukung'] as List?) ?? [])
                   .map((e) => Map<String, dynamic>.from(e as Map))
                   .toList();
+              _satuanKerja = ((hasil['satuanKerja'] as List?) ?? [])
+                  .map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList();
+              _satuanKerjaDefault =
+                  (hasil['satuanKerjaDefault'] as num?)?.toInt() ?? 0;
             }
             if (_kategoriDipilih.isNotEmpty &&
                 !_kategori.any(
@@ -135,8 +146,12 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
       }
       return;
     }
-    await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => LaporanDetailScreen(item: item)));
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => LaporanDetailScreen(
+              item: item,
+              satuanKerja: _satuanKerja,
+              satuanKerjaDefault: _satuanKerjaDefault,
+            )));
   }
 
   Future<void> _bukaPendukungInline(Map<String, dynamic> item) async {

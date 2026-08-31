@@ -24,7 +24,22 @@ import '../widgets/dialog_analisis_data.dart';
 /// laporan sekaligus -- lihat JavaDoc PosApi.prosesLaporanJalankan di server.
 class LaporanDetailScreen extends StatefulWidget {
   final Map<String, dynamic> item;
-  const LaporanDetailScreen({super.key, required this.item});
+
+  /// Daftar Satuan Kerja (unit usaha) dari respons katalog: `[{id, kode, nama}]`
+  /// dengan baris pertama "Semua Unit (Konsolidasi)" berid 0. Kosong berarti
+  /// server belum mengirimkannya (versi lama) -- pemilih unit tidak ditampilkan
+  /// dan laporan berjalan persis seperti sebelumnya.
+  final List<Map<String, dynamic>> satuanKerja;
+
+  /// Unit yang dipra-pilih (konfigurasi `satuan_kerja_kantin` di server).
+  final int satuanKerjaDefault;
+
+  const LaporanDetailScreen({
+    super.key,
+    required this.item,
+    this.satuanKerja = const [],
+    this.satuanKerjaDefault = 0,
+  });
 
   @override
   State<LaporanDetailScreen> createState() => _LaporanDetailScreenState();
@@ -38,6 +53,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   final _controllerProduk = TextEditingController();
   final _controllerPelanggan = TextEditingController();
   bool _perToko = false;
+  int? _satkerId;
 
   bool _memuat = false;
   bool _memprosesPdf = false;
@@ -53,12 +69,22 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
   bool get _adaFilterPelanggan => widget.item['pelanggan'] == true;
   bool get _adaFilterPerToko => widget.item['perToko'] == true;
 
+  /// Laporan berbasis JURNAL akuntansi bergantung pada Satuan Kerja: satu
+  /// instalasi melayani banyak unit usaha (sekolah, mart, katering, laundry)
+  /// yang masing-masing punya paket laporannya sendiri plus konsolidasi.
+  bool get _adaFilterSatker =>
+      widget.item['satker'] == true && widget.satuanKerja.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
     final sekarang = DateTime.now();
     _tglMulai = DateTime(sekarang.year, sekarang.month, 1);
     _tglSampai = sekarang;
+    // Pra-pilih unit bawaan server bila ada di daftar; kalau tidak, "Semua Unit".
+    final adaBawaan = widget.satuanKerja.any(
+        (e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
+    _satkerId = adaBawaan ? widget.satuanKerjaDefault : 0;
   }
 
   @override
@@ -78,6 +104,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       if (_adaFilterPelanggan && _controllerPelanggan.text.trim().isNotEmpty)
         'qPelanggan': _controllerPelanggan.text.trim(),
       if (_adaFilterPerToko && _perToko) 'perToko': 'true',
+      if (_adaFilterSatker && _satkerId != null) 'satkerId': '$_satkerId',
     };
   }
 
@@ -89,7 +116,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       'laporan:jalankan:${payload['r']}'
       ':${payload['tglMulai'] ?? '-'}_${payload['tglSampai'] ?? '-'}'
       ':${payload['qProduk'] ?? '-'}:${payload['qPelanggan'] ?? '-'}'
-      ':${payload['perToko'] ?? '-'}';
+      ':${payload['perToko'] ?? '-'}:${payload['satkerId'] ?? '-'}';
 
   Future<void> _tampilkan() async {
     setStateIfMounted(() {
@@ -313,6 +340,28 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
                     AppSearchField(
                       controller: _controllerPelanggan,
                       labelText: 'Cari Pelanggan',
+                    ),
+                  ],
+                  if (_adaFilterSatker) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _satkerId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Unit / Satuan Kerja',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: widget.satuanKerja
+                          .map((s) => DropdownMenuItem<int>(
+                                value: (s['id'] as num?)?.toInt() ?? 0,
+                                child: Text(
+                                  '${s['nama'] ?? ''}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setStateIfMounted(() => _satkerId = v),
                     ),
                   ],
                   if (_adaFilterPerToko)
