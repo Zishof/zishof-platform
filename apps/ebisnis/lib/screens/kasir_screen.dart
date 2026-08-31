@@ -1152,6 +1152,100 @@ class _KasirScreenState extends State<KasirScreen> {
     _jadwalkanEvaluasiHargaCoret();
   }
 
+  /// Menu Pack (PDF 31-08): produk ber-Pack menampilkan pilihan satuan vs
+  /// pack SAAT DIKETUK -- memilih pack menambah baris ber-satuan-jual pack
+  /// (stok tetap turun per satuan dasar, mesin Fase B) dengan harga pack
+  /// TETAP sebagai pratinjau; server menimpa harga yang sama saat bayar.
+  void _tambahDenganPack(Produk p) {
+    final bisaPack = p.packAktif &&
+        p.satuanPackId != null &&
+        (p.hargaPack ?? 0) > 0 &&
+        (p.faktorPackKeDasar ?? 0) > 0;
+    if (!bisaPack) {
+      _tambahKeKeranjang(p);
+      return;
+    }
+    final faktor = p.faktorPackKeDasar!.round();
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text('Jual ${p.nama} sebagai:',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.looks_one_outlined),
+            title: Text(
+                '${p.satuanNama.isEmpty ? 'Satuan' : p.satuanNama} — ${_formatRupiah.format(p.hargaJual)}'),
+            onTap: () {
+              Navigator.pop(c);
+              _tambahKeKeranjang(p);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: Text('${p.satuanPackNama} — ${_formatRupiah.format(p.hargaPack!)}'),
+            subtitle: Text('isi $faktor '
+                '${p.satuanNama.isEmpty ? 'unit' : p.satuanNama} (harga pack tetap)'),
+            onTap: () {
+              Navigator.pop(c);
+              _tambahPack(p);
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
+  void _tambahPack(Produk p) {
+    if (!produkBolehDijualMenurutStok(
+      p,
+      paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '${p.nama} tidak dapat dijual karena stok habis dan izin stok minus tidak aktif.'),
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+    final faktor = p.faktorPackKeDasar!;
+    setStateIfMounted(() {
+      final samaPack = _keranjang
+          .where((i) =>
+              i.produk.id == p.id &&
+              i.ekstra.isEmpty &&
+              i.satuanJualId == p.satuanPackId &&
+              i.satuanJualKonsisten)
+          .toList();
+      if (samaPack.isNotEmpty) {
+        final item = samaPack.first;
+        item
+          ..qtyInput = (item.qtyInput ?? 0) + 1
+          ..jumlah = item.jumlah + faktor.round();
+        tempatkanItemKeranjangTerbaruDiDepan(_keranjang, item);
+      } else {
+        final baris = ItemKeranjang(produk: p, jumlah: faktor.round())
+          ..satuanJualId = p.satuanPackId
+          ..satuanJualNama = p.satuanPackNama
+          ..qtyInput = 1
+          ..faktorKeDasar = faktor
+          ..hargaPackPerDasar = p.hargaPack! / faktor;
+        _keranjang.insert(0, baris);
+      }
+      if (_kataKunciController.text.isNotEmpty || _kataKunci.isNotEmpty) {
+        _kataKunciController.clear();
+        _kataKunci = '';
+      }
+    });
+    _siarkanKeranjangKasir();
+    _jadwalkanFokusCariItem();
+    _jadwalkanEvaluasiHargaCoret();
+  }
+
   /// Pemilih kemasan SEKALI-KETUK (Fase A dok. 48): kasir tanpa scanner bisa
   /// menjual per kemasan lewat TEKAN-LAMA kartu produk. Memilih kemasan
   /// menambah qty dasar sebanyak isinya -- jalur yang SAMA dengan scan
@@ -2582,7 +2676,7 @@ class _KasirScreenState extends State<KasirScreen> {
                     produkTampil[i],
                     paksaStokMinusToko: Sesi.instance.bolehTransaksiStokHabis,
                   ),
-                  onTap: () => _tambahKeKeranjang(produkTampil[i]),
+                  onTap: () => _tambahDenganPack(produkTampil[i]),
                   // Tekan-lama membuka pemilih kemasan -- hanya bila produk
                   // punya preset; selain itu null supaya gestur tidak
                   // menelan long-press default (tidak ada).
