@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../theme/app_colors.dart';
 import '../services/master_offline.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -273,10 +274,30 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
         cacheKey: 'master:pengadaan_bast',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(r['offline'] == true
-              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
-              : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}')));
+      // Hasil SINKRON STOK disampaikan apa adanya (dok. 59): menyetujui BAST
+      // menjadikan barang stok lewat jalur Kulakan yang sama dengan tombol
+      // manual. Bila sinkronnya tidak berjalan, pengguna harus tahu -- bukan
+      // menunggu stok yang tidak akan pernah bertambah.
+      final peringatan = '${r['peringatanSinkron'] ?? ''}'.trim();
+      final sinkronOk = r['sinkronOtomatis'] == true;
+      if (r['offline'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Keputusan tersimpan di perangkat, akan dikirim otomatis. '
+                'Stok bertambah setelah keputusan terkirim ke server.')));
+      } else if (peringatan.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Disetujui, TETAPI stok belum bertambah: $peringatan'),
+          backgroundColor: AppColors.warning,
+          duration: const Duration(seconds: 6),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(sinkronOk
+                ? 'Disetujui. Stok bertambah otomatis (terkonversi ke satuan dasar); '
+                    'buka Produk lalu Muat Ulang untuk melihatnya.'
+                : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}')));
+      }
       await _muat();
     } catch (e) {
       if (!mounted) return;
