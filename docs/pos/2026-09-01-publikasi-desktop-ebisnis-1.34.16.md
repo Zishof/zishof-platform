@@ -1,7 +1,7 @@
 # Publikasi eBisnis POS Desktop 1.34.16
 
-Tanggal: 1 September 2026  
-Varian yang dipublikasikan: **eBisnis Desktop saja**  
+Tanggal: 1 September 2026
+Varian yang dipublikasikan: **eBisnis Desktop saja**
 Status: lulus gerbang source, analisis, test, build, checksum, dan siap UAT
 
 ## Ruang lingkup source yang diaudit
