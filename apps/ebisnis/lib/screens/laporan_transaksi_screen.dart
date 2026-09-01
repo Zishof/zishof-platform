@@ -186,13 +186,14 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   final _paymentKey = GlobalKey<_TabPaymentState>();
   final _penjualanKasirKey = GlobalKey<_TabPenjualanKasirState>();
   final _penerimaanKasirKey = GlobalKey<_TabPenerimaanKasirState>();
+  final _rincianProdukKey = GlobalKey<_TabRincianProdukState>();
   final Map<int, DynamicReportModel> _reportModels = {};
   bool _menyiapkanLaporan = false;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 6, vsync: this);
+    _tab = TabController(length: 7, vsync: this);
     _tab.addListener(() {
       if (!_tab.indexIsChanging && mounted) setStateIfMounted(() {});
     });
@@ -232,8 +233,10 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
         return _paymentKey.currentState!._reportData();
       case 4:
         return _penjualanKasirKey.currentState!._reportData();
-      default:
+      case 5:
         return _penerimaanKasirKey.currentState!._reportData();
+      default:
+        return _rincianProdukKey.currentState!._reportData();
     }
   }
 
@@ -363,6 +366,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
               Tab(text: 'Report Payment'),
               Tab(text: 'Penjualan per Kasir'),
               Tab(text: 'Penerimaan per Kasir'),
+              Tab(text: 'Rincian Produk'),
             ],
           ),
           _toolbarLaporanDinamis(),
@@ -380,6 +384,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
                   key: _penjualanKasirKey, statistik: _statistik),
               _TabPenerimaanKasir(
                   key: _penerimaanKasirKey, statistik: _statistik),
+              _TabRincianProduk(
+                  key: _rincianProdukKey, statistik: _statistik),
             ]),
           ),
         ],
@@ -3387,5 +3393,254 @@ Future<void> _lihatRincianPenerimaan(
     if (context.mounted) {
       snackbarGalat(context, e);
     }
+  }
+}
+
+/// Jumlah halaman rincian produk untuk sebuah jumlah transaksi.
+///
+/// Dipisah supaya aturan berhentinya dapat diuji tanpa jaringan: salah hitung di
+/// sini membuat ekspor PDF/Excel berhenti sebelum halaman terakhir dan hasilnya
+/// tampak "berhasil" padahal terpotong.
+@visibleForTesting
+int totalHalamanRincian(int totalTransaksi, int ukuranHalaman) {
+  if (totalTransaksi <= 0 || ukuranHalaman <= 0) return 1;
+  return (totalTransaksi + ukuranHalaman - 1) ~/ ukuranHalaman;
+}
+
+/// Mengambil SELURUH halaman rincian produk untuk ekspor.
+///
+/// Sengaja tidak memakai [_ambilSemuaBarisLaporan]: helper itu berhenti ketika
+/// jumlah baris yang terkumpul mencapai `total`, sedangkan pada laporan rincian
+/// `total` berarti jumlah TRANSAKSI sementara barisnya adalah ITEM. Karena satu
+/// transaksi lazimnya berisi beberapa item, syarat itu terpenuhi sejak halaman
+/// pertama dan sisa halaman tidak pernah terunduh -- PDF/Excel akan tampak
+/// "berhasil" padahal isinya terpotong. Di sini batas berhentinya adalah nomor
+/// halaman, dihitung dari jumlah transaksi.
+Future<List<Map<String, dynamic>>> _ambilSemuaBarisRincianProduk(
+    Map<String, dynamic> payload) async {
+  const ukuranHalaman = 100;
+  final hasil = <Map<String, dynamic>>[];
+  var halaman = 1;
+  var totalHalaman = 1;
+  // (batas berhenti dihitung oleh totalHalamanRincian -- diuji terpisah)
+  do {
+    final respons = await ApiClient.instance.aksi('laporan_rincian_produk', {
+      ...payload,
+      'page': halaman,
+      'pageSize': ukuranHalaman,
+    });
+    hasil.addAll(
+        ((respons['data'] as List?) ?? const []).cast<Map<String, dynamic>>());
+    final totalTransaksi = (respons['total'] as num?)?.toInt() ?? 0;
+    totalHalaman = totalHalamanRincian(totalTransaksi, ukuranHalaman);
+    halaman++;
+    // Halaman kosong TIDAK menghentikan pengambilan: sebuah transaksi bisa saja
+    // tidak punya baris item, sedangkan halaman sesudahnya masih berisi.
+  } while (halaman <= totalHalaman && halaman <= 1000);
+  return hasil;
+}
+
+/// Rincian produk terjual per transaksi -- permintaan An Nahl (1 September 2026):
+/// laporan kasir yang diunduh harus memperlihatkan produk apa saja yang terjual,
+/// bukan hanya satu baris per transaksi.
+class _TabRincianProduk extends StatefulWidget {
+  final Map<String, dynamic>? statistik;
+
+  const _TabRincianProduk({super.key, required this.statistik});
+  @override
+  State<_TabRincianProduk> createState() => _TabRincianProdukState();
+}
+
+class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
+  // Paginasi dihitung dalam TRANSAKSI (sama seperti Report Order); satu halaman
+  // memuat seluruh item milik transaksi di halaman itu supaya sebuah nota tidak
+  // pernah terpotong di tengah.
+  static const _pageSize = 10;
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  int _halaman = 1;
+  int _totalTransaksi = 0;
+  DateTime? _mulai;
+  DateTime? _sampai;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Map<String, dynamic> get _filter => {
+        if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
+        if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
+      };
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('laporan_rincian_produk', {
+        ..._filter,
+        'page': _halaman,
+        'pageSize': _pageSize,
+      });
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _totalTransaksi = (hasil['total'] as num?)?.toInt() ?? 0;
+      });
+    } catch (e) {
+      setStateIfMounted(() => _error = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuat = false);
+    }
+  }
+
+  Future<void> _pindah(int h) async {
+    setStateIfMounted(() => _halaman = h);
+    await _muat();
+  }
+
+  Future<void> _terapkan() async {
+    setStateIfMounted(() => _halaman = 1);
+    await _muat();
+  }
+
+  int get _totalHalaman => _totalTransaksi <= 0
+      ? 1
+      : ((_totalTransaksi + _pageSize - 1) ~/ _pageSize);
+
+  double get _totalNilai => _data.fold<double>(
+      0, (jumlah, row) => jumlah + ((row['total'] as num?)?.toDouble() ?? 0));
+
+  Future<DynamicReportData> _reportData() async {
+    final rows = await _ambilSemuaBarisRincianProduk(_filter);
+    return DynamicReportData(
+      title: 'Rincian Produk Terjual',
+      subtitle: 'Satu baris per produk pada tiap transaksi',
+      columns: const [
+        DynamicReportColumn('waktuTampil', 'Waktu'),
+        DynamicReportColumn('nomorNota', 'Nota'),
+        DynamicReportColumn('kasir', 'Kasir'),
+        DynamicReportColumn('produkKode', 'Kode'),
+        DynamicReportColumn('produkNama', 'Produk'),
+        DynamicReportColumn('qtyTampil', 'Qty'),
+        DynamicReportColumn('hargaSatuan', 'Harga', numeric: true),
+        DynamicReportColumn('diskon', 'Diskon', numeric: true),
+        DynamicReportColumn('total', 'Total', numeric: true),
+      ],
+      rows: rows
+          .map((row) => {
+                ...row,
+                'waktuTampil': _formatWaktu(row['waktu']),
+              })
+          .toList(),
+    );
+  }
+
+  Widget _tabel() {
+    return AppDataTable(
+      minWidth: 940,
+      emptyText: 'Belum ada produk terjual pada rentang ini.',
+      columns: const [
+        AppTableColumn('Nota', flex: 3),
+        AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Qty', flex: 2),
+        AppTableColumn('Harga', flex: 2, align: TextAlign.right),
+        AppTableColumn('Total', flex: 2, align: TextAlign.right),
+      ],
+      rows: _data.map((row) {
+        return AppTableRowData(
+          cells: [
+            AppTableCell.text(
+              '${row['nomorNota'] ?? '-'}',
+              flex: 3,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            AppTableCell.text(
+              '${row['produkNama'] ?? '-'}',
+              flex: 4,
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            AppTableCell.text('${row['qtyTampil'] ?? row['qty'] ?? '-'}',
+                flex: 2),
+            AppTableCell.text(
+                _formatRupiah.format(row['hargaSatuan'] ?? 0), flex: 2,
+                align: TextAlign.right),
+            AppTableCell(
+              flex: 2,
+              align: TextAlign.right,
+              child: _angkaLaporan(context,
+                  label: '${row['produkNama'] ?? 'Produk'}',
+                  nilai: _formatRupiah.format(row['total'] ?? 0),
+                  rincian: {
+                    'Nota': '${row['nomorNota'] ?? '-'}',
+                    'Waktu': _formatWaktu(row['waktu']),
+                    'Kasir': '${row['kasir'] ?? '-'}',
+                    'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
+                    'Harga satuan': _formatRupiah.format(row['hargaSatuan'] ?? 0),
+                    'Diskon': _formatRupiah.format(row['diskon'] ?? 0),
+                  },
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        );
+      }).toList(),
+      pagination: _totalTransaksi > _pageSize
+          ? AppTablePagination(
+              halaman: _halaman,
+              totalHalaman: _totalHalaman,
+              totalData: _totalTransaksi,
+              labelData: 'transaksi',
+              onSebelumnya: _halaman > 1 ? () => _pindah(_halaman - 1) : null,
+              onBerikutnya:
+                  _halaman < _totalHalaman ? () => _pindah(_halaman + 1) : null,
+            )
+          : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _muat,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 20),
+        children: [
+          _FilterTanggal(
+            mulai: _mulai,
+            sampai: _sampai,
+            onMulaiBerubah: (d) => setStateIfMounted(() => _mulai = d),
+            onSampaiBerubah: (d) => setStateIfMounted(() => _sampai = d),
+            onTerapkan: _terapkan,
+          ),
+          if (_memuat || _error != null)
+            _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
+          else ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _tabel(),
+            ),
+            if (_data.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Text(
+                  '${_data.length} baris produk pada halaman ini '
+                  '· total ${_formatRupiah.format(_totalNilai)}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondaryOf(context)),
+                ),
+              ),
+          ],
+          _AnalitikLaporanFooter(statistik: widget.statistik),
+        ],
+      ),
+    );
   }
 }
