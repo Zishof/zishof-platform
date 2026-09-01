@@ -29,8 +29,8 @@ const _daftarMenu = <_ItemMenu>[
   _ItemMenu(MenuAnggota.keranjang, Icons.shopping_cart_outlined, 'Keranjang'),
   _ItemMenu(MenuAnggota.pesanan, Icons.receipt_long_outlined, 'Pesanan'),
   _ItemMenu(MenuAnggota.riwayat, Icons.history, 'Riwayat'),
-  _ItemMenu(MenuAnggota.isiSaldo, Icons.account_balance_wallet_outlined,
-      'Isi Saldo'),
+  _ItemMenu(
+      MenuAnggota.isiSaldo, Icons.account_balance_wallet_outlined, 'Isi Saldo'),
   _ItemMenu(MenuAnggota.bayarQr, Icons.qr_code_scanner, 'Bayar QR'),
   _ItemMenu(MenuAnggota.ringkasan, Icons.insights_outlined, 'Ringkasan'),
 ];
@@ -115,8 +115,8 @@ class AppShell extends StatelessWidget {
               children: [
                 if (sidebarMenetap) _Topbar(aksi: aksi),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      20, sidebarMenetap ? 20 : 14, 20, 0),
+                  padding:
+                      EdgeInsets.fromLTRB(20, sidebarMenetap ? 20 : 14, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -237,6 +237,11 @@ class _Sidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               children: _daftarMenu
+                  .where((m) =>
+                      (m.menu != MenuAnggota.isiSaldo ||
+                          Sesi.instance.aktifkanTopup) &&
+                      (m.menu != MenuAnggota.bayarQr ||
+                          Sesi.instance.aktifkanBayarQr))
                   .map((m) => _BarisMenu(
                         item: m,
                         aktif: m.menu == menuAktif,
@@ -252,7 +257,8 @@ class _Sidebar extends StatelessWidget {
               Sesi.instance.kode.isEmpty
                   ? Sesi.instance.nama
                   : '${Sesi.instance.nama}\n${Sesi.instance.kode}',
-              style: const TextStyle(color: AppColors.sidebarText, fontSize: 11),
+              style:
+                  const TextStyle(color: AppColors.sidebarText, fontSize: 11),
             ),
           ),
         ],
@@ -272,9 +278,8 @@ class _BarisMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     // Jumlah isi keranjang ditempel di menu Keranjang supaya anggota tahu
     // ada barang tertahan tanpa harus membuka halamannya.
-    final jumlah = item.menu == MenuAnggota.keranjang
-        ? Keranjang.instance.jumlahItem
-        : 0;
+    final jumlah =
+        item.menu == MenuAnggota.keranjang ? Keranjang.instance.jumlahItem : 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -284,8 +289,7 @@ class _BarisMenu extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
               children: [
                 Icon(item.ikon,
@@ -301,16 +305,15 @@ class _BarisMenu extends StatelessWidget {
                       color: aktif
                           ? AppColors.sidebarTextActive
                           : AppColors.sidebarText,
-                      fontWeight:
-                          aktif ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: aktif ? FontWeight.bold : FontWeight.normal,
                       fontSize: 13.5,
                     ),
                   ),
                 ),
                 if (jumlah > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.warning,
                       borderRadius: BorderRadius.circular(10),
@@ -348,8 +351,7 @@ class _Topbar extends StatelessWidget {
         children: [
           if (sesi.tampilkanSaldo)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
@@ -381,7 +383,9 @@ class _Topbar extends StatelessWidget {
             radius: 15,
             backgroundColor: AppColors.primary.withValues(alpha: 0.12),
             child: Text(
-              sesi.nama.isEmpty ? '?' : sesi.nama.characters.first.toUpperCase(),
+              sesi.nama.isEmpty
+                  ? '?'
+                  : sesi.nama.characters.first.toUpperCase(),
               style: const TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.bold,

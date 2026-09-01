@@ -1114,6 +1114,53 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
     ].join(' · ');
   }
 
+  Future<void> _konfirmasiDanBuatTagihan() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_idMember == null || _caraDipilih == null) {
+      await _buatTagihan();
+      return;
+    }
+    final nominal = _nominalInput();
+    final admin = (_caraDipilih!['biaya_admin'] as num?)?.toDouble() ?? 0;
+    final lanjut = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Konfirmasi Topup Online'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Member: ${_namaMember ?? '-'}'),
+            const SizedBox(height: 10),
+            Text('Nominal topup: ${_formatRupiah.format(nominal)}'),
+            Text('Biaya admin: ${_formatRupiah.format(admin)}'),
+            const Divider(),
+            Text(
+              'Total bayar: ${_formatRupiah.format(nominal + admin)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Saldo belum berubah saat tagihan dibuat. Saldo masuk setelah callback pembayaran resmi diterima server.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Buat Tagihan'),
+          ),
+        ],
+      ),
+    );
+    if (lanjut == true) await _buatTagihan();
+  }
+
   Future<void> _buatTagihan() async {
     if (!_formKey.currentState!.validate()) return;
     if (_idMember == null) {
@@ -1335,8 +1382,20 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
               keyboardType: TextInputType.number,
               hintText: 'Contoh: 100000',
               validator: (_) =>
-                  _nominalInput() <= 0 ? 'Nominal harus lebih dari 0' : null,
+                  _nominalInput() < 10000 ? 'Nominal minimal Rp 10.000' : null,
             ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: const [10000, 50000, 100000, 500000]
+                  .map((nilai) => ActionChip(
+                        label: Text(_formatRupiah.format(nilai)),
+                        onPressed: () =>
+                            setStateIfMounted(() => _nominal.text = '$nilai'),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 10),
             DropdownButtonFormField<Map<String, dynamic>>(
               value: _caraDipilih,
               isExpanded: true,
@@ -1411,7 +1470,8 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
                       label: const Text('Batal'),
                     ),
                     ElevatedButton.icon(
-                      onPressed: _membuatTagihan ? null : _buatTagihan,
+                      onPressed:
+                          _membuatTagihan ? null : _konfirmasiDanBuatTagihan,
                       icon: _membuatTagihan
                           ? const SizedBox(
                               width: 18,
