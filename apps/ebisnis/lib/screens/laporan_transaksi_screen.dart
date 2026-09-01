@@ -3407,6 +3407,45 @@ int totalHalamanRincian(int totalTransaksi, int ukuranHalaman) {
   return (totalTransaksi + ukuranHalaman - 1) ~/ ukuranHalaman;
 }
 
+/// Merangkum baris rincian menjadi rekap per produk.
+///
+/// Rekap sengaja dihitung dari BARIS RINCIAN YANG SAMA, bukan dari kueri agregat
+/// tersendiri: dua sumber angka untuk hal yang sama pasti berselisih begitu salah
+/// satu filternya berubah, dan pemilik tidak punya cara tahu mana yang benar.
+/// Jumlah transaksi dihitung dari identitas nota yang unik, bukan jumlah baris --
+/// satu nota yang memuat produk sama dua kali tetap dihitung satu transaksi.
+@visibleForTesting
+List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> baris) {
+  final peta = <String, Map<String, dynamic>>{};
+  final nota = <String, Set<String>>{};
+  for (final b in baris) {
+    final kode = (b['produkKode'] ?? '').toString().trim();
+    final nama = (b['produkNama'] ?? 'Produk tanpa nama').toString().trim();
+    final kunci = kode.isNotEmpty ? 'k:$kode' : 'n:${nama.toLowerCase()}';
+    final row = peta.putIfAbsent(
+        kunci,
+        () => <String, dynamic>{
+              'produkKode': kode,
+              'produkNama': nama.isEmpty ? 'Produk tanpa nama' : nama,
+              'satuan': (b['satuan'] ?? '').toString(),
+              'qty': 0.0,
+              'total': 0.0,
+              'jumlahTransaksi': 0,
+            });
+    row['qty'] = (row['qty'] as double) + ((b['qty'] as num?)?.toDouble() ?? 0);
+    row['total'] = (row['total'] as double) + ((b['total'] as num?)?.toDouble() ?? 0);
+    nota
+        .putIfAbsent(kunci, () => <String>{})
+        .add('${b['idTransaksi'] ?? b['nomorNota'] ?? ''}');
+  }
+  final hasil = peta.entries.map((e) {
+    e.value['jumlahTransaksi'] = nota[e.key]?.length ?? 0;
+    return e.value;
+  }).toList();
+  hasil.sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
+  return hasil;
+}
+
 /// Mengambil SELURUH halaman rincian produk untuk ekspor.
 ///
 /// Sengaja tidak memakai [_ambilSemuaBarisLaporan]: helper itu berhenti ketika
@@ -3463,6 +3502,13 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   int _totalTransaksi = 0;
   DateTime? _mulai;
   DateTime? _sampai;
+  String _cariProduk = '';
+  String _cariKasir = '';
+  // Mode rekap merangkum baris rincian yang sama, sehingga angkanya tidak pernah
+  // berselisih dengan mode rincian pada filter yang sama.
+  bool _modeRekap = false;
+  bool _memuatRekap = false;
+  List<Map<String, dynamic>> _rekap = [];
 
   @override
   void initState() {
@@ -3473,6 +3519,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   Map<String, dynamic> get _filter => {
         if (_mulai != null) 'tglMulai': _formatTanggalServer.format(_mulai!),
         if (_sampai != null) 'tglSampai': _formatTanggalServer.format(_sampai!),
+        if (_cariProduk.trim().isNotEmpty) 'produk': _cariProduk.trim(),
+        if (_cariKasir.trim().isNotEmpty) 'kasir': _cariKasir.trim(),
       };
 
   Future<void> _muat() async {
@@ -3505,6 +3553,22 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   Future<void> _terapkan() async {
     setStateIfMounted(() => _halaman = 1);
     await _muat();
+    if (_modeRekap) await _muatRekap();
+  }
+
+  /// Rekap memerlukan SELURUH baris pada filter aktif, bukan hanya halaman yang
+  /// sedang tampil -- karena itu pengambilannya dipisah dan diberi penanda muat
+  /// tersendiri agar pengguna tahu angkanya sedang dihitung.
+  Future<void> _muatRekap() async {
+    setStateIfMounted(() => _memuatRekap = true);
+    try {
+      final semua = await _ambilSemuaBarisRincianProduk(_filter);
+      setStateIfMounted(() => _rekap = rekapProdukDariRincian(semua));
+    } catch (e) {
+      setStateIfMounted(() => _error = terapkanGalat(e));
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatRekap = false);
+    }
   }
 
   int get _totalHalaman => _totalTransaksi <= 0
@@ -3514,11 +3578,34 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   double get _totalNilai => _data.fold<double>(
       0, (jumlah, row) => jumlah + ((row['total'] as num?)?.toDouble() ?? 0));
 
+  String get _subjudulFilter {
+    final bagian = <String>[
+      if (_cariProduk.trim().isNotEmpty) 'Produk "${_cariProduk.trim()}"',
+      if (_cariKasir.trim().isNotEmpty) 'Kasir "${_cariKasir.trim()}"',
+    ];
+    return bagian.isEmpty ? '' : ' · ${bagian.join(' · ')}';
+  }
+
   Future<DynamicReportData> _reportData() async {
     final rows = await _ambilSemuaBarisRincianProduk(_filter);
+    if (_modeRekap) {
+      return DynamicReportData(
+        title: 'Rekap Produk Terjual',
+        subtitle: 'Total per produk pada filter aktif$_subjudulFilter',
+        columns: const [
+          DynamicReportColumn('produkKode', 'Kode'),
+          DynamicReportColumn('produkNama', 'Produk'),
+          DynamicReportColumn('satuan', 'Satuan'),
+          DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
+          DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi', numeric: true),
+          DynamicReportColumn('total', 'Total', numeric: true),
+        ],
+        rows: rekapProdukDariRincian(rows),
+      );
+    }
     return DynamicReportData(
       title: 'Rincian Produk Terjual',
-      subtitle: 'Satu baris per produk pada tiap transaksi',
+      subtitle: 'Satu baris per produk pada tiap transaksi$_subjudulFilter',
       columns: const [
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('nomorNota', 'Nota'),
@@ -3537,6 +3624,48 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               })
           .toList(),
     );
+  }
+
+  Widget _tabelRekap() {
+    return AppDataTable(
+      minWidth: 860,
+      emptyText: 'Belum ada produk terjual pada filter ini.',
+      columns: const [
+        AppTableColumn('Kode', flex: 2),
+        AppTableColumn('Produk', flex: 4),
+        AppTableColumn('Qty', flex: 2, align: TextAlign.right),
+        AppTableColumn('Transaksi', flex: 2, align: TextAlign.right),
+        AppTableColumn('Total', flex: 3, align: TextAlign.right),
+      ],
+      rows: _rekap
+          .map((row) => AppTableRowData(
+                cells: [
+                  AppTableCell.text('${row['produkKode'] ?? '-'}', flex: 2),
+                  AppTableCell.text('${row['produkNama'] ?? '-'}',
+                      flex: 4,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  AppTableCell.text(
+                      '${_angkaRingkasRekap(row['qty'])}'
+                      '${(row['satuan'] ?? '').toString().isEmpty ? '' : ' ${row['satuan']}'}',
+                      flex: 2,
+                      align: TextAlign.right),
+                  AppTableCell.text('${row['jumlahTransaksi'] ?? 0}',
+                      flex: 2, align: TextAlign.right),
+                  AppTableCell.text(_formatRupiah.format(row['total'] ?? 0),
+                      flex: 3,
+                      align: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                ],
+              ))
+          .toList(),
+    );
+  }
+
+  static String _angkaRingkasRekap(Object? nilai) {
+    final n = (nilai as num?)?.toDouble() ?? 0;
+    return n == n.roundToDouble()
+        ? n.round().toString()
+        : n.toStringAsFixed(2).replaceAll('.', ',');
   }
 
   Widget _tabel() {
@@ -3618,9 +3747,75 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             onSampaiBerubah: (d) => setStateIfMounted(() => _sampai = d),
             onTerapkan: _terapkan,
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Cari produk',
+                    hintText: 'nama atau kode',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => _cariProduk = v,
+                  onSubmitted: (_) => _terapkan(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Kasir',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => _cariKasir = v,
+                  onSubmitted: (_) => _terapkan(),
+                ),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Wrap(spacing: 8, children: [
+              ChoiceChip(
+                label: const Text('Rincian'),
+                selected: !_modeRekap,
+                onSelected: (_) => setStateIfMounted(() => _modeRekap = false),
+              ),
+              ChoiceChip(
+                label: const Text('Rekap per produk'),
+                selected: _modeRekap,
+                onSelected: (_) {
+                  setStateIfMounted(() => _modeRekap = true);
+                  _muatRekap();
+                },
+              ),
+            ]),
+          ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
-          else ...[
+          else if (_modeRekap) ...[
+            if (_memuatRekap)
+              _kartuStatusMuat(memuat: true, error: null, onCoba: _muatRekap)
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _tabelRekap(),
+              ),
+            if (!_memuatRekap && _rekap.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Text(
+                  '${_rekap.length} produk · total '
+                  '${_formatRupiah.format(_rekap.fold<double>(0, (j, r) => j + (r['total'] as double)))}'
+                  ' — dihitung dari seluruh transaksi pada filter aktif',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondaryOf(context)),
+                ),
+              ),
+          ] else ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _tabel(),
