@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../api_client.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
@@ -379,6 +380,18 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     if (tersimpan == true) await _muatDaftar();
   }
 
+  Future<void> _bukaTopupOnline() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _FormTopupOnline(),
+    );
+    // Pembuatan VA belum merupakan topup. Daftar saldo sengaja tidak ditambah
+    // secara optimistis; Deposit baru tampil sesudah callback resmi bank atau
+    // gateway diterima server.
+    if (mounted) await _muatDaftar();
+  }
+
   Future<void> _hapus(Map<String, dynamic> d) async {
     final konfirmasi = await showDialog<bool>(
       context: context,
@@ -398,6 +411,7 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       ),
     );
     if (konfirmasi != true) return;
+    if (!mounted) return;
     try {
       // Lokal dulu, baru dikirim (pola master).
       await prosesSimpanMaster(
@@ -500,6 +514,16 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
+                    ),
+                  ),
+                if (bolehEdit)
+                  OutlinedButton.icon(
+                    onPressed: _memprosesBerkas ? null : _bukaTopupOnline,
+                    icon: const Icon(Icons.account_balance_outlined, size: 18),
+                    label: const Text('Topup Online'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.primary),
                     ),
                   ),
               ],
@@ -944,6 +968,463 @@ class _FormTopupState extends State<_FormTopup> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Form pembuatan tagihan topup melalui bank/gateway. Form ini tidak pernah
+/// menulis saldo secara lokal maupun memanggil endpoint topup manual. Saldo
+/// member hanya berubah melalui callback pembayaran resmi di server.
+class _FormTopupOnline extends StatefulWidget {
+  const _FormTopupOnline();
+
+  @override
+  State<_FormTopupOnline> createState() => _FormTopupOnlineState();
+}
+
+class _FormTopupOnlineState extends State<_FormTopupOnline> {
+  final _formKey = GlobalKey<FormState>();
+  final _cariMember = TextEditingController();
+  final _nominal = TextEditingController();
+  Timer? _debounceCariMember;
+  int? _idMember;
+  String? _namaMember;
+  List<Map<String, dynamic>> _hasilCariMember = [];
+  List<Map<String, dynamic>> _caraBayar = [];
+  Map<String, dynamic>? _caraDipilih;
+  Map<String, dynamic>? _hasilTopup;
+  bool _mencariMember = false;
+  bool _memuatCaraBayar = false;
+  bool _membuatTagihan = false;
+  bool _mengaturTeksMember = false;
+  String? _pesanError;
+  String? _detailGalat;
+
+  @override
+  void initState() {
+    super.initState();
+    _cariMember.addListener(_saatCariMemberBerubah);
+  }
+
+  @override
+  void dispose() {
+    _debounceCariMember?.cancel();
+    _cariMember.dispose();
+    _nominal.dispose();
+    super.dispose();
+  }
+
+  void _saatCariMemberBerubah() {
+    if (_mengaturTeksMember) return;
+    _debounceCariMember?.cancel();
+    _debounceCariMember = Timer(
+      const Duration(milliseconds: 400),
+      () => _cariAnggota(_cariMember.text),
+    );
+  }
+
+  Future<void> _cariAnggota(String kata) async {
+    if (kata.trim().length < 2) {
+      setStateIfMounted(() => _hasilCariMember = []);
+      return;
+    }
+    setStateIfMounted(() => _mencariMember = true);
+    try {
+      final hasil = await ApiClient.instance.aksi('anggota_list', {
+        'keyword': kata.trim(),
+        'page_size': 10,
+      });
+      final data = ((hasil['data'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (mounted) setStateIfMounted(() => _hasilCariMember = data);
+    } catch (_) {
+      if (mounted) setStateIfMounted(() => _hasilCariMember = []);
+    } finally {
+      if (mounted) setStateIfMounted(() => _mencariMember = false);
+    }
+  }
+
+  Future<void> _pilihMember(Map<String, dynamic> member) async {
+    final id = (member['id'] as num?)?.toInt();
+    if (id == null) return;
+    _mengaturTeksMember = true;
+    _cariMember.text = '${member['nama'] ?? member['kode'] ?? ''}';
+    _mengaturTeksMember = false;
+    setStateIfMounted(() {
+      _idMember = id;
+      _namaMember = '${member['nama'] ?? '-'}';
+      _hasilCariMember = [];
+      _caraBayar = [];
+      _caraDipilih = null;
+      _pesanError = null;
+      _detailGalat = null;
+      _memuatCaraBayar = true;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi(
+        'topup_online_cara_bayar',
+        {'id_member': id},
+      );
+      final daftar = ((hasil['list'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (!mounted) return;
+      setStateIfMounted(() {
+        _caraBayar = daftar;
+        _caraDipilih = daftar.length == 1 ? daftar.first : null;
+        if (daftar.isEmpty) {
+          _pesanError =
+              '${hasil['description'] ?? 'Belum ada cara pembayaran online untuk member ini.'}';
+        }
+      });
+    } catch (e) {
+      final galat = GalatTampil.dari(e);
+      if (mounted) {
+        setStateIfMounted(() {
+          _pesanError = galat.pesan;
+          _detailGalat = galat.detail;
+        });
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _memuatCaraBayar = false);
+    }
+  }
+
+  double _nominalInput() {
+    final angka = _nominal.text.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(angka) ?? 0;
+  }
+
+  String _labelCaraBayar(Map<String, dynamic> cara) {
+    final kanal =
+        '${cara['nama_channel'] ?? cara['channel'] ?? cara['nama'] ?? '-'}';
+    final metode = '${cara['nama'] ?? ''}'.trim();
+    final biaya = (cara['biaya_admin'] as num?)?.toDouble() ?? 0;
+    return [
+      kanal,
+      if (metode.isNotEmpty && metode != kanal) metode,
+      if (biaya > 0) 'admin ${_formatRupiah.format(biaya)}',
+    ].join(' · ');
+  }
+
+  Future<void> _buatTagihan() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_idMember == null) {
+      setStateIfMounted(() => _pesanError = 'Member wajib dipilih.');
+      return;
+    }
+    if (_caraDipilih == null) {
+      setStateIfMounted(
+          () => _pesanError = 'Cara pembayaran online wajib dipilih.');
+      return;
+    }
+    setStateIfMounted(() {
+      _membuatTagihan = true;
+      _pesanError = null;
+      _detailGalat = null;
+    });
+    try {
+      final hasil = await ApiClient.instance.aksi('topup_online_buat', {
+        'id_member': _idMember,
+        'cara_pembayaran_id': _caraDipilih!['id'],
+        'channel': '${_caraDipilih!['channel'] ?? ''}',
+        'nominal': _nominalInput(),
+      });
+      if (mounted) {
+        setStateIfMounted(() => _hasilTopup = Map<String, dynamic>.from(hasil));
+      }
+    } catch (e) {
+      final galat = GalatTampil.dari(e);
+      if (mounted) {
+        setStateIfMounted(() {
+          _pesanError = galat.pesan;
+          _detailGalat = galat.detail;
+        });
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _membuatTagihan = false);
+    }
+  }
+
+  void _salin(String label, String nilai) {
+    Clipboard.setData(ClipboardData(text: nilai));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label berhasil disalin.')),
+    );
+  }
+
+  Future<void> _bukaLink(String link) async {
+    final uri = Uri.tryParse(link);
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+      setStateIfMounted(
+          () => _pesanError = 'Tautan pembayaran dari server tidak valid.');
+      return;
+    }
+    final terbuka = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!terbuka && mounted) {
+      setStateIfMounted(() => _pesanError =
+          'Tautan pembayaran belum dapat dibuka pada perangkat ini.');
+    }
+  }
+
+  void _buatLagi() {
+    setStateIfMounted(() {
+      _hasilTopup = null;
+      _nominal.clear();
+      _pesanError = null;
+      _detailGalat = null;
+    });
+  }
+
+  Widget _barisHasil(String label, String nilai, {bool dapatDisalin = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              nilai.isEmpty ? '-' : nilai,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          if (dapatDisalin && nilai.isNotEmpty)
+            IconButton(
+              tooltip: 'Salin $label',
+              onPressed: () => _salin(label, nilai),
+              icon: const Icon(Icons.copy_outlined, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _isiHasil() {
+    final hasil = _hasilTopup!;
+    final topup = hasil['topup'] is Map
+        ? Map<String, dynamic>.from(hasil['topup'] as Map)
+        : const <String, dynamic>{};
+    final nominal = (topup['nilai'] as num?)?.toDouble() ?? _nominalInput();
+    final admin = (hasil['biayaAdministrasi'] as num?)?.toDouble() ?? 0;
+    final total = (hasil['total'] as num?)?.toDouble() ?? nominal + admin;
+    final va = '${hasil['va'] ?? ''}'.trim();
+    final link = '${hasil['link'] ?? ''}'.trim();
+    final vaBankLain = '${hasil['va_bank_lain'] ?? ''}'.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.latarLembut(AppColors.warning),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.schedule_outlined, color: AppColors.warning),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Tagihan online berhasil dibuat dan masih menunggu pembayaran. Saldo member belum bertambah. Saldo akan masuk otomatis hanya setelah bank/gateway mengonfirmasi pembayaran berhasil.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppFormSection(
+          judul: 'Rincian Tagihan Online',
+          children: [
+            _barisHasil('Member', '${hasil['member'] ?? _namaMember ?? '-'}'),
+            _barisHasil('Nominal topup', _formatRupiah.format(nominal)),
+            _barisHasil('Biaya admin', _formatRupiah.format(admin)),
+            _barisHasil('Total bayar', _formatRupiah.format(total)),
+            _barisHasil('Berlaku sampai', '${hasil['billExpired'] ?? '-'}'),
+            _barisHasil('Nomor VA', va, dapatDisalin: true),
+            if (vaBankLain.isNotEmpty)
+              _barisHasil('Prefix bank lain', vaBankLain, dapatDisalin: true),
+            if (link.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () => _bukaLink(link),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text('Buka Halaman Pembayaran'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _isiForm() {
+    return Column(
+      children: [
+        AppFormSection(
+          judul: 'Member',
+          children: [
+            AppFormTextField(
+              label: 'Cari Member *',
+              controller: _cariMember,
+              hintText: 'Ketik nama/kode member...',
+            ),
+            if (_mencariMember || _memuatCaraBayar)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              ),
+            if (_idMember != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Chip(
+                  avatar: const Icon(Icons.check_circle,
+                      size: 16, color: Colors.white),
+                  backgroundColor: AppColors.success,
+                  label: Text(
+                    _namaMember ?? '',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            if (_hasilCariMember.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 200),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.borderOf(context)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _hasilCariMember.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final member = _hasilCariMember[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text('${member['nama'] ?? '-'}'),
+                      subtitle: Text('${member['kode'] ?? ''}'),
+                      onTap: () => _pilihMember(member),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        AppFormSection(
+          judul: 'Pembayaran',
+          children: [
+            AppFormTextField(
+              label: 'Nominal Topup *',
+              controller: _nominal,
+              keyboardType: TextInputType.number,
+              hintText: 'Contoh: 100000',
+              validator: (_) =>
+                  _nominalInput() <= 0 ? 'Nominal harus lebih dari 0' : null,
+            ),
+            DropdownButtonFormField<Map<String, dynamic>>(
+              value: _caraDipilih,
+              isExpanded: true,
+              decoration:
+                  const InputDecoration(labelText: 'Cara Bayar / Kanal *'),
+              items: _caraBayar
+                  .map((cara) => DropdownMenuItem<Map<String, dynamic>>(
+                        value: cara,
+                        child: Text(
+                          _labelCaraBayar(cara),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ))
+                  .toList(),
+              onChanged: _memuatCaraBayar
+                  ? null
+                  : (nilai) => setStateIfMounted(() => _caraDipilih = nilai),
+              validator: (nilai) =>
+                  nilai == null ? 'Cara pembayaran wajib dipilih' : null,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Biaya administrasi pada pilihan hanya informasi awal. Nilai final selalu dihitung ulang oleh server saat tagihan dibuat.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selesai = _hasilTopup != null;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.88,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (context, scrollController) => Form(
+          key: _formKey,
+          child: AppFormSheet(
+            scrollController: scrollController,
+            title: selesai ? 'Tagihan Topup Online' : 'Topup Online',
+            subtitle: selesai
+                ? 'Berikan VA atau tautan pembayaran kepada member.'
+                : 'Buat tagihan bank/gateway untuk member terpilih.',
+            icon: Icons.account_balance_outlined,
+            errorText: _pesanError,
+            errorDetail: _detailGalat,
+            actions: selesai
+                ? [
+                    OutlinedButton.icon(
+                      onPressed: _buatLagi,
+                      icon: const Icon(Icons.add_card_outlined, size: 18),
+                      label: const Text('Buat Topup Lain'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('Selesai'),
+                    ),
+                  ]
+                : [
+                    OutlinedButton.icon(
+                      onPressed: _membuatTagihan
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Batal'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _membuatTagihan ? null : _buatTagihan,
+                      icon: _membuatTagihan
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.account_balance_outlined,
+                              size: 18),
+                      label: const Text('Buat Tagihan Online'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+            children: [selesai ? _isiHasil() : _isiForm()],
           ),
         ),
       ),
