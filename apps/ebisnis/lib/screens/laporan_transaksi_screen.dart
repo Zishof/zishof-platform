@@ -3446,6 +3446,19 @@ List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> bar
   return hasil;
 }
 
+/// Hasil pengambilan rincian: barisnya, dan apakah pengambilan berhenti karena
+/// menyentuh batas pengaman halaman.
+///
+/// Penanda ini ada supaya ekspor yang tidak lengkap TIDAK tampak sebagai ekspor
+/// yang berhasil. Laporan yang diam-diam terpotong lebih berbahaya daripada
+/// laporan yang gagal, karena angkanya terlihat wajar dan tetap dipakai.
+@visibleForTesting
+class HasilBarisRincian {
+  final List<Map<String, dynamic>> baris;
+  final bool terpotong;
+  const HasilBarisRincian(this.baris, this.terpotong);
+}
+
 /// Mengambil SELURUH halaman rincian produk untuk ekspor.
 ///
 /// Sengaja tidak memakai [_ambilSemuaBarisLaporan]: helper itu berhenti ketika
@@ -3455,9 +3468,10 @@ List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> bar
 /// pertama dan sisa halaman tidak pernah terunduh -- PDF/Excel akan tampak
 /// "berhasil" padahal isinya terpotong. Di sini batas berhentinya adalah nomor
 /// halaman, dihitung dari jumlah transaksi.
-Future<List<Map<String, dynamic>>> _ambilSemuaBarisRincianProduk(
+Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
     Map<String, dynamic> payload) async {
   const ukuranHalaman = 100;
+  const batasHalaman = 1000; // pengaman; disentuh berarti hasilnya TIDAK lengkap
   final hasil = <Map<String, dynamic>>[];
   var halaman = 1;
   var totalHalaman = 1;
@@ -3475,8 +3489,8 @@ Future<List<Map<String, dynamic>>> _ambilSemuaBarisRincianProduk(
     halaman++;
     // Halaman kosong TIDAK menghentikan pengambilan: sebuah transaksi bisa saja
     // tidak punya baris item, sedangkan halaman sesudahnya masih berisi.
-  } while (halaman <= totalHalaman && halaman <= 1000);
-  return hasil;
+  } while (halaman <= totalHalaman && halaman <= batasHalaman);
+  return HasilBarisRincian(hasil, totalHalaman > batasHalaman);
 }
 
 /// Rincian produk terjual per transaksi -- permintaan An Nahl (1 September 2026):
@@ -3508,11 +3522,18 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   // berselisih dengan mode rincian pada filter yang sama.
   bool _modeRekap = false;
   bool _memuatRekap = false;
+  bool _terpotong = false;
   List<Map<String, dynamic>> _rekap = [];
 
   @override
   void initState() {
     super.initState();
+    // Rentang bawaan HARI INI. Tanpa ini tab membuka seluruh riwayat toko, dan
+    // pada laporan tingkat item itu berarti puluhan ribu baris hanya untuk
+    // menampilkan halaman pertama. Pengguna tetap bebas melebarkan rentangnya.
+    final kini = DateTime.now();
+    _mulai = DateTime(kini.year, kini.month, kini.day);
+    _sampai = _mulai;
     _muat();
   }
 
@@ -3563,7 +3584,10 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     setStateIfMounted(() => _memuatRekap = true);
     try {
       final semua = await _ambilSemuaBarisRincianProduk(_filter);
-      setStateIfMounted(() => _rekap = rekapProdukDariRincian(semua));
+      setStateIfMounted(() {
+        _rekap = rekapProdukDariRincian(semua.baris);
+        _terpotong = semua.terpotong;
+      });
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
     } finally {
@@ -3587,11 +3611,17 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   }
 
   Future<DynamicReportData> _reportData() async {
-    final rows = await _ambilSemuaBarisRincianProduk(_filter);
+    final hasil = await _ambilSemuaBarisRincianProduk(_filter);
+    final rows = hasil.baris;
+    if (mounted) setStateIfMounted(() => _terpotong = hasil.terpotong);
+    final catatanPotong = hasil.terpotong
+        ? ' · SEBAGIAN: data melebihi batas unduhan, persempit rentang tanggal'
+        : '';
     if (_modeRekap) {
       return DynamicReportData(
         title: 'Rekap Produk Terjual',
-        subtitle: 'Total per produk pada filter aktif$_subjudulFilter',
+        subtitle:
+            'Total per produk pada filter aktif$_subjudulFilter$catatanPotong',
         columns: const [
           DynamicReportColumn('produkKode', 'Kode'),
           DynamicReportColumn('produkNama', 'Produk'),
@@ -3605,7 +3635,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     }
     return DynamicReportData(
       title: 'Rincian Produk Terjual',
-      subtitle: 'Satu baris per produk pada tiap transaksi$_subjudulFilter',
+      subtitle:
+          'Satu baris per produk pada tiap transaksi$_subjudulFilter$catatanPotong',
       columns: const [
         DynamicReportColumn('waktuTampil', 'Waktu'),
         DynamicReportColumn('nomorNota', 'Nota'),
@@ -3794,6 +3825,23 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
               ),
             ]),
           ),
+          if (_terpotong)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Data pada filter ini melebihi batas unduhan, sehingga hasil '
+                  'ekspor/rekap TIDAK lengkap. Persempit rentang tanggal atau '
+                  'saring per produk / kasir.',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ),
+            ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
           else if (_modeRekap) ...[
