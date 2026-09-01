@@ -1085,7 +1085,10 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
       final galat = GalatTampil.dari(e);
       if (mounted) {
         setStateIfMounted(() {
-          _pesanError = galat.pesan;
+          _pesanError = e is ApiException && e.offline
+              ? 'Topup Online memerlukan koneksi ke server dan konfirmasi bank/gateway. '
+                  'Tagihan belum dibuat dan saldo member tidak berubah. Periksa koneksi lalu coba kembali.'
+              : galat.pesan;
           _detailGalat = galat.detail;
         });
       }

@@ -141,6 +141,9 @@ void main() {
   // dan aksi sensitif menurut spec offline (PERINTAH_MASTER... section 13.3).
   const tetapOnline = <String, List<String>>{
     'lib/screens/hak_akses_screen.dart': ["'ebisnis_role_menu_simpan'"],
+    // Topup online membuat VA/payment-link dan saldo hanya boleh bertambah
+    // setelah callback resmi bank/gateway; tidak aman dibuat sukses lokal.
+    'lib/screens/anggota/tab_topup.dart': ["aksi('topup_online_buat'"],
     // kulakan_bulk_entry produk_simpan: dulu online-only karena butuh id
     // server seketika; sejak 2026-08-29 memakai id sementara MasterOffline
     // (lihat test 'produk baru bulk entry ...' di bawah) -- entrinya pindah.
@@ -288,6 +291,21 @@ void main() {
                 '(online-only sesuai spec 13.3 / aturan kredensial)');
       }
     }
+  });
+
+  test('topup online gagal offline tanpa sukses atau saldo semu', () {
+    final source =
+        File('lib/screens/anggota/tab_topup.dart').readAsStringSync();
+    final padat = rapat(source);
+    expect(
+        padat, contains(rapat("ApiClient.instance.aksi('topup_online_buat'")),
+        reason: 'pembuatan VA wajib meminta konfirmasi server saat itu juga');
+    expect(padat, isNot(contains(rapat("antreLokal('topup_online_buat'"))),
+        reason: 'topup online tidak boleh masuk outbox sebagai sukses lokal');
+    expect(source, contains('Topup Online memerlukan koneksi ke server'));
+    expect(source, contains('saldo member tidak berubah'));
+    expect(source, contains('Saldo member belum bertambah'));
+    expect(source, contains('callback resmi bank'));
   });
 
   test('dialog simpan "lokal dulu" bertahap + retry 5 menit berhenti sendiri',
