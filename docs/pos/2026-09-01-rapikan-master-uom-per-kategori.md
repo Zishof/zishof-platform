@@ -128,22 +128,69 @@ Ini DML (data master), bukan DDL — kebijakan "skema hanya lewat Hibernate"
 (dok. 58) tetap utuh. Ambil cadangan basis data sebelum langkah 2 dan 3 di
 lingkungan produksi.
 
-## Yang sengaja TIDAK dikerjakan
+## Keputusan pemilik: satuan dasar Pcs massal (1 September 2026)
 
-**8.674 produk aktif belum punya satuan dasar.** Mengisinya massal menuntut
-keputusan yang tidak boleh ditebak: "ABC Kecap Manis 100 g Botol" bersatuan
-dasar *Botol* (kategori UNIT), bukan *Gram*, meski namanya memuat "100 g".
-Menebak salah akan merusak konversi kulakan dan stok. Pilihan yang tersedia
-bila pemilik memutuskan:
+Audit di atas menyisakan **8.674 produk aktif tanpa satuan dasar**, yang
+membuat fitur satuan jual, Pack, dan ambang grosir per satuan tidak dapat
+dipakai pada produk tersebut. Pemilik memilih **opsi 1**: tetapkan **Pcs**
+sebagai satuan dasar untuk seluruh produk yang belum ber-UOM.
 
-1. Tetapkan **Pcs** sebagai satuan dasar untuk semua produk eceran yang
-   belum ber-UOM (satu perintah, mudah dibalik selama belum ada transaksi
-   ber-UOM), lalu perbaiki produk curah (beras, gula, minyak) satu per satu
-   menjadi Kilogram/Liter.
-2. Isi lewat impor Excel katalog (kolom "Satuan") yang sudah ada.
-3. Biarkan kosong: penjualan biasa tetap berjalan; hanya fitur satuan jual,
-   Pack, dan ambang grosir per satuan yang tidak dapat dipakai pada produk
-   tersebut.
+Yang dijalankan (mode audit dulu, baru terapkan):
 
-Sampaikan pilihan yang diambil, dan perapian lanjutan dapat dikerjakan
-memakai pola perintah di atas.
+```sql
+-- Hanya baris yang BELUM punya satuan; produk yang sudah ber-UOM tidak disentuh.
+UPDATE koperasi.produk
+   SET satuan = (SELECT id FROM koperasi.satuan_produk
+                  WHERE LOWER(TRIM(nama)) = 'pcs' AND COALESCE(aktif, true)
+                  ORDER BY id LIMIT 1)
+ WHERE satuan IS NULL;
+```
+
+Hasil di basis data UAT:
+
+| Pemeriksaan | Sebelum | Sesudah |
+| --- | --- | --- |
+| Produk tanpa satuan dasar | 8.674 | **0** |
+| Produk bersatuan Pcs | 3 | 8.677 |
+| Produk bersatuan selain Pcs (tidak disentuh) | 1 | 1 |
+| Produk menunjuk satuan tidak sah (kategori/rasio kosong) | — | **0** |
+| Satuan pembelian beda kategori dgn satuan dasar | — | **0** |
+
+`satuan_pembelian` sengaja dibiarkan kosong: mesin konversi memakai satuan
+dasar sebagai acuan bila satuan pembelian belum diisi, sehingga kulakan per
+Pcs tetap benar tanpa menebak kemasan pemasok tiap produk.
+
+### Cara membalik
+
+Seluruh 8.674 id yang diubah dicatat lebih dulu ke berkas jejak
+(`jejak-satuan-null.csv`, kolom `id,kode`) sebelum satu baris pun ditulis,
+sehingga perubahan dapat dibatalkan penuh:
+
+```sql
+UPDATE koperasi.produk SET satuan = NULL WHERE id IN (/* id dari berkas jejak */);
+```
+
+Tanpa berkas jejak, pembalikan massal tidak lagi dapat membedakan produk yang
+tadinya kosong dari produk yang memang bersatuan Pcs — simpan berkas itu
+selama masa pemantauan bila prosedur ini dijalankan di produksi.
+
+### Produk curah — diperiksa, ternyata tidak ada
+
+Kekhawatiran pada opsi 1 adalah barang curah (beras/gula/minyak kiloan) yang
+seharusnya bersatuan Kilogram/Liter, bukan Pcs. Penyaringan nama menemukan 89
+kandidat, dan sesudah dibaca satu per satu:
+
+- **82** adalah jasa laundry demo ("Cuci Gorden Reguler 3 Hari Per Kg") —
+  bukan barang stok;
+- **7** sisanya justru barang **kemasan**: "Beras bengawan koi 5kg", "Gula
+  Pasir 1kg", "Telur Garuda 250gr". Satu bungkus = satu Pcs, jadi Pcs benar.
+
+Tidak ada produk yang perlu dikoreksi menjadi Kilogram/Liter di katalog ini.
+Bila kelak ditambahkan barang timbangan, ubah satuan dasarnya lewat Master
+Data > Produk — mengubah satu produk tidak memengaruhi produk lain.
+
+## Catatan pilihan yang tidak diambil
+
+Dua pilihan lain tetap tercatat bila kondisi berubah: mengisi satuan lewat
+impor Excel katalog (kolom "Satuan"), atau membiarkan kosong — penjualan biasa
+tetap berjalan, hanya fitur ber-UOM yang tidak dapat dipakai pada produk itu.
