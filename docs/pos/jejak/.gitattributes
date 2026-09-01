@@ -1,0 +1,3 @@
+# Berkas jejak pembalikan: harus byte-identik dengan salinan kanonik di SVN
+# (SHA-256 tercatat di dok. 63) -- jangan normalisasi akhir baris.
+*.csv -text

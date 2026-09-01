@@ -162,17 +162,28 @@ Pcs tetap benar tanpa menebak kemasan pemasok tiap produk.
 
 ### Cara membalik
 
-Seluruh 8.674 id yang diubah dicatat lebih dulu ke berkas jejak
-(`jejak-satuan-null.csv`, kolom `id,kode`) sebelum satu baris pun ditulis,
-sehingga perubahan dapat dibatalkan penuh:
+Seluruh 8.674 id yang diubah dicatat lebih dulu — sebelum satu baris pun
+ditulis — sehingga perubahan dapat dibatalkan penuh. Berkas jejak disimpan
+permanen bersama dokumen ini:
+
+    docs/pos/jejak/2026-09-01-produk-tanpa-satuan-sebelum-pcs-massal.csv
+    kolom: id,kode   |   8.674 baris data   |   174 KB
+    SHA-256: 4d7b298340009072b3c4a641081ac8950fb92500d49a6636d672aa5124cb4718
 
 ```sql
-UPDATE koperasi.produk SET satuan = NULL WHERE id IN (/* id dari berkas jejak */);
+-- Syarat "satuan = Pcs" WAJIB: tanpa itu, produk yang sesudah ini dikoreksi
+-- manual (mis. menjadi Kilogram) ikut dikosongkan dan koreksinya hilang.
+UPDATE koperasi.produk
+   SET satuan = NULL
+ WHERE id IN (/* id dari berkas jejak */)
+   AND satuan = (SELECT id FROM koperasi.satuan_produk
+                  WHERE LOWER(TRIM(nama)) = 'pcs' AND COALESCE(aktif, true)
+                  ORDER BY id LIMIT 1);
 ```
 
 Tanpa berkas jejak, pembalikan massal tidak lagi dapat membedakan produk yang
-tadinya kosong dari produk yang memang bersatuan Pcs — simpan berkas itu
-selama masa pemantauan bila prosedur ini dijalankan di produksi.
+tadinya kosong dari produk yang memang bersatuan Pcs sejak awal — karena itu
+berkas ini diversi bersama dokumentasi, bukan disimpan sementara.
 
 ### Produk curah — diperiksa, ternyata tidak ada
 
