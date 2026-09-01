@@ -160,30 +160,83 @@ Hasil di basis data UAT:
 dasar sebagai acuan bila satuan pembelian belum diisi, sehingga kulakan per
 Pcs tetap benar tanpa menebak kemasan pemasok tiap produk.
 
+### Dijalankan otomatis saat boot -- tidak ada SQL manual lagi
+
+`AppStartupListener` memanggil tiga langkah idempoten di `InitIndex`, sehingga
+lingkungan baru (termasuk ebisnis.id) cukup memasang build terbaru dan
+me-restart Tomcat; SQL di atas tinggal menjadi rujukan, bukan prosedur.
+
+| Langkah | Method | Kapan berjalan |
+| --- | --- | --- |
+| Rapikan master UOM | `initMasterUomStandar()` | setiap boot (idempoten) |
+| Pembalikan | `initBalikkanSatuanPcsMassal()` | hanya bila saklar diaktifkan |
+| Isi satuan dasar Pcs | `initSatuanDasarPcsMassal()` | sekali per lingkungan |
+
+Urutan itu wajib: master UOM harus sah sebelum satuan dasar menunjuk kepadanya,
+dan pembalikan harus berjalan sebelum pengisian supaya hasilnya tidak langsung
+diisi ulang pada boot yang sama.
+
+Penjaga yang melekat pada langkah-langkah itu:
+
+- Pengisian mencatat setiap id ke `koperasi.jejak_satuan_pcs` **sebelum**
+  mengubah satu baris pun.
+- Pengisian berjalan **sekali** per lingkungan, ditandai konfigurasi
+  `kantin_uom_isi_pcs_massal_selesai`. Produk baru wajib memilih satuan di layar
+  Produk, jadi pengisian diam-diam pada tiap restart tidak diperlukan dan hanya
+  menyulitkan penelusuran.
+- Pengisian menolak menunjuk baris Pcs yang sendirinya belum sah (kategori atau
+  rasio kosong) -- menunjuk satuan rusak hanya memindahkan kegagalan ke kasir.
+- Ketiganya membaca konfigurasi lewat SQL langsung, **bukan**
+  `Common.bolehKonfigurasi`. Lapisan `KonfigurasiManager` belum tentu siap sedini
+  itu pada urutan boot; di luar container pemanggilannya terbukti menggantung,
+  dan init lain di kelas yang sama juga murni SQL.
+
+Bukti perilaku: harness `TesInitUom` memanggil ketiga method lewat refleksi --
+persis yang dipanggil saat boot -- terhadap basis data UAT: **12/12 lulus**,
+termasuk "boot berikutnya tidak mengisi produk baru", "produk yang dikoreksi
+manual ke Kilogram tidak ikut dikosongkan", dan "saklar mematikan dirinya
+sendiri".
+
 ### Cara membalik
 
-Seluruh 8.674 id yang diubah dicatat lebih dulu — sebelum satu baris pun
-ditulis — sehingga perubahan dapat dibatalkan penuh. Berkas jejak disimpan
-permanen bersama dokumen ini:
+Cukup satu baris konfigurasi -- tidak perlu lagi menulis SQL berisi ribuan id:
+
+```sql
+-- Aktifkan saklar, lalu restart Tomcat. Saklar mematikan dirinya sendiri.
+UPDATE public.konfigurasi SET nilai = 'aktif'
+ WHERE nama = 'kantin_uom_balikkan_pcs_massal';
+-- (bila barisnya belum ada)
+INSERT INTO public.konfigurasi (nama, nilai)
+SELECT 'kantin_uom_balikkan_pcs_massal', 'aktif'
+ WHERE NOT EXISTS (SELECT 1 FROM public.konfigurasi
+                    WHERE nama = 'kantin_uom_balikkan_pcs_massal');
+```
+
+Pada boot berikutnya `initBalikkanSatuanPcsMassal()` mengosongkan satuan **hanya**
+produk yang tercatat di `koperasi.jejak_satuan_pcs` **dan** masih bersatuan Pcs,
+lalu mematikan saklar sendiri dan menandai pengisian selesai supaya tidak diisi
+ulang. Syarat "masih bersatuan Pcs" itu wajib: tanpanya, produk yang sesudah
+pengisian dikoreksi manual (mis. menjadi Kilogram) ikut dikosongkan dan koreksi
+pemilik hilang.
+
+Isi tabel jejak di basis data UAT: **8.674 id**, diimpor dari berkas jejak yang
+dibuat saat pengisian pertama kali dijalankan. Berkas itu tetap disimpan sebagai
+cadangan di luar basis data:
 
     docs/pos/jejak/2026-09-01-produk-tanpa-satuan-sebelum-pcs-massal.csv
     kolom: id,kode   |   8.674 baris data   |   174 KB
     SHA-256: 4d7b298340009072b3c4a641081ac8950fb92500d49a6636d672aa5124cb4718
 
+Bentuk manualnya -- bila perlu dijalankan tanpa restart -- tetap sama:
+
 ```sql
--- Syarat "satuan = Pcs" WAJIB: tanpa itu, produk yang sesudah ini dikoreksi
--- manual (mis. menjadi Kilogram) ikut dikosongkan dan koreksinya hilang.
 UPDATE koperasi.produk
    SET satuan = NULL
- WHERE id IN (/* id dari berkas jejak */)
+ WHERE id IN (SELECT j.produk FROM koperasi.jejak_satuan_pcs j)
    AND satuan = (SELECT id FROM koperasi.satuan_produk
                   WHERE LOWER(TRIM(nama)) = 'pcs' AND COALESCE(aktif, true)
                   ORDER BY id LIMIT 1);
 ```
-
-Tanpa berkas jejak, pembalikan massal tidak lagi dapat membedakan produk yang
-tadinya kosong dari produk yang memang bersatuan Pcs sejak awal — karena itu
-berkas ini diversi bersama dokumentasi, bukan disimpan sementara.
 
 ### Produk curah — diperiksa, ternyata tidak ada
 
