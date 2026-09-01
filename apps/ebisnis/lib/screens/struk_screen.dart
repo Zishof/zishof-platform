@@ -1317,12 +1317,23 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
         if (peta is Map) {
           final t = (peta['total'] as num?)?.toDouble();
           final d = (peta['totalDiskon'] as num?)?.toDouble();
+          // Saat pengakuan server tiba, sekalian sampaikan peringatan stoknya.
+          // Kasir masih berdiri di depan layar struk -- ini kesempatan terakhir
+          // menyampaikannya kepada orang yang benar-benar bisa menindaklanjuti.
+          final catatan = '${peta['peringatanStok'] ?? ''}'.trim();
           if (mounted) {
             setState(() {
               _totalServer = t;
               _totalDiskonServer = d;
               _selesai = true;
             });
+            if (catatan.isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(catatan),
+                backgroundColor: Colors.orange.shade800,
+                duration: const Duration(seconds: 10),
+              ));
+            }
           }
           _hentikan();
           return;

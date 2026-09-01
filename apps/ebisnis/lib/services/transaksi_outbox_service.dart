@@ -73,6 +73,21 @@ class TransaksiOutboxService {
   static const String _kunciIntervalRetry =
       'transaksi_pending_interval_retry_menit';
 
+  /// Penanda bahwa pemulihan sekali-jalan di bawah sudah dijalankan pada
+  /// perangkat ini. Bertanggal supaya pemulihan berikutnya (bila suatu saat
+  /// dibutuhkan lagi) cukup memakai kunci baru, bukan menghapus yang ini.
+  static const String _kunciPulihStok2026_09 =
+      'transaksi_pending_pulih_penolakan_stok_2026_09';
+
+  /// Cuplikan pesan penolakan stok versi lama. Sengaja dicocokkan pada POTONGAN
+  /// yang stabil, bukan kalimat penuh: kalimatnya sudah diperbaiki di server
+  /// (lihat docs/pos/73) dan baris lama menyimpan bunyi yang LAMA.
+  static const List<String> _cuplikanPenolakanStokLama = [
+    'dikunci admin',
+    'tidak boleh dijual minus',
+    'Wajib Diblokir Jika Stok Tidak Cukup',
+  ];
+
   Timer? _timer;
   Timer? _retryTertunda;
   Future<HasilSinkronisasiTransaksi>? _prosesAktif;
@@ -98,7 +113,99 @@ class TransaksiOutboxService {
     } finally {
       _sedangMemulai = false;
     }
+    unawaited(pulihkanTerparkirPenolakanStok());
     unawaited(sinkronkan());
+  }
+
+  /// Bangunkan transaksi yang terparkir GAGAL karena penolakan stok yang
+  /// TERNYATA KELIRU.
+  ///
+  /// <h3>Kenapa perlu jalur khusus</h3>
+  /// `STOK_TIDAK_CUKUP` termasuk [kodePenolakanPermanen], dan retry otomatis
+  /// hanya membaca baris berstatus PENDING. Jadi setiap transaksi luring yang
+  /// ditolak gerbang stok langsung diparkir GAGAL dan TIDAK PERNAH dicoba lagi
+  /// dengan sendirinya. Itu memang benar untuk penolakan yang sah.
+  ///
+  /// Tetapi sejak r77493 (16-08-2026) sampai perbaikannya pada 02-09-2026,
+  /// gerbang itu menolak produk yang tidak pernah dikunci admin sama sekali --
+  /// nilai `null` ("Ikut Pengaturan Toko") diperlakukan sebagai "Wajib
+  /// Diblokir" (lihat docs/pos/73). Transaksi yang diparkir karenanya adalah
+  /// penjualan SAH: uangnya sudah diterima kasir dan struknya sudah tercetak,
+  /// tetapi nilainya tidak pernah sampai ke server.
+  ///
+  /// Perbaikan di server hanya menghentikan yang baru. Baris yang sudah
+  /// terparkir tetap diam sampai ada yang menekan "Kirim Ulang" di tiap
+  /// perangkat -- dan tidak ada yang tahu harus menekannya. Persis bentuk
+  /// kehilangan uang yang dicatat pada aturan 3 di kepala berkas ini:
+  /// kegagalan yang tidak terlihat jauh lebih mahal daripada yang berisik.
+  ///
+  /// <h3>Kenapa aman</h3>
+  /// Hanya baris yang pesan galatnya memang berbunyi penolakan stok yang
+  /// dibangunkan -- penolakan lain (produk kadaluarsa, data tidak lengkap)
+  /// tidak disentuh. Pengiriman ulang memakai `kode_unik` asli, dan server
+  /// menolak duplikat lewat `DUPLIKAT_KODE_TRANSAKSI` yang di sini sudah
+  /// diperlakukan sebagai "sudah ada di server" -- jadi membangunkan baris yang
+  /// ternyata sempat tersimpan TIDAK menghasilkan transaksi ganda.
+  ///
+  /// Dijalankan sekali per perangkat (ditandai [_kunciPulihStok2026_09]).
+  /// Bila gerbangnya masih menolak dengan alasan yang sah, barisnya akan
+  /// kembali GAGAL sendiri dengan sebab yang tercatat -- tidak ada yang hilang.
+  /// Apakah sebuah baris GAGAL diparkir oleh penolakan stok versi lama.
+  ///
+  /// Dipisah dan dibuat publik supaya dapat diuji tanpa basis data: yang
+  /// menentukan transaksi mana yang dibangunkan adalah pencocokan teks ini, dan
+  /// pencocokan teks adalah tempat kesalahan paling mudah lolos -- terlalu
+  /// longgar akan membangunkan penolakan yang sah (mis. produk kadaluarsa),
+  /// terlalu ketat tidak membangunkan apa pun dan penjualannya tetap hilang.
+  bool terparkirPenolakanStokKeliru(String? pesanError) {
+    final pesan = (pesanError ?? '').toLowerCase();
+    if (pesan.isEmpty) return false;
+    return _cuplikanPenolakanStokLama
+        .any((c) => pesan.contains(c.toLowerCase()));
+  }
+
+  Future<int> pulihkanTerparkirPenolakanStok() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      if (sp.getBool(_kunciPulihStok2026_09) == true) return 0;
+
+      final gagal = await CoreDb.instance.transaksiGagalBelumSinkron();
+      final kode = <String>[];
+      for (final row in gagal) {
+        if (!terparkirPenolakanStokKeliru('${row['pesan_error'] ?? ''}')) {
+          continue;
+        }
+        final k = '${row['kode_unik'] ?? ''}';
+        if (k.isNotEmpty) kode.add(k);
+      }
+
+      var dibangunkan = 0;
+      if (kode.isNotEmpty) {
+        dibangunkan = await CoreDb.instance.kembalikanTransaksiKeAntrean(kode);
+      }
+      // Ditandai SESUDAH berhasil, bukan sebelum: bila proses ini gagal di
+      // tengah jalan, percobaan berikutnya masih menemukan barisnya.
+      await sp.setBool(_kunciPulihStok2026_09, true);
+
+      // Jejaknya ditulis walau nol -- supaya pertanyaan "apakah pemulihan itu
+      // pernah jalan di perangkat ini?" punya jawaban, bukan tebakan.
+      await CoreDb.instance.catatErrorLog(
+        sumber: 'outbox-pulih-stok',
+        tingkat: dibangunkan > 0 ? 'WARN' : 'INFO',
+        pesan: 'Pemulihan penolakan stok keliru: $dibangunkan dari '
+            '${gagal.length} transaksi GAGAL dikembalikan ke antrean.',
+        detail: kode.join(', '),
+      );
+      return dibangunkan;
+    } catch (e) {
+      // Pemulihan tidak boleh menggagalkan start-up service. Penandanya sengaja
+      // TIDAK dipasang di jalur ini, jadi percobaan berikutnya masih terjadi.
+      await CoreDb.instance.catatErrorLog(
+          sumber: 'outbox-pulih-stok',
+          tingkat: 'WARN',
+          pesan: 'Pemulihan penolakan stok gagal dijalankan: $e');
+      return 0;
+    }
   }
 
   int _normalisasiInterval(int menit) => menit.clamp(1, 1440).toInt();
@@ -301,6 +408,11 @@ class TransaksiOutboxService {
           'diskonFaktur': hasilBayar['diskonFaktur'],
           'totalKlien': payload['total'],
           'data': hasilBayar['data'],
+          // Peringatan stok minus ikut disimpan, bukan dibuang. Checkout POS
+          // bersifat lokal-dulu: responsnya tiba di sini, jauh setelah kasir
+          // menutup layar. Kalau tidak ditulis ke baris outbox, satu-satunya
+          // tanda bahwa stok perlu diopname lenyap tanpa pernah terbaca.
+          'peringatanStok': hasilBayar['peringatanStok'],
         });
       } catch (e) {
         // Menyimpan angka pembanding tidak boleh menggagalkan sinkronisasi:

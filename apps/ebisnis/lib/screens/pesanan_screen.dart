@@ -812,14 +812,22 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
       var berhasil = 0;
       var nilaiBerhasil = 0.0;
       final gagal = <String>[];
+      // Transaksi yang SUKSES tetapi saldo stoknya tidak mencukupi. Bukan
+      // kegagalan -- karena itu tidak masuk `gagal` -- tetapi juga tidak boleh
+      // hilang: inilah satu-satunya tanda bahwa stok perlu diopname. Server
+      // mengirimkannya lewat `peringatanStok`; sebelum ini responsnya dibuang
+      // begitu saja (`await ...;` tanpa menampung hasilnya).
+      final peringatan = <String>[];
       String? detailStokKurang;
       Object? errorPertama;
       for (final pesanan in tertahan) {
         try {
-          await ApiClient.instance
+          final hasil = await ApiClient.instance
               .aksi('bayar', _payloadVerifikasi(pesanan, caraBayar));
           berhasil++;
           nilaiBerhasil += pesanan.totalBiaya;
+          final catatan = '${hasil['peringatanStok'] ?? ''}'.trim();
+          if (catatan.isNotEmpty) peringatan.add('${pesanan.kode}: $catatan');
         } catch (e) {
           errorPertama ??= e;
           if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
@@ -857,6 +865,17 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                   ...gagal.take(10).map((pesan) => Text('• $pesan')),
                   if (gagal.length > 10)
                     Text('• ... dan ${gagal.length - 10} transaksi lainnya.'),
+                ],
+                if (peringatan.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Tercatat, tetapi saldo stoknya perlu diopname:',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  ...peringatan.take(10).map((pesan) => Text('• $pesan')),
+                  if (peringatan.length > 10)
+                    Text('• ... dan ${peringatan.length - 10} lainnya.'),
                 ],
               ],
             ),
@@ -1437,10 +1456,19 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     if (caraBayar == null) return;
 
     try {
-      await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
+      final hasil =
+          await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${p.kode} berhasil diselesaikan.')));
+        // Peringatan stok (bila ada) menggantikan pesan sukses biasa: yang perlu
+        // ditindaklanjuti tidak boleh kalah mencolok dari kabar baiknya.
+        final catatan = '${hasil['peringatanStok'] ?? ''}'.trim();
+        ScaffoldMessenger.of(context).showSnackBar(catatan.isEmpty
+            ? SnackBar(content: Text('${p.kode} berhasil diselesaikan.'))
+            : SnackBar(
+                content: Text('${p.kode} tercatat. $catatan'),
+                backgroundColor: Colors.orange.shade800,
+                duration: const Duration(seconds: 8),
+              ));
       }
       await _muat();
     } catch (e) {
