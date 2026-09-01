@@ -56,3 +56,21 @@ server dipasang dan Tomcat di-restart, tanpa memerlukan rilis aplikasi.
 | `TesRincianProduk` | 18/18 |
 | Seluruh suite Flutter | 600/600 |
 | `flutter analyze` | bersih |
+
+## Artefak 1.34.17
+
+Seluruhnya di `apps/ebisnis/release-artifacts/semua-varian/1.34.17/`.
+
+| Berkas | Ukuran | SHA-256 | Tanda tangan |
+| --- | --- | --- | --- |
+| `app-nahl-release.apk` | 181 MB | `0c2acc0ffe22f13368aebf7de1286ad1c762b6e61fb330f947758b13f0f95f5e` | **debug** — uji internal saja |
+| `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.17.exe` | 82 MB | `a3e2e1386d6fcb7e1f27d4e67c6941392347c16fedb69c0acee3b280c3b2cd72` | Windows, tanpa penandatanganan kode |
+| `Al-Bahjah-POS-Setup-1.34.17.exe` | 82 MB | `eb86c3ac7a6ddbb6b0061242dfcdba24070ff6e4e7b1f0826185b3b35b34e8e0` | Windows, tanpa penandatanganan kode |
+
+Installer Windows dibangun dengan `-IzinkanUnsignedWindows`: berkasnya tidak
+ditandatangani sertifikat kode, sehingga SmartScreen akan memperingatkan saat
+dijalankan pertama kali. Itu tidak menghalangi pemasangan, tetapi sebaiknya
+diberitahukan lebih dulu kepada penerima agar peringatannya tidak disangka virus.
+
+Seluruh artefak dibangun dari kode yang sama pada satu kali jalan, sesudah
+seluruh suite Flutter lulus (603/603).
