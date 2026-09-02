@@ -828,6 +828,65 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
         false;
   }
 
+
+  /// Baris produk BARU yang akan ditolak gerbang harga modal server.
+  ///
+  /// Cerminan persis syarat `KantinHelper.produkSimpan`:
+  /// `hargaJual > 0 && hargaModal > hargaJual * 10`. Hanya produk baru yang
+  /// melewati `produk_simpan`, jadi baris yang produknya sudah ada dilewati.
+  List<_BulkRow> get _barisHargaModalTinggi => _activeRows
+      .where((row) =>
+          row.produkId == null &&
+          row.hargaJualNilai > 0 &&
+          row.hppUnit > row.hargaJualNilai * 10)
+      .toList();
+
+  /// Minta persetujuan SEBELUM apa pun diantrekan.
+  ///
+  /// Bentuk pra-kirim dipilih dengan sengaja, bukan tangkap-lalu-ulang seperti
+  /// layar Produk. Penolakan bisnis di sini melempar dari dalam loop yang sudah
+  /// menaruh baris di antrean offline dengan id sementara; mencoba ulang di
+  /// tengahnya berarti menyentuh penukaran id dan urutan flush -- risiko rusak
+  /// yang jauh lebih besar daripada gerbang yang dijaganya. Diperiksa lebih
+  /// dulu, tidak ada satu pun baris yang sudah terlanjur diantrekan.
+  ///
+  /// Aturannya digandakan dari server, dan itu disadari: bila salah satu sisi
+  /// berubah, yang terjadi hanyalah kembali ke perilaku hari ini (server
+  /// menolak). Server tetap pemegang keputusan; ini cuma agar penggunanya
+  /// diberi jalan keluar sebelum menabrak.
+  Future<bool> _konfirmasiHargaModalTinggi(List<_BulkRow> baris) async {
+    final daftar = baris
+        .map((row) =>
+            '- ${row.namaBersih}: modal ${_bulkRp.format(row.hppUnit)} '
+            'vs jual ${_bulkRp.format(row.hargaJualNilai)}')
+        .join('\n');
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Harga modal jauh di atas harga jual'),
+            content: SingleChildScrollView(
+              child: Text(
+                  '${baris.length} baris punya harga modal lebih dari 10 kali '
+                  'harga jualnya. Nilai sebesar ini biasanya salah ketik dan '
+                  'membuat Laporan Laba Rugi keliru.\n\n$daftar\n\n'
+                  'Bila memang disengaja (barang promo rugi, klaim garansi), '
+                  'lanjutkan dengan persetujuan.'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Periksa lagi'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Lanjutkan dengan persetujuan'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _postingFaktur() async {
     final validasi = _validasi();
     if (!validasi.canPost) {
@@ -835,6 +894,12 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
       return;
     }
     if (!await _konfirmasiPosting(validasi)) return;
+    final hargaModalTinggi = _barisHargaModalTinggi;
+    if (hargaModalTinggi.isNotEmpty &&
+        !await _konfirmasiHargaModalTinggi(hargaModalTinggi)) {
+      return;
+    }
+    final izinHargaModalTinggi = hargaModalTinggi.isNotEmpty;
     setStateIfMounted(() {
       _posting = true;
       _error = null;
@@ -857,6 +922,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
             'barcode': row.kodeBersih,
             'harga_beli': row.hppUnit,
             'harga_jual': row.hargaJualNilai,
+            if (izinHargaModalTinggi) 'izin_harga_modal_tinggi': true,
             'stok': 0,
             'keterangan':
                 'Dibuat dari Bulk Entry Kulakan faktur ${_faktur.text.trim()}',

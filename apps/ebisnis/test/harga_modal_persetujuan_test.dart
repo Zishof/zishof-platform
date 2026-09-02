@@ -57,4 +57,46 @@ void main() {
     expect(sumber, contains('_izinHargaModalTinggi = false;'));
     expect(sumber, contains('!_izinHargaModalTinggi &&'));
   });
+
+  group('entri massal Kulakan', () {
+    late String bulk;
+
+    setUpAll(() {
+      bulk = File('lib/screens/kulakan_bulk_entry_screen.dart').readAsStringSync();
+    });
+
+    test('persetujuan diminta SEBELUM baris diantrekan', () {
+      // Bentuk pra-kirim, bukan tangkap-lalu-ulang: penolakan bisnis di layar
+      // ini melempar dari dalam loop yang sudah menaruh baris di antrean
+      // offline dengan id sementara, dan seluruh posting mati
+      // (`if (!e.offline) rethrow;`). Mencoba ulang di tengahnya menyentuh
+      // penukaran id dan urutan flush.
+      final iKonfirmasi = bulk.indexOf('_konfirmasiHargaModalTinggi(hargaModalTinggi)');
+      final iAntre = bulk.indexOf('MasterOffline.antreLokal');
+      expect(iKonfirmasi, greaterThan(0));
+      expect(iAntre, greaterThan(0));
+      expect(iKonfirmasi, lessThan(iAntre),
+          reason: 'persetujuan harus diminta sebelum antreLokal dipanggil');
+    });
+
+    test('syaratnya mencerminkan gerbang server persis', () {
+      // Server: hargaJualFinal > 0.0 && hargaModalFinal > hargaJualFinal * 10.0
+      expect(bulk, contains('row.hargaJualNilai > 0'));
+      expect(bulk, contains('row.hppUnit > row.hargaJualNilai * 10'));
+      expect(bulk, contains('row.produkId == null'),
+          reason: 'hanya produk baru yang melewati produk_simpan');
+    });
+
+    test('penandanya benar-benar ikut terkirim', () {
+      expect(bulk,
+          contains("if (izinHargaModalTinggi) 'izin_harga_modal_tinggi': true,"));
+    });
+
+    test('dialognya menyebut baris mana yang bermasalah', () {
+      // Persetujuan tanpa menyebut barisnya adalah persetujuan buta atas
+      // seluruh batch -- gerbangnya mati tanpa pengguna tahu apa yang disetujui.
+      expect(bulk, contains('row.namaBersih'));
+      expect(bulk, contains('_bulkRp.format(row.hppUnit)'));
+    });
+  });
 }
