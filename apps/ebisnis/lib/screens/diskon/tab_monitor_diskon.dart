@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../models.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard_charts.dart';
@@ -50,7 +51,11 @@ class _TabMonitorDiskonState extends State<TabMonitorDiskon> with JejakGalat {
 
   Future<void> _muatDropdown() async {
     try {
-      final hasil = await ApiClient.instance.aksi('jenis_anggota_list');
+      // Filter referensi boleh memakai snapshot terakhir; data monitor tetap
+      // online karena periodenya dinamis dan tidak boleh disamarkan sebagai
+      // statistik terkini ketika jaringan putus.
+      final hasil = await MasterOffline.daftarDenganCache(
+          'jenis_anggota_list', {}, 'master:jenis_anggota_pilihan');
       if (!mounted) return;
       setStateIfMounted(() {
         _jenisAnggota = ((hasil['data'] as List?) ?? [])

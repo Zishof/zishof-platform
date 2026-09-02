@@ -88,6 +88,37 @@ void main() {
     }
   });
 
+  test('referensi jenis dan tipe anggota memakai cache bersama lintas layar',
+      () {
+    const wajibCache = <String, List<String>>{
+      'anggota/tab_data_member.dart': [
+        'master:jenis_anggota_pilihan',
+        'master:tipe_anggota_pilihan',
+      ],
+      'diskon/tab_monitor_diskon.dart': [
+        'master:jenis_anggota_pilihan',
+      ],
+      'diskon/tab_aturan_diskon.dart': [
+        'master:jenis_anggota_pilihan',
+        'master:tipe_anggota_pilihan',
+      ],
+    };
+    for (final e in wajibCache.entries) {
+      final isi = _layar(e.key);
+      expect(isi, contains(_rapat('MasterOffline.daftarDenganCache(')),
+          reason: '${e.key} belum memakai fallback cache referensi');
+      for (final kunci in e.value) {
+        expect(isi, contains(_rapat(kunci)),
+            reason: '${e.key} tidak memakai kunci bersama $kunci');
+      }
+    }
+
+    // Monitor utamanya tetap online: hanya dropdown referensi yang boleh basi.
+    final monitor = _layar('diskon/tab_monitor_diskon.dart');
+    expect(monitor,
+        contains(_rapat("ApiClient.instance.aksi('monitor_promo_cashback'")));
+  });
+
   test('antrean berjalan dan daftar hak akses TIDAK di-cache', () {
     // Dua-duanya sengaja: antrean resep yang basi membuat dua kasir melayani
     // resep yang sama, dan daftar hak akses yang basi menampilkan wewenang yang

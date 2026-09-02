@@ -191,7 +191,10 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
 
   Future<void> _muatJenis() async {
     try {
-      final hasil = await ApiClient.instance.aksi('jenis_anggota_list');
+      // Referensi jenis dipakai bersama oleh Member dan Aturan Diskon. Satu
+      // snapshot bersama menjaga pilihan form tetap tersedia saat offline.
+      final hasil = await MasterOffline.daftarDenganCache(
+          'jenis_anggota_list', {}, 'master:jenis_anggota_pilihan');
       final data = ((hasil['data'] as List?) ?? [])
           .map((e) => Kategori.fromJson(e as Map<String, dynamic>))
           .toList();

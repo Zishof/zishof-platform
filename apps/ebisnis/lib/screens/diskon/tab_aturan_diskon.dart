@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../api_client.dart';
 import '../../models.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
@@ -124,8 +123,12 @@ class _TabAturanDiskonState extends State<TabAturanDiskon> with JejakGalat {
 
   Future<void> _muatDropdown() async {
     try {
-      final hasilJenis = await ApiClient.instance.aksi('jenis_anggota_list');
-      final hasilTipe = await ApiClient.instance.aksi('tipe_anggota_list');
+      // Jenis/tipe adalah master referensi stabil. Gunakan kunci yang sama
+      // dengan layar Member agar satu hasil sinkron dapat dipakai lintas tab.
+      final hasilJenis = await MasterOffline.daftarDenganCache(
+          'jenis_anggota_list', {}, 'master:jenis_anggota_pilihan');
+      final hasilTipe = await MasterOffline.daftarDenganCache(
+          'tipe_anggota_list', {}, 'master:tipe_anggota_pilihan');
       if (mounted) {
         setStateIfMounted(() {
           _jenisAnggota = ((hasilJenis['data'] as List?) ?? [])
