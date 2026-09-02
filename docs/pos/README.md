@@ -67,3 +67,4 @@ Dokumen aktif:
 - [Fase 16 — Repository Durable dan Evidence Gate Fail-Closed](2026-08-27-fase-16-repository-durable-dan-evidence-gate.md)
 - [Implementasi menu Pengiriman Desktop dan Android](2026-08-28-implementasi-menu-pengiriman-desktop-android.md)
 - [Kebijakan perubahan skema melalui Hibernate](2026-08-29-kebijakan-perubahan-skema-melalui-hibernate.md)
+- [Grup Item Biaya Sekolah](2026-09-03-grup-item-biaya-sekolah.md)
