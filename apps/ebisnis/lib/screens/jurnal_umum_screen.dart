@@ -105,7 +105,13 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
         if (!mounted) return;
         final baris =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final hakBaru = hasil['hak'];
         setStateIfMounted(() {
+          // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+          // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+          if (hakBaru is Map) {
+            _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+          }
           _jurnal = baris.where(_lolosFilterLokal).toList();
           _dariCache = hasil['offline'] == true;
           if (hasil['dariServer'] == true) {
@@ -193,6 +199,17 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
     );
     if (tersimpan == true) await _muat();
   }
+
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  ///
+  /// Empat wewenangnya sengaja tidak digabung: memposting ke buku besar
+  /// (`approve`) bukan turunan dari boleh menyimpan draf (`create`), dan
+  /// membatalkan posting (`reject`) berbeda lagi.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
 
   Future<void> _aksiJurnal(Map<String, dynamic> j, String aksi) async {
     final terposting = j['terposting'] == true;
@@ -299,7 +316,7 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
       subjudul: 'Jurnal manual: koreksi, penyesuaian, biaya, dan saldo awal',
       scrollable: false,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _sibuk ? null : () => _bukaEditor(),
+        onPressed: _sibuk || !_boleh('create') ? null : () => _bukaEditor(),
         icon: const Icon(Icons.post_add),
         label: const Text('Jurnal Baru'),
       ),
@@ -353,7 +370,11 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                   label: const Text('Terapkan')),
               if (draf > 0)
                 OutlinedButton.icon(
-                    onPressed: _sibuk ? null : _postingSemuaDraf,
+                    // Posting massal memakai wewenang yang sama dgn posting
+                    // satu baris: approve, bukan create.
+                    onPressed: _sibuk || !_boleh('approve')
+                        ? null
+                        : _postingSemuaDraf,
                     icon: const Icon(Icons.playlist_add_check, size: 18),
                     label: Text('Posting Semua Draf ($draf)')),
               if (_sibuk)
@@ -445,14 +466,18 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                               AksiBaris(
                                   ikon: Icons.check_circle_outline,
                                   label: 'Posting ke buku besar',
-                                  onTap: _sibuk || terposting
+                                  onTap: _sibuk ||
+                                          terposting ||
+                                          !_boleh('approve')
                                       ? null
                                       : () => _aksiJurnal(
                                           j, 'jurnal_umum_posting')),
                               AksiBaris(
                                   ikon: Icons.undo,
                                   label: 'Batalkan posting',
-                                  onTap: _sibuk || !terposting
+                                  onTap: _sibuk ||
+                                          !terposting ||
+                                          !_boleh('reject')
                                       ? null
                                       : () => _aksiJurnal(
                                           j, 'jurnal_umum_batal_posting')),
@@ -460,7 +485,9 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                                   ikon: Icons.delete_outline,
                                   label: 'Hapus',
                                   merusak: true,
-                                  onTap: _sibuk || terposting
+                                  onTap: _sibuk ||
+                                          terposting ||
+                                          !_boleh('delete')
                                       ? null
                                       : () =>
                                           _aksiJurnal(j, 'jurnal_umum_hapus')),
