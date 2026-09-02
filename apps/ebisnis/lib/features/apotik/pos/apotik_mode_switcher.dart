@@ -53,6 +53,7 @@ class ApotikModeSwitcher extends StatelessWidget {
 
     final isi = Container(
       constraints: BoxConstraints(
+          maxWidth: 240,
           minHeight:
               layout.isMobile ? ApotikBreakpoints.targetSentuhMinimum : 38),
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -71,11 +72,18 @@ class ApotikModeSwitcher extends StatelessWidget {
         children: [
           Icon(_ikon(m), size: 16, color: warna),
           const SizedBox(width: 6),
-          Text(m.label,
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: terpilih ? FontWeight.w700 : FontWeight.w500,
-                  color: warna)),
+          // Flexible + ellipsis: chip dipakai juga di panel konteks selebar
+          // 260 px, sehingga label panjang ("OTC / Obat Bebas") harus boleh
+          // memendek alih-alih meluber keluar kartu.
+          Flexible(
+            child: Text(m.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: terpilih ? FontWeight.w700 : FontWeight.w500,
+                    color: warna)),
+          ),
           if (!aktifkan) ...[
             const SizedBox(width: 6),
             Icon(Icons.lock_outline, size: 13, color: t.textSecondary),
