@@ -17,7 +17,7 @@ merombak layar.
 | **IR-06** ✅ | Buka/tutup shift & kas laci untuk apotik | **SUDAH ADA** — entity `ApotikSesiKas` + aksi `apotik_sesi_kas_status/_buka/_tutup/_list` (r83308), menghitung penerimaan dari `sirs.apotik_pembayaran_transaksi`. `sesi_kas_*` POS umum TIDAK dipakai ulang: ia membaca ledger POS yang tidak memuat penjualan apotek | tab Rekonsiliasi Kas punya kartu sesi berjalan, tombol buka/tutup, dan menampilkan kas seharusnya dari server | selesai (bila kelak satu laci dipakai bersama POS umum, yang dibutuhkan adalah menambah sumber apotek ke `SesiKasUtil`) |
 | **IR-07** ✅ | Daftar metode pembayaran apotik | **SUDAH ADA** — `apotik_cara_bayar_list` + pencatatan di `ApotikPembayaranTransaksi` | dropdown hanya dirakit bila server mengirim daftar | selesai |
 | **IR-08** ◑ | Printer, laci kas, cetak ulang, bukti digital | perangkat: **sudah** lewat `core_hw` (jalur RAW ESC/POS Windows) — server: masih tidak ada riwayat cetak maupun bukti digital | struk teks + buka laci + cetak ulang **lokal** sudah jalan (Fase 6); cetak ulang hanya untuk transaksi terakhir di mesin ini dan ditandai `CETAK ULANG` | endpoint riwayat cetak + bukti digital, supaya cetak ulang mungkin dilakukan dari mesin lain dan terlacak |
-| **IR-09** | PO PBF, partial receiving, bukti suhu cold-chain | hanya `apotik_terima_barang` | form penerimaan sebatas field yang diterima server | endpoint PO + penerimaan sebagian + lampiran suhu |
+| **IR-09** ◑ | PO PBF, partial receiving, bukti suhu cold-chain | **suhu: SUDAH ADA** — entity `ApotikPenerimaanSuhu` + `apotik_terima_barang` menerima `suhu_terima` dan mengembalikan `adaColdChain`/`suhuDiLuarRentang` (r83318). PO dan penerimaan sebagian belum ada | kolom suhu muncul HANYA bila faktur memuat obat rantai dingin; di luar 2–8 °C memperingatkan tanpa menahan | PO + penerimaan sebagian menunggu keputusan alur pengadaan (siapa menyetujui, apakah PO dibuat di AIS atau di luar) |
 | **IR-10** ◑ | SLA resep/racikan, transaksi pending, cold-chain di dasbor | **sebagian ada** — `apotik_metrik_operasional` (r83268) menghitung resep menunggu, batch kedaluwarsa/segera/ditahan, obat habis, transaksi & nilai hari ini dengan COUNT atas SELURUH baris | kartu dasbor memakai angka pasti itu; bila server lama, angka jatuh ke daftar terpotong dan ditandai "100+" alih-alih menyajikan batas halaman sebagai fakta | sisa: kolom `waktu_masuk` pada `sirs.resep` supaya SLA waktu tunggu dapat dihitung jujur |
 | **IR-11** ✅ | Uang diterima, kembalian, dan pembayaran terpisah (split) | **SUDAH ADA** — `apotik_pembayaran_transaksi` kini punya kolom `tunai`/`kembalian`, dan `apotik_bayar` menerima larik `pembayaran` [{cara_bayar_id, nominal, tunai, kembalian, referensi}] yang jumlahnya wajib sama dengan total (AIS r83255) | lembar pembayaran punya mode "Bayar terpisah" dengan penanda sisa; kembalian yang tampil benar-benar tersimpan | selesai |
 
@@ -26,8 +26,9 @@ merombak layar.
 **Selesai:** IR-01, IR-02, IR-05, IR-07 (backend + UI).
 **Sebagian:** IR-08 — sisi perangkat (printer, laci, cetak ulang) selesai di
 Fase 6; sisi server (riwayat cetak, bukti digital) masih terbuka.
-**Masih terbuka:** IR-03, IR-04, IR-09.
-**Sebagian:** IR-10 (angka pasti selesai;
+**Masih terbuka:** IR-03, IR-04.
+**Sebagian:** IR-09 (bukti suhu selesai; PO & penerimaan sebagian menunggu
+keputusan alur pengadaan), IR-10 (angka pasti selesai;
 SLA waktu tunggu menunggu kolom `waktu_masuk` pada `sirs.resep` — satu-satunya
 stempel waktu yang ada sekarang, `tanggal_dirubah`, berubah tiap penyuntingan
 sehingga "menunggu 40 menit" yang dihitung darinya akan sering salah).

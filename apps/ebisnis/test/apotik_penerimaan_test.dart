@@ -8,9 +8,10 @@ BarisPenerimaan _baris({
   double qty = 10,
   double harga = 1500,
   int? edDalamHari = 400,
+  bool coldChain = false,
 }) {
   return BarisPenerimaan(
-    item: <String, dynamic>{'id': 1, 'nama': nama},
+    item: <String, dynamic>{'id': 1, 'nama': nama, 'coldChain': coldChain},
     qty: qty,
     hargaBeli: harga,
     kedaluwarsa: edDalamHari == null
@@ -155,6 +156,69 @@ void main() {
       expect(find.textContaining('Nomor PO'), findsNothing);
       expect(find.textContaining('Suhu'), findsNothing);
       expect(find.textContaining('Partial'), findsNothing);
+    });
+  });
+
+  group('Bukti suhu rantai dingin (IR-09 sebagian)', () {
+    test('obat rantai dingin tanpa suhu MEMPERINGATKAN, tidak menahan', () {
+      final p = ApotikPenerimaanPage.periksa(
+          noFaktur: 'F-1', penyedia: 'PBF A', baris: [_baris(coldChain: true)]);
+      expect(p.boleh, isTrue);
+      expect(p.peringatan.join(), contains('catat suhu'));
+    });
+
+    test('suhu di luar 2-8 derajat memperingatkan, keputusan tetap manusia',
+        () {
+      final p = ApotikPenerimaanPage.periksa(
+          noFaktur: 'F-1',
+          penyedia: 'PBF A',
+          baris: [_baris(coldChain: true)],
+          suhu: 14.5);
+      expect(p.boleh, isTrue);
+      expect(p.peringatan.join(), contains('di luar rentang'));
+      expect(p.peringatan.join(), contains('apoteker penanggung jawab'));
+    });
+
+    test('suhu dalam rentang tidak memperingatkan apa pun', () {
+      final p = ApotikPenerimaanPage.periksa(
+          noFaktur: 'F-1',
+          penyedia: 'PBF A',
+          baris: [_baris(coldChain: true)],
+          suhu: 5);
+      expect(p.peringatan, isEmpty);
+    });
+
+    test('obat biasa tidak pernah diminta suhu', () {
+      final p = ApotikPenerimaanPage.periksa(
+          noFaktur: 'F-1', penyedia: 'PBF A', baris: [_baris()]);
+      expect(p.peringatan, isEmpty);
+    });
+
+    testWidgets('kolom suhu hanya muncul bila ada obat rantai dingin',
+        (tester) async {
+      await _pump(
+          tester,
+          ApotikPenerimaanPage(
+              panggil: _server(item: [
+            {
+              'id': 5,
+              'kode': 'OBT-5',
+              'nama': 'Vaksin',
+              'stok': 3,
+              'coldChain': true
+            }
+          ])));
+      expect(find.textContaining('Suhu saat diterima'), findsNothing);
+
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Cari nama obat atau kode…'), 'vak');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vaksin').last);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Suhu saat diterima'), findsOneWidget);
+      expect(find.textContaining('catat suhu'), findsOneWidget);
     });
   });
 }

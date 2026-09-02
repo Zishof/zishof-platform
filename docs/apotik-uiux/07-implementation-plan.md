@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 292 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 297 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -65,9 +65,14 @@ selera: `SesiKasUtil` membaca ledger POS yang tidak memuat penjualan apotek.
 Bila kelak satu laci fisik dipakai bersama POS umum, yang dibutuhkan adalah
 menambah sumber apotek ke `SesiKasUtil` — bukan layar baru.
 
-**Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan integrasi:
-IR-03 (basis pengetahuan obat), IR-04 (racikan), IR-09 (PO & bukti suhu),
-dan sisa IR-10 (kolom `waktu_masuk` pada resep).
+**Bukti suhu rantai dingin ditambahkan** (AIS r83318) sebagai bagian IR-09
+yang dapat dikerjakan tanpa mengarang alur pengadaan.
+
+**Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan pemilik proses:
+IR-03 (butuh basis pengetahuan obat berlisensi), IR-04 (bentuk formula
+racikan), sisa IR-09 (alur PO & penerimaan sebagian), dan sisa IR-10 (kolom
+`waktu_masuk` pada `sirs.resep`, yang pengisiannya ada di modul ZK rumah
+sakit — di luar lingkup apotik).
 
 ## Batas jujur
 

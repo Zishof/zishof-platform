@@ -33,6 +33,9 @@ class BarisPenerimaan {
   });
 
   String get nama => '${item['nama'] ?? '-'}';
+
+  /// Obat rantai dingin (IR-01). Menentukan apakah bukti suhu diperlukan.
+  bool get coldChain => item['coldChain'] == true;
   double get subtotal => qty * hargaBeli;
 
   /// Sisa hari menuju kedaluwarsa; null bila belum diisi.
@@ -75,11 +78,16 @@ class ApotikPenerimaanPage extends StatefulWidget {
 
   /// Pemeriksaan pra-posting. Dipisah sebagai fungsi murni agar dapat diuji
   /// tanpa merakit widget.
+  /// Rentang rantai dingin baku yang dipakai layar formularium dan server.
+  static const double suhuMin = 2;
+  static const double suhuMaks = 8;
+
   static PagarPenerimaan periksa({
     required String noFaktur,
     required String penyedia,
     required List<BarisPenerimaan> baris,
     DateTime? sekarang,
+    double? suhu,
   }) {
     final alasan = <String>[];
     final peringatan = <String>[];
@@ -113,6 +121,21 @@ class ApotikPenerimaanPage extends StatefulWidget {
         peringatan.add('${b.nama}: harga beli 0 — periksa faktur.');
       }
     }
+    // Bukti suhu rantai dingin (IR-09 sebagian). Ini PERINGATAN, bukan
+    // penahan: server menyimpan tanpa menolak, dan keputusan menerima atau
+    // menolak barang rantai dingin adalah wewenang apoteker penanggung jawab
+    // menurut SOP apoteknya — bukan aturan yang boleh dikarang layar ini.
+    final adaColdChain = baris.any((b) => b.coldChain);
+    if (adaColdChain) {
+      if (suhu == null) {
+        peringatan.add('Faktur ini memuat obat rantai dingin — catat suhu '
+            'saat barang diterima sebagai bukti.');
+      } else if (suhu < suhuMin || suhu > suhuMaks) {
+        peringatan.add('Suhu ${suhu.toStringAsFixed(1)} °C di luar rentang '
+            '$suhuMin–$suhuMaks °C. Penerimaan tetap dapat dicatat, tetapi '
+            'putuskan bersama apoteker penanggung jawab.');
+      }
+    }
     return PagarPenerimaan(alasan.isEmpty, alasan, peringatan);
   }
 }
@@ -125,6 +148,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
   final _penyedia = TextEditingController();
   final _keterangan = TextEditingController();
   final _cari = TextEditingController();
+  final _suhu = TextEditingController();
   Timer? _debounce;
 
   List<Map<String, dynamic>> _hasilCari = [];
@@ -139,6 +163,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
     _noFaktur.dispose();
     _penyedia.dispose();
     _keterangan.dispose();
+    _suhu.dispose();
     _cari.dispose();
     super.dispose();
   }
@@ -179,6 +204,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
       noFaktur: _noFaktur.text,
       penyedia: _penyedia.text,
       baris: _baris,
+      suhu: _nilaiSuhu,
     );
     if (!pagar.boleh) return;
     setStateIfMounted(() {
@@ -199,6 +225,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
               'tanggal_kadaluarsa': _tgl.format(b.kedaluwarsa!),
             }
         ],
+        if (_nilaiSuhu != null) 'suhu_terima': _nilaiSuhu,
       });
       if (!mounted) return;
       if (!_sukses(r)) {
@@ -225,6 +252,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
         _baris.clear();
         _noFaktur.clear();
         _keterangan.clear();
+        _suhu.clear();
         _memposting = false;
       });
     } catch (e) {
@@ -254,6 +282,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
       noFaktur: _noFaktur.text,
       penyedia: _penyedia.text,
       baris: _baris,
+      suhu: _nilaiSuhu,
     );
     return ApotikResponsive(builder: (context, layout) {
       final padding = ApotikBreakpoints.paddingHalaman(layout);
@@ -355,8 +384,35 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
               border: OutlineInputBorder(),
               isDense: true),
         ),
+        // Kolom suhu HANYA muncul bila faktur ini memang memuat obat rantai
+        // dingin -- meminta suhu untuk kiriman tablet biasa hanya melatih
+        // petugas mengabaikan kolom.
+        if (_baris.any((b) => b.coldChain)) ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _suhu,
+            keyboardType: const TextInputType.numberWithOptions(
+                decimal: true, signed: true),
+            onChanged: (_) => setStateIfMounted(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Suhu saat diterima (°C)',
+              helperText: 'Rantai dingin: 2–8 °C. Dicatat sebagai bukti; '
+                  'keputusan menerima tetap pada apoteker.',
+              helperMaxLines: 2,
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
       ]),
     );
+  }
+
+  /// Suhu terbaca; null bila belum diisi (bukan 0 — 0 °C adalah nilai sah).
+  double? get _nilaiSuhu {
+    final teks = _suhu.text.trim().replaceAll(',', '.');
+    if (teks.isEmpty) return null;
+    return double.tryParse(teks);
   }
 
   Widget _kotakTambahItem(ApotikDesignTokens t) {
