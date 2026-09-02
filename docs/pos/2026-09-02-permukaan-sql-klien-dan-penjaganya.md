@@ -71,11 +71,23 @@ parameter), sebagaimana yang sudah dilakukan jalur POS. Itu keputusan tersendiri
 dengan dampak luas — 6 halaman untuk jalur tulis, 71 untuk jalur baca — dan
 sengaja **tidak** dikerjakan sebagai sisipan di tengah perbaikan laporan.
 
-## Catatan keandalan
+## Catatan keandalan (dikoreksi)
 
-Penjaga membaca tabel konfigurasi **dua kali per permintaan** (mode dan daftar
-token). Di luar container, pemanggilan konfigurasi itu terbukti menggantung
-(lihat dok. 67 §4 untuk kejadian serupa pada jalur boot). Di dalam container hal
-ini normal, tetapi bila kelak proteksi dinyalakan pada instalasi besar, hasil
-pembacaan itu layak di-cache agar penjaga tidak menjadi titik lambat pada setiap
-permintaan.
+Penjaga membaca konfigurasi (mode dan daftar token) melalui
+`Common.getKonfigurasi`, yang **sudah di-cache** oleh `KonfigurasiManager`
+(backing MapDB). Jadi di produksi pembacaan itu **tidak** menghasilkan
+round-trip basis data pada tiap permintaan, dan **bukan** titik lambat — koreksi
+atas catatan versi awal dokumen ini yang menyarankan menambah cache; cache itu
+sudah ada, menambah lapis kedua hanya akan mubazir.
+
+Penggantungan yang teramati terjadi **di luar container** (harness tanpa
+Tomcat), tempat lapisan MapDB/Hibernate belum diinisialisasi — artefak
+lingkungan uji, bukan perilaku produksi. (Berbeda dari dok. 67 §4: di sana
+pemanggilan konfigurasi berjalan sangat awal pada urutan boot, saat cache memang
+belum siap, sehingga jalur itu sengaja memakai SQL langsung. Penjaga SQL berjalan
+per-permintaan ketika aplikasi sudah penuh berjalan, jadi tidak terkena kondisi
+itu.)
+
+Konsekuensi praktis: menyalakan `mode_proteksi_sql_endpoint` ke `enforce` aman
+dari sisi kinerja — tidak ada beban baca konfigurasi tambahan yang perlu
+dikhawatirkan.
