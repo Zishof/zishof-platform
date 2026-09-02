@@ -93,6 +93,17 @@ const _labelJenisDuplikat = {
 /// Perkakas admin lanjutan yang sudah ada: resep/Bahan Baku & HPP otomatis
 /// (lihat `_FormProdukState._bahanBaku`), impor/ekspor Excel, pembersihan
 /// produk duplikat (5 mode, lihat `_labelJenisDuplikat`), cetak Price Tag/label.
+/// Hak CRUD produk dari peladen (balasan `katalog`), dipakai bersama oleh layar
+/// dan formulirnya -- keduanya kelas terpisah di berkas ini.
+///
+/// Peta kosong = belum dimuat, dan selama itu tombol TIDAK dipadamkan: peladen
+/// tetap gerbang sebenarnya, dan memadamkan tombol hanya karena haknya belum
+/// tiba justru mengunci pengguna yang sebenarnya berhak.
+Map<String, bool> _hakProduk = {};
+
+bool _bolehProduk(String aksi) =>
+    _hakProduk.isEmpty || _hakProduk[aksi] != false;
+
 class ProdukScreen extends StatefulWidget {
   const ProdukScreen({super.key});
 
@@ -251,6 +262,10 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
         if (Sesi.instance.idTokoTerpilih == null) 'semuaToko': true,
       });
       if (!mounted || generasi != _generasiMuat) return;
+      final hakBaru = katalog['hak'];
+      if (hakBaru is Map) {
+        _hakProduk = hakBaru.map((k, v) => MapEntry('$k', v == true));
+      }
       final dataServer = ((katalog['produk'] as List?) ?? const [])
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
@@ -1155,7 +1170,8 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
           scrollable: false,
           floatingActionButton: _tabAktif == 1 ||
                   _tabAktif == 2 ||
-                  _tabAktif == 4
+                  _tabAktif == 4 ||
+                  (_tabAktif == 0 && !_bolehProduk('create'))
               ? null
               : FloatingActionButton.extended(
                   onPressed: () =>
@@ -3372,7 +3388,15 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                 label: const Text('Batal'),
               ),
               ElevatedButton.icon(
-                onPressed: _menyimpan ? null : _simpan,
+                // Produk baru butuh create; menyunting yang sudah ada butuh
+                // update. Baris produk sendiri TETAP dapat diketuk walau tidak
+                // berhak: formulirnya juga dipakai MELIHAT rincian, dan
+                // mengunci ketukannya menutup pembacaan, bukan penyuntingan.
+                onPressed: _menyimpan ||
+                        !_bolehProduk(
+                            widget.produk == null ? 'create' : 'update')
+                    ? null
+                    : _simpan,
                 icon: _menyimpan
                     ? const SizedBox(
                         width: 18,
