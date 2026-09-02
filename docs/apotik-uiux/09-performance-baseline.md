@@ -26,3 +26,23 @@
 
 Angka baseline diisi saat Fase 8 dengan alat ukur yang sama sebelum/sesudah,
 agar perbandingan sahih.
+
+## Hasil telaah Fase 8
+
+Yang diperiksa ulang dengan test, bukan dengan perkiraan:
+
+- **Daftar yang panjangnya mengikuti data server sudah malas.** Monitor
+  kedaluwarsa (`ListView.builder`) dan antrean resep (`ListView.separated`)
+  hanya membangun baris yang terlihat; diuji dengan 100 baris.
+- **Katalog dan formularium sengaja TIDAK diubah menjadi grid malas.** Kartu
+  obat tingginya berbeda-beda (jumlah badge keselamatan tidak sama), sedangkan
+  `GridView` dengan tinggi tetap akan memotong isi kartu. Memotong badge
+  high-alert demi performa adalah pertukaran yang salah. Sebagai gantinya
+  jumlahnya dibatasi lewat `page_size` (POS 40, formularium 50) dan ada test
+  yang menahan `page_size` katalog agar tidak melewati 60.
+- **Pencarian tetap ber-debounce 300 ms** di POS, formularium, dan penerimaan;
+  seluruh `TextEditingController`/`Timer` dibebaskan pada `dispose`.
+
+Yang **tidak** diklaim: tidak ada pengukuran milidetik di sini. Angka waktu
+render dari mesin pengembang tidak mewakili mesin kasir, dan mencantumkannya
+hanya akan terlihat meyakinkan tanpa berarti apa-apa.

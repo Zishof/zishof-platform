@@ -25,6 +25,18 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
   final Color danger;
   final Color info;
 
+  /// Varian **teks** dari warna status. Warna status penuh
+  /// ([success]/[warning]/[danger]) dipilih agar mencolok sebagai ikon, garis
+  /// tepi, dan latar tipis — pada latar terang rasio kontrasnya hanya 3,0–3,3:1,
+  /// yang lolos ambang WCAG untuk GRAFIS (3:1) tetapi TIDAK untuk teks
+  /// (4,5:1). Label status apotik berukuran kecil dan membawa arti keselamatan
+  /// ("Kedaluwarsa", "Lot ditahan"), jadi teksnya memakai varian gelap ini
+  /// sementara ikon dan bingkainya tetap memakai warna penuh.
+  /// Dijaga oleh `test/apotik_kontras_test.dart`.
+  final Color successText;
+  final Color warningText;
+  final Color dangerText;
+
   /// Ungu klinis: dipakai KHUSUS penanda konteks klinis (resep, telaah,
   /// racikan) supaya tidak tertukar dengan status sukses/gagal transaksi.
   final Color clinicalPurple;
@@ -43,6 +55,9 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
     required this.warning,
     required this.danger,
     required this.info,
+    required this.successText,
+    required this.warningText,
+    required this.dangerText,
     required this.clinicalPurple,
   });
 
@@ -55,11 +70,18 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
     surfaceMuted: Color(0xFFF3F6FA),
     border: Color(0xFFDDE5EF),
     textPrimary: Color(0xFF182538),
-    textSecondary: Color(0xFF64748B),
+    // Digelapkan dari #64748B: pada latar `surfaceMuted` warna lama hanya
+    // mencapai 4,39:1 -- di bawah ambang AA untuk teks berukuran normal.
+    textSecondary: Color(0xFF5B6878),
     success: Color(0xFF16A34A),
-    warning: Color(0xFFD97706),
+    // Digelapkan dari #D97706: sebagai IKON di atas surfaceMuted warna lama
+    // hanya 2,94:1 -- di bawah ambang grafis 3:1.
+    warning: Color(0xFFC86D05),
     danger: Color(0xFFDC2626),
     info: Color(0xFF2563EB),
+    successText: Color(0xFF116B31),
+    warningText: Color(0xFF96500B),
+    dangerText: Color(0xFFB91C1C),
     clinicalPurple: Color(0xFF7C3AED),
   );
 
@@ -77,6 +99,11 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
     warning: Color(0xFFFBBF24),
     danger: Color(0xFFF87171),
     info: Color(0xFF60A5FA),
+    // Pada latar gelap warna status penuh sudah jauh di atas 4,5:1, jadi
+    // varian teksnya sengaja sama -- tidak ada gunanya memucatkannya lagi.
+    successText: Color(0xFF4ADE80),
+    warningText: Color(0xFFFBBF24),
+    dangerText: Color(0xFFF87171),
     clinicalPurple: Color(0xFFA78BFA),
   );
 
@@ -114,6 +141,9 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
     Color? warning,
     Color? danger,
     Color? info,
+    Color? successText,
+    Color? warningText,
+    Color? dangerText,
     Color? clinicalPurple,
   }) {
     return ApotikDesignTokens(
@@ -130,6 +160,9 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
       warning: warning ?? this.warning,
       danger: danger ?? this.danger,
       info: info ?? this.info,
+      successText: successText ?? this.successText,
+      warningText: warningText ?? this.warningText,
+      dangerText: dangerText ?? this.dangerText,
       clinicalPurple: clinicalPurple ?? this.clinicalPurple,
     );
   }
@@ -152,6 +185,9 @@ class ApotikDesignTokens extends ThemeExtension<ApotikDesignTokens> {
       warning: c(warning, other.warning),
       danger: c(danger, other.danger),
       info: c(info, other.info),
+      successText: c(successText, other.successText),
+      warningText: c(warningText, other.warningText),
+      dangerText: c(dangerText, other.dangerText),
       clinicalPurple: c(clinicalPurple, other.clinicalPurple),
     );
   }

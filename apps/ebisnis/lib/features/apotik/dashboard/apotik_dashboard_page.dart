@@ -343,7 +343,7 @@ class _ApotikDashboardPageState extends State<ApotikDashboardPage> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      color: t.danger)),
+                      color: t.dangerText)),
             ]),
             const SizedBox(height: 6),
             for (final e in _ringkasan.galat.entries)

@@ -205,20 +205,26 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
                       color: t.border, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-              Row(children: [
-                Expanded(
-                  child: Text('Pembayaran',
+              // Lihat catatan yang sama pada panel keranjang: nominal turun
+              // ke baris sendiri saat skala teks membesar.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  Text('Pembayaran',
                       style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: t.textPrimary)),
-                ),
-                Text(_rp.format(widget.total),
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: t.primary)),
-              ]),
+                  Text(_rp.format(widget.total),
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: t.primary)),
+                ],
+              ),
               const SizedBox(height: 14),
               if (widget.metode.isEmpty)
                 _catatan(

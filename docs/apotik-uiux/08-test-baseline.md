@@ -29,3 +29,20 @@ menambah test baru, bukan mengurangi.
 | 6 | unit anti double-submit; widget banner sinkron |
 | 7 | widget laporan; golden tutup shift |
 | 8 | a11y (semantics, target sentuh), performa katalog besar |
+
+## Setelah Fase 8 (hardening)
+
+Suite: **71 (baseline) → 277 hijau.** Berkas uji yang ditambahkan Fase 8:
+
+| Berkas | Yang dijaga |
+|---|---|
+| `apotik_kontras_test.dart` | rasio kontras WCAG **dihitung**, bukan diasumsikan: teks ≥ 4,5:1 dan ikon/garis ≥ 3:1, untuk tema terang DAN gelap, termasuk label pill di atas latar tipisnya sendiri |
+| `apotik_a11y_skala_teks_test.dart` | tujuh layar dipasang pada skala teks 1,0/1,3/2,0× — luberan tata letak muncul sebagai exception, jadi kegagalannya nyata |
+| `apotik_performa_test.dart` | daftar panjang tetap malas (100 baris tidak dibangun sekaligus) dan katalog tetap berhalaman |
+| `apotik_golden_test.dart` | 8 acuan piksel komponen (kartu obat, pill, kartu prioritas, keadaan kosong/galat), bertag `golden` |
+
+Menjalankan tanpa golden (mis. di OS lain):
+
+```
+flutter test --exclude-tags golden
+```

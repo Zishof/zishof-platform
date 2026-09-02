@@ -183,8 +183,7 @@ void main() {
     expect(dialog, contains('antreLokal'),
         reason: 'wajib menulis lokal SEBELUM menyentuh jaringan');
 
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     expect(layanan, contains('Duration(minutes: 5)'),
         reason: 'retry latar 5 menit sekali (permintaan bisnis)');
     expect(layanan, contains('_timer?.cancel()'),
@@ -192,8 +191,7 @@ void main() {
   });
 
   test('baca lokal-dulu + animasi perubahan server + riwayat AuditTrails', () {
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     // Emisi ganda: cache instan lalu server + diff utk animasi.
     expect(layanan, contains('daftarCacheDulu'));
     expect(layanan, contains("'idBaru'"));
@@ -222,8 +220,7 @@ void main() {
   });
 
   test('sinkron awal ber-progress saat cache lokal kosong (generik)', () {
-    final layanan =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final layanan = File('lib/services/master_offline.dart').readAsStringSync();
     // API generik utk SEMUA modul CRUD (permintaan bisnis: reuse, bukan
     // helper khusus satu layar).
     expect(layanan, contains('perluSinkronAwal'));
@@ -245,8 +242,7 @@ void main() {
   });
 
   test('layanan MasterOffline terikat ke outbox_master core_db', () {
-    final source =
-        File('lib/services/master_offline.dart').readAsStringSync();
+    final source = File('lib/services/master_offline.dart').readAsStringSync();
     expect(source, contains('outboxMasterTambah'));
     expect(source, contains('outboxMasterPending'));
     expect(source, contains('outboxMasterTandaiSukses'));

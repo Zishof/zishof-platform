@@ -761,11 +761,13 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          Text('Identitas pembeli',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: t.textSecondary)),
+          Flexible(
+            child: Text('Identitas pembeli',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: t.textSecondary)),
+          ),
           if (wajib) ...[
             const SizedBox(width: 6),
             Icon(Icons.lock_outline, size: 13, color: t.danger),
@@ -777,7 +779,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             child: Text(
                 'Ada obat terkendali di keranjang — nama pembeli wajib, plus '
                 'resep atau nama dokter.',
-                style: TextStyle(fontSize: 11, color: t.danger)),
+                style: TextStyle(fontSize: 11, color: t.dangerText)),
           ),
         const SizedBox(height: 6),
         TextField(

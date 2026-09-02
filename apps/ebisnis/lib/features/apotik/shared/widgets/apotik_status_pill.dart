@@ -134,6 +134,25 @@ class ApotikStatusPill extends StatelessWidget {
       ikon: Icons.science_outlined,
       penjelasan: 'Perlu dispensing racikan');
 
+  /// Warna TEKS label. Terpisah dari [_warna] karena warna status penuh
+  /// hanya lolos ambang kontras grafis (3:1), sedangkan label ini teks kecil
+  /// yang membawa arti keselamatan dan menuntut 4,5:1.
+  Color _warnaTeks(ApotikDesignTokens t) {
+    switch (nada) {
+      case ApotikStatusNada.sukses:
+        return t.successText;
+      case ApotikStatusNada.peringatan:
+        return t.warningText;
+      case ApotikStatusNada.bahaya:
+        return t.dangerText;
+      case ApotikStatusNada.info:
+      case ApotikStatusNada.klinis:
+      case ApotikStatusNada.netral:
+        // Ketiganya sudah >= 4,5:1 di atas latar terang maupun gelap.
+        return _warna(t);
+    }
+  }
+
   Color _warna(ApotikDesignTokens t) {
     switch (nada) {
       case ApotikStatusNada.sukses:
@@ -172,11 +191,13 @@ class ApotikStatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = ApotikDesignTokens.of(context);
     final warna = _warna(t);
+    final warnaTeks = _warnaTeks(t);
     final isi = Container(
       padding: EdgeInsets.symmetric(
           horizontal: rapat ? 6 : 8, vertical: rapat ? 2 : 4),
       decoration: BoxDecoration(
-        // Latar sangat tipis: kontras teks tetap dari warna penuh.
+        // Latar sangat tipis; kontras teks datang dari varian teks yang
+        // lebih gelap, bukan dari warna status penuh (lihat _warnaTeks).
         color: warna.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: warna.withValues(alpha: 0.35)),
@@ -186,11 +207,17 @@ class ApotikStatusPill extends StatelessWidget {
         children: [
           Icon(ikon ?? _ikonBawaan(), size: rapat ? 12 : 14, color: warna),
           const SizedBox(width: 4),
-          Text(teks,
-              style: TextStyle(
-                  fontSize: rapat ? 11 : 12,
-                  fontWeight: FontWeight.w600,
-                  color: warna)),
+          // Fleksibel, bukan lebar tetap: pada skala teks aksesibilitas (2,0x)
+          // label status melebihi lebar induknya dan dulu meluber. Label
+          // keselamatan tidak boleh dipotong diam-diam, jadi ia dibiarkan
+          // membungkus ke baris kedua.
+          Flexible(
+            child: Text(teks,
+                style: TextStyle(
+                    fontSize: rapat ? 11 : 12,
+                    fontWeight: FontWeight.w600,
+                    color: warnaTeks)),
+          ),
         ],
       ),
     );

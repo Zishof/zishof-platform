@@ -131,7 +131,7 @@ class _ApotikBatchSheetState extends State<ApotikBatchSheet> {
             _kartuBatch(t, i, widget.batches[i]),
           if (_galat != null) ...[
             const SizedBox(height: 4),
-            Text(_galat!, style: TextStyle(fontSize: 12, color: t.danger)),
+            Text(_galat!, style: TextStyle(fontSize: 12, color: t.dangerText)),
           ],
           const SizedBox(height: 12),
           SizedBox(

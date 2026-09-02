@@ -85,12 +85,16 @@ class ApotikCartPanel extends StatelessWidget {
       child: Row(children: [
         Icon(Icons.shopping_cart_outlined, size: 17, color: t.primary),
         const SizedBox(width: 8),
-        Text('Keranjang',
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: t.textPrimary)),
-        const Spacer(),
+        // Expanded menggantikan Spacer: pada skala teks besar judul + pill
+        // status melebihi lebar panel.
+        Expanded(
+          child: Text('Keranjang',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: t.textPrimary)),
+        ),
         if (pos.status == ApotikStatusTransaksi.held)
           const ApotikStatusPill(
               teks: 'Ditahan',
@@ -144,9 +148,12 @@ class ApotikCartPanel extends StatelessWidget {
           Row(children: [
             _stepper(t, i, b),
             const SizedBox(width: 10),
-            Text('× ${_rp.format(b.harga)}',
-                style: TextStyle(fontSize: 12, color: t.textSecondary)),
-            const Spacer(),
+            Expanded(
+              child: Text('× ${_rp.format(b.harga)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: t.textSecondary)),
+            ),
+            const SizedBox(width: 6),
             Text(_rp.format(b.subtotal),
                 style: TextStyle(
                     fontSize: 13.5,
@@ -239,16 +246,24 @@ class ApotikCartPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(children: [
-            Text('Total',
-                style: TextStyle(fontSize: 13, color: t.textSecondary)),
-            const Spacer(),
-            Text(_rp.format(pos.total),
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: t.textPrimary)),
-          ]),
+          // Wrap, bukan Row: pada skala teks aksesibilitas nominalnya lebih
+          // lebar dari panel dan angka uang tidak boleh dipotong -- ia turun
+          // ke baris sendiri.
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 2,
+            children: [
+              Text('Total',
+                  style: TextStyle(fontSize: 13, color: t.textSecondary)),
+              Text(_rp.format(pos.total),
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: t.textPrimary)),
+            ],
+          ),
           // Pesan penahan server ditampilkan APA ADANYA (perilaku existing).
           if (pos.pesanPenahan != null) ...[
             const SizedBox(height: 10),
@@ -291,7 +306,7 @@ class ApotikCartPanel extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: t.warning)),
+                            color: t.warningText)),
                   ]),
                   const SizedBox(height: 4),
                   for (final a in pagar.alasan)
