@@ -26,6 +26,19 @@ final _rp =
 /// formularium (`apotik_item_cari`/`apotik_item_profil_simpan`). Semua mutasi
 /// stok terjadi di server lewat ledger SIRS bertanda -- layar ini tidak pernah
 /// menghitung stok sendiri.
+/// Hak per menu Apotik dari peladen, dipakai bersama oleh ketiga formulir di
+/// berkas ini (Terima Barang, Opname, Retur). Peta kosong = belum dimuat.
+Map<String, Map<String, bool>> _hakApotik = {};
+
+/// Tombol dipadamkan HANYA bila peladen benar-benar bilang tidak boleh. Selama
+/// haknya belum tiba, tombol dibiarkan hidup -- peladen tetap gerbang sebenarnya.
+bool _bolehApotik(String kunciMenu, String aksi) {
+  if (_hakApotik.isEmpty) return true;
+  final menu = _hakApotik[kunciMenu];
+  if (menu == null) return true;
+  return menu[aksi] != false;
+}
+
 class PersediaanApotikScreen extends StatefulWidget {
   final int tabAwal;
   const PersediaanApotikScreen({super.key, this.tabAwal = 0});
@@ -407,6 +420,8 @@ class _TabFormulariumState extends State<_TabFormularium> {
     try {
       // Baca LOKAL DULU: snapshot cache langsung tampil, lalu hasil server
       // menyusul dgn diff baru/berubah/terhapus utk animasi (daftarCacheDulu).
+      // Hak per menu Apotik ikut pada balasan pencarian item -- daftar yang
+      // SELALU dimuat layar ini saat dibuka, sebelum formulir mana pun disentuh.
       await MasterOffline.daftarCacheDulu(
           'apotik_item_cari',
           {
@@ -416,6 +431,15 @@ class _TabFormulariumState extends State<_TabFormularium> {
           'master:apotik_item', onData: (hasil) {
         if (!mounted) return;
         final dariServer = hasil['dariServer'] == true;
+        final hakBaru = hasil['hak'];
+        // Hanya emisi SERVER yang membawa hak; snapshot cache tidak.
+        if (hakBaru is Map) {
+          _hakApotik = hakBaru.map((k, v) => MapEntry(
+              '$k',
+              v is Map
+                  ? v.map((a, b) => MapEntry('$a', b == true))
+                  : <String, bool>{}));
+        }
         setStateIfMounted(() {
           _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
           _idBaru = dariServer
@@ -877,7 +901,11 @@ class _TabPenerimaanPbfState extends State<_TabPenerimaanPbf> {
           label: const Text('Tambah Obat')),
       const SizedBox(height: 10),
       ElevatedButton.icon(
-        onPressed: _baris.isEmpty || _proses ? null : _simpan,
+        onPressed: _baris.isEmpty ||
+                _proses ||
+                !_bolehApotik('apotik_pengadaan', 'create')
+            ? null
+            : _simpan,
         icon: _proses
             ? const SizedBox(
                 width: 18,
@@ -1005,7 +1033,11 @@ class _TabOpnameState extends State<_TabOpname> {
           label: const Text('Tambah Obat Diopname')),
       const SizedBox(height: 10),
       ElevatedButton.icon(
-        onPressed: _baris.isEmpty || _proses ? null : _simpan,
+        onPressed: _baris.isEmpty ||
+                _proses ||
+                !_bolehApotik('apotik_stok_opname', 'create')
+            ? null
+            : _simpan,
         icon: _proses
             ? const SizedBox(
                 width: 18,
@@ -1167,7 +1199,11 @@ class _TabReturState extends State<_TabRetur> {
           label: const Text('Tambah Obat')),
       const SizedBox(height: 10),
       ElevatedButton.icon(
-        onPressed: _baris.isEmpty || _proses ? null : _simpan,
+        onPressed: _baris.isEmpty ||
+                _proses ||
+                !_bolehApotik('apotik_retur', 'create')
+            ? null
+            : _simpan,
         icon: _proses
             ? const SizedBox(
                 width: 18,
