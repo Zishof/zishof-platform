@@ -12,14 +12,14 @@ existing dipertahankan sebagai adapter selama migrasi.
 | **4** ✅ | antrean resep, daftar periksa pra-serah, dispensing IR-05 (racikan tetap terkunci: IR-04) | selesai |
 | **5** ✅ | formularium (editor IR-01), batch/FEFO (IR-02 tulis), penerimaan PBF | `feat(apotik-inventory): batch, expiry and procurement workspace` |
 | **6** ✅ | lembar pembayaran + kembalian, laci kas & struk ESC/POS lokal, pemulihan pembayaran yang belum dipastikan | selesai |
-| **7** ◑ | rekonsiliasi kas apotek (rekap per metode + hitung laci); penyimpanan tutup shift menunggu IR-06 | sebagian |
+| **7** ✅ | rekonsiliasi kas apotek: rekap per metode, hitung laci, dan sesi kas apotek sendiri (buka/tutup tersimpan, IR-06) | selesai |
 | **8** ✅ | hardening: kontras WCAG terukur, skala teks 2,0×, penjaga performa daftar, 8 golden komponen | selesai |
 
 Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 288 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 292 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -59,9 +59,15 @@ kosmetik — `apotik_resep_list` memotong halaman DULU baru menyaring yang belum
 ditebus, jadi "resep menunggu" dulu berarti "yang belum ditebus di antara 100
 resep terbaru". Pada server lama angkanya kini ditandai "100+".
 
+**IR-06 diputuskan dan dikerjakan** (AIS r83308): apotek mendapat sesi kas
+SENDIRI, aditif, tanpa menyentuh tutup kas POS umum. Dasarnya bukti, bukan
+selera: `SesiKasUtil` membaca ledger POS yang tidak memuat penjualan apotek.
+Bila kelak satu laci fisik dipakai bersama POS umum, yang dibutuhkan adalah
+menambah sumber apotek ke `SesiKasUtil` — bukan layar baru.
+
 **Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan integrasi:
-IR-03 (basis pengetahuan obat), IR-04 (racikan), IR-06 (penyimpanan shift),
-IR-09 (PO & bukti suhu), dan sisa IR-10 (kolom `waktu_masuk` pada resep).
+IR-03 (basis pengetahuan obat), IR-04 (racikan), IR-09 (PO & bukti suhu),
+dan sisa IR-10 (kolom `waktu_masuk` pada resep).
 
 ## Batas jujur
 

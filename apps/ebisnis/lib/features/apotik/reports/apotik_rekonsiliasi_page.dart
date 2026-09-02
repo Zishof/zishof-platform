@@ -36,6 +36,38 @@ class RekapMetode {
       );
 }
 
+/// Sesi kas (shift) yang sedang berjalan — IR-06.
+class SesiKasApotik {
+  final int? id;
+  final String namaKasir;
+  final String waktuBuka;
+  final double modalAwal;
+  final double tunaiBerjalan;
+  final double nonTunaiBerjalan;
+  final double penjualanTanpaMetode;
+
+  const SesiKasApotik({
+    this.id,
+    this.namaKasir = '',
+    this.waktuBuka = '',
+    this.modalAwal = 0,
+    this.tunaiBerjalan = 0,
+    this.nonTunaiBerjalan = 0,
+    this.penjualanTanpaMetode = 0,
+  });
+
+  factory SesiKasApotik.dariJson(Map<String, dynamic> j) => SesiKasApotik(
+        id: (j['id'] as num?)?.toInt(),
+        namaKasir: '${j['namaKasir'] ?? ''}',
+        waktuBuka: '${j['waktuBuka'] ?? ''}',
+        modalAwal: ((j['modalAwal'] as num?) ?? 0).toDouble(),
+        tunaiBerjalan: ((j['tunaiBerjalan'] as num?) ?? 0).toDouble(),
+        nonTunaiBerjalan: ((j['nonTunaiBerjalan'] as num?) ?? 0).toDouble(),
+        penjualanTanpaMetode:
+            ((j['penjualanTanpaMetode'] as num?) ?? 0).toDouble(),
+      );
+}
+
 /// Hasil hitung rekonsiliasi laci.
 class HitungLaci {
   final double kasSeharusnya;
@@ -136,10 +168,127 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
   final _modal = TextEditingController(text: '0');
   final _fisik = TextEditingController(text: '0');
 
+  /// Sesi kas berjalan (IR-06). Null = tidak ada sesi terbuka, atau server
+  /// belum punya aksinya sama sekali — dibedakan lewat [_sesiDidukung].
+  SesiKasApotik? _sesi;
+  bool _sesiDidukung = false;
+  bool _sibukSesi = false;
+
   @override
   void initState() {
     super.initState();
     _muat();
+    _muatSesi();
+  }
+
+  Future<void> _muatSesi() async {
+    try {
+      final r = await _panggil('apotik_sesi_kas_status', const {});
+      if (!_sukses(r)) return;
+      final sesi = r['sesi'];
+      setStateIfMounted(() {
+        _sesiDidukung = true;
+        _sesi = sesi is Map
+            ? SesiKasApotik.dariJson(Map<String, dynamic>.from(sesi))
+            : null;
+        if (_sesi != null) _modal.text = _sesi!.modalAwal.toStringAsFixed(0);
+      });
+    } catch (_) {
+      // Server lama tanpa sesi kas apotek: layar tetap berguna sebagai
+      // lembar hitung, hanya tanpa tombol buka/tutup.
+    }
+  }
+
+  Future<void> _bukaSesi() async {
+    setStateIfMounted(() => _sibukSesi = true);
+    try {
+      final r = await _panggil('apotik_sesi_kas_buka', {
+        'modal_awal': _angka(_modal),
+      });
+      if (!mounted) return;
+      if (!_sukses(r)) {
+        _pesan('${r['description'] ?? 'Gagal membuka sesi kas.'}', galat: true);
+        return;
+      }
+      await _muatSesi();
+      if (mounted) _pesan('Sesi kas dibuka.');
+    } catch (e) {
+      if (mounted) _pesan('Gagal membuka sesi kas: $e', galat: true);
+    } finally {
+      setStateIfMounted(() => _sibukSesi = false);
+    }
+  }
+
+  Future<void> _tutupSesi() async {
+    final fisik = _angka(_fisik);
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Tutup Sesi Kas'),
+        content: Text('Uang fisik yang dihitung: ${_rp.format(fisik)}.\n\n'
+            'Angka penerimaan dihitung ulang oleh server dari catatan '
+            'pembayaran sejak sesi dibuka — bukan dari layar ini. Setelah '
+            'ditutup, sesi tidak dapat dibuka kembali.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Tutup sesi')),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return;
+    setStateIfMounted(() => _sibukSesi = true);
+    try {
+      final r = await _panggil('apotik_sesi_kas_tutup', {'uang_fisik': fisik});
+      if (!mounted) return;
+      if (!_sukses(r)) {
+        _pesan('${r['description'] ?? 'Gagal menutup sesi kas.'}', galat: true);
+        return;
+      }
+      final sesi = Map<String, dynamic>.from((r['sesi'] as Map?) ?? const {});
+      final selisih = ((sesi['selisih'] as num?) ?? 0).toDouble();
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Sesi Kas Ditutup'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Penerimaan tunai (server): '
+                  '${_rp.format(((sesi['totalTunaiSistem'] as num?) ?? 0).toDouble())}'),
+              Text('Kas seharusnya: '
+                  '${_rp.format(((sesi['kasSeharusnya'] as num?) ?? 0).toDouble())}'),
+              Text('Uang fisik: '
+                  '${_rp.format(((sesi['uangFisik'] as num?) ?? 0).toDouble())}'),
+              const SizedBox(height: 6),
+              Text('Selisih: ${_rp.format(selisih)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+          ],
+        ),
+      );
+      await _muatSesi();
+      await _muat();
+    } catch (e) {
+      if (mounted) _pesan('Gagal menutup sesi kas: $e', galat: true);
+    } finally {
+      setStateIfMounted(() => _sibukSesi = false);
+    }
+  }
+
+  void _pesan(String teks, {bool galat = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(teks),
+      backgroundColor: galat ? Theme.of(context).colorScheme.error : null,
+    ));
   }
 
   @override
@@ -260,6 +409,10 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_sesiDidukung) ...[
+            _kartuSesi(t),
+            const SizedBox(height: 12),
+          ],
           _periode(t),
           const SizedBox(height: 12),
           _kartuRekap(t),
@@ -438,6 +591,61 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
     ]);
   }
 
+  /// Kartu sesi kas berjalan (IR-06).
+  Widget _kartuSesi(ApotikDesignTokens t) {
+    final s = _sesi;
+    if (s == null) {
+      return _kartu(t, 'Sesi kas', [
+        Text('Belum ada sesi kas terbuka atas nama Anda.',
+            style: TextStyle(fontSize: 12, color: t.textSecondary)),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: _sibukSesi ? null : _bukaSesi,
+            icon: const Icon(Icons.lock_open, size: 17),
+            label: Text(_sibukSesi
+                ? 'Memproses…'
+                : 'Buka sesi dengan modal ${_rp.format(_angka(_modal))}'),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('Modal awal diambil dari kolom "Modal awal" di bawah.',
+            style: TextStyle(fontSize: 11, color: t.textSecondary)),
+      ]);
+    }
+    return _kartu(t, 'Sesi kas berjalan', [
+      _baris(t, 'Dibuka', s.waktuBuka),
+      if (s.namaKasir.isNotEmpty) _baris(t, 'Kasir', s.namaKasir),
+      _baris(t, 'Modal awal', _rp.format(s.modalAwal)),
+      _baris(t, 'Penerimaan tunai sejak dibuka', _rp.format(s.tunaiBerjalan),
+          tebal: true),
+      _baris(t, 'Penerimaan non-tunai', _rp.format(s.nonTunaiBerjalan)),
+      _baris(t, 'Kas seharusnya sekarang',
+          _rp.format(s.modalAwal + s.tunaiBerjalan),
+          tebal: true),
+      if (s.penjualanTanpaMetode.abs() >= 1)
+        _baris(t, 'Penjualan tanpa metode tercatat',
+            _rp.format(s.penjualanTanpaMetode),
+            warna: t.warningText),
+      const SizedBox(height: 10),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.icon(
+          onPressed: _sibukSesi ? null : _tutupSesi,
+          icon: const Icon(Icons.lock_outline, size: 17),
+          label: Text(_sibukSesi ? 'Memproses…' : 'Tutup sesi kas'),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Angka penerimaan dihitung server dari catatan pembayaran sejak sesi '
+        'dibuka; layar hanya mengirim modal awal dan hasil hitungan fisik.',
+        style: TextStyle(fontSize: 11, color: t.textSecondary),
+      ),
+    ]);
+  }
+
   Widget _catatanBatas(ApotikDesignTokens t) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -451,10 +659,17 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Lembar ini TIDAK tersimpan di server. Sesi kas POS umum '
-            '(sesi_kas_*) menghitung uang dari ledger POS, yang tidak memuat '
-            'penjualan apotek — memakainya akan melaporkan tunai apotek Rp 0. '
-            'Penyimpanan tutup shift apotek menunggu keputusan IR-06.',
+            _sesiDidukung
+                ? 'Sesi kas apotek TERPISAH dari sesi kas POS umum: laporan '
+                    'POS umum menghitung uang dari ledger POS yang tidak '
+                    'memuat penjualan apotek. Bagian "Hitung laci" di bawah '
+                    'adalah lembar bantu; yang tersimpan sebagai penutupan '
+                    'resmi adalah tombol "Tutup sesi kas" di atas.'
+                : 'Server ini belum punya sesi kas apotek, jadi lembar hitung '
+                    'di bawah TIDAK tersimpan. Sesi kas POS umum (sesi_kas_*) '
+                    'tidak dapat dipakai: ia menghitung dari ledger POS yang '
+                    'tidak memuat penjualan apotek, sehingga tunai apotek '
+                    'akan dilaporkan Rp 0.',
             style: TextStyle(fontSize: 11.5, color: t.textPrimary),
           ),
         ),
