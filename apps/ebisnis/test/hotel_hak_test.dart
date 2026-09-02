@@ -36,6 +36,39 @@ void main() {
         contains(_rapat("bolehHotel('hotel_properti', 'create')")));
   });
 
+  test('empat layar sisanya memakai kunci menunya masing-masing', () {
+    const wajib = <String, List<String>>{
+      'reservasi_hotel_screen.dart': ["bolehHotel('hotel_reservasi', 'create')"],
+      'kontrak_pemilik_screen.dart': [
+        "bolehHotel('hotel_kontrak_pemilik', 'create')"
+      ],
+      // Memindahkan status MENGUBAH tiket yang sudah ada; tiketnya sendiri
+      // dibuat otomatis oleh checkout kasir, bukan oleh layar ini.
+      'tiket_dapur_screen.dart': ["bolehHotel('hotel_tiket_dapur', 'update')"],
+      // Satu layar, tiga kunci: folio punya kunci sendiri, sedangkan pindah
+      // kamar dan check-out menutup penempatan yang sama dengan check-in.
+      'resepsionis_hotel_screen.dart': [
+        "bolehHotel('hotel_checkin', 'create')",
+        "bolehHotel('hotel_checkin', 'update')",
+        "bolehHotel('hotel_folio', 'create')",
+      ],
+    };
+    for (final e in wajib.entries) {
+      final isi = _berkas(e.key);
+      for (final penjaga in e.value) {
+        expect(isi, contains(_rapat(penjaga)),
+            reason: '${e.key} tidak memakai $penjaga');
+      }
+    }
+  });
+
+  test('menu aksi tamu tidak boleh const lagi', () {
+    // Daftar const tidak dapat menyaring apa pun; bila ia kembali const, ketiga
+    // butir menu akan tampil lagi untuk semua orang tanpa ada uji yang jatuh.
+    expect(_berkas('resepsionis_hotel_screen.dart'),
+        isNot(contains(_rapat('itemBuilder: (_) => const ['))));
+  });
+
   test('belum dimuat berarti BOLEH, bukan padam', () {
     // Memadamkan tombol karena haknya belum tiba akan mengunci pengguna yang
     // sebenarnya berhak — dan menyala sendiri sesaat kemudian.

@@ -300,7 +300,8 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
               icon: const Icon(Icons.refresh)),
         ],
       ),
-      floatingActionButton: _propertiId == null
+      floatingActionButton: _propertiId == null ||
+              !bolehHotel('hotel_checkin', 'create')
           ? null
           : FloatingActionButton.extended(
               onPressed: _walkIn,
@@ -385,17 +386,26 @@ class _ResepsionisHotelScreenState extends State<ResepsionisHotelScreen> {
                                               _checkout(s);
                                           }
                                         },
-                                        itemBuilder: (_) => const [
-                                          PopupMenuItem(
-                                              value: 'folio',
-                                              child:
-                                                  Text('Folio / Pembayaran')),
-                                          PopupMenuItem(
-                                              value: 'pindah',
-                                              child: Text('Pindah Kamar')),
-                                          PopupMenuItem(
-                                              value: 'checkout',
-                                              child: Text('Check-out')),
+                                        // Tiga kunci menu berbeda dalam satu
+                                        // menu: folio punya kunci sendiri,
+                                        // sedangkan pindah kamar dan check-out
+                                        // menutup/menggeser PENEMPATAN yang sama
+                                        // dengan check-in.
+                                        itemBuilder: (_) => [
+                                          if (bolehHotel('hotel_folio', 'create'))
+                                            const PopupMenuItem(
+                                                value: 'folio',
+                                                child: Text(
+                                                    'Folio / Pembayaran')),
+                                          if (bolehHotel(
+                                              'hotel_checkin', 'update')) ...[
+                                            const PopupMenuItem(
+                                                value: 'pindah',
+                                                child: Text('Pindah Kamar')),
+                                            const PopupMenuItem(
+                                                value: 'checkout',
+                                                child: Text('Check-out')),
+                                          ],
                                         ],
                                       ),
                                     ),
@@ -770,7 +780,10 @@ class _FolioDialogState extends State<_FolioDialog> {
                   ]),
       ),
       actions: [
-        if (terbuka && !_memuat && _galat == null) ...[
+        if (terbuka &&
+            !_memuat &&
+            _galat == null &&
+            bolehHotel('hotel_folio', 'create')) ...[
           TextButton.icon(
             onPressed: () => _tambah('ADJUSTMENT'),
             icon: const Icon(Icons.tune, size: 18),

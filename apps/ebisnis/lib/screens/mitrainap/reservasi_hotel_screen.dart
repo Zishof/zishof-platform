@@ -310,7 +310,8 @@ class _ReservasiHotelScreenState extends State<ReservasiHotelScreen> {
               icon: const Icon(Icons.refresh)),
         ],
       ),
-      floatingActionButton: _propertiId == null
+      floatingActionButton: _propertiId == null ||
+              !bolehHotel('hotel_reservasi', 'create')
           ? null
           : FloatingActionButton.extended(
               onPressed: _buatReservasi,

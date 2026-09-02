@@ -257,7 +257,8 @@ class _KontrakPemilikScreenState extends State<KontrakPemilikScreen> {
         title: const Text('Kontrak Pemilik'),
         actions: const [IndikatorSinkronMaster()],
       ),
-      floatingActionButton: _propertiId == null
+      floatingActionButton: _propertiId == null ||
+              !bolehHotel('hotel_kontrak_pemilik', 'create')
           ? null
           : FloatingActionButton(
               onPressed: () => _formKontrak(null),

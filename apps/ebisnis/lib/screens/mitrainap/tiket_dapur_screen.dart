@@ -148,7 +148,11 @@ class _TiketDapurScreenState extends State<TiketDapurScreen> {
     final aksi = <Widget>[];
     void tambah(String label, String ke, {bool bahaya = false}) {
       aksi.add(TextButton(
-        onPressed: () => _ubahStatus(t, ke),
+        // Memindahkan status MENGUBAH tiket yang sudah ada -- tiketnya sendiri
+        // dibuat otomatis oleh checkout kasir, bukan oleh layar ini.
+        onPressed: !bolehHotel('hotel_tiket_dapur', 'update')
+            ? null
+            : () => _ubahStatus(t, ke),
         child: Text(label,
             style: bahaya ? const TextStyle(color: Colors.red) : null),
       ));
