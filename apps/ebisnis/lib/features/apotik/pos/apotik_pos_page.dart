@@ -1,9 +1,14 @@
 import 'dart:async';
 
+import 'package:core_hw/core_hw.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../api_client.dart';
+import '../../../services/pengaturan_laci.dart';
+import '../../../services/pengaturan_pembayaran.dart';
+import '../../../services/pengaturan_struk.dart';
 import '../../../sesi.dart';
 import '../../../widgets/safe_state.dart';
 import '../core/apotik_breakpoints.dart';
@@ -14,7 +19,10 @@ import '../shared/widgets/medication_card.dart';
 import 'apotik_batch_sheet.dart';
 import 'apotik_cart_panel.dart';
 import 'apotik_mode_switcher.dart';
+import 'apotik_pembayaran_sheet.dart';
+import 'apotik_pembayaran_tertunda.dart';
 import 'apotik_pos_state.dart';
+import 'apotik_struk_teks.dart';
 
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -54,16 +62,30 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   Timer? _debounce;
 
   List<Map<String, dynamic>> _hasilCari = [];
-  List<Map<String, dynamic>> _caraBayar = [];
+  List<MetodeBayar> _caraBayar = [];
   int? _caraBayarId;
   bool _memuatCari = false;
   String? _galatCari;
+
+  /// Pembayaran yang nasibnya belum dipastikan (lihat
+  /// [ApotikPembayaranTertundaStore]). Kosong pada keadaan normal.
+  List<PembayaranTertunda> _tertunda = const [];
+  bool _memeriksaTertunda = false;
+
+  /// Struk transaksi terakhir di mesin ini — untuk cetak dan cetak ulang.
+  /// Server belum menyimpan riwayat cetak (IR-08), jadi ini murni lokal.
+  DataStruk? _strukTerakhir;
+
+  /// Laci kasir memakai jalur RAW Windows (`core_hw`); di platform lain
+  /// opsinya tidak ditawarkan sama sekali.
+  bool get _laciTersedia => defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   void initState() {
     super.initState();
     _jalankanCari('');
     _muatCaraBayar();
+    _muatTertunda();
   }
 
   @override
@@ -85,18 +107,48 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   /// IR-07: metode pembayaran diambil dari server; UI TIDAK boleh menawarkan
   /// metode yang tidak dikonfigurasi. Bila daftar kosong/gagal, alur bayar
   /// tetap jalan tanpa metode (kompatibel server lama).
+  /// Preferensi lokal bersifat PELENGKAP: kegagalannya -- termasuk tidak
+  /// adanya plugin sama sekali -- tidak boleh menggagalkan transaksi. Karena
+  /// itu pembacaannya selalu diletakkan SETELAH hal yang wajib tampil, bukan
+  /// sebagai syarat di depannya.
+  Future<void> _prefsAman(Future<void> Function() kerja) async {
+    try {
+      await kerja();
+    } catch (_) {
+      // Abaikan: preferensi bersifat pelengkap, bukan syarat transaksi.
+    }
+  }
+
   Future<void> _muatCaraBayar() async {
+    List<MetodeBayar> daftar;
     try {
       final r = await _panggil('apotik_cara_bayar_list', const {});
       if (!_sukses(r)) return;
-      final daftar = _data(r);
-      setStateIfMounted(() {
-        _caraBayar = daftar;
-        _caraBayarId ??=
-            daftar.isEmpty ? null : (daftar.first['id'] as num?)?.toInt();
-      });
+      daftar = _data(r).map(MetodeBayar.dariJson).toList();
     } catch (_) {
       // Server lama tanpa aksi ini: bukan galat yang perlu mengganggu kasir.
+      return;
+    }
+    setStateIfMounted(() {
+      _caraBayar = daftar;
+      _caraBayarId = daftar.isEmpty ? null : (_caraBayarId ?? daftar.first.id);
+    });
+    // Metode bawaan pengguna dibaca SETELAH daftar tampil, supaya pembacaan
+    // preferensi tidak pernah menunda munculnya pilihan metode.
+    await _prefsAman(() async {
+      await PengaturanPembayaran.instance.muat();
+      final bawaan = PengaturanPembayaran.instance.caraBayarDefaultId;
+      if (bawaan == null || !daftar.any((m) => m.id == bawaan)) return;
+      setStateIfMounted(() => _caraBayarId = bawaan);
+    });
+  }
+
+  Future<void> _muatTertunda() async {
+    try {
+      final daftar = await ApotikPembayaranTertundaStore.instance.muat();
+      setStateIfMounted(() => _tertunda = daftar);
+    } catch (_) {
+      // Penyimpanan lokal tidak tersedia -- tidak boleh mengunci kasir.
     }
   }
 
@@ -257,38 +309,76 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     }
   }
 
+  /// Membuka lembar pembayaran bila memang ADA yang perlu diputuskan
+  /// (server mengirim daftar metode). Bila server tidak mengirim metode apa
+  /// pun, tidak ada pilihan untuk ditawarkan dan transaksi dikirim langsung --
+  /// perilaku yang sama persis dengan sebelum Fase 6.
   Future<void> _bayar() async {
+    if (!_pos.pagarBayar().boleh) {
+      setStateIfMounted(() {});
+      return;
+    }
+    if (_caraBayar.isEmpty) {
+      await _kirimBayar(null);
+      return;
+    }
+    final hasil = await showModalBottomSheet<HasilPembayaran>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => ApotikPembayaranSheet(
+        total: _pos.total,
+        metode: _caraBayar,
+        metodeAwalId: _caraBayarId,
+        laciTersedia: _laciTersedia,
+      ),
+    );
+    if (hasil == null || !mounted) return;
+    setStateIfMounted(() => _caraBayarId = hasil.caraBayarId);
+    await _kirimBayar(hasil);
+  }
+
+  Future<void> _kirimBayar(HasilPembayaran? bayar) async {
     // mulaiBayar() menolak panggilan kedua saat proses berjalan dan menolak
     // bila pagar belum lolos -- inti pencegahan double-submit.
     if (!_pos.mulaiBayar()) return;
     setStateIfMounted(() {});
+    final payload = _pos.payloadBayar();
+    final caraId = bayar?.caraBayarId ?? _caraBayarId;
+    if (caraId != null) payload['cara_bayar_id'] = caraId;
+    final referensi = bayar?.referensi ?? '';
+    if (referensi.isNotEmpty) payload['referensi_bayar'] = referensi;
+    final kodeKirim = '${payload['kode']}';
     try {
-      final payload = _pos.payloadBayar();
-      if (_caraBayarId != null) payload['cara_bayar_id'] = _caraBayarId;
       final r = await _panggil('apotik_bayar', payload);
       if (!_sukses(r)) {
-        // Pesan penahan server ditampilkan APA ADANYA.
+        // Penolakan BISNIS: server sadar menolak, jadi tidak ada transaksi
+        // yang terbukukan. Pesannya ditampilkan APA ADANYA.
         setStateIfMounted(() => _pos.tandaiGagal(
             '${r['description'] ?? 'Pembayaran ditolak server.'}'));
         return;
       }
-      final total = ((r['total'] as num?) ?? 0).toDouble();
+      final total = ((r['total'] as num?) ?? _pos.total).toDouble();
+      final struk = _rakitStruk(r, bayar, total);
       _pos.tandaiBerhasil();
-      if (mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text('Transaksi Berhasil'),
-            content: Text('Kode: ${r['kode']}\nTotal: ${_rp.format(total)}'
-                '${'${r['caraBayar'] ?? ''}'.isEmpty ? '' : '\nMetode: ${r['caraBayar']}'}'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
-            ],
-          ),
-        );
-      }
+      // Bila transaksi ini sempat masuk antrean "belum dipastikan", nasibnya
+      // kini jelas -- keluarkan dari antrean. Pembersihan ini tidak boleh
+      // menunda struk & dialog di depan kasir.
+      unawaited(_lupakanTertunda(kodeKirim));
+      if (bayar?.bukaLaci == true) unawaited(_bukaLaci());
+      setStateIfMounted(() => _strukTerakhir = struk);
+      if (mounted) await _dialogBerhasil(struk, bayar);
       setStateIfMounted(() => _pos.kosongkan());
+    } on ApiException catch (e) {
+      if (e.offline) {
+        // TIDAK DIKETAHUI, bukan "gagal": permintaan mungkin sudah sampai dan
+        // terbukukan. Menyebutnya gagal akan mendorong kasir menjual dua kali.
+        await _catatTertunda(kodeKirim, payload);
+        setStateIfMounted(() => _pos.tandaiBelumTersinkron());
+        if (mounted) await _dialogTidakPasti(e.pesan);
+        return;
+      }
+      setStateIfMounted(() => _pos.tandaiGagal(e.pesan));
     } catch (e) {
       // Kode idempoten SENGAJA dipertahankan supaya percobaan ulang dikenali
       // server sebagai kiriman yang sama.
@@ -298,6 +388,233 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         setStateIfMounted(() => _pos.siapkanUlang());
       }
     }
+  }
+
+  DataStruk _rakitStruk(
+      Map<String, dynamic> r, HasilPembayaran? bayar, double total) {
+    return DataStruk(
+      namaApotek: Sesi.instance.tokoNama,
+      alamat: Sesi.instance.tokoAlamat,
+      telepon: Sesi.instance.tokoTelp,
+      kodeTransaksi: '${r['kode'] ?? _pos.kodeIdempoten()}',
+      waktu: DateTime.now(),
+      kasir: Sesi.instance.userId,
+      baris: [
+        for (final b in _pos.keranjang)
+          BarisStruk(nama: b.nama, qty: b.qty, harga: b.harga),
+      ],
+      total: total,
+      metode: '${r['caraBayar'] ?? bayar?.namaMetode ?? ''}',
+      tunai: bayar?.tunai ?? 0,
+      kembalian: bayar?.kembalian ?? 0,
+      referensi: bayar?.referensi ?? '',
+      catatanKaki: Sesi.instance.pesanTerimaKasih,
+    );
+  }
+
+  Future<void> _dialogBerhasil(DataStruk struk, HasilPembayaran? bayar) async {
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Transaksi Berhasil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Kode: ${struk.kodeTransaksi}'),
+            Text('Total: ${_rp.format(struk.total)}'),
+            if (struk.metode.isNotEmpty) Text('Metode: ${struk.metode}'),
+            if ((bayar?.kembalian ?? 0) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Kembalian: ${_rp.format(bayar!.kembalian)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+          ],
+        ),
+        actions: [
+          if (_laciTersedia)
+            TextButton(
+                onPressed: () => _cetakStruk(struk),
+                child: const Text('Cetak Struk')),
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dialogTidakPasti(String pesan) async {
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Belum Dapat Dipastikan'),
+        content: Text(
+            'Server tidak terjangkau saat pembayaran dikirim, sehingga BELUM '
+            'diketahui apakah transaksi sudah terbukukan.\n\n$pesan\n\n'
+            'Jangan mengulang penjualan ini secara manual. Gunakan "Periksa '
+            'ke server" pada bilah kuning di atas untuk memastikannya; '
+            'kiriman ulang memakai kode yang sama sehingga tidak akan '
+            'terbukukan dua kali.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Mengerti')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _catatTertunda(String kode, Map<String, dynamic> payload) async {
+    try {
+      await ApotikPembayaranTertundaStore.instance.catat(PembayaranTertunda(
+        kode: kode,
+        payload: payload,
+        total: _pos.total,
+        waktu: DateTime.now(),
+      ));
+    } catch (_) {
+      // Gagal menulis antrean tidak boleh menelan pesan utama ke kasir.
+    }
+    await _muatTertunda();
+  }
+
+  Future<void> _lupakanTertunda(String kode) async {
+    try {
+      await ApotikPembayaranTertundaStore.instance.hapus(kode);
+    } catch (_) {
+      // abaikan
+    }
+    await _muatTertunda();
+  }
+
+  /// Memastikan nasib SELURUH pembayaran yang menggantung dengan mengirim
+  /// ulang payload yang sama (server idempoten terhadap `kode`).
+  Future<void> _periksaTertunda() async {
+    if (_memeriksaTertunda) return;
+    setStateIfMounted(() => _memeriksaTertunda = true);
+    final laporan = <String>[];
+    var adaYangTerbukukan = false;
+    try {
+      for (final p in List<PembayaranTertunda>.from(_tertunda)) {
+        final h = await ApotikPembayaranTertundaStore.instance
+            .periksaUlang(p, _panggil);
+        laporan.add(h.pesan);
+        if (h.status == StatusPeriksaUlang.sudahTerbukukan ||
+            h.status == StatusPeriksaUlang.baruTerbukukan) {
+          adaYangTerbukukan = true;
+          if (p.kode == _pos.kodeIdempoten()) {
+            // Transaksi di layar inilah yang ternyata terbukukan -- kosongkan
+            // keranjang supaya tidak dijual ulang.
+            setStateIfMounted(() => _pos.kosongkan());
+          }
+        }
+      }
+    } finally {
+      setStateIfMounted(() => _memeriksaTertunda = false);
+      await _muatTertunda();
+    }
+    if (!mounted || laporan.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(
+            adaYangTerbukukan ? 'Hasil Pemeriksaan' : 'Belum Ada Kepastian'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final l in laporan) Text('\u2022 $l')],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bukaLaci() async {
+    try {
+      await _prefsAman(() => PengaturanLaci.instance.muat());
+      await bukaLaciKasir(
+          pinAlternatif: PengaturanLaci.instance.pinAlternatif,
+          namaPrinter: PengaturanLaci.instance.namaPrinter);
+    } catch (e) {
+      if (!mounted) return;
+      _pesan('Gagal membuka laci: $e', galat: true);
+    }
+  }
+
+  /// Cetak LOKAL lewat jalur RAW ESC/POS. Server tidak menyimpan riwayat
+  /// cetak (IR-08), jadi tidak ada klaim apa pun soal itu di layar.
+  Future<void> _cetakStruk(DataStruk struk, {bool cetakUlang = false}) async {
+    try {
+      // Pakai lebar bawaan bila preferensi belum tersedia.
+      var lebarMm = 58.0;
+      await _prefsAman(() async {
+        await PengaturanStruk.instance.muat();
+        lebarMm = PengaturanStruk.instance.lebarKertasMm;
+      });
+      final data = cetakUlang ? _salinCetakUlang(struk) : struk;
+      final baris = ApotikStrukTeks.susun(data,
+          kolom: ApotikStrukTeks.kolomUntukKertas(lebarMm));
+      await cetakRawKasir(ApotikStrukTeks.keEscPos(baris),
+          namaPrinter: PengaturanLaci.instance.namaPrinter,
+          namaDokumen: 'Struk Apotik ${data.kodeTransaksi}');
+      if (!mounted) return;
+      _pesan('Struk ${data.kodeTransaksi} dikirim ke printer.');
+    } catch (e) {
+      if (!mounted) return;
+      _pesan('Gagal mencetak struk: $e', galat: true);
+    }
+  }
+
+  DataStruk _salinCetakUlang(DataStruk s) => DataStruk(
+        namaApotek: s.namaApotek,
+        alamat: s.alamat,
+        telepon: s.telepon,
+        kodeTransaksi: s.kodeTransaksi,
+        waktu: s.waktu,
+        kasir: s.kasir,
+        baris: s.baris,
+        total: s.total,
+        metode: s.metode,
+        tunai: s.tunai,
+        kembalian: s.kembalian,
+        referensi: s.referensi,
+        catatanKaki: s.catatanKaki,
+        cetakUlang: true,
+      );
+
+  /// Bilah peringatan pembayaran yang nasibnya belum diketahui. Sengaja
+  /// MELEKAT di atas layar: selama ini belum jelas, kasir tidak boleh
+  /// menganggap transaksinya batal.
+  Widget _bilahTertunda(ApotikDesignTokens t) {
+    return Material(
+      color: t.warning.withValues(alpha: 0.14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        child: Row(children: [
+          Icon(Icons.sync_problem, size: 18, color: t.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${_tertunda.length} pembayaran belum dipastikan terbukukan. '
+              'Jangan jual ulang -- periksa dulu.',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: t.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _memeriksaTertunda ? null : _periksaTertunda,
+            child:
+                Text(_memeriksaTertunda ? 'Memeriksa...' : 'Periksa ke server'),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -311,6 +628,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _contextBar(),
+              if (_tertunda.isNotEmpty) _bilahTertunda(t),
               Expanded(
                 child:
                     layout.bolehTigaArea ? _tigaArea(t) : _satuKolom(t, layout),
@@ -410,11 +728,23 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                   border: OutlineInputBorder(), isDense: true),
               items: _caraBayar
                   .map((c) => DropdownMenuItem<int>(
-                      value: (c['id'] as num?)?.toInt(),
-                      child: Text('${c['nama'] ?? '-'}',
+                      value: c.id,
+                      child: Text(c.nama.isEmpty ? '-' : c.nama,
                           overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (v) => setStateIfMounted(() => _caraBayarId = v),
+            ),
+            Text(
+                'Metode dapat diganti lagi saat membayar, lengkap dengan '
+                'uang diterima dan kembalian.',
+                style: TextStyle(fontSize: 11, color: t.textSecondary)),
+            const SizedBox(height: 16),
+          ],
+          if (_strukTerakhir != null) ...[
+            OutlinedButton.icon(
+              onPressed: () => _cetakStruk(_strukTerakhir!, cetakUlang: true),
+              icon: const Icon(Icons.receipt_long_outlined, size: 17),
+              label: Text('Cetak Ulang ${_strukTerakhir!.kodeTransaksi}'),
             ),
             const SizedBox(height: 16),
           ],
