@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api_client.dart';
 import '../widgets/app_error_info.dart';
+import '../services/master_offline.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
 
@@ -51,13 +52,26 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
       galatMuat = null;
     });
     try {
-      final r = await ApiClient.instance.aksi(
-          'produksi_list', <String, dynamic>{'jenis': cfg.kode, 'limit': 200});
-      if (!mounted) return;
-      setState(() {
-        dokumen = _daftar(r['data']);
-        hak = _peta(r['hakAkses']);
-      });
+      // BACA CACHE DULU: dokumen produksi dibuka di gudang. Tanpa ini layarnya
+      // KOSONG saat sinyal mati -- dokumen yang mau disunting pun tak terbuka,
+      // padahal tulisannya sudah lokal-dulu.
+      // Cache dipisah per JENIS dokumen (BOM, WO, material issue, dan
+      // seterusnya): satu kunci untuk semua akan membuat daftar yang satu
+      // menimpa yang lain.
+      await MasterOffline.daftarCacheDulu(
+        'produksi_list',
+        <String, dynamic>{'jenis': cfg.kode, 'limit': 200},
+        'master:produksi:${cfg.kode}',
+        onData: (r) {
+          if (!mounted) return;
+          setState(() {
+            dokumen = _daftar(r['data']);
+            // Hak hanya diperbarui dari emisi SERVER; snapshot cache tidak
+            // membawanya, dan menimpanya dgn peta kosong memadamkan tombol.
+            if (r['hakAkses'] is Map) hak = _peta(r['hakAkses']);
+          });
+        },
+      );
     } catch (e) {
       if (mounted) {
         setState(() => galatMuat = _infoGalatProduksi(e, cfg.judul));

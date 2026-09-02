@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../services/master_offline.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 
@@ -85,16 +85,25 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
       _galat = null;
     });
     try {
-      final r = await ApiClient.instance
-          .aksi('harga_grosir_list', {'produk_id': widget.produkId});
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _aturan = ((r['data'] as List?) ?? [])
-            .whereType<Map>()
-            .map((e) => e.cast<String, dynamic>())
-            .toList();
-        _memuat = false;
-      });
+      // BACA CACHE DULU: aturan harga dibuka kasir di lapangan, dan tulisannya
+      // sudah lokal-dulu -- percuma bila daftarnya sendiri kosong saat offline.
+      // Cache dipisah per PRODUK: satu kunci untuk semua produk akan membuat
+      // aturan produk yang satu tampil pada produk lain.
+      await MasterOffline.daftarCacheDulu(
+        'harga_grosir_list',
+        {'produk_id': widget.produkId},
+        'master:harga_grosir:${widget.produkId}',
+        onData: (r) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _aturan = ((r['data'] as List?) ?? [])
+                .whereType<Map>()
+                .map((e) => e.cast<String, dynamic>())
+                .toList();
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() {
         _galat = '$e';

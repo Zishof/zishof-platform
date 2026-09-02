@@ -56,6 +56,25 @@ void main() {
     expect(s, contains(_rapat('prosesSimpanMaster(')));
   });
 
+  test('daftarnya ikut dibaca cache-dulu, bukan hanya tulisannya', () {
+    // Menyelamatkan tulisan tanpa menyelamatkan bacaan hanya setengah jalan:
+    // offline layarnya KOSONG, jadi dokumen yang mau disunting pun tak terbuka.
+    const bacaCache = <String, String>{
+      'pengiriman_screen.dart': "'master:distribusi:\${konfigurasi.kode}'",
+      'produksi_screen.dart': "'master:produksi:\${cfg.kode}'",
+      'harga_grosir_editor.dart': "'master:harga_grosir:\${widget.produkId}'",
+    };
+    for (final e in bacaCache.entries) {
+      final s = _layar(e.key);
+      expect(s, contains(_rapat('daftarCacheDulu(')),
+          reason: '${e.key} masih membaca daftarnya online-only');
+      // Cache dipisah per JENIS/PRODUK: satu kunci untuk semua membuat daftar
+      // yang satu tampil pada yang lain.
+      expect(s, contains(_rapat(e.value)),
+          reason: '${e.key} memakai kunci cache yang tidak membedakan');
+    }
+  });
+
   test('kunci antrean membedakan dokumen, bukan satu kunci untuk semua', () {
     // Kunci yang sama untuk dua dokumen berbeda membuat yang kedua MEMBUANG yang
     // pertama dari antrean — pekerjaan hilang tanpa pesan apa pun.

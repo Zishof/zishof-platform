@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import '../services/master_offline.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/proses_simpan_master.dart';
 
@@ -57,27 +58,35 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
       _pesan = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
+      // BACA CACHE DULU: dokumen pengiriman dibuka di jalan. Tanpa ini layarnya
+      // KOSONG saat sinyal mati -- bukan data lama, melainkan tidak ada apa-apa,
+      // sehingga dokumen yang mau disunting pun tak bisa dibuka.
+      // Cache dipisah per JENIS dokumen: satu kunci untuk semua akan membuat
+      // daftar Delivery Order menimpa Freight Order dan sebaliknya.
+      await MasterOffline.daftarCacheDulu(
         'distribusi_list',
         <String, dynamic>{
           'jenis': konfigurasi.kode,
           'cari': _cari.text.trim(),
           'limit': 100,
         },
+        'master:distribusi:${konfigurasi.kode}',
+        onData: (hasil) {
+          if (!mounted) return;
+          final mentah = hasil['data'];
+          setState(() {
+            _data = mentah is List
+                ? mentah
+                    .whereType<Map>()
+                    .map((Map nilai) => Map<String, dynamic>.from(nilai))
+                    .toList()
+                : <Map<String, dynamic>>[];
+            _hak = hasil['hakAkses'] is Map
+                ? Map<String, dynamic>.from(hasil['hakAkses'] as Map)
+                : <String, dynamic>{};
+          });
+        },
       );
-      if (!mounted) return;
-      final mentah = hasil['data'];
-      setState(() {
-        _data = mentah is List
-            ? mentah
-                .whereType<Map>()
-                .map((Map nilai) => Map<String, dynamic>.from(nilai))
-                .toList()
-            : <Map<String, dynamic>>[];
-        _hak = hasil['hakAkses'] is Map
-            ? Map<String, dynamic>.from(hasil['hakAkses'] as Map)
-            : <String, dynamic>{};
-      });
     } catch (e) {
       if (mounted) setState(() => _pesan = e.toString());
     } finally {
