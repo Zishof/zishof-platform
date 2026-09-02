@@ -106,8 +106,8 @@ void main() {
       'TutupBukuHelper.java': 'tutup_buku',
     };
     for (final e in helper.entries) {
-      final f = File(r'C:\opt\AISis\src\main\srcisction\servletpi'
-          '${e.key}');
+      final f = File(r'C:\opt\AIS\ais\src\main\src\ais\action\servlet\api'
+          '\\${e.key}');
       if (!f.existsSync()) return; // working copy AIS tidak selalu ada di CI
       final isi = _rapat(f.readAsStringSync());
       expect(isi, contains(_rapat('hakAksesJson(')),

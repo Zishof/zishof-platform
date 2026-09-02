@@ -373,7 +373,9 @@ class _KamarHotelScreenState extends State<KamarHotelScreen> {
               Tab(text: 'Kamar'),
             ]),
           ),
-          floatingActionButton: _propertiId == null
+          // Tipe kamar dan kamar sama-sama bernaung pada kunci hotel_kamar.
+          floatingActionButton: _propertiId == null ||
+                  !bolehHotel('hotel_kamar', 'create')
               ? null
               : FloatingActionButton.extended(
                   onPressed: () {

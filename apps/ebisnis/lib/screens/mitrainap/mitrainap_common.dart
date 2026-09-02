@@ -38,9 +38,37 @@ Future<List<Map<String, dynamic>>> muatDaftarHotel(
   if (!apiSukses(res)) {
     throw Exception(apiPesan(res, 'Gagal memuat data ($aksi).'));
   }
+  _simpanHakHotel(res);
   return (res['data'] as List? ?? [])
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
+}
+
+/// Hak per kunci menu Hotel, dikumpulkan dari balasan daftar mana pun.
+///
+/// Ditangkap di [muatDaftarHotel] karena SELURUH layar MitraInap memuat datanya
+/// lewat sana -- satu tempat, sembilan layar. Menambahkan pembacaan hak di tiap
+/// layar pasti meninggalkan layar baru tanpa gerbang.
+final Map<String, Map<String, bool>> _hakHotel = {};
+
+void _simpanHakHotel(Map<String, dynamic> res) {
+  final kunci = '${res['hakKunci'] ?? ''}'.trim();
+  final hak = res['hak'];
+  // Kunci menunya datang dari PELADEN, bukan disalin di sini: dua salinan tabel
+  // pemetaan aksi-ke-kunci pasti berbeda begitu salah satunya diubah.
+  if (kunci.isEmpty || hak is! Map) return;
+  _hakHotel[kunci] = hak.map((k, v) => MapEntry('$k', v == true));
+}
+
+/// Bolehkah [aksi] pada menu [kunciMenu]?
+///
+/// Selama haknya belum pernah tiba untuk kunci itu, jawabannya YA: peladen tetap
+/// gerbang sebenarnya, dan memadamkan tombol hanya karena haknya belum dimuat
+/// justru mengunci pengguna yang sebenarnya berhak.
+bool bolehHotel(String kunciMenu, String aksi) {
+  final hak = _hakHotel[kunciMenu];
+  if (hak == null) return true;
+  return hak[aksi] != false;
 }
 
 /// Dropdown properti -- SEMUA layar MitraInap berscope satu properti

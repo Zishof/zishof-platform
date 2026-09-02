@@ -7,6 +7,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/kilau_perubahan.dart';
+import 'mitrainap_common.dart';
 import '../../widgets/proses_simpan_master.dart';
 import '../../widgets/safe_state.dart';
 
@@ -206,12 +207,13 @@ class _PropertiHotelScreenState extends State<PropertiHotelScreen> {
                 label: const Text('Isi Data Contoh'),
               ),
             ),
-          FloatingActionButton.extended(
-            heroTag: 'fab-tambah-properti',
-            onPressed: () => _simpan(null),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Properti'),
-          ),
+          if (bolehHotel('hotel_properti', 'create'))
+            FloatingActionButton.extended(
+              heroTag: 'fab-tambah-properti',
+              onPressed: () => _simpan(null),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Properti'),
+            ),
         ],
       ),
       body: _memuat
