@@ -21,6 +21,7 @@ Sukses = `status == '00'` atau `'success'`.
 | `apotik_laporan_penjualan` | Laporan | — |
 | `apotik_laporan_kedaluwarsa` | Laporan | — |
 | `apotik_laporan_terkendali` | Laporan | — |
+| `apotik_laporan_pembayaran` | Laporan / Rekonsiliasi Kas | **baru r83210** — rekap uang masuk per metode: `{dari, sampai}` → `{perMetode:[{nama,tunai,jumlahTransaksi,nominal}], totalTunai, totalNonTunai, jumlahTransaksi, penjualanLedger, selisihTanpaMetode}` |
 | `apotik_provision_demo` | Beranda (admin) | data contoh |
 
 Ditambah aksi bersama: `konfigurasi` (aksesMenu, identitas), `revisi_daftar/detail/pulihkan`

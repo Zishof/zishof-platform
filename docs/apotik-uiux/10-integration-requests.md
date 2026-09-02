@@ -14,7 +14,7 @@ merombak layar.
 | **IR-03** | Peringatan klinis: alergi, interaksi, duplikasi terapi, dosis | tidak ada | panel telaah tidak dibuat (menghindari kesan sudah diperiksa) | endpoint telaah + sumber data alergi pasien |
 | **IR-04** | Racikan/compounding: formula, BOM, HPP, etiket | `apotik_resep_detail` hanya **membaca** flag `racikan` | mode Racikan & Produksi tampil TERKUNCI beserta alasannya; baris racikan resep tetap terkunci (perilaku existing) | endpoint buat/kerjakan racikan |
 | **IR-05** ✅ | Double-check pemeriksa kedua, konseling | **SUDAH ADA** — entity `ApotikDispensingLog` + aksi `apotik_dispensing_status`/`_catat`; server MENOLAK pemeriksa kedua yang sama dengan penyiap | tombol dirakit hanya bila server mendukung | selesai |
-| **IR-06** | Buka/tutup shift & kas laci untuk apotik | `sesi_kas_*` milik POS umum; belum dipetakan ke apotik | kartu/menu shift tidak dibuat | putuskan: pakai ulang `sesi_kas_*` atau aksi apotik sendiri |
+| **IR-06** ◑ | Buka/tutup shift & kas laci untuk apotik | **pertanyaannya sudah terjawab:** `SesiKasUtil` menghitung uang dari `koperasi.pembelian_anggota_koperasi`, sedangkan penjualan apotek ada di `sirs.detail_transaksi_pasien` (AJ) + `sirs.apotik_pembayaran_transaksi` — memakai ulang `sesi_kas_*` apa adanya akan melaporkan tunai apotek Rp 0. Rekap uang masuk apotek kini tersedia lewat `apotik_laporan_pembayaran` (r83210) | tab **Rekonsiliasi Kas** menghitung kas seharusnya dari rekap itu; TIDAK ada tombol "Tutup Shift" karena penutupannya belum dapat disimpan — lembar hitungnya dapat disalin/ditandatangani di kertas | sisa keputusan: tambahkan sumber apotek ke `SesiKasUtil` **atau** buat `apotik_sesi_kas_buka/tutup` sendiri |
 | **IR-07** ✅ | Daftar metode pembayaran apotik | **SUDAH ADA** — `apotik_cara_bayar_list` + pencatatan di `ApotikPembayaranTransaksi` | dropdown hanya dirakit bila server mengirim daftar | selesai |
 | **IR-08** ◑ | Printer, laci kas, cetak ulang, bukti digital | perangkat: **sudah** lewat `core_hw` (jalur RAW ESC/POS Windows) — server: masih tidak ada riwayat cetak maupun bukti digital | struk teks + buka laci + cetak ulang **lokal** sudah jalan (Fase 6); cetak ulang hanya untuk transaksi terakhir di mesin ini dan ditandai `CETAK ULANG` | endpoint riwayat cetak + bukti digital, supaya cetak ulang mungkin dilakukan dari mesin lain dan terlacak |
 | **IR-09** | PO PBF, partial receiving, bukti suhu cold-chain | hanya `apotik_terima_barang` | form penerimaan sebatas field yang diterima server | endpoint PO + penerimaan sebagian + lampiran suhu |
@@ -26,7 +26,9 @@ merombak layar.
 **Selesai:** IR-01, IR-02, IR-05, IR-07 (backend + UI).
 **Sebagian:** IR-08 — sisi perangkat (printer, laci, cetak ulang) selesai di
 Fase 6; sisi server (riwayat cetak, bukti digital) masih terbuka.
-**Masih terbuka:** IR-03, IR-04, IR-06, IR-09, IR-10, IR-11.
+**Masih terbuka:** IR-03, IR-04, IR-09, IR-10, IR-11.
+**Sebagian:** IR-06 — sisi baca (rekap uang masuk per metode) selesai di
+Fase 7; yang belum ada adalah PENYIMPANAN buka/tutup shift apotek.
 
 **Tambahan backend Fase 6 (r83182).** `apotik_cara_bayar_list` kini juga
 mengirim `adaKembalian` dan `online`. Tanpa `adaKembalian`, klien terpaksa

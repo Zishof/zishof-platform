@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../app_variant.dart';
+import '../../features/apotik/reports/apotik_rekonsiliasi_page.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
@@ -22,6 +24,9 @@ class LaporanApotikScreen extends StatefulWidget {
   final int tabAwal;
   const LaporanApotikScreen({super.key, this.tabAwal = 0});
 
+  /// Indeks tab rekonsiliasi kas (hanya ada pada varian apotik).
+  static const int tabRekonsiliasi = 3;
+
   @override
   State<LaporanApotikScreen> createState() => _LaporanApotikScreenState();
 }
@@ -30,11 +35,19 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
+  /// Rekonsiliasi kas hanya bermakna pada varian apotik: angkanya berasal dari
+  /// `apotik_laporan_pembayaran`, bukan dari sesi kas POS umum.
+  bool get _adaRekonsiliasi => AppVariant.isApotik;
+
+  int get _jumlahTab => _adaRekonsiliasi ? 4 : 3;
+
   @override
   void initState() {
     super.initState();
     _tab = TabController(
-        length: 3, vsync: this, initialIndex: widget.tabAwal.clamp(0, 2));
+        length: _jumlahTab,
+        vsync: this,
+        initialIndex: widget.tabAwal.clamp(0, _jumlahTab - 1));
     _tab.addListener(_ubahTab);
   }
 
@@ -51,11 +64,13 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
 
   @override
   Widget build(BuildContext context) {
-    final bantuan = const [
+    const kunciBantuan = [
       'apotik_laporan',
       'apotik_narkotika',
-      'apotik_laporan'
-    ][_tab.index];
+      'apotik_laporan',
+      'apotik_laporan',
+    ];
+    final bantuan = kunciBantuan[_tab.index.clamp(0, kunciBantuan.length - 1)];
     return AppShell(
       menuAktif: MenuEBisnis.laporanApotik,
       judul: 'Laporan Apotik',
@@ -71,10 +86,11 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
             child: TabBar(
               controller: _tab,
               isScrollable: true,
-              tabs: const [
-                Tab(text: 'Penjualan'),
-                Tab(text: 'Obat Terkendali'),
-                Tab(text: 'Kedaluwarsa'),
+              tabs: [
+                const Tab(text: 'Penjualan'),
+                const Tab(text: 'Obat Terkendali'),
+                const Tab(text: 'Kedaluwarsa'),
+                if (_adaRekonsiliasi) const Tab(text: 'Rekonsiliasi Kas'),
               ],
             ),
           ),
@@ -82,10 +98,11 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
           Expanded(
             child: TabBarView(
               controller: _tab,
-              children: const [
-                _TabPenjualan(),
-                _TabTerkendali(),
-                _TabKedaluwarsa(),
+              children: [
+                const _TabPenjualan(),
+                const _TabTerkendali(),
+                const _TabKedaluwarsa(),
+                if (_adaRekonsiliasi) const ApotikRekonsiliasiPage(),
               ],
             ),
           ),
