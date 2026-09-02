@@ -525,7 +525,14 @@ class _DetailSpjState extends State<_DetailSpj> with JejakGalat {
                             child: const Text('Setujui (APPROVE)')),
                       if ('${d['status']}' == 'APPROVED')
                         ElevatedButton.icon(
-                            onPressed: _mulaiJalan,
+                            // "Mulai Jalan" membuka sesi nota keliling --
+                            // wewenangnya sama dengan mengubah SPJ-nya.
+                            onPressed: (Sesi.instance
+                                        .crudInventorySales.isEmpty ||
+                                    Sesi.instance.bolehAksiIs(
+                                        'surat_perintah_sales', 'update'))
+                                ? _mulaiJalan
+                                : null,
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white),

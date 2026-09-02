@@ -638,8 +638,12 @@ class _TabPembayaranState extends State<_TabPembayaran> with JejakGalat {
                               tooltip: 'Cetak Voucher (PDF)',
                               onPressed: () => _cetakVoucher(b),
                             ),
+                            // Sama seperti Piutang: membalik voucher yang sudah
+                            // posting adalah wewenang terpisah dari membayarnya.
                             if (!Sesi.instance.isSalesKeliling &&
-                                '${b['statusDok']}' == 'AKTIF')
+                                '${b['statusDok']}' == 'AKTIF' &&
+                                (Sesi.instance.crudInventorySales.isEmpty ||
+                                    Sesi.instance.bolehAksiIs('hutang', 'delete')))
                               PopupMenuButton<String>(
                                 tooltip: 'Aksi dokumen',
                                 onSelected: (aksi) {

@@ -892,8 +892,13 @@ class _TabRiwayatState extends State<_TabRiwayat> with JejakGalat {
                         tooltip: 'Cetak kwitansi (PDF)',
                         onPressed: () => _cetakKwitansi(r),
                       ),
+                      // Reversal = wewenang TERPISAH dari membuat penagihan:
+                      // membalik kwitansi yang sudah posting bukan pekerjaan
+                      // yang sama dengan menerbitkannya.
                       if (!Sesi.instance.isSalesKeliling &&
-                          '${r['statusDok']}' == 'AKTIF')
+                          '${r['statusDok']}' == 'AKTIF' &&
+                          (Sesi.instance.crudInventorySales.isEmpty ||
+                              Sesi.instance.bolehAksiIs('piutang', 'delete')))
                         PopupMenuButton<String>(
                           tooltip: 'Aksi dokumen',
                           onSelected: (v) {

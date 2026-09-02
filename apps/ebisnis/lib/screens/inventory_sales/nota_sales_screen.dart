@@ -265,6 +265,16 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales>
     }
   }
 
+  /// Hak menu `nota_sales` dari konteks aktor Inventory & Sales.
+  ///
+  /// Memakai penjaga yang SUDAH ada (`Sesi.bolehAksiIs`), bukan mekanisme baru.
+  /// Selama konteks aktor belum sempat dimuat, tombol TIDAK dipadamkan: peladen
+  /// tetap gerbang sebenarnya, dan memadamkan tombol hanya karena konteksnya
+  /// belum tiba justru mengunci pengguna yang sebenarnya berhak.
+  bool _bolehSesi(String aksi) =>
+      Sesi.instance.crudInventorySales.isEmpty ||
+      Sesi.instance.bolehAksiIs('nota_sales', aksi);
+
   Future<void> _dialogBiaya() async {
     List<Map<String, dynamic>> kategori = [];
     try {
@@ -901,42 +911,51 @@ class _DetailSesiNotaSalesState extends State<DetailSesiNotaSales>
                     if ('${d['statusSesi']}' == 'ACTIVE')
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         OutlinedButton.icon(
-                            onPressed: () => _dialogKas(
-                                'Penjualan Tunai', 'si_trip_cash_sale'),
+                            onPressed: !_bolehSesi('create')
+                                ? null
+                                : () => _dialogKas(
+                                    'Penjualan Tunai', 'si_trip_cash_sale'),
                             icon: const Icon(Icons.point_of_sale, size: 18),
                             label: const Text('Jual Tunai')),
                         OutlinedButton.icon(
-                            onPressed: _dialogBiaya,
+                            onPressed: _bolehSesi('create') ? _dialogBiaya : null,
                             icon: const Icon(Icons.receipt_outlined, size: 18),
                             label: const Text('Catat Biaya')),
                         OutlinedButton.icon(
-                            onPressed: _dialogPembelian,
+                            onPressed:
+                                _bolehSesi('create') ? _dialogPembelian : null,
                             icon: const Icon(Icons.local_shipping_outlined,
                                 size: 18),
                             label: const Text('Kulakan Sesi')),
                         OutlinedButton.icon(
-                            onPressed: () => _dialogKas(
-                                'Setoran ke Pemilik', 'si_trip_deposit'),
+                            onPressed: !_bolehSesi('create')
+                                ? null
+                                : () => _dialogKas(
+                                    'Setoran ke Pemilik', 'si_trip_deposit'),
                             icon: const Icon(Icons.savings_outlined, size: 18),
                             label: const Text('Setoran')),
                         ElevatedButton.icon(
-                            onPressed: () => _aksi('si_trip_return',
-                                {'session_id': widget.sessionId},
-                                sukses: 'Sesi ditandai KEMBALI.'),
+                            onPressed: !_bolehSesi('update')
+                                ? null
+                                : () => _aksi('si_trip_return',
+                                    {'session_id': widget.sessionId},
+                                    sukses: 'Sesi ditandai KEMBALI.'),
                             icon: const Icon(Icons.keyboard_return, size: 18),
                             label: const Text('Kembali')),
                       ]),
                     if ('${d['statusSesi']}' == 'RETURNED')
                       ElevatedButton.icon(
-                          onPressed: () => _aksi('si_trip_reconcile',
-                              {'session_id': widget.sessionId},
-                              sukses: 'Masuk tahap rekonsiliasi.'),
+                          onPressed: !_bolehSesi('update')
+                              ? null
+                              : () => _aksi('si_trip_reconcile',
+                                  {'session_id': widget.sessionId},
+                                  sukses: 'Masuk tahap rekonsiliasi.'),
                           icon: const Icon(Icons.fact_check_outlined, size: 18),
                           label: const Text(
                               'Mulai Rekonsiliasi (barang wajib habis dialokasikan)')),
                     if ('${d['statusSesi']}' == 'RECONCILING' && pemilik)
                       ElevatedButton.icon(
-                          onPressed: _dialogTutup,
+                          onPressed: _bolehSesi('update') ? _dialogTutup : null,
                           style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
                               foregroundColor: Colors.white),
