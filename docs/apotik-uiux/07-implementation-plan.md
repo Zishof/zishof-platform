@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 285 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 288 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -53,9 +53,15 @@ beberapa metode sekaligus. Pagar utamanya: jumlah seluruh baris wajib sama
 dengan total — tanpa itu penjualan bisa terbukukan dengan uang yang tidak
 pernah lengkap, dan selisihnya baru ketahuan saat tutup kas.
 
+**IR-10 menyusul** (AIS r83268): angka kartu dasbor kini COUNT atas seluruh
+baris, bukan hasil hitung dari daftar yang terpotong 100. Bedanya bukan
+kosmetik — `apotik_resep_list` memotong halaman DULU baru menyaring yang belum
+ditebus, jadi "resep menunggu" dulu berarti "yang belum ditebus di antara 100
+resep terbaru". Pada server lama angkanya kini ditandai "100+".
+
 **Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan integrasi:
 IR-03 (basis pengetahuan obat), IR-04 (racikan), IR-06 (penyimpanan shift),
-IR-09 (PO & bukti suhu), IR-10 (metrik SLA).
+IR-09 (PO & bukti suhu), dan sisa IR-10 (kolom `waktu_masuk` pada resep).
 
 ## Batas jujur
 

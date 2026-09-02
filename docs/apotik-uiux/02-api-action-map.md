@@ -22,6 +22,7 @@ Sukses = `status == '00'` atau `'success'`.
 | `apotik_laporan_kedaluwarsa` | Laporan | — |
 | `apotik_laporan_terkendali` | Laporan | — |
 | `apotik_laporan_pembayaran` | Laporan / Rekonsiliasi Kas | **baru r83210** — rekap uang masuk per metode: `{dari, sampai}` → `{perMetode:[{nama,tunai,jumlahTransaksi,nominal}], totalTunai, totalNonTunai, jumlahTransaksi, penjualanLedger, selisihTanpaMetode}` |
+| `apotik_metrik_operasional` | Dasbor | **baru r83268** — `{hari_ke_depan}` → `{resepMenunggu, resepTotal, batchKedaluwarsa, batchSegera, batchDitahan, itemHabis, transaksiHariIni, nilaiHariIni, slaResepTersedia}` |
 | `apotik_bayar` (IR-11) | POS | menerima `pembayaran: [{cara_bayar_id, nominal, tunai, kembalian, referensi}]`; jumlah nominal WAJIB = total (toleransi Rp 0,5). Jalur lama `cara_bayar_id` + `referensi_bayar` tetap berlaku dan kini juga menerima `tunai`/`kembalian`. Respons memuat larik `pembayaran` dan `caraBayar` gabungan |
 | `apotik_provision_demo` | Beranda (admin) | data contoh |
 

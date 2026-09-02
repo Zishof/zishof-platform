@@ -190,4 +190,64 @@ void main() {
       expect(find.textContaining('Shift'), findsNothing);
     });
   });
+
+  group('Metrik pasti vs angka terpotong (IR-10)', () {
+    List<Map<String, dynamic>> banyakResep(int n) =>
+        List.generate(n, (i) => {'id': i, 'kode': 'RSP-$i', 'ditebus': false});
+
+    test('memakai apotik_metrik_operasional bila tersedia', () async {
+      final diminta = <String>[];
+      final r = await ApotikDashboardLoader(panggil: (aksi, [body]) async {
+        diminta.add(aksi);
+        if (aksi == 'apotik_metrik_operasional') {
+          return {
+            'status': '00',
+            'resepMenunggu': 247,
+            'batchSegera': 12,
+            'batchKedaluwarsa': 3,
+            'batchDitahan': 2,
+            'itemHabis': 31,
+            'transaksiHariIni': 58,
+            'nilaiHariIni': 4250000,
+          };
+        }
+        return {'status': '00', 'data': const []};
+      }).muat();
+
+      expect(diminta, contains('apotik_metrik_operasional'));
+      expect(r.angkaPasti, isTrue);
+      // 247 jauh di atas batas halaman 100 -- inilah angka yang dulu salah.
+      expect(r.resepMenunggu, 247);
+      expect(r.batchNearExpiry, 15);
+      expect(r.stokHabis, 31);
+      expect(r.batchDitahan, 2);
+      expect(r.label(247), '247');
+    });
+
+    test('server lama: angka dari daftar ditandai TIDAK pasti', () async {
+      final r = await ApotikDashboardLoader(panggil: (aksi, [body]) async {
+        if (aksi == 'apotik_metrik_operasional') {
+          return {'status': '91', 'description': 'Aksi tidak dikenal'};
+        }
+        if (aksi == 'apotik_resep_list') {
+          return {'status': '00', 'data': banyakResep(100)};
+        }
+        return {'status': '00', 'data': const []};
+      }).muat();
+
+      expect(r.angkaPasti, isFalse);
+      expect(r.resepMenunggu, 100);
+      // Batas halaman TIDAK boleh disajikan sebagai fakta.
+      expect(r.label(100), '100+');
+      expect(r.label(7), '7');
+    });
+
+    test('angka yang tidak terbaca tetap null, bukan nol', () async {
+      final r = await ApotikDashboardLoader(panggil: (aksi, [body]) async {
+        throw Exception('jaringan mati');
+      }).muat();
+      expect(r.resepMenunggu, isNull);
+      expect(r.label(null), '—');
+    });
+  });
 }

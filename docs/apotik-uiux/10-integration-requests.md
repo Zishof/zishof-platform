@@ -18,7 +18,7 @@ merombak layar.
 | **IR-07** ✅ | Daftar metode pembayaran apotik | **SUDAH ADA** — `apotik_cara_bayar_list` + pencatatan di `ApotikPembayaranTransaksi` | dropdown hanya dirakit bila server mengirim daftar | selesai |
 | **IR-08** ◑ | Printer, laci kas, cetak ulang, bukti digital | perangkat: **sudah** lewat `core_hw` (jalur RAW ESC/POS Windows) — server: masih tidak ada riwayat cetak maupun bukti digital | struk teks + buka laci + cetak ulang **lokal** sudah jalan (Fase 6); cetak ulang hanya untuk transaksi terakhir di mesin ini dan ditandai `CETAK ULANG` | endpoint riwayat cetak + bukti digital, supaya cetak ulang mungkin dilakukan dari mesin lain dan terlacak |
 | **IR-09** | PO PBF, partial receiving, bukti suhu cold-chain | hanya `apotik_terima_barang` | form penerimaan sebatas field yang diterima server | endpoint PO + penerimaan sebagian + lampiran suhu |
-| **IR-10** | SLA resep/racikan, transaksi pending, cold-chain di dashboard | tidak ada | kartu untuk metrik ini **tidak dibuat** (ada test yang menjaga) | endpoint metrik operasional |
+| **IR-10** ◑ | SLA resep/racikan, transaksi pending, cold-chain di dasbor | **sebagian ada** — `apotik_metrik_operasional` (r83268) menghitung resep menunggu, batch kedaluwarsa/segera/ditahan, obat habis, transaksi & nilai hari ini dengan COUNT atas SELURUH baris | kartu dasbor memakai angka pasti itu; bila server lama, angka jatuh ke daftar terpotong dan ditandai "100+" alih-alih menyajikan batas halaman sebagai fakta | sisa: kolom `waktu_masuk` pada `sirs.resep` supaya SLA waktu tunggu dapat dihitung jujur |
 | **IR-11** ✅ | Uang diterima, kembalian, dan pembayaran terpisah (split) | **SUDAH ADA** — `apotik_pembayaran_transaksi` kini punya kolom `tunai`/`kembalian`, dan `apotik_bayar` menerima larik `pembayaran` [{cara_bayar_id, nominal, tunai, kembalian, referensi}] yang jumlahnya wajib sama dengan total (AIS r83255) | lembar pembayaran punya mode "Bayar terpisah" dengan penanda sisa; kembalian yang tampil benar-benar tersimpan | selesai |
 
 ## Status per 2 September 2026
@@ -26,7 +26,11 @@ merombak layar.
 **Selesai:** IR-01, IR-02, IR-05, IR-07 (backend + UI).
 **Sebagian:** IR-08 — sisi perangkat (printer, laci, cetak ulang) selesai di
 Fase 6; sisi server (riwayat cetak, bukti digital) masih terbuka.
-**Masih terbuka:** IR-03, IR-04, IR-09, IR-10.
+**Masih terbuka:** IR-03, IR-04, IR-09.
+**Sebagian:** IR-06 (baca selesai, simpan belum), IR-10 (angka pasti selesai;
+SLA waktu tunggu menunggu kolom `waktu_masuk` pada `sirs.resep` — satu-satunya
+stempel waktu yang ada sekarang, `tanggal_dirubah`, berubah tiap penyuntingan
+sehingga "menunggu 40 menit" yang dihitung darinya akan sering salah).
 
 **IR-11 selesai (AIS r83255).** Sekaligus menutup lubang lama: kolom IR-01 dan
 IR-02 ternyata belum pernah punya skrip migrasi tabel audit di repo. Skrip

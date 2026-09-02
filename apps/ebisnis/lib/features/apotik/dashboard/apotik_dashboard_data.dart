@@ -32,6 +32,18 @@ class ApotikRingkasan {
   final int? obatTerbaca;
   final List<ApotikTugas> tugas;
 
+  /// Angka di atas berasal dari `apotik_metrik_operasional` (COUNT di basis
+  /// data) atau — bila server belum punya aksi itu — dari daftar ber-halaman
+  /// yang **terpotong pada 100**. Bedanya wajib terlihat: angka terpotong
+  /// ditampilkan sebagai "100+", bukan sebagai fakta.
+  final bool angkaPasti;
+
+  /// Batch yang lotnya ditahan (karantina/recall/rusak). Hanya terisi bila
+  /// server mengirim metrik.
+  final int? batchDitahan;
+  final int? transaksiHariIni;
+  final double? nilaiHariIni;
+
   /// Waktu data ini benar-benar diterima dari server (untuk penanda basi).
   final DateTime? diperbaruiPada;
 
@@ -46,11 +58,26 @@ class ApotikRingkasan {
     this.tugas = const [],
     this.diperbaruiPada,
     this.galat = const {},
+    this.angkaPasti = false,
+    this.batchDitahan,
+    this.transaksiHariIni,
+    this.nilaiHariIni,
   });
+
+  /// Label angka yang siap ditampilkan: menandai batas 100 saat angkanya
+  /// berasal dari daftar terpotong.
+  String label(int? nilai) {
+    if (nilai == null) return '—';
+    if (!angkaPasti && nilai >= 100) return '100+';
+    return '$nilai';
+  }
 }
 
 /// Pemuat data dashboard dari aksi yang BENAR-BENAR ada di server:
-/// `apotik_resep_list`, `apotik_batch_monitor`, `apotik_item_cari`.
+/// `apotik_metrik_operasional` (IR-10, angka pasti) dengan `apotik_resep_list`,
+/// `apotik_batch_monitor`, dan `apotik_item_cari` untuk merakit daftar tugas.
+/// Bila server belum punya aksi metrik, angka jatuh kembali ke daftar
+/// ber-halaman dan ditandai TIDAK pasti (lihat [ApotikRingkasan.angkaPasti]).
 ///
 /// Cold-chain, tugas shift, transaksi pending, dan SLA (ada di mockup 01)
 /// TIDAK dipanggil karena backend belum menyediakannya — lihat IR-02/IR-06/
@@ -98,8 +125,35 @@ class ApotikDashboardLoader {
     int? batchNearExpiry;
     int? stokHabis;
     int? obatTerbaca;
+    int? batchDitahan;
+    int? transaksiHariIni;
+    double? nilaiHariIni;
+    var angkaPasti = false;
     final tugas = <ApotikTugas>[];
     final galat = <String, String>{};
+
+    // --- Metrik pasti (IR-10) -------------------------------------------
+    // Dicoba LEBIH DULU: bila server mendukungnya, angka kartu berasal dari
+    // COUNT atas seluruh baris, bukan dari daftar yang terpotong 100. Daftar
+    // di bawah tetap dipanggil, tetapi hanya untuk merakit daftar tugas.
+    try {
+      final r = await _panggil('apotik_metrik_operasional', {
+        'hari_ke_depan': ambangNearExpiryHari,
+      });
+      if (_sukses(r)) {
+        angkaPasti = true;
+        resepMenunggu = ((r['resepMenunggu'] as num?) ?? 0).toInt();
+        batchNearExpiry = ((r['batchSegera'] as num?) ?? 0).toInt() +
+            ((r['batchKedaluwarsa'] as num?) ?? 0).toInt();
+        stokHabis = ((r['itemHabis'] as num?) ?? 0).toInt();
+        batchDitahan = ((r['batchDitahan'] as num?) ?? 0).toInt();
+        transaksiHariIni = ((r['transaksiHariIni'] as num?) ?? 0).toInt();
+        nilaiHariIni = ((r['nilaiHariIni'] as num?) ?? 0).toDouble();
+      }
+    } catch (_) {
+      // Server lama tanpa aksi ini: angka tetap diambil dari daftar di bawah,
+      // dan ditandai tidak pasti lewat ApotikRingkasan.angkaPasti.
+    }
 
     // --- Antrean resep -------------------------------------------------
     try {
@@ -110,7 +164,7 @@ class ApotikDashboardLoader {
         // `status` (teks bebas); yang dipakai adalah `ditebus` karena itulah
         // penanda yang konsisten dari server.
         final menunggu = semua.where((e) => e['ditebus'] != true).toList();
-        resepMenunggu = menunggu.length;
+        resepMenunggu ??= menunggu.length;
         for (final e in menunggu.take(5)) {
           tugas.add(ApotikTugas(
             judul: 'Resep ${e['kode'] ?? e['id'] ?? '-'}',
@@ -137,7 +191,7 @@ class ApotikDashboardLoader {
       });
       if (_sukses(r)) {
         final batch = _data(r);
-        batchNearExpiry = batch.length;
+        batchNearExpiry ??= batch.length;
         final urut = [...batch];
         urut.sort((a, b) {
           final ha =
@@ -178,7 +232,7 @@ class ApotikDashboardLoader {
         final habis = item
             .where((e) => ((e['stok'] as num?)?.toDouble() ?? 0) <= 0)
             .toList();
-        stokHabis = habis.length;
+        stokHabis ??= habis.length;
         for (final e in habis.take(5)) {
           tugas.add(ApotikTugas(
             judul: '${e['nama'] ?? '-'}',
@@ -214,6 +268,10 @@ class ApotikDashboardLoader {
       tugas: tugas,
       diperbaruiPada: sekarang ?? DateTime.now(),
       galat: galat,
+      angkaPasti: angkaPasti,
+      batchDitahan: batchDitahan,
+      transaksiHariIni: transaksiHariIni,
+      nilaiHariIni: nilaiHariIni,
     );
   }
 }

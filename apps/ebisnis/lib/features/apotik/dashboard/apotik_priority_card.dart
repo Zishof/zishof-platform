@@ -15,6 +15,11 @@ class ApotikPriorityCard extends StatelessWidget {
   final IconData ikon;
   final String judul;
   final int? angka;
+
+  /// Label angka yang ditampilkan. Dipakai saat angkanya tidak pasti
+  /// (mis. "100+" karena berasal dari daftar yang terpotong) — kartu tidak
+  /// boleh menyajikan batas halaman sebagai fakta.
+  final String? angkaLabel;
   final String satuan;
 
   /// Kalimat pendek yang menjelaskan MENGAPA angka ini penting.
@@ -29,6 +34,7 @@ class ApotikPriorityCard extends StatelessWidget {
     required this.ikon,
     required this.judul,
     required this.angka,
+    this.angkaLabel,
     required this.makna,
     required this.tujuanLabel,
     this.satuan = '',
@@ -101,7 +107,7 @@ class ApotikPriorityCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text(angka == null ? '—' : '$angka',
+                  Text(angka == null ? '—' : (angkaLabel ?? '$angka'),
                       style: TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
