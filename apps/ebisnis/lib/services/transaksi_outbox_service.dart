@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import 'pelayanan_transaksi.dart';
+import 'peringatan_transaksi.dart';
 
 /// Pengirim ulang transaksi POS yang sudah ditulis ke SQLite sebelum request
 /// pertama dilakukan. Satu instance hidup selama aplikasi berjalan sehingga
@@ -408,11 +409,14 @@ class TransaksiOutboxService {
           'diskonFaktur': hasilBayar['diskonFaktur'],
           'totalKlien': payload['total'],
           'data': hasilBayar['data'],
-          // Peringatan stok minus ikut disimpan, bukan dibuang. Checkout POS
+          // Peringatan pasca-transaksi ikut disimpan, bukan dibuang. Checkout POS
           // bersifat lokal-dulu: responsnya tiba di sini, jauh setelah kasir
-          // menutup layar. Kalau tidak ditulis ke baris outbox, satu-satunya
-          // tanda bahwa stok perlu diopname lenyap tanpa pernah terbaca.
-          'peringatanStok': hasilBayar['peringatanStok'],
+          // menutup layar. Kalau tidak ditulis ke baris outbox, satu-satunya tanda
+          // bahwa ada yang perlu direkonsiliasi lenyap tanpa pernah terbaca.
+          //
+          // Disimpan SUDAH DIRATAKAN jadi daftar kalimat: layar struk tinggal
+          // menampilkannya, tanpa perlu tahu bentuk amplop respons servernya.
+          'peringatanTransaksi': PeringatanTransaksi.dari(hasilBayar),
         });
       } catch (e) {
         // Menyimpan angka pembanding tidak boleh menggagalkan sinkronisasi:

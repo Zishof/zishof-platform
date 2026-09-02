@@ -24,6 +24,7 @@ import 'struk_screen.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../services/peringatan_transaksi.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -826,8 +827,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
               .aksi('bayar', _payloadVerifikasi(pesanan, caraBayar));
           berhasil++;
           nilaiBerhasil += pesanan.totalBiaya;
-          final catatan = '${hasil['peringatanStok'] ?? ''}'.trim();
-          if (catatan.isNotEmpty) peringatan.add('${pesanan.kode}: $catatan');
+          for (final catatan in PeringatanTransaksi.dari(hasil)) {
+            peringatan.add('${pesanan.kode}: $catatan');
+          }
         } catch (e) {
           errorPertama ??= e;
           if (e is ApiException && e.kode == 'STOK_TIDAK_CUKUP') {
@@ -1461,7 +1463,7 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
       if (mounted) {
         // Peringatan stok (bila ada) menggantikan pesan sukses biasa: yang perlu
         // ditindaklanjuti tidak boleh kalah mencolok dari kabar baiknya.
-        final catatan = '${hasil['peringatanStok'] ?? ''}'.trim();
+        final catatan = PeringatanTransaksi.gabung(hasil);
         ScaffoldMessenger.of(context).showSnackBar(catatan.isEmpty
             ? SnackBar(content: Text('${p.kode} berhasil diselesaikan.'))
             : SnackBar(

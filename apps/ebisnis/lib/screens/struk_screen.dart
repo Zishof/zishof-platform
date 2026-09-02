@@ -1317,10 +1317,17 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
         if (peta is Map) {
           final t = (peta['total'] as num?)?.toDouble();
           final d = (peta['totalDiskon'] as num?)?.toDouble();
-          // Saat pengakuan server tiba, sekalian sampaikan peringatan stoknya.
-          // Kasir masih berdiri di depan layar struk -- ini kesempatan terakhir
+          // Saat pengakuan server tiba, sekalian sampaikan peringatannya. Kasir
+          // masih berdiri di depan layar struk -- ini kesempatan terakhir
           // menyampaikannya kepada orang yang benar-benar bisa menindaklanjuti.
-          final catatan = '${peta['peringatanStok'] ?? ''}'.trim();
+          //
+          // Outbox sudah meratakannya jadi daftar kalimat, jadi di sini tinggal
+          // digabung; bentuk lama (satu string) tetap diterima demi baris outbox
+          // yang tersimpan sebelum pembaruan ini.
+          final peringatan = peta['peringatanTransaksi'];
+          final catatan = peringatan is List
+              ? peringatan.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' ')
+              : '${peta['peringatanStok'] ?? ''}'.trim();
           if (mounted) {
             setState(() {
               _totalServer = t;
