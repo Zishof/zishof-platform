@@ -71,3 +71,18 @@ mendaftarkan entitas serta tabel audit entitas baru.
 - Perubahan hanya menambah metadata pada API; pembayaran dan nominal tidak
   dimutasi oleh helper pengelompokan.
 
+## Hotfix startup Hibernate (3 September 2026)
+
+Saat SessionFactory dibangun, Hibernate sempat gagal dengan
+`PropertyNotFoundException: Could not find a setter for property labelTampilan`.
+Entity memakai property access karena `@Id` berada pada getter, sehingga getter
+turunan `getLabelTampilan()` ikut dianggap sebagai properti persisten.
+
+Getter tersebut kini diberi `@javax.persistence.Transient`. Tidak diperlukan
+kolom database maupun setter baru karena `labelTampilan` hanya label hasil
+gabungan kode dan nama. Verifikasi setelah perbaikan:
+
+- `mvn -DskipTests compile`: **BUILD SUCCESS**.
+- Bytecode `GrupItemBiayaSekolah.class` memuat runtime annotation
+  `javax.persistence.Transient` pada `getLabelTampilan()`.
+- Kedua source mirror memiliki hash SHA-256 yang identik.
