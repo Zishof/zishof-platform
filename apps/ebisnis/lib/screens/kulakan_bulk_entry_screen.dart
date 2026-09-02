@@ -1846,8 +1846,17 @@ class _BulkSupplierSheetState extends State<_BulkSupplierSheet> {
   Future<void> _muat(String keyword) async {
     setStateIfMounted(() => _memuat = true);
     try {
-      final hasil =
-          await ApiClient.instance.aksi('penyedia_list', {'keyword': keyword});
+      // Hanya daftar AWAL (tanpa kata kunci) yang di-cache -- itulah yang
+      // muncul begitu sheet dibuka, dan tanpanya entri kulakan offline
+      // kehilangan pemasoknya. Hasil PENCARIAN sengaja tidak di-cache:
+      // menyimpannya per kata kunci hanya menumpuk snapshot yang tak pernah
+      // terpakai lagi, dan menyajikannya kembali membuat kata kunci yang
+      // berbeda tampak cocok.
+      final hasil = keyword.isEmpty
+          ? await MasterOffline.daftarDenganCache(
+              'penyedia_list', {'keyword': ''}, 'master:penyedia:awal')
+          : await ApiClient.instance
+              .aksi('penyedia_list', {'keyword': keyword});
       setStateIfMounted(() => _daftar =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
     } catch (_) {

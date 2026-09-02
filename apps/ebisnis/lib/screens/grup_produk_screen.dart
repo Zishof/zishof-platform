@@ -443,8 +443,11 @@ class _FormGrupDialogState extends State<_FormGrupDialog> {
 
   Future<void> _muatDiskonOpsi() async {
     try {
-      final r = await ApiClient.instance
-          .aksi('diskon_list', {'page': 1, 'page_size': 100});
+      // Tanpa daftar ini dropdown promo pada formulir grup tampil KOSONG,
+      // lalu grup tersimpan tanpa promo yang sebenarnya dimaksud -- salah
+      // diam-diam, bukan gagal terang-terangan.
+      final r = await MasterOffline.daftarDenganCache(
+          'diskon_list', {'page': 1, 'page_size': 100}, 'master:diskon_grup');
       if (!mounted) return;
       setStateIfMounted(() {
         _diskonOpsi = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();

@@ -746,12 +746,19 @@ class _ProdukScreenState extends State<ProdukScreen> with JejakGalat {
     }
     final pilihanUom = <Map<String, dynamic>>[];
     try {
-      final hasil = await ApiClient.instance.aksi('uom_list', {
-        'keyword': '',
-        'page': 1,
-        'page_size': 500,
-        'termasuk_nonaktif': true,
-      });
+      // Kunci cache TERPISAH dari keranjang: daftar ini sengaja memuat
+      // satuan NONAKTIF supaya produk lama yang masih memakainya tetap
+      // dapat disunting tanpa satuannya hilang diam-diam saat disimpan.
+      final hasil = await MasterOffline.daftarDenganCache(
+        'uom_list',
+        {
+          'keyword': '',
+          'page': 1,
+          'page_size': 500,
+          'termasuk_nonaktif': true,
+        },
+        'master:uom:termasuk_nonaktif',
+      );
       for (final raw in (hasil['data'] as List?) ?? const []) {
         pilihanUom.add(Map<String, dynamic>.from(raw as Map));
       }
@@ -4050,7 +4057,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: FutureBuilder<Map<String, dynamic>>(
                         future: _grupProdukFuture ??=
-                            ApiClient.instance.aksi('grup_produk_list', {}),
+                            MasterOffline.daftarDenganCache(
+                                'grup_produk_list', {}, 'master:grup_produk'),
                         builder: (c, snap) {
                           final data = ((snap.data?['data'] as List?) ?? [])
                               .map((e) => Map<String, dynamic>.from(e as Map))

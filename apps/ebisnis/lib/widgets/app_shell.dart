@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:core_db/core_db.dart';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
@@ -1352,6 +1354,12 @@ void _pindahMenu(BuildContext context, _ItemMenuShell item,
   _menuAktifNotifier.value = item.kunci;
 }
 
+/// Kunci snapshot daftar toko filter -- dibaca hanya saat pemuatan daring
+/// gagal. Sengaja TIDAK lewat MasterOffline: pembantu itu menyalakan timer
+/// outbox mutasi master sebagai efek samping, sedangkan ini murni pembacaan
+/// milik kerangka aplikasi.
+const String _kunciCacheTokoFilter = 'master:toko_filter';
+
 /// Muat daftar toko untuk combo filter (aksi `toko_filter_list`).
 ///
 /// Server yang memutuskan apakah pengguna ini boleh melihat seluruh toko dan
@@ -1368,9 +1376,28 @@ Future<void> muatDaftarTokoFilter() async {
           .whereType<Map>()
           .map((e) => e.map((k, v) => MapEntry('$k', v)))
           .toList();
+      await CoreDb.instance
+          .simpanCacheReferensi(_kunciCacheTokoFilter, jsonEncode(data));
     }
   } catch (_) {
-    // Biarkan: chip tetap menampilkan nama toko aktif spt sebelumnya.
+    // Offline: pakai snapshot terakhir supaya pemilih lingkup toko tidak
+    // menciut jadi satu toko di tengah kerja. Yang dipulihkan HANYA
+    // daftarnya. `bolehSemuaToko` sengaja TIDAK disentuh: itu wewenang,
+    // dan menaikkannya dari cache akan menghidupkan lingkup "semua toko"
+    // bagi pengguna yang wewenangnya sudah dicabut -- justru pada saat
+    // server tidak berada di jalur untuk menolaknya.
+    try {
+      final tersimpan =
+          await CoreDb.instance.ambilCacheReferensi(_kunciCacheTokoFilter);
+      if (tersimpan != null) {
+        Sesi.instance.daftarTokoFilter = (jsonDecode(tersimpan) as List)
+            .whereType<Map>()
+            .map((e) => e.map((k, v) => MapEntry('$k', v)))
+            .toList();
+      }
+    } catch (_) {
+      // Chip tetap menampilkan nama toko aktif spt sebelumnya.
+    }
   }
 }
 

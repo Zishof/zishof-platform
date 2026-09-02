@@ -12,6 +12,7 @@ import '../models.dart';
 import '../product_profile.dart';
 import '../sesi.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
+import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
@@ -2920,8 +2921,13 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   Future<void> _pilihSatuanJual(ItemKeranjang item) async {
     List<Map<String, dynamic>> uom;
     try {
-      final r = await ApiClient.instance
-          .aksi('uom_list', {'keyword': '', 'page': 1, 'page_size': 500});
+      // Satuan adalah data MASTER, tetapi tanpanya pemilihan satuan jual
+      // mati total saat offline -- baris keranjang terkunci pada satuan
+      // dasarnya. Kunci cache DIPISAH dari layar Produk: daftar di sana
+      // menyertakan satuan nonaktif, dan satu kunci untuk dua konteks akan
+      // menyuguhkan satuan mati sebagai pilihan jual tanpa tanda apa pun.
+      final r = await MasterOffline.daftarDenganCache('uom_list',
+          {'keyword': '', 'page': 1, 'page_size': 500}, 'master:uom:aktif');
       uom = ((r['data'] as List?) ?? const [])
           .whereType<Map>()
           .map((e) => e.cast<String, dynamic>())
