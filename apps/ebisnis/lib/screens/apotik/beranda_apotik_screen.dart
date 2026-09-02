@@ -12,6 +12,7 @@ import 'persediaan_apotik_screen.dart';
 import '../../app_variant.dart';
 import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
 import '../../features/apotik/inventory/apotik_batch_expiry_page.dart';
+import '../../features/apotik/inventory/apotik_formularium_page.dart';
 import '../../features/apotik/prescription/apotik_resep_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
@@ -324,7 +325,8 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
       ApotikTujuanDashboard.resep => const _HalamanAntreanResep(),
       // FASE 5: ruang kerja batch/expiry sendiri (sebelumnya tab persediaan).
       ApotikTujuanDashboard.batch => const _HalamanBatchExpiry(),
-      ApotikTujuanDashboard.stok => _layarTujuan('apotik_formularium'),
+      // FASE 5: formularium punya layar sendiri (editor profil obat IR-01).
+      ApotikTujuanDashboard.stok => const _HalamanFormularium(),
       ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
     };
     if (layar == null) return;
@@ -436,6 +438,23 @@ class _HalamanBatchExpiry extends StatelessWidget {
       subjudul: 'Monitor lot mendekati kedaluwarsa dan status penahanan',
       scrollable: false,
       body: ApotikBatchExpiryPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk Formularium / Master Obat.
+class _HalamanFormularium extends StatelessWidget {
+  const _HalamanFormularium();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Formularium / Master Obat',
+      subjudul:
+          'Golongan, bentuk sediaan, kekuatan, LASA, high-alert, cold-chain',
+      scrollable: false,
+      body: ApotikFormulariumPage(),
     );
   }
 }
