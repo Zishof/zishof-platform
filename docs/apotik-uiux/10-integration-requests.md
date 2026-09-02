@@ -39,8 +39,11 @@ IR-02 ternyata belum pernah punya skrip migrasi tabel audit di repo. Skrip
 **wajib dijalankan sebelum restart** — tanpa itu INSERT ke
 `new_audit.<tabel>__audit` gagal dan transaksi induknya ikut ter-rollback,
 sehingga penyimpanan yang tampak wajar di layar justru hilang.
-**Sebagian:** IR-06 — sisi baca (rekap uang masuk per metode) selesai di
-Fase 7; yang belum ada adalah PENYIMPANAN buka/tutup shift apotek.
+**IR-06 selesai (AIS r83308).** Apotek diberi sesi kas SENDIRI, aditif, tanpa
+menyentuh tutup kas POS umum — dasarnya bukti, bukan selera: `SesiKasUtil`
+membaca `koperasi.pembelian_anggota_koperasi` yang tidak memuat penjualan
+apotek. Bila kelak satu laci fisik dipakai bersama POS umum, yang dibutuhkan
+adalah menambah sumber apotek ke `SesiKasUtil` — bukan layar baru.
 
 **Tambahan backend Fase 6 (r83182).** `apotik_cara_bayar_list` kini juga
 mengirim `adaKembalian` dan `online`. Tanpa `adaKembalian`, klien terpaksa
