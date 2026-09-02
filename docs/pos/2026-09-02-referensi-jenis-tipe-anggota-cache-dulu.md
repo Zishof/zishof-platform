@@ -1,6 +1,6 @@
 # Referensi Jenis dan Tipe Anggota Dibaca Cache-Dulu
 
-Tanggal: 2 September 2026  
+Tanggal: 2 September 2026
 Lanjutan: audit Local-First daftar master/referensi kecil
 
 ## Masalah
