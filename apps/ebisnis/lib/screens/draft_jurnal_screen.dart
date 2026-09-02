@@ -506,13 +506,27 @@ class _DraftJurnalScreenState extends State<DraftJurnalScreen> with JejakGalat {
   /// Tombol posting massal per modul.
   ///
   /// Hanya muncul bila server menyatakan modulnya memang punya mesin posting
-  /// (`bisaPosting`). Menawarkan tombol untuk modul yang ujungnya menolak sama
+  /// (`bisaPosting`) DAN pengguna ini berhak memposting modul tersebut
+  /// (`bolehPosting`). Menawarkan tombol untuk modul yang ujungnya menolak sama
   /// saja dengan menjanjikan sesuatu yang tidak ada.
+  ///
+  /// Kedua sebab itu dipisah karena berbeda di mata pengguna: dasbor ini memuat
+  /// belasan modul dengan kunci menu berbeda-beda, dan mengatakan "belum
+  /// tersedia" kepada orang yang sebenarnya hanya tidak berhak adalah keterangan
+  /// yang salah -- ia akan melaporkannya sebagai kerusakan.
   Widget _aksiBaris(Map<String, dynamic> baris) {
     if (baris['bisaPosting'] != true) {
       return Tooltip(
         message: 'Posting massal modul ini belum tersedia dari aplikasi.',
         child: Icon(Icons.remove,
+            size: 16, color: AppColors.textSecondaryOf(context)),
+      );
+    }
+    if (baris['bolehPosting'] == false) {
+      return Tooltip(
+        message: 'Grup pengguna Anda tidak berhak memposting jurnal '
+            '${baris['nama'] ?? 'modul ini'}.',
+        child: Icon(Icons.lock_outline,
             size: 16, color: AppColors.textSecondaryOf(context)),
       );
     }
