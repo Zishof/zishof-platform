@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 277 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 285 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -47,9 +47,15 @@ dan `textSecondary` 4,39:1 di atas latar redup; enam tempat meluber pada skala
 teks 2,0× yang lazim dipakai pengguna lanjut usia. Semuanya diperbaiki dan
 kini dijaga test yang MENGHITUNG kontras serta memasang layar pada skala besar.
 
+**IR-11 dikerjakan setelah Fase 8** (AIS r83255): uang diterima dan kembalian
+kini dibukukan per baris pembayaran, dan satu transaksi boleh dibayar dengan
+beberapa metode sekaligus. Pagar utamanya: jumlah seluruh baris wajib sama
+dengan total — tanpa itu penjualan bisa terbukukan dengan uang yang tidak
+pernah lengkap, dan selisihnya baru ketahuan saat tutup kas.
+
 **Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan integrasi:
 IR-03 (basis pengetahuan obat), IR-04 (racikan), IR-06 (penyimpanan shift),
-IR-09 (PO & bukti suhu), IR-10 (metrik SLA), IR-11 (uang diterima/split).
+IR-09 (PO & bukti suhu), IR-10 (metrik SLA).
 
 ## Batas jujur
 

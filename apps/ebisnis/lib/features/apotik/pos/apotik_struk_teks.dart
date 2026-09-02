@@ -11,6 +11,13 @@ class BarisStruk {
   double get subtotal => qty * harga;
 }
 
+/// Satu metode pembayaran pada struk (IR-11: bisa lebih dari satu).
+class BarisBayarStruk {
+  final String nama;
+  final double nominal;
+  const BarisBayarStruk({required this.nama, required this.nominal});
+}
+
 /// Data yang dibutuhkan untuk mencetak struk apotik.
 class DataStruk {
   final String namaApotek;
@@ -22,6 +29,10 @@ class DataStruk {
   final List<BarisStruk> baris;
   final double total;
   final String metode;
+
+  /// Rincian per metode. Diisi saat pembayaran dipecah; struk harus
+  /// menunjukkan berapa yang dibayar dengan apa, bukan sekadar "Tunai + QRIS".
+  final List<BarisBayarStruk> rincianMetode;
 
   /// Uang diterima & kembalian: dihitung di kasir, TIDAK dibukukan server.
   /// Dicetak hanya bila memang ada (pembayaran tunai).
@@ -44,6 +55,7 @@ class DataStruk {
     this.telepon = '',
     this.kasir = '',
     this.metode = '',
+    this.rincianMetode = const [],
     this.tunai = 0,
     this.kembalian = 0,
     this.referensi = '',
@@ -119,7 +131,13 @@ class ApotikStrukTeks {
 
     l.add('-' * kolom);
     kiriKanan('TOTAL', _angka(d.total));
-    if (d.metode.isNotEmpty) kiriKanan('Metode', d.metode);
+    if (d.rincianMetode.length > 1) {
+      for (final m in d.rincianMetode) {
+        kiriKanan('  ${m.nama}', _angka(m.nominal));
+      }
+    } else if (d.metode.isNotEmpty) {
+      kiriKanan('Metode', d.metode);
+    }
     // Uang diterima/kembalian hanya dicetak bila pembayaran tunai; keduanya
     // memang tidak pernah dikirim ke server.
     if (d.tunai > 0) {

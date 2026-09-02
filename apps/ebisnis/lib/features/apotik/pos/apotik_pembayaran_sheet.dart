@@ -43,17 +43,56 @@ class MetodeBayar {
       );
 }
 
+/// Satu baris pembayaran (IR-11). Satu transaksi boleh dibayar dengan lebih
+/// dari satu metode — mis. sebagian tunai, sisanya QRIS.
+class BarisBayar {
+  MetodeBayar metode;
+
+  /// Nominal yang DIBUKUKAN untuk metode ini.
+  double nominal;
+
+  /// Uang tunai yang diserahkan pembeli; hanya bermakna pada metode yang
+  /// memberi kembalian.
+  double tunai;
+  String referensi;
+
+  BarisBayar({
+    required this.metode,
+    this.nominal = 0,
+    this.tunai = 0,
+    this.referensi = '',
+  });
+
+  double get kembalian {
+    if (!metode.adaKembalian) return 0;
+    final k = tunai - nominal;
+    return k > 0 ? k : 0;
+  }
+
+  Map<String, dynamic> toPayload() => <String, dynamic>{
+        'cara_bayar_id': metode.id,
+        'nominal': nominal,
+        if (metode.adaKembalian) 'tunai': tunai,
+        if (metode.adaKembalian) 'kembalian': kembalian,
+        if (referensi.trim().isNotEmpty) 'referensi': referensi.trim(),
+      };
+}
+
 /// Hasil lembar pembayaran; dikembalikan ke POS untuk dikirim ke server.
 class HasilPembayaran {
   final int? caraBayarId;
   final String namaMetode;
   final String referensi;
 
-  /// Uang yang diterima kasir. **Tidak dibukukan server** — lihat catatan
-  /// pada [ApotikPembayaranSheet].
+  /// Uang yang diterima kasir dan kembaliannya. Sejak IR-11 keduanya
+  /// **dibukukan server** pada baris pembayaran.
   final double tunai;
   final double kembalian;
   final bool bukaLaci;
+
+  /// Rincian pembayaran; berisi satu baris pada pembayaran biasa dan lebih
+  /// dari satu bila kasir memecahnya.
+  final List<BarisBayar> baris;
 
   const HasilPembayaran({
     required this.caraBayarId,
@@ -62,7 +101,14 @@ class HasilPembayaran {
     this.tunai = 0,
     this.kembalian = 0,
     this.bukaLaci = false,
+    this.baris = const [],
   });
+
+  bool get terpisah => baris.length > 1;
+
+  /// Payload larik `pembayaran` untuk `apotik_bayar`.
+  List<Map<String, dynamic>> payloadPembayaran() =>
+      [for (final b in baris) b.toPayload()];
 }
 
 /// Pemeriksaan pra-kirim pembayaran.
@@ -75,14 +121,15 @@ class PagarPembayaran {
 
 /// <h3>Lembar pembayaran POS Apotik (Fase 6).</h3>
 ///
-/// **Batas jujur yang harus dibaca sebelum mengubah layar ini.** Server
-/// (`apotik_bayar` → `ApotikPembayaranTransaksi`) membukukan tepat tiga hal:
-/// metode (`cara_bayar_id`), nominal **= total transaksi**, dan
-/// `referensi_bayar`. Uang diterima dan kembalian **dihitung di kasir dan
-/// tidak dikirim ke mana pun** — karena itu keduanya diberi label eksplisit di
-/// layar, bukan ditampilkan seolah-olah tersimpan. Pembayaran terpisah
-/// (split) juga belum mungkin: satu transaksi = satu baris pembayaran
-/// bernominal penuh. Lihat IR-11 pada `docs/apotik-uiux/10-integration-requests.md`.
+/// Sejak **IR-11** (AIS r83255) server membukukan pembayaran per BARIS:
+/// metode, nominal, uang diterima, kembalian, dan referensi. Karena itu satu
+/// transaksi boleh dibayar dengan lebih dari satu metode, dan kembalian yang
+/// ditampilkan di sini benar-benar tersimpan — bukan sekadar hitungan layar
+/// seperti sebelumnya.
+///
+/// **Pagar yang tidak boleh dilonggarkan:** jumlah seluruh baris harus sama
+/// dengan total. Server menolak selisih apa pun; layar menahannya lebih dulu
+/// supaya kasir melihat sisa yang belum terbagi sebelum mengirim.
 class ApotikPembayaranSheet extends StatefulWidget {
   final double total;
   final List<MetodeBayar> metode;
@@ -132,6 +179,47 @@ class ApotikPembayaranSheet extends StatefulWidget {
     return PagarPembayaran(alasan.isEmpty, alasan, peringatan);
   }
 
+  /// Pagar pembayaran TERPISAH (IR-11). Aturan pentingnya: jumlah seluruh
+  /// baris harus sama persis dengan total. Server menolak selisih apa pun,
+  /// dan menahannya di sini membuat kasir melihat sisanya sebelum mengirim.
+  static PagarPembayaran periksaSplit({
+    required double total,
+    required List<BarisBayar> baris,
+  }) {
+    final alasan = <String>[];
+    final peringatan = <String>[];
+    if (total <= 0) {
+      alasan.add('Total transaksi 0 — tidak ada yang perlu dibayar.');
+    }
+    if (baris.isEmpty) {
+      alasan.add('Belum ada baris pembayaran.');
+      return PagarPembayaran(false, alasan, peringatan);
+    }
+    var jumlah = 0.0;
+    for (final b in baris) {
+      jumlah += b.nominal;
+      if (b.nominal <= 0) {
+        alasan.add('${b.metode.nama}: nominal harus lebih dari 0.');
+      }
+      if (b.metode.adaKembalian && b.tunai < b.nominal) {
+        alasan.add('${b.metode.nama}: uang diterima kurang '
+            '${_rp.format(b.nominal - b.tunai)} dari nominalnya.');
+      }
+      if (!b.metode.adaKembalian && b.referensi.trim().isEmpty) {
+        peringatan.add('${b.metode.nama}: tanpa nomor referensi, pembayaran '
+            'ini sulit dicocokkan saat rekonsiliasi.');
+      }
+    }
+    final selisih = jumlah - total;
+    if (selisih.abs() > 0.5) {
+      alasan.add(selisih < 0
+          ? 'Pembayaran kurang ${_rp.format(-selisih)} dari total.'
+          : 'Pembayaran lebih ${_rp.format(selisih)} dari total. Kelebihan '
+              'uang tunai adalah KEMBALIAN, bukan nominal yang dibukukan.');
+    }
+    return PagarPembayaran(alasan.isEmpty, alasan, peringatan);
+  }
+
   /// Pecahan uang yang wajar ditawarkan di atas [total] (uang pas + pembulatan
   /// ke atas). Murni untuk mempercepat kasir; tidak ada aturan bisnis di sini.
   static List<double> saranTunai(double total) {
@@ -159,6 +247,45 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
   final _referensi = TextEditingController();
   bool _bukaLaci = true;
 
+  /// Mode terpisah (IR-11). Default MATI: mayoritas transaksi apotek dibayar
+  /// dengan satu metode, dan menampilkan daftar baris untuk kasus itu hanya
+  /// memperlambat kasir.
+  bool _terpisah = false;
+  final List<BarisBayar> _baris = [];
+
+  void _mulaiTerpisah() {
+    _baris
+      ..clear()
+      // Baris pertama mewarisi metode & uang yang sudah diisi kasir, supaya
+      // beralih ke mode terpisah tidak menghapus pekerjaannya.
+      ..add(BarisBayar(
+        metode: _metode ?? widget.metode.first,
+        nominal: widget.total,
+        tunai: _nilaiTunai,
+        referensi: _referensi.text.trim(),
+      ));
+    _terpisah = true;
+  }
+
+  /// Sisa yang belum tertutup baris mana pun.
+  double get _sisa {
+    final jumlah = _baris.fold<double>(0, (a, b) => a + b.nominal);
+    final sisa = widget.total - jumlah;
+    return sisa.abs() < 0.5 ? 0 : sisa;
+  }
+
+  void _tambahBaris() {
+    final terpakai = _baris.map((b) => b.metode.id).toSet();
+    final berikut = widget.metode.firstWhere((m) => !terpakai.contains(m.id),
+        orElse: () => widget.metode.first);
+    final sisa = _sisa;
+    setState(() => _baris.add(BarisBayar(
+          metode: berikut,
+          nominal: sisa > 0 ? sisa : 0,
+          tunai: berikut.adaKembalian && sisa > 0 ? sisa : 0,
+        )));
+  }
+
   @override
   void dispose() {
     _tunai.dispose();
@@ -178,13 +305,15 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
   @override
   Widget build(BuildContext context) {
     final t = ApotikDesignTokens.of(context);
-    final pagar = ApotikPembayaranSheet.periksa(
-      total: widget.total,
-      metode: _metode,
-      tunai: _nilaiTunai,
-      referensi: _referensi.text,
-    );
-    final tunaiAktif = _metode != null && _metode!.adaKembalian;
+    final pagar = _terpisah
+        ? ApotikPembayaranSheet.periksaSplit(total: widget.total, baris: _baris)
+        : ApotikPembayaranSheet.periksa(
+            total: widget.total,
+            metode: _metode,
+            tunai: _nilaiTunai,
+            referensi: _referensi.text,
+          );
+    final tunaiAktif = !_terpisah && _metode != null && _metode!.adaKembalian;
 
     return SafeArea(
       child: Padding(
@@ -233,7 +362,44 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
                     'Server belum mengirim daftar metode pembayaran. '
                     'Transaksi tetap dapat dibukukan, tetapi metodenya '
                     'tidak akan tercatat.')
-              else ...[
+              else if (_terpisah) ...[
+                Row(children: [
+                  Expanded(
+                    child: Text('Pembayaran terpisah',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: t.textSecondary)),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _terpisah = false),
+                    child: const Text('Kembali ke satu metode'),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                for (var i = 0; i < _baris.length; i++) _kartuBaris(t, i),
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                      _sisa == 0
+                          ? 'Seluruh total sudah terbagi.'
+                          : _sisa > 0
+                              ? 'Sisa belum terbagi ${_rp.format(_sisa)}'
+                              : 'Kelebihan ${_rp.format(-_sisa)}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _sisa == 0 ? t.successText : t.warningText),
+                    ),
+                  ),
+                  if (widget.metode.length > 1)
+                    TextButton.icon(
+                      onPressed: _tambahBaris,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Tambah metode'),
+                    ),
+                ]),
+              ] else ...[
                 Text('Metode',
                     style: TextStyle(
                         fontSize: 12,
@@ -255,10 +421,19 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
                       ),
                   ],
                 ),
+                if (widget.metode.length > 1)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => setState(_mulaiTerpisah),
+                      icon: const Icon(Icons.call_split, size: 16),
+                      label: const Text('Bayar terpisah'),
+                    ),
+                  ),
               ],
               const SizedBox(height: 16),
               if (tunaiAktif) ..._bagianTunai(t),
-              if (_metode != null && !_metode!.adaKembalian) ...[
+              if (!_terpisah && _metode != null && !_metode!.adaKembalian) ...[
                 TextField(
                   controller: _referensi,
                   onChanged: (_) => setState(() {}),
@@ -365,8 +540,8 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
       ),
       const SizedBox(height: 6),
       Text(
-        'Uang diterima dan kembalian dihitung di kasir. Server hanya '
-        'membukukan metode, nominal sebesar total, dan nomor referensi.',
+        'Uang diterima dan kembalian ikut dibukukan pada baris pembayaran, '
+        'sehingga selisih laci dapat ditelusuri sampai transaksinya.',
         style: TextStyle(fontSize: 11, color: t.textSecondary),
       ),
       const SizedBox(height: 12),
@@ -424,18 +599,139 @@ class _ApotikPembayaranSheetState extends State<ApotikPembayaranSheet> {
   }
 
   void _selesai() {
+    final baris = _terpisah
+        ? List<BarisBayar>.from(_baris)
+        : <BarisBayar>[
+            if (_metode != null)
+              BarisBayar(
+                metode: _metode!,
+                nominal: widget.total,
+                tunai: _metode!.adaKembalian ? _nilaiTunai : 0,
+                referensi: _referensi.text.trim(),
+              ),
+          ];
+    final adaTunai = baris.any((b) => b.metode.adaKembalian);
     Navigator.pop(
       context,
       HasilPembayaran(
-        caraBayarId: _metode?.id,
-        namaMetode: _metode?.nama ?? '',
-        referensi: _referensi.text.trim(),
-        tunai: _nilaiTunai,
-        kembalian: _kembalian,
-        bukaLaci: widget.laciTersedia &&
-            _bukaLaci &&
-            (_metode?.adaKembalian ?? false),
+        // Baris pertama tetap dikirim sebagai cara_bayar_id tunggal agar
+        // server lama membukukan metode alih-alih kehilangan jejaknya.
+        caraBayarId: baris.isEmpty ? null : baris.first.metode.id,
+        namaMetode: baris.map((b) => b.metode.nama).join(' + '),
+        referensi: baris.isEmpty ? '' : baris.first.referensi.trim(),
+        tunai: baris.fold<double>(0, (a, b) => a + b.tunai),
+        kembalian: baris.fold<double>(0, (a, b) => a + b.kembalian),
+        bukaLaci: widget.laciTersedia && _bukaLaci && adaTunai,
+        baris: baris,
       ),
+    );
+  }
+
+  /// Satu baris pembayaran pada mode terpisah.
+  Widget _kartuBaris(ApotikDesignTokens t, int i) {
+    final b = _baris[i];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: t.surfaceMuted,
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusCard),
+        border: Border.all(color: t.border),
+      ),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: DropdownButtonFormField<int>(
+              value: b.metode.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Metode',
+                  border: OutlineInputBorder(),
+                  isDense: true),
+              items: [
+                for (final m in widget.metode)
+                  DropdownMenuItem<int>(
+                      value: m.id,
+                      child: Text(m.nama, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => setState(() {
+                b.metode = widget.metode
+                    .firstWhere((m) => m.id == v, orElse: () => b.metode);
+                if (!b.metode.adaKembalian) b.tunai = 0;
+              }),
+            ),
+          ),
+          if (_baris.length > 1)
+            IconButton(
+              tooltip: 'Hapus baris ini',
+              onPressed: () => setState(() => _baris.removeAt(i)),
+              icon: const Icon(Icons.close, size: 18),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: TextFormField(
+              initialValue: b.nominal == 0 ? '' : b.nominal.toStringAsFixed(0),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
+              ],
+              decoration: const InputDecoration(
+                  labelText: 'Nominal dibukukan',
+                  border: OutlineInputBorder(),
+                  isDense: true),
+              onChanged: (v) => setState(() {
+                b.nominal = double.tryParse(v) ?? 0;
+                if (!b.metode.adaKembalian) b.tunai = b.nominal;
+              }),
+            ),
+          ),
+          if (b.metode.adaKembalian) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextFormField(
+                initialValue: b.tunai == 0 ? '' : b.tunai.toStringAsFixed(0),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
+                ],
+                decoration: const InputDecoration(
+                    labelText: 'Uang diterima',
+                    border: OutlineInputBorder(),
+                    isDense: true),
+                onChanged: (v) =>
+                    setState(() => b.tunai = double.tryParse(v) ?? 0),
+              ),
+            ),
+          ],
+        ]),
+        if (!b.metode.adaKembalian) ...[
+          const SizedBox(height: 8),
+          TextFormField(
+            initialValue: b.referensi,
+            decoration: const InputDecoration(
+                labelText: 'Nomor referensi / approval',
+                border: OutlineInputBorder(),
+                isDense: true),
+            onChanged: (v) => setState(() => b.referensi = v),
+          ),
+        ],
+        if (b.kembalian > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Kembalian ${_rp.format(b.kembalian)}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: t.textPrimary)),
+            ),
+          ),
+      ]),
     );
   }
 }

@@ -348,6 +348,18 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     if (caraId != null) payload['cara_bayar_id'] = caraId;
     final referensi = bayar?.referensi ?? '';
     if (referensi.isNotEmpty) payload['referensi_bayar'] = referensi;
+    // IR-11: rincian pembayaran dikirim SEKALIGUS dengan cara_bayar_id
+    // tunggal di atas. Server baru memakai larik ini (termasuk untuk
+    // pembayaran terpisah dan pencatatan uang diterima/kembalian); server
+    // lama mengabaikannya dan tetap membukukan metode pertama, bukan
+    // kehilangan jejak metode sama sekali.
+    if (bayar != null && bayar.baris.isNotEmpty) {
+      payload['pembayaran'] = bayar.payloadPembayaran();
+      if (bayar.baris.length == 1 && bayar.baris.first.metode.adaKembalian) {
+        payload['tunai'] = bayar.tunai;
+        payload['kembalian'] = bayar.kembalian;
+      }
+    }
     final kodeKirim = '${payload['kode']}';
     try {
       final r = await _panggil('apotik_bayar', payload);
@@ -405,6 +417,10 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       ],
       total: total,
       metode: '${r['caraBayar'] ?? bayar?.namaMetode ?? ''}',
+      rincianMetode: [
+        for (final b in (bayar?.baris ?? const []))
+          BarisBayarStruk(nama: b.metode.nama, nominal: b.nominal),
+      ],
       tunai: bayar?.tunai ?? 0,
       kembalian: bayar?.kembalian ?? 0,
       referensi: bayar?.referensi ?? '',
@@ -578,6 +594,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         baris: s.baris,
         total: s.total,
         metode: s.metode,
+        rincianMetode: s.rincianMetode,
         tunai: s.tunai,
         kembalian: s.kembalian,
         referensi: s.referensi,

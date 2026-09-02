@@ -128,6 +128,8 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
   double _totalTunai = 0;
   double _totalNonTunai = 0;
   double _penjualanLedger = 0;
+  double _uangDiterima = 0;
+  double _uangKembalian = 0;
   double _selisihTanpaMetode = 0;
   int _jumlahTransaksi = 0;
 
@@ -178,6 +180,8 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
         _totalTunai = ((r['totalTunai'] as num?) ?? 0).toDouble();
         _totalNonTunai = ((r['totalNonTunai'] as num?) ?? 0).toDouble();
         _penjualanLedger = ((r['penjualanLedger'] as num?) ?? 0).toDouble();
+        _uangDiterima = ((r['totalUangDiterima'] as num?) ?? 0).toDouble();
+        _uangKembalian = ((r['totalKembalian'] as num?) ?? 0).toDouble();
         _selisihTanpaMetode =
             ((r['selisihTanpaMetode'] as num?) ?? 0).toDouble();
         _jumlahTransaksi = ((r['jumlahTransaksi'] as num?) ?? 0).toInt();
@@ -350,6 +354,13 @@ class _ApotikRekonsiliasiPageState extends State<ApotikRekonsiliasiPage> {
       const Divider(height: 18),
       _baris(t, 'Penerimaan tunai', _rp.format(_totalTunai), tebal: true),
       _baris(t, 'Penerimaan non-tunai', _rp.format(_totalNonTunai)),
+      // IR-11: uang yang benar-benar berpindah tangan. Kas laci tetap
+      // dihitung dari penerimaan (diterima - kembalian = penerimaan); dua
+      // baris ini alat bukti saat selisih laci perlu ditelusuri.
+      if (_uangDiterima > 0 || _uangKembalian > 0) ...[
+        _baris(t, 'Uang tunai diterima', _rp.format(_uangDiterima)),
+        _baris(t, 'Kembalian diberikan', _rp.format(_uangKembalian)),
+      ],
       const Divider(height: 18),
       _baris(t, 'Penjualan tercatat (ledger)', _rp.format(_penjualanLedger)),
       if (_selisihTanpaMetode.abs() >= 1) ...[

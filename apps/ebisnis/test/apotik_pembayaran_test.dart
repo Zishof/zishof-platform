@@ -124,10 +124,10 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('menyatakan terus terang bahwa kembalian tidak dibukukan',
+    testWidgets('menyatakan bahwa uang diterima & kembalian ikut dibukukan',
         (tester) async {
       await _bukaSheet(tester, total: 50000, metode: const [_tunai]);
-      expect(find.textContaining('dihitung di kasir'), findsOneWidget);
+      expect(find.textContaining('ikut dibukukan'), findsOneWidget);
     });
 
     testWidgets('server tanpa daftar metode dikatakan apa adanya',
@@ -184,6 +184,129 @@ void main() {
       expect(hasil!.caraBayarId, 1);
       expect(hasil!.tunai, 50000);
       expect(hasil!.kembalian, 5000);
+    });
+  });
+
+  group('Pembayaran terpisah (IR-11)', () {
+    BarisBayar baris(MetodeBayar m, double nominal, {double tunai = 0}) =>
+        BarisBayar(metode: m, nominal: nominal, tunai: tunai);
+
+    test('jumlah baris harus sama dengan total', () {
+      final p = ApotikPembayaranSheet.periksaSplit(total: 100000, baris: [
+        baris(_tunai, 40000, tunai: 40000),
+        baris(_qris, 50000),
+      ]);
+      expect(p.boleh, isFalse);
+      expect(p.alasan.join(), contains('kurang Rp 10.000'));
+    });
+
+    test('kelebihan juga ditahan dan dijelaskan sebagai kembalian', () {
+      final p = ApotikPembayaranSheet.periksaSplit(total: 100000, baris: [
+        baris(_tunai, 70000, tunai: 70000),
+        baris(_qris, 50000),
+      ]);
+      expect(p.boleh, isFalse);
+      expect(p.alasan.join(), contains('KEMBALIAN'));
+    });
+
+    test('pembagian pas lolos', () {
+      final p = ApotikPembayaranSheet.periksaSplit(total: 100000, baris: [
+        baris(_tunai, 40000, tunai: 50000),
+        BarisBayar(metode: _qris, nominal: 60000, referensi: 'APV-9'),
+      ]);
+      expect(p.boleh, isTrue);
+      expect(p.alasan, isEmpty);
+      expect(p.peringatan, isEmpty);
+    });
+
+    test('baris tunai dengan uang diterima kurang ditahan', () {
+      final p = ApotikPembayaranSheet.periksaSplit(total: 100000, baris: [
+        baris(_tunai, 60000, tunai: 50000),
+        BarisBayar(metode: _qris, nominal: 40000, referensi: 'APV-9'),
+      ]);
+      expect(p.boleh, isFalse);
+      expect(p.alasan.join(), contains('uang diterima kurang'));
+    });
+
+    test('kembalian dihitung per baris tunai saja', () {
+      final b1 = baris(_tunai, 40000, tunai: 50000);
+      final b2 = baris(_qris, 60000, tunai: 99999);
+      expect(b1.kembalian, 10000);
+      expect(b2.kembalian, 0, reason: 'metode non-tunai tak punya kembalian');
+    });
+
+    test('payload baris memuat nominal dan hanya kirim tunai bila relevan', () {
+      final tunaiPayload = baris(_tunai, 40000, tunai: 50000).toPayload();
+      expect(tunaiPayload['cara_bayar_id'], 1);
+      expect(tunaiPayload['nominal'], 40000);
+      expect(tunaiPayload['tunai'], 50000);
+      expect(tunaiPayload['kembalian'], 10000);
+
+      final qrisPayload =
+          BarisBayar(metode: _qris, nominal: 60000, referensi: 'APV-9')
+              .toPayload();
+      expect(qrisPayload.containsKey('tunai'), isFalse);
+      expect(qrisPayload['referensi'], 'APV-9');
+    });
+
+    testWidgets('kasir dapat memecah pembayaran dan sisanya terbaca',
+        (tester) async {
+      await _bukaSheet(tester, total: 100000, metode: const [_tunai, _qris]);
+      await tester.tap(find.text('Bayar terpisah'));
+      await tester.pumpAndSettle();
+      // Baris pertama mewarisi seluruh total, jadi belum ada sisa.
+      expect(find.text('Seluruh total sudah terbagi.'), findsOneWidget);
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Nominal dibukukan').first,
+          '40000');
+      await tester.pumpAndSettle();
+      expect(
+          find.textContaining('Sisa belum terbagi Rp 60.000'), findsOneWidget);
+    });
+
+    testWidgets('POS mengirim larik pembayaran DAN cara_bayar_id tunggal',
+        (tester) async {
+      final terkirim = <Map<String, dynamic>>[];
+      final pos = ApotikPosController()
+        ..tambah(ApotikBarisKeranjang(item: _obat, qty: 1, harga: 100000));
+      await _pump(
+        tester,
+        ApotikPosPage(
+          controller: pos,
+          panggil: (aksi, body) async {
+            if (aksi == 'apotik_cara_bayar_list') {
+              return {
+                'status': '00',
+                'data': [
+                  {'id': 1, 'nama': 'Tunai', 'adaKembalian': true},
+                  {'id': 2, 'nama': 'QRIS', 'adaKembalian': false},
+                ],
+              };
+            }
+            if (aksi == 'apotik_bayar') {
+              terkirim.add(Map<String, dynamic>.from(body));
+              return {'status': '00', 'kode': 'TRX-1', 'total': 100000};
+            }
+            return {'status': '00', 'data': const []};
+          },
+        ),
+      );
+      await tester.tap(find.text('Bayar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Uang diterima'), '100000');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bayar').last);
+      await tester.pumpAndSettle();
+
+      expect(terkirim.length, 1);
+      final rincian = terkirim.first['pembayaran'] as List;
+      expect(rincian.length, 1);
+      expect((rincian.first as Map)['nominal'], 100000);
+      expect((rincian.first as Map)['tunai'], 100000);
+      // Kompatibilitas server lama: metode tunggal tetap ikut dikirim.
+      expect(terkirim.first['cara_bayar_id'], 1);
     });
   });
 
