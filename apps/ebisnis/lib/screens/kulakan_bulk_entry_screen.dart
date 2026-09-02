@@ -170,11 +170,14 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
   Future<void> _muatKategori() async {
     setStateIfMounted(() => _memuatKategori = true);
     try {
-      final hasil = await ApiClient.instance.aksi('jenis_produk_list', {
-        'page': 1,
-        'page_size': 500,
-        'termasuk_nonaktif': true,
-      });
+      // BACA CACHE DULU: entri massal justru dipakai ketika faktur menumpuk,
+      // kerap di gudang. Tanpa kategori, seluruh baris entri tidak dapat
+      // diklasifikasikan dan pekerjaannya berhenti sama sekali.
+      final hasil = await MasterOffline.daftarDenganCache(
+        'jenis_produk_list',
+        {'page': 1, 'page_size': 500, 'termasuk_nonaktif': true},
+        'master:jenis_produk:massal',
+      );
       var kategori = _parseKategoriResponse(hasil);
       if (kategori.isEmpty) {
         final katalog = await ApiClient.instance

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'package:barcode/barcode.dart' as bc;
 import 'package:core_db/core_db.dart';
+import '../services/master_offline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -843,10 +844,16 @@ class _PriceTagScreenState extends State<PriceTagScreen> with JejakGalat {
     if (cache != null) return cache;
     final byId = <int, Map<String, dynamic>>{};
     try {
-      final hasil = await ApiClient.instance.aksi('diskon_list', {
-        'page': 1,
-        'page_size': 1000,
-      });
+      // BACA CACHE DULU: label harga dicetak di rak toko. Tanpa aturan diskon,
+      // labelnya tercetak TANPA info promo -- dan itu tidak kelihatan salah,
+      // jadi kesalahannya baru ketahuan di kasir saat pelanggan protes.
+      // Cache in-memory di atas hanya bertahan selama layar terbuka; ini yang
+      // menyelamatkan pencetakan pertama sesudah aplikasi dibuka tanpa sinyal.
+      final hasil = await MasterOffline.daftarDenganCache(
+        'diskon_list',
+        {'page': 1, 'page_size': 1000},
+        'master:diskon_promo_price_tag',
+      );
       final data = (hasil['data'] as List?) ?? [];
       for (final row in data) {
         final m = Map<String, dynamic>.from(row as Map);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../services/master_offline.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
@@ -42,16 +43,22 @@ class _AnggotaTabSatuanKerjaState extends State<AnggotaTabSatuanKerja> {
       _pesanError = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi('satuan_kerja_list', {
-        'cari': _cari,
-        'tampilkan_nonaktif': _tampilkanNonaktif,
-      });
-      if (!mounted) return;
-      setStateIfMounted(() {
-        _daftar =
-            ((hasil['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
-        _memuat = false;
-      });
+      // BACA CACHE DULU: satuan kerja adalah data master yang dipilih saat
+      // mendaftarkan anggota. Kunci dipisah per penyaring supaya hasil saringan
+      // lama tidak tampil pada saringan yang baru dipilih.
+      await MasterOffline.daftarCacheDulu(
+        'satuan_kerja_list',
+        {'cari': _cari, 'tampilkan_nonaktif': _tampilkanNonaktif},
+        'master:satuan_kerja:${_cari}_$_tampilkanNonaktif',
+        onData: (hasil) {
+          if (!mounted) return;
+          setStateIfMounted(() {
+            _daftar = ((hasil['data'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>();
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       setStateIfMounted(() {

@@ -75,6 +75,40 @@ void main() {
     }
   });
 
+  test('daftar master lain ikut cache-dulu', () {
+    const bacaCache = <String, String>{
+      'anggota/tab_satuan_kerja.dart': 'master:satuan_kerja:',
+      'kulakan_bulk_entry_screen.dart': 'master:jenis_produk:massal',
+      'price_tag_screen.dart': 'master:diskon_promo_price_tag',
+    };
+    for (final e in bacaCache.entries) {
+      final isi = _rapat(File('lib/screens/${e.key}').readAsStringSync());
+      expect(isi, contains(_rapat(e.value)),
+          reason: '${e.key} masih membaca daftarnya online-only');
+    }
+  });
+
+  test('antrean berjalan dan daftar hak akses TIDAK di-cache', () {
+    // Dua-duanya sengaja: antrean resep yang basi membuat dua kasir melayani
+    // resep yang sama, dan daftar hak akses yang basi menampilkan wewenang yang
+    // sudah dicabut — padahal admin mengambil keputusan dari layar itu.
+    const wajibOnline = <String, String>{
+      'apotik/kasir_apotik_screen.dart': 'apotik_resep_list',
+      'konfigurasi_screen.dart': 'hak_akses_list',
+    };
+    for (final e in wajibOnline.entries) {
+      final isi = File('lib/screens/${e.key}').readAsStringSync();
+      // Dicari TITIK PEMANGGILANNYA, bukan nama aksinya: nama aksi sering muncul
+      // lebih dulu di komentar dokumentasi kepala berkas, dan jendela di
+      // sekitarnya tidak ada hubungannya dengan keputusan ini.
+      final i = isi.indexOf("aksi('${e.value}'");
+      expect(i, greaterThan(0), reason: 'pemanggilan ${e.value} tidak ditemukan');
+      final sebelum = isi.substring((i - 700).clamp(0, i), i);
+      expect(sebelum, contains('ONLINE-ONLY'),
+          reason: '${e.value} dibaca langsung tanpa alasan tertulis');
+    }
+  });
+
   test('kunci antrean membedakan dokumen, bukan satu kunci untuk semua', () {
     // Kunci yang sama untuk dua dokumen berbeda membuat yang kedua MEMBUANG yang
     // pertama dari antrean — pekerjaan hilang tanpa pesan apa pun.

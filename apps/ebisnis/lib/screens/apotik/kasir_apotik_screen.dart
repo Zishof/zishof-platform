@@ -676,6 +676,11 @@ class _SheetPilihResepState extends State<_SheetPilihResep> {
       _error = null;
     });
     try {
+      // ONLINE-ONLY: ini ANTREAN BERJALAN, bukan data master. Resep yang sudah
+      // dilayani apoteker lain harus hilang dari layar saat itu juga; salinan
+      // cache akan menampilkan antrean basi dan dua kasir dapat melayani resep
+      // yang sama. Daftar kosong saat sinyal mati lebih jujur daripada antrean
+      // yang tidak lagi benar.
       final hasil = await ApiClient.instance.aksi('apotik_resep_list', {
         if (_cari.text.trim().isNotEmpty) 'keyword': _cari.text.trim(),
         'hanya_menunggu': true,

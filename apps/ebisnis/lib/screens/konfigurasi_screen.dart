@@ -823,6 +823,10 @@ class _TabProfilTokoState extends State<_TabProfilToko> with JejakGalat {
     if (_memuatHakAkses) return;
     setStateIfMounted(() => _memuatHakAkses = true);
     try {
+      // ONLINE-ONLY: daftar hak akses menentukan siapa boleh apa. Salinan cache
+      // yang basi akan menampilkan peran dengan wewenang yang sudah dicabut --
+      // dan admin mengambil keputusan berdasarkan layar itu. Sama untuk daftar
+      // pengguna toko dan pedagang di bawah.
       final hasil = await ApiClient.instance.aksi('hak_akses_list', {});
       if (!mounted) return;
       setStateIfMounted(() {
