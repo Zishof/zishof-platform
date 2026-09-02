@@ -81,7 +81,13 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
         final dariServer = res['dariServer'] == true;
+        final hakBaru = res['hak'];
         setStateIfMounted(() {
+          // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+          // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+          if (hakBaru is Map) {
+            _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+          }
           _daftar = data;
           _idBaru = dariServer
               ? Set<String>.from(res['idBaru'] as Set? ?? const <String>{})
@@ -133,6 +139,13 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
       ),
     );
   }
+
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
 
   Future<void> _hapus(Map<String, dynamic> g) async {
     final yakin = await showDialog<bool>(
@@ -206,11 +219,13 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
             icon: const Icon(Icons.refresh)),
       ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _simpan(null),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Grup'),
-      ),
+      floatingActionButton: !_boleh('create')
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _simpan(null),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Grup'),
+            ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _galat != null
@@ -294,12 +309,16 @@ class _GrupProdukScreenState extends State<GrupProdukScreen> {
                                               icon: const Icon(Icons.history)),
                                         IconButton(
                                             tooltip: 'Ubah & terapkan',
-                                            onPressed: () => _simpan(g),
+                                            onPressed: !_boleh('update')
+                                                ? null
+                                                : () => _simpan(g),
                                             icon: const Icon(
                                                 Icons.edit_outlined)),
                                         IconButton(
                                             tooltip: 'Hapus',
-                                            onPressed: () => _hapus(g),
+                                            onPressed: !_boleh('delete')
+                                                ? null
+                                                : () => _hapus(g),
                                             icon: const Icon(
                                                 Icons.delete_outline)),
                                       ],
