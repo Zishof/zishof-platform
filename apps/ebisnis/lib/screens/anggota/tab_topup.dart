@@ -1178,6 +1178,9 @@ class _FormTopupOnlineState extends State<_FormTopupOnline> {
       _detailGalat = null;
     });
     try {
+      // ONLINE-ONLY: membuat tagihan topup memanggil gerbang pembayaran dan
+      // mengembalikan kode bayar yang dipakai SAAT ITU JUGA. Diantre, kodenya
+      // baru terbit belakangan -- pengguna sudah pergi dari layarnya.
       final hasil = await ApiClient.instance.aksi('topup_online_buat', {
         'id_member': _idMember,
         'cara_pembayaran_id': _caraDipilih!['id'],

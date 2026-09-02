@@ -155,6 +155,10 @@ class _MemberBiometricPanelState extends State<MemberBiometricPanel> {
     });
     try {
       final sample = await _bridge.capture(modality);
+      // ONLINE-ONLY: pendaftaran biometrik adalah kredensial, dan sidik jarinya
+      // baru saja diambil dari perangkat. Mengantrekannya menahan data biometrik
+      // di penyimpanan lokal, sekaligus membuat pengguna mengira pendaftarannya
+      // sudah sah padahal server belum pernah menerimanya.
       final result = await ApiClient.instance.aksi('biometrik_simpan', {
         'target_user_id': widget.targetUserId,
         'modality': modality,

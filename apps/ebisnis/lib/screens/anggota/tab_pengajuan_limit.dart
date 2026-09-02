@@ -131,6 +131,10 @@ class _AnggotaTabPengajuanLimitState extends State<AnggotaTabPengajuanLimit> {
     if (catatan == null || !mounted) return;
     setStateIfMounted(() => _memutuskan = true);
     try {
+      // ONLINE-ONLY: memutuskan pengajuan limit adalah PERSETUJUAN lintas
+      // pengguna -- keputusannya harus terlihat pihak lain saat itu juga.
+      // Diantre, dua penyetuju yang sedang offline dapat memutuskan berbeda atas
+      // pengajuan yang sama, dan yang kalah baru ketahuan saat antrean terkirim.
       final hasil = await ApiClient.instance.aksi(
         'pengajuan_limit_member_putuskan',
         {

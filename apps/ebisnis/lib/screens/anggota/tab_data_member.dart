@@ -500,6 +500,10 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
         ),
       );
       if (lanjut != true) return;
+      // ONLINE-ONLY: PIN adalah KREDENSIAL. Menyimpannya di antrean perangkat
+      // berarti menaruh kredensial anggota di penyimpanan lokal sampai jaringan
+      // pulih -- risiko yang tidak sebanding dengan kenyamanan mengetik massal
+      // saat offline.
       final hasil = await ApiClient.instance
           .aksi('anggota_pin_simpan_massal', {'data': baris});
       _infoPin('${hasil['description'] ?? '${baris.length} PIN diperbarui.'}');

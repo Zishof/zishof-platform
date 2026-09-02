@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../sesi.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 
 /// Editor aturan harga grosir SATU produk (Fase A dok. 48/49) — dipasang di
@@ -243,16 +244,26 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
     final hrg = angkaRupiahGrosir(harga.text);
     final paket = angkaRupiahGrosir(hargaPaket.text);
     try {
-      final r = await ApiClient.instance.aksi('harga_grosir_simpan', {
-        if (ubah) 'id': awal['id'],
-        'produk_id': widget.produkId,
-        'min_qty_dasar': qty,
-        'harga': hrg,
-        if (paket > 0) 'harga_paket': paket,
-        'kelipatan_wajib': kelipatanWajib,
-        if (tokoIni) 'toko_id': Sesi.instance.tokoId,
-      });
-      if (r['status'] != 'success' && r['status'] != '00') {
+      // LOKAL DULU: aturan harga adalah data master, aman diantre. Kuncinya
+      // memuat produk + minimum qty supaya dua aturan pada produk yang sama
+      // tidak saling menggantikan di antrean.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'harga_grosir_simpan',
+        kunci: 'harga_grosir:${widget.produkId}:$qty',
+        body: {
+          if (ubah) 'id': awal['id'],
+          'produk_id': widget.produkId,
+          'min_qty_dasar': qty,
+          'harga': hrg,
+          if (paket > 0) 'harga_paket': paket,
+          'kelipatan_wajib': kelipatanWajib,
+          if (tokoIni) 'toko_id': Sesi.instance.tokoId,
+        },
+      );
+      if (r['offline'] != true &&
+          r['status'] != 'success' &&
+          r['status'] != '00') {
         throw '${r['description'] ?? 'Server menolak.'}';
       }
       await _muat();
@@ -278,8 +289,14 @@ class _HargaGrosirEditorState extends State<HargaGrosirEditor> {
 
   Future<void> _nonaktifkan(Map<String, dynamic> a) async {
     try {
-      final r = await ApiClient.instance
-          .aksi('harga_grosir_hapus', {'id': a['id']});
+      // LOKAL DULU juga untuk menonaktifkan: menghapus aturan harga tanpa
+      // sinyal tetap tercatat dan menyusul terkirim.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'harga_grosir_hapus',
+        kunci: 'harga_grosir_hapus:${a['id']}',
+        body: {'id': a['id']},
+      );
       if (r['status'] != 'success' && r['status'] != '00') {
         throw '${r['description'] ?? 'Server menolak.'}';
       }

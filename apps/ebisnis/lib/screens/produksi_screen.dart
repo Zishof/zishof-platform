@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/proses_simpan_master.dart';
 
 enum BagianProduksi {
   billOfMaterial,
@@ -330,7 +331,14 @@ class _FormState extends State<_Form> {
     setState(() => simpan = true);
     try {
       final a = widget.awal ?? <String, dynamic>{};
-      await ApiClient.instance.aksi('produksi_simpan', <String, dynamic>{
+      // LOKAL DULU: dokumen produksi dikerjakan di gudang, tempat yang paling
+      // sering tanpa sinyal. Aman diantre karena payload-nya membawa
+      // clientMutationId sendiri, jadi retry tidak menghasilkan dokumen dobel.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'produksi_simpan',
+        kunci: 'produksi:${widget.cfg.kode}:${c['nomor']!.text.trim()}',
+        body: <String, dynamic>{
         'jenis': widget.cfg.kode,
         'id': a['id'],
         'nomor': c['nomor']!.text.trim(),
@@ -347,7 +355,8 @@ class _FormState extends State<_Form> {
         'genealogi': genealogi,
         'clientMutationId': a['clientMutationId'] ??
             'MOBILE-${DateTime.now().millisecondsSinceEpoch}',
-      });
+        },
+      );
       if (mounted) {
         Navigator.pop(context, true);
       }

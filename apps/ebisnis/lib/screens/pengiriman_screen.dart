@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api_client.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/proses_simpan_master.dart';
 
 enum BagianPengiriman {
   deliveryOrder,
@@ -418,9 +419,14 @@ class _DialogFormState extends State<_DialogForm> {
     }
     setState(() => menyimpan = true);
     try {
-      await ApiClient.instance.aksi(
-        'distribusi_simpan',
-        <String, dynamic>{
+      // LOKAL DULU: dokumen pengiriman diisi di jalan, kerap tanpa sinyal.
+      // Nomor dokumennya menjadi kunci antrean supaya dua pengiriman berbeda
+      // tidak saling menggantikan.
+      await prosesSimpanMaster(
+        context,
+        aksi: 'distribusi_simpan',
+        kunci: 'distribusi:${widget.konfigurasi.kode}:${nomor.text.trim()}',
+        body: <String, dynamic>{
           if (widget.awal?['id'] != null) 'id': widget.awal!['id'],
           'jenis': widget.konfigurasi.kode,
           'nomor': nomor.text.trim(),
