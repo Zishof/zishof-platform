@@ -96,7 +96,12 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
           final dariServer = res['dariServer'] == true;
+          final hakBaru = res['hak'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; cache tidak.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _daftar = data;
             _total = dariServer
                 ? (res['total'] as num?)?.toInt() ?? data.length
@@ -199,6 +204,14 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
 
   /// Keputusan atas PO. Menolak WAJIB beralasan -- server menolak alasan < 5 karakter,
   /// jadi dialog ini meminta alasannya lebih dulu agar pengguna tidak gagal di server.
+
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
   Future<void> _putusan(Map<String, dynamic> po, String keputusan) async {
     String alasan = '';
     if (keputusan == 'TOLAK') {
@@ -355,7 +368,7 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
           label: const Text('Dari PR'),
         ),
         FilledButton.icon(
-          onPressed: () => _form(),
+          onPressed: !_boleh('create') ? null : () => _form(),
           icon: const Icon(Icons.add),
           label: const Text('Buat PO'),
         ),
@@ -553,17 +566,23 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
       AksiBaris(
         ikon: Icons.check_circle_outline,
         label: 'Setujui',
-        onTap: st == 'DRAFT' ? () => _putusan(po, 'SETUJUI') : null,
+        onTap: st == 'DRAFT' && _boleh('approve')
+            ? () => _putusan(po, 'SETUJUI')
+            : null,
       ),
       AksiBaris(
         ikon: Icons.cancel_outlined,
         label: 'Tolak',
-        onTap: st == 'DRAFT' ? () => _putusan(po, 'TOLAK') : null,
+        onTap: st == 'DRAFT' && _boleh('reject')
+            ? () => _putusan(po, 'TOLAK')
+            : null,
       ),
       AksiBaris(
         ikon: Icons.undo,
         label: 'Batalkan keputusan',
-        onTap: (st == 'DISETUJUI' || st == 'DITOLAK') && !adaBayar
+        onTap: (st == 'DISETUJUI' || st == 'DITOLAK') &&
+                !adaBayar &&
+                _boleh('approve')
             ? () => _putusan(po, 'BATAL')
             : null,
       ),
@@ -581,7 +600,9 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
         ikon: Icons.delete_outline,
         label: 'Hapus',
         merusak: true,
-        onTap: st == 'DRAFT' && !adaBayar ? () => _hapus(po) : null,
+        onTap: st == 'DRAFT' && !adaBayar && _boleh('delete')
+            ? () => _hapus(po)
+            : null,
       ),
     ]);
   }

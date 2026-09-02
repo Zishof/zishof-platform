@@ -99,7 +99,12 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
           final dariServer = res['dariServer'] == true;
+          final hakBaru = res['hak'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; cache tidak.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _daftar = data;
             _total = dariServer
                 ? (res['total'] as num?)?.toInt() ?? data.length
@@ -132,6 +137,14 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
   /// Saat menyetujui, penyetuju memilih apakah pembayaran ini masuk antrean
   /// transfer bank. Pembayaran tunai tidak perlu masuk antrean pencairan, jadi
   /// pilihannya ditanyakan alih-alih diasumsikan.
+
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
   Future<void> _putusan(Map<String, dynamic> row, String keputusan) async {
     bool ajukanTransfer = false;
     if (keputusan == 'SETUJUI') {
@@ -564,11 +577,15 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
           AksiBaris(
               ikon: Icons.check_circle_outline,
               label: 'Setujui pembayaran',
-              onTap: disetujui ? null : () => _putusan(row, 'SETUJUI')),
+              onTap: disetujui || !_boleh('approve')
+                  ? null
+                  : () => _putusan(row, 'SETUJUI')),
           AksiBaris(
               ikon: Icons.undo,
               label: 'Batalkan persetujuan',
-              onTap: disetujui ? () => _putusan(row, 'BATAL') : null),
+              onTap: disetujui && _boleh('approve')
+                  ? () => _putusan(row, 'BATAL')
+                  : null),
           AksiBaris(
               ikon: Icons.history,
               label: 'Riwayat data',

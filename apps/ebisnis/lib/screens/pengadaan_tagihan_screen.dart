@@ -409,7 +409,12 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
           final dariServer = res['dariServer'] == true;
+          final hakBaru = res['hak'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; cache tidak.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _daftar = data;
             _daftarRutin = dataRutin;
             _total = dariServer
@@ -466,6 +471,14 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
 
   /// Nomor DAN tanggal faktur wajib -- server menolak bila salah satunya kosong,
   /// jadi dialog ini meminta keduanya sekaligus.
+
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
   Future<void> _terimaTagihan(Map<String, dynamic> row) async {
     final nomor = TextEditingController(text: '${row['kodeTagihan'] ?? ''}');
     final tanggal =
@@ -1032,11 +1045,15 @@ class _PengadaanTagihanScreenState extends State<PengadaanTagihanScreen>
           AksiBaris(
               ikon: sudah ? Icons.edit_note : Icons.receipt_long,
               label: sudah ? 'Ubah data faktur' : 'Terima tagihan',
-              onTap: () => _terimaTagihan(row)),
+              // Menerima tagihan = MENGUBAH dokumen tahap ini (mengisi data
+              // faktur), jadi mengikuti hak update, bukan create.
+              onTap: _boleh('update') ? () => _terimaTagihan(row) : null),
           AksiBaris(
               ikon: Icons.undo,
               label: 'Batalkan tagihan',
-              onTap: sudah ? () => _batalTagihan(row) : null),
+              onTap: sudah && _boleh('update')
+                  ? () => _batalTagihan(row)
+                  : null),
         ]),
       ),
     ]);

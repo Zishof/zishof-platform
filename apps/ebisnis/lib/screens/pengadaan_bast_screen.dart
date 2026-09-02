@@ -97,7 +97,17 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
           final dariServer = res['dariServer'] == true;
+          final hakBaru = res['hak'];
+          final hakSinkronBaru = res['hakSinkron'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+            // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
+            if (hakSinkronBaru is Map) {
+              _hakSinkron = hakSinkronBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _daftar = data;
             _total = dariServer
                 ? (res['total'] as num?)?.toInt() ?? data.length
@@ -263,6 +273,19 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
 
   /// Keputusan atas BAST. Hanya SETUJUI dan BATAL -- model penerimaan yang sudah
   /// ada tidak menyediakan kolom penolakan.
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- untuk MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  /// Sinkron ke Kulakan punya kunci menu SENDIRI (`pengadaan_sinkron`) walau
+  /// tombolnya duduk di layar ini, jadi haknya datang terpisah.
+  Map<String, bool> _hakSinkron = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
+  bool _bolehSinkron() => _hakSinkron['create'] != false;
+
   Future<void> _putusan(Map<String, dynamic> bast, String keputusan) async {
     try {
       // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
@@ -448,19 +471,21 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
       ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
       floatingActionButton: Row(mainAxisSize: MainAxisSize.min, children: [
-        FloatingActionButton.extended(
-          heroTag: 'bast_dari_po',
-          onPressed: _dariPo,
-          icon: const Icon(Icons.playlist_add_check),
-          label: const Text('Dari PO'),
-        ),
-        const SizedBox(width: 10),
-        FloatingActionButton.extended(
-          heroTag: 'bast_langsung',
-          onPressed: () => _form(),
-          icon: const Icon(Icons.add),
-          label: const Text('Terima Langsung'),
-        ),
+        if (_boleh('create')) ...[
+          FloatingActionButton.extended(
+            heroTag: 'bast_dari_po',
+            onPressed: _dariPo,
+            icon: const Icon(Icons.playlist_add_check),
+            label: const Text('Dari PO'),
+          ),
+          const SizedBox(width: 10),
+          FloatingActionButton.extended(
+            heroTag: 'bast_langsung',
+            onPressed: () => _form(),
+            icon: const Icon(Icons.add),
+            label: const Text('Terima Langsung'),
+          ),
+        ],
       ]),
       body: _bungkusTab(Column(children: [
         Padding(
@@ -647,15 +672,19 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
         AksiBaris(
             ikon: Icons.check_circle_outline,
             label: 'Setujui',
-            onTap: disetujui ? null : () => _putusan(bast, 'SETUJUI')),
+            onTap: disetujui || !_boleh('approve')
+                ? null
+                : () => _putusan(bast, 'SETUJUI')),
         AksiBaris(
             ikon: Icons.undo,
             label: 'Batalkan persetujuan',
-            onTap: disetujui ? () => _putusan(bast, 'BATAL') : null),
+            onTap: disetujui && _boleh('approve')
+                ? () => _putusan(bast, 'BATAL')
+                : null),
         AksiBaris(
             ikon: Icons.sync_alt,
             label: 'Sinkronkan ke stok Kulakan',
-            onTap: disetujui && !sudahSinkron
+            onTap: disetujui && !sudahSinkron && _bolehSinkron()
                 ? () => _sinkronKulakan(bast)
                 : null),
         AksiBaris(
@@ -671,7 +700,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
             ikon: Icons.delete_outline,
             label: 'Hapus',
             merusak: true,
-            onTap: disetujui ? null : () => _hapus(bast)),
+            onTap: disetujui || !_boleh('delete') ? null : () => _hapus(bast)),
       ]),
       if (sudahSinkron)
         Tooltip(

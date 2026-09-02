@@ -94,7 +94,13 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
           final dariServer = res['dariServer'] == true;
+          final hakBaru = res['hak'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+            // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _daftar = data;
             _total = dariServer
                 ? (res['total'] as num?)?.toInt() ?? data.length
@@ -180,6 +186,14 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
 
   /// Keputusan atas PR. Menolak WAJIB beralasan -- server menolak alasan < 5 karakter,
   /// jadi dialog ini meminta alasannya lebih dulu agar kasir tidak gagal di server.
+
+  /// Hak per aksi yang dikirim peladen bersama daftar (grid CRUD TbmroleAction).
+  /// Dipakai MEMADAMKAN tombol; gerbang sebenarnya tetap pemeriksaan di peladen.
+  /// Kunci yang tidak dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
   Future<void> _putusan(Map<String, dynamic> pr, String keputusan) async {
     String alasan = '';
     if (keputusan == 'TOLAK') {
@@ -331,11 +345,13 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
             icon: const Icon(Icons.refresh)),
       ],
       aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _form(),
-        icon: const Icon(Icons.add),
-        label: const Text('Buat PR'),
-      ),
+      floatingActionButton: !_boleh('create')
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _form(),
+              icon: const Icon(Icons.add),
+              label: const Text('Buat PR'),
+            ),
       body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -505,15 +521,19 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
       AksiBaris(
           ikon: Icons.check_circle_outline,
           label: 'Setujui',
-          onTap: st == 'DRAFT' ? () => _putusan(pr, 'SETUJUI') : null),
+          onTap: st == 'DRAFT' && _boleh('approve')
+              ? () => _putusan(pr, 'SETUJUI')
+              : null),
       AksiBaris(
           ikon: Icons.cancel_outlined,
           label: 'Tolak',
-          onTap: st == 'DRAFT' ? () => _putusan(pr, 'TOLAK') : null),
+          onTap: st == 'DRAFT' && _boleh('reject')
+              ? () => _putusan(pr, 'TOLAK')
+              : null),
       AksiBaris(
           ikon: Icons.undo,
           label: 'Batalkan keputusan',
-          onTap: (st == 'DISETUJUI' || st == 'DITOLAK')
+          onTap: (st == 'DISETUJUI' || st == 'DITOLAK') && _boleh('approve')
               ? () => _putusan(pr, 'BATAL')
               : null),
       AksiBaris(
@@ -529,7 +549,7 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
           ikon: Icons.delete_outline,
           label: 'Hapus',
           merusak: true,
-          onTap: st == 'DRAFT' ? () => _hapus(pr) : null),
+          onTap: st == 'DRAFT' && _boleh('delete') ? () => _hapus(pr) : null),
     ]);
   }
 }

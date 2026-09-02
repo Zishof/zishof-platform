@@ -91,7 +91,13 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
         'master:pengadaan_pajak_setoran',
         onData: (res) {
           if (!mounted) return;
+          final hakBaru = res['hak'];
           setStateIfMounted(() {
+            // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+            // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+            if (hakBaru is Map) {
+              _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
+            }
             _setoran = ((res['data'] as List?) ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))
                 .toList();
@@ -131,6 +137,13 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
   /// Setor pajak atas baris terpilih. NTPN dan tanggal setor WAJIB -- keduanya
   /// adalah bukti bahwa uangnya benar-benar masuk kas negara, dan server menolak
   /// bila kosong, jadi dialog meminta keduanya sekaligus.
+  /// Hak per aksi dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hak = const {};
+
+  bool _boleh(String aksi) => _hak[aksi] != false;
+
   Future<void> _setor(String jenis) async {
     if (_dipilih.isEmpty) {
       _pesan('Centang minimal satu baris pajak.', sukses: false);
@@ -419,13 +432,14 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
                 'PPN ${_fmtRp.format(_totalDipilih('ppn'))}',
                 style: const TextStyle(fontSize: 12)),
           ),
+          // Menyetor pajak MEMBUAT dokumen setoran baru -> hak create.
           OutlinedButton.icon(
-              onPressed: () => _setor('PPN'),
+              onPressed: _boleh('create') ? () => _setor('PPN') : null,
               icon: const Icon(Icons.receipt_outlined, size: 18),
               label: const Text('Setor PPN')),
           const SizedBox(width: 8),
           FilledButton.icon(
-              onPressed: () => _setor('PPH'),
+              onPressed: _boleh('create') ? () => _setor('PPH') : null,
               icon: const Icon(Icons.account_balance, size: 18),
               label: const Text('Setor PPh')),
         ]),
@@ -549,7 +563,9 @@ class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
             AksiBaris(
                 ikon: Icons.undo,
                 label: 'Batalkan setoran',
-                onTap: aktif ? () => _batal(r) : null),
+                // Membatalkan setoran = membalik dokumen yang sudah terbit,
+                // jadi mengikuti hak delete, bukan create.
+                onTap: aktif && _boleh('delete') ? () => _batal(r) : null),
           ]),
           if (!aktif)
             const Text('dibatalkan',
