@@ -86,13 +86,27 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
         {'mulai': _fmt.format(_mulai), 'sampai': _fmt.format(_sampai)},
       );
       if (!mounted) return;
-      setStateIfMounted(() => _data = Map<String, dynamic>.from(hasil));
+      final hakBaru = hasil['hak'];
+      setStateIfMounted(() {
+        // Balasan DRAF membawa hak menerapkannya; tombol Posting baru muncul
+        // sesudah draf tampil, jadi haknya selalu sudah diketahui saat
+        // tombolnya dirender.
+        if (hakBaru is Map) {
+          _bolehTerapkan = hakBaru['create'] != false;
+        }
+        _data = Map<String, dynamic>.from(hasil);
+      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
     } finally {
       setStateIfMounted(() => _sibuk = false);
     }
   }
+
+  /// Hak MENERAPKAN posting, dari balasan draf. Bawaannya true: selama draf belum
+  /// dimuat tidak ada tombol Posting yang dirender, jadi tidak ada yang perlu
+  /// dipadamkan -- dan peladen tetap gerbang sebenarnya.
+  bool _bolehTerapkan = true;
 
   /// [ids] kosong berarti "semua yang siap".
   Future<void> _posting(List<dynamic> ids) async {
@@ -223,7 +237,9 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Muat ulang')),
                 FilledButton.icon(
-                    onPressed: _sibuk || siap.isEmpty ? null : () => _posting(const []),
+                    onPressed: _sibuk || siap.isEmpty || !_bolehTerapkan
+                        ? null
+                        : () => _posting(const []),
                     icon: const Icon(Icons.post_add, size: 18),
                     label: Text('Posting semua yang siap (${siap.length})')),
                 if (_sibuk)
@@ -275,7 +291,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                               flex: 2,
                               child: bisa
                                   ? TextButton(
-                                      onPressed: _sibuk
+                                      onPressed: _sibuk || !_bolehTerapkan
                                           ? null
                                           : () => _posting([r['id']]),
                                       child: const Text('Posting'))
