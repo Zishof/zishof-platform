@@ -82,8 +82,8 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     _tglMulai = DateTime(sekarang.year, sekarang.month, 1);
     _tglSampai = sekarang;
     // Pra-pilih unit bawaan server bila ada di daftar; kalau tidak, "Semua Unit".
-    final adaBawaan = widget.satuanKerja.any(
-        (e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
+    final adaBawaan = widget.satuanKerja
+        .any((e) => (e['id'] as num?)?.toInt() == widget.satuanKerjaDefault);
     _satkerId = adaBawaan ? widget.satuanKerjaDefault : 0;
   }
 
@@ -1321,12 +1321,14 @@ class _SelAngkaRincian extends StatelessWidget {
 Map<String, dynamic> _dimensiBaris(
     List<Map<String, dynamic>> kolom, List<dynamic> baris, String idLaporan) {
   final hasil = <String, dynamic>{};
-  // Laporan saldo piutang menampilkan SISA, bukan seluruh transaksi. Tanpa
-  // penyaring ini, drill-down-nya memunculkan semua nota pelanggan tsb --
-  // termasuk yang sudah lunas -- sehingga jumlahnya tidak pernah cocok dengan
-  // angka yang barusan diklik.
+  // Laporan saldo piutang hanya boleh menelusuri transaksi Kasbon. Tanpa
+  // penyaring ini, drill-down memunculkan Voucher/QRIS/Tunai milik pelanggan
+  // yang sama dan jumlahnya tidak cocok dengan angka yang diklik.
   if (idLaporan == 'ar_saldo') {
-    hasil['hanyaBelumLunas'] = true;
+    // Laporan piutang ditentukan oleh slot metode Kasbon, bukan kolom ringkas
+    // bayar_tunai/bayar_non_tunai. Ini juga membuat Voucher dan QRIS tertutup
+    // secara fail-closed walau header lama tidak mengisi kolom ringkas tersebut.
+    hasil['hanyaPiutang'] = true;
   }
   for (var i = 0; i < kolom.length && i < baris.length; i++) {
     final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
@@ -1338,7 +1340,11 @@ Map<String, dynamic> _dimensiBaris(
     if (nilai.isEmpty || nilai == '-') {
       continue;
     }
-    if (label.contains('kode') && !hasil.containsKey('kodeProduk')) {
+    if (idLaporan == 'ar_saldo' &&
+        label.contains('kode') &&
+        !hasil.containsKey('kodePelanggan')) {
+      hasil['kodePelanggan'] = nilai;
+    } else if (label.contains('kode') && !hasil.containsKey('kodeProduk')) {
       hasil['kodeProduk'] = nilai;
     } else if ((label.contains('nama produk') || label.contains('barang')) &&
         !hasil.containsKey('namaProduk')) {
@@ -1412,6 +1418,7 @@ class _RincianTransaksi extends StatelessWidget {
         }
         final rp = NumberFormat.currency(
             locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+        final rincianPiutang = dimensi['hanyaPiutang'] == true;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1422,15 +1429,20 @@ class _RincianTransaksi extends StatelessWidget {
                 headingRowHeight: 34,
                 dataRowMinHeight: 30,
                 dataRowMaxHeight: 40,
-                columns: const [
-                  DataColumn(label: Text('Waktu')),
-                  DataColumn(label: Text('No. Nota')),
-                  DataColumn(label: Text('Kasir')),
-                  DataColumn(label: Text('Pelanggan')),
-                  DataColumn(label: Text('Produk')),
-                  DataColumn(label: Text('Qty'), numeric: true),
-                  DataColumn(label: Text('Harga'), numeric: true),
-                  DataColumn(label: Text('Total'), numeric: true),
+                columns: [
+                  const DataColumn(label: Text('Waktu')),
+                  const DataColumn(label: Text('No. Nota')),
+                  const DataColumn(label: Text('Kasir')),
+                  const DataColumn(label: Text('Pelanggan')),
+                  const DataColumn(label: Text('Produk')),
+                  if (rincianPiutang) ...const [
+                    DataColumn(label: Text('Metode Pembayaran')),
+                    DataColumn(label: Text('Jenis Piutang')),
+                    DataColumn(label: Text('Piutang Faktur'), numeric: true),
+                  ],
+                  const DataColumn(label: Text('Qty'), numeric: true),
+                  const DataColumn(label: Text('Harga'), numeric: true),
+                  const DataColumn(label: Text('Total Produk'), numeric: true),
                 ],
                 rows: [
                   for (final r in data)
@@ -1440,6 +1452,12 @@ class _RincianTransaksi extends StatelessWidget {
                       DataCell(Text('${r['kasir'] ?? ''}')),
                       DataCell(Text('${r['pelanggan'] ?? ''}')),
                       DataCell(Text('${r['produk'] ?? ''}')),
+                      if (rincianPiutang) ...[
+                        DataCell(Text('${r['metode'] ?? ''}')),
+                        DataCell(Text('${r['jenisPiutang'] ?? ''}')),
+                        DataCell(Text(rp.format(
+                            (r['nilaiPiutang'] as num?)?.toDouble() ?? 0))),
+                      ],
                       DataCell(Text('${(r['qty'] as num?)?.toDouble() ?? 0}')),
                       DataCell(Text(
                           rp.format((r['harga'] as num?)?.toDouble() ?? 0))),
@@ -1451,8 +1469,9 @@ class _RincianTransaksi extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${data.length} baris transaksi  ·  total '
+              '${data.length} baris produk  ·  total nilai produk '
               '${rp.format((snap.data?['totalNilai'] as num?)?.toDouble() ?? 0)}'
+              '${rincianPiutang ? '  ·  total piutang unik per faktur ${rp.format((snap.data?['totalPiutang'] as num?)?.toDouble() ?? 0)}' : ''}'
               '${snap.data?['dibatasi'] == true ? '  (dibatasi, masih ada baris lain)' : ''}',
               style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
             ),
