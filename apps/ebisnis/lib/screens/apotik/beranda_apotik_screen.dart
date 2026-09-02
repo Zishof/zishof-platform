@@ -11,6 +11,7 @@ import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import '../../app_variant.dart';
 import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
+import '../../features/apotik/prescription/apotik_resep_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
 
@@ -317,7 +318,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
 
   void _bukaTujuanDashboard(ApotikTujuanDashboard tujuan) {
     final layar = switch (tujuan) {
-      ApotikTujuanDashboard.resep => _layarTujuan('apotik_kasir'),
+      // FASE 4: antrean resep kini punya layarnya sendiri (sebelumnya
+      // dialihkan ke kasir karena layar ini belum ada).
+      ApotikTujuanDashboard.resep => const _HalamanAntreanResep(),
       ApotikTujuanDashboard.batch => _layarTujuan('apotik_batch'),
       ApotikTujuanDashboard.stok => _layarTujuan('apotik_formularium'),
       ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
@@ -397,6 +400,24 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
           ]);
         }).toList(),
       ),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk antrean resep supaya sidebar & menu aktif
+/// konsisten dengan layar apotik lainnya.
+class _HalamanAntreanResep extends StatelessWidget {
+  const _HalamanAntreanResep();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.kasirApotik,
+      judul: 'Antrean Resep',
+      subjudul:
+          'Telaah, daftar periksa pra-serah, pemeriksaan kedua, konseling',
+      scrollable: false,
+      body: ApotikResepPage(),
     );
   }
 }
