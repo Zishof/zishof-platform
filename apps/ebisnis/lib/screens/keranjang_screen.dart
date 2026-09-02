@@ -1136,14 +1136,36 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       ),
     );
     if (pilihan == null) return null;
+    final bukti = <String, int>{};
     if (pilihan != 'PIN') {
       final id = await _verifikasiBiometrik(bridge, pilihan, kodeUnik);
-      return id == null ? null : <String, int>{};
+      if (id == null) return null;
+      bukti[pilihan == 'FACE'
+          ? 'biometric_face_event_id'
+          : 'biometric_fingerprint_event_id'] = id;
     }
+    // PIN tetap diminta, dan itu BUKAN kelebihan langkah.
+    //
+    // Cabang ini hanya tercapai ketika _pinWajibUntukMetodeTerpilih bernilai
+    // true, yang mencerminkan daftarCaraPembayaranWajibPin di server. Server
+    // memeriksa pin_verification_event_id dengan modality "PIN" secara terpisah
+    // (BiometricApi.validPosVerification, yang langsung mengembalikan false bila
+    // eventId null) -- verifikasi wajah/sidik jari TIDAK menggantikannya.
+    //
+    // Sebelum perbaikan ini, memilih sidik jari/wajah mengembalikan map KOSONG:
+    // idnya dibuang, payload berangkat tanpa bukti apa pun, dan server menolak
+    // dengan "Verifikasi PIN wajib dilakukan kembali untuk cara pembayaran yang
+    // dipilih" -- kepada orang yang baru saja berhasil memindai sidik jarinya.
+    // Dialognya lalu menawarkan sidik jari lagi, sehingga jalur itu tidak pernah
+    // dapat selesai; hanya PIN yang bisa.
+    //
+    // Idnya kini tetap dikirim (server sudah membaca kedua kunci itu untuk
+    // gerbang wajah/sidik jarinya sendiri), sehingga bila kelak diputuskan
+    // biometrik boleh menggantikan PIN, buktinya sudah mengalir.
     final pinEventId = await _verifikasiPin(kodeUnik);
-    return pinEventId == null
-        ? null
-        : <String, int>{'pin_verification_event_id': pinEventId};
+    if (pinEventId == null) return null;
+    bukti['pin_verification_event_id'] = pinEventId;
+    return bukti;
   }
 
   Future<String> _buatKodeUnik() async {

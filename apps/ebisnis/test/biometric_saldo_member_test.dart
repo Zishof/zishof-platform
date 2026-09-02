@@ -138,6 +138,30 @@ void main() {
     expect(source, contains('Pembayaran sudah diterima server'));
   });
 
+  test('verifikasi pilihan tidak boleh membuang id yang baru saja didapat', () {
+    // Uji di atas sudah menegaskan ketiga nama kunci MUNCUL di berkas, dan
+    // tetap hijau selama cacat ini hidup: nama-nama itu ada di jalur biometrik
+    // WAJIB, sementara jalur PILIHAN membuang idnya. Menegaskan sebuah nama
+    // muncul tidak sama dengan menegaskan nilainya terkirim.
+    //
+    // Cacatnya: dialog "Verifikasi member" hanya muncul ketika PIN wajib untuk
+    // cara bayar terpilih. Memilih sidik jari/wajah menjalankan verifikasi,
+    // lalu mengembalikan map KOSONG. Server memeriksa pin_verification_event_id
+    // terpisah (BiometricApi.validPosVerification -> false bila eventId null),
+    // sehingga pembayaran ditolak dengan "Verifikasi PIN wajib dilakukan
+    // kembali" kepada orang yang baru saja berhasil memindai sidik jarinya --
+    // dan dialognya menawarkan sidik jari lagi, jadi jalur itu buntu.
+    final source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
+    expect(
+      source.contains('return id == null ? null : <String, int>{};'),
+      isFalse,
+      reason: 'id verifikasi biometrik dibuang di jalur pilihan',
+    );
+    expect(source, contains("? 'biometric_face_event_id'"));
+    expect(source, contains(": 'biometric_fingerprint_event_id'"));
+    expect(source, contains("bukti['pin_verification_event_id'] = pinEventId;"));
+  });
+
   test('PIN mengikuti metode pembayaran dan dialog hanya menerima angka', () {
     final source = File('lib/screens/keranjang_screen.dart').readAsStringSync();
     expect(source, contains('_pinWajibUntukMetodeTerpilih'));
