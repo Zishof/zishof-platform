@@ -72,12 +72,15 @@ CREATE INDEX IF NOT EXISTS idx_kop_pembelian_toko_waktu ON koperasi.pembelian (t
 CREATE INDEX IF NOT EXISTS idx_kop_pembelian_nota ON koperasi.pembelian (pembelian_anggota_koperasi);
 ```
 
-**Belum dikirim ke repositori**: berkas `InitIndex.java` sedang memuat pekerjaan
-sesi lain yang belum selesai (±370 baris), dan mengirim berkas itu seluruhnya
-berarti ikut mengklaim serta memublikasikan perubahan yang bukan milik pekerjaan
-ini. Perubahan indeksnya menunggu di salinan kerja sampai berkas itu bersih.
-Bila diperlukan lebih cepat, kedua perintah di atas aman dijalankan langsung oleh
-admin basis data.
+**Sudah masuk repositori.** Sempat tertahan karena `InitIndex.java` memuat
+pekerjaan sesi lain yang belum selesai (±370 baris) — mengirim berkas itu
+seluruhnya berarti ikut memublikasikan perubahan yang bukan milik pekerjaan ini.
+Kedua indeks akhirnya terbawa ketika berkas tersebut dikirim oleh sesi yang
+mengerjakannya, dan keberadaannya sudah diverifikasi pada HEAD.
+
+Indeks dibuat otomatis saat aplikasi dijalankan ulang (idempoten). Bila ingin
+lebih cepat, kedua perintah di atas aman dijalankan langsung oleh admin basis
+data.
 
 ## Bukti
 
