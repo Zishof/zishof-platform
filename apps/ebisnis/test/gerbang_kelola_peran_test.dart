@@ -92,8 +92,11 @@ void main() {
     expect(padat, contains(_rapat('action.startsWith("satuan_kerja_")')),
         reason: 'satuan_kerja_ kembali jatuh ke default-allow');
     // Harus berada di blok yang sama dengan saudara-saudaranya (kunci anggota).
+    // Jendelanya sengaja lapang: blok ini tumbuh setiap kali ada aksi lain yang
+    // ikut dipetakan ke kunci anggota (mis. daftar mutasi keuangan anggota),
+    // dan jendela sempit membuat penjaga ini jatuh karena alasan yang salah.
     final i = padat.indexOf(_rapat('action.startsWith("satuan_kerja_")'));
-    final sesudah = padat.substring(i, (i + 160).clamp(0, padat.length));
+    final sesudah = padat.substring(i, (i + 600).clamp(0, padat.length));
     expect(sesudah, contains(_rapat('menu.optBoolean("anggota"')),
         reason: 'satuan_kerja_ tidak dipetakan ke kunci menu anggota');
   });
