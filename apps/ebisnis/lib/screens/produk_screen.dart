@@ -2569,6 +2569,15 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   int? _satuanPackId;
   late final TextEditingController _hargaPack;
   bool _menyimpan = false;
+  /// Persetujuan sekali-pakai untuk gerbang harga modal >10x harga jual.
+  ///
+  /// Server menolak simpan dengan kode HARGA_MODAL_TINGGI dan menyuruh
+  /// "simpan ulang dengan persetujuan harga modal tinggi". Sebelum ini tidak
+  /// ada satu pun klien yang mengirim izin_harga_modal_tinggi, sehingga
+  /// perintah itu mustahil dijalankan dan barisnya terparkir GAGAL di outbox.
+  /// Direset ke false setiap kali form dibuka lagi: persetujuan berlaku untuk
+  /// satu penyimpanan, bukan menjadi sifat menetap layar ini.
+  bool _izinHargaModalTinggi = false;
   String? _pesanError;
   final List<_BahanBakuBaris> _bahanBaku = [];
   final List<_KemasanBaris> _kemasan = [];
@@ -3245,6 +3254,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'rute': _rute.isEmpty ? null : _rute,
           'perlu_qc': _perluQc,
           'harga_beli_manual': _hargaBeliManual,
+          if (_izinHargaModalTinggi) 'izin_harga_modal_tinggi': true,
           'pack_aktif': _packAktif,
           if (_packAktif) 'satuan_pack_id': _satuanPackId,
           if (_packAktif) 'harga_pack': _angka(_hargaPack.text),
@@ -3354,6 +3364,41 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      // Gerbang harga modal punya jalan keluar yang sah (barang promo rugi,
+      // klaim garansi) dan pesan servernya menyuruh memakainya. Tanpa blok
+      // ini perintah itu mustahil dijalankan: tidak ada layar yang pernah
+      // mengirim izin_harga_modal_tinggi. Dicocokkan lewat KODE, bukan teks.
+      if (e is ApiException &&
+          e.kode == 'HARGA_MODAL_TINGGI' &&
+          !_izinHargaModalTinggi &&
+          mounted) {
+        final setuju = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Harga modal jauh di atas harga jual'),
+            content: Text(e.pesan),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Periksa lagi'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Simpan dengan persetujuan'),
+              ),
+            ],
+          ),
+        );
+        if (setuju == true && mounted) {
+          _izinHargaModalTinggi = true;
+          try {
+            await _simpan();
+          } finally {
+            _izinHargaModalTinggi = false;
+          }
+          return;
+        }
+      }
       setStateIfMounted(() => _pesanError = terapkanGalat(e));
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
