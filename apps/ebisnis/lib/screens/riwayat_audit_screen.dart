@@ -501,6 +501,10 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
 
       try {
         final res =
+            // ONLINE-ONLY: minta(true) MENGHITUNG, minta(false) MENERAPKAN --
+            // sepasang. Yang disetujui pengguna adalah hasil hitungan server
+            // barusan; menunda penerapannya membuat pasangan itu bisa tidak
+            // cocok lagi.
             await ApiClient.instance.aksi('perbaiki_nilai_bayar', minta(false));
         if (!ApiClient.statusResponsSukses(res['status'])) {
           throw Exception(res['description'] ?? 'Perbaikan ditolak server.');

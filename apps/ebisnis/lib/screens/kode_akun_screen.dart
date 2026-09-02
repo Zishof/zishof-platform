@@ -369,6 +369,9 @@ class _KodeAkunScreenState extends State<KodeAkunScreen>
 
     setStateIfMounted(() => _sibuk = true);
     try {
+      // ONLINE-ONLY: pratinjau dan komit berpasangan. SERVER yang memilih baris
+      // mana yang dihapus, jadi menunda komitnya membuat daftar yang disetujui
+      // pengguna bisa tidak cocok lagi saat antreannya terkirim.
       final hasil = await ApiClient.instance.aksi('kode_akun_bersihkan', {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

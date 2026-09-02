@@ -22,6 +22,9 @@ void main() {
     'produksi_screen.dart': ['produksi_simpan'],
     // Dokumen pengiriman diisi di jalan.
     'pengiriman_screen.dart': ['distribusi_simpan'],
+    // Membatalkan opname & keputusan QC: dokumen milik toko sendiri, tidak ada
+    // pihak lain yang keputusannya dapat bertabrakan.
+    'stok_opname_screen.dart': ['so_batalkan'],
   };
 
   test('mutasi layar baru memakai jalur lokal-dulu', () {
@@ -34,6 +37,23 @@ void main() {
             reason: '$aksi kembali dikirim langsung');
       }
     }
+  });
+
+  test('disposisi QC jujur soal dokumen turunan saat offline', () {
+    // Dokumen turunan (rework/unbuild/scrap) dibuat SERVER saat perintahnya tiba.
+    // Menyebut jumlahnya saat offline berarti mengarang angka yang belum tentu
+    // benar; pesannya harus mengaku bahwa turunannya menyusul.
+    final s = _layar('produksi_screen.dart');
+    expect(s, contains(_rapat("r['offline'] == true")));
+    expect(s, contains(_rapat('Dokumen turunannya dibuat setelah terkirim.')));
+  });
+
+  test('pembatalan opname tidak menebak stok akhir saat offline', () {
+    // Stok akhir dihitung server; menebaknya di klien akan menampilkan angka
+    // yang berbeda dari kenyataan sampai penyelarasan berikutnya berjalan.
+    final s = _layar('stok_opname_screen.dart');
+    expect(s, contains(_rapat("(hasil['produkId'] as num?)?.toInt()")));
+    expect(s, contains(_rapat('prosesSimpanMaster(')));
   });
 
   test('kunci antrean membedakan dokumen, bukan satu kunci untuk semua', () {
@@ -52,6 +72,10 @@ void main() {
     // dan seseorang akan mengantrekannya tanpa tahu mengapa dulu tidak boleh.
     const wajibBeralasan = <String, String>{
       'anggota/tab_data_member.dart': 'anggota_pin_simpan_massal',
+      // Pratinjau & komit berpasangan: server yang memilih baris mana dihapus.
+      'kode_akun_screen.dart': "kode_akun_bersihkan', {})",
+      // Pengaturan GLOBAL lintas perangkat.
+      'konfigurasi_screen.dart': 'pengaturan_edit_transaksi_global_simpan',
       'anggota/member_biometric_panel.dart': 'biometrik_simpan',
       'anggota/tab_topup.dart': 'topup_online_buat',
       'anggota/tab_pengajuan_limit.dart': 'pengajuan_limit_member_putuskan',

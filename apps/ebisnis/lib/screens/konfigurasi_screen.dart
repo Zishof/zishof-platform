@@ -500,6 +500,10 @@ class _TabIdentitasMesinState extends State<_TabIdentitasMesin> {
                       setStateIfMounted(
                           () => _menyimpanEditTransaksiGlobal = true);
                       try {
+                        // ONLINE-ONLY: ini pengaturan GLOBAL lintas perangkat.
+                        // Diantre, dua kasir dapat bekerja dengan aturan berbeda
+                        // sampai antreannya terkirim -- dan tidak seorang pun
+                        // tahu aturan mana yang sedang berlaku.
                         final hasil = await ApiClient.instance.aksi(
                             'pengaturan_edit_transaksi_global_simpan',
                             {'aktif': nilai});

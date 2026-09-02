@@ -100,15 +100,26 @@ class _ProduksiScreenState extends State<ProduksiScreen> {
   /// (REWORK=WO, UNBUILD, SCRAP=WASTE) dan mengelola karantina batch.
   Future<void> _disposisi(Map<String, dynamic> d, String disposisi) async {
     try {
-      final r = await ApiClient.instance.aksi(
-          'produksi_qc_disposisi', <String, dynamic>{
-        'jenis': cfg.kode,
-        'id': d['id'],
-        'disposisi': disposisi
-      });
+      // LOKAL DULU: keputusan QC atas batch yang SUDAH ADA, aman diantre.
+      final r = await prosesSimpanMaster(
+        context,
+        aksi: 'produksi_qc_disposisi',
+        kunci: 'produksi_qc:${cfg.kode}:${d['id']}',
+        body: <String, dynamic>{
+          'jenis': cfg.kode,
+          'id': d['id'],
+          'disposisi': disposisi
+        },
+      );
+      // Dokumen turunan (rework/unbuild/scrap) dibuat SERVER saat perintahnya
+      // tiba, jadi saat offline jumlahnya belum diketahui -- pesannya menyesuaikan
+      // alih-alih mengarang angka yang belum tentu benar.
       final turunan = (r['turunan'] as List?)?.length ?? 0;
-      _pesan('Disposisi $disposisi diterapkan'
-          '${turunan > 0 ? " ($turunan dokumen turunan draf dibuat)" : ""}.');
+      _pesan(r['offline'] == true
+          ? 'Disposisi $disposisi tersimpan di perangkat, akan dikirim otomatis. '
+              'Dokumen turunannya dibuat setelah terkirim.'
+          : 'Disposisi $disposisi diterapkan'
+              '${turunan > 0 ? " ($turunan dokumen turunan draf dibuat)" : ""}.');
       _muat();
     } catch (e) {
       if (mounted) _pesan('Gagal disposisi: $e');

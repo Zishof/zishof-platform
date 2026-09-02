@@ -23,6 +23,7 @@ import '../widgets/kilau_perubahan.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/pencarian_produk_banbox.dart';
 import '../services/pencarian_produk_lokal.dart';
+import '../widgets/proses_simpan_master.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 
@@ -1531,13 +1532,23 @@ class _TabInputOpnameState extends State<_TabInputOpname> with JejakGalat {
     );
     final teksAlasan = alasan.text.trim();
     alasan.dispose();
-    if (setuju != true || teksAlasan.length < 5) return;
+    if (setuju != true || teksAlasan.length < 5 || !mounted) return;
     setStateIfMounted(() => _menyimpan = true);
     try {
-      final hasil = await ApiClient.instance.aksi('so_batalkan', {
-        'opname_id': opname['id'],
-        'alasan': teksAlasan,
-      });
+      // LOKAL DULU: membatalkan opname adalah keputusan atas dokumen milik toko
+      // sendiri -- tidak ada pihak lain yang keputusannya dapat bertabrakan.
+      final hasil = await prosesSimpanMaster(
+        context,
+        aksi: 'so_batalkan',
+        kunci: 'so_batalkan:${opname['id']}',
+        body: {
+          'opname_id': opname['id'],
+          'alasan': teksAlasan,
+        },
+      );
+      // Stok akhir dihitung SERVER; saat offline nilainya belum ada, jadi
+      // pembaruan cache dilewati dan penyelarasan stok berikutnya yang
+      // membereskannya -- bukan ditebak di sini.
       final produkId = (hasil['produkId'] as num?)?.toInt();
       final stokAkhir = hasil['stokAkhir'] as num?;
       if (produkId != null && stokAkhir != null) {
