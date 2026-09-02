@@ -11,6 +11,7 @@ import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 import '../../app_variant.dart';
 import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
+import '../../features/apotik/inventory/apotik_batch_expiry_page.dart';
 import '../../features/apotik/prescription/apotik_resep_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
@@ -321,7 +322,8 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
       // FASE 4: antrean resep kini punya layarnya sendiri (sebelumnya
       // dialihkan ke kasir karena layar ini belum ada).
       ApotikTujuanDashboard.resep => const _HalamanAntreanResep(),
-      ApotikTujuanDashboard.batch => _layarTujuan('apotik_batch'),
+      // FASE 5: ruang kerja batch/expiry sendiri (sebelumnya tab persediaan).
+      ApotikTujuanDashboard.batch => const _HalamanBatchExpiry(),
       ApotikTujuanDashboard.stok => _layarTujuan('apotik_formularium'),
       ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
     };
@@ -418,6 +420,22 @@ class _HalamanAntreanResep extends StatelessWidget {
           'Telaah, daftar periksa pra-serah, pemeriksaan kedua, konseling',
       scrollable: false,
       body: ApotikResepPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk ruang kerja Batch, Expiry & FEFO.
+class _HalamanBatchExpiry extends StatelessWidget {
+  const _HalamanBatchExpiry();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Batch, Expiry & FEFO',
+      subjudul: 'Monitor lot mendekati kedaluwarsa dan status penahanan',
+      scrollable: false,
+      body: ApotikBatchExpiryPage(),
     );
   }
 }
