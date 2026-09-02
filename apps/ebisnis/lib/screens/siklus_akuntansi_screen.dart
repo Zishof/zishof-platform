@@ -90,15 +90,29 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       await MasterOffline.daftarCacheDulu(
           'saldo_awal_daftar', const {}, _cacheSaldoAwal, onData: (sa) {
         if (!mounted) return;
-        setStateIfMounted(() => _saldoAwal =
-            ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        final hakBaru = sa['hak'];
+        setStateIfMounted(() {
+          // Hanya emisi SERVER yang membawa hak; snapshot cache tidak, dan
+          // menimpanya dgn peta kosong akan memadamkan tombol tanpa alasan.
+          if (hakBaru is Map) {
+            _hakSaldoAwal = hakBaru.map((k, v) => MapEntry('$k', v == true));
+          }
+          _saldoAwal =
+              ((sa['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        });
       });
       await MasterOffline.daftarCacheDulu(
           'penyesuaian_template_daftar', const {}, _cacheTemplate,
           onData: (tp) {
         if (!mounted) return;
-        setStateIfMounted(() => _template =
-            ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+        final hakBaru = tp['hak'];
+        setStateIfMounted(() {
+          if (hakBaru is Map) {
+            _hakPenyesuaian = hakBaru.map((k, v) => MapEntry('$k', v == true));
+          }
+          _template =
+              ((tp['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        });
       });
       final ak = await MasterOffline.daftarDenganCache(
           'akun_list', {'limit': 5000}, 'master:akun');
@@ -383,6 +397,19 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
     if (hasil != null) setStateIfMounted(() => _drafSaldoAwal = hasil);
   }
 
+  /// Hak per menu dari peladen (grid CRUD TbmroleAction) -- dipakai MEMADAMKAN
+  /// tombol; gerbang sebenarnya tetap pemeriksaan di peladen. Kunci yang tidak
+  /// dikirim dianggap BOLEH, sama seperti bawaan peladen.
+  Map<String, bool> _hakSaldoAwal = const {};
+  Map<String, bool> _hakPenyesuaian = const {};
+  Map<String, bool> _hakTutupBuku = const {};
+
+  bool _bolehSaldoAwal(String aksi) => _hakSaldoAwal[aksi] != false;
+
+  bool _bolehPenyesuaian(String aksi) => _hakPenyesuaian[aksi] != false;
+
+  bool _bolehTutupBuku(String aksi) => _hakTutupBuku[aksi] != false;
+
   Future<void> _postingSaldo() async {
     final d = _drafSaldoAwal;
     if (d == null) {
@@ -566,7 +593,17 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
       'mulai': _fmt.format(_tbMulai),
       'sampai': _fmt.format(_tbSampai),
     });
-    if (hasil != null) setStateIfMounted(() => _drafTutupBuku = hasil);
+    if (hasil != null) {
+      final hakBaru = hasil['hak'];
+      setStateIfMounted(() {
+        // Pratinjau draft-lah yang membawa hak Tutup Buku -- di layar itu pula
+        // tombol Posting berada, jadi tombolnya padam sebelum sempat ditekan.
+        if (hakBaru is Map) {
+          _hakTutupBuku = hakBaru.map((k, v) => MapEntry('$k', v == true));
+        }
+        _drafTutupBuku = hasil;
+      });
+    }
   }
 
   Future<void> _postingTutup() async {
@@ -658,7 +695,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
             icon: const Icon(Icons.fact_check_outlined, size: 18),
             label: const Text('Lihat Draf Jurnal')),
         FilledButton.icon(
-            onPressed: _sibuk ? null : _postingSaldo,
+            onPressed: _sibuk || !_bolehSaldoAwal('create')
+                ? null
+                : _postingSaldo,
             icon: const Icon(Icons.post_add, size: 18),
             label: const Text('Posting Jurnal Pembukaan')),
       ]),
@@ -758,7 +797,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
             icon: const Icon(Icons.fact_check_outlined, size: 18),
             label: const Text('Lihat Draf')),
         FilledButton.icon(
-            onPressed: _sibuk ? null : () => _postingPenyesuaian(const []),
+            onPressed: _sibuk || !_bolehPenyesuaian('create')
+                ? null
+                : () => _postingPenyesuaian(const []),
             icon: const Icon(Icons.post_add, size: 18),
             label: const Text('Posting Semua yang Siap')),
       ]),
@@ -894,7 +935,9 @@ class _SiklusAkuntansiScreenState extends State<SiklusAkuntansiScreen>
             icon: const Icon(Icons.fact_check_outlined, size: 18),
             label: const Text('Lihat Draf')),
         FilledButton.icon(
-            onPressed: _sibuk ? null : _postingTutup,
+            onPressed: _sibuk || !_bolehTutupBuku('create')
+                ? null
+                : _postingTutup,
             icon: const Icon(Icons.lock_outline, size: 18),
             label: const Text('Tutup Buku')),
       ]),

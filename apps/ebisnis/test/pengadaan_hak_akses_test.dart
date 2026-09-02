@@ -76,6 +76,49 @@ void main() {
     }
   });
 
+  test('siklus akuntansi memadamkan tiga tombol posting', () {
+    // Saldo Awal, Jurnal Penyesuaian, dan Tutup Buku menegakkan 14 pemeriksaan
+    // hak di peladen. Pada layar posting, penolakan yang baru terasa SESUDAH
+    // ditekan berarti pengguna menunggu proses yang tidak akan pernah berhasil.
+    final s = _layar('siklus_akuntansi_screen.dart');
+    for (final penjaga in [
+      "_bolehSaldoAwal('create')",
+      "_bolehPenyesuaian('create')",
+      "_bolehTutupBuku('create')",
+    ]) {
+      expect(s, contains(_rapat(penjaga)), reason: '$penjaga tidak dipakai');
+    }
+    // Ketiganya harus benar-benar DIISI, bukan sekadar dideklarasikan: peta yang
+    // tidak pernah terisi membuat penjaganya selalu meloloskan — gerbang palsu.
+    for (final isi in [
+      '_hakSaldoAwal = hakBaru.map',
+      '_hakPenyesuaian = hakBaru.map',
+      '_hakTutupBuku = hakBaru.map',
+    ]) {
+      expect(s, contains(_rapat(isi)), reason: '$isi tidak pernah diisi');
+    }
+  });
+
+  test('tiga helper posting mengirimkan haknya', () {
+    const helper = <String, String>{
+      'SaldoAwalAkunHelper.java': 'saldo_awal_akun',
+      'JurnalPenyesuaianHelper.java': 'jurnal_penyesuaian',
+      'TutupBukuHelper.java': 'tutup_buku',
+    };
+    for (final e in helper.entries) {
+      final f = File(r'C:\opt\AISis\src\main\srcisction\servletpi'
+          '${e.key}');
+      if (!f.existsSync()) return; // working copy AIS tidak selalu ada di CI
+      final isi = _rapat(f.readAsStringSync());
+      expect(isi, contains(_rapat('hakAksesJson(')),
+          reason: '${e.key} tidak menyusun hak');
+      expect(isi, contains(_rapat('hasil.put("hak"')),
+          reason: '${e.key} menyusun hak tetapi tidak mengirimkannya');
+      expect(isi, contains(_rapat('"${e.value}"')),
+          reason: '${e.key} memakai kunci menu yang salah');
+    }
+  });
+
   test('peladen mengirim hak pada balasan daftar tiap tahap', () {
     final helper = File(r'C:\opt\AIS\ais\src\main\src\ais\action\servlet\api'
         r'\PengadaanPosApiHelper.java');
