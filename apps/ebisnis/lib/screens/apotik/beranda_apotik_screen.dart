@@ -14,6 +14,7 @@ import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
 import '../../features/apotik/inventory/apotik_batch_expiry_page.dart';
 import '../../features/apotik/inventory/apotik_formularium_page.dart';
 import '../../features/apotik/prescription/apotik_resep_page.dart';
+import '../../features/apotik/procurement/apotik_penerimaan_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
 
@@ -342,7 +343,10 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen> {
       case 'apotik_batch':
         return const PersediaanApotikScreen(tabAwal: 1);
       case 'apotik_pengadaan':
-        return const PersediaanApotikScreen(tabAwal: 2);
+        // FASE 5: penerimaan PBF punya layar sendiri untuk varian apotik.
+        return AppVariant.isApotik
+            ? const _HalamanPenerimaan()
+            : const PersediaanApotikScreen(tabAwal: 2);
       case 'apotik_stok_opname':
         return const PersediaanApotikScreen(tabAwal: 3);
       case 'apotik_retur':
@@ -455,6 +459,22 @@ class _HalamanFormularium extends StatelessWidget {
           'Golongan, bentuk sediaan, kekuatan, LASA, high-alert, cold-chain',
       scrollable: false,
       body: ApotikFormulariumPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk Penerimaan PBF.
+class _HalamanPenerimaan extends StatelessWidget {
+  const _HalamanPenerimaan();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Penerimaan PBF',
+      subjudul: 'Faktur, batch baru, dan tanggal kedaluwarsa',
+      scrollable: false,
+      body: ApotikPenerimaanPage(),
     );
   }
 }
