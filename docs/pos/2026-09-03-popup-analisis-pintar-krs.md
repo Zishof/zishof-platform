@@ -91,10 +91,8 @@ popup, sehingga tidak diberi affordance klik palsu.
 - Baseline `mvn -DskipTests clean compile`: **BUILD SUCCESS** (7.512 source Java).
 - Kompilasi terarah tiga helper setelah penyederhanaan: **berhasil**
   (`javac exit=0`) dan seluruh getter keputusan ditemukan pada bytecode.
-- Build global sesudahnya tertahan oleh perubahan paralel di luar lingkup ini:
-  mirror `CommonPSB` memanggil `FormatNis.tambahIndexNomorSurat`, sedangkan
-  mirror `FormatNis` sesi lain sedang menghapus/mengganti method tersebut.
-  File paralel itu tidak diubah oleh pekerjaan ini.
+- Setelah perubahan paralel `CommonPSB/FormatNis` selesai dan kedua file kembali
+  konsisten, `mvn -DskipTests compile` final: **BUILD SUCCESS**.
 - Revisi kode utama: SVN r83819, r83827, dan r83828.
 - Revisi penyederhanaan link dan pengayaan keputusan: SVN r83861.
 
