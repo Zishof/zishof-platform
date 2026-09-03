@@ -18,14 +18,25 @@ import 'package:flutter_test/flutter_test.dart';
 /// (lihat docs/pos/89). Penjaga ini menjaga arah sebaliknya, yang tidak
 /// meninggalkan gejala apa pun sampai ada yang mengaudit.
 ///
-/// Enam kunci di bawah SENGAJA belum ditegakkan dari sisi eBisnis, masing-masing
-/// dengan alasannya. Daftar ini adalah izin untuk TIDAK ditegakkan — bukan
-/// daftar cacat yang dibiarkan. Menambah kunci baru ke `KUNCI_CRUD` tanpa
-/// gerbangnya akan menjatuhkan uji ini.
+/// Enam kunci yang dulu tercantum tanpa gerbang kini **dikeluarkan** dari
+/// `KUNCI_CRUD` (30 centang mati hilang dari grid). Karena itu daftar
+/// pengecualian di bawah sekarang KOSONG, dan invariannya menjadi mutlak:
+/// setiap kunci ber-CRUD wajib benar-benar diperiksa peladen.
 const _akarAis = r'C:\opt\AIS\ais\src\main\src';
 
 /// Kunci yang boleh tidak punya gerbang eBisnis, beserta alasannya.
-const _dikecualikan = <String, String>{
+///
+/// Sengaja dipertahankan meski kosong: bila kelak ada kunci yang memang tidak
+/// dapat digerbangi, tempatnya di sini BESERTA alasannya — bukan dibiarkan
+/// lolos diam-diam.
+const _dikecualikan = <String, String>{};
+
+/// Kunci yang WAJIB TETAP DI LUAR `KUNCI_CRUD`, beserta alasannya.
+///
+/// Mencantumkannya kembali akan memunculkan lima baris centang di grid peran
+/// yang tidak mengubah apa pun — admin mencabutnya, menyimpan, dan percaya
+/// sudah membatasi sesuatu.
+const _wajibDiLuar = <String, String>{
   // Register obat terkendali ditulis OTOMATIS sebagai jejak audit saat obat
   // bergolongan terkendali terjual (ApotikApiHelper: ApotikNarkotikaLog).
   // Tidak ada create/update/delete yang dapat dilakukan pengguna, jadi tidak
@@ -123,6 +134,46 @@ void main() {
     for (final k in _dikecualikan.keys) {
       expect(kunci, contains(k),
           reason: '$k tidak lagi ada di KUNCI_CRUD — hapus dari pengecualian');
+    }
+  });
+
+  test('enam kunci tanpa gerbang tetap DI LUAR KUNCI_CRUD', () {
+    // Mencantumkannya kembali memunculkan lima baris centang per kunci di grid
+    // peran yang tidak mengubah apa pun. Paling menyesatkan pada
+    // `apotik_narkotika`: admin yang mencabut "Hapus" mengira telah mengunci
+    // register obat terkendali, padahal jalur hapusnya memang tak pernah ada.
+    if (!katalog.existsSync()) return;
+    final kunci = _kunciCrud(katalog.readAsStringSync()).toSet();
+    for (final e in _wajibDiLuar.entries) {
+      expect(kunci, isNot(contains(e.key)),
+          reason: '${e.key} kembali masuk KUNCI_CRUD, padahal ${e.value} — '
+              'bangun gerbangnya lebih dulu, jangan tambahkan centang mati');
+    }
+  });
+
+  test('keenamnya tetap TERDAFTAR sebagai menu, hanya CRUD-nya yang dicabut',
+      () {
+    // Mengeluarkan kunci dari KUNCI_CRUD tidak boleh ikut menyembunyikan
+    // menunya: `defaultObj()` menyusun `menu` dari DAFTAR, terpisah dari `crud`.
+    // Bila entri DAFTAR-nya ikut terhapus, menunya hilang dari sidebar semua
+    // peran — kerusakan yang jauh lebih besar daripada centang mati.
+    if (!katalog.existsSync()) return;
+    final isi = katalog.readAsStringSync();
+    // Mencari nama kuncinya saja TIDAK cukup: keenamnya juga disebut di blok
+    // komentar yang menjelaskan mengapa mereka di luar KUNCI_CRUD, sehingga
+    // penjaga selonggar itu tetap hijau walau entri DAFTAR-nya benar-benar
+    // dihapus. Karena itu yang dicocokkan adalah baris PENDAFTARANNYA.
+    final daftar = RegExp(r'DAFTAR\.add\(new Entri\(\s*MODUL_[A-Z_]+\s*,\s*"([a-z0-9_]+)"')
+        .allMatches(isi)
+        .map((m) => m.group(1)!)
+        .toSet();
+    expect(daftar.length, greaterThan(50),
+        reason: 'pembacaan DAFTAR gagal — bentuknya berubah?');
+    for (final k in _wajibDiLuar.keys) {
+      expect(daftar, contains(k),
+          reason: '$k hilang dari DAFTAR — menunya ikut lenyap dari sidebar '
+              'setiap peran, kerusakan yang jauh lebih besar daripada '
+              'centang mati');
     }
   });
 }
