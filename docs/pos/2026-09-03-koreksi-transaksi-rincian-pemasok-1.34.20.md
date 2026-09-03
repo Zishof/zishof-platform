@@ -7,7 +7,9 @@ Dokumen ini menjadi panduan UAT internal untuk dua kebutuhan berikut:
 1. koreksi transaksi selesai dari Detail Riwayat Penjualan; dan
 2. rincian produk terjual pada laporan **Penjualan Barang Per Pemasok**.
 
-Status terbaru 3 September 2026: source backend sudah masuk SVN r83902 dan source Flutter beserta dokumen ini sudah di-push ke GitHub `main` pada commit `91f79cf`. Installer tetap artefak UAT lokal; belum dipublikasikan sebagai rilis dan belum boleh dianggap sudah terpasang di server/komputer toko. Deployment server dan distribusi installer dilakukan terpisah setelah persetujuan UAT.
+Status terbaru 3 September 2026: perbaikan backend awal sudah masuk SVN r83902; penyempurnaan diagnosis gerbang edit/status posting-retur ikut masuk SVN r83909. Source Flutter koreksi transaksi sudah masuk GitHub pada commit `91f79cf`; build Al-Bahjah 1.34.20 memakai source aplikasi pada commit `6b8b8cc`. Installer Windows dan APK Android dipublikasikan sebagai **prerelease UAT/internal** di [GitHub v1.34.20](https://github.com/Zishof/zishof-platform/releases/tag/v1.34.20).
+
+Publikasi GitHub tersebut hanya mendistribusikan client POS. Backend r83909 **belum otomatis ter-deploy** hanya karena rilis GitHub dibuat. Endpoint aktivasi/validasi koreksi dan struktur tujuh kolom laporan harus di-deploy serta di-restart lewat prosedur server yang berlaku sebelum UAT terpadu dinyatakan siap.
 
 ## Makna pesan dan screenshot pengguna
 
@@ -15,10 +17,19 @@ Status terbaru 3 September 2026: source backend sudah masuk SVN r83902 dan sourc
 
 Screenshot tersebut bukan menunjukkan aplikasi rusak. Panel pada screenshot menyatakan kebijakan koreksi transaksi untuk toko itu belum aktif. Tombol edit memang disembunyikan oleh server ketika salah satu gerbang keamanan tidak terpenuhi.
 
+Yang dapat disimpulkan pasti dari screenshot hanya gerbang kebijakannya: **nonaktif**. Versi respons lama memprioritaskan pesan kebijakan, sehingga screenshot itu belum membuktikan akun `ika` sudah atau belum mempunyai hak supervisor. Perbaikan respons server sekarang mengirim status tiap gerbang secara terpisah dan, bila kebijakan serta hak akun sama-sama bermasalah, menjelaskan kedua pekerjaan yang harus diselesaikan.
+
 Istilah “metode harga” perlu dikonfirmasi karena ada dua hal berbeda:
 
 - Jika yang dimaksud **metode pembayaran** (Tunai, Transfer, QRIS, dan sebagainya), nilainya dapat dikoreksi setelah kebijakan dan hak akses terpenuhi, selama transaksi belum posting dan belum memiliki retur. Server tetap memeriksa aturan member, batas transaksi, batas hutang, serta keamanan saldo/deposit.
 - Jika yang dimaksud **harga barang**, harga satuan pada transaksi selesai tidak dapat diketik/diubah langsung. Form menampilkannya sebagai informasi. Baris lama mempertahankan harga transaksi yang tersimpan; produk yang ditambahkan memakai harga master saat ini. Harga untuk transaksi berikutnya diubah melalui master/aturan harga. Pembatasan ini menjaga jejak audit dan mencegah perubahan nilai nota tanpa sumber harga yang sah.
+
+Jika maksud pengguna sebenarnya adalah hak mengubah **harga jual/harga beli pada master produk, kulakan, atau grup produk**, itu merupakan kebijakan lain. Admin/supervisor membuka **Konfigurasi > Profil Toko > Kebijakan Ubah Harga**, lalu memilih salah satu:
+
+- aktifkan **Semua pengguna boleh mengubah harga**; atau
+- biarkan nonaktif dan centang akun/grup hak akses yang memang boleh mengubah harga.
+
+Sesudah menyimpan Profil Toko, pengguna harus keluar dan masuk kembali agar konfigurasi sesi dimuat ulang. Pesan penolakannya berbeda, yaitu diawali “Anda tidak boleh mengubah harga karena tidak diberikan akses”; pesan tersebut tidak tampak pada screenshot terlampir.
 
 ### Permintaan laporan item yang terjual per pemasok
 
@@ -27,15 +38,20 @@ Laporan sebelumnya terlalu agregat sehingga pengguna hanya melihat pemasok dan t
 ## Akar masalah
 
 1. Hak edit bukan hanya hak menu. Efektivitas koreksi ditentukan bersama oleh kebijakan global/per toko, peran pengguna, dan status transaksi.
-2. Pesan pada dialog lama menyebut “audit JSON”, padahal implementasi sebenarnya memakai revisi Hibernate Envers dan alasan pada keterangan header.
-3. Jalur koreksi lama belum menjalankan kembali semua validasi finansial checkout saat metode/total pembayaran berubah.
-4. Query laporan pemasok sebelumnya berhenti pada agregat pemasok dan belum memperlihatkan identitas produk/UOM yang terjual.
+2. Respons detail lama hanya menampilkan satu alasan prioritas. Akibatnya kebijakan nonaktif dapat menutupi masalah kedua, yaitu akun belum berhak melakukan koreksi.
+3. Status posting/retur sudah ditolak pada saat penyimpanan, tetapi respons detail sebelumnya belum memasukkannya ke keputusan tombol. Pengguna masih mungkin melihat tombol edit lalu baru ditolak saat Simpan.
+4. Pesan pada dialog lama menyebut “audit JSON”, padahal implementasi sebenarnya memakai revisi Hibernate Envers dan alasan pada keterangan header.
+5. Jalur koreksi lama belum menjalankan kembali semua validasi finansial checkout saat metode/total pembayaran berubah.
+6. Query laporan pemasok sebelumnya berhenti pada agregat pemasok dan belum memperlihatkan identitas produk/UOM yang terjual.
 
 ## Perbaikan yang tersedia untuk UAT
 
 ### Koreksi transaksi
 
 - Detail transaksi mengembalikan status kebijakan global, kebijakan toko, hak aktivasi, toko transaksi, dan keputusan apakah transaksi boleh diedit.
+- Detail juga mengembalikan `penggunaBolehEditTransaksi`, `punyaHeaderTransaksi`, `transaksiSudahPosting`, dan `transaksiMemilikiRetur`, sehingga dukungan teknis dapat membedakan penyebab tanpa menebak.
+- Keputusan tombol edit dan aktivasi cepat sekarang langsung memasukkan status posting/retur. Transaksi terkunci tidak lagi menawarkan aksi yang pasti gagal ketika disimpan.
+- Bila kebijakan dan hak akun sama-sama belum terpenuhi, pesan menuliskan kedua blocker dan urutan perbaikannya.
 - Admin/supervisor yang memenuhi syarat mendapat tombol cepat **Aktifkan Koreksi Toko** saat global dan toko sama-sama nonaktif.
 - Aktivasi cepat bersifat online-only dan dikunci oleh server ke toko transaksi; klien tidak dapat memilih toko lain melalui payload.
 - Koreksi tetap atomik, mewajibkan alasan minimal lima karakter, menghitung ulang total dan stok, serta menyimpan riwayat audit sebelum/sesudah beserta alasan.
@@ -54,6 +70,21 @@ Tiga gerbang utama edit:
 2. pengguna adalah admin/supervisor atau mempunyai role **Supervisor** yang diakui server; dan
 3. transaksi belum posting ke jurnal serta belum memiliki retur.
 
+### Langkah pemberian akses akun yang diminta pada WA
+
+Untuk akun toko tertentu (misalnya akun pada screenshot), jangan mengubah database secara manual dan jangan membagikan sandi admin:
+
+1. Admin/supervisor masuk ke POS dengan toko yang benar.
+2. Buka **Konfigurasi > Akun Pengguna**.
+3. Cari akun yang dimaksud dan buka ubah akun.
+4. Aktifkan sakelar **Supervisor**, lalu simpan.
+5. Bila organisasi memakai hak berbasis grup, alternatifnya atur grup akun sebagai grup berizin **Supervisor** pada pengelolaan Hak Akses.
+6. Pengguna keluar lalu masuk kembali; tekan **Sinkronkan** dan **Muat Ulang**.
+7. Admin mengaktifkan kebijakan koreksi global/per toko, atau akun supervisor menekan **Aktifkan Koreksi Toko** dari Detail transaksi.
+8. Uji menggunakan transaksi dummy yang belum posting dan belum retur.
+
+Hak Supervisor jauh lebih luas daripada sekadar mengubah metode pembayaran. Berikan hanya kepada akun yang memang berwenang. Jika kebutuhan sebenarnya hanya mengubah harga master, gunakan daftar akun/grup pada **Kebijakan Ubah Harga** dan jangan menaikkan akun menjadi Supervisor tanpa kebutuhan operasional.
+
 ### Laporan Penjualan Barang Per Pemasok
 
 Query laporan bersama Desktop, Android, PDF/Excel, dan ZK kini memuat:
@@ -69,6 +100,8 @@ Query laporan bersama Desktop, Android, PDF/Excel, dan ZK kini memuat:
 Nilai penjualan memakai total final baris transaksi, dengan fallback untuk data lama, agar harga Pack/grosir tidak dihitung ulang secara keliru. Kode/nama snapshot baris transaksi dipakai ketika master produk sudah tidak tersedia.
 
 Keterbatasan yang harus disampaikan: pemasok masih ditentukan dari histori **pengadaan terakhir** produk, bukan dari batch/lot historis yang benar-benar keluar ketika transaksi terjadi. Label **Tanpa Pemasok** berarti produk tidak memiliki histori pengadaan dengan nama pemasok yang dapat dipakai.
+
+Screenshot laporan masih menampilkan tiga kolom lama (`Pemasok`, `Qty Terjual`, `Total Penjualan`) dan judul lama. Itu merupakan bukti lingkungan yang dipakai pengirim WA belum menjalankan query backend baru. Menyalin installer Desktop saja tidak akan menambah kolom, karena definisi kolom dan baris laporan berasal dari endpoint server. Backend harus diperbarui/restart terlebih dahulu; setelah itu klik **Sinkronkan/Muat Ulang** dan jalankan ulang laporan supaya cache hasil lama tidak disangka sebagai hasil terbaru.
 
 ## Cara membuka fitur
 
@@ -87,6 +120,16 @@ Keterbatasan yang harus disampaikan: pemasok masih ditentukan dari histori **pen
 - Kebijakan global: **Konfigurasi > Keamanan & Koreksi Transaksi > Izinkan Edit Transaksi dari Riwayat Penjualan**.
 - Kebijakan per toko: buka profil toko pada Konfigurasi, lalu **Keamanan & Koreksi Transaksi Toko > Izinkan Edit Transaksi dari Riwayat Penjualan**.
 - Bila global aktif, seluruh toko mengikuti global. Bila global nonaktif, keputusan mengikuti nilai toko masing-masing.
+
+### Bila yang dimaksud benar-benar hak mengubah harga master
+
+1. Masuk sebagai admin/supervisor dan pilih toko yang benar.
+2. Buka **Konfigurasi > Profil Toko > Kebijakan Ubah Harga**.
+3. Untuk akses terbatas, biarkan **Semua pengguna boleh mengubah harga** nonaktif.
+4. Tekan **Muat ulang** pada daftar akun/grup, kemudian centang akun atau grup yang berhak.
+5. Tekan **Simpan Profil Toko**.
+6. Pengguna keluar lalu masuk kembali dan melakukan Sinkronkan/Muat Ulang.
+7. Uji perubahan harga pada master Produk/Kulakan/Grup Produk, bukan pada nota final yang sudah selesai.
 
 ### Laporan pemasok
 
@@ -167,6 +210,7 @@ Jangan menguji tombol baru terhadap server lama: endpoint aktivasi dan validasi 
 ## Kriteria lulus
 
 - Tidak ada edit tanpa tiga gerbang keamanan.
+- Pesan detail membedakan kebijakan nonaktif, hak akun tidak cukup, transaksi sudah posting, transaksi sudah retur, dan header transaksi legacy yang tidak dapat dikoreksi.
 - Aktivasi cepat hanya mengubah toko transaksi dan gagal secara jelas saat offline.
 - Semua koreksi finansial berisiko ditolak oleh server, bukan hanya UI.
 - Koreksi yang valid mengubah total/stok secara atomik dan meninggalkan audit yang dapat ditelusuri.
@@ -176,13 +220,23 @@ Jangan menguji tombol baru terhadap server lama: endpoint aktivasi dan validasi 
 ## Validasi teknis lokal
 
 - Targeted Flutter tests koreksi + laporan pemasok + posting akun: **12/12 lulus**.
-- Flutter analyze dengan `--no-fatal-infos`: **exit 0**; tersisa 50 lint level `info` lama, tanpa warning/error.
-- Maven incremental compile: **BUILD SUCCESS**, 35 source dikompilasi.
-- `KantinKoreksiTransaksiSelfTest`: **lulus semua 9 aturan**.
+- Suite Flutter penuh setelah sinkronisasi kontrak source backend: **750/750 lulus**. Satu kegagalan awal pada `riwayat_revisi_hak_test.dart` diisolasi sebagai parser test lama yang menganggap kode entitas `si_customer` sebagai kunci menu; parser diperbaiki agar memeriksa nilai pemetaan sebenarnya (`master_customer`). Test terkait lulus **4/4**, lalu suite penuh lulus.
+- Flutter analyze proyek dengan `--no-pub --no-fatal-infos`: **exit 0**; tersisa 50 lint level `info` lama, tanpa warning/error penghambat.
+- Kompilasi terarah Java 8 setelah penyempurnaan gerbang: **lulus**, menghasilkan 5.176 class (termasuk dependensi source yang perlu dikompilasi ulang).
+- `KantinKoreksiTransaksiSelfTest`: **lulus semua 17 aturan**, termasuk hak akun, kebijakan, header legacy, posting, retur, dan hak aktivasi cepat.
 - `LaporanKantinSqlSelfTest`: **lulus semua 18 aturan**.
-- Build Windows Al-Bahjah 1.34.20 unsigned/UAT: **berhasil**.
-- Installer lokal: `C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.34.20\Al-Bahjah-POS-Setup-1.34.20.exe` (85.946.604 byte; SHA-256 `04E2FCE109CFEA88212D295414EF249470C50F7715B26B61EDA76407FFF3BC5E`).
-- Smoke-run executable lokal: **berhasil**, proses `ebisnis_albahjah` tetap hidup dan jendela berjudul **Al-Bahjah POS** tampil. Executable yang dijalankan: `C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\build\windows\x64\runner\Release\ebisnis_albahjah.exe` (SHA-256 `31E029F14FA24807EBDBCB5E6002358F5562150288FC6B7516E31F9AF37E3F42`).
+- Percobaan memakai `ant/build.xml` lama tidak dipakai sebagai bukti kelulusan: skrip itu masih menunjuk `web/WEB-INF/lib`, sedangkan library proyek saat ini berada di `src/main/webapp/WEB-INF/lib`, sehingga berhenti sebelum kompilasi. Tidak ada deploy yang dijalankan.
+- Build khusus varian Al-Bahjah menghasilkan **2/2 artefak**. Build Windows pertama terhenti karena executable hasil build lama masih berjalan dan mengunci `ebisnis.exe`; setelah PID serta path diverifikasi dan proses itu ditutup, build ulang Windows-only berhasil. APK yang sudah valid tidak dibangun ulang.
+- Installer Windows lokal: `C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.34.20\Al-Bahjah-POS-Setup-1.34.20.exe` (85.955.122 byte; SHA-256 `3F176FF6960C70BEE079ADBF437E06D72DED6FE47FCE1DC7B435E986E9416C5A`). Metadata: ProductName **Al-Bahjah POS**, ProductVersion **1.34.20**. Signature: **unsigned/UAT**.
+- APK Android lokal: `C:\opt\CodeBaseDesktopDanMobile\apps\ebisnis\release-artifacts\semua-varian\1.34.20\app-albahjah-release.apk` (190.177.824 byte; SHA-256 `FFC5ADD5DD31B416ACCDB440EF11D6F293F4B9F097FB4B567775C74F953BBDC2`). Metadata: package `id.zishof.ebisnis.albahjah`, label **Al-Bahjah POS**, versionName **1.34.20**, versionCode **182**. Signature: sertifikat **Android Debug/UAT**.
+- Smoke-run executable Windows: **lulus**; proses hidup dan responsif selama pemeriksaan, kemudian dihentikan kembali secara terkendali.
+
+### Status signing dan batas distribusi
+
+- Kedua artefak ini untuk UAT/internal, bukan paket produksi final.
+- APK debug-signed mungkin tidak dapat meng-upgrade instalasi produksi yang memakai sertifikat lain. Jangan uninstall aplikasi operasional hanya untuk memaksakan APK UAT karena data lokal dapat ikut terhapus.
+- Installer Windows unsigned dapat memunculkan peringatan SmartScreen. Distribusi produksi memerlukan build ulang dengan sertifikat Authenticode organisasi.
+- Sebelum instalasi, selesaikan sinkronisasi dan backup data lokal. Gunakan perangkat uji, bukan terminal kasir produksi, sampai UAT dan signing produksi selesai.
 
 ## Rollback
 
@@ -201,16 +255,39 @@ Assalamu’alaikum. Kami sudah cek screenshot dan permintaan laporannya.
 
 Untuk screenshot “belum bisa mengubah metode harga”, itu bukan error aplikasi. Pesan tersebut berarti kebijakan koreksi transaksi untuk toko itu masih nonaktif. Edit transaksi selesai memang dijaga oleh 3 hal: (1) kebijakan global atau kebijakan toko harus aktif, (2) pengguna harus admin/supervisor, dan (3) transaksi belum diposting serta belum memiliki retur.
 
+Screenshot itu baru memastikan syarat nomor 1 belum aktif. Pada respons lama, pesan kebijakan tampil lebih dulu sehingga dari screenshot saja belum bisa dipastikan apakah akun **ika** juga sudah mempunyai hak supervisor. Mohon admin memeriksa keduanya: aktifkan kebijakan koreksi, lalu cek **Konfigurasi > Akun Pengguna > pilih akun > Supervisor**. Sesudah disimpan, pengguna perlu keluar/masuk kembali, tekan Sinkronkan dan Muat Ulang, lalu buka ulang Detail transaksi. Karena hak Supervisor cukup luas, berikan hanya kepada akun yang memang berwenang.
+
 Pada versi UAT Al-Bahjah 1.34.20, admin/supervisor dapat membuka Riwayat Penjualan > Detail transaksi, lalu menekan tombol **Aktifkan Koreksi Toko**. Tombol ini hanya mengaktifkan toko dari transaksi tersebut, wajib online, dan tetap meminta konfirmasi. Jalur manual juga tersedia di Konfigurasi > Keamanan & Koreksi Transaksi, atau pada profil toko di bagian Keamanan & Koreksi Transaksi Toko.
 
 Mohon dibedakan istilahnya:
 - Jika maksudnya **metode pembayaran** (Tunai/Transfer/QRIS/dll.), itu dapat dikoreksi setelah seluruh syarat di atas terpenuhi. Server tetap memeriksa aturan member, batas transaksi, hutang, dan saldo.
 - Jika maksudnya **harga barang**, harga satuan transaksi yang sudah selesai memang tidak dapat diketik ulang langsung. Harga lama dipertahankan untuk audit; produk baru memakai harga dari master. Harga penjualan berikutnya diubah melalui master/aturan harga.
+- Jika maksudnya hak mengubah **harga jual/harga beli pada master Produk/Kulakan/Grup Produk**, buka **Konfigurasi > Profil Toko > Kebijakan Ubah Harga**. Admin dapat mengizinkan semua pengguna atau hanya mencentang akun/grup tertentu, kemudian Simpan Profil Toko dan minta pengguna login ulang. Ini kebijakan berbeda dari koreksi transaksi pada screenshot.
 
 Untuk laporan, buka **Laporan > Penjualan > Penjualan Barang Per Pemasok** (atau cari kata “pemasok”). Hasil yang disiapkan untuk UAT sekarang tidak hanya total pemasok, tetapi juga Kode Produk, Produk Terjual, Satuan Terjual, Qty UOM, Qty Dasar, dan Total Penjualan. Hasil dapat diperiksa di layar dan diekspor ke PDF/Excel.
 
+Screenshot yang dikirim masih menunjukkan tiga kolom versi lama. Karena struktur laporan dikirim oleh server, kolom rincian baru baru akan muncul setelah backend versi UAT diperbarui/restart; update aplikasi Desktop saja tidak cukup. Setelah backend aktif, tekan Sinkronkan/Muat Ulang lalu jalankan ulang laporan untuk periode yang sama.
+
 Keterangan **Tanpa Pemasok** berarti produk belum mempunyai histori pengadaan dengan nama pemasok. Untuk saat ini pengelompokan pemasok masih mengikuti pengadaan terakhir produk, belum menelusuri batch/lot historis yang keluar pada setiap penjualan.
 
-Mohon pengujian dilakukan memakai transaksi dummy yang belum posting dan belum retur, bukan transaksi produksi sensitif. Source perbaikannya sudah masuk SVN dan GitHub. Build ini tetap untuk UAT lokal; installernya belum kami upload/publish dan belum dinyatakan sudah terpasang di server/toko. Setelah UAT selesai dan ada persetujuan, baru proses rilis/deployment dilanjutkan.
+Build Al-Bahjah POS 1.34.20 untuk UAT/internal sudah dipublikasikan di:
+https://github.com/Zishof/zishof-platform/releases/tag/v1.34.20
+
+Pilihan unduhan:
+- Windows: `Al-Bahjah-POS-Setup-1.34.20.exe`
+- Android: `app-albahjah-release.apk`
+- File `.sha256.txt` tersedia untuk memeriksa keutuhan masing-masing unduhan.
+
+Catatan penting: APK masih memakai sertifikat Android Debug/UAT dan installer Windows belum mempunyai tanda tangan Authenticode. Jadi gunakan perangkat UAT, jangan uninstall aplikasi produksi untuk memaksakan pemasangan APK, dan lakukan backup serta sinkronisasi sebelum instalasi. Untuk Windows, SmartScreen mungkin menampilkan peringatan karena installer belum ditandatangani.
+
+Urutan UAT yang disarankan:
+1. Selesaikan Sinkronkan pada aplikasi lama dan backup data lokal.
+2. Tutup POS, instal versi 1.34.20 pada perangkat uji, lalu login ke toko yang benar.
+3. Tekan Sinkronkan dan Muat Ulang.
+4. Admin cek hak akun dan mengaktifkan kebijakan koreksi toko.
+5. Uji koreksi memakai transaksi dummy yang belum posting dan belum retur.
+6. Setelah backend r83909 di-deploy/restart, jalankan laporan Penjualan Barang Per Pemasok dan cocokkan tujuh kolomnya dengan nota serta ekspor PDF/Excel.
+
+Perlu ditegaskan bahwa publikasi installer/APK tidak sekaligus meng-update server. Source backend sudah masuk SVN, tetapi tim server tetap perlu men-deploy r83909 dan me-restart aplikasi server. Sebelum langkah backend itu selesai, tombol/validasi baru dapat belum lengkap dan laporan masih dapat menampilkan tiga kolom lama seperti pada screenshot.
 
 Terima kasih.

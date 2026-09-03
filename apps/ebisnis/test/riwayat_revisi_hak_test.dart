@@ -25,9 +25,8 @@ String _rapat(String teks) => teks.replaceAll(RegExp(r'\s+'), '');
 
 const _akarAis = r'C:\opt\AIS\ais\src\main\src';
 
-File _berkasAis(String relatif) =>
-    File('$_akarAis${Platform.pathSeparator}'
-        '${relatif.replaceAll('/', Platform.pathSeparator)}');
+File _berkasAis(String relatif) => File('$_akarAis${Platform.pathSeparator}'
+    '${relatif.replaceAll('/', Platform.pathSeparator)}');
 
 /// Badan satu metode Java, dipotong dari kurung kurawalnya.
 String _badanMetode(String src, String tandaTangan) {
@@ -76,8 +75,7 @@ void main() {
     // `menu.optBoolean(kunci, true)` mengembalikan true untuk kunci tak dikenal.
     final katalog = _berkasAis('ais/common/EbisnisMenuKatalog.java');
     if (!helper.existsSync() || !katalog.existsSync()) return;
-    final daftar = RegExp(
-            r'new Entri\(\s*MODUL_[A-Z_]+\s*,\s*"([a-z0-9_]+)"')
+    final daftar = RegExp(r'new Entri\(\s*MODUL_[A-Z_]+\s*,\s*"([a-z0-9_]+)"')
         .allMatches(katalog.readAsStringSync())
         .map((m) => m.group(1)!)
         .toSet();
@@ -87,10 +85,18 @@ void main() {
     final blok = RegExp(r'KUNCI_MENU_ENTITAS[\s\S]*?\n\t\}')
         .firstMatch(helper.readAsStringSync());
     expect(blok, isNotNull, reason: 'blok pemetaan tidak ditemukan');
-    final dipakai = RegExp('"([a-z0-9_]+)"')
+    final entitasEksplisit = RegExp(r'KUNCI_MENU_ENTITAS\.put\("([a-z0-9_]+)"')
         .allMatches(blok!.group(0)!)
         .map((m) => m.group(1)!)
-        .where((k) => k != 'hotel_tamu') // kode entitas, bukan kunci menu
+        .toSet();
+    final dipakai = RegExp('"([a-z0-9_]+)"')
+        .allMatches(blok.group(0)!)
+        .map((m) => m.group(1)!)
+        // Argumen pertama `put` adalah kode entitas. Nilai di sisi kananlah
+        // yang wajib cocok dengan kunci menu katalog. Keduanya dahulu identik
+        // (kecuali hotel_tamu), tetapi pemetaan si_customer -> master_customer
+        // membuktikan bahwa pengecualian berdasarkan satu nama tidak cukup.
+        .where((k) => !entitasEksplisit.contains(k))
         .toSet();
     for (final k in dipakai) {
       expect(daftar, contains(k),
