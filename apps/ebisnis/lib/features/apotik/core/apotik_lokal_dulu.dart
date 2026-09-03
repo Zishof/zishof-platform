@@ -24,6 +24,15 @@
 /// * Laporan, metrik, dan rekonsiliasi — semuanya agregat sisi server.
 ///   Menampilkan uang dari cache lebih berbahaya daripada mengatakan "belum
 ///   terbaca".
+/// * `apotik_resep_detail` — rincian satu resep dibaca tepat sebelum obat
+///   disiapkan; yang berubah di sini (baris sudah ditebus atau belum) justru
+///   yang menentukan boleh-tidaknya menyerahkan obat. DAFTAR antreannya
+///   lokal-dulu, rinciannya tidak.
+/// * `apotik_item_batch` — daftar lot untuk memilih batch FEFO. Status lot
+///   (karantina, recall, kedaluwarsa) justru yang paling sering berubah dan
+///   paling berbahaya bila basi: memilih dari daftar lama berarti menyiapkan
+///   obat dari lot yang mungkin sudah ditahan. Selagi pembayaran memang
+///   menuntut server, daftar lot pun dibaca langsung.
 library;
 
 import 'package:flutter/widgets.dart';
@@ -64,6 +73,9 @@ const String kunciCacheBatchApotik = 'master:apotik_batch';
 /// berganti-ganti dan diff-nya berisik.
 String kunciCacheResepApotik({required bool hanyaMenunggu}) =>
     hanyaMenunggu ? 'master:apotik_resep_menunggu' : 'master:apotik_resep';
+
+/// Kunci cache daftar metode pembayaran (master, jarang berubah).
+const String kunciCacheCaraBayarApotik = 'master:apotik_cara_bayar';
 
 /// Menyaring hasil dari CACHE menurut kata kunci.
 ///

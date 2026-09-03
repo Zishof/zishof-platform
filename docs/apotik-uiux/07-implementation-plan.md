@@ -87,6 +87,11 @@ jebakan yang ikut ditangani:
 * katalog dari cache diberi penanda "stok belum tentu mutakhir", karena data
   lama tampak sama meyakinkannya dengan data baru.
 
+Sapuan terakhir menutup dua pembacaan sisa di POS (daftar metode pembayaran
+dan antrean resep untuk penebusan). Setelah itu **tidak ada lagi pembacaan
+apotik yang bisa di-cache tetapi belum**; sisanya semua tulis atau memang
+harus segar.
+
 Yang **sengaja tetap online** beserta alasannya ada di
 `lib/features/apotik/core/apotik_lokal_dulu.dart`, dan dikunci oleh
 `master_offline_kontrak_test.dart` supaya tidak "dirapikan" belakangan:

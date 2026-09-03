@@ -155,9 +155,24 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   Future<void> _muatCaraBayar() async {
     List<MetodeBayar> daftar;
     try {
-      final r = await _panggil('apotik_cara_bayar_list', const {});
-      if (!_sukses(r)) return;
-      daftar = _data(r).map(MetodeBayar.dariJson).toList();
+      // Metode pembayaran adalah master yang jarang berubah: dibaca lokal-dulu
+      // supaya lembar pembayaran tidak kehilangan pilihannya hanya karena
+      // jaringan sedang tersendat.
+      List<MetodeBayar>? terbaca;
+      await _muatKatalog(
+        'apotik_cara_bayar_list',
+        const {},
+        kunciCacheCaraBayarApotik,
+        onData: (hasil) {
+          final data = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => MetodeBayar.dariJson(Map<String, dynamic>.from(e)))
+              .toList();
+          if (data.isNotEmpty || hasil['dariServer'] == true) terbaca = data;
+        },
+      );
+      if (terbaca == null) return;
+      daftar = terbaca!;
     } catch (_) {
       // Server lama tanpa aksi ini: bukan galat yang perlu mengganggu kasir.
       return;
@@ -300,8 +315,15 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   Future<void> _tebusResep() async {
     List<Map<String, dynamic>> daftar;
     try {
-      final r = await _panggil(
-          'apotik_resep_list', {'hanya_menunggu': true, 'page_size': 50});
+      // Antrean resep dibaca lokal-dulu; PENEBUSANnya tetap lewat server.
+      Map<String, dynamic>? emisi;
+      await _muatKatalog(
+        'apotik_resep_list',
+        {'hanya_menunggu': true, 'page_size': 50},
+        kunciCacheResepApotik(hanyaMenunggu: true),
+        onData: (hasil) => emisi = hasil,
+      );
+      final r = <String, dynamic>{'status': '00', ...?emisi};
       daftar = _data(r);
     } catch (e) {
       _pesan('Gagal memuat resep: $e', galat: true);

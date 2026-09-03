@@ -1,4 +1,5 @@
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
+import 'package:ebisnis/features/apotik/core/apotik_lokal_dulu.dart';
 import 'package:ebisnis/features/apotik/pos/apotik_batch_sheet.dart';
 import 'package:ebisnis/features/apotik/pos/apotik_cart_panel.dart';
 import 'package:ebisnis/features/apotik/pos/apotik_mode_switcher.dart';
@@ -335,17 +336,27 @@ void main() {
   });
 
   group('Katalog lokal-dulu', () {
+    /// Pemuat palsu yang hanya menjawab untuk aksi KATALOG; aksi lain
+    /// (metode bayar, antrean resep) mengembalikan kosong supaya isinya tidak
+    /// bocor ke bagian layar lain.
+    MuatDaftarApotik katalog(List<Map<String, dynamic>> data,
+        {bool dariServer = false, bool lempar = false}) {
+      return (aksi, body, cacheKey, {required onData}) async {
+        if (aksi != 'apotik_item_cari') {
+          onData({'data': const [], 'dariServer': true});
+          return;
+        }
+        onData({'data': data, 'dariServer': dariServer});
+        if (lempar) throw Exception('Koneksi terputus');
+      };
+    }
+
     testWidgets('katalog dari cache ditandai dan stoknya tidak diklaim baru',
         (tester) async {
       await _pump(
         tester,
         ApotikPosPage(
-          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
-            onData({
-              'data': [_obat],
-              'dariServer': false
-            });
-          },
+          muatKatalog: katalog([_obat]),
         ),
         const Size(1500, 900),
       );
@@ -361,6 +372,10 @@ void main() {
         tester,
         ApotikPosPage(
           muatKatalog: (aksi, body, cacheKey, {required onData}) async {
+            if (aksi != 'apotik_item_cari') {
+              onData({'data': const [], 'dariServer': true});
+              return;
+            }
             onData({
               'data': [_obat],
               'dariServer': false
@@ -383,15 +398,10 @@ void main() {
       await _pump(
         tester,
         ApotikPosPage(
-          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
-            onData({
-              'data': [
-                _obat,
-                {..._obat, 'id': 99, 'kode': 'OBT-99', 'nama': 'Vitamin C'},
-              ],
-              'dariServer': false,
-            });
-          },
+          muatKatalog: katalog([
+            _obat,
+            {..._obat, 'id': 99, 'kode': 'OBT-99', 'nama': 'Vitamin C'},
+          ]),
         ),
         const Size(1500, 900),
       );
@@ -412,13 +422,7 @@ void main() {
       await _pump(
         tester,
         ApotikPosPage(
-          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
-            onData({
-              'data': [_obat],
-              'dariServer': false
-            });
-            throw Exception('Koneksi terputus');
-          },
+          muatKatalog: katalog([_obat], lempar: true),
         ),
         const Size(1500, 900),
       );

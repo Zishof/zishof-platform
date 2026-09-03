@@ -104,6 +104,8 @@ void main() {
     'lib/features/apotik/pos/apotik_pos_page.dart': [
       "'apotik_item_cari'",
       'kunciCacheItemApotik',
+      'kunciCacheCaraBayarApotik',
+      'kunciCacheResepApotik(',
       'MasterOffline.daftarCacheDulu',
       'saringCacheLokal(',
       '_katalogDariCache',
