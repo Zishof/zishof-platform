@@ -183,6 +183,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   String? _pesan;
   late DateTime _waktu;
   int? _caraBayarId;
+  bool _caraBayarDiubah = false;
 
   @override
   void initState() {
@@ -375,7 +376,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       'alasan': alasan,
       'item': item,
       'waktu': _waktu.toIso8601String(),
-      'cara_bayar': _caraBayarId,
+      if (widget.modeBaru || _caraBayarDiubah) 'cara_bayar': _caraBayarId,
       if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
   }
@@ -430,7 +431,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               child: Text(
                 widget.modeBaru
                     ? 'Khusus Supervisor. Transaksi pemulihan tetap melalui validasi harga, stok, diskon, audit, dan idempotensi server.'
-                    : 'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan rincian sebelum/sesudah pada audit JSON. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
+                    : 'Khusus Supervisor. Perubahan akan menghitung ulang total dan stok serta menyimpan riwayat audit sebelum/sesudah beserta alasan. Transaksi yang sudah diposting atau memiliki retur tidak dapat diedit.',
               ),
             ),
             const SizedBox(height: 12),
@@ -504,7 +505,10 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                   .map((cara) => DropdownMenuItem<int>(
                       value: cara.id, child: Text(cara.nama)))
                   .toList(),
-              onChanged: (value) => setState(() => _caraBayarId = value),
+              onChanged: (value) => setState(() {
+                _caraBayarId = value;
+                _caraBayarDiubah = true;
+              }),
             ),
             const SizedBox(height: 8),
             Row(children: [
@@ -1765,6 +1769,21 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                   _editTransaksi(row, hasil, items);
                 },
               ),
+            if (hasil['bolehEditTransaksi'] != true &&
+                hasil['bolehAktifkanKebijakanEditTransaksi'] == true &&
+                hasil['kebijakanEditGlobalAktif'] != true &&
+                hasil['kebijakanEditTokoAktif'] != true &&
+                hasil['tokoIdTransaksi'] != null)
+              TextButton.icon(
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 19),
+                label: const Text('Aktifkan Koreksi Toko'),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  final aktif = await _aktifkanKoreksiTransaksiToko(
+                      hasil['tokoIdTransaksi']);
+                  if (aktif && mounted) await _lihatDetail(row);
+                },
+              ),
             if (row['idTransaksi'] != null &&
                 (Sesi.instance.bolehAksiPos('riwayatpenjualan', 'delete') ||
                     Sesi.instance.bolehAksiPos('riwayatpenjualan', 'reject')))
@@ -1795,6 +1814,55 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       if (mounted) {
         snackbarGalat(context, e);
       }
+    }
+  }
+
+  Future<bool> _aktifkanKoreksiTransaksiToko(dynamic tokoId) async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Aktifkan Koreksi Transaksi?'),
+        content: const Text(
+          'Izin akan diaktifkan hanya untuk toko transaksi ini. Tindakan koreksi '
+          'tetap terbatas untuk admin/supervisor, wajib terhubung ke server, dan '
+          'setiap perubahan transaksi wajib disertai alasan agar dapat diaudit.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.lock_open_outlined, size: 18),
+            label: const Text('Aktifkan untuk Toko Ini'),
+          ),
+        ],
+      ),
+    );
+    if (setuju != true || !mounted) return false;
+    try {
+      // Online-only: kebijakan ini membuka koreksi transaksi final. Server wajib
+      // memverifikasi hak pelaku dan lingkup toko sebelum UI menyatakan berhasil.
+      final hasil = await ApiClient.instance.aksi(
+        'pengaturan_edit_transaksi_toko_aktifkan',
+        {'toko_id': tokoId},
+      );
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(hasil['description']?.toString() ??
+            'Koreksi transaksi telah diaktifkan untuk toko ini.'),
+      ));
+      return true;
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(
+          context,
+          e is ApiException ? e.info : e,
+          aktivitas: 'mengaktifkan koreksi transaksi toko',
+        );
+      }
+      return false;
     }
   }
 
@@ -1890,7 +1958,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         'alasan': hasilEdit['alasan'],
         'item': hasilEdit['item'],
         'waktu': hasilEdit['waktu'],
-        'cara_bayar': hasilEdit['cara_bayar'],
+        if (hasilEdit.containsKey('cara_bayar'))
+          'cara_bayar': hasilEdit['cara_bayar'],
         if (hasilEdit['kasir_user_id'] != null)
           'kasir_user_id': hasilEdit['kasir_user_id'],
       });

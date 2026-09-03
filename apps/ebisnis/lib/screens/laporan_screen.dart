@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'kode_akun_screen.dart';
+import 'posting_akun_perbaikan.dart';
 import 'posting_toko_dialog.dart';
 import 'siklus_akuntansi_screen.dart';
 import 'package:intl/intl.dart';
@@ -178,7 +179,8 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
     if (petaSiklus.containsKey(id)) {
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: Text(item['judul'] as String? ?? 'Siklus Akuntansi')),
+          appBar: AppBar(
+              title: Text(item['judul'] as String? ?? 'Siklus Akuntansi')),
           body: SiklusAkuntansiScreen(tabAwal: petaSiklus[id]!),
         ),
       ));
@@ -355,10 +357,11 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _pesanError != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('Gagal memuat: $_pesanError'),
-                AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
-              ]))
+              ? Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('Gagal memuat: $_pesanError'),
+                  AppDetailGalatOpsional(detail: detailUntuk(_pesanError)),
+                ]))
               : _pendukungTerpilih == null
                   ? _katalog()
                   : _panelPendukung(_pendukungTerpilih!),
@@ -384,184 +387,173 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
 
   Widget _katalog() {
     return Builder(
-                  builder: (context) {
-                    final data = _terfilter;
-                    final totalHalaman = _totalHalaman(data.length);
-                    final halamanData = _halamanData(data);
+      builder: (context) {
+        final data = _terfilter;
+        final totalHalaman = _totalHalaman(data.length);
+        final halamanData = _halamanData(data);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final sempit = constraints.maxWidth < 720;
+                  final kategoriDropdown = DropdownButtonFormField<String>(
+                    value: _kategoriDipilih,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori',
+                      prefixIcon: Icon(Icons.category_outlined),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('Semua kategori'),
+                      ),
+                      ..._opsiKategori.map(
+                        (kategori) => DropdownMenuItem(
+                          value: kategori,
+                          child: Text(
+                            kategori,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setStateIfMounted(() {
+                      _kategoriDipilih = value ?? '';
+                      _halaman = 1;
+                    }),
+                  );
+                  final pencarian = AppSearchField(
+                    controller: _controllerCari,
+                    hintText: 'Cari laporan...',
+                    debounce: Duration.zero,
+                    onChanged: (_) => setStateIfMounted(() => _halaman = 1),
+                  );
+                  if (sempit) {
                     return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final sempit = constraints.maxWidth < 720;
-                              final kategoriDropdown =
-                                  DropdownButtonFormField<String>(
-                                value: _kategoriDipilih,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Kategori',
-                                  prefixIcon: Icon(Icons.category_outlined),
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                items: [
-                                  const DropdownMenuItem(
-                                    value: '',
-                                    child: Text('Semua kategori'),
-                                  ),
-                                  ..._opsiKategori.map(
-                                    (kategori) => DropdownMenuItem(
-                                      value: kategori,
-                                      child: Text(
-                                        kategori,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: (value) => setStateIfMounted(() {
-                                  _kategoriDipilih = value ?? '';
-                                  _halaman = 1;
-                                }),
-                              );
-                              final pencarian = AppSearchField(
-                                controller: _controllerCari,
-                                hintText: 'Cari laporan...',
-                                debounce: Duration.zero,
-                                onChanged: (_) =>
-                                    setStateIfMounted(() => _halaman = 1),
-                              );
-                              if (sempit) {
-                                return Column(
-                                  children: [
-                                    kategoriDropdown,
-                                    const SizedBox(height: 8),
-                                    pencarian,
-                                  ],
-                                );
-                              }
-                              return Row(
-                                children: [
-                                  SizedBox(width: 320, child: kategoriDropdown),
-                                  const SizedBox(width: 10),
-                                  Expanded(child: pencarian),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                        AppDataTable(
-                          minWidth: 920,
-                          emptyText: 'Tidak ada laporan yang cocok.',
-                          columns: const [
-                            AppTableColumn('Kategori', flex: 2),
-                            AppTableColumn('Laporan', flex: 3),
-                            AppTableColumn('Keterangan', flex: 4),
-                            AppTableColumn('Format',
-                                width: 96, align: TextAlign.center),
-                            AppTableColumn('Aksi',
-                                width: 82, align: TextAlign.center),
-                          ],
-                          rows: halamanData.map((baris) {
-                            final item = baris.item;
-                            final adaUrl =
-                                (item['url'] as String? ?? '').isNotEmpty;
-                            return AppTableRowData(
-                              onTap: () => _bukaItem(item),
-                              cells: [
-                                // Kilau ditempel pada KATEGORI: itulah satuan
-                                // ber-identitas stabil pada respons katalog
-                                // ('kat'), sedangkan baris tabel di sini hasil
-                                // perataan item per kategori.
-                                AppTableCell(
-                                  flex: 2,
-                                  child: KilauBaris(
-                                    kunci: MasterOffline.kunciBaris(
-                                        {'kat': baris.kategori}, 'kat'),
-                                    idBaru: _diff.idBaru,
-                                    idBerubah: _diff.idBerubah,
-                                    child: Text(
-                                      baris.kategori,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimaryOf(context),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                AppTableCell.text(
-                                  item['judul'] as String? ?? '-',
-                                  flex: 3,
-                                  maxLines: 2,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: _warnaBiruGelap(context),
-                                  ),
-                                ),
-                                AppTableCell.text(
-                                  item['ket'] as String? ?? '-',
-                                  flex: 4,
-                                  maxLines: 2,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondaryOf(context),
-                                  ),
-                                ),
-                                AppTableCell(
-                                  width: 96,
-                                  align: TextAlign.center,
-                                  child: StatusPill(
-                                    label: adaUrl ? 'Link' : 'Data',
-                                    warna: adaUrl
-                                        ? AppColors.info
-                                        : AppColors.primary,
-                                  ),
-                                ),
-                                AppTableCell(
-                                  width: 82,
-                                  align: TextAlign.center,
-                                  child: IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    tooltip: adaUrl
-                                        ? 'Buka laporan'
-                                        : 'Jalankan laporan',
-                                    icon: Icon(
-                                      adaUrl
-                                          ? Icons.open_in_new
-                                          : Icons.chevron_right,
-                                      size: 20,
-                                      color: _warnaBiruGelap(context),
-                                    ),
-                                    onPressed: () => _bukaItem(item),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                          pagination: AppTablePagination(
-                            halaman: _halaman,
-                            totalHalaman: totalHalaman,
-                            totalData: data.length,
-                            labelData: 'laporan',
-                            onSebelumnya: _halaman > 1
-                                ? () => setStateIfMounted(() => _halaman--)
-                                : null,
-                            onBerikutnya: _halaman < totalHalaman
-                                ? () => setStateIfMounted(() => _halaman++)
-                                : null,
-                          ),
-                        ),
+                        kategoriDropdown,
+                        const SizedBox(height: 8),
+                        pencarian,
                       ],
                     );
-                  },
+                  }
+                  return Row(
+                    children: [
+                      SizedBox(width: 320, child: kategoriDropdown),
+                      const SizedBox(width: 10),
+                      Expanded(child: pencarian),
+                    ],
+                  );
+                },
+              ),
+            ),
+            AppDataTable(
+              minWidth: 920,
+              emptyText: 'Tidak ada laporan yang cocok.',
+              columns: const [
+                AppTableColumn('Kategori', flex: 2),
+                AppTableColumn('Laporan', flex: 3),
+                AppTableColumn('Keterangan', flex: 4),
+                AppTableColumn('Format', width: 96, align: TextAlign.center),
+                AppTableColumn('Aksi', width: 82, align: TextAlign.center),
+              ],
+              rows: halamanData.map((baris) {
+                final item = baris.item;
+                final adaUrl = (item['url'] as String? ?? '').isNotEmpty;
+                return AppTableRowData(
+                  onTap: () => _bukaItem(item),
+                  cells: [
+                    // Kilau ditempel pada KATEGORI: itulah satuan
+                    // ber-identitas stabil pada respons katalog
+                    // ('kat'), sedangkan baris tabel di sini hasil
+                    // perataan item per kategori.
+                    AppTableCell(
+                      flex: 2,
+                      child: KilauBaris(
+                        kunci: MasterOffline.kunciBaris(
+                            {'kat': baris.kategori}, 'kat'),
+                        idBaru: _diff.idBaru,
+                        idBerubah: _diff.idBerubah,
+                        child: Text(
+                          baris.kategori,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimaryOf(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                    AppTableCell.text(
+                      item['judul'] as String? ?? '-',
+                      flex: 3,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: _warnaBiruGelap(context),
+                      ),
+                    ),
+                    AppTableCell.text(
+                      item['ket'] as String? ?? '-',
+                      flex: 4,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryOf(context),
+                      ),
+                    ),
+                    AppTableCell(
+                      width: 96,
+                      align: TextAlign.center,
+                      child: StatusPill(
+                        label: adaUrl ? 'Link' : 'Data',
+                        warna: adaUrl ? AppColors.info : AppColors.primary,
+                      ),
+                    ),
+                    AppTableCell(
+                      width: 82,
+                      align: TextAlign.center,
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: adaUrl ? 'Buka laporan' : 'Jalankan laporan',
+                        icon: Icon(
+                          adaUrl ? Icons.open_in_new : Icons.chevron_right,
+                          size: 20,
+                          color: _warnaBiruGelap(context),
+                        ),
+                        onPressed: () => _bukaItem(item),
+                      ),
+                    ),
+                  ],
                 );
+              }).toList(),
+              pagination: AppTablePagination(
+                halaman: _halaman,
+                totalHalaman: totalHalaman,
+                totalData: data.length,
+                labelData: 'laporan',
+                onSebelumnya: _halaman > 1
+                    ? () => setStateIfMounted(() => _halaman--)
+                    : null,
+                onBerikutnya: _halaman < totalHalaman
+                    ? () => setStateIfMounted(() => _halaman++)
+                    : null,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -665,10 +657,14 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
                 child: _memuat
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text('Gagal memuat akun: $_error'),
-                          AppDetailGalatOpsional(detail: detailUntuk(_error)),
-                        ]))
+                        ? Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                Text('Gagal memuat akun: $_error'),
+                                AppDetailGalatOpsional(
+                                    detail: detailUntuk(_error)),
+                              ]))
                         : ListView.separated(
                             itemCount: akun.length,
                             separatorBuilder: (_, __) =>
@@ -709,7 +705,8 @@ class _PostingKeuanganDialog extends StatefulWidget {
   State<_PostingKeuanganDialog> createState() => _PostingKeuanganDialogState();
 }
 
-class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with JejakGalat {
+class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
+    with JejakGalat {
   late DateTime _mulai;
   DateTime _sampai = DateTime.now();
   bool _memuat = false;
@@ -862,14 +859,15 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with Jej
       margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF7ED),
-        border: Border.all(
-            color: const Color(0xFFF59E0B).withValues(alpha: .35)),
+        border:
+            Border.all(color: const Color(0xFFF59E0B).withValues(alpha: .35)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: ExpansionTile(
         leading: const Icon(Icons.settings_suggest_outlined,
             color: Color(0xFFB45309)),
-        title: Text('${semua.length} transaksi belum siap karena setting akun.'),
+        title:
+            Text('${semua.length} transaksi belum siap karena setting akun.'),
         subtitle: Text(unik.isEmpty
             ? 'Buka rincian untuk mengetahui pengaturan yang perlu dilengkapi.'
             : unik.first),
@@ -907,167 +905,184 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog> with Jej
         .toList();
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
     final Widget isi = Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                Expanded(
-                    child: Text(widget.judul,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700))),
-                if (!widget.inline)
-                  IconButton(
-                      onPressed: _memuat ? null : () => Navigator.pop(context),
-                      icon: const Icon(Icons.close)),
-              ]),
-              const Text(
-                  'Pratinjau dan posting dilakukan langsung di halaman ini.'),
-              const SizedBox(height: 12),
-              Wrap(spacing: 10, runSpacing: 8, children: [
-                OutlinedButton.icon(
-                    onPressed: _memuat ? null : () => _pilihTanggal(true),
-                    icon: const Icon(Icons.date_range),
-                    label:
-                        Text('Mulai ${_formatTanggalLaporan.format(_mulai)}')),
-                OutlinedButton.icon(
-                    onPressed: _memuat ? null : () => _pilihTanggal(false),
-                    icon: const Icon(Icons.event_available),
-                    label: Text(
-                        'Sampai ${_formatTanggalLaporan.format(_sampai)}')),
-                FilledButton.icon(
-                    onPressed: _memuat ? null : () => _proses(false),
-                    icon: const Icon(Icons.preview_outlined),
-                    label: const Text('Pratinjau')),
-              ]),
-              if (_memuat) const LinearProgressIndicator(),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child:
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
-                ),
-              if (_data != null) ...[
-                const SizedBox(height: 12),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  Chip(
-                      label: Text(
-                          'Total ${_formatRupiahLaporan.format(_data!['total'] ?? 0)}')),
-                  if (_data!.containsKey('jumlahTransaksi'))
-                    Chip(label: Text('${_data!['jumlahTransaksi']} transaksi')),
-                  Chip(
-                      label: Text(_data!['siap'] == true
-                          ? 'Siap diposting'
-                          : 'Belum siap')),
-                  if (_data!['terakhir'] != null)
-                    Chip(label: Text('Posting terakhir ${_data!['terakhir']}')),
-                ]),
-                if (belum.isNotEmpty) _diagnostikPemetaan(belum),
-              ],
-              const SizedBox(height: 8),
-              Expanded(
-                child: rincian.isEmpty
-                    ? (jurnal.isEmpty
-                        ? const Center(
-                            child: Text('Jalankan pratinjau untuk melihat draft jurnal.'))
-                        : ListView.separated(
-                            itemCount: jurnal.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (_, i) {
-                              final row = jurnal[i];
-                              return ListTile(
-                                dense: true,
-                                title: Text(row['akun']?.toString() ?? '-'),
-                                subtitle: Text(row['posisi']?.toString() ?? '-'),
-                                trailing: Text(_formatRupiahLaporan
-                                    .format(row['nominal'] ?? 0)),
-                              );
-                            },
-                          ))
-                    // DRAFT JURNAL PER TRANSAKSI (pola Posting Cicilan Mahasiswa):
-                    // tiap transaksi tampil beserta baris akun debit/kreditnya sehingga
-                    // dapat dianalisis dulu, lalu diposting satu per satu.
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Expanded(
+                child: Text(widget.judul,
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w700))),
+            if (!widget.inline)
+              IconButton(
+                  onPressed: _memuat ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.close)),
+          ]),
+          const Text(
+              'Pratinjau dan posting dilakukan langsung di halaman ini.'),
+          const SizedBox(height: 12),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            OutlinedButton.icon(
+                onPressed: _memuat ? null : () => _pilihTanggal(true),
+                icon: const Icon(Icons.date_range),
+                label: Text('Mulai ${_formatTanggalLaporan.format(_mulai)}')),
+            OutlinedButton.icon(
+                onPressed: _memuat ? null : () => _pilihTanggal(false),
+                icon: const Icon(Icons.event_available),
+                label: Text('Sampai ${_formatTanggalLaporan.format(_sampai)}')),
+            FilledButton.icon(
+                onPressed: _memuat ? null : () => _proses(false),
+                icon: const Icon(Icons.preview_outlined),
+                label: const Text('Pratinjau')),
+            TombolSesuaikanAkunPosting(
+                jenis: widget.jenis, sisi: SisiAkunPosting.debet),
+            TombolSesuaikanAkunPosting(
+                jenis: widget.jenis, sisi: SisiAkunPosting.kredit),
+          ]),
+          if (_memuat) const LinearProgressIndicator(),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+            ),
+          if (_data != null) ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              Chip(
+                  label: Text(
+                      'Total ${_formatRupiahLaporan.format(_data!['total'] ?? 0)}')),
+              if (_data!.containsKey('jumlahTransaksi'))
+                Chip(label: Text('${_data!['jumlahTransaksi']} transaksi')),
+              Chip(
+                  label: Text(_data!['siap'] == true
+                      ? 'Siap diposting'
+                      : 'Belum siap')),
+              if (_data!['terakhir'] != null)
+                Chip(label: Text('Posting terakhir ${_data!['terakhir']}')),
+            ]),
+            if (belum.isNotEmpty) _diagnostikPemetaan(belum),
+          ],
+          const SizedBox(height: 8),
+          Expanded(
+            child: rincian.isEmpty
+                ? (jurnal.isEmpty
+                    ? const Center(
+                        child: Text(
+                            'Jalankan pratinjau untuk melihat draft jurnal.'))
                     : ListView.separated(
-                        itemCount: rincian.length,
+                        itemCount: jurnal.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, i) {
-                          final t = rincian[i];
-                          final siapBaris = t['siap'] == true;
-                          final barisJurnal =
-                              ((t['jurnal'] as List?) ?? []).cast<Map<String, dynamic>>();
-                          return Container(
-                            color: siapBaris ? null : const Color(0xFFFFF7ED),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 6),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('${t['ref'] ?? '-'}',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w700)),
-                                      Text(
-                                          _formatRupiahLaporan
-                                              .format(t['nilai'] ?? 0),
-                                          style: const TextStyle(fontSize: 12)),
-                                      const SizedBox(height: 4),
-                                      for (final j in barisJurnal)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              left: 8, top: 1),
-                                          child: Text(
-                                            '${j['akun'] ?? '-'}   '
-                                            '${(j['debit'] ?? 0) > 0 ? 'D ${_formatRupiahLaporan.format(j['debit'])}' : 'K ${_formatRupiahLaporan.format(j['kredit'])}'}',
-                                            style: const TextStyle(
-                                                fontSize: 11.5,
-                                                fontFamily: 'monospace'),
-                                          ),
-                                        ),
-                                      if (!siapBaris &&
-                                          '${t['alasan'] ?? ''}'.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 3),
-                                          child: Text('${t['alasan']}',
-                                              style: const TextStyle(
-                                                  fontSize: 11.5,
-                                                  color: Color(0xFFB45309))),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                siapBaris
-                                    ? OutlinedButton.icon(
-                                        onPressed: _memuat
-                                            ? null
-                                            : () => _postingSatu(t['id']),
-                                        icon: const Icon(Icons.check_circle_outline,
-                                            size: 16),
-                                        label: const Text('Posting'))
-                                    : const Chip(
-                                        label: Text('Belum siap',
-                                            style: TextStyle(fontSize: 11))),
-                              ],
-                            ),
+                          final row = jurnal[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(row['akun']?.toString() ?? '-'),
+                            subtitle: Text(row['posisi']?.toString() ?? '-'),
+                            trailing: Text(_formatRupiahLaporan
+                                .format(row['nominal'] ?? 0)),
                           );
                         },
-                      ),
-              ),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(
-                    onPressed: _memuat ? null : () => Navigator.pop(context),
-                    child: const Text('Tutup')),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                    onPressed: siap && !_memuat ? () => _proses(true) : null,
-                    icon: const Icon(Icons.post_add),
-                    label: const Text('Posting')),
-              ]),
-            ],
+                      ))
+                // DRAFT JURNAL PER TRANSAKSI (pola Posting Cicilan Mahasiswa):
+                // tiap transaksi tampil beserta baris akun debit/kreditnya sehingga
+                // dapat dianalisis dulu, lalu diposting satu per satu.
+                : ListView.separated(
+                    itemCount: rincian.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final t = rincian[i];
+                      final siapBaris = t['siap'] == true;
+                      final barisJurnal = ((t['jurnal'] as List?) ?? [])
+                          .cast<Map<String, dynamic>>();
+                      return Container(
+                        color: siapBaris ? null : const Color(0xFFFFF7ED),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${t['ref'] ?? '-'}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                  Text(
+                                      _formatRupiahLaporan
+                                          .format(t['nilai'] ?? 0),
+                                      style: const TextStyle(fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  for (final j in barisJurnal)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 8, top: 1),
+                                      child: Text(
+                                        '${j['akun'] ?? '-'}   '
+                                        '${(j['debit'] ?? 0) > 0 ? 'D ${_formatRupiahLaporan.format(j['debit'])}' : 'K ${_formatRupiahLaporan.format(j['kredit'])}'}',
+                                        style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontFamily: 'monospace'),
+                                      ),
+                                    ),
+                                  if (!siapBaris &&
+                                      '${t['alasan'] ?? ''}'.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text('${t['alasan']}',
+                                          style: const TextStyle(
+                                              fontSize: 11.5,
+                                              color: Color(0xFFB45309))),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            siapBaris
+                                ? OutlinedButton.icon(
+                                    onPressed: _memuat
+                                        ? null
+                                        : () => _postingSatu(t['id']),
+                                    icon: const Icon(Icons.check_circle_outline,
+                                        size: 16),
+                                    label: const Text('Posting'))
+                                : Wrap(
+                                    direction: Axis.vertical,
+                                    spacing: 4,
+                                    children: [
+                                      TombolSesuaikanAkunPosting(
+                                        jenis: widget.jenis,
+                                        sisi: SisiAkunPosting.debet,
+                                        alasan: '${t['alasan'] ?? ''}',
+                                        ringkas: true,
+                                      ),
+                                      TombolSesuaikanAkunPosting(
+                                        jenis: widget.jenis,
+                                        sisi: SisiAkunPosting.kredit,
+                                        alasan: '${t['alasan'] ?? ''}',
+                                        ringkas: true,
+                                      ),
+                                    ],
+                                  ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
-        );
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            TextButton(
+                onPressed: _memuat ? null : () => Navigator.pop(context),
+                child: const Text('Tutup')),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+                onPressed: siap && !_memuat ? () => _proses(true) : null,
+                icon: const Icon(Icons.post_add),
+                label: const Text('Posting')),
+          ]),
+        ],
+      ),
+    );
     if (widget.inline) {
       return isi;
     }
