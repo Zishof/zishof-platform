@@ -7,7 +7,7 @@ Dokumen ini menjadi panduan UAT internal untuk dua kebutuhan berikut:
 1. koreksi transaksi selesai dari Detail Riwayat Penjualan; dan
 2. rincian produk terjual pada laporan **Penjualan Barang Per Pemasok**.
 
-Status saat dokumen dibuat: perubahan masih lokal untuk UAT. Belum diunggah ke GitHub, belum dibuatkan rilis, dan belum boleh dianggap sudah terpasang di server/komputer toko. Publikasi hanya dilakukan setelah UAT Al-Bahjah selesai dan ada izin pengguna.
+Status terbaru 3 September 2026: source backend sudah masuk SVN r83902 dan source Flutter beserta dokumen ini sudah di-push ke GitHub `main` pada commit `91f79cf`. Installer tetap artefak UAT lokal; belum dipublikasikan sebagai rilis dan belum boleh dianggap sudah terpasang di server/komputer toko. Deployment server dan distribusi installer dilakukan terpisah setelah persetujuan UAT.
 
 ## Makna pesan dan screenshot pengguna
 
@@ -211,6 +211,6 @@ Untuk laporan, buka **Laporan > Penjualan > Penjualan Barang Per Pemasok** (atau
 
 Keterangan **Tanpa Pemasok** berarti produk belum mempunyai histori pengadaan dengan nama pemasok. Untuk saat ini pengelompokan pemasok masih mengikuti pengadaan terakhir produk, belum menelusuri batch/lot historis yang keluar pada setiap penjualan.
 
-Mohon pengujian dilakukan memakai transaksi dummy yang belum posting dan belum retur, bukan transaksi produksi sensitif. Build ini masih untuk UAT lokal; belum kami upload/publish atau nyatakan sudah terpasang di server/toko. Setelah UAT selesai dan ada persetujuan, baru proses rilis/deployment dilanjutkan.
+Mohon pengujian dilakukan memakai transaksi dummy yang belum posting dan belum retur, bukan transaksi produksi sensitif. Source perbaikannya sudah masuk SVN dan GitHub. Build ini tetap untuk UAT lokal; installernya belum kami upload/publish dan belum dinyatakan sudah terpasang di server/toko. Setelah UAT selesai dan ada persetujuan, baru proses rilis/deployment dilanjutkan.
 
 Terima kasih.
