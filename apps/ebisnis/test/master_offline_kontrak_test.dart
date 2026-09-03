@@ -39,6 +39,10 @@ void main() {
     ],
     'lib/screens/anggota/tab_mutasi_hutang.dart': [
       "aksi: 'hutang_bayar_simpan'",
+      // Pembayaran yang salah kini bisa dibatalkan dari aplikasi. Dikunci di sini
+      // karena menyentuh uang: kalau hapusnya kembali jadi kirim-langsung, kegagalan
+      // kirim berarti pembayaran tampak terhapus di layar tetapi tetap ada di server.
+      "aksi: 'hutang_bayar_hapus'",
     ],
     'lib/screens/jenis_produk_screen.dart': [
       "daftarCacheDulu('jenis_produk_list'",

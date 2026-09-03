@@ -183,6 +183,55 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     if (tersimpan == true) await _muat();
   }
 
+  /// Hapus satu entri PEMBAYARAN hutang.
+  ///
+  /// Hanya baris pembayaran yang boleh dihapus. Daftar mutasi mencampur dua sumber,
+  /// dan `barisId` membedakannya: awalan `C` = koperasi.pembayaran_hutang (id-nya
+  /// mengikuti), awalan `H<slot>` = pembelian anggota yang menambah hutang. Menghapus
+  /// baris `H` berarti membatalkan pembeliannya -- bukan urusan layar ini.
+  ///
+  /// Pembayaran hutang TIDAK menjurnal (tidak ada mesin posting yang merujuk
+  /// PembayaranHutang), jadi menghapusnya tidak meninggalkan jurnal yatim.
+  Future<void> _hapusPembayaran(Map<String, dynamic> baris) async {
+    final kode = '${baris['barisId'] ?? ''}';
+    final id = int.tryParse(kode.startsWith('C') ? kode.substring(1) : '');
+    if (id == null) return;
+    final ya = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus pembayaran hutang?'),
+        content: Text(
+            'Pembayaran ${_formatRpMutasiHutang.format(baris['berkurang'] ?? 0)} '
+            'atas nama ${baris['namaAnggota'] ?? '-'} akan dihapus. '
+            'Sisa hutang anggota akan naik kembali sebesar itu.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (ya != true || !mounted) return;
+    try {
+      await prosesSimpanMaster(
+        context,
+        aksi: 'hutang_bayar_hapus',
+        body: {'id': id},
+        kunci: 'hutang_bayar:hapus:$id',
+      );
+      await _muat();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(terapkanGalat(e))));
+      }
+    }
+  }
+
+
   Future<void> _unduhExcel() async {
     if (_data.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -510,7 +559,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           AppDataTable(
-            minWidth: 900,
+            minWidth: 980,
             emptyText: 'Tidak ada mutasi hutang pada rentang ini.',
             columns: const [
               AppTableColumn('Nama', flex: 2),
@@ -519,6 +568,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
               AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
               AppTableColumn('Bayar', flex: 1, align: TextAlign.right),
               AppTableColumn('Sisa Hutang', flex: 1, align: TextAlign.right),
+              AppTableColumn('', flex: 1, align: TextAlign.center),
             ],
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
@@ -561,6 +611,17 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                     _formatRpMutasiHutang.format(r['saldoPerAnggota'] ?? 0),
                     flex: 1,
                     align: TextAlign.right),
+                AppTableCell(
+                  flex: 1,
+                  child: '${r['barisId'] ?? ''}'.startsWith('C')
+                      ? IconButton(
+                          tooltip: 'Hapus pembayaran',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          onPressed: () => _hapusPembayaran(r),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ]);
             }).toList(),
             pagination: AppTablePagination(
