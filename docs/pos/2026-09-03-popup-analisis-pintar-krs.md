@@ -6,14 +6,15 @@ Tanggal: 3 September 2026
 
 Ringkasan pada kolom **Keterangan** KRS sebelumnya hanya menampilkan beberapa
 kalimat seperti jumlah perkuliahan yang disetujui dan yang belum dinilai.
-Ringkasan tersebut kini menjadi kartu yang jelas dapat diklik. Klik membuka
+Ringkasan tersebut kini langsung menjadi link yang jelas dapat diklik. Klik membuka
 popup analisis rinci tanpa mengubah data akademik.
 
 ## Tampilan ringkasan
 
-- Ringkasan dibungkus kartu biru yang tetap menampilkan informasi lama.
-- Di bawah ringkasan terdapat label **Analisis pintar & grafik — klik**.
-- Cursor dan tooltip menjelaskan bahwa kartu dapat dibuka.
+- Isi ringkasan lama langsung menjadi link bergaris titik dengan ikon grafik.
+- Tidak ada kartu/border besar dan tidak ada teks tambahan "Analisis pintar &
+  grafik — klik".
+- Cursor dan tooltip menjelaskan bahwa ringkasan dapat dibuka.
 - Listener dipasang sekali. Refresh/timer hanya memperbarui konteks pada
   atribut komponen sehingga tidak terjadi listener ganda atau memakai entity
   dari render lama.
@@ -32,6 +33,15 @@ Popup **Analisis Pintar KRS Mahasiswa** berisi:
 8. temuan analitis dan rekomendasi tindak lanjut;
 9. tabel setiap mata kuliah: kode, nama, SKS, persetujuan, dan penilaian;
 10. penjelasan cara sistem menghitung hasil agar analisis dapat diaudit.
+
+Penyempurnaan keputusan menambahkan:
+
+- tingkat prioritas **TINGGI**, **SEDANG**, **RENDAH**, atau **PERLU VERIFIKASI**;
+- satu arahan keputusan berikut yang paling relevan;
+- skor kesiapan 0-100% dengan bobot 50% persetujuan dan 50% penilaian;
+- audit konsistensi SKS hasil rincian terhadap rekap semester;
+- urutan rincian otomatis: status nonstandar/menunggu persetujuan, belum
+  dinilai, kemudian yang sudah selesai.
 
 Analisis bersifat deterministik/explainable. Istilah "pintar" tidak berarti
 data dikirim ke layanan AI eksternal; kesimpulan dibuat dari aturan domain dan
@@ -78,8 +88,15 @@ popup, sehingga tidak diberi affordance klik palsu.
 
 - 22 pasangan file pada `src/main/java` dan `src/main/src`: SHA-256 identik.
 - Bytecode helper analisis dan popup ditemukan pada hasil build.
-- `mvn -DskipTests clean compile`: **BUILD SUCCESS** (7.512 source Java).
+- Baseline `mvn -DskipTests clean compile`: **BUILD SUCCESS** (7.512 source Java).
+- Kompilasi terarah tiga helper setelah penyederhanaan: **berhasil**
+  (`javac exit=0`) dan seluruh getter keputusan ditemukan pada bytecode.
+- Build global sesudahnya tertahan oleh perubahan paralel di luar lingkup ini:
+  mirror `CommonPSB` memanggil `FormatNis.tambahIndexNomorSurat`, sedangkan
+  mirror `FormatNis` sesi lain sedang menghapus/mengganti method tersebut.
+  File paralel itu tidak diubah oleh pekerjaan ini.
 - Revisi kode utama: SVN r83819, r83827, dan r83828.
+- Revisi penyederhanaan link dan pengayaan keputusan: SVN r83861.
 
 ## Deployment
 
@@ -87,4 +104,3 @@ Perubahan berada di Java server/ZK. Deploy WAR/class hasil build dan restart
 atau reload aplikasi. Sesudah deployment, uji kartu Keterangan pada daftar
 Mahasiswa serta minimal satu layar KRS/Nilai untuk memastikan event popup dan
 grafik tampil pada browser target.
-

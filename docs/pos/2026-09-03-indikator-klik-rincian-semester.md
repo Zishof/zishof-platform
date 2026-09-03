@@ -13,12 +13,14 @@ angka biru kecil bergaris bawah sehingga mudah dianggap sebagai teks biasa.
 Affordance klik dipusatkan pada
 `SemesterMahasiswaAnalisisPopupHelper.pasangLink(...)`:
 
-- label menjadi **Semester n · klik**;
-- tautan diberi bentuk pill biru, border, garis bawah, dan cursor pointer;
+- label tetap hanya berupa angka semester, misalnya **3**;
+- angka diberi bentuk badge/link biru kecil, border bulat, garis bawah, dan
+  cursor pointer sehingga tetap jelas dapat diklik tanpa teks tambahan;
 - tooltip menyebut semester yang dibuka serta isi rinciannya;
 - listener dan query analisis tetap lazy, baru berjalan setelah pengguna klik.
 
-Karena renderer seluruh baris dan seluruh halaman pagination Mahasiswa selalu
+Tidak ada kata "Semester" atau "klik" di dalam label. Karena renderer seluruh
+baris dan seluruh halaman pagination Mahasiswa selalu
 memanggil helper tersebut, indikator yang sama berlaku untuk setiap tampilan
 angka semester yang menyediakan popup analisis, bukan hanya baris pada gambar
 laporan.
@@ -39,4 +41,3 @@ laporan.
 
 Perubahan berada pada Java server/ZK. Deploy WAR atau class hasil build lalu
 restart/reload aplikasi agar tampilan baru terbaca oleh sesi pengguna.
-
