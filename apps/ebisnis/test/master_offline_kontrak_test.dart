@@ -46,6 +46,16 @@ void main() {
       "'master:jenis_produk'",
       'IndikatorSinkronMaster(',
     ],
+    // Kelompok Aset menggantikan kelompok_asset.zul yang sebelumnya dibuka di
+    // browser sistem. Penandanya dikunci di sini supaya tidak diam-diam kembali
+    // menjadi kirim-langsung: layar ini menyunting akun POSTING, jadi kegagalan
+    // kirim yang tidak terantre berarti perbaikan akun hilang tanpa jejak.
+    'lib/screens/kelompok_aset_screen.dart': [
+      "daftarCacheDulu('kelompok_aset_list'",
+      "'master:kelompok_aset",
+      "aksi: 'kelompok_aset_akun_simpan'",
+      'IndikatorSinkronMaster(',
+    ],
     'lib/screens/grup_produk_screen.dart': [
       "'grup_produk_daftar'",
       "'master:grup_produk'",
@@ -460,6 +470,7 @@ void main() {
     const layarAkun = <String>[
       'lib/screens/anggaran_screen.dart',
       'lib/screens/jurnal_umum_screen.dart',
+      'lib/screens/kelompok_aset_screen.dart',
       'lib/screens/kas_besar_screen.dart',
       'lib/screens/kas_kecil_screen.dart',
       'lib/screens/laporan_screen.dart',
