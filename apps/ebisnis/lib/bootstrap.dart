@@ -18,6 +18,7 @@ import 'screens/login_screen.dart';
 import 'screens/pengaturan_server_screen.dart';
 import 'services/master_offline.dart';
 import 'services/pengaturan_update.dart';
+import 'services/prefs_guard.dart';
 import 'services/pengaturan_sesi_lokal.dart';
 import 'services/transaksi_outbox_service.dart';
 import 'services/server_config.dart';
@@ -44,6 +45,16 @@ import 'widgets/safe_state.dart';
 Future<void> bootstrap(AppProductProfile profil) async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    // WAJIB sebelum apa pun menyentuh SharedPreferences -- langsung maupun
+    // lewat AppThemeController/ServerConfig. `main.dart` (varian eBisnis)
+    // sudah memanggilnya sejak awal, tetapi bootstrap bersama ini TIDAK,
+    // sehingga varian apotik/emedik/inventory_sales/mitrainap kehilangan
+    // penjaganya: satu file preferensi korup (mati listrik saat menulis)
+    // membuat getInstance() melempar, exception-nya ditelan zone guard, dan
+    // `runApp` di bawah TIDAK PERNAH dipanggil -- jendela dibuat tetapi tidak
+    // pernah dirender, jadi aplikasi tampak tidak bisa dibuka sama sekali
+    // tanpa pesan apa pun. Lihat JavaDoc [PrefsGuard].
+    await PrefsGuard.perbaikiJikaKorup();
     AppProductProfile.aktif = profil;
     CoreDb.configureStorage(AppVariant.storageNamespace);
     if (!profil.cocokDenganDartDefine()) {
