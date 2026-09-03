@@ -84,11 +84,14 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
         onData: (hasil) {
           if (!mounted) return;
           final dariServer = hasil['dariServer'] == true;
+          final data = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
           setStateIfMounted(() {
-            _item = ((hasil['data'] as List?) ?? const [])
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList();
+            // Emisi cache disaring ulang: cache menyimpan hasil kueri
+            // TERAKHIR, bukan kueri yang sedang diketik.
+            _item = dariServer ? data : saringCacheLokal(data, keyword);
             _idBaru = dariServer
                 ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
                 : {};

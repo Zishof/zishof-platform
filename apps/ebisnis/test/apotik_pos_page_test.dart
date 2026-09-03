@@ -126,7 +126,9 @@ void main() {
         }
         return {'status': '00', 'data': const []};
       }), const Size(1500, 900));
-      expect(find.text('Katalog sedang dikunci.'), findsOneWidget);
+      // Kini dibungkus Exception oleh jalur lokal-dulu; pesan servernya tetap
+      // tampil apa adanya di dalamnya.
+      expect(find.textContaining('Katalog sedang dikunci.'), findsOneWidget);
       expect(find.text('Coba lagi'), findsOneWidget);
     });
   });
@@ -329,6 +331,99 @@ void main() {
       await tester.pumpAndSettle();
       expect(kodeTerkirim.length, 2);
       expect(kodeTerkirim[0], kodeTerkirim[1]);
+    });
+  });
+
+  group('Katalog lokal-dulu', () {
+    testWidgets('katalog dari cache ditandai dan stoknya tidak diklaim baru',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikPosPage(
+          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [_obat],
+              'dariServer': false
+            });
+          },
+        ),
+        const Size(1500, 900),
+      );
+      expect(find.textContaining('Katalog dari data terakhir'), findsOneWidget);
+      expect(find.textContaining('stok belum tentu mutakhir'), findsOneWidget);
+      // Pagar keselamatan tetap: pembayaran butuh server.
+      expect(find.textContaining('Pembayaran tetap memerlukan server'),
+          findsOneWidget);
+    });
+
+    testWidgets('emisi server menghapus penanda cache', (tester) async {
+      await _pump(
+        tester,
+        ApotikPosPage(
+          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [_obat],
+              'dariServer': false
+            });
+            onData({
+              'data': [_obat],
+              'dariServer': true
+            });
+          },
+        ),
+        const Size(1500, 900),
+      );
+      expect(find.textContaining('Katalog dari data terakhir'), findsNothing);
+    });
+
+    testWidgets('hasil cache DISARING menurut kata kunci yang diketik',
+        (tester) async {
+      // Cache menyimpan hasil kueri terakhir. Tanpa penyaringan, mengetik
+      // kata kunci baru saat offline akan memunculkan obat yang salah.
+      await _pump(
+        tester,
+        ApotikPosPage(
+          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [
+                _obat,
+                {..._obat, 'id': 99, 'kode': 'OBT-99', 'nama': 'Vitamin C'},
+              ],
+              'dariServer': false,
+            });
+          },
+        ),
+        const Size(1500, 900),
+      );
+      expect(find.text('Vitamin C'), findsOneWidget);
+
+      await tester.enterText(
+          find.widgetWithText(
+              TextField, 'Cari nama obat, kode, atau pindai barcode…'),
+          'vitamin');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text('Vitamin C'), findsOneWidget);
+      expect(find.text('Paracetamol 500 mg'), findsNothing);
+    });
+
+    testWidgets('server gagal TIDAK menghapus katalog dari cache',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikPosPage(
+          muatKatalog: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [_obat],
+              'dariServer': false
+            });
+            throw Exception('Koneksi terputus');
+          },
+        ),
+        const Size(1500, 900),
+      );
+      expect(find.byType(MedicationCard), findsWidgets);
+      expect(find.textContaining('Koneksi terputus'), findsNothing);
     });
   });
 }

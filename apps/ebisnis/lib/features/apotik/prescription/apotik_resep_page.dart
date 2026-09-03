@@ -16,12 +16,6 @@ import '../shared/widgets/apotik_status_pill.dart';
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-/// Kunci cache antrean resep. Dipisah per filter "hanya menunggu" karena
-/// keduanya daftar yang berbeda; menyatukannya akan membuat isi cache
-/// berganti-ganti dan diff-nya berisik.
-String kunciCacheResepApotik({required bool hanyaMenunggu}) =>
-    hanyaMenunggu ? 'master:apotik_resep_menunggu' : 'master:apotik_resep';
-
 typedef PanggilResep = Future<Map<String, dynamic>> Function(
     String aksi, Map<String, dynamic> body);
 

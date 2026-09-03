@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../api_client.dart';
+import '../../../services/master_offline.dart';
 import '../../../services/pengaturan_laci.dart';
 import '../../../services/pengaturan_pembayaran.dart';
 import '../../../services/pengaturan_struk.dart';
@@ -13,6 +14,7 @@ import '../../../sesi.dart';
 import '../../../widgets/safe_state.dart';
 import '../core/apotik_breakpoints.dart';
 import '../core/apotik_design_tokens.dart';
+import '../core/apotik_lokal_dulu.dart';
 import '../shared/widgets/apotik_context_bar.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/medication_card.dart';
@@ -46,7 +48,12 @@ class ApotikPosPage extends StatefulWidget {
   final PanggilAksi? panggil;
   final ApotikPosController? controller;
 
-  const ApotikPosPage({super.key, this.panggil, this.controller});
+  /// Pemuat katalog "lokal dulu". Hanya KATALOG yang dibaca dari cache;
+  /// pembayaran tetap menuntut server (lihat core/apotik_lokal_dulu.dart).
+  final MuatDaftarApotik? muatKatalog;
+
+  const ApotikPosPage(
+      {super.key, this.panggil, this.controller, this.muatKatalog});
 
   @override
   State<ApotikPosPage> createState() => _ApotikPosPageState();
@@ -58,10 +65,36 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   late final PanggilAksi _panggil =
       widget.panggil ?? (aksi, body) => ApiClient.instance.aksi(aksi, body);
 
+  /// Bila pemanggil menyuntik [panggil] (test atau penyematan), katalog dibaca
+  /// lewat panggilan itu — sumber datanya memang sengaja diambil alih.
+  /// Produksi tidak pernah menyuntiknya, sehingga jalur normalnya tetap
+  /// lokal-dulu lewat `MasterOffline`.
+  late final MuatDaftarApotik _muatKatalog = widget.muatKatalog ??
+      (widget.panggil == null
+          ? MasterOffline.daftarCacheDulu
+          : _katalogLewatPanggil);
+
+  Future<void> _katalogLewatPanggil(
+    String aksi,
+    Map<String, dynamic> body,
+    String cacheKey, {
+    required void Function(Map<String, dynamic> hasil) onData,
+  }) async {
+    final r = await _panggil(aksi, body);
+    if (!_sukses(r)) {
+      throw Exception('${r['description'] ?? 'Gagal memuat katalog obat.'}');
+    }
+    onData({...r, 'dariServer': true});
+  }
+
   final _cari = TextEditingController();
   Timer? _debounce;
 
   List<Map<String, dynamic>> _hasilCari = [];
+
+  /// true bila katalog yang sedang tampil berasal dari cache dan server belum
+  /// menjawab. Ditandai di layar: stok dari cache bisa sudah basi.
+  bool _katalogDariCache = false;
   List<MetodeBayar> _caraBayar = [];
   int? _caraBayarId;
   bool _memuatCari = false;
@@ -164,22 +197,33 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       _galatCari = null;
     });
     try {
-      final r = await _panggil(
-          'apotik_item_cari', {'keyword': keyword, 'page_size': 40});
-      if (!_sukses(r)) {
-        setStateIfMounted(() {
-          _galatCari = '${r['description'] ?? 'Gagal memuat katalog obat.'}';
-          _memuatCari = false;
-        });
-        return;
-      }
-      setStateIfMounted(() {
-        _hasilCari = _data(r);
-        _memuatCari = false;
-      });
+      // Katalog dibaca LOKAL DULU supaya kasir tetap dapat memeriksa harga dan
+      // penanda keselamatan saat jaringan mati. Yang di-cache hanya katalog;
+      // pembayaran tetap menuntut server.
+      await _muatKatalog(
+        'apotik_item_cari',
+        {'keyword': keyword, 'page_size': 40},
+        kunciCacheItemApotik,
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          final data = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          setStateIfMounted(() {
+            // Emisi cache disaring ulang: cache berisi hasil kueri TERAKHIR.
+            _hasilCari = dariServer ? data : saringCacheLokal(data, keyword);
+            _katalogDariCache = !dariServer;
+            _memuatCari = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() {
-        _galatCari = '$e';
+        // Katalog dari cache TIDAK dibuang saat server gagal; kasir masih
+        // butuh melihat obatnya. Galat hanya bila tak ada apa pun.
+        if (_hasilCari.isEmpty) _galatCari = '$e';
         _memuatCari = false;
       });
     }
@@ -845,6 +889,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             onSubmitted: _jalankanCari,
           ),
         ),
+        if (_katalogDariCache) _bilahKatalogCache(t),
         Expanded(
           child: _galatCari != null
               ? ApotikErrorState(
@@ -862,6 +907,33 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                       : _gridObat(t),
         ),
       ],
+    );
+  }
+
+  /// Penanda katalog dari cache. Kasir HARUS tahu angka stoknya belum tentu
+  /// mutakhir — tanpa ini, data lama tampak sama meyakinkannya dengan data
+  /// baru, dan itu jenis kesalahan yang tidak terlihat sampai obatnya ternyata
+  /// tidak ada.
+  Widget _bilahKatalogCache(ApotikDesignTokens t) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: t.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusControl),
+        border: Border.all(color: t.warning.withValues(alpha: 0.35)),
+      ),
+      child: Row(children: [
+        Icon(Icons.cloud_off_outlined, size: 15, color: t.warning),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Katalog dari data terakhir — stok belum tentu mutakhir. '
+            'Pembayaran tetap memerlukan server.',
+            style: TextStyle(fontSize: 11.5, color: t.textPrimary),
+          ),
+        ),
+      ]),
     );
   }
 

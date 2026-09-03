@@ -1,4 +1,6 @@
 import '../../../api_client.dart';
+import '../../../services/master_offline.dart';
+import '../core/apotik_lokal_dulu.dart';
 
 /// Satu pekerjaan konkret yang menunggu di dashboard (bukan sekadar angka).
 class ApotikTugas {
@@ -91,11 +93,35 @@ class ApotikDashboardLoader {
   final Future<Map<String, dynamic>> Function(String aksi,
       [Map<String, dynamic>? body]) _panggil;
 
+  /// Pemuat daftar lokal-dulu untuk sumber dasbor. Bila server tak terjangkau,
+  /// dasbor tetap menampilkan gambaran terakhir alih-alih layar kosong —
+  /// angkanya sudah ditandai tidak pasti lewat [ApotikRingkasan.angkaPasti].
+  final MuatDaftarApotik _muatDaftar;
+
   ApotikDashboardLoader({
     Future<Map<String, dynamic>> Function(String aksi,
             [Map<String, dynamic>? body])?
         panggil,
-  }) : _panggil = panggil ?? _panggilDefault;
+    MuatDaftarApotik? muatDaftar,
+  })  : _panggil = panggil ?? _panggilDefault,
+        // Bila pemanggil menyuntik [panggil], seluruh sumber dibaca lewat
+        // panggilan itu; produksi tidak menyuntiknya sehingga jalur normalnya
+        // tetap lokal-dulu.
+        _muatDaftar = muatDaftar ??
+            (panggil == null
+                ? MasterOffline.daftarCacheDulu
+                : _pemuatDariPanggil(panggil));
+
+  static MuatDaftarApotik _pemuatDariPanggil(
+    Future<Map<String, dynamic>> Function(String aksi,
+            [Map<String, dynamic>? body])
+        panggil,
+  ) {
+    return (aksi, body, cacheKey, {required onData}) async {
+      final r = await panggil(aksi, body);
+      onData({...r, 'dariServer': true});
+    };
+  }
 
   static Future<Map<String, dynamic>> _panggilDefault(String aksi,
           [Map<String, dynamic>? body]) =>
@@ -157,7 +183,14 @@ class ApotikDashboardLoader {
 
     // --- Antrean resep -------------------------------------------------
     try {
-      final r = await _panggil('apotik_resep_list', {'page_size': 100});
+      Map<String, dynamic>? emisi;
+      await _muatDaftar(
+        'apotik_resep_list',
+        {'page_size': 100},
+        kunciCacheResepApotik(hanyaMenunggu: false),
+        onData: (hasil) => emisi = hasil,
+      );
+      final r = {'status': '00', ...?emisi};
       if (_sukses(r)) {
         final semua = _data(r);
         // "Menunggu" = belum ditebus. Server mengirim `ditebus` (bool) dan
@@ -185,10 +218,14 @@ class ApotikDashboardLoader {
 
     // --- Batch mendekati kedaluwarsa ------------------------------------
     try {
-      final r = await _panggil('apotik_batch_monitor', {
-        'hari_ke_depan': ambangNearExpiryHari,
-        'page_size': 100,
-      });
+      Map<String, dynamic>? emisi;
+      await _muatDaftar(
+        'apotik_batch_monitor',
+        {'hari_ke_depan': ambangNearExpiryHari, 'page_size': 100},
+        kunciCacheBatchApotik,
+        onData: (hasil) => emisi = hasil,
+      );
+      final r = {'status': '00', ...?emisi};
       if (_sukses(r)) {
         final batch = _data(r);
         batchNearExpiry ??= batch.length;
@@ -225,7 +262,14 @@ class ApotikDashboardLoader {
 
     // --- Stok habis ------------------------------------------------------
     try {
-      final r = await _panggil('apotik_item_cari', {'page_size': 100});
+      Map<String, dynamic>? emisi;
+      await _muatDaftar(
+        'apotik_item_cari',
+        {'page_size': 100},
+        kunciCacheItemApotik,
+        onData: (hasil) => emisi = hasil,
+      );
+      final r = {'status': '00', ...?emisi};
       if (_sukses(r)) {
         final item = _data(r);
         obatTerbaca = item.length;

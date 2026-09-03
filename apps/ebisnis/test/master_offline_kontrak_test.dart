@@ -99,6 +99,29 @@ void main() {
       'kunciCacheResepApotik(',
       'MasterOffline.daftarCacheDulu',
     ],
+    // Katalog kasir: harga & penanda keselamatan tetap terbaca saat jaringan
+    // mati, dengan penanda bahwa stoknya bisa basi. Menjual tetap online.
+    'lib/features/apotik/pos/apotik_pos_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      'MasterOffline.daftarCacheDulu',
+      'saringCacheLokal(',
+      '_katalogDariCache',
+    ],
+    // Pencarian obat saat menyusun baris penerimaan (postingnya tetap online).
+    'lib/features/apotik/procurement/apotik_penerimaan_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      'MasterOffline.daftarCacheDulu',
+    ],
+    // Dasbor: gambaran terakhir lebih berguna daripada layar kosong; angkanya
+    // sudah ditandai tidak pasti lewat ApotikRingkasan.angkaPasti.
+    'lib/features/apotik/dashboard/apotik_dashboard_data.dart': [
+      'kunciCacheItemApotik',
+      'kunciCacheBatchApotik',
+      'kunciCacheResepApotik(',
+      'MasterOffline.daftarCacheDulu',
+    ],
   };
 
   // POS Apotik: mutasi yang SENGAJA tidak diantre, beserta berkas tempat

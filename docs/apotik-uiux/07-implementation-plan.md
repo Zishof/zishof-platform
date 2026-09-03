@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 314 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 318 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -76,6 +76,16 @@ monitor batch, dan antrean resep kini memakai `MasterOffline.daftarCacheDulu` (b
 dulu, hasil server menyusul beserta animasi kilau + bilah "pembaruan dari
 server"), menyimpan lewat `prosesSimpanMaster` (antre saat offline), dan punya
 tombol riwayat AuditTrails per baris.
+
+Setelah itu cakupannya diluaskan ke **semua pembacaan yang punya cache**:
+katalog POS, pencarian obat pada penerimaan, dan ketiga sumber dasbor. Dua
+jebakan yang ikut ditangani:
+
+* cache hanya menyimpan hasil kueri TERAKHIR, sehingga mengetik kata kunci
+  baru saat offline dulu akan memunculkan hasil pencarian sebelumnya seolah
+  itu jawabannya — emisi cache kini disaring ulang (`saringCacheLokal`);
+* katalog dari cache diberi penanda "stok belum tentu mutakhir", karena data
+  lama tampak sama meyakinkannya dengan data baru.
 
 Yang **sengaja tetap online** beserta alasannya ada di
 `lib/features/apotik/core/apotik_lokal_dulu.dart`, dan dikunci oleh

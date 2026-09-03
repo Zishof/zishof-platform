@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../api_client.dart';
 import '../../../widgets/safe_state.dart';
+import '../../../services/master_offline.dart';
 import '../core/apotik_breakpoints.dart';
+import '../core/apotik_lokal_dulu.dart';
 import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
@@ -71,7 +73,12 @@ class PagarPenerimaan {
 /// lihat IR-09. Layar ini tidak berpura-pura mencatatnya.
 class ApotikPenerimaanPage extends StatefulWidget {
   final PanggilTerima? panggil;
-  const ApotikPenerimaanPage({super.key, this.panggil});
+
+  /// Pencarian obat dibaca lokal-dulu; POSTING penerimaannya tetap online
+  /// (belum ada kunci idempoten — lihat core/apotik_lokal_dulu.dart).
+  final MuatDaftarApotik? muatKatalog;
+
+  const ApotikPenerimaanPage({super.key, this.panggil, this.muatKatalog});
 
   @override
   State<ApotikPenerimaanPage> createState() => _ApotikPenerimaanPageState();
@@ -141,6 +148,25 @@ class ApotikPenerimaanPage extends StatefulWidget {
 }
 
 class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
+  /// Bila pemanggil menyuntik [panggil] (test atau penyematan), katalog dibaca
+  /// lewat panggilan itu — sumber datanya memang sengaja diambil alih.
+  /// Produksi tidak pernah menyuntiknya, sehingga jalur normalnya tetap
+  /// lokal-dulu lewat `MasterOffline`.
+  late final MuatDaftarApotik _muatKatalog = widget.muatKatalog ??
+      (widget.panggil == null
+          ? MasterOffline.daftarCacheDulu
+          : _katalogLewatPanggil);
+
+  Future<void> _katalogLewatPanggil(
+    String aksi,
+    Map<String, dynamic> body,
+    String cacheKey, {
+    required void Function(Map<String, dynamic> hasil) onData,
+  }) async {
+    final r = await _panggil(aksi, body);
+    if (_sukses(r)) onData({...r, 'dariServer': true});
+  }
+
   late final PanggilTerima _panggil =
       widget.panggil ?? (aksi, body) => ApiClient.instance.aksi(aksi, body);
 
@@ -183,18 +209,26 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
     }
     setStateIfMounted(() => _mencari = true);
     try {
-      final r = await _panggil(
-          'apotik_item_cari', {'keyword': keyword, 'page_size': 15});
-      setStateIfMounted(() {
-        _hasilCari = _sukses(r)
-            ? ((r['data'] as List?) ?? const [])
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList()
-            : [];
-        _mencari = false;
-      });
+      await _muatKatalog(
+        'apotik_item_cari',
+        {'keyword': keyword, 'page_size': 15},
+        kunciCacheItemApotik,
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          final data = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          setStateIfMounted(() {
+            _hasilCari = dariServer ? data : saringCacheLokal(data, keyword);
+            _mencari = false;
+          });
+        },
+      );
     } catch (_) {
+      // Hasil dari cache (bila ada) dipertahankan: petugas masih bisa
+      // menyusun baris penerimaan; postingnya yang butuh server.
       setStateIfMounted(() => _mencari = false);
     }
   }

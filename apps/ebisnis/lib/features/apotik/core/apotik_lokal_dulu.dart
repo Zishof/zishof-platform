@@ -58,3 +58,28 @@ const String kunciCacheItemApotik = 'master:apotik_item';
 
 /// Kunci cache monitor batch/kedaluwarsa.
 const String kunciCacheBatchApotik = 'master:apotik_batch';
+
+/// Kunci cache antrean resep. Dipisah per filter "hanya menunggu" karena
+/// keduanya daftar yang berbeda; menyatukannya akan membuat isi cache
+/// berganti-ganti dan diff-nya berisik.
+String kunciCacheResepApotik({required bool hanyaMenunggu}) =>
+    hanyaMenunggu ? 'master:apotik_resep_menunggu' : 'master:apotik_resep';
+
+/// Menyaring hasil dari CACHE menurut kata kunci.
+///
+/// Cache master hanya menyimpan hasil kueri terakhir. Tanpa penyaringan ini,
+/// mengetik kata kunci baru saat server tak terjangkau akan menampilkan hasil
+/// pencarian SEBELUMNYA seolah-olah itu jawabannya — obat yang salah muncul
+/// karena alasan yang tidak terlihat pengguna. Emisi dari server tidak perlu
+/// disaring: server sudah menyaringnya.
+List<Map<String, dynamic>> saringCacheLokal(
+    List<Map<String, dynamic>> data, String keyword) {
+  final k = keyword.trim().toLowerCase();
+  if (k.isEmpty) return data;
+  return data.where((e) {
+    for (final kolom in const ['nama', 'kode', 'barcode', 'kandungan']) {
+      if ('${e[kolom] ?? ''}'.toLowerCase().contains(k)) return true;
+    }
+    return false;
+  }).toList();
+}
