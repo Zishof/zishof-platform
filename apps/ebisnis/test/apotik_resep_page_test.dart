@@ -1,5 +1,6 @@
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
 import 'package:ebisnis/features/apotik/prescription/apotik_resep_page.dart';
+import 'package:ebisnis/widgets/kilau_perubahan.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +29,19 @@ PanggilResep _server({
   };
 }
 
+/// Merakit halaman dengan pemuat "lokal dulu" yang meneruskan ke [server]
+/// palsu — jalur UI-nya sama dengan produksi, hanya sumber datanya tiruan.
+ApotikResepPage _halamanResep(PanggilResep server) => ApotikResepPage(
+      panggil: server,
+      muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+        final r = await server(aksi, body);
+        if (r['status'] != '00' && r['status'] != 'success') {
+          throw Exception('${r['description'] ?? 'Gagal memuat antrean.'}');
+        }
+        onData({...r, 'dariServer': true});
+      },
+    );
+
 Future<void> _pump(WidgetTester tester, Widget child, Size ukuran) async {
   await tester.binding.setSurfaceSize(ukuran);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -55,8 +69,8 @@ final _resepSatu = <String, dynamic>{
 void main() {
   group('Antrean resep', () {
     testWidgets('menampilkan daftar dengan status menunggu', (tester) async {
-      await _pump(tester,
-          ApotikResepPage(panggil: _server(resep: [_resepSatu])), _desktop);
+      await _pump(
+          tester, _halamanResep(_server(resep: [_resepSatu])), _desktop);
       expect(find.text('RSP-007'), findsOneWidget);
       // "Menunggu" muncul dua kali dan itu benar: label chip filter DAN pill
       // status pada barisnya.
@@ -67,8 +81,7 @@ void main() {
     testWidgets('resep sudah ditebus ditandai berbeda', (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             {..._resepSatu, 'ditebus': true}
           ])),
           _desktop);
@@ -77,24 +90,23 @@ void main() {
 
     testWidgets('antrean kosong memberi petunjuk, bukan layar hampa',
         (tester) async {
-      await _pump(tester, ApotikResepPage(panggil: _server()), _desktop);
+      await _pump(tester, _halamanResep(_server()), _desktop);
       expect(find.text('Tidak ada resep menunggu'), findsOneWidget);
     });
 
     testWidgets('galat server ditampilkan apa adanya', (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: (aksi, body) async =>
-                  {'status': '91', 'description': 'Antrean sedang dikunci.'}),
+          _halamanResep((aksi, body) async =>
+              {'status': '91', 'description': 'Antrean sedang dikunci.'}),
           _desktop);
-      expect(find.text('Antrean sedang dikunci.'), findsOneWidget);
+      expect(find.textContaining('Antrean sedang dikunci.'), findsOneWidget);
     });
 
     testWidgets('sebelum memilih resep, panel kanan mengajak memilih',
         (tester) async {
-      await _pump(tester,
-          ApotikResepPage(panggil: _server(resep: [_resepSatu])), _desktop);
+      await _pump(
+          tester, _halamanResep(_server(resep: [_resepSatu])), _desktop);
       expect(find.text('Pilih resep'), findsOneWidget);
     });
   });
@@ -104,8 +116,7 @@ void main() {
         (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {
@@ -131,8 +142,7 @@ void main() {
     testWidgets('stok kurang dihitung dari kebutuhan resep', (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Amoxicillin', 'jumlah': 30, 'stok': 5, 'satuan': 'tablet'}
@@ -148,8 +158,7 @@ void main() {
         (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Puyer Batuk', 'jumlah': 1, 'stok': 10, 'racikan': true}
@@ -165,8 +174,7 @@ void main() {
         (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Paracetamol', 'jumlah': 10, 'stok': 100}
@@ -187,8 +195,7 @@ void main() {
         (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Paracetamol', 'jumlah': 1, 'stok': 5}
@@ -202,8 +209,7 @@ void main() {
     testWidgets('menampilkan tombol saat server mendukung', (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Paracetamol', 'jumlah': 1, 'stok': 5}
@@ -223,8 +229,7 @@ void main() {
     testWidgets('yang sudah tercatat menonaktifkan tombolnya', (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Paracetamol', 'jumlah': 1, 'stok': 5}
@@ -258,8 +263,7 @@ void main() {
         (tester) async {
       await _pump(
           tester,
-          ApotikResepPage(
-              panggil: _server(resep: [
+          _halamanResep(_server(resep: [
             _resepSatu
           ], baris: [
             {'nama': 'Paracetamol', 'jumlah': 1, 'stok': 5}
@@ -282,6 +286,65 @@ void main() {
       await tester.tap(find.text('Catat'));
       await tester.pumpAndSettle();
       expect(find.textContaining('harus akun yang BERBEDA'), findsOneWidget);
+    });
+  });
+
+  group('Local-first antrean resep', () {
+    testWidgets('memakai kunci cache terpisah per filter', (tester) async {
+      final kunci = <String>[];
+      await _pump(
+        tester,
+        ApotikResepPage(
+          panggil: _server(),
+          muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+            kunci.add(cacheKey);
+            onData({'data': const [], 'dariServer': true});
+          },
+        ),
+        _desktop,
+      );
+      // Default layar: hanya yang menunggu.
+      expect(kunci.first, kunciCacheResepApotik(hanyaMenunggu: true));
+      expect(kunciCacheResepApotik(hanyaMenunggu: false),
+          isNot(kunciCacheResepApotik(hanyaMenunggu: true)));
+    });
+
+    testWidgets('antrean dari cache tetap terbaca saat server gagal',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikResepPage(
+          panggil: _server(),
+          muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [_resepSatu],
+              'dariServer': false
+            });
+            throw Exception('Koneksi terputus');
+          },
+        ),
+        _desktop,
+      );
+      expect(find.text('RSP-007'), findsOneWidget);
+      expect(find.textContaining('Koneksi terputus'), findsNothing);
+    });
+
+    testWidgets('resep baru dari petugas lain dianimasikan', (tester) async {
+      await _pump(
+        tester,
+        ApotikResepPage(
+          panggil: _server(resep: [_resepSatu]),
+          muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': [_resepSatu],
+              'dariServer': true,
+              'idBaru': {'7'},
+            });
+          },
+        ),
+        _desktop,
+      );
+      expect(find.byType(KilauBaris), findsWidgets);
     });
   });
 }

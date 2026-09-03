@@ -4,7 +4,10 @@ import 'package:intl/intl.dart';
 import '../../../api_client.dart';
 import '../../../sesi.dart';
 import '../../../widgets/safe_state.dart';
+import '../../../services/master_offline.dart';
+import '../../../widgets/kilau_perubahan.dart';
 import '../core/apotik_breakpoints.dart';
+import '../core/apotik_lokal_dulu.dart';
 import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
@@ -12,6 +15,12 @@ import '../shared/widgets/apotik_status_pill.dart';
 
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+/// Kunci cache antrean resep. Dipisah per filter "hanya menunggu" karena
+/// keduanya daftar yang berbeda; menyatukannya akan membuat isi cache
+/// berganti-ganti dan diff-nya berisik.
+String kunciCacheResepApotik({required bool hanyaMenunggu}) =>
+    hanyaMenunggu ? 'master:apotik_resep_menunggu' : 'master:apotik_resep';
 
 typedef PanggilResep = Future<Map<String, dynamic>> Function(
     String aksi, Map<String, dynamic> body);
@@ -32,13 +41,20 @@ typedef PanggilResep = Future<Map<String, dynamic>> Function(
 /// dicatat server.
 class ApotikResepPage extends StatefulWidget {
   final PanggilResep? panggil;
-  const ApotikResepPage({super.key, this.panggil});
+
+  /// Pemuat "lokal dulu" untuk daftar antrean. Detail resep, dispensing, dan
+  /// penebusan tetap lewat [panggil] karena semuanya butuh server saat itu
+  /// juga (lihat core/apotik_lokal_dulu.dart).
+  final MuatDaftarApotik? muatDaftar;
+  const ApotikResepPage({super.key, this.panggil, this.muatDaftar});
 
   @override
   State<ApotikResepPage> createState() => _ApotikResepPageState();
 }
 
 class _ApotikResepPageState extends State<ApotikResepPage> {
+  late final MuatDaftarApotik _muatDaftar =
+      widget.muatDaftar ?? MasterOffline.daftarCacheDulu;
   late final PanggilResep _panggil =
       widget.panggil ?? (aksi, body) => ApiClient.instance.aksi(aksi, body);
 
@@ -68,28 +84,45 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
+  /// Diff emisi server -> animasi baris resep yang baru masuk antrean.
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+
   Future<void> _muat() async {
     setStateIfMounted(() {
       _memuat = true;
       _galat = null;
     });
     try {
-      final r = await _panggil('apotik_resep_list',
-          {'hanya_menunggu': _hanyaMenunggu, 'page_size': 100});
-      if (!_sukses(r)) {
-        setStateIfMounted(() {
-          _galat = '${r['description'] ?? 'Gagal memuat antrean resep.'}';
-          _memuat = false;
-        });
-        return;
-      }
-      setStateIfMounted(() {
-        _daftar = _data(r);
-        _memuat = false;
-      });
+      // Baca LOKAL DULU: antrean yang terakhir terlihat tetap terbaca saat
+      // jaringan mati. Penebusannya sendiri tetap butuh server -- yang
+      // di-cache hanya DAFTARnya, bukan izin menyerahkan obat.
+      await _muatDaftar(
+        'apotik_resep_list',
+        {'hanya_menunggu': _hanyaMenunggu, 'page_size': 100},
+        kunciCacheResepApotik(hanyaMenunggu: _hanyaMenunggu),
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          setStateIfMounted(() {
+            _daftar = ((hasil['data'] as List?) ?? const [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            _idBaru = dariServer
+                ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+                : {};
+            _idBerubah = dariServer
+                ? Set<String>.from(
+                    hasil['idBerubah'] as Set? ?? const <String>{})
+                : {};
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() {
-        _galat = '$e';
+        if (_daftar.isEmpty) _galat = '$e';
         _memuat = false;
       });
     }
@@ -336,8 +369,12 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
                           itemCount: _daftar.length,
                           separatorBuilder: (_, __) =>
                               Divider(height: 1, color: t.border),
-                          itemBuilder: (context, i) =>
-                              _barisResep(t, _daftar[i], layout),
+                          itemBuilder: (context, i) => KilauBaris(
+                            kunci: MasterOffline.kunciBaris(_daftar[i]),
+                            idBaru: _idBaru,
+                            idBerubah: _idBerubah,
+                            child: _barisResep(t, _daftar[i], layout),
+                          ),
                         ),
         ),
       ]),

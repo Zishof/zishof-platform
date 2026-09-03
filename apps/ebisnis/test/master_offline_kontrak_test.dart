@@ -91,6 +91,16 @@ void main() {
     ],
   };
 
+  // Layar yang DAFTARnya lokal-dulu tetapi mutasinya memang harus online:
+  // yang di-cache hanya daftar untuk dibaca, bukan izin melakukan tindakan.
+  const bacaLokalDuluSaja = <String, List<String>>{
+    'lib/features/apotik/prescription/apotik_resep_page.dart': [
+      "'apotik_resep_list'",
+      'kunciCacheResepApotik(',
+      'MasterOffline.daftarCacheDulu',
+    ],
+  };
+
   // POS Apotik: mutasi yang SENGAJA tidak diantre, beserta berkas tempat
   // alasannya ditulis. Bentuk pemeriksaannya beda dari `tetapOnline` di bawah
   // karena layar apotik memanggil server lewat closure yang disuntik (agar
@@ -195,6 +205,17 @@ void main() {
               source.contains('SelTeksDenganSinkron('),
           isTrue,
           reason: '$file belum memasang indikator per-baris');
+    }
+  });
+
+  test('daftar yang lokal-dulu tanpa antrean tulis tetap membaca dari cache',
+      () {
+    for (final entri in bacaLokalDuluSaja.entries) {
+      final source = File(entri.key).readAsStringSync();
+      for (final penanda in entri.value) {
+        expect(source, contains(penanda),
+            reason: '${entri.key} kehilangan penanda: $penanda');
+      }
     }
   });
 

@@ -83,12 +83,16 @@ void main() {
         (tester) async {
       await _pump(
         tester,
-        ApotikResepPage(panggil: (aksi, body) async {
-          if (aksi == 'apotik_resep_list') {
-            return {'status': '00', 'data': _resepBanyak(100)};
-          }
-          return {'status': '00', 'data': const []};
-        }),
+        ApotikResepPage(
+            panggil: (aksi, body) async => {'status': '00', 'data': const []},
+            muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+              onData({
+                'data': aksi == 'apotik_resep_list'
+                    ? _resepBanyak(100)
+                    : const <Map<String, dynamic>>[],
+                'dariServer': true,
+              });
+            }),
       );
       final terbangun = tester.widgetList(find.textContaining('RSP-')).length;
       expect(terbangun, greaterThan(0));

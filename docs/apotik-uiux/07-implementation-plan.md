@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 310 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 314 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -72,7 +72,7 @@ yang dapat dikerjakan tanpa mengarang alur pengadaan.
 modernisasi ini SEMUANYA memanggil server langsung — padahal layar persediaan
 lama yang sebagian digantikannya sudah lokal-dulu, jadi untuk varian apotik itu
 adalah kemunduran, bukan sekadar fitur yang belum sempat. Formularium dan
-monitor batch kini memakai `MasterOffline.daftarCacheDulu` (baca dari cache
+monitor batch, dan antrean resep kini memakai `MasterOffline.daftarCacheDulu` (baca dari cache
 dulu, hasil server menyusul beserta animasi kilau + bilah "pembaruan dari
 server"), menyimpan lewat `prosesSimpanMaster` (antre saat offline), dan punya
 tombol riwayat AuditTrails per baris.
