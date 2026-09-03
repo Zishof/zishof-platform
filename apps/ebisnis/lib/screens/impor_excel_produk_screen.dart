@@ -178,6 +178,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
   int _total = 0,
       _dibuat = 0,
       _diperbarui = 0,
+      _tidakBerubah = 0,
       _dilewati = 0,
       _kategoriBaru = 0,
       _pemasokBaru = 0,
@@ -267,7 +268,7 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
     final idBerhasilSemuaBatch = <int>{
       ..._baris.map((b) => b.produkId).whereType<int>(),
     };
-    _total = _dibuat = _diperbarui = _dilewati = _kategoriBaru =
+    _total = _dibuat = _diperbarui = _tidakBerubah = _dilewati = _kategoriBaru =
         _pemasokBaru = _satuanBaru = _stokDiopname = _verifikasiGagal = 0;
     try {
       // 50 baris menjaga durasi setiap request tetap di bawah timeout proxy/AJP
@@ -282,6 +283,10 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
         _total += (hasil['total'] as num?)?.toInt() ?? 0;
         _dibuat += (hasil['dibuat'] as num?)?.toInt() ?? 0;
         _diperbarui += (hasil['diperbarui'] as num?)?.toInt() ?? 0;
+        // Server memisahkan baris yang benar-benar berubah dari baris yang
+        // nilainya sama persis (docs/pos/103). Tanpa membacanya di sini,
+        // "Diperbarui" tetap tampak menyusut tanpa penjelasan.
+        _tidakBerubah += (hasil['tidakBerubah'] as num?)?.toInt() ?? 0;
         _dilewati += (hasil['dilewati'] as num?)?.toInt() ?? 0;
         _kategoriBaru += (hasil['kategoriBaru'] as num?)?.toInt() ?? 0;
         _pemasokBaru += (hasil['pemasokBaru'] as num?)?.toInt() ?? 0;
@@ -826,6 +831,11 @@ class _ImporExcelProdukScreenState extends State<ImporExcelProdukScreen> {
                     warna: AppColors.info,
                     nilai: '$_diperbarui',
                     label: 'Diperbarui'),
+AppKpiCard(
+    icon: Icons.done_all_outlined,
+    warna: AppColors.textSecondary,
+    nilai: '$_tidakBerubah',
+    label: 'Tidak berubah'),
                 AppKpiCard(
                     icon: Icons.skip_next_outlined,
                     warna: AppColors.textSecondary,
