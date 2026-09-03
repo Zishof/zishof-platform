@@ -109,6 +109,17 @@ void main() {
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
     // real-time) -- entri lamanya dipindah dari daftar online-only ini.
+    // Ditambahkan dari daftar 'wajib online' di docs/pos/33-audit-lokal-dulu.md.
+    // Dokumen itu menyebut seluruh daftarnya dikunci berkas ini, padahal sebelumnya
+    // hanya tiga entri teratas yang benar-benar terkunci -- sisanya benar dalam
+    // praktik tetapi tidak dijaga tes apa pun.
+    'lib/screens/inventory_sales/kas_jurnal_screen.dart': ["'si_coa_save'"],
+    'lib/screens/riwayat_penjualan_screen.dart': ["'batalkan_transaksi'"],
+    'lib/screens/ringkasan/tab_umum.dart': ["'batalkan_transaksi'"],
+    'lib/screens/anggota/tab_sinkronisasi.dart': ["'sinkron_referensi'"],
+    'lib/services/layar_pelanggan_broadcaster.dart': ["'layar_pelanggan_kirim'"],
+    'lib/screens/produk_screen.dart': ["'produk_duplikat_hapus'"],
+    'lib/screens/mutasi_antar_outlet_screen.dart': ["'mutasi_stok_simpan'"],
   };
 
   // Layar induk yang hanya menjadi tuan-rumah indikator (tanpa mutasi CRUD).
