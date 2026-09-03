@@ -6,6 +6,7 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'kasir_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
@@ -452,12 +453,16 @@ class _HalamanFormularium extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Indikator sinkron dipasang di layar INDUK, mengikuti pola layar master
+    // lain (lihat master_offline_kontrak_test.dart): halamannya sendiri tetap
+    // bebas timer sehingga dapat diuji sebagai widget biasa.
     return const AppShell(
       menuAktif: MenuEBisnis.persediaanApotik,
       judul: 'Formularium / Master Obat',
       subjudul:
           'Golongan, bentuk sediaan, kekuatan, LASA, high-alert, cold-chain',
       scrollable: false,
+      actionsAppBar: [IndikatorSinkronMaster()],
       body: ApotikFormulariumPage(),
     );
   }

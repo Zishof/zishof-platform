@@ -2,16 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../api_client.dart';
+import '../../../services/master_offline.dart';
+import '../../../widgets/kilau_perubahan.dart';
+import '../../../widgets/proses_simpan_master.dart';
+import '../../../widgets/riwayat_data_dialog.dart';
 import '../../../widgets/safe_state.dart';
 import '../core/apotik_breakpoints.dart';
+import '../core/apotik_lokal_dulu.dart';
 import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/medication_card.dart';
-
-typedef PanggilFormularium = Future<Map<String, dynamic>> Function(
-    String aksi, Map<String, dynamic> body);
 
 /// <h3>Formularium / Master Obat (Fase 5).</h3>
 ///
@@ -25,22 +26,31 @@ typedef PanggilFormularium = Future<Map<String, dynamic>> Function(
 /// katalog puluhan ribu obat tidak pernah dimuat seluruhnya ke memori —
 /// keputusan performa yang sudah benar di layar lama dan dipertahankan.
 class ApotikFormulariumPage extends StatefulWidget {
-  final PanggilFormularium? panggil;
-  const ApotikFormulariumPage({super.key, this.panggil});
+  final MuatDaftarApotik? muatDaftar;
+  final SimpanMasterApotik? simpan;
+
+  const ApotikFormulariumPage({super.key, this.muatDaftar, this.simpan});
 
   @override
   State<ApotikFormulariumPage> createState() => _ApotikFormulariumPageState();
 }
 
 class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
-  late final PanggilFormularium _panggil =
-      widget.panggil ?? (aksi, body) => ApiClient.instance.aksi(aksi, body);
+  late final MuatDaftarApotik _muatDaftar =
+      widget.muatDaftar ?? MasterOffline.daftarCacheDulu;
+  late final SimpanMasterApotik _simpan = widget.simpan ?? prosesSimpanMaster;
 
   final _cari = TextEditingController();
   Timer? _debounce;
   bool _memuat = true;
   String? _galat;
   List<Map<String, dynamic>> _item = [];
+
+  /// Diff dari emisi server: menggerakkan animasi kilau baris dan bilah
+  /// "pembaruan dari server" — termasuk perubahan yang dibuat petugas lain.
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
 
   @override
   void initState() {
@@ -55,34 +65,47 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
     super.dispose();
   }
 
-  bool _sukses(Map<String, dynamic> r) =>
-      r['status'] == '00' || r['status'] == 'success';
-
+  /// Baca LOKAL DULU: snapshot cache tampil seketika, hasil server menyusul
+  /// beserta diff baru/berubah/terhapus untuk animasi. Saat server tidak
+  /// terjangkau, daftar terakhir tetap terbaca alih-alih layar kosong.
   Future<void> _muat(String keyword) async {
     setStateIfMounted(() {
       _memuat = true;
       _galat = null;
     });
     try {
-      final r = await _panggil(
-          'apotik_item_cari', {'keyword': keyword, 'page_size': 50});
-      if (!_sukses(r)) {
-        setStateIfMounted(() {
-          _galat = '${r['description'] ?? 'Gagal memuat formularium.'}';
-          _memuat = false;
-        });
-        return;
-      }
-      setStateIfMounted(() {
-        _item = ((r['data'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
-        _memuat = false;
-      });
+      await _muatDaftar(
+        'apotik_item_cari',
+        {
+          if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+          'page_size': 50,
+        },
+        kunciCacheItemApotik,
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          setStateIfMounted(() {
+            _item = ((hasil['data'] as List?) ?? const [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            _idBaru = dariServer
+                ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+                : {};
+            _idBerubah = dariServer
+                ? Set<String>.from(
+                    hasil['idBerubah'] as Set? ?? const <String>{})
+                : {};
+            _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() {
-        _galat = '$e';
+        // Daftar dari cache (bila ada) TIDAK dibuang: galat ditampilkan hanya
+        // bila memang tidak ada apa pun untuk ditunjukkan.
+        if (_item.isEmpty) _galat = '$e';
         _memuat = false;
       });
     }
@@ -100,19 +123,21 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
     );
     if (hasil == null || !mounted) return;
     try {
-      final r = await _panggil('apotik_item_profil_simpan', {
-        'item_id': item['id'],
-        ...hasil,
-      });
+      // Alur "lokal dulu" ber-indikator animasi: antre -> coba kirim -> tutup.
+      // Saat offline profil tetap tersimpan di cache lokal dan dikirim ulang
+      // otomatis, jadi apoteker tidak kehilangan pekerjaannya.
+      final res = await _simpan(
+        context,
+        aksi: 'apotik_item_profil_simpan',
+        body: {'item_id': item['id'], ...hasil},
+        kunci: 'apotik_item_profil:${item['id']}',
+        cacheKey: kunciCacheItemApotik,
+        rowLokal: {...item, ..._rowLokalDariForm(hasil)},
+      );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_sukses(r)
-            ? 'Profil ${item['nama']} tersimpan.'
-            : 'Gagal: ${r['description'] ?? r['status']}'),
-        backgroundColor:
-            _sukses(r) ? null : Theme.of(context).colorScheme.error,
-      ));
-      if (_sukses(r)) _muat(_cari.text);
+      // Saat offline daftar TIDAK dimuat ulang dari server; cache lokal sudah
+      // diperbarui oleh prosesSimpanMaster.
+      if (res['offline'] != true) _muat(_cari.text);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -120,6 +145,19 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
           backgroundColor: Theme.of(context).colorScheme.error));
     }
   }
+
+  /// Terjemahan field form (snake_case, bahasa server) ke bentuk baris cache
+  /// (camelCase, bentuk yang dibaca kartu obat).
+  Map<String, dynamic> _rowLokalDariForm(Map<String, dynamic> form) => {
+        if (form.containsKey('golongan_obat'))
+          'golonganObat': form['golongan_obat'],
+        if (form.containsKey('lasa')) 'lasa': form['lasa'],
+        if (form.containsKey('bentuk_sediaan'))
+          'bentukSediaan': form['bentuk_sediaan'],
+        if (form.containsKey('kekuatan')) 'kekuatan': form['kekuatan'],
+        if (form.containsKey('high_alert')) 'highAlert': form['high_alert'],
+        if (form.containsKey('cold_chain')) 'coldChain': form['cold_chain'],
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +173,8 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
                 'Atur golongan, bentuk sediaan, kekuatan, LASA, high-alert, '
                 'dan cold-chain',
           ),
+          if (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)
+            _bilahPerubahan(t),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: padding),
             child: TextField(
@@ -178,6 +218,33 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
     });
   }
 
+  /// Bilah "pembaruan dari server": memberi tahu bahwa daftar berubah karena
+  /// petugas lain, bukan karena tindakan pengguna ini.
+  Widget _bilahPerubahan(ApotikDesignTokens t) {
+    final bagian = <String>[
+      if (_idBaru.isNotEmpty) '${_idBaru.length} baru',
+      if (_idBerubah.isNotEmpty) '${_idBerubah.length} berubah',
+      if (_jumlahHapus > 0) '$_jumlahHapus dihapus',
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: t.info.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusControl),
+        border: Border.all(color: t.info.withValues(alpha: 0.35)),
+      ),
+      child: Row(children: [
+        Icon(Icons.cloud_download_outlined, size: 15, color: t.info),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text('Pembaruan dari server: ${bagian.join(', ')}.',
+              style: TextStyle(fontSize: 11.5, color: t.textPrimary)),
+        ),
+      ]),
+    );
+  }
+
   Widget _grid(double padding) {
     return LayoutBuilder(builder: (context, c) {
       final kolom = (c.maxWidth / 330).floor().clamp(1, 4);
@@ -194,8 +261,26 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
                 width: lebar,
                 // Kartu yang SAMA dengan katalog POS -- apoteker melihat
                 // persis apa yang nanti dilihat kasir setelah profil diubah.
-                child:
-                    MedicationCard(item: item, onTap: () => _editProfil(item)),
+                child: KilauBaris(
+                  kunci: MasterOffline.kunciBaris(item),
+                  idBaru: _idBaru,
+                  idBerubah: _idBerubah,
+                  child: MedicationCard(
+                    item: item,
+                    onTap: () => _editProfil(item),
+                    aksiTambahan: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Riwayat data ini (AuditTrails)',
+                      icon: const Icon(Icons.history, size: 16),
+                      onPressed: () => tampilkanRiwayatData(
+                        context,
+                        entitas: 'apotik_item',
+                        id: item['id'],
+                        judul: '${item['nama'] ?? ''}',
+                      ),
+                    ),
+                  ),
+                ),
               ),
           ],
         ),

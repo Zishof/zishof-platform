@@ -74,6 +74,36 @@ void main() {
     'lib/screens/mitrainap/properti_hotel_screen.dart': ["'hotel_properti:"],
     'lib/screens/mitrainap/kontrak_pemilik_screen.dart': ["'hotel_kontrak:"],
     'lib/screens/apotik/persediaan_apotik_screen.dart': ["'apotik_item:"],
+    // Varian POS Apotik: layar master hasil modernisasi UI/UX. Indikator
+    // sinkron dipasang di AppShell induk (beranda_apotik_screen), mengikuti
+    // pola "Gelombang 2" di atas.
+    'lib/features/apotik/inventory/apotik_formularium_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      "'apotik_item_profil:",
+      'tampilkanRiwayatData(',
+    ],
+    'lib/features/apotik/inventory/apotik_batch_expiry_page.dart': [
+      "'apotik_batch_monitor'",
+      'kunciCacheBatchApotik',
+      "'apotik_batch_status:",
+      'tampilkanRiwayatData(',
+    ],
+  };
+
+  // POS Apotik: mutasi yang SENGAJA tidak diantre, beserta berkas tempat
+  // alasannya ditulis. Bentuk pemeriksaannya beda dari `tetapOnline` di bawah
+  // karena layar apotik memanggil server lewat closure yang disuntik (agar
+  // dapat diuji), sehingga literal `ApiClient.instance` tidak berdampingan
+  // dengan nama aksinya.
+  const apotikTetapOnline = <String, List<String>>{
+    'lib/features/apotik/pos/apotik_pos_page.dart': ["'apotik_bayar'"],
+    'lib/features/apotik/procurement/apotik_penerimaan_page.dart': [
+      "'apotik_terima_barang'"
+    ],
+    'lib/features/apotik/reports/apotik_rekonsiliasi_page.dart': [
+      "'apotik_sesi_kas_tutup'"
+    ],
   };
 
   // Layar daftar master yang WAJIB menampilkan indikator sinkron PER-BARIS
@@ -117,7 +147,9 @@ void main() {
     'lib/screens/riwayat_penjualan_screen.dart': ["'batalkan_transaksi'"],
     'lib/screens/ringkasan/tab_umum.dart': ["'batalkan_transaksi'"],
     'lib/screens/anggota/tab_sinkronisasi.dart': ["'sinkron_referensi'"],
-    'lib/services/layar_pelanggan_broadcaster.dart': ["'layar_pelanggan_kirim'"],
+    'lib/services/layar_pelanggan_broadcaster.dart': [
+      "'layar_pelanggan_kirim'"
+    ],
     'lib/screens/produk_screen.dart': ["'produk_duplikat_hapus'"],
     'lib/screens/mutasi_antar_outlet_screen.dart': ["'mutasi_stok_simpan'"],
   };
@@ -139,9 +171,13 @@ void main() {
       // *_simpan/*_hapus entitas layar ybs (transaksi/aksi lain boleh).
       // Dua jalur sah: simpanAtauAntre (programatik) atau prosesSimpanMaster
       // (dialog "lokal dulu" ber-indikator animasi -- standar form CRUD).
+      // Bentuk ketiga yang sah: tear-off `?? prosesSimpanMaster` sebagai
+      // nilai bawaan parameter yang dapat disuntik pada test (dipakai layar
+      // features/apotik). Fungsinya sama; hanya cara merangkainya berbeda.
       expect(
           source.contains('MasterOffline.simpanAtauAntre') ||
-              source.contains('prosesSimpanMaster('),
+              source.contains('prosesSimpanMaster(') ||
+              source.contains('?? prosesSimpanMaster'),
           isTrue,
           reason: '${entri.key} belum memakai jalur simpan offline-first');
     }
@@ -159,6 +195,29 @@ void main() {
               source.contains('SelTeksDenganSinkron('),
           isTrue,
           reason: '$file belum memasang indikator per-baris');
+    }
+  });
+
+  test('POS Apotik: penjualan/penerimaan/tutup kas tidak diantre', () {
+    const berkasAlasan = 'lib/features/apotik/core/apotik_lokal_dulu.dart';
+    final alasan = File(berkasAlasan).readAsStringSync();
+    for (final entri in apotikTetapOnline.entries) {
+      final source = File(entri.key).readAsStringSync();
+      for (final aksi in entri.value) {
+        expect(source, contains(aksi),
+            reason: '${entri.key} kehilangan aksi $aksi');
+        // Tidak boleh diam-diam dipindah ke antrean master.
+        expect(source.contains('prosesSimpanMaster'), isFalse,
+            reason: '${entri.key}: $aksi menyentuh uang/stok dan tidak boleh '
+                'diantre offline');
+        expect(source.contains('simpanAtauAntre'), isFalse,
+            reason: '${entri.key}: $aksi tidak boleh diantre offline');
+        // Alasannya WAJIB tertulis, supaya keputusan ini tidak tampak seperti
+        // kelalaian dan tidak "dirapikan" orang berikutnya.
+        expect(alasan, contains(aksi.replaceAll("'", '')),
+            reason: '$berkasAlasan harus menjelaskan kenapa $aksi '
+                'tetap online-only');
+      }
     }
   });
 

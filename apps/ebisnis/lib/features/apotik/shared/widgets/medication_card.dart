@@ -27,11 +27,16 @@ class MedicationCard extends StatelessWidget {
   /// racikan pada resep). Alasan WAJIB diisi supaya pengguna tahu sebabnya.
   final String? alasanTerkunci;
 
+  /// Aksi kecil di sudut kartu (mis. tombol riwayat AuditTrails). Opsional
+  /// supaya katalog kasir tetap bersih; hanya layar master yang mengisinya.
+  final Widget? aksiTambahan;
+
   const MedicationCard({
     super.key,
     required this.item,
     this.onTap,
     this.alasanTerkunci,
+    this.aksiTambahan,
   });
 
   double get _stok => (item['stok'] as num?)?.toDouble() ?? 0;
@@ -122,6 +127,7 @@ class MedicationCard extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                   color: t.primary)),
                         ],
+                        if (aksiTambahan != null) aksiTambahan!,
                       ],
                     ),
                     if (_sediaan.isNotEmpty) ...[

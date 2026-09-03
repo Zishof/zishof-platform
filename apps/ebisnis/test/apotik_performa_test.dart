@@ -62,16 +62,14 @@ void main() {
         (tester) async {
       await _pump(
         tester,
-        ApotikBatchExpiryPage(panggil: (aksi, body) async {
-          if (aksi == 'apotik_batch_monitor') {
-            return {
-              'status': '00',
-              'data': _batchBanyak(100),
-              'jumlahKedaluwarsa': 0,
-              'jumlahSegera': 100,
-            };
-          }
-          return {'status': '00', 'data': const []};
+        ApotikBatchExpiryPage(
+            muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+          onData({
+            'data': aksi == 'apotik_batch_monitor'
+                ? _batchBanyak(100)
+                : const <Map<String, dynamic>>[],
+            'dariServer': true,
+          });
         }),
       );
       final terbangun =

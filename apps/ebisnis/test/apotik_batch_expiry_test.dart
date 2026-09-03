@@ -1,24 +1,49 @@
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
+import 'package:ebisnis/features/apotik/core/apotik_lokal_dulu.dart';
 import 'package:ebisnis/features/apotik/inventory/apotik_batch_expiry_page.dart';
+import 'package:ebisnis/widgets/kilau_perubahan.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-PanggilBatch _server({
+/// Meniru urutan nyata `MasterOffline.daftarCacheDulu`: cache dulu, server
+/// menyusul beserta diff.
+MuatDaftarApotik _server({
   List<Map<String, dynamic>>? batch,
-  Map<String, dynamic>? hasilUbah,
+  List<Map<String, dynamic>>? cache,
+  Set<String> idBerubah = const {},
+  int jumlahHapus = 0,
+  Object? galat,
   List<Map<String, dynamic>>? terkirim,
 }) {
-  return (aksi, body) async {
-    terkirim?.add({'aksi': aksi, ...body});
-    switch (aksi) {
-      case 'apotik_batch_monitor':
-        return {'status': '00', 'data': batch ?? const []};
-      case 'apotik_batch_status_ubah':
-        return hasilUbah ??
-            {'status': '00', 'description': 'Status lot diubah.'};
-      default:
-        return {'status': '91', 'description': 'Aksi tidak dikenal'};
-    }
+  return (aksi, body, cacheKey, {required onData}) async {
+    terkirim?.add({'aksi': aksi, 'cacheKey': cacheKey, ...body});
+    if (cache != null) onData({'data': cache, 'dariServer': false});
+    if (galat != null) throw galat;
+    onData({
+      'data': batch ?? const [],
+      'dariServer': true,
+      'idBerubah': idBerubah,
+      'jumlahHapus': jumlahHapus,
+    });
+  };
+}
+
+SimpanMasterApotik _penyimpan({
+  List<Map<String, dynamic>>? terkirim,
+  Map<String, dynamic>? hasil,
+  Object? lempar,
+}) {
+  return (context,
+      {required aksi, required body, kunci, cacheKey, rowLokal}) async {
+    terkirim?.add({
+      'aksi': aksi,
+      'kunci': kunci ?? '',
+      'cacheKey': cacheKey ?? '',
+      'rowLokal': rowLokal ?? const <String, dynamic>{},
+      ...body,
+    });
+    if (lempar != null) throw lempar;
+    return hasil ?? {'status': '00'};
   };
 }
 
@@ -50,7 +75,7 @@ void main() {
     await _pump(
         tester,
         ApotikBatchExpiryPage(
-            panggil: _server(batch: [
+            muatDaftar: _server(batch: [
           {
             'kadaluarsaId': 1,
             'kode': 'OBT-1',
@@ -70,7 +95,7 @@ void main() {
     await _pump(
         tester,
         ApotikBatchExpiryPage(
-            panggil: _server(batch: [
+            muatDaftar: _server(batch: [
           {
             'kadaluarsaId': 2,
             'nama': 'Obat Basi',
@@ -87,7 +112,7 @@ void main() {
     await _pump(
         tester,
         ApotikBatchExpiryPage(
-            panggil: _server(batch: [
+            muatDaftar: _server(batch: [
           {
             'kadaluarsaId': 3,
             'nama': 'Obat Karantina',
@@ -103,7 +128,7 @@ void main() {
 
   testWidgets('kosong memberi kalimat menenangkan yang menyebut ambang hari',
       (tester) async {
-    await _pump(tester, ApotikBatchExpiryPage(panggil: _server()));
+    await _pump(tester, ApotikBatchExpiryPage(muatDaftar: _server()));
     expect(find.text('Tidak ada batch mendekati kedaluwarsa'), findsOneWidget);
     expect(find.textContaining('90 hari ke depan'), findsOneWidget);
   });
@@ -112,7 +137,7 @@ void main() {
       (tester) async {
     final terkirim = <Map<String, dynamic>>[];
     await _pump(
-        tester, ApotikBatchExpiryPage(panggil: _server(terkirim: terkirim)));
+        tester, ApotikBatchExpiryPage(muatDaftar: _server(terkirim: terkirim)));
     await tester.tap(find.text('30 hari'));
     await tester.pumpAndSettle();
     expect(terkirim.last['hari_ke_depan'], 30);
@@ -122,11 +147,9 @@ void main() {
     await _pump(
         tester,
         ApotikBatchExpiryPage(
-            panggil: (aksi, body) async => {
-                  'status': '91',
-                  'description': 'Monitor batch dinonaktifkan.'
-                }));
-    expect(find.text('Monitor batch dinonaktifkan.'), findsOneWidget);
+            muatDaftar:
+                _server(galat: Exception('Monitor batch dinonaktifkan.'))));
+    expect(find.textContaining('Monitor batch dinonaktifkan.'), findsOneWidget);
   });
 
   group('Ubah status lot (IR-02 sisi tulis)', () {
@@ -135,16 +158,17 @@ void main() {
       await _pump(
           tester,
           ApotikBatchExpiryPage(
-              panggil: _server(batch: [
-            {
-              'kadaluarsaId': 9,
-              'nama': 'Obat X',
-              'tanggalKadaluarsa': _tanggalDalam(40),
-              'sisa': 12,
-              'kedaluwarsa': false,
-              'lotLayak': true,
-            }
-          ], terkirim: terkirim)));
+              muatDaftar: _server(batch: [
+                {
+                  'kadaluarsaId': 9,
+                  'nama': 'Obat X',
+                  'tanggalKadaluarsa': _tanggalDalam(40),
+                  'sisa': 12,
+                  'kedaluwarsa': false,
+                  'lotLayak': true,
+                }
+              ]),
+              simpan: _penyimpan(terkirim: terkirim)));
       await tester.tap(find.text('Ubah status'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Kemasan penyok');
@@ -157,12 +181,128 @@ void main() {
       expect(kirim['alasan'], 'Kemasan penyok');
     });
 
-    testWidgets('penolakan "alasan wajib" dari server ditampilkan apa adanya',
-        (tester) async {
+    testWidgets('penolakan dari server ditampilkan apa adanya', (tester) async {
       await _pump(
           tester,
           ApotikBatchExpiryPage(
-              panggil: _server(batch: [
+            muatDaftar: _server(batch: [
+              {
+                'kadaluarsaId': 9,
+                'nama': 'Obat X',
+                'tanggalKadaluarsa': _tanggalDalam(40),
+                'sisa': 12,
+                'kedaluwarsa': false,
+                'lotLayak': true,
+              }
+            ]),
+            simpan: _penyimpan(
+                lempar: Exception('Alasan wajib diisi saat menahan lot.')),
+          ));
+      await tester.tap(find.text('Ubah status'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Alasan wajib diisi'), findsOneWidget);
+    });
+  });
+
+  group('Local-first', () {
+    testWidgets('memakai kunci cache monitor batch', (tester) async {
+      final terkirim = <Map<String, dynamic>>[];
+      await _pump(tester,
+          ApotikBatchExpiryPage(muatDaftar: _server(terkirim: terkirim)));
+      expect(terkirim.first['cacheKey'], kunciCacheBatchApotik);
+    });
+
+    testWidgets('isi cache tetap terbaca saat server tidak terjangkau',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikBatchExpiryPage(
+          muatDaftar: _server(
+            cache: [
+              {
+                'kadaluarsaId': 9,
+                'nama': 'Obat Dari Cache',
+                'tanggalKadaluarsa': _tanggalDalam(10),
+                'sisa': 5,
+                'kedaluwarsa': false,
+                'lotLayak': true,
+              }
+            ],
+            galat: Exception('Koneksi terputus'),
+          ),
+        ),
+      );
+      // Justru saat jaringan mati, petugas perlu tahu lot mana yang tidak
+      // boleh dijual.
+      expect(find.text('Obat Dari Cache'), findsOneWidget);
+      expect(find.textContaining('Koneksi terputus'), findsNothing);
+    });
+
+    testWidgets('lot yang diubah petugas lain diberitahukan + dianimasikan',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikBatchExpiryPage(
+          muatDaftar: _server(
+            batch: [
+              {
+                'kadaluarsaId': 9,
+                'nama': 'Obat X',
+                'tanggalKadaluarsa': _tanggalDalam(40),
+                'sisa': 12,
+                'kedaluwarsa': false,
+                'lotLayak': false,
+                'statusLot': 'QUARANTINE',
+              }
+            ],
+            idBerubah: {'9'},
+          ),
+        ),
+      );
+      expect(find.textContaining('Pembaruan dari server'), findsOneWidget);
+      expect(find.byType(KilauBaris), findsWidgets);
+    });
+
+    testWidgets('perubahan status diantre dengan kunci + baris lokal',
+        (tester) async {
+      final terkirim = <Map<String, dynamic>>[];
+      await _pump(
+          tester,
+          ApotikBatchExpiryPage(
+            muatDaftar: _server(batch: [
+              {
+                'kadaluarsaId': 9,
+                'nama': 'Obat X',
+                'tanggalKadaluarsa': _tanggalDalam(40),
+                'sisa': 12,
+                'kedaluwarsa': false,
+                'lotLayak': true,
+              }
+            ]),
+            simpan: _penyimpan(terkirim: terkirim),
+          ));
+      await tester.tap(find.text('Ubah status'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Kemasan penyok');
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      final kirim = terkirim.single;
+      expect(kirim['kunci'], 'apotik_batch_status:9');
+      expect(kirim['cacheKey'], kunciCacheBatchApotik);
+      final row = kirim['rowLokal'] as Map<String, dynamic>;
+      expect(row['statusLot'], isNotNull);
+      expect(row['lotLayak'], isNotNull,
+          reason: 'baris cache harus ikut menandai lot tak layak');
+    });
+
+    testWidgets('tiap lot punya tombol riwayat AuditTrails', (tester) async {
+      await _pump(
+        tester,
+        ApotikBatchExpiryPage(
+          muatDaftar: _server(batch: [
             {
               'kadaluarsaId': 9,
               'nama': 'Obat X',
@@ -171,16 +311,10 @@ void main() {
               'kedaluwarsa': false,
               'lotLayak': true,
             }
-          ], hasilUbah: {
-            'status': '91',
-            'description':
-                'Alasan wajib diisi (minimal 5 karakter) saat menahan lot -- penahanan stok harus dapat ditelusuri.'
-          })));
-      await tester.tap(find.text('Ubah status'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Simpan'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Alasan wajib diisi'), findsOneWidget);
+          ]),
+        ),
+      );
+      expect(find.byTooltip('Riwayat data ini (AuditTrails)'), findsOneWidget);
     });
   });
 }

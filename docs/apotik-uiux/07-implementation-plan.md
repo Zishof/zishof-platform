@@ -19,7 +19,7 @@ Setelah SETIAP fase: `dart format` → `flutter analyze` → test terkait.
 
 ## Status per 19 Agustus 2026
 
-Suite test: **71 (baseline) → 297 hijau**. Analyze bersih di seluruh fase.
+Suite test: **71 (baseline) → 310 hijau**. Analyze bersih di seluruh fase.
 
 **Fase 0-6 SELESAI.** Backend IR-01/IR-02/IR-05/IR-07 sudah diimplementasikan
 (SVN) dan dipakai UI; Fase 6 menambah `adaKembalian`/`online` pada
@@ -67,6 +67,24 @@ menambah sumber apotek ke `SesiKasUtil` — bukan layar baru.
 
 **Bukti suhu rantai dingin ditambahkan** (AIS r83318) sebagai bagian IR-09
 yang dapat dikerjakan tanpa mengarang alur pengadaan.
+
+**Local-first (audit susulan).** Pemeriksaan menemukan bahwa layar apotik hasil
+modernisasi ini SEMUANYA memanggil server langsung — padahal layar persediaan
+lama yang sebagian digantikannya sudah lokal-dulu, jadi untuk varian apotik itu
+adalah kemunduran, bukan sekadar fitur yang belum sempat. Formularium dan
+monitor batch kini memakai `MasterOffline.daftarCacheDulu` (baca dari cache
+dulu, hasil server menyusul beserta animasi kilau + bilah "pembaruan dari
+server"), menyimpan lewat `prosesSimpanMaster` (antre saat offline), dan punya
+tombol riwayat AuditTrails per baris.
+
+Yang **sengaja tetap online** beserta alasannya ada di
+`lib/features/apotik/core/apotik_lokal_dulu.dart`, dan dikunci oleh
+`master_offline_kontrak_test.dart` supaya tidak "dirapikan" belakangan:
+penjualan (`apotik_bayar`) butuh alokasi lot FEFO + register obat terkendali di
+server; penerimaan (`apotik_terima_barang`) belum punya kunci idempoten
+sehingga kiriman ulang menggandakan stok; tutup kas dihitung server. Laporan
+dan metrik juga tidak di-cache — menampilkan uang dari cache lebih berbahaya
+daripada mengatakan "belum terbaca".
 
 **Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan pemilik proses:
 IR-03 (butuh basis pengetahuan obat berlisensi), IR-04 (bentuk formula

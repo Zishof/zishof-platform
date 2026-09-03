@@ -78,6 +78,18 @@ Future<Map<String, dynamic>> _server(
   return {'status': '00', 'data': const []};
 }
 
+/// Pemuat "lokal dulu" yang meneruskan ke [_server] palsu di atas, sehingga
+/// layar master ikut diuji pada skala teks besar.
+Future<void> _muatLokal(
+  String aksi,
+  Map<String, dynamic> body,
+  String cacheKey, {
+  required void Function(Map<String, dynamic> hasil) onData,
+}) async {
+  final r = await _server(aksi, body);
+  onData({...r, 'dariServer': true});
+}
+
 /// Memasang layar pada skala teks tertentu. Overflow tata letak muncul sebagai
 /// exception yang ditangkap [WidgetTester], sehingga pemeriksaannya nyata —
 /// bukan sekadar "kelihatannya muat".
@@ -135,7 +147,7 @@ void main() {
       testWidgets('Formularium pada skala ${skala}x', (tester) async {
         final galat = await _pumpSkala(
           tester,
-          const ApotikFormulariumPage(panggil: _server),
+          const ApotikFormulariumPage(muatDaftar: _muatLokal),
           skala: skala,
           ukuran: const Size(1100, 900),
         );
@@ -145,7 +157,7 @@ void main() {
       testWidgets('Monitor kedaluwarsa pada skala ${skala}x', (tester) async {
         final galat = await _pumpSkala(
           tester,
-          const ApotikBatchExpiryPage(panggil: _server),
+          const ApotikBatchExpiryPage(muatDaftar: _muatLokal),
           skala: skala,
           ukuran: const Size(1100, 900),
         );

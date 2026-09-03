@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../../api_client.dart';
+import '../../../services/master_offline.dart';
+import '../../../widgets/kilau_perubahan.dart';
+import '../../../widgets/proses_simpan_master.dart';
+import '../../../widgets/riwayat_data_dialog.dart';
 import '../../../widgets/safe_state.dart';
 import '../core/apotik_breakpoints.dart';
 import '../core/apotik_design_tokens.dart';
+import '../core/apotik_lokal_dulu.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/apotik_status_pill.dart';
-
-typedef PanggilBatch = Future<Map<String, dynamic>> Function(
-    String aksi, Map<String, dynamic> body);
 
 /// <h3>Batch, Expiry &amp; FEFO (Fase 5, mockup 05).</h3>
 ///
@@ -19,16 +20,19 @@ typedef PanggilBatch = Future<Map<String, dynamic>> Function(
 /// **mewajibkan alasan** saat menahan lot — server yang menegakkannya, layar
 /// ini hanya menyediakan tempat mengisinya.
 class ApotikBatchExpiryPage extends StatefulWidget {
-  final PanggilBatch? panggil;
-  const ApotikBatchExpiryPage({super.key, this.panggil});
+  final MuatDaftarApotik? muatDaftar;
+  final SimpanMasterApotik? simpan;
+
+  const ApotikBatchExpiryPage({super.key, this.muatDaftar, this.simpan});
 
   @override
   State<ApotikBatchExpiryPage> createState() => _ApotikBatchExpiryPageState();
 }
 
 class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
-  late final PanggilBatch _panggil =
-      widget.panggil ?? (aksi, body) => ApiClient.instance.aksi(aksi, body);
+  late final MuatDaftarApotik _muatDaftar =
+      widget.muatDaftar ?? MasterOffline.daftarCacheDulu;
+  late final SimpanMasterApotik _simpan = widget.simpan ?? prosesSimpanMaster;
 
   static const _pilihanHari = <int>[30, 60, 90, 180];
   int _hari = 90;
@@ -36,14 +40,16 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
   String? _galat;
   List<Map<String, dynamic>> _batch = [];
 
+  /// Diff emisi server -> animasi kilau baris + bilah pemberitahuan.
+  Set<String> _idBaru = {};
+  Set<String> _idBerubah = {};
+  int _jumlahHapus = 0;
+
   @override
   void initState() {
     super.initState();
     _muat();
   }
-
-  bool _sukses(Map<String, dynamic> r) =>
-      r['status'] == '00' || r['status'] == 'success';
 
   Future<void> _muat() async {
     setStateIfMounted(() {
@@ -51,32 +57,71 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
       _galat = null;
     });
     try {
-      final r = await _panggil(
-          'apotik_batch_monitor', {'hari_ke_depan': _hari, 'page_size': 100});
-      if (!_sukses(r)) {
-        setStateIfMounted(() {
-          _galat = '${r['description'] ?? 'Gagal memuat monitor batch.'}';
-          _memuat = false;
-        });
-        return;
-      }
-      final data = ((r['data'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-      // Paling mendesak di atas: yang sudah/paling dekat kedaluwarsa.
-      data.sort((a, b) => '${a['tanggalKadaluarsa'] ?? ''}'
-          .compareTo('${b['tanggalKadaluarsa'] ?? ''}'));
-      setStateIfMounted(() {
-        _batch = data;
-        _memuat = false;
-      });
+      // Baca LOKAL DULU: monitor kedaluwarsa harus tetap terbaca saat jaringan
+      // mati -- justru saat itulah petugas perlu tahu lot mana yang tidak
+      // boleh dijual.
+      await _muatDaftar(
+        'apotik_batch_monitor',
+        {'hari_ke_depan': _hari, 'page_size': 100},
+        kunciCacheBatchApotik,
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          final data = ((hasil['data'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          // Paling mendesak di atas: yang sudah/paling dekat kedaluwarsa.
+          data.sort((a, b) => '${a['tanggalKadaluarsa'] ?? ''}'
+              .compareTo('${b['tanggalKadaluarsa'] ?? ''}'));
+          setStateIfMounted(() {
+            _batch = data;
+            _idBaru = dariServer
+                ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
+                : {};
+            _idBerubah = dariServer
+                ? Set<String>.from(
+                    hasil['idBerubah'] as Set? ?? const <String>{})
+                : {};
+            _jumlahHapus = dariServer ? (hasil['jumlahHapus'] as int? ?? 0) : 0;
+            _memuat = false;
+          });
+        },
+      );
     } catch (e) {
       setStateIfMounted(() {
-        _galat = '$e';
+        if (_batch.isEmpty) _galat = '$e';
         _memuat = false;
       });
     }
+  }
+
+  /// Bilah "pembaruan dari server": lot yang berubah karena petugas lain
+  /// (mis. dikarantina dari terminal sebelah) harus terlihat, bukan diam-diam
+  /// tertukar di layar.
+  Widget _bilahPerubahan(ApotikDesignTokens t) {
+    final bagian = <String>[
+      if (_idBaru.isNotEmpty) '${_idBaru.length} baru',
+      if (_idBerubah.isNotEmpty) '${_idBerubah.length} berubah',
+      if (_jumlahHapus > 0) '$_jumlahHapus hilang',
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: t.info.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusControl),
+        border: Border.all(color: t.info.withValues(alpha: 0.35)),
+      ),
+      child: Row(children: [
+        Icon(Icons.cloud_download_outlined, size: 15, color: t.info),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text('Pembaruan dari server: ${bagian.join(', ')}.',
+              style: TextStyle(fontSize: 11.5, color: t.textPrimary)),
+        ),
+      ]),
+    );
   }
 
   int? _sisaHari(String? tanggal) {
@@ -147,20 +192,27 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
     );
     if (lanjut != true || !mounted) return;
     try {
-      final r = await _panggil('apotik_batch_status_ubah', {
-        'kadaluarsa_id': b['kadaluarsaId'],
-        'status': dipilih,
-        'alasan': alasan.text.trim(),
-      });
+      // Diantre bila jaringan mati: penahanan lot yang tercatat terlambat
+      // masih jauh lebih baik daripada penahanan yang hilang sama sekali.
+      // Server tetap yang menegakkan "alasan wajib" saat kiriman sampai.
+      final r = await _simpan(
+        context,
+        aksi: 'apotik_batch_status_ubah',
+        body: {
+          'kadaluarsa_id': b['kadaluarsaId'],
+          'status': dipilih,
+          'alasan': alasan.text.trim(),
+        },
+        kunci: 'apotik_batch_status:${b['kadaluarsaId']}',
+        cacheKey: kunciCacheBatchApotik,
+        rowLokal: {
+          ...b,
+          'statusLot': dipilih,
+          'lotLayak': dipilih == 'ELIGIBLE',
+        },
+      );
       if (!mounted) return;
-      // Pesan server apa adanya, termasuk penolakan "alasan wajib".
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            '${r['description'] ?? (_sukses(r) ? 'Status lot diubah.' : r['status'])}'),
-        backgroundColor:
-            _sukses(r) ? null : Theme.of(context).colorScheme.error,
-      ));
-      if (_sukses(r)) _muat();
+      if (r['offline'] != true) _muat();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -186,6 +238,8 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
                   icon: const Icon(Icons.refresh)),
             ],
           ),
+          if (_idBaru.isNotEmpty || _idBerubah.isNotEmpty || _jumlahHapus > 0)
+            _bilahPerubahan(t),
           Padding(
             padding: EdgeInsets.symmetric(
                 horizontal: ApotikBreakpoints.paddingHalaman(layout)),
@@ -220,8 +274,13 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
                                     ApotikBreakpoints.paddingHalaman(layout),
                                 vertical: 4),
                             itemCount: _batch.length,
-                            itemBuilder: (context, i) =>
-                                _kartu(t, _batch[i], layout),
+                            itemBuilder: (context, i) => KilauBaris(
+                              kunci: MasterOffline.kunciBaris(
+                                  _batch[i], 'kadaluarsaId'),
+                              idBaru: _idBaru,
+                              idBerubah: _idBerubah,
+                              child: _kartu(t, _batch[i], layout),
+                            ),
                           ),
           ),
         ]),
@@ -279,6 +338,17 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
             onPressed: () => _ubahStatus(b),
             icon: const Icon(Icons.tune, size: 16),
             label: const Text('Ubah status'),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Riwayat data ini (AuditTrails)',
+            icon: const Icon(Icons.history, size: 16),
+            onPressed: () => tampilkanRiwayatData(
+              context,
+              entitas: 'apotik_batch',
+              id: b['kadaluarsaId'] ?? b['id'] ?? 0,
+              judul: '${b['nama'] ?? b['kode'] ?? ''}',
+            ),
           ),
         ]),
       ]),
