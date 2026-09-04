@@ -24,9 +24,9 @@ dan syarat total Debet sama dengan Kredit. Tombol **Sesuaikan Akun Debet** dan *
 Akun Kredit** tersedia di bagian atas serta pada baris yang belum siap. Tombol membuka master
 sumber yang tepat, lalu pratinjau dimuat ulang setelah pengguna kembali.
 
-Manual Word dan PDF yang baru tidak menimpa dokumen v1.34.21. Dokumen baru berjumlah 87
-halaman A4 landscape dan memuat 27 tangkapan layar penuh, 81 diagram, serta narasi 872–900+
-kata untuk setiap tangkapan layar. Isinya menggabungkan manual pengguna, skenario UAT,
+Manual Word dan PDF yang baru tidak menimpa dokumen v1.34.21. Dokumen baru berjumlah 86
+halaman A4 landscape dan memuat 27 tangkapan layar penuh, 81 diagram, serta penjelasan
+operasional terperinci untuk setiap tangkapan layar. Isinya menggabungkan manual pengguna, skenario UAT,
 use case, flowchart, aliran data/ERD ringkas, bukti hasil, prosedur koreksi, dan lembar sign-off.
 
 ## Perubahan aplikasi
@@ -173,7 +173,7 @@ Folder `docs/pos/uat-v1.34.22/` berisi:
 - `Manual-UAT-E2E-Kantin-POS-Kulakan-Akuntansi-100-Record-Jurnal-Umum-v1.34.22-20260904.pdf`;
 - `uat-kantin-akun-lengkap-evidence.json`.
 
-Manual PDF telah dirender ke 87 gambar halaman dan diperiksa melalui contact sheet serta sampel
+Manual PDF telah dirender ke 86 gambar halaman dan diperiksa melalui contact sheet serta sampel
 resolusi penuh. Tidak ditemukan halaman limpahan kosong, screenshot terpotong, tabel keluar
 margin, diagram terpisah, atau laporan yang berhenti sebelum bagian terakhir.
 
