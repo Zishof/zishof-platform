@@ -224,7 +224,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
               '${_data?['message'] ?? 'Menyiapkan draf jurnal...'}'
               '  •  Draf hanya menghitung; jurnal baru ditulis saat tombol Posting ditekan.',
               style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 12),
+          PenjelasanSumberAkunPosting(jenis: widget.jenis),
           Wrap(spacing: 8, runSpacing: 8, children: [
             OutlinedButton.icon(
                 onPressed: _sibuk ? null : () => _pilihTanggal(true),
@@ -239,9 +239,13 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                 icon: const Icon(Icons.refresh, size: 18),
                 label: const Text('Muat ulang')),
             TombolSesuaikanAkunPosting(
-                jenis: widget.jenis, sisi: SisiAkunPosting.debet),
+                jenis: widget.jenis,
+                sisi: SisiAkunPosting.debet,
+                onSelesai: _muatDraf),
             TombolSesuaikanAkunPosting(
-                jenis: widget.jenis, sisi: SisiAkunPosting.kredit),
+                jenis: widget.jenis,
+                sisi: SisiAkunPosting.kredit,
+                onSelesai: _muatDraf),
             FilledButton.icon(
                 onPressed: _sibuk || siap.isEmpty || !_bolehTerapkan
                     ? null
@@ -310,12 +314,14 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                                       sisi: SisiAkunPosting.debet,
                                       alasan: '${r['alasan'] ?? ''}',
                                       ringkas: true,
+                                      onSelesai: _muatDraf,
                                     ),
                                     TombolSesuaikanAkunPosting(
                                       jenis: widget.jenis,
                                       sisi: SisiAkunPosting.kredit,
                                       alasan: '${r['alasan'] ?? ''}',
                                       ringkas: true,
+                                      onSelesai: _muatDraf,
                                     ),
                                   ],
                                 ),

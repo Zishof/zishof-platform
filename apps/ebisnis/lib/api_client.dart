@@ -194,6 +194,7 @@ class ApiClient {
     'otomatis_layani_jalankan',
     'layani_transaksi',
     'detail_transaksi',
+    'mutasi_piutang_detail',
     'layar_pelanggan_slide_list',
     'layar_pelanggan_slide_upload',
     'layar_pelanggan_slide_ubah',
@@ -421,11 +422,14 @@ class ApiClient {
     final referensiPermintaan =
         '${mulai.millisecondsSinceEpoch.toRadixString(36).toUpperCase()}-${namaAksi.hashCode.abs().toRadixString(36).toUpperCase()}';
     headers['X-Request-ID'] = referensiPermintaan;
-    final batasWaktu = namaAksi == 'produk_impor_excel_preview'
-        ? const Duration(minutes: 5)
-        : namaAksi == 'produk_impor_excel_komit'
-            ? const Duration(minutes: 3)
-            : const Duration(seconds: 30);
+    final pemetaanKantinMassal = namaAksi == 'pemetaan_akun_kantin_audit' ||
+        namaAksi == 'pemetaan_akun_kantin_terapkan';
+    final batasWaktu =
+        namaAksi == 'produk_impor_excel_preview' || pemetaanKantinMassal
+            ? const Duration(minutes: 5)
+            : namaAksi == 'produk_impor_excel_komit'
+                ? const Duration(minutes: 3)
+                : const Duration(seconds: 30);
 
     http.Response resp;
     try {

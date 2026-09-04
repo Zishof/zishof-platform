@@ -10,6 +10,114 @@ import 'toko_kelola_screen.dart';
 
 enum SisiAkunPosting { debet, kredit }
 
+({String debet, String kredit, String urutan}) sumberAkunPosting(String jenis) {
+  final kunci = jenis.toLowerCase().replaceFirst('posting_', '');
+  return switch (kunci) {
+    'penjualan' => (
+        debet:
+            'Cara Pembayaran → Akun Kas/Bank; penjualan kredit memakai Toko → Piutang Usaha.',
+        kredit:
+            'Jenis Produk → Akun Pendapatan; PPN keluaran ditambahkan bila transaksi berpajak.',
+        urutan:
+            'Master transaksi → master terkait → konfigurasi cadangan Kantin. Akun induk dan akun kosong ditolak.'
+      ),
+    'hpp' => (
+        debet:
+            'Jenis Produk → Akun HPP; bila kosong sistem membaca akun HPP bawaan Kelompok Aset.',
+        kredit:
+            'Master Aset barang → Akun Persediaan; bila kosong sistem membaca Kelompok Aset.',
+        urutan:
+            'Jenis Produk/Master Aset → Kelompok Aset → konfigurasi cadangan Kantin. Akun Persediaan harus sama dengan debet Kulakan.'
+      ),
+    'kulakan' => (
+        debet:
+            'Master Aset barang → Akun Persediaan/Pembelian; bila kosong memakai Kelompok Aset.',
+        kredit:
+            'Pembelian kredit: Supplier → Akun Utang. Pembelian tunai: Cara Pembayaran/Toko → Akun Kas/Bank.',
+        urutan:
+            'Master Aset/Supplier → Kelompok Aset/Toko/Cara Pembayaran → konfigurasi cadangan Kantin.'
+      ),
+    'bayar_hutang' => (
+        debet: 'Supplier → Akun Utang Dagang yang akan dikurangi.',
+        kredit: 'Cara Pembayaran atau Toko → Akun Kas/Bank yang dibayarkan.',
+        urutan:
+            'Supplier dan metode bayar harus sesuai dokumen sumber; nilai tidak boleh melebihi sisa utang.'
+      ),
+    'terima_piutang' => (
+        debet: 'Cara Pembayaran atau Toko → Akun Kas/Bank penerimaan.',
+        kredit: 'Toko → Akun Piutang Usaha yang akan dikurangi.',
+        urutan:
+            'Toko dan metode penerimaan harus sesuai dokumen sumber; nilai tidak boleh melebihi sisa piutang.'
+      ),
+    'penyesuaian' => (
+        debet:
+            'Ditentukan oleh jenis mutasi: Persediaan, HPP/selisih stok, Kas, atau Piutang.',
+        kredit:
+            'Pasangan akun ditentukan oleh arah retur, hasil stok opname, atau mutasi antar-outlet.',
+        urutan:
+            'Alasan transaksi → Jenis Produk/Master Aset/Kelompok Aset → Toko/Cara Pembayaran.'
+      ),
+    _ => (
+        debet:
+            'Diambil dari master sumber transaksi yang menambah aset atau beban.',
+        kredit:
+            'Diambil dari master sumber transaksi yang menambah utang/pendapatan atau mengurangi aset.',
+        urutan:
+            'Periksa alasan pada baris, lalu buka master yang ditunjuk melalui tombol penyesuaian akun.'
+      ),
+  };
+}
+
+/// Penjelasan ringkas yang selalu terlihat di setiap layar posting. Pengguna
+/// tidak perlu menebak mengapa sebuah kode akun muncul atau master mana yang
+/// harus dibuka saat pasangan jurnalnya belum tepat.
+class PenjelasanSumberAkunPosting extends StatelessWidget {
+  const PenjelasanSumberAkunPosting({
+    super.key,
+    required this.jenis,
+  });
+
+  final String jenis;
+
+  @override
+  Widget build(BuildContext context) {
+    final sumber = sumberAkunPosting(jenis);
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        border: Border.all(color: const Color(0xFF93C5FD)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.account_tree_outlined, size: 18, color: Color(0xFF1D4ED8)),
+          SizedBox(width: 7),
+          Text('Dari mana akun jurnal diambil?',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 6),
+        Text('DEBET  •  ${sumber.debet}',
+            style: const TextStyle(fontSize: 12.5)),
+        const SizedBox(height: 3),
+        Text('KREDIT •  ${sumber.kredit}',
+            style: const TextStyle(fontSize: 12.5)),
+        const SizedBox(height: 3),
+        Text('Urutan pencarian: ${sumber.urutan}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+        const SizedBox(height: 5),
+        const Text(
+          'Cara mengganti: gunakan tombol Sesuaikan Akun Debet/Kredit di bawah. '
+          'Sistem membuka master sumbernya, lalu muat ulang pratinjau. Posting '
+          'hanya aktif untuk akun daun dan pasangan dengan total Debet = Kredit.',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ]),
+    );
+  }
+}
+
 /// Tujuan CRUD sumber akun. Posting tidak boleh mengubah baris jurnal hasil
 /// hitung secara langsung: yang diperbaiki adalah master sumbernya agar dokumen
 /// lain dengan metode/jenis barang yang sama ikut benar.
@@ -56,7 +164,8 @@ const _masterAset = TargetCrudAkunPosting(
 const _kelompokAset = TargetCrudAkunPosting(
   id: 'kelompok_aset',
   label: 'Kelompok Aset',
-  keterangan: 'Ubah akun Persediaan, Pembelian, Penyusutan, atau HPP bawaan kelompok aset.',
+  keterangan:
+      'Ubah akun Persediaan, Pembelian, Penyusutan, atau HPP bawaan kelompok aset.',
 );
 
 /// Pemetaan ini dipakai tombol global maupun tombol pada baris yang belum siap.
@@ -213,12 +322,14 @@ class TombolSesuaikanAkunPosting extends StatelessWidget {
     required this.sisi,
     this.alasan = '',
     this.ringkas = false,
+    this.onSelesai,
   });
 
   final String jenis;
   final SisiAkunPosting sisi;
   final String alasan;
   final bool ringkas;
+  final Future<void> Function()? onSelesai;
 
   @override
   Widget build(BuildContext context) {
@@ -227,12 +338,15 @@ class TombolSesuaikanAkunPosting extends StatelessWidget {
         : 'Sesuaikan Akun Kredit';
     return OutlinedButton.icon(
       key: ValueKey('sesuaikan_akun_${sisi.name}_$jenis'),
-      onPressed: () => bukaCrudAkunPosting(
-        context,
-        jenis: jenis,
-        sisi: sisi,
-        alasan: alasan,
-      ),
+      onPressed: () async {
+        await bukaCrudAkunPosting(
+          context,
+          jenis: jenis,
+          sisi: sisi,
+          alasan: alasan,
+        );
+        if (onSelesai != null) await onSelesai!();
+      },
       icon: Icon(Icons.build_outlined, size: ringkas ? 14 : 17),
       label: Text(label, style: TextStyle(fontSize: ringkas ? 10.5 : null)),
       style: ringkas

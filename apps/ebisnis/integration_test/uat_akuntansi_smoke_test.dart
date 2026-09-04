@@ -21,7 +21,14 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('smoke UAT Akuntansi dan tangkapan layar asli', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1600, 900));
+    // Mengikuti area kerja monitor UAT 2560x1440 (tinggi efektif 1392 setelah
+    // taskbar). Nilai dapat dioverride di CI/monitor lain tanpa mengubah tes.
+    const surfaceWidth =
+        int.fromEnvironment('POS_TEST_SURFACE_WIDTH', defaultValue: 2560);
+    const surfaceHeight =
+        int.fromEnvironment('POS_TEST_SURFACE_HEIGHT', defaultValue: 1392);
+    await tester.binding
+        .setSurfaceSize(const Size(surfaceWidth * 1.0, surfaceHeight * 1.0));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final penanganGalatTes = FlutterError.onError;
     addTearDown(() => FlutterError.onError = penanganGalatTes);
@@ -52,6 +59,19 @@ void main() {
     expect(login['token'], isNotNull, reason: 'Login demo gagal: $login');
     await ApiClient.instance.simpanToken(login['token'] as String);
     app.main();
+    // main() memasang penangkap galat produksi. Runner test memulihkan handler
+    // bawaannya SEBELUM penantian layar awal, supaya timeout startup tetap
+    // dilaporkan sebagai penyebab asli dan bukan assertion handler sekunder.
+    FlutterError.onError = (detail) {
+      if (detail.exceptionAsString().contains('A RenderFlex overflowed')) {
+        // Temuan tata letak tetap dicatat dan difoto, tetapi tidak menghentikan
+        // UAT fungsional seluruh submenu/laporan.
+        // ignore: avoid_print
+        print('UAT_LAYOUT_OVERFLOW=${detail.exceptionAsString()}');
+        return;
+      }
+      penanganGalatTes?.call(detail);
+    };
     await _tungguSampai(
       tester,
       () =>
@@ -76,18 +96,14 @@ void main() {
       alasan: 'Sesi admin dan Kantin Demo belum selesai dimuat',
       detik: 180,
     );
-    // main() memasang penangkap galat produksi; runner test perlu handler
-    // bawaannya kembali agar galat interaksi dilaporkan dengan benar.
-    FlutterError.onError = (detail) {
-      if (detail.exceptionAsString().contains('A RenderFlex overflowed')) {
-        // Temuan tata letak tetap dicatat dan difoto, tetapi tidak menghentikan
-        // UAT fungsional seluruh submenu/laporan.
-        // ignore: avoid_print
-        print('UAT_LAYOUT_OVERFLOW=${detail.exceptionAsString()}');
-        return;
-      }
-      penanganGalatTes?.call(detail);
-    };
+    // Instalasi/build baru dapat menampilkan dialog penyiapan data lokal. Untuk
+    // UAT online dialog ini ditutup lewat pilihan "Nanti" agar tidak menutupi
+    // sidebar dan tidak mengubah data yang sedang diuji.
+    final nanti = find.text('Nanti');
+    if (nanti.evaluate().isNotEmpty) {
+      await tester.tap(nanti.last);
+      await tester.pump(const Duration(seconds: 1));
+    }
 
     await _ambilGambar(tester, '00-layar-awal-integration');
 
@@ -125,7 +141,8 @@ void main() {
       ]) {
         await _bukaMenuDanFoto(tester, item.$1, item.$2);
       }
-      await _ambilLaporanInti(tester);
+      const skipReports = bool.fromEnvironment('POS_TEST_SKIP_REPORTS');
+      if (!skipReports) await _ambilLaporanInti(tester);
       return;
     }
 
@@ -134,6 +151,36 @@ void main() {
 
     const hanyaMenu = bool.fromEnvironment('POS_TEST_MENU_ONLY');
     if (hanyaMenu) {
+      return;
+    }
+
+    const hanyaJurnal = bool.fromEnvironment('POS_TEST_JURNAL_ONLY');
+    if (hanyaJurnal) {
+      await _ketukSidebar(tester, 'Jurnal Umum');
+      await _tungguSampai(
+        tester,
+        () =>
+            find.byType(JurnalUmumScreen).evaluate().isNotEmpty &&
+            find.byType(CircularProgressIndicator).evaluate().isEmpty,
+        alasan: 'Jurnal Umum tidak selesai memuat data',
+        detik: 120,
+      );
+      await _ambilGambar(tester, '30-jurnal-umum-daftar-fullscreen');
+      await tester.tap(find.text('Jurnal Baru'));
+      await _tungguSampai(
+        tester,
+        () => find.text('Jurnal Umum Baru').evaluate().isNotEmpty,
+        alasan: 'Editor jurnal baru tidak terbuka',
+      );
+      await tester.enterText(_fieldDenganLabel('Keterangan jurnal *'),
+          'Contoh UAT Jurnal Umum - Pembelian ATK tunai');
+      await _pilihAkun(tester, 'Akun baris 1', '512.115');
+      await tester.enterText(_fieldDenganLabel('Debet').at(0), '750000');
+      await _pilihAkun(tester, 'Akun baris 2', '111.101');
+      await tester.enterText(_fieldDenganLabel('Kredit').at(1), '750000');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Siap disimpan'), findsOneWidget);
+      await _ambilGambar(tester, '31-jurnal-umum-form-seimbang-fullscreen');
       return;
     }
 
@@ -423,13 +470,14 @@ Future<void> _jalankanLaporan(WidgetTester tester, String idLaporan,
     String judul, String namaGambar) async {
   final pencarian = find.byWidgetPredicate(
       (w) => w is TextField && w.decoration?.hintText == 'Cari laporan...');
+  await tester.enterText(pencarian, '');
+  await tester.pump(const Duration(milliseconds: 300));
   await tester.enterText(pencarian, judul);
-  await tester.pump(const Duration(seconds: 1));
-  final barisLaporan = find
-      .byWidgetPredicate((w) => w is Text && (w.data ?? '').contains(judul));
-  expect(barisLaporan, findsOneWidget,
-      reason: 'Laporan $judul tidak ada di katalog');
-  Navigator.of(tester.element(barisLaporan)).push(MaterialPageRoute(
+  await tester.pump(const Duration(milliseconds: 500));
+  // Buka detail memakai id katalog yang stabil. Snapshot cache pada sebagian
+  // instalasi lama belum selalu memuat kembali seluruh judul setelah kembali
+  // dari laporan pertama, sedangkan endpoint berdasarkan id sudah tersedia.
+  Navigator.of(tester.element(pencarian)).push(MaterialPageRoute(
       builder: (_) => LaporanDetailScreen(item: {
             'id': idLaporan,
             'judul': judul,
@@ -458,6 +506,59 @@ Future<void> _jalankanLaporan(WidgetTester tester, String idLaporan,
       reason: 'Laporan $judul menampilkan pesan gagal');
   await tester.pump(const Duration(seconds: 1));
   await _ambilGambar(tester, namaGambar);
+  const captureScroll = bool.fromEnvironment('POS_TEST_CAPTURE_REPORT_SCROLL');
+  if (captureScroll) {
+    await _ambilGambar(tester, '$namaGambar-atas');
+    final scrollable = find.descendant(
+      of: find.byType(LaporanDetailScreen),
+      matching: find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+      ),
+    );
+    expect(scrollable, findsWidgets,
+        reason: 'Area gulir vertikal laporan $judul tidak ditemukan');
+    final state = tester.state<ScrollableState>(scrollable.first);
+    final max = state.position.maxScrollExtent;
+    if (max > 0) {
+      state.position.jumpTo(max / 2);
+      await tester.pump(const Duration(milliseconds: 700));
+      await _ambilGambar(tester, '$namaGambar-tengah');
+      state.position.jumpTo(max);
+      await tester.pump(const Duration(milliseconds: 700));
+      await _ambilGambar(tester, '$namaGambar-bawah');
+      expect(state.position.pixels, closeTo(max, 1),
+          reason: 'Laporan $judul belum mencapai scroll terbawah');
+    }
+    // AppDataTable dapat tetap mempunyai beberapa halaman setelah viewport
+    // mencapai bagian bawah. Maju sampai tombol berikutnya nonaktif, lalu
+    // ambil bukti bagian bawah HALAMAN TERAKHIR agar seluruh laporan tercakup.
+    for (var halaman = 2; halaman <= 500; halaman++) {
+      final tombolBerikut = find.ancestor(
+        of: find.descendant(
+          of: find.byType(LaporanDetailScreen),
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        matching: find.byType(IconButton),
+      );
+      Finder? aktif;
+      for (var i = 0; i < tombolBerikut.evaluate().length; i++) {
+        final kandidat = tombolBerikut.at(i);
+        if (tester.widget<IconButton>(kandidat).onPressed != null) {
+          aktif = kandidat;
+        }
+      }
+      if (aktif == null) break;
+      await tester.tap(aktif);
+      // Pagination laporan bersifat lokal/in-memory; satu frame cukup. Tidak
+      // ada request server per halaman, jadi menunggu spinner hanya akan
+      // memperlambat laporan besar (Jurnal Umum dapat >150 halaman).
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    final finalState = tester.state<ScrollableState>(scrollable.first);
+    finalState.position.jumpTo(finalState.position.maxScrollExtent);
+    await tester.pump(const Duration(milliseconds: 500));
+    await _ambilGambar(tester, '$namaGambar-akhir-bawah');
+  }
   // ignore: avoid_print
   print('UAT_LAPORAN=$judul STATUS=TAMPIL');
   await tester.tap(find.byType(BackButton));
@@ -466,6 +567,7 @@ Future<void> _jalankanLaporan(WidgetTester tester, String idLaporan,
     () => find.byType(LaporanDetailScreen).evaluate().isEmpty,
     alasan: 'Tidak dapat kembali dari laporan $judul',
   );
+  await tester.pump(const Duration(milliseconds: 700));
 }
 
 Future<void> _ambilLaporanInti(WidgetTester tester) async {

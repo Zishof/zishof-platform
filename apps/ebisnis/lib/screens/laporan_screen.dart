@@ -921,7 +921,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
           ]),
           const Text(
               'Pratinjau dan posting dilakukan langsung di halaman ini.'),
-          const SizedBox(height: 12),
+          PenjelasanSumberAkunPosting(jenis: widget.jenis),
           Wrap(spacing: 10, runSpacing: 8, children: [
             OutlinedButton.icon(
                 onPressed: _memuat ? null : () => _pilihTanggal(true),
@@ -936,9 +936,13 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                 icon: const Icon(Icons.preview_outlined),
                 label: const Text('Pratinjau')),
             TombolSesuaikanAkunPosting(
-                jenis: widget.jenis, sisi: SisiAkunPosting.debet),
+                jenis: widget.jenis,
+                sisi: SisiAkunPosting.debet,
+                onSelesai: () => _proses(false)),
             TombolSesuaikanAkunPosting(
-                jenis: widget.jenis, sisi: SisiAkunPosting.kredit),
+                jenis: widget.jenis,
+                sisi: SisiAkunPosting.kredit,
+                onSelesai: () => _proses(false)),
           ]),
           if (_memuat) const LinearProgressIndicator(),
           if (_error != null)
@@ -1055,12 +1059,14 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                                         sisi: SisiAkunPosting.debet,
                                         alasan: '${t['alasan'] ?? ''}',
                                         ringkas: true,
+                                        onSelesai: () => _proses(false),
                                       ),
                                       TombolSesuaikanAkunPosting(
                                         jenis: widget.jenis,
                                         sisi: SisiAkunPosting.kredit,
                                         alasan: '${t['alasan'] ?? ''}',
                                         ringkas: true,
+                                        onSelesai: () => _proses(false),
                                       ),
                                     ],
                                   ),

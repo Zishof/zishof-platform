@@ -2,6 +2,33 @@ import 'package:ebisnis/screens/posting_akun_perbaikan.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('sumber akun posting', () {
+    test('Penjualan menjelaskan kas/piutang dan pendapatan', () {
+      final sumber = sumberAkunPosting('penjualan');
+
+      expect(sumber.debet, contains('Cara Pembayaran'));
+      expect(sumber.debet, contains('Piutang Usaha'));
+      expect(sumber.kredit, contains('Jenis Produk'));
+      expect(sumber.kredit, contains('Akun Pendapatan'));
+    });
+
+    test('HPP menjelaskan relasi beban dan persediaan', () {
+      final sumber = sumberAkunPosting('hpp');
+
+      expect(sumber.debet, contains('Akun HPP'));
+      expect(sumber.kredit, contains('Akun Persediaan'));
+      expect(sumber.urutan, contains('Akun Persediaan harus sama'));
+    });
+
+    test('Kulakan membedakan pembelian kredit dan tunai', () {
+      final sumber = sumberAkunPosting('kulakan');
+
+      expect(sumber.debet, contains('Akun Persediaan'));
+      expect(sumber.kredit, contains('Pembelian kredit'));
+      expect(sumber.kredit, contains('Pembelian tunai'));
+    });
+  });
+
   group('pemetaan CRUD akun seluruh posting', () {
     test('penjualan mengarah ke Cara Pembayaran dan Jenis Produk', () {
       expect(

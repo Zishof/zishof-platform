@@ -15,6 +15,8 @@ void main() {
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 1);
     const post = bool.fromEnvironment('POS_UAT_POST');
+    const prefix = String.fromEnvironment('POS_UAT_PREFIX',
+        defaultValue: 'UAT-VOL-POS-20260904');
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
     final login = await ApiClient.instance.aksi('login', {
@@ -73,7 +75,7 @@ void main() {
     final existingReport = await call('laporan_order_list', {
       'tglMulai': '2026-09-01',
       'tglSampai': '2026-09-30',
-      'nomorNota': 'UAT-VOL-POS-20260904',
+      'nomorNota': prefix,
       'tokoId': 1,
       'page': 1,
       'pageSize': 100,
@@ -85,7 +87,7 @@ void main() {
 
     int? lastTransactionId;
     for (var i = 1; i <= volume; i++) {
-      final code = 'UAT-VOL-POS-20260904-${i.toString().padLeft(3, '0')}';
+      final code = '$prefix-${i.toString().padLeft(3, '0')}';
       if (existingCodes.contains(code)) {
         if (i == 1 || i % 10 == 0 || i == volume) {
           // ignore: avoid_print
@@ -166,7 +168,7 @@ void main() {
     if (lastTransactionId != null) {
       final detail = await call('detail_transaksi', {'id': lastTransactionId});
       final byCode = await call('laporan_order_list', {
-        'nomorNota': 'UAT-VOL-POS-20260904',
+        'nomorNota': prefix,
         'tokoId': 1,
         'page': 1,
         'pageSize': 100,

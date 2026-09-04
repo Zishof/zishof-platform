@@ -15,6 +15,8 @@ void main() {
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 50);
     const post = bool.fromEnvironment('POS_UAT_POST');
+    const prefix = String.fromEnvironment('POS_KUL_UAT_PREFIX',
+        defaultValue: 'UAT-VOL-KUL-20260904');
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
@@ -65,7 +67,7 @@ void main() {
 
     var created = 0;
     for (var i = 1; i <= volume; i++) {
-      final number = 'UAT-VOL-KUL-20260904-${i.toString().padLeft(3, '0')}';
+      final number = '$prefix-${i.toString().padLeft(3, '0')}';
       final list = await call('kulakan_faktur_list', {
         'keyword': number,
         'page': 1,
@@ -114,7 +116,7 @@ void main() {
     }
 
     final all = await call('kulakan_faktur_list', {
-      'keyword': 'UAT-VOL-KUL-20260904',
+      'keyword': prefix,
       'page': 1,
       'page_size': 100,
     });

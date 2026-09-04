@@ -150,7 +150,11 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // Aplikasi operasional dan UAT membutuhkan ruang kerja seluas mungkin sejak
+  // layar pertama. SW_SHOWMAXIMIZED memakai area kerja monitor aktif (tetap
+  // menyisakan taskbar), sehingga tabel, laporan, dan tangkapan layar tidak
+  // diawali dengan jendela 1280x720 yang sempit.
+  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
 }
 
 // static

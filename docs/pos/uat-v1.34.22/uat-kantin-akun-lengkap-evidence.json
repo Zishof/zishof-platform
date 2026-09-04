@@ -1,0 +1,77 @@
+{
+  "tanggal_uat": "2026-09-04",
+  "build_uat": "eBisnis POS 1.34.21+183",
+  "periode": {
+    "mulai": "2026-09-01",
+    "sampai": "2026-09-30"
+  },
+  "akun": {
+    "kas": "111.101 - KAS YAYASAN",
+    "piutang": "131.300 - PIUTANG USAHA TOKO",
+    "persediaan": "151.200 - PERSEDIAAN BARANG LAINNYA",
+    "utang": "310.600 - UTANG USAHA TOKO",
+    "pendapatan": "410.900 - PENDAPATAN PENJUALAN TOKO",
+    "hpp": "510.900 - BEBAN POKOK PENJUALAN TOKO"
+  },
+  "volume_data": {
+    "penjualan": 102,
+    "kulakan": 207,
+    "kulakan_dalam_posting": 202,
+    "batas_minimum": 100,
+    "batas_maksimum": 10000
+  },
+  "penjualan": {
+    "siap": 102,
+    "diposting": 102,
+    "tertahan": 0,
+    "nilai": 51154000
+  },
+  "hpp": {
+    "siap": 2,
+    "diposting": 2,
+    "tertahan": 0,
+    "nilai": 41009014
+  },
+  "kulakan": {
+    "siap": 100,
+    "diposting": 100,
+    "tertahan": 0,
+    "nilai": 112500000,
+    "diposting_kumulatif": 202,
+    "nilai_kumulatif": 335020000
+  },
+  "audit_pascaposting": {
+    "penjualan_belum_posting": 0,
+    "hpp_belum_posting": 0,
+    "kulakan_belum_posting": 0,
+    "produk_tanpa_master_aset": 0,
+    "produk_tanpa_akun_persediaan": 0,
+    "jenis_produk_tanpa_pendapatan": 0,
+    "jenis_produk_tanpa_hpp": 0,
+    "penyedia_tanpa_utang": 0
+  },
+  "keseimbangan_jurnal": {
+    "jumlah_baris": 2901,
+    "total_debet": 842678014,
+    "total_kredit": 842678014,
+    "selisih": 0,
+    "jurnal_tidak_seimbang": 0,
+    "koreksi_terverifikasi": "LPJ Kas Besar diposting ulang setelah akun beban rincian dipulihkan; 103 dokumen sukses"
+  },
+  "tangkapan_layar": {
+    "mode": "Windows maximized / full working area",
+    "lebar_pixel": 2560,
+    "tinggi_pixel": 1392,
+    "jumlah_file_praposting": 9,
+    "jumlah_file_pascaposting": 27,
+    "cakupan_laporan": "halaman awal dan halaman terakhir/terbawah untuk setiap laporan"
+  },
+  "laporan": [
+    "Laba Rugi",
+    "Neraca",
+    "Arus Kas",
+    "Jurnal Umum",
+    "Buku Besar",
+    "Neraca Saldo"
+  ]
+}
