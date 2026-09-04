@@ -1,0 +1,57 @@
+{
+  "rilis": "apotik-v1.34.25+187",
+  "runId": "R2",
+  "waktuUat": "2026-09-05T05:21:54+07:00",
+  "volumePerMenu": 100,
+  "status": "PASS",
+  "deployUlangDiperlukan": false,
+  "fiturTerbuka": {
+    "otcObatBebas": true,
+    "resepDokter": true,
+    "racikan": true,
+    "produksiFarmasi": true,
+    "tebusResep": true
+  },
+  "provisioning": {
+    "lulus": true,
+    "obatJadi": 10000,
+    "bahanRacikan": 1000,
+    "formulaRacikanOperasional": 250,
+    "formulaProduksiOperasional": 250,
+    "resepSiapJualSetelahUat": 4499,
+    "antreanHariIni": 300
+  },
+  "transaksiUtamaLulus": {
+    "otcObatBebas": 100,
+    "resepDokter": 100,
+    "racikan": 100,
+    "produksiFarmasi": 100,
+    "tebusResepCampuran": 100,
+    "total": 500
+  },
+  "postflightIdempoten": {
+    "otcObatBebas": 100,
+    "resepDokter": 100,
+    "racikan": 100,
+    "produksiFarmasi": 100,
+    "tebusResep": 100,
+    "totalKodeUnik": 500
+  },
+  "resepFormulaDitandaiDitebus": 200,
+  "regresiUi": {
+    "lulus": 96,
+    "gagal": 0
+  },
+  "observasi": {
+    "responsGatewaySementara": 17,
+    "jenis": [
+      "HTTP 502",
+      "HTTP 503",
+      "timeout 40 detik"
+    ],
+    "recheckKodeAwal": 20,
+    "recheckLulus": 20,
+    "gagalTersisa": 0,
+    "dampakDataGanda": false
+  }
+}
