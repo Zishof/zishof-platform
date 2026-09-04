@@ -191,6 +191,38 @@ SHA-256 diterbitkan sebagai berkas pendamping untuk setiap installer dan APK. Ji
 tidak memiliki sertifikat produksi, artefak ditandai sebagai UAT/internal: APK memakai
 sertifikat debug yang terverifikasi dan installer Windows tidak mempunyai Authenticode.
 
+Snapshot build: commit `c05c2d18dcc3c2d78d3585d4a01ba74e388d3f00`. Keenam artefak dibangun
+secara serial dari worktree bersih agar folder output bersama tidak saling menimpa.
+
+| Artefak | Ukuran (byte) | SHA-256 |
+|---|---:|---|
+| `eBisnis-Setup-1.34.22.exe` | 50.035.063 | `ff00fe6c4bbcda77bf94e27141b295e39c67f7204f6b70fa09d56b6a4cb06bca` |
+| `app-ebisnis-release.apk` | 154.000.962 | `4dc937460e7cfddb5695a14a82858e3502a221b7df668878e4b6aca0f261743b` |
+| `Al-Bahjah-POS-Setup-1.34.22.exe` | 50.095.681 | `703ab998d64168fee2455348d77bd243cf3d885b29b2c37b39b68c5ad96410c2` |
+| `app-albahjah-release.apk` | 154.061.997 | `bd89882139720b24cbcf09d6d5e1eb35dbff2c4d4275b9f52cd0b8e26fa6881b` |
+| `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.22.exe` | 50.249.299 | `d10082ca65565c113fe07ec7d59d135442aaf0a81a5d182c5f10868a04c19d34` |
+| `app-nahl-release.apk` | 154.083.403 | `54f73c5befeb400f09ebeb5aaa983b674e2f60447a5d19ed00d110249faacd02` |
+
+Metadata APK diverifikasi memakai Android Build Tools 36.0.0:
+
+- eBisnis: package `id.zishof.ebisnis`, versionName `1.34.22`, versionCode `184`;
+- Al-Bahjah: package `id.zishof.ebisnis.albahjah`, versionName `1.34.22`, versionCode `184`;
+- Nahl: package `id.zishof.ebisnis.nahl`, versionName `1.34.22`, versionCode `184`.
+
+ProductVersion ketiga installer Windows juga terbaca `1.34.22`. Isi berkas checksum dihitung
+ulang setelah penyalinan dan seluruhnya cocok dengan artefak. Status distribusi rilis ini adalah
+**UAT/internal**: ketiga APK Debug/UAT signed dan ketiga installer Windows unsigned.
+
+## Verifikasi kualitas aplikasi
+
+- Seluruh suite unit/widget test lulus: **763 test**.
+- Test khusus sumber dan tombol koreksi akun lulus: **7/7**.
+- Analisis statis menemukan **0 error** dan **0 warning** pada perubahan rilis.
+- Terdapat 45 lint tingkat `info` yang sudah tersebar pada source lama dan tidak memblokir build.
+- Build Android dan Windows sukses untuk ketiga varian.
+- Kompilator Windows mencatat warning konversi numerik dari dependency `flutter_zxing`; tidak ada
+  error CMake/linker dan warning tersebut tidak berasal dari perubahan rilis ini.
+
 ## Prosedur operator ketika akun salah atau jurnal belum balance
 
 1. Jangan menekan posting berulang kali dan jangan membuat Jurnal Umum pengganti.
