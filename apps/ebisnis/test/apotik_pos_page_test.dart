@@ -27,7 +27,13 @@ PanggilAksi _server({
       case 'apotik_cara_bayar_list':
         return {'status': '00', 'data': caraBayar ?? const []};
       case 'apotik_bayar':
+      case 'apotik_bayar_racikan':
         return hasilBayar ?? {'status': '00', 'kode': 'APT1', 'total': 6000};
+      case 'apotik_racikan_list':
+      case 'apotik_produksi_katalog':
+        return {'status': '00', 'data': item ?? const []};
+      case 'apotik_produksi_proses':
+        return {'status': '00', 'kode': 'PROD1', 'jumlahProduksi': 1};
       case 'apotik_resep_list':
         return {'status': '00', 'data': const []};
       default:
@@ -167,6 +173,138 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ApotikBatchSheet), findsOneWidget);
       expect(find.textContaining('Pilih Batch'), findsOneWidget);
+    });
+  });
+
+  group('Mode kasir lengkap', () {
+    testWidgets('Racikan terbuka, memakai katalog dan endpoint bayar racikan',
+        (tester) async {
+      final aksi = <String>[];
+      final racikan = <String, dynamic>{
+        'id': 51,
+        'racikanId': 51,
+        'racikan': true,
+        'kode': 'RAC-51',
+        'nama': 'Racikan UAT',
+        'satuan': 'Paket',
+        'stok': 120,
+        'hargaJual': 7500,
+      };
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [racikan], dicatat: aksi)),
+          const Size(1500, 900));
+
+      await tester.tap(find.text('Racikan'));
+      await tester.pumpAndSettle();
+      expect(aksi, contains('apotik_racikan_list'));
+      expect(find.text('Racikan UAT'), findsOneWidget);
+
+      aksi.clear();
+      await tester.tap(find.text('Racikan UAT'));
+      await tester.pumpAndSettle();
+      expect(aksi, isNot(contains('apotik_item_batch')));
+      await tester.tap(find.text('Bayar'));
+      await tester.pumpAndSettle();
+      expect(aksi, contains('apotik_bayar_racikan'));
+      expect(find.text('Transaksi Berhasil'), findsOneWidget);
+    });
+
+    testWidgets('Produksi terbuka dan memproses batch barang jadi',
+        (tester) async {
+      final aksi = <String>[];
+      final produksi = <String, dynamic>{
+        'id': 61,
+        'itemId': 61,
+        'produksi': true,
+        'kode': 'PROD-61',
+        'nama': 'Kapsul Produksi UAT',
+        'satuan': 'Batch produksi',
+        'stok': 120,
+        'hargaJual': 0,
+      };
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [produksi], dicatat: aksi)),
+          const Size(1500, 900));
+
+      await tester.tap(find.text('Produksi Farmasi'));
+      await tester.pumpAndSettle();
+      expect(aksi, contains('apotik_produksi_katalog'));
+      await tester.tap(find.text('Kapsul Produksi UAT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Proses Produksi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Konfirmasi Produksi Farmasi'), findsOneWidget);
+      await tester.tap(find.text('Proses Produksi').last);
+      await tester.pumpAndSettle();
+      expect(aksi, contains('apotik_produksi_proses'));
+      expect(find.text('Produksi Berhasil'), findsOneWidget);
+    });
+
+    testWidgets('tebus resep campuran mengirim obat jadi dan racikan atomik',
+        (tester) async {
+      final pos = ApotikPosController();
+      String? aksiBayar;
+      Map<String, dynamic>? payloadBayar;
+      Future<Map<String, dynamic>> server(
+          String aksi, Map<String, dynamic> body) async {
+        switch (aksi) {
+          case 'apotik_item_cari':
+          case 'apotik_cara_bayar_list':
+            return {'status': '00', 'data': const []};
+          case 'apotik_resep_list':
+            return {
+              'status': '00',
+              'data': [
+                {'id': 71, 'kode': 'RX-71', 'jumlahBaris': 2}
+              ]
+            };
+          case 'apotik_resep_detail':
+            return {
+              'status': '00',
+              'adaRacikan': true,
+              'data': [
+                {..._obat, 'itemId': 1, 'jumlah': 2, 'racikan': false},
+                {
+                  'id': 72,
+                  'racikanId': 72,
+                  'racikan': true,
+                  'kode': 'RAC-72',
+                  'nama': 'Puyer Resep',
+                  'satuan': 'Paket',
+                  'stok': 100,
+                  'hargaJual': 5000,
+                  'jumlah': 1,
+                },
+              ]
+            };
+          case 'apotik_item_batch':
+            return {'status': '00', 'data': const []};
+          case 'apotik_bayar_racikan':
+            aksiBayar = aksi;
+            payloadBayar = body;
+            return {'status': '00', 'kode': 'APT-MIX-71', 'total': 11000};
+          default:
+            return {'status': '91', 'description': 'Aksi $aksi tidak dikenal'};
+        }
+      }
+
+      await _pump(tester, ApotikPosPage(controller: pos, panggil: server),
+          const Size(1500, 900));
+      await tester.tap(find.text('Tebus Resep'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('RX-71'));
+      await tester.pumpAndSettle();
+      expect(pos.keranjang, hasLength(2));
+
+      await tester.tap(find.text('Bayar'));
+      await tester.pumpAndSettle();
+      expect(aksiBayar, 'apotik_bayar_racikan');
+      expect(payloadBayar!['resep_id'], 71);
+      final items = payloadBayar!['items'] as List;
+      expect(items[0], containsPair('item_id', 1));
+      expect(items[1], containsPair('racikan_id', 72));
     });
   });
 

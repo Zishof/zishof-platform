@@ -13,12 +13,14 @@ typedef PanggilBayar = Future<Map<String, dynamic>> Function(
 class PembayaranTertunda {
   /// Kode idempoten yang dikirim ke server (`payload['kode']`).
   final String kode;
+  final String aksi;
   final Map<String, dynamic> payload;
   final double total;
   final DateTime waktu;
 
   const PembayaranTertunda({
     required this.kode,
+    this.aksi = 'apotik_bayar',
     required this.payload,
     required this.total,
     required this.waktu,
@@ -26,6 +28,7 @@ class PembayaranTertunda {
 
   Map<String, dynamic> toJson() => {
         'kode': kode,
+        'aksi': aksi,
         'payload': payload,
         'total': total,
         'waktu': waktu.toIso8601String(),
@@ -38,6 +41,7 @@ class PembayaranTertunda {
     if (kode.isEmpty || payload is! Map) return null;
     return PembayaranTertunda(
       kode: kode,
+      aksi: '${j['aksi'] ?? 'apotik_bayar'}',
       payload: Map<String, dynamic>.from(payload),
       total: ((j['total'] as num?) ?? 0).toDouble(),
       waktu: DateTime.tryParse('${j['waktu'] ?? ''}') ?? DateTime.now(),
@@ -164,7 +168,7 @@ class ApotikPembayaranTertundaStore {
       PembayaranTertunda p, PanggilBayar panggil) async {
     Map<String, dynamic> r;
     try {
-      r = await panggil('apotik_bayar', p.payload);
+      r = await panggil(p.aksi, p.payload);
     } on ApiException catch (e) {
       if (e.offline) {
         return HasilPeriksaUlang(StatusPeriksaUlang.masihTidakPasti,

@@ -9,7 +9,7 @@ existing dipertahankan sebagai adapter selama migrasi.
 | **1** ✅ | design token, breakpoint, context bar, page header, status pill, state loading/empty/error | `6913f1b` |
 | **2** ✅ | dashboard operasional berbasis prioritas | `3a00ba1` |
 | **3** ✅ | state machine + mode switcher + panel keranjang (`8469045`); halaman POS 3-area + pemilih batch FEFO IR-02 + `KasirApotikScreen` jadi route adapter | selesai |
-| **4** ✅ | antrean resep, daftar periksa pra-serah, dispensing IR-05 (racikan tetap terkunci: IR-04) | selesai |
+| **4** ✅ | antrean resep, daftar periksa pra-serah, dispensing IR-05, racikan dan resep campuran IR-04 | selesai |
 | **5** ✅ | formularium (editor IR-01), batch/FEFO (IR-02 tulis), penerimaan PBF | `feat(apotik-inventory): batch, expiry and procurement workspace` |
 | **6** ✅ | lembar pembayaran + kembalian, laci kas & struk ESC/POS lokal, pemulihan pembayaran yang belum dipastikan | selesai |
 | **7** ✅ | rekonsiliasi kas apotek: rekap per metode, hitung laci, dan sesi kas apotek sendiri (buka/tutup tersimpan, IR-06) | selesai |
@@ -102,7 +102,7 @@ dan metrik juga tidak di-cache — menampilkan uang dari cache lebih berbahaya
 daripada mengatakan "belum terbaca".
 
 **Sisa pekerjaan bukan lagi soal UI**, melainkan keputusan pemilik proses:
-IR-03 (butuh basis pengetahuan obat berlisensi), IR-04 (bentuk formula
+IR-03 (butuh basis pengetahuan obat berlisensi), lanjutan IR-04 (etiket dan formula
 racikan), sisa IR-09 (alur PO & penerimaan sebagian), dan sisa IR-10 (kolom
 `waktu_masuk` pada `sirs.resep`, yang pengisiannya ada di modul ZK rumah
 sakit — di luar lingkup apotik).

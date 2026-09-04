@@ -202,16 +202,25 @@ void main() {
   });
 
   group('Mode transaksi', () {
-    test('racikan dan produksi menahan bayar dengan alasan jujur', () {
+    test('seluruh mode kasir didukung server dan lolos pagar dasar', () {
       final c = ApotikPosController()
         ..tambah(_baris())
         ..mode = ApotikModePos.racikan;
       final pagar = c.pagarBayar();
-      expect(pagar.boleh, isFalse);
-      expect(pagar.alasan.join(), contains('belum tersedia dari server'));
-      expect(ApotikModePos.racikan.didukungServer, isFalse);
-      expect(ApotikModePos.otc.didukungServer, isTrue);
-      expect(ApotikModePos.resep.didukungServer, isTrue);
+      expect(pagar.boleh, isTrue);
+      for (final mode in ApotikModePos.values) {
+        expect(mode.didukungServer, isTrue);
+      }
+    });
+
+    test('item dan racikan dengan id sama tidak digabung', () {
+      final c = ApotikPosController()
+        ..tambah(_baris(id: 5))
+        ..tambah(ApotikBarisKeranjang(
+          item: {'id': 5, 'racikanId': 5, 'racikan': true, 'nama': 'Racikan'},
+          harga: 4000,
+        ));
+      expect(c.keranjang, hasLength(2));
     });
   });
 
@@ -247,6 +256,37 @@ void main() {
       expect(p.containsKey('pembeli'), isFalse);
       expect(p.containsKey('nama_dokter'), isFalse);
       expect(p.containsKey('resep_id'), isFalse);
+    });
+
+    test('resep campuran mengirim item_id dan racikan_id secara tepat', () {
+      final c = ApotikPosController()
+        ..tambah(_baris(id: 7))
+        ..tambah(ApotikBarisKeranjang(
+          item: {'id': 9, 'racikanId': 9, 'racikan': true, 'nama': 'Puyer A'},
+          qty: 2,
+          harga: 5000,
+        ));
+      final items = c.payloadBayar()['items'] as List;
+      expect(items[0], containsPair('item_id', 7));
+      expect(items[0].containsKey('racikan_id'), isFalse);
+      expect(items[1], containsPair('racikan_id', 9));
+      expect(items[1].containsKey('item_id'), isFalse);
+    });
+
+    test('payload produksi hanya membawa item, qty, batch, dan kedaluwarsa',
+        () {
+      final c = ApotikPosController()
+        ..mode = ApotikModePos.produksi
+        ..tambah(ApotikBarisKeranjang(
+          item: {'id': 21, 'produksi': true, 'nama': 'Kapsul Jadi'},
+          qty: 10,
+          harga: 9000,
+        ));
+      final p = c.payloadProduksi(
+          nomorBatch: ' LOT-01 ', tanggalKadaluarsa: '2028-01-31');
+      expect(p['nomor_batch'], 'LOT-01');
+      expect(p['tanggal_kadaluarsa'], '2028-01-31');
+      expect((p['items'] as List).single, {'item_id': 21, 'qty': 10});
     });
   });
 

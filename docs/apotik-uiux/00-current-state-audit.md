@@ -25,7 +25,7 @@ Pendukung bersama: `main_apotik.dart` (20), `theme/app_colors.dart` (79),
   - batch **FEFO** dengan prefill otomatis; batch kedaluwarsa **dinonaktifkan**;
   - badge **LASA** (nama mirip dibedakan visual);
   - **obat terkendali**: nama pembeli wajib + resep/nama dokter, jika tidak transaksi ditahan;
-  - baris **racikan** pada resep ditampilkan TERKUNCI dengan alasan jujur (belum didukung kasir);
+  - baris **racikan** pada resep kini ikut tebus resep campuran dalam satu transaksi atomik;
   - **kode idempoten dibuat SEKALI** sebelum kirim; retry memakai kode yang sama;
   - pesan penahan server ditampilkan apa adanya (tidak ditelan UI).
 - Permission fail-closed (`bolehMenuVarianBaru`, default false).

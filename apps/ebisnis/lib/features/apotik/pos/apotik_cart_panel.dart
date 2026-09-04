@@ -24,6 +24,13 @@ class ApotikCartPanel extends StatelessWidget {
   final VoidCallback? onBayar;
   final VoidCallback? onTahan;
   final VoidCallback? onLanjutkan;
+  final String judul;
+  final String ringkasanLabel;
+  final String? ringkasanNilai;
+  final String labelAksi;
+  final IconData ikonAksi;
+  final String judulPagar;
+  final String petunjukKosong;
 
   const ApotikCartPanel({
     super.key,
@@ -34,6 +41,14 @@ class ApotikCartPanel extends StatelessWidget {
     this.onBayar,
     this.onTahan,
     this.onLanjutkan,
+    this.judul = 'Keranjang',
+    this.ringkasanLabel = 'Total',
+    this.ringkasanNilai,
+    this.labelAksi = 'Bayar',
+    this.ikonAksi = Icons.payments_outlined,
+    this.judulPagar = 'Pembayaran ditahan',
+    this.petunjukKosong =
+        'Cari obat di katalog, atau pilih resep untuk menebus obat pasien.',
   });
 
   @override
@@ -54,12 +69,10 @@ class ApotikCartPanel extends StatelessWidget {
               Divider(height: 1, color: t.border),
               Expanded(
                 child: pos.keranjang.isEmpty
-                    ? const ApotikEmptyState(
+                    ? ApotikEmptyState(
                         ikon: Icons.shopping_cart_outlined,
                         judul: 'Keranjang kosong',
-                        petunjuk:
-                            'Cari obat di katalog, atau pilih resep untuk '
-                            'menebus obat pasien.',
+                        petunjuk: petunjukKosong,
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -88,7 +101,7 @@ class ApotikCartPanel extends StatelessWidget {
         // Expanded menggantikan Spacer: pada skala teks besar judul + pill
         // status melebihi lebar panel.
         Expanded(
-          child: Text('Keranjang',
+          child: Text(judul,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   fontSize: 14,
@@ -112,6 +125,7 @@ class ApotikCartPanel extends StatelessWidget {
   Widget _baris(BuildContext context, ApotikDesignTokens t, int i,
       ApotikBarisKeranjang b) {
     final batchKurang = !b.batchLengkap;
+    final bolehPilihBatch = onPilihBatch != null && !b.racikan && !b.produksi;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       child: Column(
@@ -160,10 +174,10 @@ class ApotikCartPanel extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: t.textPrimary)),
           ]),
-          if (b.batch.isNotEmpty || onPilihBatch != null) ...[
+          if (b.batch.isNotEmpty || bolehPilihBatch) ...[
             const SizedBox(height: 6),
             InkWell(
-              onTap: onPilihBatch == null ? null : () => onPilihBatch!(i),
+              onTap: bolehPilihBatch ? () => onPilihBatch!(i) : null,
               borderRadius: BorderRadius.circular(6),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
@@ -183,7 +197,7 @@ class ApotikCartPanel extends StatelessWidget {
                           color: batchKurang ? t.warning : t.textSecondary),
                     ),
                   ),
-                  if (onPilihBatch != null)
+                  if (bolehPilihBatch)
                     Icon(Icons.chevron_right, size: 15, color: t.textSecondary),
                 ]),
               ),
@@ -255,9 +269,9 @@ class ApotikCartPanel extends StatelessWidget {
             spacing: 8,
             runSpacing: 2,
             children: [
-              Text('Total',
+              Text(ringkasanLabel,
                   style: TextStyle(fontSize: 13, color: t.textSecondary)),
-              Text(_rp.format(pos.total),
+              Text(ringkasanNilai ?? _rp.format(pos.total),
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -302,7 +316,7 @@ class ApotikCartPanel extends StatelessWidget {
                   Row(children: [
                     Icon(Icons.gpp_maybe_outlined, size: 15, color: t.warning),
                     const SizedBox(width: 6),
-                    Text('Pembayaran ditahan',
+                    Text(judulPagar,
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -351,8 +365,8 @@ class ApotikCartPanel extends StatelessWidget {
                           width: 15,
                           height: 15,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.payments_outlined, size: 18),
-                  label: Text(sedangProses ? 'Memproses…' : 'Bayar'),
+                      : Icon(ikonAksi, size: 18),
+                  label: Text(sedangProses ? 'Memproses…' : labelAksi),
                 ),
               ),
             ),

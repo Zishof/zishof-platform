@@ -12,7 +12,7 @@ merombak layar.
 | **IR-01** ✅ | Atribut obat: golongan (Rx/OTC/keras/narkotika), bentuk sediaan, kekuatan, `high_alert`, `cold_chain` | `apotik_item_cari` hanya mengirim `lasa`, `terkendali`, `kandungan`, `barcode`, `satuan`, `stok`, `hargaJual` | `MedicationCard` hanya menampilkan yang ada; badge Rx/high-alert/cold-chain tidak dirender | tambah field pada `ApotikApiHelper.itemCari` (sumbernya sebagian sudah ada di profil item) |
 | **IR-02** ✅ | Status batch: lokasi, saldo ditahan, karantina, recall, rusak | `apotik_item_batch` / `apotik_batch_monitor` hanya `kedaluwarsa`, `sisa` | UI menurunkan sendiri `expired`/`nearExpiry`/`depleted`; status lain tidak ditampilkan | tambah kolom status lot + endpoint ubah status |
 | **IR-03** | Peringatan klinis: alergi, interaksi, duplikasi terapi, dosis | tidak ada | panel telaah tidak dibuat (menghindari kesan sudah diperiksa) | endpoint telaah + sumber data alergi pasien |
-| **IR-04** | Racikan/compounding: formula, BOM, HPP, etiket | `apotik_resep_detail` hanya **membaca** flag `racikan` | mode Racikan & Produksi tampil TERKUNCI beserta alasannya; baris racikan resep tetap terkunci (perilaku existing) | endpoint buat/kerjakan racikan |
+| **IR-04** ✅ inti | Racikan/compounding dan produksi farmasi | `apotik_racikan_list`, `apotik_bayar_racikan`, `apotik_produksi_katalog`, `apotik_produksi_proses`; resep campuran atomik | mode Racikan & Produksi terbuka; stok, FEFO, pembayaran, dan batch hasil dibukukan server | etiket khusus dan workflow formula lanjutan tetap backlog |
 | **IR-05** ✅ | Double-check pemeriksa kedua, konseling | **SUDAH ADA** — entity `ApotikDispensingLog` + aksi `apotik_dispensing_status`/`_catat`; server MENOLAK pemeriksa kedua yang sama dengan penyiap | tombol dirakit hanya bila server mendukung | selesai |
 | **IR-06** ✅ | Buka/tutup shift & kas laci untuk apotik | **SUDAH ADA** — entity `ApotikSesiKas` + aksi `apotik_sesi_kas_status/_buka/_tutup/_list` (r83308), menghitung penerimaan dari `sirs.apotik_pembayaran_transaksi`. `sesi_kas_*` POS umum TIDAK dipakai ulang: ia membaca ledger POS yang tidak memuat penjualan apotek | tab Rekonsiliasi Kas punya kartu sesi berjalan, tombol buka/tutup, dan menampilkan kas seharusnya dari server | selesai (bila kelak satu laci dipakai bersama POS umum, yang dibutuhkan adalah menambah sumber apotek ke `SesiKasUtil`) |
 | **IR-07** ✅ | Daftar metode pembayaran apotik | **SUDAH ADA** — `apotik_cara_bayar_list` + pencatatan di `ApotikPembayaranTransaksi` | dropdown hanya dirakit bila server mengirim daftar | selesai |
@@ -26,7 +26,8 @@ merombak layar.
 **Selesai:** IR-01, IR-02, IR-05, IR-07 (backend + UI).
 **Sebagian:** IR-08 — sisi perangkat (printer, laci, cetak ulang) selesai di
 Fase 6; sisi server (riwayat cetak, bukti digital) masih terbuka.
-**Masih terbuka:** IR-03, IR-04.
+**Masih terbuka:** IR-03; bagian lanjutan IR-04 berupa etiket khusus dan
+workflow persetujuan formula.
 **Sebagian:** IR-09 (bukti suhu selesai; PO & penerimaan sebagian menunggu
 keputusan alur pengadaan), IR-10 (angka pasti selesai;
 SLA waktu tunggu menunggu kolom `waktu_masuk` pada `sirs.resep` — satu-satunya

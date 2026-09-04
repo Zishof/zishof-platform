@@ -6,11 +6,7 @@ import 'apotik_pos_state.dart';
 
 /// <h3>Pemilih mode transaksi (OTC / Resep / Racikan / Produksi).</h3>
 ///
-/// Menutup temuan audit "mode OTC, Resep Dokter, Racikan, dan Produksi perlu
-/// tampil lebih eksplisit". Mode yang belum didukung server tetap DITAMPILKAN
-/// tetapi dinonaktifkan beserta alasannya — lebih jujur daripada
-/// menyembunyikannya (pengguna tahu fitur itu direncanakan) dan lebih aman
-/// daripada tombol yang tidak menulis apa pun.
+/// Keempat mode memiliki alur server end-to-end dan dapat dipilih langsung.
 class ApotikModeSwitcher extends StatelessWidget {
   final ApotikModePos aktif;
   final ValueChanged<ApotikModePos> onPilih;
@@ -47,9 +43,7 @@ class ApotikModeSwitcher extends StatelessWidget {
   Widget _chip(BuildContext context, ApotikDesignTokens t, ApotikModePos m,
       ApotikLayout layout) {
     final terpilih = m == aktif;
-    final aktifkan = m.didukungServer;
-    final warna =
-        !aktifkan ? t.textSecondary : (terpilih ? t.primary : t.textSecondary);
+    final warna = terpilih ? t.primary : t.textSecondary;
 
     final isi = Container(
       constraints: BoxConstraints(
@@ -58,13 +52,11 @@ class ApotikModeSwitcher extends StatelessWidget {
               layout.isMobile ? ApotikBreakpoints.targetSentuhMinimum : 38),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: terpilih && aktifkan
-            ? t.primarySoft
-            : (aktifkan ? t.surface : t.surfaceMuted),
+        color: terpilih ? t.primarySoft : t.surface,
         borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusControl),
         border: Border.all(
-          color: terpilih && aktifkan ? t.primary : t.border,
-          width: terpilih && aktifkan ? 1.6 : 1,
+          color: terpilih ? t.primary : t.border,
+          width: terpilih ? 1.6 : 1,
         ),
       ),
       child: Row(
@@ -84,22 +76,9 @@ class ApotikModeSwitcher extends StatelessWidget {
                     fontWeight: terpilih ? FontWeight.w700 : FontWeight.w500,
                     color: warna)),
           ),
-          if (!aktifkan) ...[
-            const SizedBox(width: 6),
-            Icon(Icons.lock_outline, size: 13, color: t.textSecondary),
-          ],
         ],
       ),
     );
-
-    if (!aktifkan) {
-      // Tooltip + label semantik menjelaskan MENGAPA terkunci.
-      return Semantics(
-        label: '${m.label}. ${m.alasanBelumDidukung}',
-        excludeSemantics: true,
-        child: Tooltip(message: m.alasanBelumDidukung, child: isi),
-      );
-    }
     return Semantics(
       button: true,
       selected: terpilih,

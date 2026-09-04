@@ -329,6 +329,26 @@ void main() {
       expect(daftar.first.payload['kode'], 'APT1');
     });
 
+    test('endpoint racikan ikut tersimpan dan dipakai saat pemeriksaan ulang',
+        () async {
+      final store = ApotikPembayaranTertundaStore.instance;
+      final tertunda = PembayaranTertunda(
+        kode: 'RAC-1',
+        aksi: 'apotik_bayar_racikan',
+        payload: const {'kode': 'RAC-1', 'items': []},
+        total: 10000,
+        waktu: DateTime(2026, 9, 5),
+      );
+      await store.catat(tertunda);
+      final terbaca = (await store.muat()).single;
+      String? aksiTerkirim;
+      await store.periksaUlang(terbaca, (aksi, body) async {
+        aksiTerkirim = aksi;
+        return {'status': '00', 'kode': 'RAC-1', 'idempoten': true};
+      });
+      expect(aksiTerkirim, 'apotik_bayar_racikan');
+    });
+
     test('kode yang sama tidak menggandakan antrean', () async {
       final store = ApotikPembayaranTertundaStore.instance;
       await store.catat(contoh());

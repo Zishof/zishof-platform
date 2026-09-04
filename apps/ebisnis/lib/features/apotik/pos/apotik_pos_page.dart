@@ -42,8 +42,8 @@ typedef PanggilAksi = Future<Map<String, dynamic>> Function(
 /// Seluruh pagar keselamatan yang sudah terbukti DIPERTAHANKAN dan kini
 /// ditegakkan lewat [ApotikPosController]: obat terkendali wajib identitas
 /// pembeli + resep/dokter, batch kedaluwarsa & lot ditahan tidak dapat
-/// dipilih (IR-02), baris racikan resep dilewati dengan pemberitahuan jujur,
-/// dan kode idempoten dipakai ulang saat retry.
+/// dipilih (IR-02), resep campuran dibukukan atomik, dan kode idempoten
+/// dipakai ulang saat retry.
 class ApotikPosPage extends StatefulWidget {
   final PanggilAksi? panggil;
   final ApotikPosController? controller;
@@ -131,6 +131,40 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   bool _sukses(Map<String, dynamic> r) =>
       r['status'] == '00' || r['status'] == 'success';
 
+  bool get _modeProduksi => _pos.mode == ApotikModePos.produksi;
+
+  String get _aksiKatalog => switch (_pos.mode) {
+        ApotikModePos.racikan => 'apotik_racikan_list',
+        ApotikModePos.produksi => 'apotik_produksi_katalog',
+        _ => 'apotik_item_cari',
+      };
+
+  String get _kunciKatalog => switch (_pos.mode) {
+        ApotikModePos.racikan => kunciCacheRacikanApotik,
+        ApotikModePos.produksi => kunciCacheProduksiApotik,
+        _ => kunciCacheItemApotik,
+      };
+
+  String get _hintCari => switch (_pos.mode) {
+        ApotikModePos.racikan => 'Cari nama atau kode formula racikan…',
+        ApotikModePos.produksi => 'Cari barang jadi atau formula produksi…',
+        _ => 'Cari nama obat, kode, atau pindai barcode…',
+      };
+
+  String get _judulKatalogKosong => switch (_pos.mode) {
+        ApotikModePos.racikan => 'Formula racikan tidak ditemukan',
+        ApotikModePos.produksi => 'Formula produksi tidak ditemukan',
+        _ => 'Obat tidak ditemukan',
+      };
+
+  String get _petunjukKatalogKosong => switch (_pos.mode) {
+        ApotikModePos.racikan =>
+          'Coba kata kunci lain atau pastikan komposisi racikan sudah dibuat.',
+        ApotikModePos.produksi =>
+          'Coba kata kunci lain atau pastikan formula bahan baku sudah dibuat.',
+        _ => 'Coba kata kunci lain, atau pindai barcode pada kemasan obat.',
+      };
+
   List<Map<String, dynamic>> _data(Map<String, dynamic> r) =>
       ((r['data'] as List?) ?? const [])
           .whereType<Map>()
@@ -206,6 +240,38 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         Timer(const Duration(milliseconds: 300), () => _jalankanCari(v));
   }
 
+  Future<void> _pilihMode(ApotikModePos mode) async {
+    if (mode == _pos.mode) return;
+    if (_pos.keranjang.isNotEmpty) {
+      final lanjut = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Ganti mode transaksi?'),
+          content: const Text(
+              'Keranjang transaksi yang sedang berjalan akan dikosongkan.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Ganti Mode')),
+          ],
+        ),
+      );
+      if (lanjut != true || !mounted) return;
+    }
+    setStateIfMounted(() {
+      _pos.kosongkan();
+      _pos.mode = mode;
+      _cari.clear();
+      _hasilCari = const [];
+      _katalogDariCache = false;
+      _galatCari = null;
+    });
+    await _jalankanCari('');
+  }
+
   Future<void> _jalankanCari(String keyword) async {
     setStateIfMounted(() {
       _memuatCari = true;
@@ -216,9 +282,9 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       // penanda keselamatan saat jaringan mati. Yang di-cache hanya katalog;
       // pembayaran tetap menuntut server.
       await _muatKatalog(
-        'apotik_item_cari',
-        {'keyword': keyword, 'page_size': 40},
-        kunciCacheItemApotik,
+        _aksiKatalog,
+        {'keyword': keyword, 'page_size': 100},
+        _kunciKatalog,
         onData: (hasil) {
           if (!mounted) return;
           final dariServer = hasil['dariServer'] == true;
@@ -256,26 +322,32 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   /// lebih dulu (prefill FEFO) — sama seperti alur lama.
   Future<void> _tambahItem(Map<String, dynamic> item, {double qty = 1}) async {
     var batchTerpilih = <Map<String, dynamic>>[];
-    try {
-      final r = await _panggil('apotik_item_batch', {'item_id': item['id']});
-      final batches = _data(r);
-      if (batches.isNotEmpty && mounted) {
-        final pilih = await showModalBottomSheet<List<Map<String, dynamic>>>(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => ApotikBatchSheet(
-              namaItem: '${item['nama'] ?? '-'}',
-              batches: batches,
-              qtyDiminta: qty),
-        );
-        if (pilih == null) return; // kasir membatalkan
-        batchTerpilih = pilih;
-        qty = batchTerpilih.fold<double>(
-            0, (a, b) => a + (((b['qty'] as num?) ?? 0).toDouble()));
+    final serverPilihFefo = item['racikan'] == true || item['produksi'] == true;
+    if (!serverPilihFefo) {
+      try {
+        final r = await _panggil('apotik_item_batch', {'item_id': item['id']});
+        if (!_sukses(r)) {
+          throw Exception('${r['description'] ?? 'Batch tidak dapat dimuat.'}');
+        }
+        final batches = _data(r);
+        if (batches.isNotEmpty && mounted) {
+          final pilih = await showModalBottomSheet<List<Map<String, dynamic>>>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => ApotikBatchSheet(
+                namaItem: '${item['nama'] ?? '-'}',
+                batches: batches,
+                qtyDiminta: qty),
+          );
+          if (pilih == null) return; // kasir membatalkan
+          batchTerpilih = pilih;
+          qty = batchTerpilih.fold<double>(
+              0, (a, b) => a + (((b['qty'] as num?) ?? 0).toDouble()));
+        }
+      } catch (e) {
+        _pesan('Gagal memuat batch: $e', galat: true);
+        return;
       }
-    } catch (e) {
-      _pesan('Gagal memuat batch: $e', galat: true);
-      return;
     }
     setStateIfMounted(() {
       _pos.tambah(ApotikBarisKeranjang(
@@ -289,8 +361,12 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
 
   Future<void> _ubahBatch(int indeks) async {
     final baris = _pos.keranjang[indeks];
+    if (baris.racikan || baris.produksi) return;
     try {
       final r = await _panggil('apotik_item_batch', {'item_id': baris.itemId});
+      if (!_sukses(r)) {
+        throw Exception('${r['description'] ?? 'Batch tidak dapat dimuat.'}');
+      }
       final batches = _data(r);
       if (batches.isEmpty || !mounted) return;
       final pilih = await showModalBottomSheet<List<Map<String, dynamic>>>(
@@ -310,8 +386,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     }
   }
 
-  /// Tebus resep — alur dipertahankan dari layar lama, termasuk pemberitahuan
-  /// JUJUR bahwa baris racikan dilewati (belum didukung server, IR-04).
+  /// Tebus resep obat jadi maupun racikan. Bila keduanya ada, seluruh baris
+  /// tetap masuk satu transaksi dan satu pembayaran server.
   Future<void> _tebusResep() async {
     List<Map<String, dynamic>> daftar;
     try {
@@ -319,7 +395,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       Map<String, dynamic>? emisi;
       await _muatKatalog(
         'apotik_resep_list',
-        {'hanya_menunggu': true, 'page_size': 50},
+        {'hanya_menunggu': true, 'page_size': 100},
         kunciCacheResepApotik(hanyaMenunggu: true),
         onData: (hasil) => emisi = hasil,
       );
@@ -344,18 +420,16 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       final detail =
           await _panggil('apotik_resep_detail', {'resep_id': resep['id']});
       final rows = _data(detail);
-      if (detail['adaRacikan'] == true) {
-        _pesan('Resep memuat RACIKAN — baris racikan belum bisa diserahkan '
-            'lewat kasir ini dan dilewati.');
-      }
       setStateIfMounted(() {
         _pos.mode = ApotikModePos.resep;
         _pos.resepId = resep['id'];
         _pos.resepKode = '${resep['kode'] ?? ''}';
       });
-      for (final r in rows.where((r) => r['racikan'] != true)) {
+      for (final r in rows) {
         await _tambahItem({
-          'id': r['itemId'],
+          'id': r['racikan'] == true ? r['racikanId'] : r['itemId'],
+          'racikanId': r['racikanId'],
+          'racikan': r['racikan'] == true,
           'kode': r['kode'],
           'nama': r['nama'],
           'satuan': r['satuan'],
@@ -368,6 +442,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           'kekuatan': r['kekuatan'],
           'highAlert': r['highAlert'],
           'coldChain': r['coldChain'],
+          'komponen': r['komponen'],
+          'jumlahKomponen': r['jumlahKomponen'],
         }, qty: ((r['jumlah'] as num?) ?? 1).toDouble());
       }
     } catch (e) {
@@ -382,6 +458,10 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   Future<void> _bayar() async {
     if (!_pos.pagarBayar().boleh) {
       setStateIfMounted(() {});
+      return;
+    }
+    if (_modeProduksi) {
+      await _prosesProduksi();
       return;
     }
     if (_caraBayar.isEmpty) {
@@ -402,6 +482,62 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     if (hasil == null || !mounted) return;
     setStateIfMounted(() => _caraBayarId = hasil.caraBayarId);
     await _kirimBayar(hasil);
+  }
+
+  Future<void> _prosesProduksi() async {
+    final sekarang = DateTime.now();
+    final data = await showDialog<_DataProduksi>(
+      context: context,
+      builder: (_) => _DialogProduksi(
+        nomorBatchAwal: 'PROD-${DateFormat('yyyyMMdd-HHmm').format(sekarang)}',
+        tanggalAwal: DateTime(sekarang.year + 1, sekarang.month, sekarang.day),
+      ),
+    );
+    if (data == null || !mounted || !_pos.mulaiBayar()) return;
+    setStateIfMounted(() {});
+    final payload = _pos.payloadProduksi(
+      nomorBatch: data.nomorBatch,
+      tanggalKadaluarsa: DateFormat('yyyy-MM-dd').format(data.kadaluarsa),
+    );
+    try {
+      final r = await _panggil('apotik_produksi_proses', payload);
+      if (!_sukses(r)) {
+        setStateIfMounted(() => _pos
+            .tandaiGagal('${r['description'] ?? 'Produksi ditolak server.'}'));
+        return;
+      }
+      _pos.tandaiBerhasil();
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Produksi Berhasil'),
+            content: Text(
+                '${r['jumlahProduksi'] ?? _pos.keranjang.length} barang jadi '
+                'telah diproduksi.\nBatch: ${data.nomorBatch}\n'
+                'Kedaluwarsa: ${DateFormat('dd-MM-yyyy').format(data.kadaluarsa)}'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Tutup')),
+            ],
+          ),
+        );
+      }
+      setStateIfMounted(() => _pos.kosongkan());
+      unawaited(_jalankanCari(_cari.text));
+    } on ApiException catch (e) {
+      setStateIfMounted(() => _pos.tandaiGagal(e.offline
+          ? 'Server tidak terjangkau. Status produksi belum dapat dipastikan; '
+              'coba lagi dengan keranjang yang sama agar kode idempoten tetap digunakan.'
+          : e.pesan));
+    } catch (e) {
+      setStateIfMounted(() => _pos.tandaiGagal('$e'));
+    } finally {
+      if (_pos.status == ApotikStatusTransaksi.paymentFailed) {
+        setStateIfMounted(() => _pos.siapkanUlang());
+      }
+    }
   }
 
   Future<void> _kirimBayar(HasilPembayaran? bayar) async {
@@ -427,8 +563,11 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       }
     }
     final kodeKirim = '${payload['kode']}';
+    final aksi = _pos.keranjang.any((b) => b.racikan)
+        ? 'apotik_bayar_racikan'
+        : 'apotik_bayar';
     try {
-      final r = await _panggil('apotik_bayar', payload);
+      final r = await _panggil(aksi, payload);
       if (!_sukses(r)) {
         // Penolakan BISNIS: server sadar menolak, jadi tidak ada transaksi
         // yang terbukukan. Pesannya ditampilkan APA ADANYA.
@@ -447,11 +586,12 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       setStateIfMounted(() => _strukTerakhir = struk);
       if (mounted) await _dialogBerhasil(struk, bayar);
       setStateIfMounted(() => _pos.kosongkan());
+      unawaited(_jalankanCari(_cari.text));
     } on ApiException catch (e) {
       if (e.offline) {
         // TIDAK DIKETAHUI, bukan "gagal": permintaan mungkin sudah sampai dan
         // terbukukan. Menyebutnya gagal akan mendorong kasir menjual dua kali.
-        await _catatTertunda(kodeKirim, payload);
+        await _catatTertunda(kodeKirim, aksi, payload);
         setStateIfMounted(() => _pos.tandaiBelumTersinkron());
         if (mounted) await _dialogTidakPasti(e.pesan);
         return;
@@ -546,10 +686,12 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     );
   }
 
-  Future<void> _catatTertunda(String kode, Map<String, dynamic> payload) async {
+  Future<void> _catatTertunda(
+      String kode, String aksi, Map<String, dynamic> payload) async {
     try {
       await ApotikPembayaranTertundaStore.instance.catat(PembayaranTertunda(
         kode: kode,
+        aksi: aksi,
         payload: payload,
         total: _pos.total,
         waktu: DateTime.now(),
@@ -763,7 +905,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
               12, ApotikBreakpoints.paddingHalaman(layout), 0),
           child: ApotikModeSwitcher(
             aktif: _pos.mode,
-            onPilih: (m) => setStateIfMounted(() => _pos.mode = m),
+            onPilih: _pilihMode,
           ),
         ),
         Expanded(child: _panelKatalog(t)),
@@ -788,7 +930,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           const SizedBox(height: 8),
           ApotikModeSwitcher(
             aktif: _pos.mode,
-            onPilih: (m) => setStateIfMounted(() => _pos.mode = m),
+            onPilih: _pilihMode,
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -797,7 +939,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             label: const Text('Tebus Resep'),
           ),
           const SizedBox(height: 16),
-          if (_caraBayar.isNotEmpty) ...[
+          if (_caraBayar.isNotEmpty && !_modeProduksi) ...[
             Text('Metode pembayaran',
                 style: TextStyle(
                     fontSize: 12,
@@ -831,7 +973,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             ),
             const SizedBox(height: 16),
           ],
-          _identitasPembeli(t),
+          if (!_modeProduksi) _identitasPembeli(t),
         ],
       ),
     );
@@ -894,7 +1036,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             controller: _cari,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Cari nama obat, kode, atau pindai barcode…',
+              hintText: _hintCari,
               prefixIcon: const Icon(Icons.search),
               border: const OutlineInputBorder(),
               isDense: true,
@@ -918,14 +1060,17 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                   pesan: _galatCari!,
                   onCobaLagi: () => _jalankanCari(_cari.text))
               : (_memuatCari && _hasilCari.isEmpty)
-                  ? const ApotikLoadingState(pesan: 'Memuat katalog obat…')
+                  ? ApotikLoadingState(
+                      pesan: _modeProduksi
+                          ? 'Memuat formula produksi…'
+                          : _pos.mode == ApotikModePos.racikan
+                              ? 'Memuat formula racikan…'
+                              : 'Memuat katalog obat…')
                   : _hasilCari.isEmpty
-                      ? const ApotikEmptyState(
+                      ? ApotikEmptyState(
                           ikon: Icons.medication_outlined,
-                          judul: 'Obat tidak ditemukan',
-                          petunjuk:
-                              'Coba kata kunci lain, atau pindai barcode pada '
-                              'kemasan obat.')
+                          judul: _judulKatalogKosong,
+                          petunjuk: _petunjukKatalogKosong)
                       : _gridObat(t),
         ),
       ],
@@ -993,6 +1138,18 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       onBayar: _bayar,
       onTahan: () => setStateIfMounted(() => _pos.tahan()),
       onLanjutkan: () => setStateIfMounted(() => _pos.lanjutkan()),
+      judul: _modeProduksi ? 'Rencana Produksi' : 'Keranjang',
+      ringkasanLabel: _modeProduksi ? 'Total hasil' : 'Total',
+      ringkasanNilai: _modeProduksi
+          ? '${_pos.keranjang.fold<double>(0, (a, b) => a + b.qty).toStringAsFixed(0)} unit'
+          : null,
+      labelAksi: _modeProduksi ? 'Proses Produksi' : 'Bayar',
+      ikonAksi:
+          _modeProduksi ? Icons.factory_outlined : Icons.payments_outlined,
+      judulPagar: _modeProduksi ? 'Produksi ditahan' : 'Pembayaran ditahan',
+      petunjukKosong: _modeProduksi
+          ? 'Pilih barang jadi dari katalog formula untuk memulai produksi.'
+          : 'Cari obat atau racikan, atau pilih resep untuk menebus obat pasien.',
     );
   }
 
@@ -1013,7 +1170,10 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
               children: [
                 Text('${_pos.keranjang.length} item',
                     style: TextStyle(fontSize: 11, color: t.textSecondary)),
-                Text(_rp.format(_pos.total),
+                Text(
+                    _modeProduksi
+                        ? '${_pos.keranjang.fold<double>(0, (a, b) => a + b.qty).toStringAsFixed(0)} unit'
+                        : _rp.format(_pos.total),
                     style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -1026,7 +1186,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             child: FilledButton.icon(
               onPressed: _pos.keranjang.isEmpty ? null : _bukaKeranjangPenuh,
               icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-              label: const Text('Keranjang'),
+              label: Text(_modeProduksi ? 'Rencana Produksi' : 'Keranjang'),
             ),
           ),
         ]),
@@ -1077,11 +1237,116 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
               _pos.lanjutkan();
               setSheet(() {});
             },
+            judul: _modeProduksi ? 'Rencana Produksi' : 'Keranjang',
+            ringkasanLabel: _modeProduksi ? 'Total hasil' : 'Total',
+            ringkasanNilai: _modeProduksi
+                ? '${_pos.keranjang.fold<double>(0, (a, b) => a + b.qty).toStringAsFixed(0)} unit'
+                : null,
+            labelAksi: _modeProduksi ? 'Proses Produksi' : 'Bayar',
+            ikonAksi: _modeProduksi
+                ? Icons.factory_outlined
+                : Icons.payments_outlined,
+            judulPagar:
+                _modeProduksi ? 'Produksi ditahan' : 'Pembayaran ditahan',
+            petunjukKosong: _modeProduksi
+                ? 'Pilih barang jadi dari katalog formula untuk memulai produksi.'
+                : 'Cari obat atau racikan, atau pilih resep untuk menebus obat pasien.',
           ),
         ),
       ),
     );
     setStateIfMounted(() {});
+  }
+}
+
+class _DataProduksi {
+  final String nomorBatch;
+  final DateTime kadaluarsa;
+  const _DataProduksi(this.nomorBatch, this.kadaluarsa);
+}
+
+class _DialogProduksi extends StatefulWidget {
+  final String nomorBatchAwal;
+  final DateTime tanggalAwal;
+
+  const _DialogProduksi({
+    required this.nomorBatchAwal,
+    required this.tanggalAwal,
+  });
+
+  @override
+  State<_DialogProduksi> createState() => _DialogProduksiState();
+}
+
+class _DialogProduksiState extends State<_DialogProduksi> {
+  late final TextEditingController _batch =
+      TextEditingController(text: widget.nomorBatchAwal);
+  late DateTime _tanggal = widget.tanggalAwal;
+
+  @override
+  void dispose() {
+    _batch.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pilihTanggal() async {
+    final kini = DateTime.now();
+    final hasil = await showDatePicker(
+      context: context,
+      initialDate: _tanggal,
+      firstDate: DateTime(kini.year, kini.month, kini.day + 1),
+      lastDate: DateTime(kini.year + 10, 12, 31),
+      helpText: 'Tanggal kedaluwarsa hasil produksi',
+    );
+    if (hasil != null && mounted) setState(() => _tanggal = hasil);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final batchValid = _batch.text.trim().isNotEmpty;
+    return AlertDialog(
+      title: const Text('Konfirmasi Produksi Farmasi'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+                'Bahan baku akan dikurangi dan batch barang jadi akan dibuat dalam satu proses.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _batch,
+              decoration: const InputDecoration(
+                labelText: 'Nomor batch hasil',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _pilihTanggal,
+              icon: const Icon(Icons.event_outlined),
+              label: Text(
+                  'Kedaluwarsa: ${DateFormat('dd-MM-yyyy').format(_tanggal)}'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal')),
+        FilledButton.icon(
+          onPressed: batchValid
+              ? () => Navigator.pop(
+                  context, _DataProduksi(_batch.text.trim(), _tanggal))
+              : null,
+          icon: const Icon(Icons.factory_outlined),
+          label: const Text('Proses Produksi'),
+        ),
+      ],
+    );
   }
 }
 

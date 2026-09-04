@@ -18,20 +18,10 @@ enum ApotikModePos {
         ApotikModePos.produksi => 'Produksi Farmasi',
       };
 
-  /// Mode yang BELUM didukung server (racikan/produksi belum punya aksi tulis).
-  /// Dipakai UI untuk menampilkan alasan jujur, bukan tombol yang tidak menulis
-  /// apa pun — lihat IR-04 pada docs/apotik-uiux/02-api-action-map.md.
-  bool get didukungServer =>
-      this == ApotikModePos.otc || this == ApotikModePos.resep;
+  /// Seluruh mode telah memiliki kontrak baca dan tulis di server.
+  bool get didukungServer => true;
 
-  String get alasanBelumDidukung => switch (this) {
-        ApotikModePos.racikan =>
-          'Dispensing racikan belum tersedia dari server (IR-04). '
-              'Baris racikan pada resep tetap ditampilkan terkunci.',
-        ApotikModePos.produksi =>
-          'Produksi farmasi belum tersedia dari server (IR-04).',
-        _ => '',
-      };
+  String get alasanBelumDidukung => '';
 }
 
 enum ApotikStatusTransaksi {
@@ -74,6 +64,12 @@ class ApotikBarisKeranjang {
   }) : batch = batch ?? <Map<String, dynamic>>[];
 
   Object? get itemId => item['id'];
+  Object? get racikanId => item['racikanId'] ?? item['id'];
+  bool get racikan => item['racikan'] == true;
+  bool get produksi => item['produksi'] == true;
+  String get kunciBaris =>
+      '${racikan ? 'racikan' : produksi ? 'produksi' : 'item'}:'
+      '${racikan ? racikanId : itemId}';
   bool get terkendali => item['terkendali'] == true;
   bool get lasa => item['lasa'] == true;
   String get nama => '${item['nama'] ?? '-'}';
@@ -144,8 +140,8 @@ class ApotikPosController {
   }
 
   void tambah(ApotikBarisKeranjang baris) {
-    final adaIndeks = keranjang
-        .indexWhere((b) => b.itemId != null && b.itemId == baris.itemId);
+    final adaIndeks =
+        keranjang.indexWhere((b) => b.kunciBaris == baris.kunciBaris);
     if (adaIndeks >= 0 && baris.batch.isEmpty) {
       keranjang[adaIndeks].qty += baris.qty;
     } else {
@@ -217,9 +213,6 @@ class ApotikPosController {
             'belum sama dengan qty (${b.qty.toStringAsFixed(0)}).');
       }
     }
-    if (!mode.didukungServer) {
-      alasan.add(mode.alasanBelumDidukung);
-    }
     return ApotikPagarBayar(alasan.isEmpty, alasan);
   }
 
@@ -258,8 +251,8 @@ class ApotikPosController {
     _segarkanStatus();
   }
 
-  /// Payload `apotik_bayar` — bentuknya dijaga identik dengan implementasi
-  /// existing agar kontrak server tidak berubah diam-diam.
+  /// Payload penjualan. Baris racikan memakai `racikan_id`; obat jadi memakai
+  /// `item_id`. Bentuk campuran dipakai oleh tebus resep atomik.
   Map<String, dynamic> payloadBayar() {
     return <String, dynamic>{
       'kode': kodeIdempoten(),
@@ -272,7 +265,10 @@ class ApotikPosController {
       if (namaDokter.trim().isNotEmpty) 'nama_dokter': namaDokter.trim(),
       'items': keranjang
           .map((b) => <String, dynamic>{
-                'item_id': b.itemId,
+                if (b.racikan)
+                  'racikan_id': b.racikanId
+                else
+                  'item_id': b.itemId,
                 'qty': b.qty,
                 'harga_satuan': b.harga,
                 if (b.batch.isNotEmpty)
@@ -282,6 +278,25 @@ class ApotikPosController {
                             'qty': x['qty'],
                           })
                       .toList(),
+              })
+          .toList(),
+    };
+  }
+
+  /// Payload produksi farmasi. Harga jual dan pembayaran tidak ikut karena
+  /// aksi ini memindahkan stok bahan baku menjadi stok barang jadi.
+  Map<String, dynamic> payloadProduksi({
+    required String nomorBatch,
+    required String tanggalKadaluarsa,
+  }) {
+    return <String, dynamic>{
+      'kode': kodeIdempoten(),
+      'nomor_batch': nomorBatch.trim(),
+      'tanggal_kadaluarsa': tanggalKadaluarsa,
+      'items': keranjang
+          .map((b) => <String, dynamic>{
+                'item_id': b.itemId,
+                'qty': b.qty,
               })
           .toList(),
     };

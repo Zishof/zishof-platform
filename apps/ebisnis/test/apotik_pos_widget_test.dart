@@ -57,7 +57,7 @@ void main() {
       expect(find.text('Produksi Farmasi'), findsOneWidget);
     });
 
-    testWidgets('mode tanpa dukungan server tidak dapat dipilih',
+    testWidgets('racikan dan produksi dapat dipilih tanpa ikon kunci',
         (tester) async {
       final dipilih = <ApotikModePos>[];
       await tester.pumpWidget(_bungkus(ApotikModeSwitcher(
@@ -66,21 +66,12 @@ void main() {
       )));
       await tester.tap(find.text('Racikan'));
       await tester.pump();
-      expect(dipilih, isEmpty);
+      expect(dipilih, [ApotikModePos.racikan]);
 
-      await tester.tap(find.text('Resep Dokter'));
+      await tester.tap(find.text('Produksi Farmasi'));
       await tester.pump();
-      expect(dipilih, [ApotikModePos.resep]);
-    });
-
-    testWidgets('alasan terkunci tersedia untuk pembaca layar', (tester) async {
-      await tester.pumpWidget(_bungkus(ApotikModeSwitcher(
-        aktif: ApotikModePos.otc,
-        onPilih: (_) {},
-      )));
-      expect(
-          find.bySemanticsLabel(RegExp('Racikan.*belum tersedia dari server')),
-          findsOneWidget);
+      expect(dipilih, [ApotikModePos.racikan, ApotikModePos.produksi]);
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
     });
   });
 

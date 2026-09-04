@@ -14,6 +14,12 @@
 ///   belakangan. Kegagalan JARINGAN saat membayar ditangani terpisah lewat
 ///   `ApotikPembayaranTertundaStore` (status `paidUnsynced`), bukan dengan
 ///   berpura-pura transaksinya sukses.
+/// * `apotik_bayar_racikan` — obat jadi dan komponen racikan pada resep harus
+///   mengurangi ledger, mengalokasikan FEFO, menulis register terkendali, dan
+///   membukukan pembayaran dalam satu commit server yang idempoten.
+/// * `apotik_produksi_proses` — persetujuan produksi, pemakaian bahan baku,
+///   stok barang jadi, dan batch kedaluwarsa hasil harus atomik di server.
+///   Katalog formulanya (`apotik_produksi_katalog`) boleh dibaca lokal-dulu.
 /// * `apotik_terima_barang` — penerimaan menambah stok dan membuat lot baru,
 ///   tetapi aksinya belum punya kunci idempoten. Kiriman ulang akan
 ///   menggandakan stok, dan stok hantu di apotek berujung pada obat yang
@@ -76,6 +82,12 @@ String kunciCacheResepApotik({required bool hanyaMenunggu}) =>
 
 /// Kunci cache daftar metode pembayaran (master, jarang berubah).
 const String kunciCacheCaraBayarApotik = 'master:apotik_cara_bayar';
+
+/// Kunci cache katalog formula racikan.
+const String kunciCacheRacikanApotik = 'master:apotik_racikan';
+
+/// Kunci cache katalog formula produksi farmasi.
+const String kunciCacheProduksiApotik = 'master:apotik_produksi';
 
 /// Menyaring hasil dari CACHE menurut kata kunci.
 ///

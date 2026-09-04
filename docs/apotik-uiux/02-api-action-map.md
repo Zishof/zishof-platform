@@ -4,7 +4,7 @@ Sumber: `ais/action/servlet/api/ApotikApiDispatcher.java` + `ApotikApiHelper.jav
 Seluruh aksi lewat `ApiClient.instance.aksi(nama, body)` → POST `/Data` (PosApi).
 Sukses = `status == '00'` atau `'success'`.
 
-## Aksi yang BENAR-BENAR tersedia (14)
+## Aksi yang BENAR-BENAR tersedia
 
 | Aksi | Dipakai layar | Field respons utama |
 |---|---|---|
@@ -12,6 +12,10 @@ Sukses = `status == '00'` atau `'success'`.
 | `apotik_item_batch` | Kasir (FEFO), Persediaan | `id, kedaluwarsa, stok` per batch |
 | `apotik_item_profil_simpan` | Persediaan | — |
 | `apotik_bayar` | Kasir | `kode, total, idempoten` |
+| `apotik_racikan_list` | Kasir Racikan | formula, komponen, stok maksimal, harga, penanda risiko |
+| `apotik_bayar_racikan` | Kasir Racikan / Tebus Resep | menerima baris `racikan_id` dan `item_id` campuran; stok, FEFO, register terkendali, pembayaran, dan resep satu commit idempoten |
+| `apotik_produksi_katalog` | Produksi Farmasi | barang jadi, formula bahan baku, stok maksimal yang dapat diproduksi |
+| `apotik_produksi_proses` | Produksi Farmasi | mengurangi bahan baku dan membuat stok + batch kedaluwarsa barang jadi dalam satu commit idempoten |
 | `apotik_resep_list` | Kasir (sheet resep) | `id, kode, status, diagnosa, ditebus` |
 | `apotik_resep_detail` | Kasir | baris obat + `racikan`, `jumlah`, `sisa`, `lasa`, `terkendali`, `hargaJual` |
 | `apotik_terima_barang` | Persediaan (PBF) | — |
@@ -42,7 +46,7 @@ Aturan dokumen §3: *"Mockup tidak boleh diimplementasikan secara buta"* dan §2
 | `high_alert`, `cold_chain` | **tidak ada** | idem; integration request IR-01 |
 | Batch: lokasi, saldo ditahan, karantina, recall, rusak | **tidak ada** (hanya `kedaluwarsa`, `stok`) | FEFO picker pakai data nyata; status lain disembunyikan sampai API siap (IR-02) |
 | Peringatan klinis (alergi, interaksi, duplikasi, dosis) | **tidak ada** | panel telaah menampilkan "belum tersedia dari server" — bukan hasil palsu (IR-03) |
-| Racikan/compounding (formula, BOM, etiket) | **read-only** di `apotik_resep_detail` | baris racikan tetap TERKUNCI dengan alasan jujur (perilaku existing dipertahankan) (IR-04) |
+| Racikan/compounding (formula, BOM, etiket) | **tersedia** melalui `apotik_racikan_list`, `apotik_bayar_racikan`, dan rincian resep campuran | mode Racikan terbuka; penjualan dan tebus resep memakai transaksi atomik. Etiket khusus masih menjadi pengembangan lanjutan (IR-04) |
 | Double-check pemeriksa kedua, konseling | **tidak ada** | tidak dibuat tombol yang tidak menulis apa pun (IR-05) |
 | Buka/tutup shift, kas laci | **tidak ada** aksi apotik (`sesi_kas_*` milik POS umum) | dievaluasi memakai `sesi_kas_*` bila kontraknya cocok (IR-06) |
 | Metode pembayaran (QRIS/kartu/split) | `apotik_bayar` tanpa daftar metode | hanya tampilkan metode yang dikirim server (IR-07) |
@@ -50,5 +54,8 @@ Aturan dokumen §3: *"Mockup tidak boleh diimplementasikan secara buta"* dan §2
 | PO PBF & partial receiving, bukti suhu | hanya `apotik_terima_barang` | form penerimaan sesuai field yang diterima server (IR-09) |
 | SLA resep/racikan | **tidak ada** | dashboard memakai metrik yang bisa dihitung dari data nyata (IR-10) |
 
-**Kesimpulan:** ±60% konten visual mockup dapat diwujudkan sekarang; sisanya
-menunggu backend. Layar dibangun agar field baru cukup ditambahkan tanpa rombak UI.
+**Kesimpulan:** alur inti kasir OTC, resep dokter, racikan, produksi farmasi,
+dan tebus resep campuran sudah memiliki kontrak end-to-end. Gap yang tersisa
+adalah fungsi klinis/operasional lanjutan seperti interaksi obat, double-check,
+dan etiket khusus; layar tetap disusun agar field baru dapat ditambahkan tanpa
+rombak UI.
