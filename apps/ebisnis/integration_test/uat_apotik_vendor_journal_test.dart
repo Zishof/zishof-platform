@@ -1,16 +1,21 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/services/server_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-const _marker = 'UAT Apotik v1.34.22 - pembayaran vendor';
+const _marker = 'UAT Apotik v1.34.23 - pembayaran vendor';
+const _outputDir = String.fromEnvironment(
+  'POS_TEST_OUTPUT_DIR',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.23',
+);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('50 pembayaran vendor diposting ke jurnal sesuai COA terlampir',
+  testWidgets('100 pembayaran vendor diposting ke jurnal sesuai COA terlampir',
       (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
@@ -53,9 +58,9 @@ void main() {
       'pageSize': 100,
     }))
         .where((e) => e['status'] == 'DISETUJUI' && e['caraBayar'] == 'Tunai')
-        .take(50)
+        .take(100)
         .toList();
-    expect(payments, hasLength(50));
+    expect(payments, hasLength(100));
 
     final existing = rows(await call('jurnal_umum_list', {
       'mulai': '2026-09-01',
@@ -110,17 +115,23 @@ void main() {
       'cari': _marker,
       'status': 'posting',
     }));
-    expect(verified.length, greaterThanOrEqualTo(50));
-    expect(verified.take(50).every((e) => e['terposting'] == true), isTrue);
+    expect(verified.length, greaterThanOrEqualTo(100));
+    expect(verified.take(100).every((e) => e['terposting'] == true), isTrue);
 
+    final summary = {
+      'pembayaranDiperiksa': payments.length,
+      'jurnalDibuat': created,
+      'jurnalDipostingPadaRun': toPost.length,
+      'jurnalTerpostingTerverifikasi': verified.length,
+      'debet': '310.500 HUTANG VENDOR',
+      'kredit': '111.101 KAS YAYASAN',
+    };
+    final output = Directory(_outputDir)..createSync(recursive: true);
+    File('${output.path}\\vendor-journal-summary.json').writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(summary),
+      flush: true,
+    );
     // ignore: avoid_print
-    print('UAT_VENDOR_JURNAL=${jsonEncode({
-          'pembayaranDiperiksa': payments.length,
-          'jurnalDibuat': created,
-          'jurnalDipostingPadaRun': toPost.length,
-          'jurnalTerpostingTerverifikasi': verified.length,
-          'debet': '310.500 HUTANG VENDOR',
-          'kredit': '111.101 KAS YAYASAN',
-        })}');
+    print('UAT_VENDOR_JURNAL=${jsonEncode(summary)}');
   });
 }

@@ -150,7 +150,13 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // POS dipakai sebagai aplikasi meja kerja utama dan bukti UAT perlu
+  // memperlihatkan area operasional seluas mungkin. Tampilkan jendela utama
+  // langsung dalam keadaan maximized pada work area monitor (taskbar tetap
+  // tersedia), bukan exclusive fullscreen. Jendela pelanggan dari plugin
+  // desktop_multi_window mempunyai runner/window native sendiri sehingga
+  // penempatan multi-monitor-nya tidak ikut diubah di sini.
+  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
 }
 
 // static

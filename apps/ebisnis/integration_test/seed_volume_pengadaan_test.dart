@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/services/server_config.dart';
@@ -6,7 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 const _tokoId = 1;
-const _prefix = 'UAT-VOL-PROC-APT13422-R4-20260904';
+const _prefix = 'UAT-VOL-PROC-APT13423-R1-20260904';
+const _outputDir = String.fromEnvironment(
+  'POS_TEST_OUTPUT_DIR',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.23',
+);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -122,7 +127,7 @@ void main() {
       final pr = await call('pengadaan_pr_simpan', {
         'toko_id': _tokoId,
         'tanggal': '04-09-2026',
-        'keterangan': '$marker — PR bahan baku kantin',
+        'keterangan': '$marker — PR persediaan apotik',
         'tanpaAnggaran': true,
         'detail': [
           {
@@ -130,7 +135,7 @@ void main() {
             'master_asset_id': good['master_asset_id'],
             'jumlah': quantity,
             'hargaBeli': unitPrice,
-            'keterangan': 'Persediaan saus dan kecap untuk operasional kantin',
+            'keterangan': 'Persediaan pendukung operasional apotik',
           }
         ],
       });
@@ -341,6 +346,13 @@ void main() {
               'bolehPosting': e['bolehPosting'],
             })
         .toList();
+    counts['prefix'] = _prefix;
+    counts['volumeDiminta'] = volume;
+    final output = Directory(_outputDir)..createSync(recursive: true);
+    File('${output.path}\\procurement-summary.json').writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(counts),
+      flush: true,
+    );
     // ignore: avoid_print
     print('PROC_AUDIT=${jsonEncode(counts)}');
   });

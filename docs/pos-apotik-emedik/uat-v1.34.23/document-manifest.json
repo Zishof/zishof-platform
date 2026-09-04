@@ -1,0 +1,17 @@
+{
+  "version": "1.34.23 (build 185)",
+  "document": "Laporan-UAT-dan-Manual-POS-Apotik-v1.34.23.docx",
+  "screenshotSections": 9,
+  "narrativeWordCounts": {
+    "Penjualan Obat Jadi": 969,
+    "Penjualan Obat Racik": 953,
+    "Penjualan Gabungan dan Layar Pasien": 990,
+    "Kulakan: PR, PO, BAST, Tagihan, dan Pembayaran": 989,
+    "Pengelolaan Stok Semua Obat dan Alat Kesehatan": 997,
+    "Pengelolaan Tanggal Kedaluwarsa": 976,
+    "Akuntansi: Jurnal dan Posting": 982,
+    "Laporan Penjualan dan Kulakan": 980,
+    "Laporan Keuangan": 996
+  },
+  "diagramCount": 27
+}

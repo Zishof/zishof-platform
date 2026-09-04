@@ -1,0 +1,434 @@
+[
+  {
+    "index": 1,
+    "title": "Penjualan Obat Jadi",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/01-kasir-obat-jadi.png",
+    "caption": "Bukti 1. Kasir obat jadi setelah UAT API pada server demo.",
+    "actors": [
+      "Pasien / keluarga",
+      "Kasir",
+      "Apoteker",
+      "Supervisor"
+    ],
+    "usecases": [
+      "Identifikasi pembeli dan permintaan",
+      "Cari obat serta validasi hak jual",
+      "Pilih batch FEFO dan proses pembayaran",
+      "Edukasi, serah terima, dan audit"
+    ],
+    "flow": [
+      "Identifikasi pasien",
+      "Cari/pindai obat",
+      "Validasi stok & golongan",
+      "Pilih batch FEFO",
+      "Bayar & simpan",
+      "Etiket dan serah terima"
+    ],
+    "gate": "GATE: obat belum kedaluwarsa, jumlah cukup, otorisasi sesuai, kode transaksi idempoten.",
+    "entities": [
+      "PASIEN\nid, identitas",
+      "PENJUALAN\nkode, tanggal",
+      "DETAIL OBAT\nqty, harga",
+      "BATCH\nED, sisa",
+      "JURNAL/AUDIT\nreferensi"
+    ],
+    "observation": "100 dari 100 transaksi obat jadi dengan kode UAT v1.34.23 berhasil dan pemeriksaan idempotensi lulus. Katalog deploy hanya memuat dua item, sehingga keberhasilan transaksi volume tidak berarti katalog 100 item telah tersedia",
+    "status": "PASS transaksi / BLOCKED volume katalog",
+    "controls": "validasi item, batch tidak kedaluwarsa, sisa stok, FEFO, obat terkendali, pembayaran, dan bukti serah terima",
+    "acceptance": "100 kode tersimpan satu kali, stok berkurang pada batch yang benar, transaksi dapat dibaca ulang, dan penyerahan dilakukan setelah verifikasi pasien-obat-jumlah",
+    "narrative": [
+      "Bukti layar untuk Penjualan Obat Jadi dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Pasien / keluarga, Kasir, Apoteker, Supervisor. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Identifikasi pasien; Cari/pindai obat; Validasi stok & golongan; Pilih batch FEFO; Bayar & simpan; Etiket dan serah terima. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara PASIEN\nid, identitas, PENJUALAN\nkode, tanggal, DETAIL OBAT\nqty, harga, BATCH\nED, sisa, JURNAL/AUDIT\nreferensi. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: 100 dari 100 transaksi obat jadi dengan kode UAT v1.34.23 berhasil dan pemeriksaan idempotensi lulus. Katalog deploy hanya memuat dua item, sehingga keberhasilan transaksi volume tidak berarti katalog 100 item telah tersedia. Status formalnya PASS transaksi / BLOCKED volume katalog. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Penjualan Obat Jadi adalah validasi item, batch tidak kedaluwarsa, sisa stok, FEFO, obat terkendali, pembayaran, dan bukti serah terima. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 100 kode tersimpan satu kali, stok berkurang pada batch yang benar, transaksi dapat dibaca ulang, dan penyerahan dilakukan setelah verifikasi pasien-obat-jumlah. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS transaksi / BLOCKED volume katalog berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 969
+  },
+  {
+    "index": 2,
+    "title": "Penjualan Obat Racik",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/02-resep-racikan.png",
+    "caption": "Bukti 2. Halaman resep/racikan dengan data server demo.",
+    "actors": [
+      "Dokter / resep",
+      "Apoteker",
+      "Tenaga teknis",
+      "Pasien"
+    ],
+    "usecases": [
+      "Terima dan telaah resep",
+      "Hitung serta pilih bahan",
+      "Racik, kemas, dan periksa akhir",
+      "Edukasi serta ubah status antrean"
+    ],
+    "flow": [
+      "Resep diterima",
+      "Telaah klinis/farmasetik",
+      "Hitung bahan",
+      "Racik & kemas",
+      "Pemeriksaan akhir",
+      "Serahkan & edukasi"
+    ],
+    "gate": "GATE: resep terbaca, bahan tersedia, kalkulasi dan etiket diverifikasi petugas berwenang.",
+    "entities": [
+      "RESEP\nid, pasien",
+      "RACIKAN\nformula, dosis",
+      "BAHAN\nitem, qty",
+      "BATCH BAHAN\nED, sisa",
+      "PENYERAHAN\nstatus, edukasi"
+    ],
+    "observation": "100 dari 100 transaksi racikan berhasil; endpoint daftar mengembalikan 100 resep pada halaman uji dan ringkasan provision server menyatakan total 5.000 resep demo tersedia",
+    "status": "PASS transaksi racikan",
+    "controls": "telaah resep, kalkulasi dosis, kompatibilitas, pemilihan batch, kebersihan area racik, pemeriksaan akhir, etiket, dan edukasi",
+    "acceptance": "100 resep terhubung ke transaksi satu kali, pemakaian bahan dapat ditelusuri, status selesai benar, dan hasil racikan diserahkan setelah pemeriksaan akhir",
+    "narrative": [
+      "Bukti layar untuk Penjualan Obat Racik dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Dokter / resep, Apoteker, Tenaga teknis, Pasien. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Resep diterima; Telaah klinis/farmasetik; Hitung bahan; Racik & kemas; Pemeriksaan akhir; Serahkan & edukasi. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara RESEP\nid, pasien, RACIKAN\nformula, dosis, BAHAN\nitem, qty, BATCH BAHAN\nED, sisa, PENYERAHAN\nstatus, edukasi. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: 100 dari 100 transaksi racikan berhasil; endpoint daftar mengembalikan 100 resep pada halaman uji dan ringkasan provision server menyatakan total 5.000 resep demo tersedia. Status formalnya PASS transaksi racikan. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Penjualan Obat Racik adalah telaah resep, kalkulasi dosis, kompatibilitas, pemilihan batch, kebersihan area racik, pemeriksaan akhir, etiket, dan edukasi. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 100 resep terhubung ke transaksi satu kali, pemakaian bahan dapat ditelusuri, status selesai benar, dan hasil racikan diserahkan setelah pemeriksaan akhir. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS transaksi racikan berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 953
+  },
+  {
+    "index": 3,
+    "title": "Penjualan Gabungan dan Layar Pasien",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/06-layar-kedua-obat-jadi-racikan.png",
+    "caption": "Bukti 3. Pratinjau terkontrol layar kedua gabungan; endpoint antrean live belum tersedia.",
+    "actors": [
+      "Kasir",
+      "Apoteker",
+      "Pasien / keluarga",
+      "Layar publik"
+    ],
+    "usecases": [
+      "Gabungkan obat jadi dan racikan",
+      "Bayar dalam satu transaksi",
+      "Perbarui status penyiapan",
+      "Tampilkan antrean tersamar"
+    ],
+    "flow": [
+      "Pilih item jadi",
+      "Pilih resep racikan",
+      "Validasi dua lini",
+      "Bayar gabungan",
+      "Siapkan obat",
+      "Panggil pada layar"
+    ],
+    "gate": "GATE: seluruh lini sah; layar publik hanya menerima nomor antrean, status, loket, dan identitas tersamar.",
+    "entities": [
+      "PENJUALAN\nkode gabungan",
+      "DETAIL JADI\nitem, batch",
+      "DETAIL RACIK\nresep, bahan",
+      "ANTREAN\nnomor, status",
+      "LAYAR PUBLIK\nview tersamar"
+    ],
+    "observation": "100 dari 100 transaksi gabungan yang masing-masing berisi lini obat jadi dan racikan berhasil. Komponen layar gabungan, khusus obat jadi, dan khusus racikan dapat dirender, tetapi endpoint antrean farmasi pada server demo mengembalikan aksi belum tersedia; screenshot ini memakai data pratinjau terkontrol",
+    "status": "PASS transaksi / PASS komponen / BLOCKED integrasi antrean",
+    "controls": "atomicity transaksi gabungan, pencegahan duplikasi, sinkronisasi status, privasi pasien, polling, dan pemilihan monitor",
+    "acceptance": "100 transaksi gabungan tersimpan utuh, tidak ada lini terputus, dan integrasi layar baru lulus setelah endpoint live menampilkan minimal 50 antrean tersamar serta perubahan status real-time",
+    "narrative": [
+      "Bukti layar untuk Penjualan Gabungan dan Layar Pasien dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Kasir, Apoteker, Pasien / keluarga, Layar publik. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Pilih item jadi; Pilih resep racikan; Validasi dua lini; Bayar gabungan; Siapkan obat; Panggil pada layar. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara PENJUALAN\nkode gabungan, DETAIL JADI\nitem, batch, DETAIL RACIK\nresep, bahan, ANTREAN\nnomor, status, LAYAR PUBLIK\nview tersamar. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: 100 dari 100 transaksi gabungan yang masing-masing berisi lini obat jadi dan racikan berhasil. Komponen layar gabungan, khusus obat jadi, dan khusus racikan dapat dirender, tetapi endpoint antrean farmasi pada server demo mengembalikan aksi belum tersedia; screenshot ini memakai data pratinjau terkontrol. Status formalnya PASS transaksi / PASS komponen / BLOCKED integrasi antrean. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Penjualan Gabungan dan Layar Pasien adalah atomicity transaksi gabungan, pencegahan duplikasi, sinkronisasi status, privasi pasien, polling, dan pemilihan monitor. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 100 transaksi gabungan tersimpan utuh, tidak ada lini terputus, dan integrasi layar baru lulus setelah endpoint live menampilkan minimal 50 antrean tersamar serta perubahan status real-time. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS transaksi / PASS komponen / BLOCKED integrasi antrean berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 990
+  },
+  {
+    "index": 4,
+    "title": "Kulakan: PR, PO, BAST, Tagihan, dan Pembayaran",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots-pengadaan/02-pr-daftar-50.png",
+    "caption": "Bukti 4. Dashboard PR pada rangkaian procure-to-pay server demo.",
+    "actors": [
+      "Peminta",
+      "Approver",
+      "Gudang",
+      "Keuangan"
+    ],
+    "usecases": [
+      "Ajukan kebutuhan melalui PR",
+      "Terbitkan PO dan terima barang",
+      "Cocokkan BAST dengan tagihan",
+      "Bayar vendor dan buat audit trail"
+    ],
+    "flow": [
+      "PR + justifikasi",
+      "Persetujuan",
+      "PO ke vendor",
+      "BAST & batch",
+      "Terima tagihan",
+      "Bayar vendor"
+    ],
+    "gate": "GATE: otorisasi dan three-way match PR/PO/BAST/tagihan konsisten sebelum pembayaran.",
+    "entities": [
+      "PR\nkode, kebutuhan",
+      "PO\nvendor, termin",
+      "BAST\nqty, mutu",
+      "TAGIHAN\nnomor, nilai",
+      "PEMBAYARAN\nbukti, jurnal"
+    ],
+    "observation": "100 PR, 100 PO, 100 BAST, dan 100 tagihan dengan prefix rilis berhasil dibaca. Seratus pembayaran berhasil disetujui dan dijadikan sumber jurnal, namun filter daftar pembayaran memakai marker yang sama mengembalikan nol sehingga query/filter tersebut dicatat sebagai defect. Dashboard bersama menampilkan total lebih besar dari run ini",
+    "status": "PASS alur P2P / defect filter daftar pembayaran",
+    "controls": "segregasi tugas, otorisasi anggaran, vendor, qty, mutu, batch, ED, three-way match, bukti transfer, dan pelacakan status",
+    "acceptance": "100 dokumen per tahap terhubung konsisten, tidak ada pembayaran tanpa tagihan disetujui, serta filter pembayaran diperbaiki dan diretest terhadap marker rilis",
+    "narrative": [
+      "Bukti layar untuk Kulakan: PR, PO, BAST, Tagihan, dan Pembayaran dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Peminta, Approver, Gudang, Keuangan. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: PR + justifikasi; Persetujuan; PO ke vendor; BAST & batch; Terima tagihan; Bayar vendor. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara PR\nkode, kebutuhan, PO\nvendor, termin, BAST\nqty, mutu, TAGIHAN\nnomor, nilai, PEMBAYARAN\nbukti, jurnal. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: 100 PR, 100 PO, 100 BAST, dan 100 tagihan dengan prefix rilis berhasil dibaca. Seratus pembayaran berhasil disetujui dan dijadikan sumber jurnal, namun filter daftar pembayaran memakai marker yang sama mengembalikan nol sehingga query/filter tersebut dicatat sebagai defect. Dashboard bersama menampilkan total lebih besar dari run ini. Status formalnya PASS alur P2P / defect filter daftar pembayaran. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Kulakan: PR, PO, BAST, Tagihan, dan Pembayaran adalah segregasi tugas, otorisasi anggaran, vendor, qty, mutu, batch, ED, three-way match, bukti transfer, dan pelacakan status. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 100 dokumen per tahap terhubung konsisten, tidak ada pembayaran tanpa tagihan disetujui, serta filter pembayaran diperbaiki dan diretest terhadap marker rilis. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS alur P2P / defect filter daftar pembayaran berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 989
+  },
+  {
+    "index": 5,
+    "title": "Pengelolaan Stok Semua Obat dan Alat Kesehatan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/03-formularium-obat.png",
+    "caption": "Bukti 5. Formularium/katalog Apotik yang tersedia pada deployment demo.",
+    "actors": [
+      "Petugas gudang",
+      "Apoteker",
+      "Kasir",
+      "Auditor stok"
+    ],
+    "usecases": [
+      "Kelola master dan kategori",
+      "Terima batch serta mutasi",
+      "Reservasi/pengeluaran FEFO",
+      "Stock opname dan rekonsiliasi"
+    ],
+    "flow": [
+      "Buat/validasi item",
+      "Kelompokkan kategori",
+      "Terima batch",
+      "Mutasi/penjualan",
+      "Hitung fisik",
+      "Rekonsiliasi selisih"
+    ],
+    "gate": "GATE: satuan, kategori, batch, lokasi, sisa, dan tanggal kedaluwarsa tervalidasi sebelum item aktif.",
+    "entities": [
+      "ITEM\nkode, kategori",
+      "BATCH\nlot, ED",
+      "MUTASI\nmasuk/keluar",
+      "LOKASI\nrak, gudang",
+      "OPNAME\nfisik, selisih"
+    ],
+    "observation": "pencarian katalog pada deployment demo hanya mengembalikan dua item dan satu item non-terkendali yang layak dipakai untuk uji transaksi. Provision telah dijalankan, tetapi volume master obat yang diminta belum muncul di endpoint katalog. Uji 100 transaksi tetap dapat dilakukan melalui top-up batch idempoten",
+    "status": "BLOCKED data master volume / PASS fungsi stok yang terpakai",
+    "controls": "keunikan kode, kategori obat jadi, bahan racikan, alat kesehatan, satuan, batch, FEFO, stok negatif, mutasi, dan stock opname",
+    "acceptance": "minimal 100 item lintas kategori tersedia dan dapat ditelusuri per batch/lokasi; mutasi dari penerimaan, penjualan, racikan, retur, dan opname menghasilkan saldo yang dapat direkonsiliasi",
+    "narrative": [
+      "Bukti layar untuk Pengelolaan Stok Semua Obat dan Alat Kesehatan dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Petugas gudang, Apoteker, Kasir, Auditor stok. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Buat/validasi item; Kelompokkan kategori; Terima batch; Mutasi/penjualan; Hitung fisik; Rekonsiliasi selisih. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara ITEM\nkode, kategori, BATCH\nlot, ED, MUTASI\nmasuk/keluar, LOKASI\nrak, gudang, OPNAME\nfisik, selisih. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: pencarian katalog pada deployment demo hanya mengembalikan dua item dan satu item non-terkendali yang layak dipakai untuk uji transaksi. Provision telah dijalankan, tetapi volume master obat yang diminta belum muncul di endpoint katalog. Uji 100 transaksi tetap dapat dilakukan melalui top-up batch idempoten. Status formalnya BLOCKED data master volume / PASS fungsi stok yang terpakai. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Pengelolaan Stok Semua Obat dan Alat Kesehatan adalah keunikan kode, kategori obat jadi, bahan racikan, alat kesehatan, satuan, batch, FEFO, stok negatif, mutasi, dan stock opname. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: minimal 100 item lintas kategori tersedia dan dapat ditelusuri per batch/lokasi; mutasi dari penerimaan, penjualan, racikan, retur, dan opname menghasilkan saldo yang dapat direkonsiliasi. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan BLOCKED data master volume / PASS fungsi stok yang terpakai berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 997
+  },
+  {
+    "index": 6,
+    "title": "Pengelolaan Tanggal Kedaluwarsa",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/04-batch-kedaluwarsa.png",
+    "caption": "Bukti 6. Monitor batch dan kedaluwarsa pada POS Apotik.",
+    "actors": [
+      "Sistem",
+      "Gudang",
+      "Apoteker",
+      "Supervisor"
+    ],
+    "usecases": [
+      "Catat lot dan tanggal ED",
+      "Prioritaskan batch FEFO",
+      "Beri peringatan mendekati ED",
+      "Karantina/retur/musnahkan"
+    ],
+    "flow": [
+      "Terima lot",
+      "Validasi ED",
+      "Simpan batch",
+      "Pantau horizon",
+      "Karantina jika tidak layak",
+      "Retur/musnahkan"
+    ],
+    "gate": "GATE: batch kedaluwarsa tidak boleh dipilih untuk penjualan atau bahan racikan.",
+    "entities": [
+      "ITEM\nkode",
+      "BATCH\nlot, ED",
+      "ALERT\nhorizon, status",
+      "KARANTINA\nalasan",
+      "DISPOSISI\nretur/musnah"
+    ],
+    "observation": "monitor batch dan laporan kedaluwarsa berhasil diakses; run akhir mendeteksi setidaknya satu batch kedaluwarsa ketika memilih batch uji dan laporan API mengembalikan baris data. Algoritme kemudian memilih batch aktif dengan sisa tertinggi untuk mencegah false failure akibat batch FEFO yang hampir habis",
+    "status": "PASS monitoring / perlu sign-off SOP disposisi",
+    "controls": "format tanggal, zona waktu, horizon peringatan, FEFO, larangan batch lewat ED, karantina, otorisasi retur/pemusnahan, dan audit trail",
+    "acceptance": "batch kedaluwarsa selalu ditolak dari transaksi, batch mendekati ED tampil dalam monitoring, dan setiap disposisi mempunyai alasan, jumlah, petugas, persetujuan, serta bukti",
+    "narrative": [
+      "Bukti layar untuk Pengelolaan Tanggal Kedaluwarsa dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Sistem, Gudang, Apoteker, Supervisor. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Terima lot; Validasi ED; Simpan batch; Pantau horizon; Karantina jika tidak layak; Retur/musnahkan. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara ITEM\nkode, BATCH\nlot, ED, ALERT\nhorizon, status, KARANTINA\nalasan, DISPOSISI\nretur/musnah. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: monitor batch dan laporan kedaluwarsa berhasil diakses; run akhir mendeteksi setidaknya satu batch kedaluwarsa ketika memilih batch uji dan laporan API mengembalikan baris data. Algoritme kemudian memilih batch aktif dengan sisa tertinggi untuk mencegah false failure akibat batch FEFO yang hampir habis. Status formalnya PASS monitoring / perlu sign-off SOP disposisi. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Pengelolaan Tanggal Kedaluwarsa adalah format tanggal, zona waktu, horizon peringatan, FEFO, larangan batch lewat ED, karantina, otorisasi retur/pemusnahan, dan audit trail. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: batch kedaluwarsa selalu ditolak dari transaksi, batch mendekati ED tampil dalam monitoring, dan setiap disposisi mempunyai alasan, jumlah, petugas, persetujuan, serta bukti. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS monitoring / perlu sign-off SOP disposisi berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 976
+  },
+  {
+    "index": 7,
+    "title": "Akuntansi: Jurnal dan Posting",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots-akuntansi/08-draft-jurnal.png",
+    "caption": "Bukti 7. Dashboard Draft Jurnal setelah pengujian vendor dan posting.",
+    "actors": [
+      "Keuangan",
+      "Akuntan",
+      "Approver",
+      "Auditor"
+    ],
+    "usecases": [
+      "Bangkitkan/masukkan jurnal",
+      "Validasi debit dan kredit",
+      "Posting ke buku besar",
+      "Rekonsiliasi dengan sumber"
+    ],
+    "flow": [
+      "Dokumen sumber",
+      "Preview/mapping akun",
+      "Jurnal draf",
+      "Validasi seimbang",
+      "Posting",
+      "Rekonsiliasi"
+    ],
+    "gate": "GATE: debit = kredit, periode terbuka, akun sah, referensi sumber dan approval tersedia.",
+    "entities": [
+      "DOKUMEN SUMBER\npembayaran",
+      "JURNAL\ntanggal, referensi",
+      "DETAIL JURNAL\nakun, D/K",
+      "BUKU BESAR\nposting",
+      "AUDIT\nuser, waktu"
+    ],
+    "observation": "100 pembayaran vendor diperiksa, 100 jurnal dibuat, 100 diposting pada run, dan 100 diverifikasi terposting. Mapping UAT memakai debit 310.500 HUTANG VENDOR dan kredit 111.101 KAS YAYASAN. Dashboard tenant bersama kemudian menampilkan 777 draf, 151 posted, total 928; angka dashboard tidak semuanya berasal dari run ini",
+    "status": "PASS jurnal vendor / BLOCKED posting otomatis tertentu",
+    "controls": "pemetaan COA, keseimbangan, periode, approval, referensi sumber, pencegahan posting ganda, reversal, dan rekonsiliasi",
+    "acceptance": "100 jurnal berstatus posted satu kali, total debit sama dengan kredit, akun sesuai workbook, dan buku besar dapat menelusuri kembali pembayaran vendor",
+    "narrative": [
+      "Bukti layar untuk Akuntansi: Jurnal dan Posting dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Keuangan, Akuntan, Approver, Auditor. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Dokumen sumber; Preview/mapping akun; Jurnal draf; Validasi seimbang; Posting; Rekonsiliasi. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara DOKUMEN SUMBER\npembayaran, JURNAL\ntanggal, referensi, DETAIL JURNAL\nakun, D/K, BUKU BESAR\nposting, AUDIT\nuser, waktu. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: 100 pembayaran vendor diperiksa, 100 jurnal dibuat, 100 diposting pada run, dan 100 diverifikasi terposting. Mapping UAT memakai debit 310.500 HUTANG VENDOR dan kredit 111.101 KAS YAYASAN. Dashboard tenant bersama kemudian menampilkan 777 draf, 151 posted, total 928; angka dashboard tidak semuanya berasal dari run ini. Status formalnya PASS jurnal vendor / BLOCKED posting otomatis tertentu. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Akuntansi: Jurnal dan Posting adalah pemetaan COA, keseimbangan, periode, approval, referensi sumber, pencegahan posting ganda, reversal, dan rekonsiliasi. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 100 jurnal berstatus posted satu kali, total debit sama dengan kredit, akun sesuai workbook, dan buku besar dapat menelusuri kembali pembayaran vendor. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS jurnal vendor / BLOCKED posting otomatis tertentu berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 982
+  },
+  {
+    "index": 8,
+    "title": "Laporan Penjualan dan Kulakan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots/09-laporan-penjualan.png",
+    "caption": "Bukti 8. Halaman laporan penjualan pada server demo setelah transaksi volume.",
+    "actors": [
+      "Supervisor Apotik",
+      "Procurement",
+      "Keuangan",
+      "Auditor"
+    ],
+    "usecases": [
+      "Pilih periode dan filter",
+      "Tampilkan penjualan/kulakan",
+      "Telusuri rincian sumber",
+      "Ekspor dan rekonsiliasi"
+    ],
+    "flow": [
+      "Pilih laporan",
+      "Atur periode",
+      "Terapkan filter",
+      "Tampilkan agregat",
+      "Drill-down dokumen",
+      "Ekspor/rekonsiliasi"
+    ],
+    "gate": "GATE: periode, toko, status dokumen, retur, diskon, pajak, dan pembatalan diperlakukan konsisten.",
+    "entities": [
+      "PENJUALAN\nheader/detail",
+      "PENGADAAN\nPR-PO-BAST",
+      "FILTER\nperiode/toko",
+      "AGREGAT\nqty/nilai",
+      "EKSPOR\nrekonsiliasi"
+    ],
+    "observation": "endpoint laporan penjualan mengembalikan status success tetapi nol baris setelah 300 transaksi UAT; hal ini dicatat sebagai defect data/reporting, bukan PASS angka. Dashboard PR/PO/BAST/tagihan berhasil menunjukkan data pengadaan volume dan katalog laporan dapat dibuka",
+    "status": "PASS akses layar / BLOCKED validasi isi laporan penjualan",
+    "controls": "cut-off, status final, void/retur, diskon, pajak, COGS, vendor, toko, pagination, total, drill-down, dan konsistensi ekspor",
+    "acceptance": "300 transaksi muncul pada periode yang tepat dan totalnya cocok dengan detail; 100 rantai pengadaan dapat ditelusuri; agregat layar, ekspor, dan dokumen sumber mempunyai nilai yang sama",
+    "narrative": [
+      "Bukti layar untuk Laporan Penjualan dan Kulakan dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Supervisor Apotik, Procurement, Keuangan, Auditor. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Pilih laporan; Atur periode; Terapkan filter; Tampilkan agregat; Drill-down dokumen; Ekspor/rekonsiliasi. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara PENJUALAN\nheader/detail, PENGADAAN\nPR-PO-BAST, FILTER\nperiode/toko, AGREGAT\nqty/nilai, EKSPOR\nrekonsiliasi. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: endpoint laporan penjualan mengembalikan status success tetapi nol baris setelah 300 transaksi UAT; hal ini dicatat sebagai defect data/reporting, bukan PASS angka. Dashboard PR/PO/BAST/tagihan berhasil menunjukkan data pengadaan volume dan katalog laporan dapat dibuka. Status formalnya PASS akses layar / BLOCKED validasi isi laporan penjualan. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Laporan Penjualan dan Kulakan adalah cut-off, status final, void/retur, diskon, pajak, COGS, vendor, toko, pagination, total, drill-down, dan konsistensi ekspor. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: 300 transaksi muncul pada periode yang tepat dan totalnya cocok dengan detail; 100 rantai pengadaan dapat ditelusuri; agregat layar, ekspor, dan dokumen sumber mempunyai nilai yang sama. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS akses layar / BLOCKED validasi isi laporan penjualan berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 980
+  },
+  {
+    "index": 9,
+    "title": "Laporan Keuangan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.23/screenshots-akuntansi/24-laporan-laba-rugi.png",
+    "caption": "Bukti 9. Laporan Laba Rugi berbasis jurnal pada server demo.",
+    "actors": [
+      "Akuntan",
+      "Manajemen",
+      "Auditor",
+      "Owner COA"
+    ],
+    "usecases": [
+      "Tampilkan buku besar/trial balance",
+      "Susun Laba Rugi dan Neraca",
+      "Analisis Arus Kas",
+      "Bandingkan periode dan sign-off"
+    ],
+    "flow": [
+      "Posting jurnal",
+      "Buku besar",
+      "Neraca saldo",
+      "Laporan utama",
+      "Bandingkan periode",
+      "Review & sign-off"
+    ],
+    "gate": "GATE: hanya jurnal posted, periode dan klasifikasi akun benar, saldo awal dan closing tervalidasi.",
+    "entities": [
+      "AKUN\nkode, grup",
+      "DETAIL POSTED\nD/K",
+      "BUKU BESAR\nsaldo",
+      "TRIAL BALANCE\nD/K",
+      "LAPORAN\nLR/neraca/arus kas"
+    ],
+    "observation": "enam halaman inti—Laba Rugi, Neraca, Arus Kas, Keseluruhan Jurnal, Buku Besar, dan Neraca Saldo—berhasil dibuka dan dirender. Beberapa hasil belum mempunyai data yang dapat direkonsiliasi; Saldo Awal dan Jurnal Penyesuaian menampilkan masalah parsing respons, sedangkan katalog menyediakan laporan perbandingan namun belum diuji angka bulan/tahun",
+    "status": "PASS render / BLOCKED rekonsiliasi angka dan beberapa backend",
+    "controls": "klasifikasi akun, saldo awal, cut-off, posting, closing, retained earnings, arus kas, dimensi unit, perbandingan bulanan/tahunan, dan audit trail",
+    "acceptance": "buku besar, trial balance, Laba Rugi, Neraca, dan Arus Kas seimbang serta cocok dengan 100 jurnal vendor dan transaksi sumber; perbandingan bulanan/tahunan dapat direproduksi dan disetujui owner Akuntansi",
+    "narrative": [
+      "Bukti layar untuk Laporan Keuangan dipakai sebagai titik masuk pemeriksaan UAT sekaligus panduan kerja operator. Tujuan pengujian bukan hanya memastikan halaman dapat terbuka, melainkan memastikan rangkaian keputusan, data, otorisasi, dan jejak audit tetap konsisten dari awal sampai akhir. Aktor yang terlibat adalah Akuntan, Manajemen, Auditor, Owner COA. Sebelum memulai, penguji memastikan varian yang tampil adalah POS Apotik, koneksi HTTPS menuju server demo aktif, pengguna berhasil login dengan role yang sesuai, tanggal dan waktu perangkat benar, serta data uji mempunyai penanda rilis agar dapat dibedakan dari transaksi lain pada tenant bersama. Screenshot diambil pada resolusi 1600 × 900 setelah indikator pemuatan selesai. Karena server demo dipakai bersama, jumlah total yang tampak pada dashboard dapat melebihi volume yang dibuat dalam run ini; hasil kelulusan karena itu dihitung dari kode idempoten dan ringkasan API, bukan dari perkiraan visual semata.",
+      "Cara penggunaan normal mengikuti urutan: Posting jurnal; Buku besar; Neraca saldo; Laporan utama; Bandingkan periode; Review & sign-off. Operator membaca seluruh label dan nilai sebelum menekan tindakan simpan atau setujui. Kolom wajib tidak boleh diisi dengan nilai acak hanya untuk melewati validasi. Untuk nominal, kuantitas, batch, tanggal, vendor, pasien, dan akun, penguji mencocokkan kembali sumbernya dengan dokumen atau skenario. Setelah penyimpanan, operator menunggu notifikasi sukses, kemudian membuka ulang daftar dan mencari kode uji yang sama. Langkah baca ulang ini penting untuk membuktikan persistensi, bukan sekadar perubahan state sementara pada layar. Jika tombol tidak aktif, aplikasi menampilkan pesan gagal, atau indikator terus berputar, penguji mencatat waktu, menu, kode dokumen, payload relevan tanpa kredensial, dan screenshot. Penguji tidak mengulang simpan dengan kode baru sebelum memastikan apakah permintaan pertama sebenarnya sudah diterima server, karena tindakan tersebut dapat menggandakan transaksi.",
+      "Data yang diamati dalam skenario ini membentuk aliran konseptual antara AKUN\nkode, grup, DETAIL POSTED\nD/K, BUKU BESAR\nsaldo, TRIAL BALANCE\nD/K, LAPORAN\nLR/neraca/arus kas. Hubungan antardata dijaga melalui identitas dokumen, referensi transaksi sumber, detail barang atau akun, dan status proses. Kunci idempoten pada run volume mencegah penciptaan ulang ketika tes diulang setelah gangguan jaringan. Untuk data persediaan, kuantitas tidak boleh hanya dicatat di header; detail batch, tanggal kedaluwarsa, dan sisa stok harus dapat ditelusuri. Untuk data keuangan, jurnal harus membawa referensi dokumen sumber dan pasangan debit-kredit yang seimbang. Untuk data pasien, layar petugas boleh menampilkan informasi operasional yang diperlukan, sedangkan layar publik wajib menggunakan identitas tersamar. Penguji juga memperhatikan bahwa keberhasilan respons HTTP atau status “success” belum selalu membuktikan angka laporan benar; rekonsiliasi nilai terhadap dokumen sumber tetap menjadi acceptance test terpisah.",
+      "Hasil aktual pada server demo untuk skenario ini adalah: enam halaman inti—Laba Rugi, Neraca, Arus Kas, Keseluruhan Jurnal, Buku Besar, dan Neraca Saldo—berhasil dibuka dan dirender. Beberapa hasil belum mempunyai data yang dapat direkonsiliasi; Saldo Awal dan Jurnal Penyesuaian menampilkan masalah parsing respons, sedangkan katalog menyediakan laporan perbandingan namun belum diuji angka bulan/tahun. Status formalnya PASS render / BLOCKED rekonsiliasi angka dan beberapa backend. Arti status tersebut harus dibaca secara presisi. PASS berarti operasi yang dinyatakan berhasil benar-benar disimpan atau dirender dan diverifikasi dengan pemeriksaan lanjutan. PASS TAMPILAN hanya berarti komponen dapat digunakan dan difoto, bukan bahwa seluruh endpoint produksi sudah tersedia. BLOCKED berarti prasyarat backend, konfigurasi, atau data master belum mencukupi; blocker tidak boleh disamarkan sebagai kegagalan operator dan juga tidak boleh dianggap lulus. LULUS BERSYARAT berarti jalur utama dapat dipakai untuk UAT atau pilot yang dikendalikan, dengan risiko dan pekerjaan retest yang tercantum. Pemisahan ini menjaga dokumen tetap dapat diaudit dan membantu pemilik proses memutuskan apakah sebuah temuan menahan produksi atau cukup ditangani sebelum go-live.",
+      "Kontrol utama untuk Laporan Keuangan adalah klasifikasi akun, saldo awal, cut-off, posting, closing, retained earnings, arus kas, dimensi unit, perbandingan bulanan/tahunan, dan audit trail. Penguji melakukan negative check dengan mempertimbangkan data kosong, hak akses tidak memadai, dokumen sudah diproses, batch tidak layak, ketidakseimbangan jurnal, duplikasi kode, dan putus jaringan. Sistem harus menolak atau membatasi tindakan yang tidak sah tanpa menghapus data yang telah benar. Setelah setiap perubahan status, petugas yang berbeda—bila segregasi tugas diwajibkan—membuka data dari sesinya sendiri dan mengonfirmasi hasil. Bukti ideal terdiri dari screenshot sebelum tindakan, respons sesudah tindakan, daftar hasil, dan ringkasan mesin. Dokumen ini menampilkan satu screenshot representatif per kelompok skenario agar setiap gambar dapat diberi narasi dan diagram lengkap; berkas screenshot lain tetap tersedia di folder bukti dalam repository untuk investigasi teknis, namun tidak ditampilkan di badan dokumen agar tidak menimbulkan interpretasi bahwa semua gambar memiliki status integrasi yang sama.",
+      "Bila terjadi penyimpangan, operator menjalankan prosedur berikut. Pertama, hentikan tindakan lanjutan yang dapat mengubah stok atau keuangan. Kedua, catat kode dokumen, waktu, role, dan pesan kesalahan. Ketiga, muat ulang daftar serta cari kode idempoten yang sama untuk menentukan apakah server sudah menyimpan transaksi. Keempat, bandingkan detail dengan dokumen sumber dan jangan membuat pengganti sebelum status transaksi pertama pasti. Kelima, eskalasikan ke pemilik modul dengan klasifikasi: data master, RBAC, validasi bisnis, integrasi API, tampilan, atau akuntansi. Jika penyimpangan menyentuh pasien, obat, batch, atau kedaluwarsa, apoteker mengambil keputusan keselamatan dan menahan penyerahan bila perlu. Jika menyentuh vendor, tagihan, pembayaran, atau jurnal, keuangan menahan pembayaran/posting dan akuntansi melakukan rekonsiliasi. Seluruh koreksi harus menghasilkan jejak audit baru, bukan menghapus diam-diam riwayat lama.",
+      "Kriteria penerimaan akhir untuk skenario ini adalah: buku besar, trial balance, Laba Rugi, Neraca, dan Arus Kas seimbang serta cocok dengan 100 jurnal vendor dan transaksi sumber; perbandingan bulanan/tahunan dapat direproduksi dan disetujui owner Akuntansi. Setelah kriteria terpenuhi, penguji memberi tanda pada matriks, mencatat bukti, dan meminta sign-off pemilik proses. Untuk penggunaan harian, supervisor sebaiknya menjalankan pemeriksaan awal shift terhadap koneksi, toko aktif, perangkat periferal, role, dan sinkronisasi; pemeriksaan selama shift terhadap transaksi tertahan, stok negatif, batch mendekati kedaluwarsa, antrean, dan dokumen gagal; serta pemeriksaan akhir shift terhadap kas, stok kritis, dokumen pengadaan, pembayaran, jurnal, dan laporan. Pola ini membuat aplikasi berfungsi sebagai sistem pengendalian, bukan hanya alat input. Pada rilis 1.34.23 (build 185), kesimpulan PASS render / BLOCKED rekonsiliasi angka dan beberapa backend berlaku untuk lingkungan yang diuji dan tidak otomatis membuktikan kompatibilitas setiap tenant, printer, monitor, kebijakan COA, atau keystore. Retest produksi wajib memakai konfigurasi tujuan dan persetujuan owner."
+    ],
+    "narrativeWordCount": 996
+  }
+]

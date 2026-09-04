@@ -22,11 +22,14 @@ import 'package:intl/date_symbol_data_local.dart';
 
 const _outputDir = String.fromEnvironment(
   'POS_TEST_OUTPUT_DIR',
-  defaultValue: r'C:\tmp\uat-apotik-v1.34.22',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.23',
 );
 const _tokoId = int.fromEnvironment('POS_TEST_TOKO_ID', defaultValue: 1);
 const _minimumKatalog =
     int.fromEnvironment('POS_TEST_MIN_CATALOG', defaultValue: 50);
+const _expectedTransactionVolume = int.fromEnvironment(
+    'POS_TEST_EXPECTED_TRANSACTION_VOLUME',
+    defaultValue: 50);
 const _hanyaAmbilBukti =
     bool.fromEnvironment('POS_TEST_CAPTURE_ONLY', defaultValue: false);
 
@@ -64,7 +67,7 @@ void main() {
     Sesi.instance.terapkanKonfig(konfig);
 
     final ringkasan = <String, dynamic>{
-      'rilis': 'apotik-v1.34.22',
+      'rilis': 'apotik-v1.34.23',
       'waktuUatUtc': DateTime.now().toUtc().toIso8601String(),
       'server': 'https://$host/$context',
       'tokoUjiId': _tokoId,
@@ -97,6 +100,12 @@ void main() {
           reason: 'Ringkasan transaksi run sebelumnya tidak ditemukan');
       final sebelumnya = jsonDecode(buktiSebelumnya.readAsStringSync())
           as Map<String, dynamic>;
+      // Pertahankan seluruh hasil API E2E (termasuk skenario gabungan,
+      // idempotensi, dan status integrasi). Capture UI hanya memperkaya bukti,
+      // bukan mengganti ringkasan hasil transaksi yang sudah tervalidasi.
+      ringkasan.addAll(sebelumnya);
+      ringkasan['rilis'] = 'apotik-v1.34.23';
+      ringkasan['waktuBuktiUiUtc'] = DateTime.now().toUtc().toIso8601String();
       jualJadi = _angka(sebelumnya['transaksiObatJadiLulus']).toInt();
       jualRacikan = _angka(sebelumnya['transaksiRacikanLulus']).toInt();
       ringkasan['modeTransaksi'] = 'BUKTI_UI_SETELAH_RUN_API';
@@ -107,8 +116,8 @@ void main() {
           (e) => e['kedaluwarsa'] != true && _angka(e['sisa']) >= 100);
       for (var i = 1; i <= 50; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
-          'kode': 'UAT-APT-13422-JADI-${i.toString().padLeft(3, '0')}',
-          'keterangan': 'Data demo UAT v1.34.22 — obat jadi',
+          'kode': 'UAT-APT-13423-JADI-${i.toString().padLeft(3, '0')}',
+          'keterangan': 'Data demo UAT v1.34.23 — obat jadi',
           'pembeli': {'nama': 'Pasien Demo Jadi $i'},
           'items': [
             {
@@ -125,9 +134,9 @@ void main() {
       }
       for (var i = 1; i <= 50; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
-          'kode': 'UAT-APT-13422-RACIK-${i.toString().padLeft(3, '0')}',
+          'kode': 'UAT-APT-13423-RACIK-${i.toString().padLeft(3, '0')}',
           'resep_id': daftarResep[i - 1]['id'],
-          'keterangan': 'Data demo UAT v1.34.22 — penebusan racikan',
+          'keterangan': 'Data demo UAT v1.34.23 — penebusan racikan',
           'pembeli': {'nama': 'Pasien Demo Racikan $i'},
           'items': [
             {
@@ -143,8 +152,8 @@ void main() {
         if (_sukses(hasil)) jualRacikan++;
       }
     }
-    expect(jualJadi, 50);
-    expect(jualRacikan, 50);
+    expect(jualJadi, _expectedTransactionVolume);
+    expect(jualRacikan, _expectedTransactionVolume);
     ringkasan['transaksiObatJadiLulus'] = jualJadi;
     ringkasan['transaksiRacikanLulus'] = jualRacikan;
 
@@ -265,7 +274,7 @@ Future<Map<String, dynamic>> _login(String username, String password) async {
       return await ApiClient.instance.aksi('login', {
         'username': username,
         'password': password,
-        'labelPerangkat': 'UAT-Apotik-v1.34.22',
+        'labelPerangkat': 'UAT-Apotik-v1.34.23',
       });
     } catch (e) {
       terakhir = e;
