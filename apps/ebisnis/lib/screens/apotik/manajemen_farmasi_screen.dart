@@ -5,6 +5,7 @@ import '../../widgets/app_shell.dart';
 import 'kasir_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
 import 'menu_apotik_screen.dart';
+import 'pasien_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
 
 /// Pusat kerja tahap awal untuk seluruh pengembangan lanjutan Apotik.
@@ -26,7 +27,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
 
   static const _modul = <_ModulFarmasi>[
     _ModulFarmasi('Pasien & Alergi', 'Profil pasien dan riwayat alergi aktif',
-        Icons.personal_injury_outlined, Color(0xFF7C3AED), 'resep', 'resep'),
+        Icons.personal_injury_outlined, Color(0xFF7C3AED), 'pasien', 'pasien'),
     _ModulFarmasi('Telaah Klinis', 'Peringatan alergi dan daftar periksa resep',
         Icons.health_and_safety_outlined, Color(0xFFDC2626), 'resep', 'resep'),
     _ModulFarmasi(
@@ -71,7 +72,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         'item',
         'pengadaan'),
     _ModulFarmasi('Kas & Handover', 'Sesi kas, pembayaran, dan serah terima',
-        Icons.point_of_sale_outlined, Color(0xFF047857), 'penjualan', 'kasir'),
+        Icons.point_of_sale_outlined, Color(0xFF047857), 'penjualan', 'kas'),
     _ModulFarmasi(
         'Audit & Persetujuan',
         'Jejak transaksi, idempotensi, dan maker-checker',
@@ -91,8 +92,8 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         'Pengingat obat rutin dan layanan pelanggan',
         Icons.loyalty_outlined,
         Color(0xFFBE185D),
-        'resep',
-        'resep'),
+        'pasien',
+        'pasien'),
     _ModulFarmasi(
         'Business Intelligence',
         'Penjualan, stok, kedaluwarsa, dan performa farmasi',
@@ -133,6 +134,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       _aman('apotik_item_cari', const {'page_size': 100}),
       _aman('apotik_resep_list',
           const {'hanya_menunggu': true, 'page_size': 100}),
+      _aman('apotik_pasien_cari', const {'page_size': 100}),
       _aman('apotik_racikan_list', const {'page_size': 100}),
       _aman('apotik_produksi_katalog', const {'page_size': 100}),
       _aman('apotik_batch_monitor', const {'page_size': 100}),
@@ -146,10 +148,11 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         ..addAll({
           'item': _jumlah(hasil[0]),
           'resep': _jumlah(hasil[1]),
-          'racikan': _jumlah(hasil[2]),
-          'produksi': _jumlah(hasil[3]),
-          'batch': _jumlah(hasil[4]),
-          'penjualan': _jumlah(hasil[5]),
+          'pasien': _jumlah(hasil[2]),
+          'racikan': _jumlah(hasil[3]),
+          'produksi': _jumlah(hasil[4]),
+          'batch': _jumlah(hasil[5]),
+          'penjualan': _jumlah(hasil[6]),
         });
       _memuat = false;
       if (semuaKosong) {
@@ -262,12 +265,15 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
 
   void _buka(_ModulFarmasi modul) {
     final Widget tujuan = switch (modul.tujuan) {
+      'pasien' => const PasienApotikScreen(),
       'resep' => const TebusResepApotikScreen(),
       'racikan' => const RacikanApotikScreen(),
       'produksi' => const ProduksiFarmasiApotikScreen(),
       'batch' => const PersediaanApotikScreen(tabAwal: 1),
       'pengadaan' => const PersediaanApotikScreen(tabAwal: 2),
       'persediaan' => const PersediaanApotikScreen(),
+      'kas' =>
+        const LaporanApotikScreen(tabAwal: LaporanApotikScreen.tabRekonsiliasi),
       'laporan' => const LaporanApotikScreen(),
       _ => const KasirApotikScreen(),
     };

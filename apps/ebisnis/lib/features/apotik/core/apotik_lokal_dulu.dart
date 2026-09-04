@@ -89,6 +89,9 @@ const String kunciCacheRacikanApotik = 'master:apotik_racikan';
 /// Kunci cache katalog formula produksi farmasi.
 const String kunciCacheProduksiApotik = 'master:apotik_produksi';
 
+/// Kunci cache profil pasien SIRS untuk pencarian petugas farmasi.
+const String kunciCachePasienApotik = 'master:apotik_pasien';
+
 /// Menyaring hasil dari CACHE menurut kata kunci.
 ///
 /// Cache master hanya menyimpan hasil kueri terakhir. Tanpa penyaringan ini,
