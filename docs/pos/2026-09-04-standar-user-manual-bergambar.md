@@ -16,13 +16,16 @@ setelah 4 September 2026.
   dan keterlacakan audit.
 - Use case, flowchart, dan aliran data/ERD ditempatkan setelah penjelasan proses yang
   bersangkutan dan menggunakan istilah bisnis yang konsisten dengan layar aplikasi.
+- Konektor diagram harus memakai ruang kosong di antara node. Garis dan kepala panah tidak
+  boleh melintasi kotak proses, teks, kepala panah lain, atau batas node tujuan.
 
 ## Kontrol penerbitan
 
 Generator boleh memeriksa tingkat kedalaman penjelasan secara internal, tetapi hasil hitungan
 tersebut tidak boleh dicetak di dokumen pengguna. Sebelum Word dan PDF diterbitkan, lakukan
 pemeriksaan teks untuk memastikan label internal tidak ikut tampil, lalu render seluruh halaman
-untuk memeriksa judul, gambar, tabel, diagram, page break, header, dan footer.
+untuk memeriksa judul, gambar, tabel, diagram, arah dan jarak konektor, page break, header,
+dan footer.
 
 Jika dokumen lama diterbitkan ulang, aturan ini diterapkan saat penggantian artefak. Nama berkas
 dan versi boleh dipertahankan ketika revisi hanya memperbaiki penyajian tanpa mengubah hasil UAT.

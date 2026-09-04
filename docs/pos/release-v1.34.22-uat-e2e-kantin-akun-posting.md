@@ -29,6 +29,10 @@ halaman A4 landscape dan memuat 27 tangkapan layar penuh, 81 diagram, serta penj
 operasional terperinci untuk setiap tangkapan layar. Isinya menggabungkan manual pengguna, skenario UAT,
 use case, flowchart, aliran data/ERD ringkas, bukti hasil, prosedur koreksi, dan lembar sign-off.
 
+Revisi penyajian terakhir merapikan seluruh diagram use case. Hubungan dari aktor sekarang
+memakai satu jalur cabang di area kosong dan kepala panah berhenti sebelum batas node. Tidak ada
+lagi garis yang melintasi kotak proses atau teks seperti pada susunan horizontal sebelumnya.
+
 ## Perubahan aplikasi
 
 ### 1. Asal akun Debet dan Kredit terlihat di layar
