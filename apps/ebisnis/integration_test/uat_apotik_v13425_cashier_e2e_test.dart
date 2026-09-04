@@ -393,24 +393,18 @@ Future<List<Map<String, dynamic>>> _obatBerbatch(int target) async {
 
 Future<List<Map<String, dynamic>>> _resepCampuran(int target) async {
   final hasil = <Map<String, dynamic>>[];
-  // Provisioning menautkan formula racikan ke 250 resep pertama berdasarkan
-  // ORDER BY kode (leksikografis), bukan berdasarkan nomor integer. Bentuk
-  // urutan yang sama agar kandidat seperti RSP-DEMO-1000 ikut diperiksa.
-  final kandidat = List<int>.generate(4999, (index) => index + 2)
-    ..sort((a, b) => 'RSP-DEMO-${a.toString().padLeft(3, '0')}'
-        .compareTo('RSP-DEMO-${b.toString().padLeft(3, '0')}'));
-  for (final nomor in kandidat.take(250)) {
+  // Provisioning selalu menautkan formula ke resep SAMPLE yang masih belum
+  // ditebus. Ambil antrean server apa adanya agar run UAT berulang tidak
+  // terpaku pada 250 kode lama yang sebagian sudah selesai pada run terdahulu.
+  final kandidat = await _paged(
+    'apotik_resep_list',
+    extra: const {'hanya_menunggu': true, 'page_size': 100},
+    minimumRows: target * 3,
+  );
+  for (final resep in kandidat) {
     if (hasil.length >= target) break;
-    final kode = 'RSP-DEMO-${nomor.toString().padLeft(3, '0')}';
-    final list = await _call('apotik_resep_list', {
-      'keyword': kode,
-      'hanya_menunggu': true,
-      'page_size': 10,
-    });
-    _expectSuccess('daftar $kode', list);
-    final cocok = _rows(list).where((e) => e['kode'] == kode).toList();
-    if (cocok.isEmpty) continue;
-    final resep = cocok.first;
+    final kode = '${resep['kode'] ?? ''}';
+    if (!kode.startsWith('RSP-DEMO-')) continue;
     final detailResponse = await _call('apotik_resep_detail', {
       'resep_id': resep['id'],
     });
