@@ -1,0 +1,20 @@
+{
+  "toko": "Demo",
+  "tokoSumber": "Demo",
+  "periode": "2026-09-01 s.d. 2026-09-30",
+  "posting": {
+    "hpp": {
+      "permintaanPosting": 100,
+      "responsPosting": {
+        "diposting": 100,
+        "gagal": 0,
+        "dilewati": 0,
+        "pesan": ""
+      },
+      "belumDiposting": 202,
+      "telahDiposting": 400,
+      "status": "PASS"
+    }
+  },
+  "status": "PASS"
+}

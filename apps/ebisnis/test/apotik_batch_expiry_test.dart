@@ -130,7 +130,7 @@ void main() {
       (tester) async {
     await _pump(tester, ApotikBatchExpiryPage(muatDaftar: _server()));
     expect(find.text('Tidak ada batch mendekati kedaluwarsa'), findsOneWidget);
-    expect(find.textContaining('90 hari ke depan'), findsOneWidget);
+    expect(find.textContaining('365 hari ke depan'), findsOneWidget);
   });
 
   testWidgets('mengubah ambang hari memuat ulang dengan parameter baru',

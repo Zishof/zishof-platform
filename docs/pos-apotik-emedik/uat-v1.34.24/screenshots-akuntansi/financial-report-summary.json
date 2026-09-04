@@ -1,0 +1,24 @@
+{
+  "sumberJurnalTarget": 100,
+  "sumberJurnalDibuatPadaRun": 0,
+  "sumberJurnalDipostingPadaRun": 0,
+  "sumberJurnalTerpostingTerverifikasi": 100,
+  "periode": "2026-09-01 s.d. 2026-09-30",
+  "akunKas": "111.101 KAS YAYASAN",
+  "akunPersediaan": "151.200 PERSEDIAAN BARANG LAINNYA",
+  "akunPendapatan": "410.900 PENDAPATAN PENJUALAN TOKO",
+  "akunHpp": "510.900 BEBAN POKOK PENJUALAN TOKO",
+  "akunBelumDipetakanSebelum": 0,
+  "akunDipetakanPadaRun": 0,
+  "kelompokLaporanBaruPadaRun": 0,
+  "jenisLaporanBaruPadaRun": 0,
+  "barisLaporan": {
+    "akn_laba_rugi": 11,
+    "akn_neraca": 32,
+    "akn_arus_kas": 21,
+    "akn_jurnal": 2500,
+    "akn_buku_besar": 2500,
+    "akn_neraca_saldo": 7
+  },
+  "status": "PASS"
+}

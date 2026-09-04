@@ -4,9 +4,28 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('laporan pemasok dirinci per produk dan UOM oleh backend bersama', () {
-    final source = File(
-      '../../../AIS/ais/src/main/src/ais/action/master/koperasi/helper/LaporanKantinUtil.java',
-    ).readAsStringSync();
+    final kandidat = [
+      File(
+        '../../../AIS/ais/src/main/src/ais/action/master/koperasi/helper/LaporanKantinUtil.java',
+      ),
+      File(
+        r'C:\opt\AIS\ais\src\main\src\ais\action\master\koperasi\helper\LaporanKantinUtil.java',
+      ),
+      File(
+        '../../../AIS-apotik-v13424/ais/src/main/src/ais/action/master/koperasi/helper/LaporanKantinUtil.java',
+      ),
+    ];
+    final sumber = kandidat.firstWhere(
+      (file) => file.existsSync(),
+      orElse: () => kandidat.first,
+    );
+    expect(
+      sumber.existsSync(),
+      isTrue,
+      reason:
+          'Checkout AIS tidak ditemukan pada salah satu lokasi yang didukung.',
+    );
+    final source = sumber.readAsStringSync();
 
     final mulai = source.indexOf('"pnj_per_pemasok".equals(r)');
     final selesai = source.indexOf('"pnj_uang_muka".equals(r)', mulai);

@@ -11,7 +11,7 @@ const DATA = JSON.parse(await fs.readFile(path.join(OUT, "presentation-data.json
 const SUMMARY = JSON.parse(await fs.readFile(path.join(OUT, "screenshots/uat-summary.json"), "utf8"));
 const PROCUREMENT = JSON.parse(await fs.readFile(path.join(OUT, "screenshots/procurement-summary.json"), "utf8"));
 const JOURNAL = JSON.parse(await fs.readFile(path.join(OUT, "screenshots/vendor-journal-summary.json"), "utf8"));
-const FINANCIAL = JSON.parse(await fs.readFile(path.join(OUT, "screenshots/financial-report-summary.json"), "utf8"));
+const FINANCIAL = JSON.parse(await fs.readFile(path.join(OUT, "screenshots-akuntansi/financial-report-summary.json"), "utf8"));
 
 const W = 1280;
 const H = 720;
@@ -129,7 +129,7 @@ let slideNo = 0;
   addText(slide, "APK masih debug-signed. Gunakan untuk UAT/pilot perangkat terkontrol sampai keystore resmi tersedia.", 714, 421, 430, 98, 20, C.ink, true, "center");
   notes(slide,
     `Ringkasan mesin mencatat ${SUMMARY.katalogItemTotal ?? 0} item katalog, ${SUMMARY.bahanRacikanTerverifikasi ?? SUMMARY.bahanRacikanTotal ?? 0} bahan racikan, ${SUMMARY.resepSiapJualTerverifikasi ?? SUMMARY.resepSiapJualTotal ?? 0} resep siap jual, dan ${SUMMARY.totalTransaksiPenjualanLulus ?? 0} transaksi lulus. Procure-to-pay diperiksa 100 record per tahap, sedangkan ${FINANCIAL.sumberJurnalTerpostingTerverifikasi ?? 0} jurnal sample menjadi sumber laporan keuangan non-kosong.`,
-    ["docs/pos-apotik-emedik/uat-v1.34.24/screenshots/uat-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/procurement-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/vendor-journal-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/financial-report-summary.json"]);
+    ["docs/pos-apotik-emedik/uat-v1.34.24/screenshots/uat-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/procurement-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/vendor-journal-summary.json", "docs/pos-apotik-emedik/uat-v1.34.24/screenshots-akuntansi/financial-report-summary.json"]);
 }
 
 {

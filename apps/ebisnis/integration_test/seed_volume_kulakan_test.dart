@@ -15,6 +15,7 @@ void main() {
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 50);
     const post = bool.fromEnvironment('POS_UAT_POST');
+    const allCredit = bool.fromEnvironment('POS_UAT_ALL_CREDIT');
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
@@ -63,18 +64,26 @@ void main() {
         .map((e) => Map<String, dynamic>.from(e))
         .firstWhere((e) => '${e['nama']}' == 'CV Sumber Pangan Nusantara');
 
+    final existingNumbers = <String>{};
+    for (var page = 1; page <= 20; page++) {
+      final list = await call('kulakan_faktur_list', {
+        'toko_id': 1,
+        'keyword': 'UAT-VOL-KUL-20260904',
+        'page': page,
+        'page_size': 100,
+      });
+      final part = ((list['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => '${e['nomorFaktur']}')
+          .toList();
+      existingNumbers.addAll(part);
+      if (part.length < 100) break;
+    }
+
     var created = 0;
     for (var i = 1; i <= volume; i++) {
       final number = 'UAT-VOL-KUL-20260904-${i.toString().padLeft(3, '0')}';
-      final list = await call('kulakan_faktur_list', {
-        'keyword': number,
-        'page': 1,
-        'page_size': 20,
-      });
-      final exists = ((list['data'] as List?) ?? const [])
-          .whereType<Map>()
-          .any((e) => '${e['nomorFaktur']}' == number);
-      if (exists) continue;
+      if (existingNumbers.contains(number)) continue;
       final qty = 5 + (i % 6);
       final price = 145000 + ((i % 5) * 2500);
       final result = await call('kulakan_faktur_simpan', {
@@ -95,9 +104,9 @@ void main() {
       final invoiceId = (result['fakturId'] as num).toInt();
       await call('si_purchase_terms_save', {
         'faktur_id': invoiceId,
-        'jenis_pembayaran': i.isEven ? 'CREDIT' : 'CASH',
-        'termin_hari': i.isEven ? 30 : 0,
-        'keterangan': i.isEven
+        'jenis_pembayaran': allCredit || i.isEven ? 'CREDIT' : 'CASH',
+        'termin_hari': allCredit || i.isEven ? 30 : 0,
+        'keterangan': allCredit || i.isEven
             ? 'Termin supplier 30 hari — sample UAT'
             : 'Pembelian tunai — sample UAT',
       });
@@ -114,11 +123,13 @@ void main() {
     }
 
     final all = await call('kulakan_faktur_list', {
+      'toko_id': 1,
       'keyword': 'UAT-VOL-KUL-20260904',
       'page': 1,
       'page_size': 100,
     });
     final draft = await call('posting_kulakan_draft', {
+      'toko_id': 1,
       'mulai': '2026-09-01',
       'sampai': '2026-09-30',
     });

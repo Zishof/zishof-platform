@@ -454,7 +454,7 @@ class _TabKedaluwarsa extends StatefulWidget {
 }
 
 class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
-  int _hari = 90;
+  int _hari = 365;
   bool _memuat = false;
   Map<String, dynamic>? _data;
 
@@ -499,7 +499,7 @@ class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
               DropdownMenuItem(value: 365, child: Text('1 tahun')),
             ],
             onChanged: (v) {
-              _hari = v ?? 90;
+              _hari = v ?? 365;
               _muat();
             },
           ),

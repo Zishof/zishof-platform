@@ -34,8 +34,8 @@ class _ApotikBatchExpiryPageState extends State<ApotikBatchExpiryPage> {
       widget.muatDaftar ?? MasterOffline.daftarCacheDulu;
   late final SimpanMasterApotik _simpan = widget.simpan ?? prosesSimpanMaster;
 
-  static const _pilihanHari = <int>[30, 60, 90, 180];
-  int _hari = 90;
+  static const _pilihanHari = <int>[30, 60, 90, 180, 365];
+  int _hari = 365;
   bool _memuat = true;
   String? _galat;
   List<Map<String, dynamic>> _batch = [];

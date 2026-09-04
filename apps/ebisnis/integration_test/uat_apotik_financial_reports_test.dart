@@ -146,6 +146,30 @@ void main() {
     expect(
         verified.take(_volume).every((e) => e['terposting'] == true), isTrue);
 
+    // Gunakan mekanisme pemetaan resmi yang menurunkan Kelompok Laporan dari
+    // bagan akun/akun induk. Ini memperbaiki master sumber secara permanen dan
+    // dapat diaudit; bukan menambahkan jurnal penyeimbang sementara hanya agar
+    // laporan tampak berisi.
+    final mappingProposal = await call('pemetaan_akun_usulan', {
+      'batasContoh': 100,
+    });
+    final unmappedBefore =
+        (mappingProposal['jumlahBelumDipetakan'] as num?)?.toInt() ?? 0;
+    Map<String, dynamic> mappingResult = const {};
+    if (unmappedBefore > 0) {
+      mappingResult = await call('pemetaan_akun_terapkan', {});
+    }
+    // Ringkas bukti runtime agar log UAT tetap dapat diaudit tanpa menyalin
+    // ratusan detail pemetaan yang sudah tersedia melalui API sumber.
+    // ignore: avoid_print
+    print('UAT_PEMETAAN_LAPORAN=${jsonEncode({
+          'belumDipetakanSebelum': unmappedBefore,
+          'dipetakan': mappingResult['dipetakan'] ?? 0,
+          'kelompokBaru': mappingResult['kelompokBaru'] ?? 0,
+          'jenisLaporanBaru': mappingResult['jenisLaporanBaru'] ?? 0,
+          'gagal': mappingResult['gagal'] ?? 0,
+        })}');
+
     const reports = <String, String>{
       'akn_laba_rugi': 'Laba Rugi',
       'akn_neraca': 'Neraca',
@@ -161,11 +185,18 @@ void main() {
         'tglMulai': '2026-09-01',
         'tglSampai': '2026-09-30',
       });
-      final count = ((response['baris'] as List?) ?? const []).length;
+      final reportData = (response['baris'] as List?) ?? const [];
+      final count = reportData.length;
       expect(count, greaterThan(0),
           reason: '${entry.value} tidak boleh kosong setelah jurnal diposting');
+      expect(jsonEncode(reportData), isNot(contains('Belum ada data')),
+          reason:
+              '${entry.value} tidak boleh lulus hanya karena satu baris pesan kosong');
       reportRows[entry.key] = count;
     }
+    expect(reportRows['akn_laba_rugi'], greaterThanOrEqualTo(4));
+    expect(reportRows['akn_jurnal'], greaterThanOrEqualTo(_volume * 4));
+    expect(reportRows['akn_buku_besar'], greaterThanOrEqualTo(_volume * 4));
 
     final summary = <String, dynamic>{
       'sumberJurnalTarget': _volume,
@@ -177,6 +208,10 @@ void main() {
       'akunPersediaan': '151.200 PERSEDIAAN BARANG LAINNYA',
       'akunPendapatan': '410.900 PENDAPATAN PENJUALAN TOKO',
       'akunHpp': '510.900 BEBAN POKOK PENJUALAN TOKO',
+      'akunBelumDipetakanSebelum': unmappedBefore,
+      'akunDipetakanPadaRun': mappingResult['dipetakan'] ?? 0,
+      'kelompokLaporanBaruPadaRun': mappingResult['kelompokBaru'] ?? 0,
+      'jenisLaporanBaruPadaRun': mappingResult['jenisLaporanBaru'] ?? 0,
       'barisLaporan': reportRows,
       'status': 'PASS',
     };

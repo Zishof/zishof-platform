@@ -25,8 +25,6 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final oldError = FlutterError.onError;
-    addTearDown(() => FlutterError.onError = oldError);
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
@@ -58,14 +56,6 @@ void main() {
     app.main();
     await _wait(tester, () => find.byType(KasirScreen).evaluate().isNotEmpty,
         reason: 'Layar POS belum siap', seconds: 180);
-    FlutterError.onError = (detail) {
-      if (detail.exceptionAsString().contains('A RenderFlex overflowed')) {
-        // ignore: avoid_print
-        print('UAT_LAYOUT_OVERFLOW=${detail.exceptionAsString()}');
-        return;
-      }
-      oldError?.call(detail);
-    };
     expect(find.byType(LoginScreen), findsNothing);
     // Instalasi/test runner baru dapat menampilkan dialog sinkronisasi awal.
     // Tutup secara eksplisit agar bukti dan interaksi berikutnya merekam layar
@@ -77,7 +67,7 @@ void main() {
     await _shot(tester, '01-menu-pengadaan-terbuka');
 
     await _openMenu(tester, 'Permintaan Pembelian (PR)');
-    await _shot(tester, '02-pr-daftar-50');
+    await _shot(tester, '02-pr-daftar-100');
     await tester.tap(find.text('Buat PR').last);
     await _wait(tester,
         () => find.text('Buat Permintaan Pembelian').evaluate().isNotEmpty,
@@ -102,7 +92,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     await _openMenu(tester, 'Penerimaan Barang (BAST)');
-    await _shot(tester, '07-bast-daftar-50');
+    await _shot(tester, '07-bast-daftar-100');
     // Tombol dapat berubah menjadi kartu RichText setelah data dasbor selesai
     // dimuat. Dialog pemilih hanya pelengkap dokumentasi; daftar BAST tetap harus
     // direkam dan langkah berikutnya tidak boleh gagal bila tombol tidak tappable.
@@ -123,7 +113,7 @@ void main() {
     }
 
     await _openMenu(tester, 'Terima Tagihan Vendor');
-    await _shot(tester, '09-terima-tagihan-50');
+    await _shot(tester, '09-terima-tagihan-100');
 
     await _tapSidebar(tester, 'KEUANGAN');
     await _openMenu(tester, 'Proses Transfer');
@@ -132,7 +122,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
     await _waitNoSpinner(tester, seconds: 90);
-    await _shot(tester, '10-pembayaran-vendor-50');
+    await _shot(tester, '10-pembayaran-vendor-100');
 
     await _tapSidebar(tester, 'AKUNTANSI');
     await _openMenu(tester, 'Draft Jurnal');

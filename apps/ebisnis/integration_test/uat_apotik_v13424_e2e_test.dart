@@ -42,6 +42,18 @@ void main() {
       await ApiClient.instance.simpanToken('${login['token']}');
     }
 
+    // Deploy/restart Tomcat dapat mengosongkan cache ConstantValues SIRS walau
+    // master kode transaksi AJ/BM/ADT/ADK sudah ada di basis data. Endpoint ini
+    // memang khusus server demo, berpengaman token eksplisit dan idempoten;
+    // panggilan latar mengikat ulang cache runtime sebelum transaksi UAT.
+    if (host.toLowerCase() == 'demo.ecampus.id') {
+      await _call('apotik_provision_demo', {
+        'konfirmasi': 'SEED-DEMO-APOTIK',
+        'background': true,
+      });
+      await Future<void>.delayed(const Duration(seconds: 5));
+    }
+
     final catalogPage =
         await _call('apotik_item_cari', {'page': 1, 'page_size': 100});
     final ingredientPage = await _call('apotik_item_cari', {

@@ -1,0 +1,71 @@
+{
+  "completedThisRun": 0,
+  "pengadaan_pr_daftar": 100,
+  "pengadaan_po_daftar": 100,
+  "pengadaan_bast_daftar": 100,
+  "pengadaan_tagihan_daftar": 100,
+  "pengadaan_bayar_daftar": 100,
+  "draftJurnalTotal": 561,
+  "draftJurnal": 411,
+  "postingJurnal": 150,
+  "kategoriBerisi": [
+    {
+      "kunci": "jurnal_umum",
+      "nama": "Jurnal Umum",
+      "draft": 2,
+      "posting": 150,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "pembayaran_termin_vendor",
+      "nama": "Pembayaran Termin Vendor",
+      "draft": 50,
+      "posting": 0,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "mahasiswa",
+      "nama": "Mahasiswa - Pembayaran",
+      "draft": 5,
+      "posting": 0,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "mahasiswa",
+      "nama": "Mahasiswa - Dibayar Dimuka",
+      "draft": 30,
+      "posting": 0,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "siswa",
+      "nama": "Siswa - Pembayaran",
+      "draft": 18,
+      "posting": 0,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "penyusutan",
+      "nama": "Fix Aset (Jurnal Saat BAST)",
+      "draft": 154,
+      "posting": 0,
+      "bisaPosting": true,
+      "bolehPosting": true
+    },
+    {
+      "kunci": "closing",
+      "nama": "Closing",
+      "draft": 152,
+      "posting": 0,
+      "bisaPosting": false,
+      "bolehPosting": false
+    }
+  ],
+  "prefix": "UAT-VOL-PROC-APT13423-R1-20260904",
+  "volumeDiminta": 100
+}

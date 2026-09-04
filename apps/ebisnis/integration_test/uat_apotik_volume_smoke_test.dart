@@ -234,7 +234,7 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: 'Demo',
           dataPratinjau: antreanLayar),
       '06-layar-kedua-obat-jadi-racikan',
     );
@@ -243,7 +243,7 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: 'Demo',
           mode: ModeLayarFarmasi.obatJadi,
           dataPratinjau: antreanLayar),
       '07-layar-tambahan-obat-jadi',
@@ -253,7 +253,7 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: 'Demo',
           mode: ModeLayarFarmasi.racikan,
           dataPratinjau: antreanLayar),
       '08-layar-tambahan-racikan',

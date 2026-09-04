@@ -186,7 +186,7 @@ def shade(cell, fill: str):
     pr.append(shd)
 
 
-def set_cell_margins(cell, top=80, start=120, bottom=80, end=120):
+def set_cell_margins(cell, top=55, start=120, bottom=55, end=120):
     pr = cell._tc.get_or_add_tcPr()
     margins = pr.first_child_found_in("w:tcMar")
     if margins is None:
@@ -434,7 +434,7 @@ def scenarios(summary: dict, procurement: dict, journal: dict, financial: dict) 
                  f"UAT menjalankan monitor dan laporan kedaluwarsa setelah transaksi. Seleksi batch menemukan {summary.get('batchKedaluwarsaDitemukanSaatSeleksi', 0)} baris kedaluwarsa dan hanya memilih batch aktif untuk penjualan. Endpoint monitor berstatus {summary.get('batchMonitorStatus', 'belum tercatat')} dengan {summary.get('batchMonitorBaris', 0)} baris yang dapat dibaca pada halaman uji. Penolakan batch kedaluwarsa adalah kontrol keselamatan yang tidak boleh dinonaktifkan untuk mengejar kelulusan tes.",
                  "Petugas memilih horizon, membuka item, menelusuri sumber penerimaan, dan memastikan jumlah fisik sesuai. Batch bermasalah dipindahkan ke status karantina melalui prosedur yang disetujui. Bila tanggal tidak valid atau sisa negatif, hentikan transaksi terkait, simpan bukti, dan lakukan rekonsiliasi ledger. Disposisi akhir harus mencatat jumlah, alasan, petugas, persetujuan, dan dokumen retur atau pemusnahan.",
              ], **common),
-        dict(title="Penerimaan Barang dari PBF", screenshot=PROC / "07-bast-daftar-50.png",
+        dict(title="Penerimaan Barang dari PBF", screenshot=PROC / "07-bast-daftar-100.png",
              actors=["Gudang", "PBF/Vendor", "Apoteker", "Keuangan"],
              usecases=["Menerima barang", "Mencatat batch dan ED", "Memeriksa kuantitas", "Menghubungkan dokumen sumber"],
              flow=["Pilih vendor/dokumen", "Cocokkan barang", "Isi lot dan ED", "Periksa harga/qty", "Simpan penerimaan", "Baca ulang stok"],
@@ -511,7 +511,7 @@ def scenarios(summary: dict, procurement: dict, journal: dict, financial: dict) 
                  f"Endpoint berstatus {summary.get('laporanKedaluwarsaStatus', 'belum tercatat')} dan klien membaca {summary.get('laporanKedaluwarsaBaris', 0)} baris pada pengujian. Katalog besar menghasilkan banyak batch sample dengan tanggal bervariasi sehingga pagination dan performa ikut diuji. Volume tinggi tidak otomatis berarti risiko nyata karena seluruh data UAT bersifat sintetik.",
                  "Pengguna memilih horizon sesuai kebijakan, memeriksa item berisiko tertinggi, lalu mencockan dengan stok fisik. Setiap tindakan harus mengubah status batch atau mutasi melalui transaksi yang tepat agar laporan berikutnya konsisten. Jika baris tetap muncul setelah disposisi, periksa tanggal efektif, status batch, dan posting mutasi sebelum membuat koreksi baru.",
              ], **common),
-        dict(title="Procure-to-Pay: PR sampai Pembayaran Vendor", screenshot=PROC / "10-pembayaran-vendor-50.png",
+        dict(title="Procure-to-Pay: PR sampai Pembayaran Vendor", screenshot=PROC / "10-pembayaran-vendor-100.png",
              actors=["Peminta", "Procurement", "Penerima", "Keuangan"],
              usecases=["Membuat PR/PO", "Menerima melalui BAST", "Mencatat tagihan", "Membayar vendor"],
              flow=["Buat PR", "Setujui dan buat PO", "Terima/BAST", "Terima tagihan", "Setujui pembayaran", "Rekonsiliasi"],
@@ -540,7 +540,7 @@ def scenarios(summary: dict, procurement: dict, journal: dict, financial: dict) 
              gate="GATE: hanya jurnal posted, saldo awal sah, klasifikasi akun benar, dan periode konsisten.",
              entities=["AKUN", "JURNAL POSTED", "BUKU BESAR", "TRIAL BALANCE", "LAPORAN KEUANGAN"],
              paragraphs=[
-                 "Tangkapan layar Laba Rugi memakai seluruh lebar area kerja: kolom keterangan memperoleh ruang utama sampai sisi kanan, nilai rata kanan mudah dibandingkan, dan ikon chevron menandai angka yang dapat dibuka untuk melihat data penyusunnya. Bukti ini menggantikan tangkapan layar kosong pada dokumen lama. Dari laporan ini akuntan melanjutkan rekonsiliasi ke Jurnal Umum, Buku Besar, Neraca Saldo, Neraca, dan Arus Kas dengan periode yang sama.",
+                 "Tangkapan layar Laba Rugi memakai seluruh lebar area kerja: kolom keterangan memperoleh ruang utama sampai sisi kanan dan setiap sel angka dapat diklik untuk membuka data penyusunnya. Bukti ini menggantikan tangkapan layar kosong pada dokumen lama. Dari laporan ini akuntan melanjutkan rekonsiliasi ke Jurnal Umum, Buku Besar, Neraca Saldo, Neraca, dan Arus Kas dengan periode yang sama.",
                  f"UAT memposting dan membaca ulang {financial.get('sumberJurnalTerpostingTerverifikasi', 0)} jurnal sample sebagai sumber laporan, di samping {journal.get('jurnalTerpostingTerverifikasi', 0)} jurnal pembayaran vendor. Enam endpoint laporan keuangan diperiksa dan semuanya harus mengembalikan baris: Laba Rugi, Neraca, Arus Kas, Jurnal Umum, Buku Besar, serta Trial Balance. Akun dari workbook pengguna dipakai sebagai rujukan, termasuk 111.101 KAS YAYASAN, 151.200 PERSEDIAAN BARANG LAINNYA, 410.900 PENDAPATAN PENJUALAN TOKO, dan 510.900 BEBAN POKOK PENJUALAN TOKO.",
                  "Akuntan memilih periode yang sama, menelusuri nomor jurnal ke Buku Besar, lalu membandingkan saldo akun kas dan utang dengan pembayaran vendor. Untuk laporan Laba Rugi dan laporan lain, data hanya boleh dinyatakan lengkap setelah akun sumber dipetakan dan baris jurnalnya benar-benar masuk klasifikasi laporan. Jika sebuah laporan kosong, perbaiki pemetaan atau dataset terlebih dahulu dan ambil bukti ulang; jangan menampilkan halaman kosong sebagai hasil lulus.",
              ], **common),
@@ -580,7 +580,7 @@ def build_document() -> Path:
     summary = load_json(SHOT / "uat-summary.json")
     procurement = load_json(SHOT / "procurement-summary.json")
     journal = load_json(SHOT / "vendor-journal-summary.json")
-    financial = load_json(SHOT / "financial-report-summary.json")
+    financial = load_json(ACC / "financial-report-summary.json")
     minimums = {
         "katalog item": summary.get("katalogItemTotal", 0),
         "bahan racikan": summary.get("bahanRacikanTerverifikasi", summary.get("bahanRacikanTotal", 0)),

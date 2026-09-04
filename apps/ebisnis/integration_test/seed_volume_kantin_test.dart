@@ -8,22 +8,38 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('seed 50 transaksi POS untuk UAT Kantin', (tester) async {
+  testWidgets('seed transaksi POS volume UAT', (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 1);
     const post = bool.fromEnvironment('POS_UAT_POST');
+    const productKeyword = String.fromEnvironment('POS_UAT_PRODUCT_KEYWORD',
+        defaultValue: 'ABC Kacang hijau 200ml (hijau)');
+    const codePrefix = String.fromEnvironment('POS_UAT_CODE_PREFIX',
+        defaultValue: 'UAT-VOL-POS-20260904');
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    final login = await ApiClient.instance.aksi('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-Volume-Kantin',
-    });
-    await ApiClient.instance.simpanToken(login['token'] as String);
-    await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': 1});
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      final login = await ApiClient.instance.aksi('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-Volume-Kantin',
+      });
+      await ApiClient.instance.simpanToken(login['token'] as String);
+    }
+    // Admin lintas toko pada sebagian deployment tidak memiliki satu toko
+    // terikat untuk dijadikan aktif. Payload transaksi di bawah tetap membawa
+    // idToko/tokoId eksplisit dan server melakukan validasi hak sebenarnya.
+    try {
+      await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': 1});
+    } on Object {
+      // Dilanjutkan untuk akun administrator global.
+    }
 
     Future<Map<String, dynamic>> call(
         String action, Map<String, dynamic> body) async {
@@ -43,7 +59,7 @@ void main() {
     }
 
     final catalog = await call('katalog', {
-      'keyword': 'ABC Kacang hijau 200ml (hijau)',
+      'keyword': productKeyword,
       'semuaToko': true,
     });
     final products = ((catalog['produk'] as List?) ?? const [])
@@ -51,10 +67,7 @@ void main() {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     expect(products, isNotEmpty);
-    final product = products.firstWhere(
-      (e) => '${e['nama']}'.contains('ABC Kacang hijau'),
-      orElse: () => products.first,
-    );
+    final product = products.first;
     final price = ((product['hargaJual'] ??
                 product['harga'] ??
                 product['harga_jual']) as num?)
@@ -73,7 +86,7 @@ void main() {
     final existingReport = await call('laporan_order_list', {
       'tglMulai': '2026-09-01',
       'tglSampai': '2026-09-30',
-      'nomorNota': 'UAT-VOL-POS-20260904',
+      'nomorNota': codePrefix,
       'tokoId': 1,
       'page': 1,
       'pageSize': 100,
@@ -85,7 +98,7 @@ void main() {
 
     int? lastTransactionId;
     for (var i = 1; i <= volume; i++) {
-      final code = 'UAT-VOL-POS-20260904-${i.toString().padLeft(3, '0')}';
+      final code = '$codePrefix-${i.toString().padLeft(3, '0')}';
       if (existingCodes.contains(code)) {
         if (i == 1 || i % 10 == 0 || i == volume) {
           // ignore: avoid_print
@@ -164,21 +177,30 @@ void main() {
           'sample': ((orders['data'] as List?) ?? const []).take(2).toList(),
         })}');
     if (lastTransactionId != null) {
-      final detail = await call('detail_transaksi', {'id': lastTransactionId});
       final byCode = await call('laporan_order_list', {
-        'nomorNota': 'UAT-VOL-POS-20260904',
+        'nomorNota': codePrefix,
         'tokoId': 1,
         'page': 1,
         'pageSize': 100,
       });
-      // ignore: avoid_print
-      print('VOLUME_POS_DETAIL=${jsonEncode({
-            'id': lastTransactionId,
-            'status': detail['status'],
-            'waktu': detail['waktu'],
-            'kode': detail['kode'],
-            'items': (detail['data'] as List?)?.length,
-          })}');
+      try {
+        final detail =
+            await call('detail_transaksi', {'id': lastTransactionId});
+        // ignore: avoid_print
+        print('VOLUME_POS_DETAIL=${jsonEncode({
+              'id': lastTransactionId,
+              'status': detail['status'],
+              'waktu': detail['waktu'],
+              'kode': detail['kode'],
+              'items': (detail['data'] as List?)?.length,
+            })}');
+      } on Object catch (error) {
+        // Akun administrator global boleh membuat dan mengaudit laporan lintas
+        // toko, tetapi pada deployment tertentu detail transaksi tetap dibatasi
+        // ke pengguna toko. Laporan by-code di bawah menjadi bukti otoritatif.
+        // ignore: avoid_print
+        print('VOLUME_POS_DETAIL_DIBATASI=$error');
+      }
       // ignore: avoid_print
       print('VOLUME_POS_BY_CODE=${jsonEncode({
             'total': byCode['total'],

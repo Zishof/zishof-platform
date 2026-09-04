@@ -21,7 +21,7 @@ void main() {
     final source =
         File('lib/screens/posting_toko_dialog.dart').readAsStringSync();
 
-    expect(source, contains('_diagnostikSetting(rincian)'));
+    expect(source, contains('_diagnostikSetting(rincianBelum)'));
     expect(source, contains("r['referensi']"));
     expect(source, contains("r['alasan']"));
     expect(source, contains('Lengkapi master/akun yang disebutkan'));

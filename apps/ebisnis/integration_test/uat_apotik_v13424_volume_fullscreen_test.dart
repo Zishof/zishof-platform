@@ -66,13 +66,56 @@ void main() {
     }
     final konfig = await ApiClient.instance.aksi('konfigurasi');
     Sesi.instance.terapkanKonfig(konfig);
+    final daftarToko = await ApiClient.instance.aksi(
+      'toko_kelola_list',
+      {'cari': 'Demo'},
+    );
+    final tokoUji = _data(daftarToko).firstWhere(
+      (toko) => _angka(toko['id']).toInt() == _tokoId,
+      orElse: () => <String, dynamic>{},
+    );
+    expect(tokoUji, isNotEmpty,
+        reason: 'Toko UAT ID $_tokoId wajib tersedia pada konfigurasi live');
+    final namaTokoUji = '${tokoUji['nama'] ?? ''}'.trim();
+    expect(namaTokoUji, 'Demo',
+        reason: 'Sumber runtime UAT wajib toko ID 1 / Demo');
+    Sesi.instance
+      ..tokoFilter = _tokoId
+      ..tokoId = _tokoId
+      ..tokoNama = namaTokoUji;
 
     final ringkasan = <String, dynamic>{
       'rilis': 'apotik-v1.34.24',
       'waktuUatUtc': DateTime.now().toUtc().toIso8601String(),
       'server': 'https://$host/$context',
       'tokoUjiId': _tokoId,
+      'tokoUjiNama': namaTokoUji,
     };
+
+    // Gerbang regresi r84374: metrik transaksi harus mengikuti relasi
+    // detail_transaksi_pasien.transaksi_detail -> transaksi_medis_detail.transaksi.
+    // Panggilan langsung ini mencegah layar dashboard tampak selesai walaupun
+    // loader-nya diam-diam jatuh ke data fallback setelah SQL server gagal.
+    final metrik = await _aksiRetry(
+      'apotik_metrik_operasional',
+      {'hari_ke_depan': 90},
+    );
+    expect(_sukses(metrik), isTrue);
+    for (final kunci in const [
+      'resepMenunggu',
+      'resepTotal',
+      'batchKedaluwarsa',
+      'batchSegera',
+      'batchDitahan',
+      'itemHabis',
+      'transaksiHariIni',
+      'nilaiHariIni',
+    ]) {
+      expect(metrik[kunci], isA<num>(), reason: 'Metrik $kunci wajib numerik');
+    }
+    ringkasan['metrikOperasionalStatus'] = metrik['status'];
+    ringkasan['metrikTransaksiHariIni'] = metrik['transaksiHariIni'];
+    ringkasan['metrikNilaiHariIni'] = metrik['nilaiHariIni'];
 
     final katalog =
         await ApiClient.instance.aksi('apotik_item_cari', {'page_size': 100});
@@ -231,9 +274,9 @@ void main() {
         antreanLayar.where((e) => e['jenis'] == 'RACIKAN').length;
     ringkasan['antreanServerAktif'] = antreanServerAktif;
 
-    final laporanPenjualan = await ApiClient.instance
-        .aksi('apotik_laporan_penjualan', {'page_size': 100});
-    final laporanKedaluwarsa = await ApiClient.instance.aksi(
+    final laporanPenjualan =
+        await _aksiRetry('apotik_laporan_penjualan', {'page_size': 100});
+    final laporanKedaluwarsa = await _aksiRetry(
         'apotik_laporan_kedaluwarsa', {'hari_ke_depan': 365, 'page_size': 100});
     expect(_data(laporanPenjualan).length, greaterThanOrEqualTo(100));
     expect(_data(laporanKedaluwarsa).length, greaterThanOrEqualTo(100));
@@ -263,7 +306,7 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: namaTokoUji,
           dataPratinjau: antreanLayar),
       '06-layar-kedua-obat-jadi-racikan',
     );
@@ -272,7 +315,7 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: namaTokoUji,
           mode: ModeLayarFarmasi.obatJadi,
           dataPratinjau: antreanLayar),
       '07-layar-tambahan-obat-jadi',
@@ -282,16 +325,20 @@ void main() {
       LayarAntreanFarmasiScreen(
           jendelaKedua: true,
           tokoIdOverride: _tokoId,
-          tokoNamaOverride: 'Instalasi Farmasi Demo',
+          tokoNamaOverride: namaTokoUji,
           mode: ModeLayarFarmasi.racikan,
           dataPratinjau: antreanLayar),
       '08-layar-tambahan-racikan',
     );
     await _pumpHalaman(
-        tester, const LaporanApotikScreen(), '09-laporan-penjualan');
-    await _pumpHalaman(tester, const LaporanApotikScreen(tabAwal: 1),
+        tester, LaporanApotikScreen(key: UniqueKey()), '09-laporan-penjualan');
+    await _pumpHalaman(
+        tester,
+        LaporanApotikScreen(key: UniqueKey(), tabAwal: 1),
         '10-register-obat-terkendali');
-    await _pumpHalaman(tester, const LaporanApotikScreen(tabAwal: 2),
+    await _pumpHalaman(
+        tester,
+        LaporanApotikScreen(key: UniqueKey(), tabAwal: 2),
         '11-laporan-kedaluwarsa');
   }, timeout: const Timeout(Duration(minutes: 20)));
 }
@@ -311,6 +358,22 @@ Future<Map<String, dynamic>> _login(String username, String password) async {
     }
   }
   throw StateError('Login UAT gagal: $terakhir');
+}
+
+Future<Map<String, dynamic>> _aksiRetry(
+    String aksi, Map<String, dynamic> parameter) async {
+  Object? terakhir;
+  for (var attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await ApiClient.instance.aksi(aksi, parameter);
+    } catch (e) {
+      terakhir = e;
+      if (attempt < 5) {
+        await Future<void>.delayed(Duration(seconds: attempt));
+      }
+    }
+  }
+  throw StateError('$aksi gagal setelah 5 percobaan: $terakhir');
 }
 
 List<Map<String, dynamic>> _data(Map<String, dynamic> hasil) =>

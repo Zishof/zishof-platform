@@ -24,8 +24,6 @@ void main() {
   testWidgets('smoke UAT Akuntansi dan tangkapan layar asli', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1920, 1080));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final penanganGalatTes = FlutterError.onError;
-    addTearDown(() => FlutterError.onError = penanganGalatTes);
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
@@ -82,19 +80,6 @@ void main() {
       alasan: 'Sesi POS belum selesai dimuat',
       detik: 180,
     );
-    // main() memasang penangkap galat produksi; runner test perlu handler
-    // bawaannya kembali agar galat interaksi dilaporkan dengan benar.
-    FlutterError.onError = (detail) {
-      if (detail.exceptionAsString().contains('A RenderFlex overflowed')) {
-        // Temuan tata letak tetap dicatat dan difoto, tetapi tidak menghentikan
-        // UAT fungsional seluruh submenu/laporan.
-        // ignore: avoid_print
-        print('UAT_LAYOUT_OVERFLOW=${detail.exceptionAsString()}');
-        return;
-      }
-      penanganGalatTes?.call(detail);
-    };
-
     await _tutupOnboardingJikaAda(tester);
 
     await _ambilGambar(tester, '00-layar-awal-integration');
@@ -370,6 +355,14 @@ Future<void> _bukaMenuDanFoto(
     await tester.pump(const Duration(seconds: 1));
   }
   final stabil = await _tungguTanpaSpinner(tester, detik: 90);
+  if (label.startsWith('Posting ') &&
+      find.text('Pratinjau').evaluate().isNotEmpty) {
+    await tester.tap(find.text('Pratinjau').last);
+    final pratinjauSelesai = await _tungguTanpaSpinner(tester, detik: 120);
+    expect(pratinjauSelesai, isTrue,
+        reason: 'Pratinjau $label tidak selesai memuat');
+    await tester.pump(const Duration(seconds: 1));
+  }
   if (label == 'Tutup Buku (Laba Ditahan)') {
     final sampai = find.textContaining('Sampai 2026-09-');
     if (sampai.evaluate().isNotEmpty) {

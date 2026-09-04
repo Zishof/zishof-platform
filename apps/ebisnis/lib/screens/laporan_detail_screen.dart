@@ -1307,35 +1307,27 @@ class _SelAngkaRincian extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Klik untuk melihat data penghitungannya',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(5),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  teks,
-                  textAlign: TextAlign.right,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: gaya.copyWith(
-                    decoration: TextDecoration.underline,
-                    decorationStyle: TextDecorationStyle.dotted,
-                  ),
+    return SizedBox(
+      width: double.infinity,
+      child: Tooltip(
+        message: 'Klik untuk melihat data penghitungannya',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(5),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Text(
+                teks,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: gaya.copyWith(
+                  decoration: TextDecoration.underline,
+                  decorationStyle: TextDecorationStyle.dotted,
                 ),
-                const SizedBox(width: 5),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 17,
-                  color: AppColors.primary,
-                ),
-              ],
+              ),
             ),
           ),
         ),

@@ -1,0 +1,32 @@
+{
+  "hpp": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 201
+  },
+  "penjualan": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 800
+  },
+  "kulakan": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 200
+  },
+  "bayar_hutang": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 100
+  },
+  "terima_piutang": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 200
+  },
+  "penyesuaian": {
+    "belumDiposting": 0,
+    "telahDiposting": 0,
+    "siapDiposting": 350
+  }
+}

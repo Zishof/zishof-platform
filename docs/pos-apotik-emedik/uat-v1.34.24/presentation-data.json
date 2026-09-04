@@ -1,0 +1,602 @@
+[
+  {
+    "index": 1,
+    "title": "Dashboard Operasional Apotik",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/00-dashboard-operasional.png",
+    "actors": [
+      "Pemilik Apotik",
+      "Apoteker",
+      "Kasir",
+      "Gudang"
+    ],
+    "usecases": [
+      "Memantau indikator harian",
+      "Menilai antrean dan resep",
+      "Membuka tindakan kasir",
+      "Menindak stok dan batch"
+    ],
+    "flow": [
+      "Masuk sebagai role Apotik",
+      "Baca kartu ringkasan",
+      "Periksa peringatan",
+      "Buka modul terkait",
+      "Tindak lanjuti",
+      "Konfirmasi hasil"
+    ],
+    "gate": "GATE: identitas varian, tenant, toko, tanggal, dan status sinkronisasi harus benar.",
+    "entities": [
+      "PENGGUNA",
+      "TOKO/APOTEK",
+      "TRANSAKSI HARIAN",
+      "PERINGATAN",
+      "DASHBOARD"
+    ],
+    "paragraphs": [
+      "Dashboard adalah titik orientasi setelah login. Pada tangkapan layar, identitas aplikasi tampil sebagai Apotik dengan aksen hijau; panel ringkasan mengarahkan perhatian ke transaksi, resep, stok, dan aktivitas yang membutuhkan tindakan. Layar ini tidak dipakai untuk mengubah data klinis atau keuangan secara langsung. Fungsinya adalah membantu pemilik, apoteker, kasir, dan petugas gudang memahami kondisi saat ini sebelum membuka menu kerja yang tepat.",
+      "UAT memeriksa bahwa dashboard dapat dibuka pada kanvas 1920 x 1080, tidak menampilkan overflow, dan tetap membaca konfigurasi server demo. Data dasarnya telah dipersiapkan hingga 11000 item katalog, 1000 bahan racikan, 4800 resep siap jual, dan 200 antrean farmasi. Angka pada kartu harus dipahami sebagai ringkasan tenant bersama; untuk audit, operator tetap membuka daftar sumber dan mencari kode transaksi atau resep yang relevan.",
+      "Cara pakai yang aman dimulai dengan memeriksa nama toko dan tanggal, lalu memilih indikator yang memang memerlukan tindakan. Jika angka tampak tidak wajar, jangan langsung membuat transaksi koreksi. Muat ulang, buka daftar sumber, cocokkan periode, dan pastikan tidak ada filter aktif. Perbedaan antara kartu dan daftar harus dicatat sebagai masalah agregasi, bukan diselesaikan dengan menggandakan data."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 2,
+    "title": "Penjualan Obat Jadi",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/01-kasir-obat-jadi.png",
+    "actors": [
+      "Kasir",
+      "Pasien",
+      "Apoteker",
+      "Sistem stok"
+    ],
+    "usecases": [
+      "Mencari obat jadi",
+      "Memilih batch layak",
+      "Memvalidasi obat terkendali",
+      "Menyelesaikan pembayaran"
+    ],
+    "flow": [
+      "Pilih OTC/obat bebas",
+      "Cari nama atau barcode",
+      "Tambahkan ke keranjang",
+      "Periksa qty dan batch",
+      "Pilih pembayaran",
+      "Bayar dan cetak"
+    ],
+    "gate": "GATE: stok cukup, batch belum kedaluwarsa, harga aktif, dan persyaratan obat terkendali terpenuhi.",
+    "entities": [
+      "ITEM OBAT",
+      "BATCH",
+      "KERANJANG",
+      "PEMBAYARAN",
+      "PENJUALAN"
+    ],
+    "paragraphs": [
+      "Layar kasir obat jadi dibagi menjadi mode transaksi, katalog, dan keranjang. Kolom pencarian menerima nama, kode, atau barcode; kartu item memperlihatkan harga serta penanda seperti LASA atau terkendali. Keranjang di sisi kanan menjadi tempat pemeriksaan akhir sebelum pembayaran. Susunan ini memungkinkan kasir mempertahankan konteks tanpa berpindah halaman ketika antrean pelanggan ramai.",
+      "Pengujian membuat 100 transaksi dengan kode UAT yang unik dan mengulang satu kode untuk membuktikan idempotensi. Setiap penjualan memakai batch aktif dan jumlah yang tersedia. Status PASS membuktikan bahwa pengulangan permintaan tidak membuat nota kedua. Katalog yang digunakan adalah data sample/UAT dan tidak boleh diperlakukan sebagai daftar obat terdaftar atau acuan terapi.",
+      "Operator mencari obat, menilai nama dan dosis secara lengkap, memeriksa peringatan LASA, lalu mengatur jumlah. Sebelum menekan Bayar, cocokkan item, kuantitas, harga, identitas pembeli bila diperlukan, metode pembayaran, dan ketentuan resep. Bila stok atau batch ditolak, jangan memilih batch kedaluwarsa sebagai jalan pintas; eskalasikan ke gudang atau apoteker dan gunakan alur penerimaan/opname yang sah."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 3,
+    "title": "Penjualan Obat Racikan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/02-resep-racikan.png",
+    "actors": [
+      "Apoteker",
+      "Kasir",
+      "Dokter",
+      "Pasien"
+    ],
+    "usecases": [
+      "Memilih resep menunggu",
+      "Memeriksa komposisi",
+      "Menyiapkan racikan",
+      "Menebus dan menyerahkan"
+    ],
+    "flow": [
+      "Buka antrean resep",
+      "Pilih resep",
+      "Baca komposisi",
+      "Validasi bahan",
+      "Konfirmasi racikan",
+      "Tebus resep"
+    ],
+    "gate": "GATE: resep sah, komposisi terbaca, bahan cukup, dan verifikasi apoteker selesai.",
+    "entities": [
+      "RESEP",
+      "DETAIL RESEP",
+      "BAHAN RACIKAN",
+      "PENEBUSAN",
+      "AUDIT FARMASI"
+    ],
+    "paragraphs": [
+      "Halaman resep racikan menempatkan daftar resep menunggu di sisi kiri dan detail pilihan di area utama. Setelah resep dipilih, petugas harus dapat melihat identitas operasional, komposisi, jumlah, serta status proses. Pemisahan daftar dan detail mencegah racikan dikerjakan hanya berdasarkan nomor antrean tanpa membaca bahan yang menyusunnya.",
+      "Server menyediakan 4800 resep siap jual dan sekurangnya 1000 bahan racikan sample. UAT menebus 100 resep melalui endpoint pembayaran. Keberhasilan dihitung dari respons tersimpan dan pembacaan ulang, bukan dari banyaknya kartu yang kebetulan terlihat pada satu halaman. Bahan dan formula sample diberi penanda UAT; isinya tidak boleh digunakan sebagai petunjuk klinis.",
+      "Apoteker memilih resep, membandingkan komposisi dengan resep sumber, memeriksa ketersediaan batch bahan, lalu memberi status sesuai pekerjaan sebenarnya. Kasir hanya menyelesaikan tagihan setelah verifikasi farmasi selesai. Jika detail kosong, satuan tidak jelas, atau bahan tidak tersedia, resep ditahan. Jangan mengganti bahan atau dosis hanya agar transaksi bisa disimpan; koreksi harus berasal dari pihak yang berwenang dan meninggalkan jejak audit."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 4,
+    "title": "Formularium dan Katalog Obat",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/03-formularium-obat.png",
+    "actors": [
+      "Apoteker",
+      "Gudang",
+      "Manajemen",
+      "Auditor"
+    ],
+    "usecases": [
+      "Menelusuri katalog",
+      "Membedakan jenis item",
+      "Memeriksa profil obat",
+      "Mengendalikan aktivasi"
+    ],
+    "flow": [
+      "Buka formularium",
+      "Gunakan pencarian",
+      "Pilih kategori",
+      "Buka profil",
+      "Periksa stok/batch",
+      "Simpan perubahan sah"
+    ],
+    "gate": "GATE: kode unik, jenis item benar, satuan jelas, dan seluruh data ditandai sample bila untuk UAT.",
+    "entities": [
+      "ITEM MEDIS",
+      "JENIS ITEM",
+      "PROFIL APOTIK",
+      "SATUAN",
+      "KATALOG"
+    ],
+    "paragraphs": [
+      "Formularium adalah sumber identitas item yang dipakai oleh kasir, penerimaan, stok, resep, dan laporan. Tangkapan layar menunjukkan daftar item dengan pencarian dan informasi operasional. Perbedaan antara obat jadi, bahan baku racikan, alat kesehatan, serta item terkendali harus terlihat dari data master, bukan disimpulkan hanya dari nama produk.",
+      "Setelah provisioning final, UAT mensyaratkan sedikitnya 11.000 item gabungan: 10.000 obat jadi dan 1.000 bahan racikan. Hasil mesin membaca 11000 item katalog dan 1000 bahan berprefix DEMO-BHN. Nama, produsen, negara, dosis, harga, barcode, dan batch dibuat secara deterministik untuk pengujian volume. Semua data bersifat sintetik/sample dan tidak menyatakan izin edar, keamanan, atau kesetaraan klinis.",
+      "Untuk memeriksa satu item, cari kode yang spesifik, buka profil, lalu cocokkan jenis, satuan, harga, golongan, LASA, batas stok, barcode, dan batch. Perubahan profil tidak boleh dilakukan massal tanpa daftar persetujuan. Jika jumlah hasil tidak cocok dengan total, periksa pagination dan filter. Katalog besar harus tetap responsif serta tidak menutupi label atau tombol pada layar 1920 x 1080."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 5,
+    "title": "Batch, FEFO, dan Kedaluwarsa",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/04-batch-kedaluwarsa.png",
+    "actors": [
+      "Gudang",
+      "Apoteker",
+      "Supervisor",
+      "Sistem FEFO"
+    ],
+    "usecases": [
+      "Memantau tanggal ED",
+      "Memilih batch FEFO",
+      "Mengarantina batch",
+      "Mencatat disposisi"
+    ],
+    "flow": [
+      "Pilih horizon",
+      "Baca status batch",
+      "Urutkan tanggal",
+      "Periksa sisa",
+      "Karantina/retur",
+      "Dokumentasikan disposisi"
+    ],
+    "gate": "GATE: batch lewat tanggal tidak boleh dipakai dalam penjualan atau racikan.",
+    "entities": [
+      "ITEM",
+      "BATCH/LOT",
+      "MUTASI STOK",
+      "KARANTINA",
+      "MONITOR ED"
+    ],
+    "paragraphs": [
+      "Monitor batch memusatkan perhatian pada nomor lot, tanggal kedaluwarsa, sisa, dan status penanganan. Pilihan horizon membantu gudang memisahkan barang yang harus segera diprioritaskan, dipindahkan, diretur, atau dikarantina. Warna peringatan mendukung keputusan, tetapi tanggal dan sisa tetap harus dibaca; warna bukan satu-satunya dasar tindakan.",
+      "UAT menjalankan monitor dan laporan kedaluwarsa setelah transaksi. Seleksi batch menemukan 0 baris kedaluwarsa dan hanya memilih batch aktif untuk penjualan. Endpoint monitor berstatus success dengan 100 baris yang dapat dibaca pada halaman uji. Penolakan batch kedaluwarsa adalah kontrol keselamatan yang tidak boleh dinonaktifkan untuk mengejar kelulusan tes.",
+      "Petugas memilih horizon, membuka item, menelusuri sumber penerimaan, dan memastikan jumlah fisik sesuai. Batch bermasalah dipindahkan ke status karantina melalui prosedur yang disetujui. Bila tanggal tidak valid atau sisa negatif, hentikan transaksi terkait, simpan bukti, dan lakukan rekonsiliasi ledger. Disposisi akhir harus mencatat jumlah, alasan, petugas, persetujuan, dan dokumen retur atau pemusnahan."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 6,
+    "title": "Penerimaan Barang dari PBF",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots-pengadaan/07-bast-daftar-100.png",
+    "actors": [
+      "Gudang",
+      "PBF/Vendor",
+      "Apoteker",
+      "Keuangan"
+    ],
+    "usecases": [
+      "Menerima barang",
+      "Mencatat batch dan ED",
+      "Memeriksa kuantitas",
+      "Menghubungkan dokumen sumber"
+    ],
+    "flow": [
+      "Pilih vendor/dokumen",
+      "Cocokkan barang",
+      "Isi lot dan ED",
+      "Periksa harga/qty",
+      "Simpan penerimaan",
+      "Baca ulang stok"
+    ],
+    "gate": "GATE: barang, jumlah, mutu, batch, ED, dan referensi PO/BAST harus konsisten.",
+    "entities": [
+      "VENDOR/PBF",
+      "PO",
+      "BAST/PENERIMAAN",
+      "BATCH",
+      "PERSEDIAAN"
+    ],
+    "paragraphs": [
+      "Penerimaan PBF adalah pintu masuk stok sehingga kesalahan di layar ini akan terbawa ke penjualan, FEFO, HPP, tagihan, dan laporan. Form menampilkan identitas pemasok atau dokumen, daftar item, jumlah, harga beli, batch, tanggal kedaluwarsa, serta keterangan. Operator harus bekerja dari surat jalan, PO, dan pemeriksaan fisik, bukan menyalin nilai dari transaksi lama.",
+      "Dalam UAT, daftar penerimaan membuktikan 100 BAST sample yang dapat ditelusuri ke PO. Item jangkar UJI-PCT juga diberi top-up batch idempoten dengan kode faktur UAT-TERIMA-APT-13424-001 bila batch yang cukup belum ada. Setelah penyimpanan, batch dibaca kembali dan digunakan oleh transaksi penjualan. Cara ini membuktikan bahwa penerimaan memengaruhi stok nyata dan bukan sekadar menghasilkan notifikasi sukses.",
+      "Gudang mencocokkan satu per satu nama item, kuantitas, satuan, nomor lot, dan ED. Apoteker menilai kelayakan mutu; keuangan tidak memproses tagihan bila penerimaan belum sah. Jika jumlah berbeda dari PO atau barang rusak, catat selisih dan gunakan status pengecualian. Jangan menaikkan stok lewat koreksi langsung agar angka cocok, karena tindakan itu memutus hubungan antara persediaan dan dokumen pengadaan."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 7,
+    "title": "Layar Publik Obat Jadi dan Racikan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/06-layar-kedua-obat-jadi-racikan.png",
+    "actors": [
+      "Pasien/Keluarga",
+      "Petugas Farmasi",
+      "Sistem Antrean",
+      "Petugas Loket"
+    ],
+    "usecases": [
+      "Melihat status anonim",
+      "Membedakan jenis layanan",
+      "Mengetahui loket",
+      "Memanggil antrean siap"
+    ],
+    "flow": [
+      "Ambil antrean server",
+      "Samarkan identitas",
+      "Kelompokkan jenis",
+      "Tampilkan status",
+      "Arahkan ke loket",
+      "Perbarui otomatis"
+    ],
+    "gate": "GATE: identitas pasien tersamar dan hanya informasi yang diperlukan publik yang ditampilkan.",
+    "entities": [
+      "ANTREAN FARMASI",
+      "PASIEN TERSAMAR",
+      "DAFTAR OBAT PUBLIK",
+      "LOKET",
+      "LAYAR KEDUA"
+    ],
+    "paragraphs": [
+      "Layar kedua menggabungkan obat jadi dan racikan agar pasien atau keluarga dapat mengetahui posisi proses tanpa bertanya berulang ke loket. Informasi dipisahkan menurut jenis layanan, status seperti menunggu, disiapkan, atau siap, serta tujuan loket. Ukuran huruf dan kontras dirancang untuk televisi atau monitor publik yang dilihat dari jarak tertentu.",
+      "Endpoint live mengembalikan 200 antrean untuk toko uji dan menyatakan kebijakan privasi IDENTITAS_DISAMARKAN. UAT memastikan data berasal dari server, bukan pratinjau lokal. Nama dan nomor rekam medis harus disamarkan, sedangkan catatan publik tidak boleh memuat diagnosis, rincian klinis sensitif, nomor telepon, alamat, atau informasi pembayaran.",
+      "Petugas membuka layar pada monitor kedua, memilih toko dan mode gabungan, lalu memeriksa pembaruan otomatis. Ketika obat siap, status dan loket harus berubah tanpa memerlukan login pasien. Jika identitas lengkap terlihat, layar wajib segera ditutup dan insiden privasi dicatat. Bila koneksi terputus, tampilan harus menunjukkan kondisi yang jujur dan tidak terus memanggil antrean berdasarkan data lama seolah-olah masih terbaru."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 8,
+    "title": "Layar Tambahan Obat Jadi",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/07-layar-tambahan-obat-jadi.png",
+    "actors": [
+      "Pasien OTC",
+      "Petugas Farmasi",
+      "Sistem Antrean",
+      "Petugas Loket"
+    ],
+    "usecases": [
+      "Memfilter obat jadi",
+      "Menampilkan status",
+      "Mengatur loket",
+      "Memperbarui panggilan"
+    ],
+    "flow": [
+      "Pilih mode obat jadi",
+      "Ambil antrean",
+      "Terapkan filter",
+      "Tampilkan urutan",
+      "Panggil yang siap",
+      "Segarkan layar"
+    ],
+    "gate": "GATE: hanya antrean obat jadi yang tampil dan identitas tetap tersamar.",
+    "entities": [
+      "ANTREAN",
+      "JENIS JADI",
+      "STATUS",
+      "LOKET",
+      "MONITOR PUBLIK"
+    ],
+    "paragraphs": [
+      "Mode obat jadi menyediakan layar khusus ketika instalasi memiliki monitor terpisah atau volume resep non-racikan tinggi. Filter jenis mengurangi kepadatan informasi dan membuat nomor antrean, status, serta loket lebih mudah dibaca. Mode ini bukan daftar penjualan; pasien hanya melihat informasi pengambilan yang diperlukan.",
+      "UAT membandingkan isi mode khusus dengan data antrean gabungan dan memverifikasi 100 antrean obat jadi sample. Baris bertipe racikan atau campuran tidak boleh masuk ke tampilan ini. Status siap harus tetap menampilkan loket yang tepat, sedangkan identitas mengikuti masker server. Penambahan layar tidak membuat salinan data baru: semua monitor membaca sumber antrean yang sama sehingga perubahan status konsisten.",
+      "Petugas memilih mode Obat Jadi pada konfigurasi layar tambahan dan menempatkan jendela pada monitor yang sesuai. Setelah pergantian shift atau toko, periksa kembali judul instalasi dan loket. Jika sebuah nomor muncul di mode yang salah, verifikasi nilai jenis pada sumber antrean; jangan menutupi kesalahan dengan menghapus pasien dari daftar publik."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 9,
+    "title": "Layar Tambahan Obat Racikan",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/08-layar-tambahan-racikan.png",
+    "actors": [
+      "Pasien Resep",
+      "Apoteker",
+      "Sistem Antrean",
+      "Petugas Loket"
+    ],
+    "usecases": [
+      "Memfilter racikan",
+      "Memantau tahap persiapan",
+      "Memanggil pasien",
+      "Menjaga privasi"
+    ],
+    "flow": [
+      "Pilih mode racikan",
+      "Ambil antrean",
+      "Terapkan filter",
+      "Tampilkan proses",
+      "Arahkan ke loket",
+      "Perbarui status"
+    ],
+    "gate": "GATE: antrean racikan/campuran benar, status tidak prematur, dan data klinis tidak dipublikasikan.",
+    "entities": [
+      "RESEP",
+      "ANTREAN RACIKAN",
+      "STATUS PROSES",
+      "LOKET",
+      "LAYAR PUBLIK"
+    ],
+    "paragraphs": [
+      "Mode racikan menyoroti antrean yang membutuhkan penyiapan farmasi lebih panjang. Pasien dapat membedakan apakah resep masih menunggu, sedang diracik, atau siap diambil. Informasi tersebut mengurangi tekanan pada loket sekaligus menjaga agar apoteker tidak mengubah status hanya untuk memenuhi ekspektasi waktu.",
+      "UAT memastikan filter menampilkan 100 antrean racikan sample dan tidak memasukkan obat jadi murni. Komposisi detail resep tidak ditampilkan; layar cukup memberi label layanan dan catatan publik yang aman. Pengujian juga menilai keterbacaan pada 1920 x 1080 serta ketiadaan teks yang terpotong pada daftar panjang.",
+      "Apoteker memperbarui status berdasarkan pekerjaan nyata. Petugas loket memanggil hanya entri siap. Jika racikan harus dikoreksi, status dikembalikan melalui alur operasional dan pasien diberi informasi non-klinis yang sesuai. Jangan menampilkan nama bahan sensitif, diagnosis, atau instruksi terapi di layar publik; rincian tersebut tetap berada pada layar petugas berotorisasi."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 10,
+    "title": "Laporan Penjualan Apotik",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/09-laporan-penjualan.png",
+    "actors": [
+      "Supervisor",
+      "Keuangan",
+      "Kasir",
+      "Auditor"
+    ],
+    "usecases": [
+      "Memilih periode",
+      "Membaca agregat",
+      "Menelusuri item",
+      "Merekonsiliasi nota"
+    ],
+    "flow": [
+      "Atur periode",
+      "Terapkan filter",
+      "Baca total",
+      "Periksa item",
+      "Bandingkan nota",
+      "Ekspor/arsipkan"
+    ],
+    "gate": "GATE: periode, status final, toko, pembatalan, diskon, dan retur dihitung konsisten.",
+    "entities": [
+      "PENJUALAN",
+      "DETAIL ITEM",
+      "FILTER PERIODE",
+      "AGREGAT",
+      "LAPORAN"
+    ],
+    "paragraphs": [
+      "Laporan penjualan merangkum kuantitas dan nilai per item untuk periode yang dipilih. Layar harus dipakai setelah transaksi tersimpan, bukan sebagai pengganti nota. Filter periode dan toko menentukan ruang lingkup; total kemudian ditelusuri ke item serta transaksi sumber ketika ada perbedaan.",
+      "Setelah perbaikan endpoint, laporan berstatus success, membaca 102 baris produk pada klien, dan sumber server mencatat 400 transaksi UAT lulus. Skenario memakai sedikitnya 100 item berbeda agar halaman laporan tidak hanya menunjukkan satu atau dua agregat. Acceptance test kemudian membandingkan kuantitas, nilai, dan jejak nota pada periode yang sama.",
+      "Supervisor memilih periode yang mencakup waktu UAT, memastikan toko benar, lalu membandingkan item UJI-PCT dan kode transaksi berprefix rilis. Jika laporan kosong sementara nota ada, periksa cut-off tanggal, status transaksi, zona waktu, dan struktur respons. Jangan mengubah tanggal transaksi agar laporan terlihat benar; temuan harus diperbaiki pada filter atau agregasi dan kemudian diretest."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 11,
+    "title": "Register Obat Terkendali",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/10-register-obat-terkendali.png",
+    "actors": [
+      "Apoteker",
+      "Penanggung Jawab",
+      "Auditor",
+      "Sistem Kepatuhan"
+    ],
+    "usecases": [
+      "Membaca transaksi terkendali",
+      "Memeriksa identitas wajib",
+      "Menelusuri batch",
+      "Mengaudit penyerahan"
+    ],
+    "flow": [
+      "Pilih periode",
+      "Filter golongan",
+      "Buka transaksi",
+      "Periksa identitas",
+      "Cocokkan batch",
+      "Tandai pemeriksaan"
+    ],
+    "gate": "GATE: obat terkendali tidak boleh diserahkan tanpa data dan otorisasi yang dipersyaratkan.",
+    "entities": [
+      "ITEM TERKENDALI",
+      "TRANSAKSI",
+      "PASIEN/RESEP",
+      "BATCH",
+      "REGISTER"
+    ],
+    "paragraphs": [
+      "Register obat terkendali memisahkan transaksi yang memerlukan jejak kepatuhan lebih kuat dari penjualan obat bebas. Kolom dan filter membantu apoteker menelusuri tanggal, item, jumlah, referensi resep atau pasien, dan batch. Layar ini tidak boleh menyederhanakan kewajiban institusi; SOP dan ketentuan regulator tetap menjadi sumber keputusan.",
+      "UAT membuka endpoint dan halaman dengan status success serta membaca 101 baris register pada periode uji. Item UJI-CDN dipakai pada transaksi sample beridentitas fiktif, alamat sample, nama dokter sample, dan batch aktif. Pengujian membuktikan validasi data wajib, pencatatan register, serta kemampuan halaman menangani volume audit tanpa memakai data pasien nyata.",
+      "Apoteker memilih periode, membuka transaksi, dan mencocokkan item, jumlah, batch, pihak yang menyerahkan, serta data resep yang diwajibkan. Bila identitas atau referensi kosong, penyerahan ditahan dan transaksi dikoreksi lewat alur resmi. Akses register harus dibatasi; ekspor dan screenshot tidak boleh menyebarkan data pasien di luar tujuan audit yang sah."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 12,
+    "title": "Laporan Kedaluwarsa",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots/11-laporan-kedaluwarsa.png",
+    "actors": [
+      "Gudang",
+      "Apoteker",
+      "Manajemen",
+      "Auditor"
+    ],
+    "usecases": [
+      "Menyaring horizon ED",
+      "Mengukur nilai risiko",
+      "Menentukan tindakan",
+      "Membuktikan disposisi"
+    ],
+    "flow": [
+      "Pilih horizon",
+      "Tampilkan batch",
+      "Kelompokkan urgensi",
+      "Cek stok fisik",
+      "Tentukan disposisi",
+      "Rekonsiliasi"
+    ],
+    "gate": "GATE: hasil laporan harus cocok dengan batch fisik dan transaksi mutasi.",
+    "entities": [
+      "BATCH",
+      "ITEM",
+      "HORIZON",
+      "NILAI PERSEDIAAN",
+      "LAPORAN ED"
+    ],
+    "paragraphs": [
+      "Laporan kedaluwarsa mengubah data batch menjadi daftar kerja bagi gudang dan apoteker. Berbeda dari monitor operasional, laporan ini dipakai untuk melihat dampak lintas item pada horizon tertentu dan mendukung perencanaan retur, pemindahan, atau pemusnahan. Tanggal, sisa, dan nilai harus dapat ditelusuri kembali ke batch sumber.",
+      "Endpoint berstatus success dan klien membaca 999 baris pada pengujian. Katalog besar menghasilkan banyak batch sample dengan tanggal bervariasi sehingga pagination dan performa ikut diuji. Volume tinggi tidak otomatis berarti risiko nyata karena seluruh data UAT bersifat sintetik.",
+      "Pengguna memilih horizon sesuai kebijakan, memeriksa item berisiko tertinggi, lalu mencockan dengan stok fisik. Setiap tindakan harus mengubah status batch atau mutasi melalui transaksi yang tepat agar laporan berikutnya konsisten. Jika baris tetap muncul setelah disposisi, periksa tanggal efektif, status batch, dan posting mutasi sebelum membuat koreksi baru."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 13,
+    "title": "Procure-to-Pay: PR sampai Pembayaran Vendor",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots-pengadaan/10-pembayaran-vendor-100.png",
+    "actors": [
+      "Peminta",
+      "Procurement",
+      "Penerima",
+      "Keuangan"
+    ],
+    "usecases": [
+      "Membuat PR/PO",
+      "Menerima melalui BAST",
+      "Mencatat tagihan",
+      "Membayar vendor"
+    ],
+    "flow": [
+      "Buat PR",
+      "Setujui dan buat PO",
+      "Terima/BAST",
+      "Terima tagihan",
+      "Setujui pembayaran",
+      "Rekonsiliasi"
+    ],
+    "gate": "GATE: segregasi tugas, vendor sah, kuantitas diterima, tagihan, dan persetujuan lengkap.",
+    "entities": [
+      "PR",
+      "PO",
+      "BAST",
+      "TAGIHAN",
+      "PEMBAYARAN"
+    ],
+    "paragraphs": [
+      "Layar pembayaran vendor adalah ujung rangkaian procure-to-pay, bukan titik awal. Sebuah baris layak dibayar hanya bila dapat ditelusuri ke permintaan, pemesanan, penerimaan/BAST, dan tagihan yang disetujui. Filter dan status pada halaman membantu keuangan memisahkan dokumen yang masih menunggu, ditolak, atau sudah dibayar.",
+      "Dataset volume memuat 100 PR, 100 PO, 100 BAST, dan 100 tagihan. Retest endpoint menemukan 100 pembayaran melalui marker yang sama, menutup temuan filter nol pada rilis sebelumnya. Data ini tetap berada pada tenant demo dan ditandai prefix UAT agar dapat diaudit.",
+      "Keuangan membuka detail sebelum menyetujui pembayaran, mencocokkan vendor, nomor tagihan, nilai, cara bayar, dan dokumen sumber. Bila BAST atau persetujuan tidak ada, pembayaran dihentikan. Jangan menyelesaikan selisih dengan mengedit nominal secara terpisah pada tahap terakhir; koreksi harus kembali ke dokumen yang menyebabkan selisih sehingga hubungan audit tetap utuh."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 14,
+    "title": "Draft Jurnal dan Posting",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots-akuntansi/08-draft-jurnal.png",
+    "actors": [
+      "Akuntan",
+      "Approver",
+      "Owner COA",
+      "Auditor"
+    ],
+    "usecases": [
+      "Meninjau draft",
+      "Memetakan akun",
+      "Memvalidasi debit/kredit",
+      "Memposting buku besar"
+    ],
+    "flow": [
+      "Buka draft",
+      "Pilih kategori",
+      "Baca referensi",
+      "Validasi akun",
+      "Posting",
+      "Periksa buku besar"
+    ],
+    "gate": "GATE: debit sama dengan kredit, akun leaf aktif, periode terbuka, dan sumber dapat ditelusuri.",
+    "entities": [
+      "DOKUMEN SUMBER",
+      "DRAFT JURNAL",
+      "DETAIL D/K",
+      "POSTING HISTORY",
+      "BUKU BESAR"
+    ],
+    "paragraphs": [
+      "Draft Jurnal menampilkan transaksi sumber yang belum atau sudah diproses menjadi jurnal. Akuntan memakai kategori untuk memisahkan penjualan, HPP, kulakan, pembayaran vendor, jurnal umum, dan proses lain. Jumlah pada kartu adalah indikator pekerjaan; keputusan posting tetap dilakukan setelah membuka referensi dan memeriksa akun debit-kredit.",
+      "UAT vendor memeriksa 100 pembayaran dan menemukan 100 jurnal terposting. Mapping yang diuji adalah debit 310.500 HUTANG VENDOR dan kredit 111.101 KAS YAYASAN. Retest memastikan jurnal dapat dibaca ulang sebagai posted; dashboard tenant bersama dapat menampilkan total yang lebih besar karena juga berisi transaksi modul lain.",
+      "Akuntan memilih kategori, membaca dokumen sumber, memeriksa tanggal serta nominal, lalu menilai akun yang disarankan. Posting tidak boleh dilakukan hanya karena tombol aktif. Bila akun salah, gunakan fasilitas penyesuaian mapping yang sah dan ulangi preview. Jika debit dan kredit tidak seimbang atau periode sudah ditutup, simpan bukti dan perbaiki sumber; jangan menambahkan baris penyeimbang tanpa substansi bisnis."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  },
+  {
+    "index": 15,
+    "title": "Laporan Keuangan dan Rekonsiliasi",
+    "screenshot": "docs/pos-apotik-emedik/uat-v1.34.24/screenshots-akuntansi/24-laporan-laba-rugi.png",
+    "actors": [
+      "Akuntan",
+      "Manajemen",
+      "Auditor",
+      "Pemilik Proses"
+    ],
+    "usecases": [
+      "Membaca Laba Rugi",
+      "Merekonsiliasi Buku Besar",
+      "Menilai Arus Kas",
+      "Menyetujui periode"
+    ],
+    "flow": [
+      "Pastikan posting",
+      "Pilih periode",
+      "Buka laporan",
+      "Telusuri akun",
+      "Bandingkan sumber",
+      "Sign-off"
+    ],
+    "gate": "GATE: hanya jurnal posted, saldo awal sah, klasifikasi akun benar, dan periode konsisten.",
+    "entities": [
+      "AKUN",
+      "JURNAL POSTED",
+      "BUKU BESAR",
+      "TRIAL BALANCE",
+      "LAPORAN KEUANGAN"
+    ],
+    "paragraphs": [
+      "Tangkapan layar Laba Rugi memakai seluruh lebar area kerja: kolom keterangan memperoleh ruang utama sampai sisi kanan dan setiap sel angka dapat diklik untuk membuka data penyusunnya. Bukti ini menggantikan tangkapan layar kosong pada dokumen lama. Dari laporan ini akuntan melanjutkan rekonsiliasi ke Jurnal Umum, Buku Besar, Neraca Saldo, Neraca, dan Arus Kas dengan periode yang sama.",
+      "UAT memposting dan membaca ulang 100 jurnal sample sebagai sumber laporan, di samping 100 jurnal pembayaran vendor. Enam endpoint laporan keuangan diperiksa dan semuanya harus mengembalikan baris: Laba Rugi, Neraca, Arus Kas, Jurnal Umum, Buku Besar, serta Trial Balance. Akun dari workbook pengguna dipakai sebagai rujukan, termasuk 111.101 KAS YAYASAN, 151.200 PERSEDIAAN BARANG LAINNYA, 410.900 PENDAPATAN PENJUALAN TOKO, dan 510.900 BEBAN POKOK PENJUALAN TOKO.",
+      "Akuntan memilih periode yang sama, menelusuri nomor jurnal ke Buku Besar, lalu membandingkan saldo akun kas dan utang dengan pembayaran vendor. Untuk laporan Laba Rugi dan laporan lain, data hanya boleh dinyatakan lengkap setelah akun sumber dipetakan dan baris jurnalnya benar-benar masuk klasifikasi laporan. Jika sebuah laporan kosong, perbaiki pemetaan atau dataset terlebih dahulu dan ambil bukti ulang; jangan menampilkan halaman kosong sebagai hasil lulus."
+    ],
+    "controls": "Role sesuai fungsi, data sumber lengkap, kode idempoten, audit trail, dan pembacaan ulang hasil.",
+    "acceptance": "Operasi tersimpan sekali, dapat ditemukan kembali, dan konsisten dengan detail serta laporan sumber."
+  }
+]

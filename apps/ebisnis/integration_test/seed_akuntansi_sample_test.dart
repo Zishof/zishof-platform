@@ -113,9 +113,9 @@ void main() {
 
     await aksi('toko_kelola_simpan', {
       'id': _tokoId,
-      'nama': 'Kantin Demo',
+      'nama': 'Demo',
       'kode': '001',
-      'keterangan': 'Toko demo dengan data sample praktik akuntansi eBisnis',
+      'keterangan': 'Toko Demo dengan data sample praktik akuntansi Apotik',
       'aktif': true,
       'boleh_melihat_toko_lain': false,
       'boleh_transaksi_stok_habis': true,
