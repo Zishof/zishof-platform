@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../app_variant.dart';
+import '../../features/apotik/pos/apotik_pos_page.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'pos_help.dart';
@@ -274,6 +276,21 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // MODERNISASI FASE 3: varian APOTIK memakai ruang kerja kasir tiga area
+    // (ApotikPosPage). Layar ini menjadi ROUTE ADAPTER -- kelas & menu publik
+    // tidak berubah, sehingga varian lain (eMedik) yang ikut memakai kelas ini
+    // tetap mendapat tampilan lama tanpa perubahan perilaku.
+    if (AppVariant.isApotik) {
+      return AppShell(
+        menuAktif: MenuEBisnis.kasirApotik,
+        judul: 'Kasir Apotik',
+        subjudul:
+            'Penjualan obat, tebus resep, FEFO, LASA, dan obat terkendali',
+        scrollable: false,
+        actionsAppBar: [PosHelp.button(context, 'apotik_kasir', compact: true)],
+        body: const ApotikPosPage(),
+      );
+    }
     final lebar = MediaQuery.sizeOf(context).width;
     final desktop = lebar >= 900;
     final panelCari = _panelCari(context);

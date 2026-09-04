@@ -7,10 +7,17 @@ import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'kasir_apotik_screen.dart';
 import 'antrean_farmasi_screen.dart';
 import 'persediaan_apotik_screen.dart';
+import '../../app_variant.dart';
+import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
+import '../../features/apotik/inventory/apotik_batch_expiry_page.dart';
+import '../../features/apotik/inventory/apotik_formularium_page.dart';
+import '../../features/apotik/prescription/apotik_resep_page.dart';
+import '../../features/apotik/procurement/apotik_penerimaan_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
 import '../../widgets/jejak_galat.dart';
@@ -144,6 +151,11 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
   @override
   Widget build(BuildContext context) {
     final s = Sesi.instance;
+    // MODERNISASI FASE 2: varian APOTIK memakai dashboard command center
+    // berbasis prioritas (ApotikDashboardPage). Varian eMedik -- yang berbagi
+    // layar ini -- SENGAJA tetap memakai tampilan kartu+chip lama supaya
+    // perubahan apotik tidak merembet ke varian lain (aturan multi-varian).
+    if (AppVariant.isApotik) return _dashboardModern();
     final adaMenuApotik = _menuApotik.any((m) => s.bolehMenuVarianBaru(m.$1)) ||
         _menuEmedik.any((m) => s.bolehMenuVarianBaru(m.$1));
     return AppShell(
@@ -370,6 +382,33 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
 
   /// Tujuan navigasi menu yang layarnya SUDAH dibangun -- bertambah per fase.
   /// Menu tanpa tujuan tetap chip status (hak akses tetap terverifikasi UAT).
+  /// Command center Fase 2 dibungkus AppShell existing supaya sidebar, menu
+  /// aktif, dan bantuan kontekstual tetap konsisten dengan layar lain.
+  Widget _dashboardModern() {
+    return AppShell(
+      menuAktif: MenuEBisnis.berandaApotik,
+      judul: 'Dashboard Apotik',
+      subjudul: 'Prioritas kerja apotek: resep, expiry, dan stok',
+      scrollable: false,
+      body: ApotikDashboardPage(onBuka: _bukaTujuanDashboard),
+    );
+  }
+
+  void _bukaTujuanDashboard(ApotikTujuanDashboard tujuan) {
+    final layar = switch (tujuan) {
+      // FASE 4: antrean resep kini punya layarnya sendiri (sebelumnya
+      // dialihkan ke kasir karena layar ini belum ada).
+      ApotikTujuanDashboard.resep => const _HalamanAntreanResep(),
+      // FASE 5: ruang kerja batch/expiry sendiri (sebelumnya tab persediaan).
+      ApotikTujuanDashboard.batch => const _HalamanBatchExpiry(),
+      // FASE 5: formularium punya layar sendiri (editor profil obat IR-01).
+      ApotikTujuanDashboard.stok => const _HalamanFormularium(),
+      ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
+    };
+    if (layar == null) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => layar));
+  }
+
   Widget? _layarTujuan(String kunci) {
     switch (kunci) {
       case 'apotik_kasir':
@@ -379,7 +418,10 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
       case 'apotik_batch':
         return const PersediaanApotikScreen(tabAwal: 1);
       case 'apotik_pengadaan':
-        return const PersediaanApotikScreen(tabAwal: 2);
+        // FASE 5: penerimaan PBF punya layar sendiri untuk varian apotik.
+        return AppVariant.isApotik
+            ? const _HalamanPenerimaan()
+            : const PersediaanApotikScreen(tabAwal: 2);
       case 'apotik_stok_opname':
         return const PersediaanApotikScreen(tabAwal: 3);
       case 'apotik_retur':
@@ -441,6 +483,77 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
           ]);
         }).toList(),
       ),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk antrean resep supaya sidebar & menu aktif
+/// konsisten dengan layar apotik lainnya.
+class _HalamanAntreanResep extends StatelessWidget {
+  const _HalamanAntreanResep();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.kasirApotik,
+      judul: 'Antrean Resep',
+      subjudul:
+          'Telaah, daftar periksa pra-serah, pemeriksaan kedua, konseling',
+      scrollable: false,
+      body: ApotikResepPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk ruang kerja Batch, Expiry & FEFO.
+class _HalamanBatchExpiry extends StatelessWidget {
+  const _HalamanBatchExpiry();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Batch, Expiry & FEFO',
+      subjudul: 'Monitor lot mendekati kedaluwarsa dan status penahanan',
+      scrollable: false,
+      body: ApotikBatchExpiryPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk Formularium / Master Obat.
+class _HalamanFormularium extends StatelessWidget {
+  const _HalamanFormularium();
+
+  @override
+  Widget build(BuildContext context) {
+    // Indikator sinkron dipasang di layar INDUK, mengikuti pola layar master
+    // lain (lihat master_offline_kontrak_test.dart): halamannya sendiri tetap
+    // bebas timer sehingga dapat diuji sebagai widget biasa.
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Formularium / Master Obat',
+      subjudul:
+          'Golongan, bentuk sediaan, kekuatan, LASA, high-alert, cold-chain',
+      scrollable: false,
+      actionsAppBar: [IndikatorSinkronMaster()],
+      body: ApotikFormulariumPage(),
+    );
+  }
+}
+
+/// Pembungkus AppShell untuk Penerimaan PBF.
+class _HalamanPenerimaan extends StatelessWidget {
+  const _HalamanPenerimaan();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      menuAktif: MenuEBisnis.persediaanApotik,
+      judul: 'Penerimaan PBF',
+      subjudul: 'Faktur, batch baru, dan tanggal kedaluwarsa',
+      scrollable: false,
+      body: ApotikPenerimaanPage(),
     );
   }
 }

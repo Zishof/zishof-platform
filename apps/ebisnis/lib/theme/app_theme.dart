@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_setting.dart';
 import '../app_variant.dart';
+import '../features/apotik/core/apotik_design_tokens.dart';
 import 'app_colors.dart';
 
 /// Pengelola tema ringan tanpa dependency state-management tambahan.
@@ -161,6 +162,17 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
+      // Token semantik varian APOTIK saja (ThemeExtension). Varian lain tidak
+      // menerima ekstensi ini sehingga branding globalnya TIDAK berubah
+      // (aturan multi-varian Sec.4.2 dokumen modernisasi). Layar apotik membaca
+      // lewat ApotikDesignTokens.of(context).
+      extensions: AppVariant.isApotik
+          ? <ThemeExtension<dynamic>>[
+              brightness == Brightness.dark
+                  ? ApotikDesignTokens.dark
+                  : ApotikDesignTokens.light,
+            ]
+          : const <ThemeExtension<dynamic>>[],
     );
   }
 }

@@ -127,6 +127,71 @@ void main() {
     'lib/screens/mitrainap/properti_hotel_screen.dart': ["'hotel_properti:"],
     'lib/screens/mitrainap/kontrak_pemilik_screen.dart': ["'hotel_kontrak:"],
     'lib/screens/apotik/persediaan_apotik_screen.dart': ["'apotik_item:"],
+    // Varian POS Apotik: layar master hasil modernisasi UI/UX. Indikator
+    // sinkron dipasang di AppShell induk (beranda_apotik_screen), mengikuti
+    // pola "Gelombang 2" di atas.
+    'lib/features/apotik/inventory/apotik_formularium_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      "'apotik_item_profil:",
+      'tampilkanRiwayatData(',
+    ],
+    'lib/features/apotik/inventory/apotik_batch_expiry_page.dart': [
+      "'apotik_batch_monitor'",
+      'kunciCacheBatchApotik',
+      "'apotik_batch_status:",
+      'tampilkanRiwayatData(',
+    ],
+  };
+
+  // Layar yang DAFTARnya lokal-dulu tetapi mutasinya memang harus online:
+  // yang di-cache hanya daftar untuk dibaca, bukan izin melakukan tindakan.
+  const bacaLokalDuluSaja = <String, List<String>>{
+    'lib/features/apotik/prescription/apotik_resep_page.dart': [
+      "'apotik_resep_list'",
+      'kunciCacheResepApotik(',
+      'MasterOffline.daftarCacheDulu',
+    ],
+    // Katalog kasir: harga & penanda keselamatan tetap terbaca saat jaringan
+    // mati, dengan penanda bahwa stoknya bisa basi. Menjual tetap online.
+    'lib/features/apotik/pos/apotik_pos_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      'kunciCacheCaraBayarApotik',
+      'kunciCacheResepApotik(',
+      'MasterOffline.daftarCacheDulu',
+      'saringCacheLokal(',
+      '_katalogDariCache',
+    ],
+    // Pencarian obat saat menyusun baris penerimaan (postingnya tetap online).
+    'lib/features/apotik/procurement/apotik_penerimaan_page.dart': [
+      "'apotik_item_cari'",
+      'kunciCacheItemApotik',
+      'MasterOffline.daftarCacheDulu',
+    ],
+    // Dasbor: gambaran terakhir lebih berguna daripada layar kosong; angkanya
+    // sudah ditandai tidak pasti lewat ApotikRingkasan.angkaPasti.
+    'lib/features/apotik/dashboard/apotik_dashboard_data.dart': [
+      'kunciCacheItemApotik',
+      'kunciCacheBatchApotik',
+      'kunciCacheResepApotik(',
+      'MasterOffline.daftarCacheDulu',
+    ],
+  };
+
+  // POS Apotik: mutasi yang SENGAJA tidak diantre, beserta berkas tempat
+  // alasannya ditulis. Bentuk pemeriksaannya beda dari `tetapOnline` di bawah
+  // karena layar apotik memanggil server lewat closure yang disuntik (agar
+  // dapat diuji), sehingga literal `ApiClient.instance` tidak berdampingan
+  // dengan nama aksinya.
+  const apotikTetapOnline = <String, List<String>>{
+    'lib/features/apotik/pos/apotik_pos_page.dart': ["'apotik_bayar'"],
+    'lib/features/apotik/procurement/apotik_penerimaan_page.dart': [
+      "'apotik_terima_barang'"
+    ],
+    'lib/features/apotik/reports/apotik_rekonsiliasi_page.dart': [
+      "'apotik_sesi_kas_tutup'"
+    ],
   };
 
   // Layar daftar master yang WAJIB menampilkan indikator sinkron PER-BARIS
@@ -206,6 +271,19 @@ void main() {
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
     // real-time) -- entri lamanya dipindah dari daftar online-only ini.
+    // Ditambahkan dari daftar 'wajib online' di docs/pos/33-audit-lokal-dulu.md.
+    // Dokumen itu menyebut seluruh daftarnya dikunci berkas ini, padahal sebelumnya
+    // hanya tiga entri teratas yang benar-benar terkunci -- sisanya benar dalam
+    // praktik tetapi tidak dijaga tes apa pun.
+    'lib/screens/inventory_sales/kas_jurnal_screen.dart': ["'si_coa_save'"],
+    'lib/screens/riwayat_penjualan_screen.dart': ["'batalkan_transaksi'"],
+    'lib/screens/ringkasan/tab_umum.dart': ["'batalkan_transaksi'"],
+    'lib/screens/anggota/tab_sinkronisasi.dart': ["'sinkron_referensi'"],
+    'lib/services/layar_pelanggan_broadcaster.dart': [
+      "'layar_pelanggan_kirim'"
+    ],
+    'lib/screens/produk_screen.dart': ["'produk_duplikat_hapus'"],
+    'lib/screens/mutasi_antar_outlet_screen.dart': ["'mutasi_stok_simpan'"],
   };
 
   // Layar induk yang hanya menjadi tuan-rumah indikator (tanpa mutasi CRUD).
@@ -230,9 +308,13 @@ void main() {
       // *_simpan/*_hapus entitas layar ybs (transaksi/aksi lain boleh).
       // Dua jalur sah: simpanAtauAntre (programatik) atau prosesSimpanMaster
       // (dialog "lokal dulu" ber-indikator animasi -- standar form CRUD).
+      // Bentuk ketiga yang sah: tear-off `?? prosesSimpanMaster` sebagai
+      // nilai bawaan parameter yang dapat disuntik pada test (dipakai layar
+      // features/apotik). Fungsinya sama; hanya cara merangkainya berbeda.
       expect(
           source.contains('MasterOffline.simpanAtauAntre') ||
-              source.contains('prosesSimpanMaster('),
+              source.contains('prosesSimpanMaster(') ||
+              source.contains('?? prosesSimpanMaster'),
           isTrue,
           reason: '${entri.key} belum memakai jalur simpan offline-first');
     }
@@ -287,6 +369,40 @@ void main() {
         reason: 'rating harus tercatat lokal sebelum dikirim');
     expect(layar, isNot(contains('prosesSimpanMaster')),
         reason: 'layar pelanggan tidak boleh memunculkan dialog proses kasir');
+  });
+
+  test('daftar yang lokal-dulu tanpa antrean tulis tetap membaca dari cache',
+      () {
+    for (final entri in bacaLokalDuluSaja.entries) {
+      final source = File(entri.key).readAsStringSync();
+      for (final penanda in entri.value) {
+        expect(source, contains(penanda),
+            reason: '${entri.key} kehilangan penanda: $penanda');
+      }
+    }
+  });
+
+  test('POS Apotik: penjualan/penerimaan/tutup kas tidak diantre', () {
+    const berkasAlasan = 'lib/features/apotik/core/apotik_lokal_dulu.dart';
+    final alasan = File(berkasAlasan).readAsStringSync();
+    for (final entri in apotikTetapOnline.entries) {
+      final source = File(entri.key).readAsStringSync();
+      for (final aksi in entri.value) {
+        expect(source, contains(aksi),
+            reason: '${entri.key} kehilangan aksi $aksi');
+        // Tidak boleh diam-diam dipindah ke antrean master.
+        expect(source.contains('prosesSimpanMaster'), isFalse,
+            reason: '${entri.key}: $aksi menyentuh uang/stok dan tidak boleh '
+                'diantre offline');
+        expect(source.contains('simpanAtauAntre'), isFalse,
+            reason: '${entri.key}: $aksi tidak boleh diantre offline');
+        // Alasannya WAJIB tertulis, supaya keputusan ini tidak tampak seperti
+        // kelalaian dan tidak "dirapikan" orang berikutnya.
+        expect(alasan, contains(aksi.replaceAll("'", '')),
+            reason: '$berkasAlasan harus menjelaskan kenapa $aksi '
+                'tetap online-only');
+      }
+    }
   });
 
   test('aksi sensitif tetap online-only (tidak diantre diam-diam)', () {

@@ -1,0 +1,5 @@
+# Tag khusus supaya golden dapat dikecualikan di mesin/OS lain:
+#   flutter test --exclude-tags golden
+# Acuan PNG dibuat di Windows; render Flutter tidak dijamin identik lintas OS.
+tags:
+  golden:
