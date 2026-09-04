@@ -120,10 +120,10 @@ BEGIN
             VALUE "OriginalFilename", "ebisnis_inventory_sales.exe" "\0"
             VALUE "ProductName", "eBisnis Inventory & Sales" "\0"
 #elif defined(EBISNIS_VARIANT_APOTIK)
-            VALUE "FileDescription", "eBisnis POS Apotik" "\0"
+            VALUE "FileDescription", "Apotik" "\0"
             VALUE "InternalName", "ebisnis_apotik" "\0"
             VALUE "OriginalFilename", "ebisnis_apotik.exe" "\0"
-            VALUE "ProductName", "eBisnis POS Apotik" "\0"
+            VALUE "ProductName", "Apotik" "\0"
 #elif defined(EBISNIS_VARIANT_EMEDIK)
             VALUE "FileDescription", "eBisnis POS eMedik" "\0"
             VALUE "InternalName", "ebisnis_emedik" "\0"

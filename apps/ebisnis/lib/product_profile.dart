@@ -95,8 +95,8 @@ class AppProductProfile {
   const AppProductProfile.apotik()
       : this._(
           kode: 'apotik',
-          namaAplikasi: 'eBisnis POS Apotik',
-          namaSidebar: 'POS Apotik',
+          namaAplikasi: 'Apotik',
+          namaSidebar: 'Apotik',
           updateAssetKeyword: 'apotik',
           logoAsset: 'assets/images/apotik/icon.png',
           fiturGrup: const {FiturGrup.pos, FiturGrup.apotik},

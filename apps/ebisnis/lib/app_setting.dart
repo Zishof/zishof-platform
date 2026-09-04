@@ -59,12 +59,13 @@ class AppSetting {
   static const bool baseUrlHttps = true;
 
   /// Warna tema BAWAAN varian ini, sebelum pengguna pernah mengubahnya
-  /// sendiri lewat Konfigurasi. Al-Bahjah: hijau (mengikuti warna korporat
+  /// sendiri lewat Konfigurasi. Al-Bahjah, An-Nahl, dan Apotik: hijau
+  /// (mengikuti identitas masing-masing
   /// logo -- lihat juga aksen emas tambahan di `AppTheme._base` dan sidebar
-  /// hijau di `AppColors`, keduanya HANYA aktif utk varian ini). Varian lain
+  /// hijau di `AppColors`). Varian lain
   /// tetap biru spt sebelumnya.
   static const AppThemeWarna temaBawaan =
-      AppVariant.isAlBahjah || AppVariant.isNahl
+      AppVariant.isAlBahjah || AppVariant.isNahl || AppVariant.isApotik
           ? AppThemeWarna.hijau
           : AppThemeWarna.biru;
 }

@@ -54,6 +54,7 @@ void main() {
   group('ApotikDesignTokens', () {
     test('memakai teal farmasi, bukan biru POS umum', () {
       expect(ApotikDesignTokens.light.primary, const Color(0xFF0F766E));
+      expect(ApotikDesignTokens.light.navigationDark, const Color(0xFF124625));
     });
 
     test('lerp menghasilkan token valid antar tema', () {

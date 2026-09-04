@@ -1,4 +1,4 @@
-; Inno Setup script for the eBisnis POS Apotik Windows variant.
+; Inno Setup script for the standalone Apotik Windows variant.
 ; AppVersion is passed in via /DAppVersion=x.y.z on the ISCC command line.
 ;
 ; Build exe-nya lebih dulu (WAJIB kedua parameter, lihat lib/main_apotik.dart):
@@ -13,11 +13,11 @@
 
 [Setup]
 AppId={{B6C9E2D4-6C3A-4B0E-9C0D-1E3A5F0APTIK}
-AppName=eBisnis POS Apotik
+AppName=Apotik
 AppVersion={#AppVersion}
 AppPublisher=Zishof
-DefaultDirName={autopf}\eBisnis POS Apotik
-DefaultGroupName=eBisnis POS Apotik
+DefaultDirName={autopf}\Apotik
+DefaultGroupName=Apotik
 UninstallDisplayIcon={app}\ebisnis_apotik.exe
 OutputBaseFilename=eBisnis-POS-Apotik-Setup-{#AppVersion}
 OutputDir=dist
@@ -40,13 +40,13 @@ Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis.exe,ebisnis_
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\eBisnis POS Apotik"; Filename: "{app}\ebisnis_apotik.exe"
-Name: "{group}\Uninstall eBisnis POS Apotik"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\eBisnis POS Apotik"; Filename: "{app}\ebisnis_apotik.exe"; Tasks: desktopicon
+Name: "{group}\Apotik"; Filename: "{app}\ebisnis_apotik.exe"
+Name: "{group}\Uninstall Apotik"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Apotik"; Filename: "{app}\ebisnis_apotik.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Memasang komponen Microsoft Visual C++ Runtime..."; Check: VCRedistNeeded; Flags: waituntilterminated
-Filename: "{app}\ebisnis_apotik.exe"; Description: "Jalankan eBisnis POS Apotik sekarang"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ebisnis_apotik.exe"; Description: "Jalankan Apotik sekarang"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function VCRedistNeeded: Boolean;

@@ -73,7 +73,7 @@ class AppVariant {
           : (isInventorySales
               ? 'eBisnis Inventory & Sales'
               : (isApotik
-                  ? 'eBisnis POS Apotik'
+                  ? 'Apotik'
                   : (isEmedik
                       ? 'eBisnis POS eMedik'
                       : (isMitraInap
@@ -86,7 +86,7 @@ class AppVariant {
           : (isInventorySales
               ? 'Inventory & Sales'
               : (isApotik
-                  ? 'POS Apotik'
+                  ? 'Apotik'
                   : (isEmedik
                       ? 'POS eMedik'
                       : (isMitraInap
@@ -119,7 +119,7 @@ class AppVariant {
           : (isInventorySales
               ? 'eBisnis Inventory & Sales Flutter'
               : (isApotik
-                  ? 'eBisnis POS Apotik Flutter'
+                  ? 'Apotik Flutter'
                   : (isEmedik
                       ? 'eBisnis POS eMedik Flutter'
                       : (isMitraInap

@@ -30,7 +30,8 @@ void main() {
   test('profil apotik terdefinisi utuh (branding + fitur grup)', () {
     const apotik = AppProductProfile.apotik();
     expect(apotik.kode, 'apotik');
-    expect(apotik.namaAplikasi, 'eBisnis POS Apotik');
+    expect(apotik.namaAplikasi, 'Apotik');
+    expect(apotik.namaSidebar, 'Apotik');
     expect(apotik.updateAssetKeyword, 'apotik');
     expect(apotik.logoAsset, 'assets/images/apotik/icon.png');
     expect(apotik.isApotik, isTrue);
