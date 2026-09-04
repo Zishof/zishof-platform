@@ -66,6 +66,8 @@ import '../screens/inventory_sales/kas_jurnal_screen.dart';
 import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../screens/apotik/beranda_apotik_screen.dart';
 import '../screens/apotik/kasir_apotik_screen.dart';
+import '../screens/apotik/menu_apotik_screen.dart';
+import '../screens/apotik/manajemen_farmasi_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
 import '../screens/mitrainap/beranda_mitrainap_screen.dart';
@@ -179,21 +181,67 @@ class AppDrawer extends StatelessWidget {
                       if (AppProductProfile.aktif.isApotik &&
                           (Sesi.instance.isAdmin ||
                               Sesi.instance
-                                  .bolehMenuVarianBaru('apotik_kasir') ||
-                              Sesi.instance
-                                  .bolehMenuVarianBaru('apotik_resep')))
+                                  .bolehMenuVarianBaru('apotik_kasir')))
                         _ItemMenu(
                           icon: Icons.point_of_sale,
-                          label: 'Kasir & Resep',
-                          aktif: menuAktif == 'Kasir & Resep',
+                          label: 'Kasir Apotik',
+                          aktif: menuAktif == 'Kasir Apotik',
                           onTap: () => _pindahMenu(
                             context,
-                            label: 'Kasir & Resep',
+                            label: 'Kasir Apotik',
                             builder: (_) => const KasirApotikScreen(),
                           ),
                         ),
                       if (AppProductProfile.aktif.isApotik &&
                           (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_resep')))
+                        _ItemMenu(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Tebus Resep Dokter',
+                          aktif: menuAktif == 'Tebus Resep Dokter',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Tebus Resep Dokter',
+                            builder: (_) => const TebusResepApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_racikan')))
+                        _ItemMenu(
+                          icon: Icons.science_outlined,
+                          label: 'Racikan',
+                          aktif: menuAktif == 'Racikan',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Racikan',
+                            builder: (_) => const RacikanApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_racikan')))
+                        _ItemMenu(
+                          icon: Icons.factory_outlined,
+                          label: 'Produksi Farmasi',
+                          aktif: menuAktif == 'Produksi Farmasi',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Produksi Farmasi',
+                            builder: (_) => const ProduksiFarmasiApotikScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_kasir') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_resep') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_racikan') ||
                               Sesi.instance
                                   .bolehMenuVarianBaru('apotik_formularium') ||
                               Sesi.instance
@@ -203,23 +251,114 @@ class AppDrawer extends StatelessWidget {
                               Sesi.instance
                                   .bolehMenuVarianBaru('apotik_stok_opname') ||
                               Sesi.instance
-                                  .bolehMenuVarianBaru('apotik_retur')))
+                                  .bolehMenuVarianBaru('apotik_retur') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_narkotika') ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_laporan')))
                         _ItemMenu(
-                          icon: Icons.medication_outlined,
-                          label: 'Obat & Persediaan',
-                          aktif: menuAktif == 'Obat & Persediaan',
+                          icon: Icons.hub_outlined,
+                          label: 'Manajemen Farmasi',
+                          aktif: menuAktif == 'Manajemen Farmasi',
                           onTap: () => _pindahMenu(
                             context,
-                            label: 'Obat & Persediaan',
+                            label: 'Manajemen Farmasi',
+                            builder: (_) => const ManajemenFarmasiScreen(),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_formularium')))
+                        _ItemMenu(
+                          icon: Icons.medication_outlined,
+                          label: 'Formularium & Obat',
+                          aktif: menuAktif == 'Formularium & Obat',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Formularium & Obat',
                             builder: (_) => const PersediaanApotikScreen(),
                           ),
                         ),
                       if (AppProductProfile.aktif.isApotik &&
                           (Sesi.instance.isAdmin ||
                               Sesi.instance
-                                  .bolehMenuVarianBaru('apotik_laporan') ||
+                                  .bolehMenuVarianBaru('apotik_batch')))
+                        _ItemMenu(
+                          icon: Icons.event_busy_outlined,
+                          label: 'Batch & Kedaluwarsa',
+                          aktif: menuAktif == 'Batch & Kedaluwarsa',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Batch & Kedaluwarsa',
+                            builder: (_) =>
+                                const PersediaanApotikScreen(tabAwal: 1),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_pengadaan')))
+                        _ItemMenu(
+                          icon: Icons.local_shipping_outlined,
+                          label: 'Pengadaan / PBF',
+                          aktif: menuAktif == 'Pengadaan / PBF',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Pengadaan / PBF',
+                            builder: (_) =>
+                                const PersediaanApotikScreen(tabAwal: 2),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_stok_opname')))
+                        _ItemMenu(
+                          icon: Icons.inventory_outlined,
+                          label: 'Stok Opname Apotik',
+                          aktif: menuAktif == 'Stok Opname Apotik',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Stok Opname Apotik',
+                            builder: (_) =>
+                                const PersediaanApotikScreen(tabAwal: 3),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_retur')))
+                        _ItemMenu(
+                          icon: Icons.assignment_return_outlined,
+                          label: 'Retur Obat',
+                          aktif: menuAktif == 'Retur Obat',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Retur Obat',
+                            builder: (_) =>
+                                const PersediaanApotikScreen(tabAwal: 4),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
                               Sesi.instance
                                   .bolehMenuVarianBaru('apotik_narkotika')))
+                        _ItemMenu(
+                          icon: Icons.health_and_safety_outlined,
+                          label: 'Obat Terkendali',
+                          aktif: menuAktif == 'Obat Terkendali',
+                          onTap: () => _pindahMenu(
+                            context,
+                            label: 'Obat Terkendali',
+                            builder: (_) =>
+                                const LaporanApotikScreen(tabAwal: 1),
+                          ),
+                        ),
+                      if (AppProductProfile.aktif.isApotik &&
+                          (Sesi.instance.isAdmin ||
+                              Sesi.instance
+                                  .bolehMenuVarianBaru('apotik_laporan')))
                         _ItemMenu(
                           icon: Icons.analytics_outlined,
                           label: 'Laporan Apotik',

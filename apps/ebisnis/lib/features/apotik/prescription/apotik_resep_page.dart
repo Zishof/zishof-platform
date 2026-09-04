@@ -24,15 +24,12 @@ typedef PanggilResep = Future<Map<String, dynamic>> Function(
 /// Master-detail adaptif: daftar resep di kiri, rincian + daftar periksa
 /// pra-serah di kanan (desktop) atau halaman terpisah (mobile).
 ///
-/// **Batas jujur yang disengaja.** Panel "telaah klinis" pada mockup — alergi,
-/// interaksi obat, duplikasi terapi, pemeriksaan dosis — TIDAK dibuat karena
-/// server belum punya sumber datanya (IR-03). Membuat panel yang selalu
-/// menampilkan "tidak ada peringatan" justru berbahaya: apoteker bisa
-/// menyimpulkan resep sudah diperiksa padahal tidak ada yang memeriksanya.
-/// Sebagai gantinya, layar ini menampilkan **daftar periksa dari data yang
-/// benar-benar ada**: obat terkendali, high-alert, LASA, cold-chain, dan
-/// kecukupan stok — plus pemeriksaan kedua &amp; konseling (IR-05) yang
-/// dicatat server.
+/// Panel telaah klinis memakai profil pasien, diagnosis, dan alergi aktif dari
+/// model SIRS. Pencocokan alergi dibuat fail-safe: hanya relasi persis ke item
+/// obat yang ditandai sebagai konflik. Interaksi obat, duplikasi terapi, dan
+/// pemeriksaan dosis belum dinyatakan aman sampai basis pengetahuan klinis
+/// tersedia. Daftar periksa operasional tetap mencakup obat terkendali,
+/// high-alert, LASA, cold-chain, stok, pemeriksaan kedua, dan konseling.
 class ApotikResepPage extends StatefulWidget {
   final PanggilResep? panggil;
 
@@ -62,6 +59,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
   bool _memuatDetail = false;
   String? _galatDetail;
   Map<String, dynamic> _statusDispensing = {};
+  Map<String, dynamic> _telaahKlinis = {};
 
   @override
   void initState() {
@@ -129,6 +127,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
       _galatDetail = null;
       _baris = [];
       _statusDispensing = {};
+      _telaahKlinis = {};
     });
     try {
       final r =
@@ -151,6 +150,9 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
       setStateIfMounted(() {
         _baris = _data(r);
         _statusDispensing = statusD;
+        _telaahKlinis = r['telaahKlinis'] is Map
+            ? Map<String, dynamic>.from(r['telaahKlinis'] as Map)
+            : <String, dynamic>{};
         _memuatDetail = false;
       });
     } catch (e) {
@@ -451,6 +453,8 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
           Text('${_terpilih!['diagnosa']}',
               style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
         const SizedBox(height: 14),
+        _kotakKeselamatanKlinis(t),
+        const SizedBox(height: 14),
         _kotakDaftarPeriksa(t),
         const SizedBox(height: 14),
         _kotakDispensing(t),
@@ -463,6 +467,140 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
         const SizedBox(height: 6),
         for (final b in _baris) _barisObat(t, b),
       ],
+    );
+  }
+
+  Widget _kotakKeselamatanKlinis(ApotikDesignTokens t) {
+    final pasien = _telaahKlinis['pasien'] is Map
+        ? Map<String, dynamic>.from(_telaahKlinis['pasien'] as Map)
+        : <String, dynamic>{};
+    final alergi = ((_telaahKlinis['alergiAktif'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final peringatan = ((_telaahKlinis['peringatan'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final adaBahaya = peringatan.any((e) => e['tingkat'] == 'BAHAYA');
+    final evaluasiLengkap = _telaahKlinis['evaluasiOtomatisLengkap'] == true;
+    final warna = adaBahaya ? t.danger : t.clinicalPurple;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: adaBahaya ? t.danger.withValues(alpha: .06) : t.surface,
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusCard),
+        border: Border.all(color: adaBahaya ? t.danger : t.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.health_and_safety_outlined, size: 18, color: warna),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Keselamatan klinis pasien',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: t.textPrimary)),
+          ),
+          ApotikStatusPill(
+            teks: adaBahaya ? 'Alergi terdeteksi' : 'Telaah apoteker',
+            nada: adaBahaya ? ApotikStatusNada.bahaya : ApotikStatusNada.klinis,
+            ikon: adaBahaya ? Icons.warning_amber : Icons.medical_information,
+            penjelasan: 'Ringkasan dari profil pasien SIRS',
+            rapat: true,
+          ),
+        ]),
+        const SizedBox(height: 10),
+        if (pasien.isNotEmpty)
+          Row(children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: t.primarySoft,
+              child: Icon(Icons.person_outline, color: t.primary, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${pasien['nama'] ?? '-'}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, color: t.textPrimary)),
+                    Text(
+                        '${pasien['kode'] ?? '-'}'
+                        '${'${pasien['jenisKelamin'] ?? ''}'.isEmpty ? '' : ' • ${pasien['jenisKelamin']}'}',
+                        style:
+                            TextStyle(fontSize: 11.5, color: t.textSecondary)),
+                  ]),
+            ),
+          ])
+        else
+          Text('Profil pasien belum terhubung dengan resep.',
+              style: TextStyle(fontSize: 12, color: t.textSecondary)),
+        if (alergi.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('Alergi aktif',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: t.textPrimary)),
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: alergi
+                .map((a) => ApotikStatusPill(
+                      teks:
+                          '${a['substansi'] ?? '-'} • ${a['keparahan'] ?? '-'}',
+                      nada: a['cocokEksakDenganResep'] == true
+                          ? ApotikStatusNada.bahaya
+                          : ApotikStatusNada.peringatan,
+                      ikon: Icons.warning_amber_rounded,
+                      penjelasan: '${a['reaksi'] ?? ''}',
+                    ))
+                .toList(),
+          ),
+        ],
+        for (final alert in peringatan)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(
+                alert['tingkat'] == 'BAHAYA'
+                    ? Icons.error_outline
+                    : alert['tingkat'] == 'PERINGATAN'
+                        ? Icons.warning_amber
+                        : Icons.info_outline,
+                size: 15,
+                color: alert['tingkat'] == 'BAHAYA'
+                    ? t.danger
+                    : alert['tingkat'] == 'PERINGATAN'
+                        ? t.warning
+                        : t.info,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                  child: Text('${alert['pesan'] ?? ''}',
+                      style: TextStyle(fontSize: 11.5, color: t.textPrimary))),
+            ]),
+          ),
+        if (!evaluasiLengkap)
+          Padding(
+            padding: const EdgeInsets.only(top: 9),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.fact_check_outlined, size: 15, color: t.textSecondary),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Interaksi obat, duplikasi terapi, dan kesesuaian dosis '
+                  'wajib ditelaah apoteker.',
+                  style: TextStyle(fontSize: 11.5, color: t.textSecondary),
+                ),
+              ),
+            ]),
+          ),
+      ]),
     );
   }
 
@@ -505,25 +643,6 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
             ]),
           ),
         const SizedBox(height: 10),
-        // Pernyataan JUJUR tentang apa yang TIDAK diperiksa sistem.
-        Container(
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(
-            color: t.surfaceMuted,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_outline, size: 14, color: t.textSecondary),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                  'Sistem BELUM memeriksa alergi, interaksi obat, duplikasi '
-                  'terapi, dan kesesuaian dosis — pemeriksaan itu tetap '
-                  'tanggung jawab apoteker.',
-                  style: TextStyle(fontSize: 11, color: t.textSecondary)),
-            ),
-          ]),
-        ),
       ]),
     );
   }

@@ -9,6 +9,7 @@ PanggilResep _server({
   List<Map<String, dynamic>>? resep,
   List<Map<String, dynamic>>? baris,
   Map<String, dynamic>? statusDispensing,
+  Map<String, dynamic>? telaahKlinis,
   Map<String, dynamic>? hasilCatat,
   List<Map<String, dynamic>>? terkirim,
 }) {
@@ -18,7 +19,11 @@ PanggilResep _server({
       case 'apotik_resep_list':
         return {'status': '00', 'data': resep ?? const []};
       case 'apotik_resep_detail':
-        return {'status': '00', 'data': baris ?? const []};
+        return {
+          'status': '00',
+          'data': baris ?? const [],
+          if (telaahKlinis != null) 'telaahKlinis': telaahKlinis,
+        };
       case 'apotik_dispensing_status':
         return statusDispensing ??
             {'status': '91', 'description': 'belum tersedia'};
@@ -171,7 +176,7 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('SELALU menyatakan apa yang BELUM diperiksa sistem (IR-03)',
+    testWidgets('tetap mewajibkan telaah apoteker untuk evaluasi nonotomatis',
         (tester) async {
       await _pump(
           tester,
@@ -183,11 +188,44 @@ void main() {
           _desktop);
       await tester.tap(find.text('RSP-007'));
       await tester.pumpAndSettle();
-      // Tidak boleh ada klaim "tidak ada interaksi/alergi" -- sistem memang
-      // belum memeriksanya, dan itu dinyatakan terang-terangan.
-      expect(find.textContaining('BELUM memeriksa alergi, interaksi obat'),
+      expect(find.textContaining('Interaksi obat, duplikasi terapi'),
           findsOneWidget);
       expect(find.textContaining('Tidak ada peringatan klinis'), findsNothing);
+    });
+
+    testWidgets('profil pasien dan alergi eksak ditampilkan sebagai bahaya',
+        (tester) async {
+      await _pump(
+          tester,
+          _halamanResep(_server(resep: [
+            _resepSatu
+          ], baris: [
+            {'nama': 'Amoxicillin', 'jumlah': 10, 'stok': 100}
+          ], telaahKlinis: {
+            'pasien': {'kode': 'APT-UAT-001', 'nama': 'Pasien Demo 001'},
+            'alergiAktif': [
+              {
+                'substansi': 'Amoxicillin',
+                'keparahan': 'BERAT',
+                'reaksi': 'Sesak napas',
+                'cocokEksakDenganResep': true,
+              }
+            ],
+            'peringatan': [
+              {
+                'tingkat': 'BAHAYA',
+                'pesan': 'Alergi pasien cocok dengan obat pada resep.'
+              }
+            ],
+            'evaluasiOtomatisLengkap': false,
+          })),
+          _desktop);
+      await tester.tap(find.text('RSP-007'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pasien Demo 001'), findsOneWidget);
+      expect(find.textContaining('Amoxicillin • BERAT'), findsOneWidget);
+      expect(find.text('Alergi terdeteksi'), findsOneWidget);
+      expect(find.textContaining('Alergi pasien cocok'), findsOneWidget);
     });
   });
 

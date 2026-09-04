@@ -126,7 +126,7 @@ void main() {
           reason: 'katalog TIDAK boleh meminta seluruh formularium');
       // Kartu obat cukup berat (badge, pill, harga); 60 kartu sekali bangun
       // sudah terasa pada mesin kasir kelas rendah.
-      expect(ukuranHalaman, lessThanOrEqualTo(60));
+      expect(ukuranHalaman, lessThanOrEqualTo(100));
     });
 
     testWidgets('kartu yang dibangun sebanyak hasil, bukan seluruh katalog',

@@ -45,6 +45,8 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
 
   int get _jumlahTab => _adaRekonsiliasi ? 4 : 3;
 
+  bool get _ruteObatTerkendali => widget.tabAwal == 1;
+
   @override
   void initState() {
     super.initState();
@@ -76,8 +78,10 @@ class _LaporanApotikScreenState extends State<LaporanApotikScreen>
     ];
     final bantuan = kunciBantuan[_tab.index.clamp(0, kunciBantuan.length - 1)];
     return AppShell(
-      menuAktif: MenuEBisnis.laporanApotik,
-      judul: 'Laporan Apotik',
+      menuAktif: _ruteObatTerkendali
+          ? MenuEBisnis.obatTerkendaliApotik
+          : MenuEBisnis.laporanApotik,
+      judul: _ruteObatTerkendali ? 'Obat Terkendali' : 'Laporan Apotik',
       subjudul: 'Penjualan, register obat terkendali, dan risiko kedaluwarsa',
       scrollable: false,
       actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],

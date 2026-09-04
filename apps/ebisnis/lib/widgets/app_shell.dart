@@ -85,6 +85,8 @@ import '../screens/inventory_sales/kas_jurnal_screen.dart';
 import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../screens/apotik/beranda_apotik_screen.dart';
 import '../screens/apotik/kasir_apotik_screen.dart';
+import '../screens/apotik/menu_apotik_screen.dart';
+import '../screens/apotik/manajemen_farmasi_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
 import '../screens/mitrainap/beranda_mitrainap_screen.dart';
@@ -228,7 +230,16 @@ enum MenuEBisnis {
   labaRugi,
   berandaApotik,
   kasirApotik,
+  tebusResepApotik,
+  racikanApotik,
+  produksiFarmasiApotik,
+  manajemenFarmasiApotik,
   persediaanApotik,
+  batchApotik,
+  pengadaanApotik,
+  stokOpnameApotik,
+  returApotik,
+  obatTerkendaliApotik,
   laporanApotik,
   berandaMitraInap,
   propertiHotel,
@@ -243,8 +254,33 @@ enum MenuEBisnis {
 const _menuKhususApotik = <MenuEBisnis>{
   MenuEBisnis.berandaApotik,
   MenuEBisnis.kasirApotik,
+  MenuEBisnis.tebusResepApotik,
+  MenuEBisnis.racikanApotik,
+  MenuEBisnis.produksiFarmasiApotik,
+  MenuEBisnis.manajemenFarmasiApotik,
   MenuEBisnis.persediaanApotik,
+  MenuEBisnis.batchApotik,
+  MenuEBisnis.pengadaanApotik,
+  MenuEBisnis.stokOpnameApotik,
+  MenuEBisnis.returApotik,
+  MenuEBisnis.obatTerkendaliApotik,
   MenuEBisnis.laporanApotik,
+};
+
+/// Satu hak server = satu menu sidebar. Dashboard tidak memakai kunci karena
+/// selalu menjadi pintu diagnostik varian Apotik (dan tetap admin-safe).
+const _kunciMenuApotik = <MenuEBisnis, String>{
+  MenuEBisnis.kasirApotik: 'apotik_kasir',
+  MenuEBisnis.tebusResepApotik: 'apotik_resep',
+  MenuEBisnis.racikanApotik: 'apotik_racikan',
+  MenuEBisnis.produksiFarmasiApotik: 'apotik_racikan',
+  MenuEBisnis.persediaanApotik: 'apotik_formularium',
+  MenuEBisnis.batchApotik: 'apotik_batch',
+  MenuEBisnis.pengadaanApotik: 'apotik_pengadaan',
+  MenuEBisnis.stokOpnameApotik: 'apotik_stok_opname',
+  MenuEBisnis.returApotik: 'apotik_retur',
+  MenuEBisnis.obatTerkendaliApotik: 'apotik_narkotika',
+  MenuEBisnis.laporanApotik: 'apotik_laporan',
 };
 
 /// Menu khusus varian MitraInap -- kunci server hotel_* (EbisnisMenuKatalog
@@ -439,26 +475,22 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
   }
   if (_menuKhususApotik.contains(kunci)) {
     if (!AppProductProfile.aktif.isApotik) return false;
-    // Admin tetap dapat membuka beranda untuk provisioning/diagnostik. Layar
-    // operasional selain beranda mengikuti hak menu farmasi secara fail-closed.
+    // Dashboard tetap menjadi pintu provisioning/diagnostik. Sepuluh menu
+    // operasional setelahnya memakai pemetaan SATU hak server = SATU menu;
+    // jangan digabung kembali karena admin mengaturnya per baris di matriks
+    // Hak Akses Pedagang.
     if (kunci == MenuEBisnis.berandaApotik || Sesi.instance.isAdmin) {
       return true;
     }
-    if (kunci == MenuEBisnis.kasirApotik) {
-      return Sesi.instance.bolehMenuVarianBaru('apotik_kasir') ||
-          Sesi.instance.bolehMenuVarianBaru('apotik_resep');
+    // Pusat kendali adalah penghubung seluruh fungsi farmasi. Pengguna yang
+    // memiliki sedikitnya satu hak Apotik harus dapat memakainya, sedangkan
+    // tiap tujuan tetap diperiksa lagi oleh menu operasionalnya sendiri.
+    if (kunci == MenuEBisnis.manajemenFarmasiApotik) {
+      return _kunciMenuApotik.values.any(Sesi.instance.bolehMenuVarianBaru);
     }
-    if (kunci == MenuEBisnis.persediaanApotik) {
-      return const [
-        'apotik_formularium',
-        'apotik_batch',
-        'apotik_pengadaan',
-        'apotik_stok_opname',
-        'apotik_retur'
-      ].any(Sesi.instance.bolehMenuVarianBaru);
-    }
-    return Sesi.instance.bolehMenuVarianBaru('apotik_laporan') ||
-        Sesi.instance.bolehMenuVarianBaru('apotik_narkotika');
+    final kunciServer = _kunciMenuApotik[kunci];
+    return kunciServer != null &&
+        Sesi.instance.bolehMenuVarianBaru(kunciServer);
   }
   if (_menuKhususMitraInap.contains(kunci)) {
     if (!AppProductProfile.aktif.isMitraInap) return false;
@@ -516,11 +548,37 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(
       MenuEBisnis.berandaApotik, Icons.dashboard_outlined, 'Dashboard Apotik',
       builder: _bangunBerandaApotik),
-  _ItemMenuShell(MenuEBisnis.kasirApotik, Icons.point_of_sale, 'Kasir & Resep',
+  _ItemMenuShell(MenuEBisnis.kasirApotik, Icons.point_of_sale, 'Kasir Apotik',
       builder: _bangunKasirApotik),
+  _ItemMenuShell(MenuEBisnis.tebusResepApotik, Icons.receipt_long_outlined,
+      'Tebus Resep Dokter',
+      builder: _bangunTebusResepApotik),
+  _ItemMenuShell(MenuEBisnis.racikanApotik, Icons.science_outlined, 'Racikan',
+      builder: _bangunRacikanApotik),
+  _ItemMenuShell(MenuEBisnis.produksiFarmasiApotik, Icons.factory_outlined,
+      'Produksi Farmasi',
+      builder: _bangunProduksiFarmasiApotik),
+  _ItemMenuShell(MenuEBisnis.manajemenFarmasiApotik, Icons.hub_outlined,
+      'Manajemen Farmasi',
+      builder: _bangunManajemenFarmasiApotik),
   _ItemMenuShell(MenuEBisnis.persediaanApotik, Icons.medication_outlined,
-      'Obat & Persediaan',
+      'Formularium & Obat',
       builder: _bangunPersediaanApotik),
+  _ItemMenuShell(
+      MenuEBisnis.batchApotik, Icons.event_busy_outlined, 'Batch & Kedaluwarsa',
+      builder: _bangunBatchApotik),
+  _ItemMenuShell(MenuEBisnis.pengadaanApotik, Icons.local_shipping_outlined,
+      'Pengadaan / PBF',
+      builder: _bangunPengadaanApotik),
+  _ItemMenuShell(MenuEBisnis.stokOpnameApotik, Icons.inventory_outlined,
+      'Stok Opname Apotik',
+      builder: _bangunStokOpnameApotik),
+  _ItemMenuShell(
+      MenuEBisnis.returApotik, Icons.assignment_return_outlined, 'Retur Obat',
+      builder: _bangunReturApotik),
+  _ItemMenuShell(MenuEBisnis.obatTerkendaliApotik,
+      Icons.health_and_safety_outlined, 'Obat Terkendali',
+      builder: _bangunObatTerkendaliApotik),
   _ItemMenuShell(
       MenuEBisnis.laporanApotik, Icons.analytics_outlined, 'Laporan Apotik',
       builder: _bangunLaporanApotik),
@@ -822,11 +880,37 @@ List<({String label, bool dapatDilipat, bool terbukaBawaan, int jumlahItem})>
             ))
         .toList();
 
+/// Kontrak publik kecil untuk menguji bahwa matriks hak Apotik tidak kembali
+/// dipadatkan menjadi beberapa menu gabungan. Dashboard sengaja berkunci null;
+/// sepuluh menu lainnya wajib tepat satu lawan satu dengan hak server.
+List<({MenuEBisnis menu, String label, String? kunciServer, bool punyaTujuan})>
+    ringkasanMenuApotikSidebar() {
+  final grup = _grupMenu.firstWhere((g) => g.label == 'Apotik & Farmasi');
+  return grup.items.map((menu) {
+    final item = _itemMenu(menu);
+    return (
+      menu: menu,
+      label: item?.label ?? '',
+      kunciServer: _kunciMenuApotik[menu],
+      punyaTujuan: item?.builder != null,
+    );
+  }).toList();
+}
+
 const _grupMenu = <_GrupMenuShell>[
   _GrupMenuShell('Apotik & Farmasi', [
     MenuEBisnis.berandaApotik,
     MenuEBisnis.kasirApotik,
+    MenuEBisnis.tebusResepApotik,
+    MenuEBisnis.racikanApotik,
+    MenuEBisnis.produksiFarmasiApotik,
+    MenuEBisnis.manajemenFarmasiApotik,
     MenuEBisnis.persediaanApotik,
+    MenuEBisnis.batchApotik,
+    MenuEBisnis.pengadaanApotik,
+    MenuEBisnis.stokOpnameApotik,
+    MenuEBisnis.returApotik,
+    MenuEBisnis.obatTerkendaliApotik,
     MenuEBisnis.laporanApotik,
   ]),
   _GrupMenuShell('MitraInap', [
@@ -1191,8 +1275,25 @@ Widget _bangunKasJurnal(BuildContext c) => const KasJurnalScreen();
 Widget _bangunLabaRugi(BuildContext c) => const LabaRugiScreen();
 Widget _bangunBerandaApotik(BuildContext c) => const BerandaApotikScreen();
 Widget _bangunKasirApotik(BuildContext c) => const KasirApotikScreen();
+Widget _bangunTebusResepApotik(BuildContext c) =>
+    const TebusResepApotikScreen();
+Widget _bangunRacikanApotik(BuildContext c) => const RacikanApotikScreen();
+Widget _bangunProduksiFarmasiApotik(BuildContext c) =>
+    const ProduksiFarmasiApotikScreen();
+Widget _bangunManajemenFarmasiApotik(BuildContext c) =>
+    const ManajemenFarmasiScreen();
 Widget _bangunPersediaanApotik(BuildContext c) =>
     const PersediaanApotikScreen();
+Widget _bangunBatchApotik(BuildContext c) =>
+    const PersediaanApotikScreen(tabAwal: 1);
+Widget _bangunPengadaanApotik(BuildContext c) =>
+    const PersediaanApotikScreen(tabAwal: 2);
+Widget _bangunStokOpnameApotik(BuildContext c) =>
+    const PersediaanApotikScreen(tabAwal: 3);
+Widget _bangunReturApotik(BuildContext c) =>
+    const PersediaanApotikScreen(tabAwal: 4);
+Widget _bangunObatTerkendaliApotik(BuildContext c) =>
+    const LaporanApotikScreen(tabAwal: 1);
 Widget _bangunLaporanApotik(BuildContext c) => const LaporanApotikScreen();
 Widget _bangunBerandaMitraInap(BuildContext c) =>
     const BerandaMitraInapScreen();
@@ -1662,9 +1763,27 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.berandaApotik:
       return 'Dashboard Apotik';
     case MenuEBisnis.kasirApotik:
-      return 'Kasir & Resep';
+      return 'Kasir Apotik';
+    case MenuEBisnis.tebusResepApotik:
+      return 'Tebus Resep Dokter';
+    case MenuEBisnis.racikanApotik:
+      return 'Racikan';
+    case MenuEBisnis.produksiFarmasiApotik:
+      return 'Produksi Farmasi';
+    case MenuEBisnis.manajemenFarmasiApotik:
+      return 'Manajemen Farmasi';
     case MenuEBisnis.persediaanApotik:
-      return 'Obat & Persediaan';
+      return 'Formularium & Obat';
+    case MenuEBisnis.batchApotik:
+      return 'Batch & Kedaluwarsa';
+    case MenuEBisnis.pengadaanApotik:
+      return 'Pengadaan / PBF';
+    case MenuEBisnis.stokOpnameApotik:
+      return 'Stok Opname Apotik';
+    case MenuEBisnis.returApotik:
+      return 'Retur Obat';
+    case MenuEBisnis.obatTerkendaliApotik:
+      return 'Obat Terkendali';
     case MenuEBisnis.laporanApotik:
       return 'Laporan Apotik';
     case MenuEBisnis.berandaMitraInap:
@@ -1857,10 +1976,30 @@ MenuEBisnis? _menuDariLabel(String label) {
       return MenuEBisnis.labaRugi;
     case 'Dashboard Apotik':
       return MenuEBisnis.berandaApotik;
+    case 'Kasir Apotik':
     case 'Kasir & Resep':
       return MenuEBisnis.kasirApotik;
+    case 'Tebus Resep Dokter':
+      return MenuEBisnis.tebusResepApotik;
+    case 'Racikan':
+      return MenuEBisnis.racikanApotik;
+    case 'Produksi Farmasi':
+      return MenuEBisnis.produksiFarmasiApotik;
+    case 'Manajemen Farmasi':
+      return MenuEBisnis.manajemenFarmasiApotik;
+    case 'Formularium & Obat':
     case 'Obat & Persediaan':
       return MenuEBisnis.persediaanApotik;
+    case 'Batch & Kedaluwarsa':
+      return MenuEBisnis.batchApotik;
+    case 'Pengadaan / PBF':
+      return MenuEBisnis.pengadaanApotik;
+    case 'Stok Opname Apotik':
+      return MenuEBisnis.stokOpnameApotik;
+    case 'Retur Obat':
+      return MenuEBisnis.returApotik;
+    case 'Obat Terkendali':
+      return MenuEBisnis.obatTerkendaliApotik;
     case 'Laporan Apotik':
       return MenuEBisnis.laporanApotik;
     case 'Dashboard MitraInap':

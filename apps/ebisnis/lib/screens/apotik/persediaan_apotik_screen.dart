@@ -55,6 +55,25 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
   bool _provisionBerjalan = false;
   String _statusProvision = '';
 
+  int get _indeksMenuAwal =>
+      widget.tabAwal < 0 ? 0 : (widget.tabAwal > 4 ? 4 : widget.tabAwal);
+
+  MenuEBisnis get _menuAktif => const [
+        MenuEBisnis.persediaanApotik,
+        MenuEBisnis.batchApotik,
+        MenuEBisnis.pengadaanApotik,
+        MenuEBisnis.stokOpnameApotik,
+        MenuEBisnis.returApotik,
+      ][_indeksMenuAwal];
+
+  String get _judulMenu => const [
+        'Formularium & Obat',
+        'Batch & Kedaluwarsa',
+        'Pengadaan / PBF',
+        'Stok Opname Apotik',
+        'Retur Obat',
+      ][_indeksMenuAwal];
+
   @override
   void initState() {
     super.initState();
@@ -172,8 +191,12 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
       });
       if (!mounted) return;
       if (berhasil) {
-        _tab.animateTo(0);
-        await _formulariumKey.currentState?.muatUlang();
+        // Penyelesaian provision di latar tidak boleh memindahkan pengguna
+        // dari Batch/PBF/Opname/Retur kembali ke Formularium. Muat ulang
+        // formularium hanya bila tab tersebut memang sedang aktif.
+        if (_tab.index == 0) {
+          await _formulariumKey.currentState?.muatUlang();
+        }
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content:
@@ -239,8 +262,8 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     ][_tab.index];
     final bolehDataContoh = Sesi.instance.bolehDataSample;
     return AppShell(
-      menuAktif: MenuEBisnis.persediaanApotik,
-      judul: 'Obat & Persediaan',
+      menuAktif: _menuAktif,
+      judul: _judulMenu,
       subjudul: 'Formularium, batch, PBF, stok opname, dan retur obat',
       scrollable: false,
       actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],

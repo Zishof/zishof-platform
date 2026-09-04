@@ -3,15 +3,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:ebisnis/api_client.dart';
-import 'package:ebisnis/features/apotik/dashboard/apotik_dashboard_page.dart';
-import 'package:ebisnis/features/apotik/inventory/apotik_batch_expiry_page.dart';
-import 'package:ebisnis/features/apotik/inventory/apotik_formularium_page.dart';
-import 'package:ebisnis/features/apotik/pos/apotik_pos_page.dart';
-import 'package:ebisnis/features/apotik/prescription/apotik_resep_page.dart';
-import 'package:ebisnis/features/apotik/procurement/apotik_penerimaan_page.dart';
 import 'package:ebisnis/product_profile.dart';
+import 'package:ebisnis/screens/apotik/beranda_apotik_screen.dart';
+import 'package:ebisnis/screens/apotik/kasir_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/laporan_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/layar_antrean_farmasi_screen.dart';
+import 'package:ebisnis/screens/apotik/menu_apotik_screen.dart';
+import 'package:ebisnis/screens/apotik/persediaan_apotik_screen.dart';
 import 'package:ebisnis/services/server_config.dart';
 import 'package:ebisnis/sesi.dart';
 import 'package:flutter/material.dart';
@@ -22,7 +20,11 @@ import 'package:intl/date_symbol_data_local.dart';
 
 const _outputDir = String.fromEnvironment(
   'POS_TEST_OUTPUT_DIR',
-  defaultValue: r'C:\tmp\uat-apotik-v1.34.24',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.25',
+);
+const _rilis = String.fromEnvironment(
+  'POS_TEST_RELEASE',
+  defaultValue: 'apotik-v1.34.25',
 );
 const _tokoId = int.fromEnvironment('POS_TEST_TOKO_ID', defaultValue: 1);
 const _minimumKatalog =
@@ -85,7 +87,7 @@ void main() {
       ..tokoNama = namaTokoUji;
 
     final ringkasan = <String, dynamic>{
-      'rilis': 'apotik-v1.34.24',
+      'rilis': _rilis,
       'waktuUatUtc': DateTime.now().toUtc().toIso8601String(),
       'server': 'https://$host/$context',
       'tokoUjiId': _tokoId,
@@ -160,7 +162,7 @@ void main() {
       // idempotensi, dan status integrasi). Capture UI hanya memperkaya bukti,
       // bukan mengganti ringkasan hasil transaksi yang sudah tervalidasi.
       ringkasan.addAll(sebelumnya);
-      ringkasan['rilis'] = 'apotik-v1.34.24';
+      ringkasan['rilis'] = _rilis;
       ringkasan['waktuBuktiUiUtc'] = DateTime.now().toUtc().toIso8601String();
       jualJadi = _angka(sebelumnya['transaksiObatJadiLulus']).toInt();
       jualRacikan = _angka(sebelumnya['transaksiRacikanLulus']).toInt();
@@ -290,17 +292,25 @@ void main() {
       const JsonEncoder.withIndent('  ').convert(ringkasan),
     );
 
+    // Ambil bukti melalui wrapper produksi yang memuat AppShell. Dengan cara
+    // ini screenshot membuktikan isi layar sekaligus pemetaan satu hak akses
+    // ke satu menu sidebar setelah perbaikan navigasi Apotik.
     await _pumpHalaman(
-        tester, const ApotikDashboardPage(), '00-dashboard-operasional');
-
-    await _pumpHalaman(tester, const ApotikPosPage(), '01-kasir-obat-jadi');
-    await _pumpHalaman(tester, const ApotikResepPage(), '02-resep-racikan');
+        tester, const BerandaApotikScreen(), '00-dashboard-operasional');
+    await _pumpHalaman(tester, const KasirApotikScreen(), '01-kasir-obat-jadi');
     await _pumpHalaman(
-        tester, const ApotikFormulariumPage(), '03-formularium-obat');
+        tester, const TebusResepApotikScreen(), '02-tebus-resep-dokter');
+    await _pumpHalaman(tester, const RacikanApotikScreen(), '02-resep-racikan');
+    await _pumpHalaman(tester, const PersediaanApotikScreen(tabAwal: 0),
+        '03-formularium-obat');
+    await _pumpHalaman(tester, const PersediaanApotikScreen(tabAwal: 1),
+        '04-batch-kedaluwarsa');
     await _pumpHalaman(
-        tester, const ApotikBatchExpiryPage(), '04-batch-kedaluwarsa');
+        tester, const PersediaanApotikScreen(tabAwal: 2), '05-penerimaan-pbf');
+    await _pumpHalaman(tester, const PersediaanApotikScreen(tabAwal: 3),
+        '05b-stok-opname-apotik');
     await _pumpHalaman(
-        tester, const ApotikPenerimaanPage(), '05-penerimaan-pbf');
+        tester, const PersediaanApotikScreen(tabAwal: 4), '05c-retur-obat');
     await _pumpHalaman(
       tester,
       LayarAntreanFarmasiScreen(
@@ -418,7 +428,11 @@ Future<void> _pumpHalaman(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF15803D)),
       useMaterial3: true,
     ),
-    home: halaman,
+    // Setiap bukti harus membangun state halaman baru. Tanpa key unik,
+    // Flutter dapat mempertahankan State lama ketika beberapa bukti memakai
+    // runtimeType yang sama (misalnya lima tab PersediaanApotikScreen),
+    // sehingga semua screenshot berhenti pada tab pertama.
+    home: KeyedSubtree(key: ValueKey<String>(namaBukti), child: halaman),
   ));
   await _tutupOnboardingJikaAda(tester);
   await _tungguTenang(tester, seconds: 90);
@@ -438,12 +452,30 @@ Future<void> _tutupOnboardingJikaAda(WidgetTester tester) async {
 }
 
 Future<void> _tungguTenang(WidgetTester tester, {int seconds = 60}) async {
+  int? jumlahIndikatorSebelumnya;
+  var stabil = 0;
   for (var i = 0; i < seconds * 4; i++) {
     await tester.pump(const Duration(milliseconds: 250));
-    if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+    final jumlahIndikator =
+        find.byType(CircularProgressIndicator).evaluate().length;
+    if (jumlahIndikator == 0) {
       await tester.pump(const Duration(milliseconds: 750));
       return;
     }
+    // AppShell dapat mempertahankan satu indikator sinkronisasi global walau
+    // konten utama sudah selesai dimuat. Setelah sedikitnya enam detik dan
+    // jumlah indikator tidak berubah selama tiga detik, frame dianggap stabil
+    // lalu diverifikasi lagi melalui inspeksi screenshot hasil UAT.
+    if (i >= 24 && jumlahIndikator == jumlahIndikatorSebelumnya) {
+      stabil++;
+      if (stabil >= 12) {
+        await tester.pump(const Duration(seconds: 1));
+        return;
+      }
+    } else {
+      stabil = 0;
+    }
+    jumlahIndikatorSebelumnya = jumlahIndikator;
   }
   throw StateError('Layar tetap memuat setelah $seconds detik');
 }
