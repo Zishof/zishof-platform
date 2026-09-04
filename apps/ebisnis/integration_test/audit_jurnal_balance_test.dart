@@ -66,6 +66,12 @@ void main() {
         .toList();
     // ignore: avoid_print
     print('BALANCE_UNBALANCED=${jsonEncode(unbalanced)}');
+    expect(rows.length, greaterThanOrEqualTo(100),
+        reason: 'Laporan jurnal UAT wajib memuat minimal 100 baris.');
+    expect(byJournal.length, greaterThanOrEqualTo(100),
+        reason: 'Periode UAT wajib memuat minimal 100 nomor jurnal.');
+    expect(unbalanced, isEmpty,
+        reason: 'Semua jurnal UAT wajib memiliki total debet = kredit.');
   });
 }
 

@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
 flutter build windows --release -t lib/main_inventory_sales.dart --dart-define=EBISNIS_VARIANT=inventory_sales
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "EXE: build\windows\x64\runner\Release\ebisnis_inventory_sales.exe"

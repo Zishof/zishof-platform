@@ -2,6 +2,7 @@ param([switch]$IzinkanUnsignedWindows)
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
 $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value -split '\+')[0]
 flutter build windows --release -t lib/main_nahl.dart --dart-define=EBISNIS_VARIANT=nahl
 $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'

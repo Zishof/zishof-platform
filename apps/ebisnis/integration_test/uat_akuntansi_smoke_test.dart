@@ -8,6 +8,7 @@ import 'package:ebisnis/screens/login_screen.dart';
 import 'package:ebisnis/screens/jurnal_umum_screen.dart';
 import 'package:ebisnis/screens/laporan_detail_screen.dart';
 import 'package:ebisnis/services/server_config.dart';
+import 'package:ebisnis/widgets/filter_status_posting.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,8 +31,6 @@ void main() {
     await tester.binding
         .setSurfaceSize(const Size(surfaceWidth * 1.0, surfaceHeight * 1.0));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final penanganGalatTes = FlutterError.onError;
-    addTearDown(() => FlutterError.onError = penanganGalatTes);
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const host = String.fromEnvironment('POS_TEST_HOST');
@@ -58,20 +57,12 @@ void main() {
     if (login == null) throw StateError('Login UAT gagal: $loginError');
     expect(login['token'], isNotNull, reason: 'Login demo gagal: $login');
     await ApiClient.instance.simpanToken(login['token'] as String);
+    await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': 1});
+    final penanganGalatTes = FlutterError.onError;
     app.main();
     // main() memasang penangkap galat produksi. Runner test memulihkan handler
     // bawaannya SEBELUM penantian layar awal, supaya timeout startup tetap
     // dilaporkan sebagai penyebab asli dan bukan assertion handler sekunder.
-    FlutterError.onError = (detail) {
-      if (detail.exceptionAsString().contains('A RenderFlex overflowed')) {
-        // Temuan tata letak tetap dicatat dan difoto, tetapi tidak menghentikan
-        // UAT fungsional seluruh submenu/laporan.
-        // ignore: avoid_print
-        print('UAT_LAYOUT_OVERFLOW=${detail.exceptionAsString()}');
-        return;
-      }
-      penanganGalatTes?.call(detail);
-    };
     await _tungguSampai(
       tester,
       () =>
@@ -80,6 +71,7 @@ void main() {
       alasan: 'Layar awal eBisnis tidak selesai dimuat',
       detik: 180,
     );
+    FlutterError.onError = penanganGalatTes;
     if (find.byType(LoginScreen).evaluate().isNotEmpty) {
       await tester.enterText(
           find.widgetWithText(TextField, 'Username'), username);
@@ -99,11 +91,7 @@ void main() {
     // Instalasi/build baru dapat menampilkan dialog penyiapan data lokal. Untuk
     // UAT online dialog ini ditutup lewat pilihan "Nanti" agar tidak menutupi
     // sidebar dan tidak mengubah data yang sedang diuji.
-    final nanti = find.text('Nanti');
-    if (nanti.evaluate().isNotEmpty) {
-      await tester.tap(nanti.last);
-      await tester.pump(const Duration(seconds: 1));
-    }
+    await _tutupDialogSinkronisasiJikaAda(tester, tungguKemunculan: true);
 
     await _ambilGambar(tester, '00-layar-awal-integration');
 
@@ -387,6 +375,8 @@ Future<void> _pilihAkun(
 
 Future<void> _bukaMenuDanFoto(
     WidgetTester tester, String label, String namaGambar) async {
+  const harapkanSudahDiposting = bool.fromEnvironment('POS_TEST_EXPECT_POSTED');
+  await _tutupDialogSinkronisasiJikaAda(tester);
   if (label == 'Posting Kulakan' ||
       label == 'Posting Bayar Hutang' ||
       label == 'Posting Terima Piutang') {
@@ -396,9 +386,15 @@ Future<void> _bukaMenuDanFoto(
     await _tungguTanpaSpinner(tester, detik: 45);
   }
   await _ketukSidebar(tester, label);
+  final penandaLayar = switch (label) {
+    'Posting Penjualan' => 'Membukukan penjualan kasir ke buku besar',
+    'Posting HPP' => 'Membukukan harga pokok penjualan ke buku besar',
+    'Posting Kulakan' => 'Membukukan pembelian barang toko',
+    _ => label,
+  };
   await _tungguSampai(
     tester,
-    () => find.text(label).evaluate().isNotEmpty,
+    () => find.textContaining(penandaLayar).evaluate().isNotEmpty,
     alasan: 'Submenu $label tidak terbuka',
     detik: 45,
   );
@@ -415,23 +411,58 @@ Future<void> _bukaMenuDanFoto(
     await tester.pump(const Duration(seconds: 1));
   }
   final stabil = await _tungguTanpaSpinner(tester, detik: 90);
+  await _tutupDialogSinkronisasiJikaAda(tester);
   if (label == 'Posting Penjualan' || label == 'Posting HPP') {
     final pratinjau = find.text('Pratinjau');
     expect(pratinjau, findsWidgets,
         reason: 'Tombol Pratinjau $label tidak tersedia');
     await tester.tap(pratinjau.last);
-    final selesai = await _tungguTanpaSpinner(tester, detik: 120);
-    expect(selesai, isTrue, reason: 'Pratinjau $label terus memuat');
+    await tester.pump(const Duration(milliseconds: 100));
+    if (harapkanSudahDiposting) {
+      await _tungguSampai(
+        tester,
+        () => find.byType(FilterStatusPostingBar).evaluate().isNotEmpty,
+        alasan: 'Pratinjau $label tidak menghasilkan kontrol status posting',
+        detik: 120,
+      );
+    } else {
+      final selesai = await _tungguTanpaSpinner(tester, detik: 120);
+      expect(selesai, isTrue, reason: 'Pratinjau $label terus memuat');
+    }
     expect(find.textContaining('Jalankan pratinjau'), findsNothing,
         reason: '$label belum menampilkan data pratinjau');
-    if (label == 'Posting Penjualan') {
-      expect(find.textContaining('100 transaksi'), findsWidgets,
-          reason: 'Batch 100 transaksi Penjualan belum tampil');
+    if (harapkanSudahDiposting) {
+      await _pilihFilterTerpostingDanValidasi(tester, label);
+    } else if (label == 'Posting Penjualan') {
+      final jumlahTransaksi = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((w) => w.data ?? '')
+          .map((s) => RegExp(r'^(\d+) transaksi$').firstMatch(s))
+          .whereType<RegExpMatch>()
+          .map((m) => int.parse(m.group(1)!))
+          .fold<int>(
+              0, (terbesar, nilai) => nilai > terbesar ? nilai : terbesar);
+      expect(jumlahTransaksi, greaterThanOrEqualTo(100),
+          reason:
+              'Pratinjau Penjualan hanya menampilkan $jumlahTransaksi transaksi; target minimum 100.');
     } else {
-      expect(find.textContaining('ABC Kecap Manis'), findsWidgets,
-          reason: 'Rincian HPP untuk batch 100 transaksi belum tampil');
+      final jumlahBelum = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((w) => w.data ?? '')
+          .map((s) => RegExp(r'^Belum Diposting \((\d+)\)$').firstMatch(s))
+          .whereType<RegExpMatch>()
+          .map((m) => int.parse(m.group(1)!))
+          .fold<int>(
+              0, (terbesar, nilai) => nilai > terbesar ? nilai : terbesar);
+      expect(jumlahBelum, greaterThanOrEqualTo(100),
+          reason:
+              'Pratinjau HPP hanya menampilkan $jumlahBelum baris belum diposting; target minimum 100.');
     }
-    await _ambilGambar(tester, '$namaGambar-pratinjau-berisi');
+    await _ambilGambar(
+        tester,
+        harapkanSudahDiposting
+            ? '$namaGambar-telah-diposting-berisi'
+            : '$namaGambar-pratinjau-berisi');
   }
   if (label == 'Posting Kulakan') {
     final muatUlang = find.text('Muat ulang');
@@ -440,14 +471,32 @@ Future<void> _bukaMenuDanFoto(
     expect(pemicu, findsWidgets,
         reason: 'Tombol pemuat draf Posting Kulakan tidak tersedia');
     await tester.tap(pemicu.last);
-    final selesai = await _tungguTanpaSpinner(tester, detik: 120);
-    expect(selesai, isTrue, reason: 'Draf Posting Kulakan terus memuat');
-    expect(find.textContaining('Tidak ada dokumen yang belum diposting'),
-        findsNothing,
-        reason: 'Batch 100 faktur Kulakan belum tampil');
-    expect(find.textContaining('100 dokumen'), findsWidgets,
-        reason: 'Ringkasan 100 faktur Kulakan belum tampil');
-    await _ambilGambar(tester, '$namaGambar-pratinjau-berisi');
+    await tester.pump(const Duration(milliseconds: 100));
+    if (harapkanSudahDiposting) {
+      await _tungguSampai(
+        tester,
+        () => find.byType(FilterStatusPostingBar).evaluate().isNotEmpty,
+        alasan: 'Posting Kulakan tidak menghasilkan kontrol status posting',
+        detik: 120,
+      );
+    } else {
+      final selesai = await _tungguTanpaSpinner(tester, detik: 120);
+      expect(selesai, isTrue, reason: 'Draf Posting Kulakan terus memuat');
+    }
+    if (harapkanSudahDiposting) {
+      await _pilihFilterTerpostingDanValidasi(tester, label);
+    } else {
+      expect(find.textContaining('Tidak ada dokumen yang belum diposting'),
+          findsNothing,
+          reason: 'Batch 100 faktur Kulakan belum tampil');
+      expect(find.textContaining('100 dokumen'), findsWidgets,
+          reason: 'Ringkasan 100 faktur Kulakan belum tampil');
+    }
+    await _ambilGambar(
+        tester,
+        harapkanSudahDiposting
+            ? '$namaGambar-telah-diposting-berisi'
+            : '$namaGambar-pratinjau-berisi');
   }
   if (label == 'Tutup Buku (Laba Ditahan)') {
     final sampai = find.textContaining('Sampai 2026-09-');
@@ -485,6 +534,45 @@ Future<void> _bukaMenuDanFoto(
   if (tutupDialog) {
     await tester.tapAt(const Offset(8, 8));
     await tester.pump(const Duration(milliseconds: 500));
+  }
+}
+
+Future<void> _pilihFilterTerpostingDanValidasi(
+    WidgetTester tester, String label) async {
+  final bar = find.byType(FilterStatusPostingBar);
+  expect(bar, findsWidgets,
+      reason: 'Filter Telah Diposting tidak tersedia pada $label');
+  final kontrol = tester.widget<FilterStatusPostingBar>(bar.last);
+  final jumlah = kontrol.jumlahSudah;
+  expect(jumlah, greaterThanOrEqualTo(100),
+      reason:
+          '$label hanya mempunyai $jumlah record Telah Diposting; target minimum 100.');
+  final pilihan = find.descendant(
+    of: bar.last,
+    matching: find.textContaining('Telah Diposting'),
+  );
+  expect(pilihan, findsOneWidget,
+      reason: 'Segmen Telah Diposting tidak bisa dipilih pada $label');
+  await tester.tap(pilihan.last);
+  await tester.pump(const Duration(seconds: 1));
+  await _tungguTanpaSpinner(tester, detik: 45);
+  expect(find.textContaining('BELUM DIPOSTING'), findsNothing,
+      reason: 'Filter $label masih mencampur record belum diposting');
+}
+
+Future<void> _tutupDialogSinkronisasiJikaAda(WidgetTester tester,
+    {bool tungguKemunculan = false}) async {
+  final percobaan = tungguKemunculan ? 20 : 1;
+  for (var i = 0; i < percobaan; i++) {
+    final nanti = find.text('Nanti');
+    if (nanti.evaluate().isNotEmpty) {
+      await tester.tap(nanti.last);
+      await tester.pump(const Duration(seconds: 1));
+      return;
+    }
+    if (tungguKemunculan) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
   }
 }
 

@@ -45,8 +45,7 @@ Map<String, List<double>> keluaranYuNetSintetis({
   keluaran['bbox_$stride']![i * 4 + 3] = math.log(kotak.height / stride);
   for (var k = 0; k < 5; k++) {
     keluaran['kps_$stride']![i * 10 + k * 2] = landmark[k].dx / stride - c;
-    keluaran['kps_$stride']![i * 10 + k * 2 + 1] =
-        landmark[k].dy / stride - r;
+    keluaran['kps_$stride']![i * 10 + k * 2 + 1] = landmark[k].dy / stride - r;
   }
   return keluaran;
 }
@@ -110,13 +109,26 @@ void main() {
           reason: 'tanpa deklarasi ini model tidak ikut APK Android');
     });
 
+    test('semua entry point build menyiapkan model terverifikasi', () {
+      final pelanggar = Directory('tool')
+          .listSync()
+          .whereType<File>()
+          .where((f) => RegExp(r'build_.*\.ps1$').hasMatch(f.path))
+          .where((f) => f.readAsStringSync().contains('flutter build'))
+          .where((f) => !f.readAsStringSync().contains('unduh_model_wajah.ps1'))
+          .map((f) => f.uri.pathSegments.last)
+          .toList();
+      expect(pelanggar, isEmpty,
+          reason: 'model ONNX diabaikan Git; setiap build harus mengunduh dan '
+              'memverifikasi hash lebih dahulu: ${pelanggar.join(', ')}');
+    });
+
     test('bacaBytes jatuh ke rootBundle saat filesystem kosong', () async {
       // Kandidat direktori sengaja kosong -> satu-satunya jalur = bundle,
       // persis kondisi Android. YuNet (232 KB) dipakai agar test ringan.
       final lokator = LokatorModelWajah(direktoriKandidat: const []);
       final bytes = await lokator.bacaBytes(LokatorModelWajah.namaYunet);
-      expect(bytes, isNotNull,
-          reason: 'model harus terbaca dari asset bundle');
+      expect(bytes, isNotNull, reason: 'model harus terbaca dari asset bundle');
       expect(bytes!.length, 232589); // ukuran YuNet ter-pin
     });
 
@@ -241,13 +253,12 @@ void main() {
       final bytes = embeddingKeBytesLe(embedding);
       expect(bytes.length, 512);
       expect(
-          FaceOnDeviceCapture.validasiEmbeddingBase64(
-              String.fromCharCodes([])) ,
+          FaceOnDeviceCapture.validasiEmbeddingBase64(String.fromCharCodes([])),
           isNotNull); // string kosong bukan embedding
       final data = ByteData.sublistView(bytes);
       expect(data.getFloat32(0, Endian.little), closeTo(embedding[0], 1e-6));
-      expect(data.getFloat32(508, Endian.little),
-          closeTo(embedding[127], 1e-6));
+      expect(
+          data.getFloat32(508, Endian.little), closeTo(embedding[127], 1e-6));
     });
 
     test('cosine: identik 1, ortogonal 0', () {
@@ -271,8 +282,7 @@ void main() {
     });
 
     test('gambar kecil di-skala NAIK ke 640 (bukan dibiarkan)', () {
-      final hasil =
-          letterboxUntukDeteksi(img.Image(width: 160, height: 120));
+      final hasil = letterboxUntukDeteksi(img.Image(width: 160, height: 120));
       expect(hasil.gambar.width, sisiYunet);
       expect(hasil.faktor, closeTo(0.25, 1e-9));
     });
@@ -304,8 +314,7 @@ void main() {
       expect(sample.templateFormat, FaceOnDeviceCapture.templateFormat);
       expect(sample.provider, OnnxFaceEmbeddingProvider.namaProvider);
       expect(sample.livenessScore, greaterThanOrEqualTo(0.6));
-      expect(
-          FaceOnDeviceCapture.validasiEmbeddingBase64(sample.templateBase64),
+      expect(FaceOnDeviceCapture.validasiEmbeddingBase64(sample.templateBase64),
           isNull);
       // Lolos juga validasi registri (jalur yang dipakai bridge sungguhan).
       FaceOnDeviceCapture.pasang(_ProviderTetap(sample));
@@ -319,14 +328,14 @@ void main() {
         _landmarkUji(),
         _landmarkUji(), // pose kedua identik = foto diam
       ]);
-      expect(_provider(mesin).capture(),
-          throwsA(isA<PosBiometricUnavailable>()));
+      expect(
+          _provider(mesin).capture(), throwsA(isA<PosBiometricUnavailable>()));
     });
 
     test('pembatalan kamera -> PosBiometricUnavailable', () async {
       final mesin = _MesinPalsu(landmarkPerPanggilan: [_landmarkUji()]);
-      final provider = OnnxFaceEmbeddingProvider(
-          mesin: mesin, ambilFoto: () async => null);
+      final provider =
+          OnnxFaceEmbeddingProvider(mesin: mesin, ambilFoto: () async => null);
       expect(provider.capture(), throwsA(isA<PosBiometricUnavailable>()));
     });
   });

@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $appDir = Split-Path $PSScriptRoot -Parent
 Set-Location $appDir
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
 $versi = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
 $artifactDir = Join-Path $appDir "release-artifacts\non-albahjah\$versi"
 New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null

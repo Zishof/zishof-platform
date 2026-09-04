@@ -11,6 +11,7 @@ import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/filter_status_posting.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/kilau_perubahan.dart';
 import 'laporan_detail_screen.dart';
@@ -691,6 +692,26 @@ class _DaftarAkunDialogState extends State<_DaftarAkunDialog> with JejakGalat {
   }
 }
 
+/// Panel publik untuk pengujian terfokus dan pemakaian ulang halaman posting
+/// Penjualan/HPP tanpa harus melewati katalog laporan terlebih dahulu.
+class PostingKeuanganPanel extends StatelessWidget {
+  const PostingKeuanganPanel({
+    super.key,
+    required this.jenis,
+    required this.judul,
+  });
+
+  final String jenis;
+  final String judul;
+
+  @override
+  Widget build(BuildContext context) => _PostingKeuanganDialog(
+        jenis: jenis,
+        judul: judul,
+        inline: true,
+      );
+}
+
 class _PostingKeuanganDialog extends StatefulWidget {
   final String jenis;
   final String judul;
@@ -712,6 +733,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
   bool _memuat = false;
   String? _error;
   Map<String, dynamic>? _data;
+  FilterStatusPosting _filterStatus = FilterStatusPosting.semua;
 
   @override
   void initState() {
@@ -777,6 +799,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
           'mulai': _formatTanggalLaporan.format(_mulai),
           'sampai': _formatTanggalLaporan.format(_sampai),
           'posting': posting,
+          'batasRiwayat': 1000,
         },
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
@@ -828,6 +851,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
           'mulai': _formatTanggalLaporan.format(_mulai),
           'sampai': _formatTanggalLaporan.format(_sampai),
           'posting_ids': [id],
+          'batasRiwayat': 1000,
         },
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
@@ -899,10 +923,12 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     final belum = ((_data?['belumDipetakan'] as List?) ?? []);
-    // Draft jurnal per transaksi dari server (field 'rincian').
-    final rincian = ((_data?['rincian'] as List?) ?? [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    // Gabungkan draf dan riwayat terposting; status eksplisit dari server
+    // menentukan filter, bukan ada/tidaknya tombol pada baris.
+    final semua = rincianPostingSemua(_data);
+    final rincian = filterRincianPosting(semua, _filterStatus);
+    final jumlahSudah = semua.where((r) => r['sudahDiposting'] == true).length;
+    final jumlahBelum = semua.length - jumlahSudah;
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
     final Widget isi = Padding(
       padding: const EdgeInsets.all(20),
@@ -968,13 +994,20 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
             if (belum.isNotEmpty) _diagnostikPemetaan(belum),
           ],
           const SizedBox(height: 8),
+          if (_data != null) ...[
+            FilterStatusPostingBar(
+              nilai: _filterStatus,
+              jumlahSemua: semua.length,
+              jumlahSudah: jumlahSudah,
+              jumlahBelum: jumlahBelum,
+              onChanged: (nilai) => setState(() => _filterStatus = nilai),
+            ),
+            const SizedBox(height: 8),
+          ],
           Expanded(
             child: rincian.isEmpty
-                ? (jurnal.isEmpty
-                    ? const Center(
-                        child: Text(
-                            'Jalankan pratinjau untuk melihat draft jurnal.'))
-                    : ListView.separated(
+                ? (semua.isEmpty && jurnal.isNotEmpty
+                    ? ListView.separated(
                         itemCount: jurnal.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, i) {
@@ -987,20 +1020,29 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                                 .format(row['nominal'] ?? 0)),
                           );
                         },
-                      ))
-                // DRAFT JURNAL PER TRANSAKSI (pola Posting Cicilan Mahasiswa):
-                // tiap transaksi tampil beserta baris akun debit/kreditnya sehingga
-                // dapat dianalisis dulu, lalu diposting satu per satu.
+                      )
+                    : const Center(
+                        child: Text(
+                            'Tidak ada transaksi untuk filter yang dipilih.')))
                 : ListView.separated(
                     itemCount: rincian.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final t = rincian[i];
-                      final siapBaris = t['siap'] == true;
+                      final sudahDiposting = t['sudahDiposting'] == true;
+                      final siapBaris = !sudahDiposting && t['siap'] == true;
                       final barisJurnal = ((t['jurnal'] as List?) ?? [])
-                          .cast<Map<String, dynamic>>();
+                          .whereType<Map>()
+                          .map((e) => Map<String, dynamic>.from(e))
+                          .toList();
+                      final status =
+                          '${t['statusLabel'] ?? (siapBaris ? 'Belum Diposting - Siap' : 'Belum Diposting - Tertahan')}';
                       return Container(
-                        color: siapBaris ? null : const Color(0xFFFFF7ED),
+                        color: sudahDiposting
+                            ? const Color(0xFFF0FDF4)
+                            : siapBaris
+                                ? null
+                                : const Color(0xFFFFF7ED),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 6),
                         child: Row(
@@ -1010,13 +1052,21 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${t['ref'] ?? '-'}',
+                                  Text('${t['ref'] ?? t['referensi'] ?? '-'}',
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w700)),
                                   Text(
-                                      _formatRupiahLaporan
-                                          .format(t['nilai'] ?? 0),
-                                      style: const TextStyle(fontSize: 12)),
+                                      '${_formatRupiahLaporan.format(t['nilai'] ?? 0)} • $status',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: sudahDiposting
+                                              ? const Color(0xFF15803D)
+                                              : null)),
+                                  if (sudahDiposting)
+                                    Text(
+                                      'Jurnal ${t['nomorJurnal'] ?? '-'} • ${t['tanggalPosting'] ?? t['tanggal'] ?? '-'}',
+                                      style: const TextStyle(fontSize: 11.5),
+                                    ),
                                   const SizedBox(height: 4),
                                   for (final j in barisJurnal)
                                     Padding(
@@ -1030,7 +1080,8 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                                             fontFamily: 'monospace'),
                                       ),
                                     ),
-                                  if (!siapBaris &&
+                                  if (!sudahDiposting &&
+                                      !siapBaris &&
                                       '${t['alasan'] ?? ''}'.isNotEmpty)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 3),
@@ -1042,34 +1093,41 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                                 ],
                               ),
                             ),
-                            siapBaris
-                                ? OutlinedButton.icon(
-                                    onPressed: _memuat
-                                        ? null
-                                        : () => _postingSatu(t['id']),
-                                    icon: const Icon(Icons.check_circle_outline,
-                                        size: 16),
-                                    label: const Text('Posting'))
-                                : Wrap(
-                                    direction: Axis.vertical,
-                                    spacing: 4,
-                                    children: [
-                                      TombolSesuaikanAkunPosting(
-                                        jenis: widget.jenis,
-                                        sisi: SisiAkunPosting.debet,
-                                        alasan: '${t['alasan'] ?? ''}',
-                                        ringkas: true,
-                                        onSelesai: () => _proses(false),
-                                      ),
-                                      TombolSesuaikanAkunPosting(
-                                        jenis: widget.jenis,
-                                        sisi: SisiAkunPosting.kredit,
-                                        alasan: '${t['alasan'] ?? ''}',
-                                        ringkas: true,
-                                        onSelesai: () => _proses(false),
-                                      ),
-                                    ],
+                            if (sudahDiposting)
+                              const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Icon(Icons.task_alt,
+                                    color: Color(0xFF15803D)),
+                              )
+                            else if (siapBaris)
+                              OutlinedButton.icon(
+                                  onPressed: _memuat
+                                      ? null
+                                      : () => _postingSatu(t['id']),
+                                  icon: const Icon(Icons.check_circle_outline,
+                                      size: 16),
+                                  label: const Text('Posting'))
+                            else
+                              Wrap(
+                                direction: Axis.vertical,
+                                spacing: 4,
+                                children: [
+                                  TombolSesuaikanAkunPosting(
+                                    jenis: widget.jenis,
+                                    sisi: SisiAkunPosting.debet,
+                                    alasan: '${t['alasan'] ?? ''}',
+                                    ringkas: true,
+                                    onSelesai: () => _proses(false),
                                   ),
+                                  TombolSesuaikanAkunPosting(
+                                    jenis: widget.jenis,
+                                    sisi: SisiAkunPosting.kredit,
+                                    alasan: '${t['alasan'] ?? ''}',
+                                    ringkas: true,
+                                    onSelesai: () => _proses(false),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       );

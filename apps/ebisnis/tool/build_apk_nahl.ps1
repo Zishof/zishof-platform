@@ -2,6 +2,7 @@ param([switch]$IzinkanDebugSigning)
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
 flutter build apk --release --flavor nahl -t lib/main_nahl.dart --dart-define=EBISNIS_VARIANT=nahl --no-tree-shake-icons
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $apk = 'build\app\outputs\flutter-apk\app-nahl-release.apk'

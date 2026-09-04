@@ -5,6 +5,7 @@ param([switch]$IzinkanDebugSigning)
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
 flutter build apk --release --flavor albahjah -t lib/main.dart --dart-define=EBISNIS_VARIANT=albahjah
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $apk = 'build\app\outputs\flutter-apk\app-albahjah-release.apk'

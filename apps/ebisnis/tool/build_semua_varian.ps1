@@ -28,6 +28,10 @@ $ErrorActionPreference = 'Stop'
 $appDir = Split-Path $PSScriptRoot -Parent
 Set-Location $appDir
 
+# Model ONNX tidak disimpan di Git. Unduh dan verifikasi hash sebelum build
+# varian mana pun agar APK/Windows tidak terbit tanpa fitur wajah.
+& (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
+
 $versi = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
 $artifactDir = Join-Path $appDir "release-artifacts\semua-varian\$versi"
 New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null

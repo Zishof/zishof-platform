@@ -1,0 +1,48 @@
+{
+  "tanggal_uat": "2026-09-04",
+  "build": "1.34.23+185",
+  "server": "https://ebisnis.id/ebisnis",
+  "periode": "1-30 September 2026",
+  "volume": {
+    "penjualan_terposting": 403,
+    "hpp_terposting": 104,
+    "kulakan_total": 407,
+    "kulakan_terposting": 402,
+    "baris_jurnal_terposting": 4107
+  },
+  "status_posting": {
+    "penjualan_belum_posting": 0,
+    "hpp_belum_posting": 0,
+    "kulakan_belum_posting": 0,
+    "jurnal_tidak_seimbang": 0
+  },
+  "akun": {
+    "kas": "111.101 - KAS YAYASAN",
+    "piutang": "131.300 - PIUTANG USAHA TOKO",
+    "persediaan": "151.200 - PERSEDIAAN BARANG LAINNYA",
+    "utang": "310.600 - UTANG USAHA TOKO",
+    "pendapatan": "410.900 - PENDAPATAN PENJUALAN TOKO",
+    "hpp": "510.900 - BEBAN POKOK PENJUALAN TOKO"
+  },
+  "akun_tidak_lengkap": {
+    "produk_tanpa_master_aset": 0,
+    "produk_tanpa_akun_persediaan": 0,
+    "jenis_produk_tanpa_pendapatan": 0,
+    "jenis_produk_tanpa_hpp": 0,
+    "penyedia_tanpa_utang": 0
+  },
+  "laporan_lulus": [
+    "Laba Rugi",
+    "Neraca",
+    "Arus Kas",
+    "Keseluruhan Jurnal",
+    "Buku Besar",
+    "Neraca Saldo"
+  ],
+  "regresi": {
+    "flutter_test_lulus": 762,
+    "flutter_test_gagal": 0,
+    "api_workflow_gagal": 0,
+    "resolusi_screenshot": "2560x1392"
+  }
+}

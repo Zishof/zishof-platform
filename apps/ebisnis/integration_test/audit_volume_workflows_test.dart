@@ -21,10 +21,15 @@ void main() {
       'labelPerangkat': 'UAT-Audit-Volume',
     });
     await ApiClient.instance.simpanToken(login['token'] as String);
+    final kegagalan = <String>[];
 
     Future<void> audit(String action, Map<String, dynamic> body) async {
       try {
         final r = await ApiClient.instance.aksi(action, body);
+        if (r['status'] != null && r['status'] != 'success') {
+          kegagalan.add('$action: status=${r['status']} '
+              '${r['description'] ?? ''}');
+        }
         int length(Object? value) => value is List ? value.length : -1;
         final summary = <String, dynamic>{
           'status': r['status'],
@@ -47,6 +52,8 @@ void main() {
         // ignore: avoid_print
         print('AUDIT_$action=${jsonEncode(summary)}');
       } catch (e) {
+        kegagalan.add('$action: $e'
+            '${e is ApiException ? ' | ${e.teknis}' : ''}');
         // ignore: avoid_print
         print('AUDIT_GAGAL_$action=$e'
             '${e is ApiException ? '\n${e.teknis}' : ''}');
@@ -89,8 +96,8 @@ void main() {
     for (final kind in ['hpp', 'penjualan']) {
       await audit('laporan_keuangan_pendukung', {
         'jenis': kind,
-        'mulai': '2026-01-01',
-        'sampai': '2026-12-31',
+        'mulai': '2026-09-01',
+        'sampai': '2026-09-30',
         'posting': false,
       });
     }
@@ -124,10 +131,12 @@ void main() {
     for (final kind in ['hpp', 'penjualan']) {
       await audit('laporan_keuangan_pendukung', {
         'jenis': kind,
-        'mulai': '2026-01-01',
-        'sampai': '2026-12-31',
+        'mulai': '2026-09-01',
+        'sampai': '2026-09-30',
         'posting': false,
       });
     }
+    expect(kegagalan, isEmpty,
+        reason: 'Seluruh endpoint UAT wajib lulus:\n${kegagalan.join('\n')}');
   });
 }

@@ -8,13 +8,14 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('seed 50 transaksi POS untuk UAT Kantin', (tester) async {
+  testWidgets('seed transaksi POS untuk UAT Kantin', (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 1);
     const post = bool.fromEnvironment('POS_UAT_POST');
+    const distinctProducts = bool.fromEnvironment('POS_UAT_DISTINCT_PRODUCTS');
     const prefix = String.fromEnvironment('POS_UAT_PREFIX',
         defaultValue: 'UAT-VOL-POS-20260904');
     await ServerConfig.instance
@@ -44,24 +45,46 @@ void main() {
       throw StateError('$action gagal: $last');
     }
 
-    final catalog = await call('katalog', {
-      'keyword': 'ABC Kecap Manis 100 g Botol',
-      'tokoId': 1,
-    });
-    final products = ((catalog['produk'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    expect(products, isNotEmpty);
-    final product = products.firstWhere(
+    final products = <Map<String, dynamic>>[];
+    if (distinctProducts) {
+      for (var page = 1; page <= 100 && products.length < volume; page++) {
+        final catalog = await call('katalog', {
+          'keyword': '',
+          'tokoId': 1,
+          'page': page,
+          'page_size': 100,
+        });
+        final pageProducts = ((catalog['produk'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .where((e) {
+          final price =
+              (e['hargaJual'] ?? e['harga'] ?? e['harga_jual']) as num?;
+          final stock = e['stok'] as num?;
+          return (price?.toDouble() ?? 0) > 0 && (stock?.toDouble() ?? 0) >= 4;
+        });
+        products.addAll(pageProducts);
+        if (((catalog['produk'] as List?) ?? const []).length < 100) {
+          break;
+        }
+      }
+      expect(products.length, greaterThanOrEqualTo(volume),
+          reason:
+              'Butuh $volume produk berbeda dengan stok dan harga positif untuk UAT HPP.');
+    } else {
+      final catalog = await call('katalog', {
+        'keyword': 'ABC Kecap Manis 100 g Botol',
+        'tokoId': 1,
+      });
+      products.addAll(((catalog['produk'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e)));
+      expect(products, isNotEmpty);
+    }
+    final defaultProduct = products.firstWhere(
       (e) => '${e['nama']}'.contains('ABC Kecap Manis'),
       orElse: () => products.first,
     );
-    final price = ((product['hargaJual'] ??
-                product['harga'] ??
-                product['harga_jual']) as num?)
-            ?.toDouble() ??
-        25000;
     final payments = await call('cara_bayar_list_admin', {
       'keyword': 'Tunai',
       'page': 1,
@@ -98,6 +121,12 @@ void main() {
       final hour = 8 + ((i - 1) ~/ 12);
       final minute = ((i - 1) * 5) % 60;
       final qty = 1 + ((i - 1) % 3);
+      final product = distinctProducts ? products[i - 1] : defaultProduct;
+      final price = ((product['hargaJual'] ??
+                  product['harga'] ??
+                  product['harga_jual']) as num?)
+              ?.toDouble() ??
+          25000;
       final total = price * qty;
       final result = await call('bayar', {
         'kodeUnik': code,

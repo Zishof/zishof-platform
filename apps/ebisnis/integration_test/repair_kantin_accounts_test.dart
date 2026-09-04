@@ -196,6 +196,7 @@ void main() {
         return call('posting_kulakan_draft', {
           'mulai': '2026-09-01',
           'sampai': '2026-09-30',
+          'batasRiwayat': 1000,
         });
       }
       return call('laporan_keuangan_pendukung', {
@@ -203,6 +204,7 @@ void main() {
         'mulai': '2026-09-01',
         'sampai': '2026-09-30',
         'posting': false,
+        'batasRiwayat': 1000,
       });
     }
 
@@ -228,15 +230,33 @@ void main() {
           .toList();
       final ready = rows.where((e) => e['siap'] == true).toList();
       final blocked = rows.where((e) => e['siap'] != true).toList();
+      final posted = ((data['rincianSudahDiposting'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
       // ignore: avoid_print
       print('KANTIN_${kind.toUpperCase()}_AUDIT=${jsonEncode({
             'jumlah': rows.length,
             'siap': ready.length,
             'tertahan': blocked.length,
+            'sudahDiposting': posted.length,
+            'jumlahSudahDiposting': data['jumlahSudahDiposting'],
             'total': data['total'] ?? data['totalSiap'],
             'contohSiap': ready.take(2).toList(),
             'contohTertahan': blocked.take(3).toList(),
+            'contohSudahDiposting': posted.take(2).toList(),
           })}');
+      expect(blocked, isEmpty,
+          reason: 'Masih ada ${blocked.length} record $kind yang tertahan '
+              'karena akun atau validasi posting belum lengkap.');
+      expect(rows.length + posted.length, greaterThanOrEqualTo(100),
+          reason: 'Volume $kind hanya ${rows.length + posted.length} record; '
+              'target minimum UAT adalah 100.');
+      if (!post && rows.isEmpty) {
+        expect(posted.length, greaterThanOrEqualTo(100),
+            reason: 'Seluruh $kind sudah diposting, tetapi riwayat yang '
+                'dikembalikan API kurang dari 100 record.');
+      }
       if (post && ready.isNotEmpty) {
         final ids = ready.map((e) => e['id']).where((e) => e != null).toList();
         final result = kind == 'kulakan'

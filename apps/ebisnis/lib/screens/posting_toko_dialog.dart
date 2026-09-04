@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../api_client.dart';
 import '../widgets/app_components.dart';
+import '../widgets/filter_status_posting.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import 'posting_akun_perbaikan.dart';
@@ -44,6 +45,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
   bool _sibuk = false;
   String? _galat;
   Map<String, dynamic>? _data;
+  FilterStatusPosting _filterStatus = FilterStatusPosting.semua;
 
   @override
   void initState() {
@@ -53,10 +55,12 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     WidgetsBinding.instance.addPostFrameCallback((_) => _muatDraf());
   }
 
-  List<Map<String, dynamic>> get _rincian =>
+  List<Map<String, dynamic>> get _rincianDraf =>
       ((_data?['rincian'] as List?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+
+  List<Map<String, dynamic>> get _rincianSemua => rincianPostingSemua(_data);
 
   Future<void> _pilihTanggal(bool awal) async {
     final hasil = await showDatePicker(
@@ -85,7 +89,11 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     try {
       final hasil = await ApiClient.instance.aksi(
         'posting_${widget.jenis}_draft',
-        {'mulai': _fmt.format(_mulai), 'sampai': _fmt.format(_sampai)},
+        {
+          'mulai': _fmt.format(_mulai),
+          'sampai': _fmt.format(_sampai),
+          'batasRiwayat': 1000,
+        },
       );
       if (!mounted) return;
       final hakBaru = hasil['hak'];
@@ -201,7 +209,11 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
 
   @override
   Widget build(BuildContext context) {
-    final rincian = _rincian;
+    final rincian = _rincianDraf;
+    final semua = _rincianSemua;
+    final rincianTerfilter = filterRincianPosting(semua, _filterStatus);
+    final jumlahSudah = semua.where((r) => r['sudahDiposting'] == true).length;
+    final jumlahBelum = semua.length - jumlahSudah;
     final siap = rincian.where((r) => r['siap'] == true).toList();
     final Widget isi = Padding(
       padding: const EdgeInsets.all(20),
@@ -265,12 +277,23 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
           ],
           const SizedBox(height: 12),
           _diagnostikSetting(rincian),
+          if (_data != null) ...[
+            FilterStatusPostingBar(
+              nilai: _filterStatus,
+              jumlahSemua: semua.length,
+              jumlahSudah: jumlahSudah,
+              jumlahBelum: jumlahBelum,
+              onChanged: (nilai) =>
+                  setStateIfMounted(() => _filterStatus = nilai),
+            ),
+            const SizedBox(height: 10),
+          ],
           Expanded(
-            child: rincian.isEmpty
+            child: rincianTerfilter.isEmpty
                 ? Center(
                     child: Text(_sibuk
                         ? 'Menghitung...'
-                        : 'Tidak ada dokumen yang belum diposting pada periode ini.'))
+                        : 'Tidak ada dokumen untuk filter yang dipilih.'))
                 : AppDataTable(
                     minWidth: 1160,
                     emptyText: 'Tidak ada draf.',
@@ -283,8 +306,11 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                       AppTableColumn('Status', flex: 4),
                       AppTableColumn('Aksi', flex: 4),
                     ],
-                    rows: rincian.map((r) {
-                      final bisa = r['siap'] == true;
+                    rows: rincianTerfilter.map((r) {
+                      final sudahDiposting = r['sudahDiposting'] == true;
+                      final bisa = !sudahDiposting && r['siap'] == true;
+                      final status =
+                          '${r['statusLabel'] ?? (bisa ? 'Belum Diposting - Siap' : 'Belum Diposting - Tertahan')}';
                       return AppTableRowData(cells: [
                         AppTableCell.text('${r['tanggal'] ?? ''}', flex: 2),
                         AppTableCell.text('${r['referensi'] ?? ''}', flex: 3),
@@ -295,36 +321,45 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                         AppTableCell.text('${r['debet'] ?? ''}', flex: 4),
                         AppTableCell.text('${r['kredit'] ?? ''}', flex: 4),
                         AppTableCell.text(
-                            bisa ? 'Siap diposting' : '${r['alasan'] ?? ''}',
+                            sudahDiposting
+                                ? '$status${'${r['nomorJurnal'] ?? ''}'.isEmpty ? '' : ' • Jurnal ${r['nomorJurnal']}'}'
+                                : bisa
+                                    ? status
+                                    : '$status${'${r['alasan'] ?? ''}'.isEmpty ? '' : ' — ${r['alasan']}'}',
                             flex: 4),
                         AppTableCell(
                           flex: 4,
-                          child: bisa
-                              ? TextButton(
-                                  onPressed: _sibuk || !_bolehTerapkan
-                                      ? null
-                                      : () => _posting([r['id']]),
-                                  child: const Text('Posting'))
-                              : Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: [
-                                    TombolSesuaikanAkunPosting(
-                                      jenis: widget.jenis,
-                                      sisi: SisiAkunPosting.debet,
-                                      alasan: '${r['alasan'] ?? ''}',
-                                      ringkas: true,
-                                      onSelesai: _muatDraf,
+                          child: sudahDiposting
+                              ? const Text('Tercatat di buku besar',
+                                  style: TextStyle(
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.w600))
+                              : bisa
+                                  ? TextButton(
+                                      onPressed: _sibuk || !_bolehTerapkan
+                                          ? null
+                                          : () => _posting([r['id']]),
+                                      child: const Text('Posting'))
+                                  : Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.debet,
+                                          alasan: '${r['alasan'] ?? ''}',
+                                          ringkas: true,
+                                          onSelesai: _muatDraf,
+                                        ),
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.kredit,
+                                          alasan: '${r['alasan'] ?? ''}',
+                                          ringkas: true,
+                                          onSelesai: _muatDraf,
+                                        ),
+                                      ],
                                     ),
-                                    TombolSesuaikanAkunPosting(
-                                      jenis: widget.jenis,
-                                      sisi: SisiAkunPosting.kredit,
-                                      alasan: '${r['alasan'] ?? ''}',
-                                      ringkas: true,
-                                      onSelesai: _muatDraf,
-                                    ),
-                                  ],
-                                ),
                         ),
                       ]);
                     }).toList(),
