@@ -263,10 +263,14 @@ void main() {
     'lib/screens/konfigurasi_screen.dart': ["'password_baru':"],
     // Server yang memilih baris: himpunan yang disetujui pengguna bisa berubah
     // sebelum antrean terkirim.
-    'lib/screens/ringkasan/tab_umum.dart': ["aksi('layani_semua_transaksi'"],
+    'lib/screens/ringkasan/tab_umum.dart': [
+      "aksi('layani_semua_transaksi'",
+      "aksi('batalkan_transaksi'",
+    ],
     'lib/screens/riwayat_audit_screen.dart': ["aksi('revisi_pulihkan_massal'"],
     'lib/screens/produk_screen.dart': [
-      "aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false}"
+      "aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false}",
+      "aksi('produk_duplikat_hapus'",
     ],
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
@@ -275,15 +279,10 @@ void main() {
     // Dokumen itu menyebut seluruh daftarnya dikunci berkas ini, padahal sebelumnya
     // hanya tiga entri teratas yang benar-benar terkunci -- sisanya benar dalam
     // praktik tetapi tidak dijaga tes apa pun.
-    'lib/screens/inventory_sales/kas_jurnal_screen.dart': ["'si_coa_save'"],
-    'lib/screens/riwayat_penjualan_screen.dart': ["'batalkan_transaksi'"],
-    'lib/screens/ringkasan/tab_umum.dart': ["'batalkan_transaksi'"],
     'lib/screens/anggota/tab_sinkronisasi.dart': ["'sinkron_referensi'"],
     'lib/services/layar_pelanggan_broadcaster.dart': [
       "'layar_pelanggan_kirim'"
     ],
-    'lib/screens/produk_screen.dart': ["'produk_duplikat_hapus'"],
-    'lib/screens/mutasi_antar_outlet_screen.dart': ["'mutasi_stok_simpan'"],
   };
 
   // Layar induk yang hanya menjadi tuan-rumah indikator (tanpa mutasi CRUD).

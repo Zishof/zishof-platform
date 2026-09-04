@@ -1199,11 +1199,10 @@ class _TabReturState extends State<_TabRetur> {
           label: const Text('Tambah Obat')),
       const SizedBox(height: 10),
       ElevatedButton.icon(
-        onPressed: _baris.isEmpty ||
-                _proses ||
-                !_bolehApotik('apotik_retur', 'create')
-            ? null
-            : _simpan,
+        onPressed:
+            _baris.isEmpty || _proses || !_bolehApotik('apotik_retur', 'create')
+                ? null
+                : _simpan,
         icon: _proses
             ? const SizedBox(
                 width: 18,
