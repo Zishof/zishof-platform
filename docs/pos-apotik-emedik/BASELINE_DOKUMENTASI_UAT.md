@@ -30,6 +30,28 @@ Dokumen ini adalah aturan tetap untuk pembuatan dan pembaruan panduan pengguna, 
 - Tema, nama aplikasi, versi, resolusi, status server, dan angka UAT pada dokumen harus konsisten dengan build serta ringkasan mesin yang dipublikasikan.
 - Satu-satunya pengecualian rilis Apotik v1.34.24 yang telah disetujui adalah APK belum memakai keystore produksi; pengecualian lain harus ditulis sebagai temuan dan tidak boleh disamarkan.
 
+## Tata letak laporan aplikasi
+
+- Semua laporan keuangan dan laporan operasional harus memakai lebar area konten sampai sisi kanan layar; tabel dua atau tiga kolom tidak boleh menumpuk sempit di sisi kiri sementara area kanan kosong.
+- Kolom uraian, keterangan, nama akun, atau deskripsi mendapat porsi lebar utama. Kolom kode, tanggal, status, dan nilai dibuat proporsional; angka tetap rata kanan dan mudah dibandingkan.
+- Angka yang dapat ditelusuri harus mempunyai penanda interaksi yang konsisten, dapat diklik, dan membuka rincian atau data penyusunnya tanpa mengubah filter periode aktif.
+- Perubahan layout laporan wajib diterapkan melalui komponen laporan bersama agar Laba Rugi, Neraca, Arus Kas, Buku Besar, Trial Balance, serta laporan operasional lain memperoleh perilaku desktop yang sama.
+- Bukti layar untuk panduan harus diambil setelah layout lebar ini aktif, dalam jendela yang dimaksimalkan, sehingga judul, keterangan, nilai, pagination, dan penanda drill-down terlihat jelas.
+
+## Status dan filter pada seluruh halaman posting
+
+- Setiap halaman posting wajib menampilkan tiga filter yang konsisten: **Semua**, **Telah Diposting**, dan **Belum Diposting**.
+- Pilihan **Belum Diposting** tetap membedakan status operasional menjadi **Siap** dan **Tertahan**; alasan tertahan harus terlihat serta dapat ditindaklanjuti.
+- Status setiap baris berasal dari field eksplisit API (`statusPosting`/`sudahDiposting`), bukan disimpulkan dari tombol, nominal, atau kolom kosong.
+- API mempertahankan `rincian` untuk kompatibilitas client lama dan mengirim riwayat pada `rincianSudahDiposting`; batas data yang didukung adalah 100 sampai 10.000 record.
+- Bukti UAT wajib memperlihatkan filter, kolom status, sedikitnya 100 record sumber yang valid, serta contoh record yang sudah dan belum diposting.
+
+## Checkpoint deployment lintas server
+
+- Deployment pada satu sesi atau satu server tidak dianggap otomatis berlaku pada server lain, walaupun aplikasi Flutter dan codebase asalnya sama.
+- Setiap target server harus memiliki checkpoint **SIAP DEPLOY** tersendiri yang mencantumkan revision/commit, daftar file, urutan build/deploy, dan pemeriksaan pascadeploy.
+- Status UAT 100% hanya boleh diberikan setelah endpoint pada server target diverifikasi langsung sesudah deployment.
+
 ## Gerbang publikasi
 
 Dokumentasi hanya boleh dipublikasikan setelah Word, PDF, dan PPTX lulus pemeriksaan visual penuh, seluruh diagram bebas overlap, narasi unik dan relevan, setiap layar data membuktikan minimal 100 record sample, tidak ada label jumlah kata, tidak ada data sensitif, serta tautan/versi/checksum sesuai dengan artefak rilis.

@@ -705,6 +705,8 @@ class _PostingKeuanganDialog extends StatefulWidget {
   State<_PostingKeuanganDialog> createState() => _PostingKeuanganDialogState();
 }
 
+enum _FilterStatusPosting { semua, sudah, belum }
+
 class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
     with JejakGalat {
   late DateTime _mulai;
@@ -712,6 +714,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
   bool _memuat = false;
   String? _error;
   Map<String, dynamic>? _data;
+  _FilterStatusPosting _filterStatus = _FilterStatusPosting.semua;
 
   @override
   void initState() {
@@ -777,6 +780,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
           'mulai': _formatTanggalLaporan.format(_mulai),
           'sampai': _formatTanggalLaporan.format(_sampai),
           'posting': posting,
+          'batasRiwayat': 10000,
         },
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
@@ -828,6 +832,7 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
           'mulai': _formatTanggalLaporan.format(_mulai),
           'sampai': _formatTanggalLaporan.format(_sampai),
           'posting_ids': [id],
+          'batasRiwayat': 10000,
         },
       );
       final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
@@ -899,10 +904,20 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
     final belum = ((_data?['belumDipetakan'] as List?) ?? []);
-    // Draft jurnal per transaksi dari server (field 'rincian').
-    final rincian = ((_data?['rincian'] as List?) ?? [])
+    // `rincian` tetap khusus draf agar kompatibel dengan server/client lama.
+    // Server baru mengirim riwayat terpisah supaya status tidak perlu ditebak.
+    final rincianBelum = ((_data?['rincian'] as List?) ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    final rincianSudah = ((_data?['rincianSudahDiposting'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final semuaRincian = [...rincianBelum, ...rincianSudah];
+    final rincian = switch (_filterStatus) {
+      _FilterStatusPosting.semua => semuaRincian,
+      _FilterStatusPosting.sudah => rincianSudah,
+      _FilterStatusPosting.belum => rincianBelum,
+    };
     final siap = _data?['siap'] == true && _data?['diposting'] != true;
     final Widget isi = Padding(
       padding: const EdgeInsets.all(20),
@@ -960,9 +975,44 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                       : 'Belum siap')),
               if (_data!['terakhir'] != null)
                 Chip(label: Text('Posting terakhir ${_data!['terakhir']}')),
+              Chip(
+                  avatar: const Icon(Icons.pending_actions, size: 16),
+                  label: Text(
+                      'Belum Diposting ${_data!['jumlahBelumDiposting'] ?? rincianBelum.length}')),
+              Chip(
+                  avatar: const Icon(Icons.task_alt,
+                      size: 16, color: Color(0xFF15803D)),
+                  label: Text(
+                      'Telah Diposting ${_data!['jumlahSudahDiposting'] ?? rincianSudah.length}')),
             ]),
             if (belum.isNotEmpty) _diagnostikPemetaan(belum),
           ],
+          const SizedBox(height: 8),
+          if (_data != null)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: Text('Semua (${semuaRincian.length})'),
+                  selected: _filterStatus == _FilterStatusPosting.semua,
+                  onSelected: (_) => setState(
+                      () => _filterStatus = _FilterStatusPosting.semua),
+                ),
+                ChoiceChip(
+                  label: Text('Telah Diposting (${rincianSudah.length})'),
+                  selected: _filterStatus == _FilterStatusPosting.sudah,
+                  onSelected: (_) => setState(
+                      () => _filterStatus = _FilterStatusPosting.sudah),
+                ),
+                ChoiceChip(
+                  label: Text('Belum Diposting (${rincianBelum.length})'),
+                  selected: _filterStatus == _FilterStatusPosting.belum,
+                  onSelected: (_) => setState(
+                      () => _filterStatus = _FilterStatusPosting.belum),
+                ),
+              ],
+            ),
           const SizedBox(height: 8),
           Expanded(
             child: rincian.isEmpty
@@ -984,90 +1034,118 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
                           );
                         },
                       ))
-                // DRAFT JURNAL PER TRANSAKSI (pola Posting Cicilan Mahasiswa):
-                // tiap transaksi tampil beserta baris akun debit/kreditnya sehingga
-                // dapat dianalisis dulu, lalu diposting satu per satu.
-                : ListView.separated(
-                    itemCount: rincian.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final t = rincian[i];
+                : AppDataTable(
+                    minWidth: 1160,
+                    emptyText: 'Tidak ada data untuk filter ini.',
+                    columns: const [
+                      AppTableColumn('Tanggal', flex: 2),
+                      AppTableColumn('Referensi', flex: 3),
+                      AppTableColumn('Nilai', flex: 2, align: TextAlign.right),
+                      AppTableColumn('Akun / Jurnal', flex: 6),
+                      AppTableColumn('Status Posting', flex: 3),
+                      AppTableColumn('Aksi', flex: 3),
+                    ],
+                    rows: rincian.map((t) {
                       final siapBaris = t['siap'] == true;
+                      final sudahDiposting = t['sudahDiposting'] == true ||
+                          t['statusPosting'] == 'SUDAH_DIPOSTING';
                       final barisJurnal = ((t['jurnal'] as List?) ?? [])
-                          .cast<Map<String, dynamic>>();
-                      return Container(
-                        color: siapBaris ? null : const Color(0xFFFFF7ED),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('${t['ref'] ?? '-'}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w700)),
-                                  Text(
-                                      _formatRupiahLaporan
-                                          .format(t['nilai'] ?? 0),
-                                      style: const TextStyle(fontSize: 12)),
-                                  const SizedBox(height: 4),
-                                  for (final j in barisJurnal)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                          left: 8, top: 1),
-                                      child: Text(
-                                        '${j['akun'] ?? '-'}   '
-                                        '${(j['debit'] ?? 0) > 0 ? 'D ${_formatRupiahLaporan.format(j['debit'])}' : 'K ${_formatRupiahLaporan.format(j['kredit'])}'}',
-                                        style: const TextStyle(
-                                            fontSize: 11.5,
-                                            fontFamily: 'monospace'),
-                                      ),
-                                    ),
-                                  if (!siapBaris &&
-                                      '${t['alasan'] ?? ''}'.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 3),
-                                      child: Text('${t['alasan']}',
-                                          style: const TextStyle(
-                                              fontSize: 11.5,
-                                              color: Color(0xFFB45309))),
-                                    ),
-                                ],
-                              ),
+                          .whereType<Map>()
+                          .map((e) => Map<String, dynamic>.from(e))
+                          .toList();
+                      final akunJurnal = sudahDiposting
+                          ? [
+                              if ('${t['nomorJurnal'] ?? ''}'.isNotEmpty)
+                                'Jurnal ${t['nomorJurnal']}',
+                              if ('${t['tanggalPosting'] ?? ''}'.isNotEmpty)
+                                'Diposting ${t['tanggalPosting']}',
+                              if ('${t['keterangan'] ?? ''}'.isNotEmpty)
+                                '${t['keterangan']}',
+                            ].join('\n')
+                          : barisJurnal.map((j) {
+                              final debit = (j['debit'] as num?) ?? 0;
+                              return '${j['akun'] ?? '-'}  '
+                                  '${debit > 0 ? 'D ${_formatRupiahLaporan.format(debit)}' : 'K ${_formatRupiahLaporan.format(j['kredit'] ?? 0)}'}';
+                            }).join('\n');
+                      final statusLabel = '${t['statusLabel'] ?? ''}'.isNotEmpty
+                          ? '${t['statusLabel']}'
+                          : sudahDiposting
+                              ? 'Telah Diposting'
+                              : siapBaris
+                                  ? 'Belum Diposting - Siap'
+                                  : 'Belum Diposting - Tertahan';
+                      return AppTableRowData(cells: [
+                        AppTableCell.text('${t['tanggal'] ?? ''}', flex: 2),
+                        AppTableCell.text(
+                            '${t['ref'] ?? t['referensi'] ?? '-'}',
+                            flex: 3),
+                        AppTableCell.text(
+                            _formatRupiahLaporan.format(t['nilai'] ?? 0),
+                            flex: 2,
+                            align: TextAlign.right),
+                        AppTableCell.text(akunJurnal, flex: 6),
+                        AppTableCell(
+                          flex: 3,
+                          child: Chip(
+                            avatar: Icon(
+                              sudahDiposting
+                                  ? Icons.task_alt
+                                  : siapBaris
+                                      ? Icons.pending_actions
+                                      : Icons.warning_amber,
+                              size: 16,
+                              color: sudahDiposting
+                                  ? const Color(0xFF15803D)
+                                  : siapBaris
+                                      ? const Color(0xFF0369A1)
+                                      : const Color(0xFFB45309),
                             ),
-                            siapBaris
-                                ? OutlinedButton.icon(
-                                    onPressed: _memuat
-                                        ? null
-                                        : () => _postingSatu(t['id']),
-                                    icon: const Icon(Icons.check_circle_outline,
-                                        size: 16),
-                                    label: const Text('Posting'))
-                                : Wrap(
-                                    direction: Axis.vertical,
-                                    spacing: 4,
-                                    children: [
-                                      TombolSesuaikanAkunPosting(
-                                        jenis: widget.jenis,
-                                        sisi: SisiAkunPosting.debet,
-                                        alasan: '${t['alasan'] ?? ''}',
-                                        ringkas: true,
-                                      ),
-                                      TombolSesuaikanAkunPosting(
-                                        jenis: widget.jenis,
-                                        sisi: SisiAkunPosting.kredit,
-                                        alasan: '${t['alasan'] ?? ''}',
-                                        ringkas: true,
-                                      ),
-                                    ],
-                                  ),
-                          ],
+                            label: Text(statusLabel),
+                          ),
                         ),
-                      );
-                    },
+                        AppTableCell(
+                          flex: 3,
+                          child: sudahDiposting
+                              ? Text(
+                                  'Posting #${t['postingHistoryId'] ?? '-'}',
+                                  style: const TextStyle(
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.w600),
+                                )
+                              : siapBaris
+                                  ? OutlinedButton.icon(
+                                      onPressed: _memuat
+                                          ? null
+                                          : () => _postingSatu(t['id']),
+                                      icon: const Icon(
+                                          Icons.check_circle_outline,
+                                          size: 16),
+                                      label: const Text('Posting'))
+                                  : Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        Text('${t['alasan'] ?? ''}',
+                                            style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: Color(0xFFB45309))),
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.debet,
+                                          alasan: '${t['alasan'] ?? ''}',
+                                          ringkas: true,
+                                        ),
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.kredit,
+                                          alasan: '${t['alasan'] ?? ''}',
+                                          ringkas: true,
+                                        ),
+                                      ],
+                                    ),
+                        ),
+                      ]);
+                    }).toList(),
                   ),
           ),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [

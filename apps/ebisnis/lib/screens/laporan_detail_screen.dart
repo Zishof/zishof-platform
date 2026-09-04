@@ -488,7 +488,6 @@ class _TabelLaporan extends StatefulWidget {
 }
 
 class _TabelLaporanState extends State<_TabelLaporan> {
-  static const _lebarKolom = 150.0;
   static const _pageSize = 15;
 
   int _halaman = 1;
@@ -886,11 +885,40 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     ];
     final semuaBaris = <AppTableRowData>[];
 
+    // Laporan dua/tiga kolom (terutama laporan keuangan) sebelumnya memakai
+    // lebar tetap 150 px per kolom. Akibatnya tabel hanya menumpuk di sisi
+    // kiri dan sebagian besar kanvas desktop kosong. Flex ini dipakai oleh
+    // header DAN seluruh jenis baris agar tabel selalu memenuhi lebar layar:
+    // kolom uraian mendapat ruang utama, sementara angka tetap cukup lebar dan
+    // rata kanan. Untuk laporan dengan banyak dimensi, kode/tanggal/status
+    // dibuat lebih ringkas supaya keterangan tetap terbaca.
+    int flexKolom(int index) {
+      final definisi = kolom[index];
+      final label = '${definisi['l'] ?? ''}'.trim().toLowerCase();
+      final numerik = definisi['t'] == 'num';
+      if (kolom.length == 1) return 1;
+      if (numerik) return kolom.length <= 3 ? 3 : 2;
+      final uraian = label.contains('keterangan') ||
+          label.contains('uraian') ||
+          label.contains('deskripsi') ||
+          label.contains('nama') ||
+          label.contains('akun') ||
+          label.contains('catatan');
+      if (uraian) return kolom.length <= 3 ? 7 : 5;
+      if (kolom.length <= 3) return 6;
+      final ringkas = label.contains('kode') ||
+          label.contains('tanggal') ||
+          label.contains('status') ||
+          label.contains('jenis') ||
+          label.contains('no.');
+      return ringkas ? 2 : 3;
+    }
+
     List<AppTableCell> selKosong({String? labelAwal, TextStyle? styleAwal}) {
       return List.generate(kolom.length, (i) {
         return AppTableCell.text(
           i == 0 ? (labelAwal ?? '') : '',
-          width: _lebarKolom,
+          flex: flexKolom(i),
           maxLines: 2,
           style: i == 0 ? styleAwal : null,
         );
@@ -914,13 +942,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // punya rincian server (mis. HPP Laba Rugi) dibuka rincian penyusunnya.
           if (!isNum || teksSel.isEmpty) {
             return AppTableCell.text(teksSel,
-                width: _lebarKolom,
+                flex: flexKolom(i),
                 align: isNum ? TextAlign.right : TextAlign.left,
                 maxLines: 2,
                 style: gaya);
           }
           return AppTableCell(
-            width: _lebarKolom,
+            flex: flexKolom(i),
             align: TextAlign.right,
             child: _SelAngkaRincian(
               teks: teksSel,
@@ -970,7 +998,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // ANGKA SUBTOTAL IKUT DAPAT DIKLIK -- padanan data-grup versi JSP.
           if (isNum && teks.isNotEmpty) {
             return AppTableCell(
-              width: _lebarKolom,
+              flex: flexKolom(i),
               align: TextAlign.right,
               child: _SelAngkaRincian(
                 teks: teks,
@@ -987,7 +1015,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           }
           return AppTableCell.text(
             teks,
-            width: _lebarKolom,
+            flex: flexKolom(i),
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
             style: gayaTotal,
@@ -1052,7 +1080,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // ANGKA GRAND TOTAL IKUT DAPAT DIKLIK -- padanan data-total versi JSP.
           if (isNum && teks.isNotEmpty) {
             return AppTableCell(
-              width: _lebarKolom,
+              flex: flexKolom(i),
               align: TextAlign.right,
               child: _SelAngkaRincian(
                 teks: teks,
@@ -1069,7 +1097,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           }
           return AppTableCell.text(
             teks,
-            width: _lebarKolom,
+            flex: flexKolom(i),
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
             style: gayaGrand,
@@ -1085,9 +1113,6 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     final rows = mulai >= semuaBaris.length
         ? <AppTableRowData>[]
         : semuaBaris.sublist(mulai, sampai);
-    final minWidth =
-        (_lebarKolom * kolom.length) < 760 ? 760.0 : _lebarKolom * kolom.length;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1124,15 +1149,16 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
         AppDataTable(
-          minWidth: minWidth,
+          minWidth: 760,
           emptyText: 'Tidak ada data untuk halaman ini.',
-          columns: kolom
-              .map((k) => AppTableColumn(
-                    k['l'] as String? ?? '',
-                    width: _lebarKolom,
-                    align: k['t'] == 'num' ? TextAlign.right : TextAlign.left,
-                  ))
-              .toList(),
+          columns: List.generate(
+            kolom.length,
+            (i) => AppTableColumn(
+              kolom[i]['l'] as String? ?? '',
+              flex: flexKolom(i),
+              align: kolom[i]['t'] == 'num' ? TextAlign.right : TextAlign.left,
+            ),
+          ),
           rows: rows,
           pagination: AppTablePagination(
             halaman: _halaman,
@@ -1290,15 +1316,26 @@ class _SelAngkaRincian extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-            child: Text(
-              teks,
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: gaya.copyWith(
-                decoration: TextDecoration.underline,
-                decorationStyle: TextDecorationStyle.dotted,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  teks,
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: gaya.copyWith(
+                    decoration: TextDecoration.underline,
+                    decorationStyle: TextDecorationStyle.dotted,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 17,
+                  color: AppColors.primary,
+                ),
+              ],
             ),
           ),
         ),

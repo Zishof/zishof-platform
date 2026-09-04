@@ -7,6 +7,8 @@ import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import 'posting_akun_perbaikan.dart';
 
+enum _FilterStatusPostingToko { semua, sudah, belum }
+
 /// Dialog posting jurnal untuk rantai pengadaan &rarr; pembayaran toko:
 /// kulakan, pembayaran hutang supplier, penerimaan piutang customer, dan
 /// penyesuaian persediaan (retur beli/jual, selisih opname, mutasi antar outlet).
@@ -44,6 +46,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
   bool _sibuk = false;
   String? _galat;
   Map<String, dynamic>? _data;
+  _FilterStatusPostingToko _filterStatus = _FilterStatusPostingToko.semua;
 
   @override
   void initState() {
@@ -53,8 +56,13 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     WidgetsBinding.instance.addPostFrameCallback((_) => _muatDraf());
   }
 
-  List<Map<String, dynamic>> get _rincian =>
+  List<Map<String, dynamic>> get _rincianBelum =>
       ((_data?['rincian'] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+  List<Map<String, dynamic>> get _rincianSudah =>
+      ((_data?['rincianSudahDiposting'] as List?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
 
@@ -85,7 +93,11 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     try {
       final hasil = await ApiClient.instance.aksi(
         'posting_${widget.jenis}_draft',
-        {'mulai': _fmt.format(_mulai), 'sampai': _fmt.format(_sampai)},
+        {
+          'mulai': _fmt.format(_mulai),
+          'sampai': _fmt.format(_sampai),
+          'batasRiwayat': 10000,
+        },
       );
       if (!mounted) return;
       final hakBaru = hasil['hak'];
@@ -141,6 +153,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
       final body = <String, dynamic>{
         'mulai': _fmt.format(_mulai),
         'sampai': _fmt.format(_sampai),
+        'batasRiwayat': 10000,
       };
       if (ids.isNotEmpty) body['posting_ids'] = ids;
       final hasil = await ApiClient.instance
@@ -201,8 +214,15 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
 
   @override
   Widget build(BuildContext context) {
-    final rincian = _rincian;
-    final siap = rincian.where((r) => r['siap'] == true).toList();
+    final rincianBelum = _rincianBelum;
+    final rincianSudah = _rincianSudah;
+    final semuaRincian = [...rincianBelum, ...rincianSudah];
+    final rincian = switch (_filterStatus) {
+      _FilterStatusPostingToko.semua => semuaRincian,
+      _FilterStatusPostingToko.sudah => rincianSudah,
+      _FilterStatusPostingToko.belum => rincianBelum,
+    };
+    final siap = rincianBelum.where((r) => r['siap'] == true).toList();
     final Widget isi = Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -260,13 +280,38 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
             AppDetailGalatOpsional(detail: detailUntuk(_galat)),
           ],
           const SizedBox(height: 12),
-          _diagnostikSetting(rincian),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: Text('Semua (${semuaRincian.length})'),
+                selected: _filterStatus == _FilterStatusPostingToko.semua,
+                onSelected: (_) => setStateIfMounted(
+                    () => _filterStatus = _FilterStatusPostingToko.semua),
+              ),
+              ChoiceChip(
+                label: Text('Telah Diposting (${rincianSudah.length})'),
+                selected: _filterStatus == _FilterStatusPostingToko.sudah,
+                onSelected: (_) => setStateIfMounted(
+                    () => _filterStatus = _FilterStatusPostingToko.sudah),
+              ),
+              ChoiceChip(
+                label: Text('Belum Diposting (${rincianBelum.length})'),
+                selected: _filterStatus == _FilterStatusPostingToko.belum,
+                onSelected: (_) => setStateIfMounted(
+                    () => _filterStatus = _FilterStatusPostingToko.belum),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _diagnostikSetting(rincianBelum),
           Expanded(
             child: rincian.isEmpty
                 ? Center(
                     child: Text(_sibuk
                         ? 'Menghitung...'
-                        : 'Tidak ada dokumen yang belum diposting pada periode ini.'))
+                        : 'Tidak ada data untuk filter status ini.'))
                 : AppDataTable(
                     minWidth: 1160,
                     emptyText: 'Tidak ada draf.',
@@ -281,6 +326,15 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                     ],
                     rows: rincian.map((r) {
                       final bisa = r['siap'] == true;
+                      final sudahDiposting = r['sudahDiposting'] == true ||
+                          r['statusPosting'] == 'SUDAH_DIPOSTING';
+                      final statusLabel = '${r['statusLabel'] ?? ''}'.isNotEmpty
+                          ? '${r['statusLabel']}'
+                          : sudahDiposting
+                              ? 'Telah Diposting'
+                              : bisa
+                                  ? 'Belum Diposting - Siap'
+                                  : 'Belum Diposting - Tertahan';
                       return AppTableRowData(cells: [
                         AppTableCell.text('${r['tanggal'] ?? ''}', flex: 2),
                         AppTableCell.text('${r['referensi'] ?? ''}', flex: 3),
@@ -288,37 +342,50 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
                             _uang.format((r['nilai'] as num?)?.toDouble() ?? 0),
                             flex: 2,
                             align: TextAlign.right),
-                        AppTableCell.text('${r['debet'] ?? ''}', flex: 4),
-                        AppTableCell.text('${r['kredit'] ?? ''}', flex: 4),
                         AppTableCell.text(
-                            bisa ? 'Siap diposting' : '${r['alasan'] ?? ''}',
+                            sudahDiposting
+                                ? 'Jurnal ${r['nomorJurnal'] ?? '-'}'
+                                : '${r['debet'] ?? ''}',
                             flex: 4),
+                        AppTableCell.text(
+                            sudahDiposting
+                                ? 'Posting #${r['postingHistoryId'] ?? '-'}'
+                                : '${r['kredit'] ?? ''}',
+                            flex: 4),
+                        AppTableCell.text(statusLabel, flex: 4),
                         AppTableCell(
                           flex: 4,
-                          child: bisa
-                              ? TextButton(
-                                  onPressed: _sibuk || !_bolehTerapkan
-                                      ? null
-                                      : () => _posting([r['id']]),
-                                  child: const Text('Posting'))
-                              : Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: [
-                                    TombolSesuaikanAkunPosting(
-                                      jenis: widget.jenis,
-                                      sisi: SisiAkunPosting.debet,
-                                      alasan: '${r['alasan'] ?? ''}',
-                                      ringkas: true,
+                          child: sudahDiposting
+                              ? Text(
+                                  '${r['tanggalPosting'] ?? ''}',
+                                  style: const TextStyle(
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.w600),
+                                )
+                              : bisa
+                                  ? TextButton(
+                                      onPressed: _sibuk || !_bolehTerapkan
+                                          ? null
+                                          : () => _posting([r['id']]),
+                                      child: const Text('Posting'))
+                                  : Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.debet,
+                                          alasan: '${r['alasan'] ?? ''}',
+                                          ringkas: true,
+                                        ),
+                                        TombolSesuaikanAkunPosting(
+                                          jenis: widget.jenis,
+                                          sisi: SisiAkunPosting.kredit,
+                                          alasan: '${r['alasan'] ?? ''}',
+                                          ringkas: true,
+                                        ),
+                                      ],
                                     ),
-                                    TombolSesuaikanAkunPosting(
-                                      jenis: widget.jenis,
-                                      sisi: SisiAkunPosting.kredit,
-                                      alasan: '${r['alasan'] ?? ''}',
-                                      ringkas: true,
-                                    ),
-                                  ],
-                                ),
                         ),
                       ]);
                     }).toList(),

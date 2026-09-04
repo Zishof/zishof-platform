@@ -60,14 +60,20 @@ void main() {
     expect(catalogTotal, greaterThanOrEqualTo(11000));
     expect(ingredientTotal, greaterThanOrEqualTo(1000));
     expect(readyRecipeTotal, greaterThanOrEqualTo(500));
-    final catalog = await _paged('apotik_item_cari', 'page_size');
+    final catalog = await _paged('apotik_item_cari', 'page_size',
+        extra: {'keyword': 'DEMO-OBT-'}, minimumRows: _volume + 50);
     final recipes = await _paged('apotik_resep_list', 'page_size', extra: {
       'hanya_menunggu': true,
     });
     expect(catalog.length, greaterThanOrEqualTo(_volume));
     expect(recipes.length, greaterThanOrEqualTo(_volume));
 
-    final stockAnchor = catalog.firstWhere((e) => e['kode'] == 'UJI-PCT');
+    final stockAnchor = _rows(await _call('apotik_item_cari', {
+      'keyword': 'UJI-PCT',
+      'page': 1,
+      'page_size': 10,
+    }))
+        .firstWhere((e) => e['kode'] == 'UJI-PCT');
     final stockAnchorId = _number(stockAnchor['id']).toInt();
     final stockAnchorBatches = _rows(await _call('apotik_item_batch', {
       'item_id': stockAnchorId,
@@ -93,6 +99,47 @@ void main() {
       });
     }
 
+    final controlledAnchor = _rows(await _call('apotik_item_cari', {
+      'keyword': 'UJI-CDN',
+      'page': 1,
+      'page_size': 10,
+    }))
+        .firstWhere((e) => e['kode'] == 'UJI-CDN');
+    final controlledAnchorId = _number(controlledAnchor['id']).toInt();
+    final controlledAnchorBatches = _rows(await _call('apotik_item_batch', {
+      'item_id': controlledAnchorId,
+    }));
+    final controlledUatBatchExists = controlledAnchorBatches.any((e) =>
+        e['tanggalKadaluarsa'] == '2030-12-31' &&
+        _number(e['qtyAwal']) >= 2000);
+    if (!controlledUatBatchExists) {
+      await _call('apotik_terima_barang', {
+        'no_faktur': 'UAT-TERIMA-APT-13424-CTRL-001',
+        'penyedia': 'PBF Data Sample UAT',
+        'items': [
+          {
+            'item_id': controlledAnchorId,
+            'qty': 2000,
+            'harga_beli': _number(controlledAnchor['hargaBeli']) == 0
+                ? 4000
+                : _number(controlledAnchor['hargaBeli']),
+            'tanggal_kadaluarsa': '2030-12-31',
+            'keterangan':
+                'Top-up idempoten obat terkendali untuk register UAT v1.34.24',
+          }
+        ],
+      });
+    }
+    final controlledBatches = _rows(await _call('apotik_item_batch', {
+      'item_id': controlledAnchorId,
+    }))
+        .where((e) => e['kedaluwarsa'] != true && _number(e['sisa']) >= _volume)
+        .toList()
+      ..sort((a, b) => _number(b['sisa']).compareTo(_number(a['sisa'])));
+    expect(controlledBatches, isNotEmpty,
+        reason:
+            'Obat terkendali harus memiliki batch aktif untuk 100 register');
+
     final usable = <Map<String, dynamic>>[];
     final activeBatchByItem = <int, Map<String, dynamic>>{};
     var expiredBatchRows = 0;
@@ -112,8 +159,9 @@ void main() {
       usable.add(item);
       activeBatchByItem[itemId] = active.first;
     }
-    expect(usable, isNotEmpty,
-        reason: 'Harus tersedia obat bebas dengan batch aktif');
+    expect(usable.length, greaterThanOrEqualTo(_volume),
+        reason:
+            'Harus tersedia minimal $_volume obat bebas berbeda dengan batch aktif');
 
     Map<String, dynamic> line(Map<String, dynamic> item) {
       final itemId = _number(item['id']).toInt();
@@ -128,9 +176,22 @@ void main() {
       };
     }
 
+    Map<String, dynamic> controlledLine() => {
+          'item_id': controlledAnchorId,
+          'qty': 1,
+          'harga_satuan': _number(controlledAnchor['hargaJual']),
+          'batch': [
+            {
+              'kadaluarsa_id': controlledBatches.first['kadaluarsaId'],
+              'qty': 1,
+            }
+          ],
+        };
+
     var finishedPassed = 0;
     var compoundPassed = 0;
     var combinedPassed = 0;
+    var controlledPassed = 0;
     for (var i = 0; i < _volume; i++) {
       final number = (i + 1).toString().padLeft(4, '0');
       final recipeId = recipes[i]['id'];
@@ -163,6 +224,18 @@ void main() {
       });
       if (combined['status'] == 'success') combinedPassed++;
 
+      final controlled = await _call('apotik_bayar', {
+        'kode': 'UAT-APT-13424-CTRL-$number',
+        'keterangan': 'Data sample UAT $_release - register obat terkendali',
+        'nama_dokter': 'dr. Sample UAT $number',
+        'pembeli': {
+          'nama': 'Pasien Sample Terkendali $number',
+          'alamat': 'Alamat Sample UAT Nomor $number',
+        },
+        'items': [controlledLine()],
+      });
+      if (controlled['status'] == 'success') controlledPassed++;
+
       if ((i + 1) % 10 == 0 || i == 0) {
         // ignore: avoid_print
         print('UAT_APOTIK_PROGRESS=${i + 1}/$_volume');
@@ -171,6 +244,7 @@ void main() {
     expect(finishedPassed, _volume);
     expect(compoundPassed, _volume);
     expect(combinedPassed, _volume);
+    expect(controlledPassed, _volume);
 
     final idempotent = await _call('apotik_bayar', {
       'kode': 'UAT-APT-13424-JADI-0001',
@@ -195,6 +269,10 @@ void main() {
       'hari_ke_depan': 1095,
       'page_size': 100,
     });
+    expect(_rows(batchMonitor).length, greaterThanOrEqualTo(100));
+    expect(_rows(salesReport).length, greaterThanOrEqualTo(100));
+    expect(_rows(controlledReport).length, greaterThanOrEqualTo(100));
+    expect(_rows(expiryReport).length, greaterThanOrEqualTo(100));
 
     var queueStatus = 'BLOCKED_ENDPOINT_BELUM_TERPASANG';
     var queueRows = 0;
@@ -226,8 +304,9 @@ void main() {
       'transaksiObatJadiLulus': finishedPassed,
       'transaksiRacikanLulus': compoundPassed,
       'transaksiGabunganLulus': combinedPassed,
+      'transaksiTerkendaliLulus': controlledPassed,
       'totalTransaksiPenjualanLulus':
-          finishedPassed + compoundPassed + combinedPassed,
+          finishedPassed + compoundPassed + combinedPassed + controlledPassed,
       'idempotensiTransaksi': idempotent['idempoten'] == true ? 'PASS' : 'FAIL',
       'batchKedaluwarsaDitemukanSaatSeleksi': expiredBatchRows,
       'batchMonitorStatus': batchMonitor['status'],
@@ -249,7 +328,7 @@ void main() {
     );
     // ignore: avoid_print
     print('UAT_APOTIK_FINAL=${jsonEncode(summary)}');
-  });
+  }, timeout: const Timeout(Duration(minutes: 30)));
 }
 
 Future<Map<String, dynamic>> _call(
@@ -270,9 +349,9 @@ Future<Map<String, dynamic>> _call(
 }
 
 Future<List<Map<String, dynamic>>> _paged(String action, String pageSizeKey,
-    {Map<String, dynamic> extra = const {}}) async {
+    {Map<String, dynamic> extra = const {}, int minimumRows = _volume}) async {
   final all = <Map<String, dynamic>>[];
-  for (var page = 1; page <= 100 && all.length < _volume; page++) {
+  for (var page = 1; page <= 100 && all.length < minimumRows; page++) {
     final response = await _call(action, {
       ...extra,
       'page': page,

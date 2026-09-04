@@ -49,7 +49,8 @@ void main() {
     const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
-    expect(username, isNotEmpty, reason: 'POS_TEST_USERNAME wajib diisi');
+    expect(username.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue,
+        reason: 'POS_TEST_USERNAME atau POS_TEST_TOKEN wajib diisi');
     expect(password.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue,
         reason: 'POS_TEST_PASSWORD atau POS_TEST_TOKEN wajib diisi');
     expect(host, isNotEmpty, reason: 'POS_TEST_HOST wajib diisi');
@@ -126,7 +127,7 @@ void main() {
           .aksi('apotik_item_batch', {'item_id': itemPct['id']});
       final batchPct = _data(batch).firstWhere(
           (e) => e['kedaluwarsa'] != true && _angka(e['sisa']) >= 100);
-      for (var i = 1; i <= 50; i++) {
+      for (var i = 1; i <= _expectedTransactionVolume; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
           'kode': 'UAT-APT-13424-JADI-${i.toString().padLeft(3, '0')}',
           'keterangan': 'Data demo UAT v1.34.24 — obat jadi',
@@ -144,7 +145,7 @@ void main() {
         });
         if (_sukses(hasil)) jualJadi++;
       }
-      for (var i = 1; i <= 50; i++) {
+      for (var i = 1; i <= _expectedTransactionVolume; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
           'kode': 'UAT-APT-13424-RACIK-${i.toString().padLeft(3, '0')}',
           'resep_id': daftarResep[i - 1]['id'],
@@ -177,32 +178,41 @@ void main() {
           .aksi('apotik_antrean_farmasi_list', {'toko_id': _tokoId});
       final kodeAda =
           _data(antreanAwal).map((e) => '${e['kodeAntrean']}').toSet();
-      for (var i = 1; i <= 50; i++) {
-        final kode = 'U${i.toString().padLeft(3, '0')}';
-        if (!kodeAda.contains(kode)) {
-          await ApiClient.instance.aksi('apotik_antrean_farmasi_simpan', {
-            'toko_id': _tokoId,
-            'kode_antrean': kode,
-            'nama_pasien': 'Pasien Demo Farmasi $i',
-            'nomor_rekam_medis': 'RM-DEMO-${i.toString().padLeft(5, '0')}',
-            'jenis': i.isEven ? 'RACIKAN' : 'JADI',
-            'loket': '${1 + (i % 4)}',
-            'catatan_publik': i % 3 == 0
-                ? 'Silakan menuju loket untuk menerima obat.'
-                : 'Obat sedang disiapkan oleh petugas farmasi.',
-            'obat': [
-              {
-                'nama': i.isEven ? 'Racikan Demo' : 'Obat Jadi Demo',
-                'jumlah': '${1 + (i % 3)} bungkus'
-              }
-            ],
-          });
+      for (final jenis in const ['JADI', 'RACIKAN']) {
+        for (var i = 1; i <= 100; i++) {
+          final kode =
+              '${jenis == 'JADI' ? 'J' : 'R'}${i.toString().padLeft(3, '0')}';
+          if (!kodeAda.contains(kode)) {
+            await ApiClient.instance.aksi('apotik_antrean_farmasi_simpan', {
+              'toko_id': _tokoId,
+              'kode_antrean': kode,
+              'nama_pasien': 'Pasien Sample $jenis $i',
+              'nomor_rekam_medis':
+                  'RM-SAMPLE-${jenis.substring(0, 1)}-${i.toString().padLeft(5, '0')}',
+              'jenis': jenis,
+              'loket': '${1 + (i % 4)}',
+              'catatan_publik': i % 3 == 0
+                  ? 'Silakan menuju loket untuk menerima obat.'
+                  : 'Obat sedang disiapkan oleh petugas farmasi.',
+              'obat': [
+                {
+                  'nama':
+                      jenis == 'JADI' ? 'Obat Jadi Sample' : 'Racikan Sample',
+                  'jumlah': '${1 + (i % 3)} bungkus'
+                }
+              ],
+            });
+          }
         }
       }
       final layar = await ApiClient.instance.aksi('apotik_antrean_farmasi_list',
           {'toko_id': _tokoId, 'untuk_layar': true});
       antreanLayar = _data(layar);
-      expect(antreanLayar.length, greaterThanOrEqualTo(50));
+      expect(antreanLayar.length, greaterThanOrEqualTo(100));
+      expect(antreanLayar.where((e) => e['jenis'] == 'JADI').length,
+          greaterThanOrEqualTo(100));
+      expect(antreanLayar.where((e) => e['jenis'] == 'RACIKAN').length,
+          greaterThanOrEqualTo(100));
       expect(layar['privasi'], 'IDENTITAS_DISAMARKAN');
       antreanServerAktif = true;
       ringkasan['identitasLayarPublik'] = layar['privasi'];
@@ -214,12 +224,19 @@ void main() {
       ringkasan['identitasLayarPublik'] = 'PRATINJAU_TERKONTROL';
     }
     ringkasan['antreanFarmasiDipastikan'] = antreanLayar.length;
+    ringkasan['antreanFarmasiBaris'] = antreanLayar.length;
+    ringkasan['antreanObatJadi'] =
+        antreanLayar.where((e) => e['jenis'] == 'JADI').length;
+    ringkasan['antreanRacikan'] =
+        antreanLayar.where((e) => e['jenis'] == 'RACIKAN').length;
     ringkasan['antreanServerAktif'] = antreanServerAktif;
 
     final laporanPenjualan = await ApiClient.instance
         .aksi('apotik_laporan_penjualan', {'page_size': 100});
     final laporanKedaluwarsa = await ApiClient.instance.aksi(
         'apotik_laporan_kedaluwarsa', {'hari_ke_depan': 365, 'page_size': 100});
+    expect(_data(laporanPenjualan).length, greaterThanOrEqualTo(100));
+    expect(_data(laporanKedaluwarsa).length, greaterThanOrEqualTo(100));
     ringkasan['laporanPenjualanStatus'] = laporanPenjualan['status'];
     ringkasan['laporanPenjualanBaris'] = _data(laporanPenjualan).length;
     ringkasan['laporanKedaluwarsaStatus'] = laporanKedaluwarsa['status'];
@@ -305,7 +322,7 @@ List<Map<String, dynamic>> _data(Map<String, dynamic> hasil) =>
 bool _sukses(Map<String, dynamic> hasil) =>
     hasil['status'] == 'success' || hasil['status'] == '00';
 
-List<Map<String, dynamic>> _buatAntreanPratinjau() => List.generate(50, (i) {
+List<Map<String, dynamic>> _buatAntreanPratinjau() => List.generate(100, (i) {
       final nomor = i + 1;
       return <String, dynamic>{
         'kodeAntrean': 'U${nomor.toString().padLeft(3, '0')}',
