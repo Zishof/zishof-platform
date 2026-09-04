@@ -38,6 +38,13 @@ Revisi penyajian terakhir merapikan seluruh diagram use case. Hubungan dari akto
 memakai satu jalur cabang di area kosong dan kepala panah berhenti sebelum batas node. Tidak ada
 lagi garis yang melintasi kotak proses atau teks seperti pada susunan horizontal sebelumnya.
 
+Revisi UAT lanjutan menambahkan batch nyata `UAT-E2E-POS-20260904-R2` dan
+`UAT-E2E-KUL-20260904-R2`, masing-masing 100 dokumen. Tiga screenshot panel akun yang semula
+memperlihatkan keadaan kosong diganti dengan bukti pratinjau berisi data, akun Debet/Kredit,
+nilai, status siap, dan tombol koreksi. Seluruh laporan juga diambil ulang memakai renderer kolom
+fleksibel yang memenuhi lebar layar sampai sisi kanan; kolom uraian menjadi lebih mudah dibaca
+dan angka yang dapat ditelusuri tetap rata kanan serta dapat diklik pada seluruh area selnya.
+
 ## Perubahan aplikasi
 
 ### 1. Asal akun Debet dan Kredit terlihat di layar
@@ -100,6 +107,15 @@ Integration test baru atau diperbarui mencakup:
 - smoke test Akuntansi, Jurnal Umum, dan enam laporan;
 - ukuran permukaan Windows 2560 × 1392 untuk bukti layar penuh.
 
+### 6. Tata letak penuh untuk seluruh laporan
+
+Renderer generik laporan tidak lagi memberi lebar tetap 150 piksel pada setiap kolom. Semua
+laporan katalog—termasuk Laba Rugi, Neraca, Arus Kas, Keseluruhan Jurnal, Buku Besar, dan Neraca
+Saldo—sekarang membagi ruang secara proporsional: uraian/nama mendapat porsi terbesar dan angka
+mendapat porsi yang stabil di sisi kanan. Perubahan dilakukan pada satu renderer bersama sehingga
+berlaku pula pada laporan lain tanpa kode khusus per judul. Sel angka yang bergaris bawah juga
+memenuhi seluruh lebar kolom sehingga target klik untuk membuka data penyusun lebih jelas.
+
 ## Akun contoh yang diverifikasi
 
 | Peran akun | Kode dan nama |
@@ -122,19 +138,20 @@ Periode bukti: 1–30 September 2026.
 
 | Pemeriksaan | Target | Aktual | Status |
 |---|---:|---:|---|
-| Data Penjualan | 100–10.000 | 102 transaksi | LULUS |
-| Data Kulakan | 100–10.000 | 207 faktur kumulatif | LULUS |
-| Batch Kulakan baru | minimal 100 | 100 faktur | LULUS |
-| Posting Penjualan | tertahan 0 | 102/102; Rp51.154.000 | LULUS |
-| Posting HPP | tertahan 0 | 2/2; Rp41.009.014 | LULUS |
+| Data Penjualan | 100–10.000 | 202 transaksi kumulatif | LULUS |
+| Data Kulakan | 100–10.000 | 307 faktur kumulatif | LULUS |
+| Batch Penjualan R2 | minimal 100 | 100 transaksi; Rp49.849.500 | LULUS |
+| Batch Kulakan R2 | minimal 100 | 100 faktur; Rp112.500.000 | LULUS |
+| Posting Penjualan R2 | tertahan 0 | 100/100; Rp49.849.500 | LULUS |
+| Posting HPP R2 | tertahan 0 | 100 transaksi → 1 agregat; 199 unit; Rp39.800.000 | LULUS |
 | Posting Kulakan | tertahan 0 | 100/100; Rp112.500.000 | LULUS |
 | Produk tanpa Master Aset | 0 | 0 | LULUS |
 | Produk tanpa akun Persediaan | 0 | 0 | LULUS |
 | Jenis Produk tanpa Pendapatan | 0 | 0 | LULUS |
 | Jenis Produk tanpa HPP | 0 | 0 | LULUS |
 | Penyedia tanpa akun Utang | 0 | 0 | LULUS |
-| Keseimbangan jurnal | selisih Rp0 | Debet=Kredit Rp842.678.014 | LULUS |
-| Jurnal tidak seimbang | 0 | 0 dari 2.901 baris | LULUS |
+| Keseimbangan jurnal | selisih Rp0 | Debet=Kredit Rp1.044.827.514 | LULUS |
+| Jurnal tidak seimbang | 0 | 0 dari 3.303 baris | LULUS |
 | Laporan | 6/6 | 6/6 sampai akhir/terbawah | LULUS |
 
 Urutan UAT yang dibuktikan adalah transaksi Penjualan POS → histori Penjualan → histori
@@ -164,7 +181,9 @@ Audit awal menemukan selisih Rp2.400.000 pada jurnal LPJ Kas Besar nomor
 tetapi kehilangan Debet beban Rp2.400.000. Logika server telah dikoreksi agar akun beban rincian
 selalu dipopulasi. Sebanyak 103 LPJ Kas Besar kemudian dibatalkan postingnya secara terkontrol
 dan diposting ulang. Audit pascaretest menemukan nol jurnal tidak seimbang dan total seluruh
-baris kembali Debet=Kredit Rp842.678.014.
+baris pada tahap tersebut kembali Debet=Kredit Rp842.678.014. Setelah batch R2 Penjualan, HPP,
+dan Kulakan diposting, audit akhir meningkat menjadi 3.303 baris dengan total Debet dan Kredit
+masing-masing Rp1.044.827.514 serta selisih tetap Rp0.
 
 ## Verifikasi server
 

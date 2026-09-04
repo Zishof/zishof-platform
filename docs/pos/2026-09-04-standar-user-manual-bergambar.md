@@ -22,6 +22,21 @@ dan dokumen UAT bergambar yang diterbitkan atau diterbitkan ulang setelah 4 Sept
 - Dua tangkapan layar yang berbeda tidak boleh memakai isi penjelasan yang sama. Struktur judul
   boleh konsisten, tetapi konteks, cara membaca, tindakan, makna akuntansi, dan hasil UAT harus
   spesifik terhadap bukti pada layar tersebut.
+- Layar daftar transaksi, pratinjau posting, buku besar, dan laporan tidak boleh diterbitkan dalam
+  keadaan kosong apabila tujuan UAT adalah membuktikan alur data. Jalankan filter, tombol
+  **Pratinjau**, **Muat ulang**, atau **Tampilkan** terlebih dahulu dan tunggu pemuatan selesai.
+- Untuk UAT berbasis volume, siapkan sedikitnya 100 record pada setiap sumber transaksi utama.
+  Jika aplikasi secara sah mengagregasi record—misalnya HPP merangkum banyak nota per produk—
+  screenshot dan penjelasan harus menyebut jumlah transaksi sumber, kuantitas, jumlah agregat,
+  dan nilai agar layar tidak disalahartikan sebagai kekurangan data.
+- Bukti end-to-end harus dibagi menjadi praposting, hasil posting, dan pascaposting. Screenshot
+  praposting memperlihatkan data serta akun; screenshot pascaposting membuktikan antrean bersih
+  dan laporan telah berubah. Dilarang memakai keadaan kosong pascaposting sebagai satu-satunya
+  bukti menu posting.
+- Tabel laporan keuangan dan laporan lain harus memanfaatkan lebar area kerja sampai sisi kanan.
+  Kolom uraian diberi ruang lebih besar, kolom angka tetap rata kanan, dan area angka yang dapat
+  diklik harus memenuhi lebar sel. Screenshot laporan wajib diambil setelah tata letak penuh ini
+  aktif agar keterangan maupun nilai tidak menumpuk di sisi kiri layar.
 - Use case, flowchart, dan aliran data/ERD ditempatkan setelah penjelasan proses yang
   bersangkutan dan menggunakan istilah bisnis yang konsisten dengan layar aplikasi.
 - Konektor diagram harus memakai ruang kosong di antara node. Garis dan kepala panah tidak

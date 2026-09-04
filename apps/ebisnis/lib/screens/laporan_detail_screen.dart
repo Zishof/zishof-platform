@@ -488,7 +488,10 @@ class _TabelLaporan extends StatefulWidget {
 }
 
 class _TabelLaporanState extends State<_TabelLaporan> {
-  static const _lebarKolom = 150.0;
+  // Lebar tetap hanya dipakai di dialog penyusun yang memang bisa digulir
+  // horizontal. Tabel laporan utama memakai flex agar seluruh ruang layar
+  // sampai sisi kanan terisi dan uraian tidak berhimpitan di sisi kiri.
+  static const _lebarKolomDialog = 150.0;
   static const _pageSize = 15;
 
   int _halaman = 1;
@@ -522,7 +525,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
     Widget sel(String teks, {required bool angka, required bool tebal}) {
       return SizedBox(
-        width: 150,
+        width: _lebarKolomDialog,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
           child: Text(
@@ -825,6 +828,24 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     return l.startsWith('jml') || l.startsWith('jumlah');
   }
 
+  /// Proporsi kolom generik untuk seluruh laporan katalog. Kolom uraian/nama
+  /// mendapat ruang terbesar, sedangkan angka tetap cukup lebar dan rata
+  /// kanan. Karena renderer ini dipakai semua laporan, satu aturan ini juga
+  /// berlaku untuk Laba Rugi, Neraca, Arus Kas, Buku Besar, serta laporan lain.
+  int _flexKolom(Map<String, dynamic> kolom, int index) {
+    final label = '${kolom['l'] ?? ''}'.trim().toLowerCase();
+    final tipe = '${kolom['t'] ?? 'text'}';
+    if (tipe == 'num') return 2;
+    if (index == 0 ||
+        label.contains('keterangan') ||
+        label.contains('deskripsi') ||
+        label.contains('uraian') ||
+        label.contains('nama')) {
+      return 4;
+    }
+    return 3;
+  }
+
   String _fmtNum(num? v, bool hitung) {
     if (v == null) return '';
     final neg = v < 0;
@@ -890,7 +911,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
       return List.generate(kolom.length, (i) {
         return AppTableCell.text(
           i == 0 ? (labelAwal ?? '') : '',
-          width: _lebarKolom,
+          flex: _flexKolom(kolom[i], i),
           maxLines: 2,
           style: i == 0 ? styleAwal : null,
         );
@@ -914,13 +935,13 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // punya rincian server (mis. HPP Laba Rugi) dibuka rincian penyusunnya.
           if (!isNum || teksSel.isEmpty) {
             return AppTableCell.text(teksSel,
-                width: _lebarKolom,
+                flex: _flexKolom(kolom[i], i),
                 align: isNum ? TextAlign.right : TextAlign.left,
                 maxLines: 2,
                 style: gaya);
           }
           return AppTableCell(
-            width: _lebarKolom,
+            flex: _flexKolom(kolom[i], i),
             align: TextAlign.right,
             child: _SelAngkaRincian(
               teks: teksSel,
@@ -970,7 +991,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // ANGKA SUBTOTAL IKUT DAPAT DIKLIK -- padanan data-grup versi JSP.
           if (isNum && teks.isNotEmpty) {
             return AppTableCell(
-              width: _lebarKolom,
+              flex: _flexKolom(kolom[i], i),
               align: TextAlign.right,
               child: _SelAngkaRincian(
                 teks: teks,
@@ -987,7 +1008,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           }
           return AppTableCell.text(
             teks,
-            width: _lebarKolom,
+            flex: _flexKolom(kolom[i], i),
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
             style: gayaTotal,
@@ -1052,7 +1073,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           // ANGKA GRAND TOTAL IKUT DAPAT DIKLIK -- padanan data-total versi JSP.
           if (isNum && teks.isNotEmpty) {
             return AppTableCell(
-              width: _lebarKolom,
+              flex: _flexKolom(kolom[i], i),
               align: TextAlign.right,
               child: _SelAngkaRincian(
                 teks: teks,
@@ -1069,7 +1090,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           }
           return AppTableCell.text(
             teks,
-            width: _lebarKolom,
+            flex: _flexKolom(kolom[i], i),
             align: isNum ? TextAlign.right : TextAlign.left,
             maxLines: 2,
             style: gayaGrand,
@@ -1085,9 +1106,6 @@ class _TabelLaporanState extends State<_TabelLaporan> {
     final rows = mulai >= semuaBaris.length
         ? <AppTableRowData>[]
         : semuaBaris.sublist(mulai, sampai);
-    final minWidth =
-        (_lebarKolom * kolom.length) < 760 ? 760.0 : _lebarKolom * kolom.length;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1124,13 +1142,17 @@ class _TabelLaporanState extends State<_TabelLaporan> {
             ),
           ),
         AppDataTable(
-          minWidth: minWidth,
+          minWidth: 760,
           emptyText: 'Tidak ada data untuk halaman ini.',
           columns: kolom
-              .map((k) => AppTableColumn(
-                    k['l'] as String? ?? '',
-                    width: _lebarKolom,
-                    align: k['t'] == 'num' ? TextAlign.right : TextAlign.left,
+              .asMap()
+              .entries
+              .map((entry) => AppTableColumn(
+                    entry.value['l'] as String? ?? '',
+                    flex: _flexKolom(entry.value, entry.key),
+                    align: entry.value['t'] == 'num'
+                        ? TextAlign.right
+                        : TextAlign.left,
                   ))
               .toList(),
           rows: rows,
@@ -1281,23 +1303,26 @@ class _SelAngkaRincian extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Klik untuk melihat data penghitungannya',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(5),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-            child: Text(
-              teks,
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: gaya.copyWith(
-                decoration: TextDecoration.underline,
-                decorationStyle: TextDecorationStyle.dotted,
+    return SizedBox(
+      width: double.infinity,
+      child: Tooltip(
+        message: 'Klik untuk melihat data penghitungannya',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(5),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Text(
+                teks,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: gaya.copyWith(
+                  decoration: TextDecoration.underline,
+                  decorationStyle: TextDecorationStyle.dotted,
+                ),
               ),
             ),
           ),

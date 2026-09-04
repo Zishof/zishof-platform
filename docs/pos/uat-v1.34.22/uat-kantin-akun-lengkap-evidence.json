@@ -1,6 +1,6 @@
 {
   "tanggal_uat": "2026-09-04",
-  "build_uat": "eBisnis POS 1.34.21+183",
+  "build_uat": "eBisnis POS 1.34.22+184",
   "periode": {
     "mulai": "2026-09-01",
     "sampai": "2026-09-30"
@@ -14,31 +14,40 @@
     "hpp": "510.900 - BEBAN POKOK PENJUALAN TOKO"
   },
   "volume_data": {
-    "penjualan": 102,
-    "kulakan": 207,
-    "kulakan_dalam_posting": 202,
+    "penjualan": 202,
+    "penjualan_batch_tambahan": 100,
+    "kulakan": 307,
+    "kulakan_batch_tambahan": 100,
+    "posting_baru": 201,
     "batas_minimum": 100,
     "batas_maksimum": 10000
   },
   "penjualan": {
-    "siap": 102,
-    "diposting": 102,
+    "siap": 100,
+    "diposting": 100,
     "tertahan": 0,
-    "nilai": 51154000
+    "nilai": 49849500,
+    "diposting_kumulatif": 202,
+    "pendapatan_laporan": 105753500,
+    "prefix": "UAT-E2E-POS-20260904-R2"
   },
   "hpp": {
-    "siap": 2,
-    "diposting": 2,
+    "transaksi_sumber": 100,
+    "qty": 199,
+    "agregat_produk": 1,
+    "siap": 1,
+    "diposting": 1,
     "tertahan": 0,
-    "nilai": 41009014
+    "nilai": 39800000,
+    "saldo_hpp_laporan": 357454014
   },
   "kulakan": {
     "siap": 100,
     "diposting": 100,
     "tertahan": 0,
     "nilai": 112500000,
-    "diposting_kumulatif": 202,
-    "nilai_kumulatif": 335020000
+    "diposting_kumulatif": 302,
+    "prefix": "UAT-E2E-KUL-20260904-R2"
   },
   "audit_pascaposting": {
     "penjualan_belum_posting": 0,
@@ -51,19 +60,21 @@
     "penyedia_tanpa_utang": 0
   },
   "keseimbangan_jurnal": {
-    "jumlah_baris": 2901,
-    "total_debet": 842678014,
-    "total_kredit": 842678014,
+    "jumlah_baris": 3303,
+    "total_debet": 1044827514,
+    "total_kredit": 1044827514,
     "selisih": 0,
     "jurnal_tidak_seimbang": 0,
-    "koreksi_terverifikasi": "LPJ Kas Besar diposting ulang setelah akun beban rincian dipulihkan; 103 dokumen sukses"
+    "koreksi_terverifikasi": "Batch tambahan menghasilkan 100 posting Penjualan, 1 posting HPP agregat dari 100 transaksi, dan 100 posting Kulakan; seluruh 3.303 baris jurnal tetap Debet=Kredit Rp1.044.827.514."
   },
   "tangkapan_layar": {
     "mode": "Windows maximized / full working area",
     "lebar_pixel": 2560,
     "tinggi_pixel": 1392,
     "jumlah_file_praposting": 9,
-    "jumlah_file_pascaposting": 27,
+    "jumlah_file_panel_akun_berisi": 13,
+    "jumlah_file_pascaposting": 28,
+    "jumlah_dipilih_manual": 27,
     "cakupan_laporan": "halaman awal dan halaman terakhir/terbawah untuk setiap laporan"
   },
   "laporan": [

@@ -154,6 +154,13 @@ void main() {
       return;
     }
 
+    const hanyaDraftKantin = bool.fromEnvironment('POS_TEST_DRAFT_ONLY');
+    if (hanyaDraftKantin) {
+      await _bukaMenuDanFoto(
+          tester, 'Draft Jurnal', '08-draft-jurnal-kantin-volume');
+      return;
+    }
+
     const hanyaJurnal = bool.fromEnvironment('POS_TEST_JURNAL_ONLY');
     if (hanyaJurnal) {
       await _ketukSidebar(tester, 'Jurnal Umum');
@@ -408,6 +415,40 @@ Future<void> _bukaMenuDanFoto(
     await tester.pump(const Duration(seconds: 1));
   }
   final stabil = await _tungguTanpaSpinner(tester, detik: 90);
+  if (label == 'Posting Penjualan' || label == 'Posting HPP') {
+    final pratinjau = find.text('Pratinjau');
+    expect(pratinjau, findsWidgets,
+        reason: 'Tombol Pratinjau $label tidak tersedia');
+    await tester.tap(pratinjau.last);
+    final selesai = await _tungguTanpaSpinner(tester, detik: 120);
+    expect(selesai, isTrue, reason: 'Pratinjau $label terus memuat');
+    expect(find.textContaining('Jalankan pratinjau'), findsNothing,
+        reason: '$label belum menampilkan data pratinjau');
+    if (label == 'Posting Penjualan') {
+      expect(find.textContaining('100 transaksi'), findsWidgets,
+          reason: 'Batch 100 transaksi Penjualan belum tampil');
+    } else {
+      expect(find.textContaining('ABC Kecap Manis'), findsWidgets,
+          reason: 'Rincian HPP untuk batch 100 transaksi belum tampil');
+    }
+    await _ambilGambar(tester, '$namaGambar-pratinjau-berisi');
+  }
+  if (label == 'Posting Kulakan') {
+    final muatUlang = find.text('Muat ulang');
+    final muatDraf = find.text('Muat draf');
+    final pemicu = muatUlang.evaluate().isNotEmpty ? muatUlang : muatDraf;
+    expect(pemicu, findsWidgets,
+        reason: 'Tombol pemuat draf Posting Kulakan tidak tersedia');
+    await tester.tap(pemicu.last);
+    final selesai = await _tungguTanpaSpinner(tester, detik: 120);
+    expect(selesai, isTrue, reason: 'Draf Posting Kulakan terus memuat');
+    expect(find.textContaining('Tidak ada dokumen yang belum diposting'),
+        findsNothing,
+        reason: 'Batch 100 faktur Kulakan belum tampil');
+    expect(find.textContaining('100 dokumen'), findsWidgets,
+        reason: 'Ringkasan 100 faktur Kulakan belum tampil');
+    await _ambilGambar(tester, '$namaGambar-pratinjau-berisi');
+  }
   if (label == 'Tutup Buku (Laba Ditahan)') {
     final sampai = find.textContaining('Sampai 2026-09-');
     if (sampai.evaluate().isNotEmpty) {
