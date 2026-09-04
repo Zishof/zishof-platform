@@ -1,9 +1,9 @@
 # Laporan UAT Kasir Apotik v1.34.25
 
-Tanggal pelaksanaan: 5 September 2026 (WIB)  
-Rilis yang diuji: `apotik-v1.34.25+187`  
-Status akhir: **PASS**  
-Kebutuhan deploy ulang: **Tidak**
+- Tanggal pelaksanaan: 5 September 2026 (WIB)
+- Rilis yang diuji: `apotik-v1.34.25+187`
+- Status akhir: **PASS**
+- Kebutuhan deploy ulang: **Tidak**
 
 ## Ringkasan hasil
 
@@ -56,4 +56,3 @@ Observasi ini tidak membutuhkan deploy aplikasi, tetapi metrik reverse proxy/Tom
 - Ringkasan mesin: `docs/pos-apotik-emedik/uat-v1.34.25/cashier-retest/uat-kasir-summary.json`
 - Commit implementasi frontend: `af8a54f`
 - Revisi backend terakhir untuk resep campuran atomik: `r84380`
-
