@@ -2,6 +2,12 @@
 
 Untuk melanjutkan di komputer/sesi lain. Semua **sumber sudah di git** (bukan di svn).
 
+> **Baseline dokumentasi wajib:** sebelum membuat atau memperbarui Word, PDF,
+> PPTX, screenshot, atau diagram UAT, baca
+> [`BASELINE_DOKUMENTASI_UAT.md`](BASELINE_DOKUMENTASI_UAT.md). Narasi harus unik
+> dan spesifik terhadap layar, tanpa target/label jumlah kata, dan seluruh diagram
+> wajib bebas overlap setelah render visual.
+
 ## Status repo saat handover (semua clean & ter-push)
 
 | Repo | Lokasi | Branch | HEAD | Remote |

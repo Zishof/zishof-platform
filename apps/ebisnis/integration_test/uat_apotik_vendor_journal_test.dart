@@ -9,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 const _marker = 'UAT Apotik v1.34.23 - pembayaran vendor';
 const _outputDir = String.fromEnvironment(
   'POS_TEST_OUTPUT_DIR',
-  defaultValue: r'C:\tmp\uat-apotik-v1.34.23',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.24',
 );
 
 void main() {
@@ -19,17 +19,24 @@ void main() {
       (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    final login = await ApiClient.instance.aksi('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-Apotik-Vendor-Jurnal',
-    });
-    await ApiClient.instance.simpanToken('${login['token']}');
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      expect(username, isNotEmpty);
+      expect(password, isNotEmpty);
+      final login = await ApiClient.instance.aksi('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-Apotik-Vendor-Jurnal',
+      });
+      await ApiClient.instance.simpanToken('${login['token']}');
+    }
 
     Future<Map<String, dynamic>> call(
             String action, Map<String, dynamic> body) async =>

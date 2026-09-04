@@ -19,21 +19,28 @@ void main() {
   testWidgets('UAT E2E Apotik v1.34.24 pada server nyata', (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     expect(_volume, inInclusiveRange(100, 10000));
-    expect(username, isNotEmpty);
-    expect(password, isNotEmpty);
+    expect(username.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue,
+        reason: 'POS_TEST_USERNAME atau POS_TEST_TOKEN wajib diisi');
+    expect(password.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue,
+        reason: 'POS_TEST_PASSWORD atau POS_TEST_TOKEN wajib diisi');
     expect(host, isNotEmpty);
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    final login = await _call('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-Apotik-v1.34.24',
-    });
-    await ApiClient.instance.simpanToken('${login['token']}');
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      final login = await _call('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-Apotik-v1.34.24',
+      });
+      await ApiClient.instance.simpanToken('${login['token']}');
+    }
 
     final catalogPage =
         await _call('apotik_item_cari', {'page': 1, 'page_size': 100});

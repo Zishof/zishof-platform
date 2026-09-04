@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/main.dart' as app;
+import 'package:ebisnis/product_profile.dart';
 import 'package:ebisnis/screens/kasir_screen.dart';
 import 'package:ebisnis/screens/login_screen.dart';
 import 'package:ebisnis/services/server_config.dart';
@@ -20,30 +21,40 @@ void main() {
 
   testWidgets('UAT bergambar Pengadaan volume termin dan non-termin',
       (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final oldError = FlutterError.onError;
     addTearDown(() => FlutterError.onError = oldError);
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    Map<String, dynamic>? login;
-    Object? loginError;
-    for (var attempt = 1; attempt <= 4 && login == null; attempt++) {
-      try {
-        login = await ApiClient.instance.aksi('login', {
-          'username': username,
-          'password': password,
-          'labelPerangkat': 'UAT-Manual-Pengadaan-Volume',
-        });
-      } catch (e) {
-        loginError = e;
-        await Future<void>.delayed(Duration(seconds: attempt));
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      Map<String, dynamic>? login;
+      Object? loginError;
+      for (var attempt = 1; attempt <= 4 && login == null; attempt++) {
+        try {
+          login = await ApiClient.instance.aksi('login', {
+            'username': username,
+            'password': password,
+            'labelPerangkat': 'UAT-Manual-Pengadaan-Volume',
+          });
+        } catch (e) {
+          loginError = e;
+          await Future<void>.delayed(Duration(seconds: attempt));
+        }
       }
+      if (login == null) throw StateError('Login UAT gagal: $loginError');
+      await ApiClient.instance.simpanToken(login['token'] as String);
     }
-    if (login == null) throw StateError('Login UAT gagal: $loginError');
-    await ApiClient.instance.simpanToken(login['token'] as String);
+    AppProductProfile.aktif = const AppProductProfile.apotik();
     app.main();
     await _wait(tester, () => find.byType(KasirScreen).evaluate().isNotEmpty,
         reason: 'Layar POS belum siap', seconds: 180);

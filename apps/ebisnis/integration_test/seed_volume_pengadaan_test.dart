@@ -10,7 +10,7 @@ const _tokoId = 1;
 const _prefix = 'UAT-VOL-PROC-APT13423-R1-20260904';
 const _outputDir = String.fromEnvironment(
   'POS_TEST_OUTPUT_DIR',
-  defaultValue: r'C:\tmp\uat-apotik-v1.34.23',
+  defaultValue: r'C:\tmp\uat-apotik-v1.34.24',
 );
 
 void main() {
@@ -20,18 +20,25 @@ void main() {
       (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('PROC_UAT_VOLUME', defaultValue: 2);
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    final login = await ApiClient.instance.aksi('login', {
-      'username': username,
-      'password': password,
-      'labelPerangkat': 'UAT-Volume-Pengadaan',
-    });
-    await ApiClient.instance.simpanToken(login['token'] as String);
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      expect(username, isNotEmpty);
+      expect(password, isNotEmpty);
+      final login = await ApiClient.instance.aksi('login', {
+        'username': username,
+        'password': password,
+        'labelPerangkat': 'UAT-Volume-Pengadaan',
+      });
+      await ApiClient.instance.simpanToken(login['token'] as String);
+    }
 
     Future<Map<String, dynamic>> call(
         String action, Map<String, dynamic> body) async {

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/main.dart' as app;
+import 'package:ebisnis/product_profile.dart';
 import 'package:ebisnis/screens/kasir_screen.dart';
 import 'package:ebisnis/screens/login_screen.dart';
 import 'package:ebisnis/screens/jurnal_umum_screen.dart';
@@ -21,36 +22,42 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('smoke UAT Akuntansi dan tangkapan layar asli', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1600, 900));
+    await tester.binding.setSurfaceSize(const Size(1920, 1080));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final penanganGalatTes = FlutterError.onError;
     addTearDown(() => FlutterError.onError = penanganGalatTes);
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
+    const tokenTersimpan = String.fromEnvironment('POS_TEST_TOKEN');
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
-    expect(username, isNotEmpty);
-    expect(password, isNotEmpty);
+    expect(username.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue);
+    expect(password.isNotEmpty || tokenTersimpan.isNotEmpty, isTrue);
     expect(host, isNotEmpty);
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
-    Map<String, dynamic>? login;
-    Object? loginError;
-    for (var attempt = 1; attempt <= 4 && login == null; attempt++) {
-      try {
-        login = await ApiClient.instance.aksi('login', {
-          'username': username,
-          'password': password,
-          'labelPerangkat': 'UAT-Manual-Akuntansi',
-        });
-      } catch (e) {
-        loginError = e;
-        await Future<void>.delayed(Duration(seconds: attempt));
+    if (tokenTersimpan.isNotEmpty) {
+      await ApiClient.instance.simpanToken(tokenTersimpan);
+    } else {
+      Map<String, dynamic>? login;
+      Object? loginError;
+      for (var attempt = 1; attempt <= 4 && login == null; attempt++) {
+        try {
+          login = await ApiClient.instance.aksi('login', {
+            'username': username,
+            'password': password,
+            'labelPerangkat': 'UAT-Manual-Akuntansi',
+          });
+        } catch (e) {
+          loginError = e;
+          await Future<void>.delayed(Duration(seconds: attempt));
+        }
       }
+      if (login == null) throw StateError('Login UAT gagal: $loginError');
+      expect(login['token'], isNotNull, reason: 'Login demo gagal: $login');
+      await ApiClient.instance.simpanToken(login['token'] as String);
     }
-    if (login == null) throw StateError('Login UAT gagal: $loginError');
-    expect(login['token'], isNotNull, reason: 'Login demo gagal: $login');
-    await ApiClient.instance.simpanToken(login['token'] as String);
+    AppProductProfile.aktif = const AppProductProfile.apotik();
     app.main();
     await _tungguSampai(
       tester,
