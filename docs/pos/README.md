@@ -6,7 +6,7 @@ berhubungan dengan POS harus dicatat di sini sebelum pekerjaan dinyatakan selesa
 
 Dokumen aktif:
 
-- [Standar tampilan profesional user manual bergambar](2026-09-04-standar-user-manual-bergambar.md)
+- [Baseline wajib user manual dan UAT bergambar](2026-09-04-standar-user-manual-bergambar.md)
 - [ATURAN WAJIB: Local-first untuk semua modul](ATURAN-WAJIB-LOCAL-FIRST.md)
 - [Publikasi eBisnis POS Desktop 1.34.16 — 1 September 2026](2026-09-01-publikasi-desktop-ebisnis-1.34.16.md)
 - [Handover lanjutan Local-First dan runtime Produksi — 29 Agustus 2026](2026-08-29-handover-lanjutan-local-first-dan-runtime-produksi.md)

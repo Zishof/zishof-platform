@@ -1,7 +1,7 @@
-# Standar tampilan profesional user manual bergambar
+# Baseline wajib user manual dan UAT bergambar
 
-Standar ini berlaku untuk seluruh user manual dan dokumen UAT bergambar yang diterbitkan
-setelah 4 September 2026.
+**Status: CATATAN PENTING / BASELINE WAJIB.** Standar ini berlaku untuk seluruh user manual
+dan dokumen UAT bergambar yang diterbitkan atau diterbitkan ulang setelah 4 September 2026.
 
 ## Aturan tampilan
 
@@ -14,6 +14,14 @@ setelah 4 September 2026.
 - Penjelasan tetap harus rinci, operasional, mudah diikuti, serta mencakup tujuan, aktor,
   prasyarat, langkah kerja, sumber data, relasi akun, kontrol, hasil UAT, penanganan masalah,
   dan keterlacakan audit.
+- Panjang penjelasan mengikuti kebutuhan layar, bukan kuota. Dilarang menambah paragraf umum
+  atau mengulang isi layar lain hanya untuk membuat bagian terlihat panjang.
+- Setiap penjelasan harus menyebut unsur yang benar-benar terlihat atau dibuktikan oleh layar,
+  misalnya nama menu, filter, periode, status, jumlah transaksi, nilai, akun, tombol, halaman,
+  posisi scroll, hasil validasi, atau tindakan pengguna yang relevan.
+- Dua tangkapan layar yang berbeda tidak boleh memakai isi penjelasan yang sama. Struktur judul
+  boleh konsisten, tetapi konteks, cara membaca, tindakan, makna akuntansi, dan hasil UAT harus
+  spesifik terhadap bukti pada layar tersebut.
 - Use case, flowchart, dan aliran data/ERD ditempatkan setelah penjelasan proses yang
   bersangkutan dan menggunakan istilah bisnis yang konsisten dengan layar aplikasi.
 - Konektor diagram harus memakai ruang kosong di antara node. Garis dan kepala panah tidak
@@ -21,11 +29,10 @@ setelah 4 September 2026.
 
 ## Kontrol penerbitan
 
-Generator boleh memeriksa tingkat kedalaman penjelasan secara internal, tetapi hasil hitungan
-tersebut tidak boleh dicetak di dokumen pengguna. Sebelum Word dan PDF diterbitkan, lakukan
-pemeriksaan teks untuk memastikan label internal tidak ikut tampil, lalu render seluruh halaman
-untuk memeriksa judul, gambar, tabel, diagram, arah dan jarak konektor, page break, header,
-dan footer.
+Generator harus memeriksa cakupan seluruh layar, paragraf kosong, duplikasi, dan kemiripan isi.
+Pemeriksaan tidak boleh memaksa panjang tertentu dan metrik internal tidak boleh dicetak di
+dokumen pengguna. Sebelum Word dan PDF diterbitkan, render seluruh halaman untuk memeriksa
+judul, gambar, tabel, diagram, arah dan jarak konektor, page break, header, dan footer.
 
 Jika dokumen lama diterbitkan ulang, aturan ini diterapkan saat penggantian artefak. Nama berkas
 dan versi boleh dipertahankan ketika revisi hanya memperbaiki penyajian tanpa mengubah hasil UAT.

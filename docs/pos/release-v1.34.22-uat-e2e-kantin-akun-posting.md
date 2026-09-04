@@ -29,6 +29,11 @@ halaman A4 landscape dan memuat 27 tangkapan layar penuh, 81 diagram, serta penj
 operasional terperinci untuk setiap tangkapan layar. Isinya menggabungkan manual pengguna, skenario UAT,
 use case, flowchart, aliran data/ERD ringkas, bukti hasil, prosedur koreksi, dan lembar sign-off.
 
+Seluruh 27 halaman penjelasan kini ditulis khusus berdasarkan bukti pada layar masing-masing.
+Panjang uraian mengikuti kebutuhan proses; teks umum yang sebelumnya berulang telah dihapus.
+Setiap bagian membahas konteks, cara membaca, tindakan pengguna, makna akuntansi, dan hasil UAT
+yang relevan dengan menu, angka, akun, status, atau laporan yang sedang ditampilkan.
+
 Revisi penyajian terakhir merapikan seluruh diagram use case. Hubungan dari aktor sekarang
 memakai satu jalur cabang di area kosong dan kepala panah berhenti sebelum batas node. Tidak ada
 lagi garis yang melintasi kotak proses atau teks seperti pada susunan horizontal sebelumnya.
