@@ -28,7 +28,7 @@ class PengadaanPajakScreen extends StatefulWidget {
 }
 
 class _PengadaanPajakScreenState extends State<PengadaanPajakScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final TabController _tabLuar;
   static final _fmtRp =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);

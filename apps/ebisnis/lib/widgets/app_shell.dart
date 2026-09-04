@@ -1113,6 +1113,11 @@ Widget _halamanAkuntansi(
 Widget _postingKeuangan(
         MenuEBisnis menu, String judul, String subjudul, String idPendukung) =>
     LaporanScreen(
+      // Semua submenu memakai tipe widget yang sama. Key berbeda memaksa state
+      // dibuat ulang saat pengguna berpindah Penjualan <-> HPP <-> Kulakan;
+      // tanpa ini tab lama tetap menempel dan layar dapat menampilkan data menu
+      // sebelumnya.
+      key: ValueKey<String>('posting-keuangan:$idPendukung'),
       aksiKatalog: 'laporan_keuangan_katalog',
       menuAktif: menu,
       judul: judul,

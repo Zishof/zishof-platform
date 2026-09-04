@@ -7,6 +7,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pemilih_akun.dart';
+import '../widgets/pemilih_anggaran.dart';
 import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/aksi_baris_menu.dart';
@@ -372,9 +373,8 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                 OutlinedButton.icon(
                     // Posting massal memakai wewenang yang sama dgn posting
                     // satu baris: approve, bukan create.
-                    onPressed: _sibuk || !_boleh('approve')
-                        ? null
-                        : _postingSemuaDraf,
+                    onPressed:
+                        _sibuk || !_boleh('approve') ? null : _postingSemuaDraf,
                     icon: const Icon(Icons.playlist_add_check, size: 18),
                     label: Text('Posting Semua Draf ($draf)')),
               if (_sibuk)
@@ -420,6 +420,7 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                         AppTableColumn('Kode', flex: 3),
                         AppTableColumn('Tanggal', flex: 2),
                         AppTableColumn('Keterangan', flex: 5),
+                        AppTableColumn('Mata Anggaran', flex: 4),
                         AppTableColumn('Debet',
                             flex: 2, align: TextAlign.right),
                         AppTableColumn('Kredit',
@@ -436,6 +437,17 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                               '${j['keterangan'] ?? ''}'
                               '${(j['jumlahBaris'] ?? 0) > 0 ? '  (${j['jumlahBaris']} baris)' : ''}',
                               flex: 5),
+                          AppTableCell.text(
+                              '${j['workspaceKode'] ?? ''}'
+                                          '${(j['workspaceKode'] ?? '').toString().isNotEmpty && (j['workspaceNama'] ?? '').toString().isNotEmpty ? ' — ' : ''}'
+                                          '${j['workspaceNama'] ?? ''}'
+                                      .trim()
+                                      .isEmpty
+                                  ? '-'
+                                  : '${j['workspaceKode'] ?? ''}'
+                                      '${(j['workspaceKode'] ?? '').toString().isNotEmpty && (j['workspaceNama'] ?? '').toString().isNotEmpty ? ' — ' : ''}'
+                                      '${j['workspaceNama'] ?? ''}',
+                              flex: 4),
                           AppTableCell.text(_rp(j['totalDebet'] as num?),
                               flex: 2, align: TextAlign.right),
                           AppTableCell.text(_rp(j['totalKredit'] as num?),
@@ -466,21 +478,19 @@ class _JurnalUmumScreenState extends State<JurnalUmumScreen> {
                               AksiBaris(
                                   ikon: Icons.check_circle_outline,
                                   label: 'Posting ke buku besar',
-                                  onTap: _sibuk ||
-                                          terposting ||
-                                          !_boleh('approve')
-                                      ? null
-                                      : () => _aksiJurnal(
-                                          j, 'jurnal_umum_posting')),
+                                  onTap:
+                                      _sibuk || terposting || !_boleh('approve')
+                                          ? null
+                                          : () => _aksiJurnal(
+                                              j, 'jurnal_umum_posting')),
                               AksiBaris(
                                   ikon: Icons.undo,
                                   label: 'Batalkan posting',
-                                  onTap: _sibuk ||
-                                          !terposting ||
-                                          !_boleh('reject')
-                                      ? null
-                                      : () => _aksiJurnal(
-                                          j, 'jurnal_umum_batal_posting')),
+                                  onTap:
+                                      _sibuk || !terposting || !_boleh('reject')
+                                          ? null
+                                          : () => _aksiJurnal(
+                                              j, 'jurnal_umum_batal_posting')),
                               AksiBaris(
                                   ikon: Icons.delete_outline,
                                   label: 'Hapus',
@@ -542,6 +552,8 @@ class _EditorJurnalState extends State<_EditorJurnal> {
   final List<_BarisJurnal> _baris = [];
   DateTime _tanggal = DateTime.now();
   int? _jenisId;
+  String? _workspaceId;
+  String? _anggaranNama;
   bool _menyimpan = false;
   String? _pesan;
 
@@ -559,6 +571,15 @@ class _EditorJurnalState extends State<_EditorJurnal> {
       }
       final jid = k['jenisTransaksiId'];
       _jenisId = jid is num ? jid.toInt() : null;
+      final wsTeks = '${k['workspaceIdTeks'] ?? ''}'.trim();
+      final wsAngka = k['workspaceId'];
+      _workspaceId = wsTeks.isNotEmpty
+          ? wsTeks
+          : wsAngka == null
+              ? null
+              : '$wsAngka';
+      final label = '${k['workspaceLabel'] ?? ''}'.trim();
+      _anggaranNama = label.isEmpty ? null : label;
     }
     if (widget.barisAwal.isEmpty) {
       _tambahBaris();
@@ -722,12 +743,15 @@ class _EditorJurnalState extends State<_EditorJurnal> {
           if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
           'tanggal': _fmtTanggal.format(_tanggal),
           'keterangan': _keterangan.text.trim(),
+          if (_workspaceId != null) 'workspaceIdTeks': _workspaceId,
+          if (_anggaranNama != null) 'workspaceNama': _anggaranNama,
         },
         body: {
           if (widget.kepala?['id'] != null) 'id': widget.kepala!['id'],
           'tanggal': _fmtTanggal.format(_tanggal),
           'keterangan': _keterangan.text.trim(),
           'jenisTransaksiId': _jenisId ?? 0,
+          if (_workspaceId != null) 'workspaceIdTeks': _workspaceId,
           'baris': baris,
         },
       );
@@ -790,7 +814,13 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                                 firstDate: DateTime(2015),
                                 lastDate: DateTime(2100));
                             if (p != null) {
-                              setStateIfMounted(() => _tanggal = p);
+                              setStateIfMounted(() {
+                                if (p.year != _tanggal.year) {
+                                  _workspaceId = null;
+                                  _anggaranNama = null;
+                                }
+                                _tanggal = p;
+                              });
                             }
                           },
                     icon: const Icon(Icons.event, size: 18),
@@ -827,6 +857,35 @@ class _EditorJurnalState extends State<_EditorJurnal> {
                       readOnly: _terkunci,
                       decoration: const InputDecoration(
                           labelText: 'Keterangan jurnal *', isDense: true),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 920,
+                    child: PemilihAnggaranField(
+                      aksiCari: 'jurnal_umum_cari_anggaran',
+                      workspaceId: _workspaceId,
+                      namaAnggaran: _anggaranNama,
+                      tahun: _tanggal.year,
+                      enabled: !_terkunci,
+                      helperText:
+                          'Opsional. Jika dipilih, nilai debet jurnal menjadi realisasi mata anggaran dan tampil di laporan realisasi.',
+                      onDipilih: (w) => setStateIfMounted(() {
+                        if (w == null) {
+                          _workspaceId = null;
+                          _anggaranNama = null;
+                          return;
+                        }
+                        _workspaceId = '${w['idTeks'] ?? w['id']}';
+                        _anggaranNama =
+                            '${w['kode'] ?? ''} — ${w['nama'] ?? ''}';
+                        final akun = (w['akunId'] as num?)?.toInt();
+                        if (akun != null &&
+                            akun > 0 &&
+                            _baris.isNotEmpty &&
+                            _baris.first.akunId == null) {
+                          _baris.first.akunId = akun;
+                        }
+                      }),
                     ),
                   ),
                 ]),

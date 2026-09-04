@@ -27,6 +27,7 @@ class PemilihAnggaranField extends StatelessWidget {
     required this.onDipilih,
     this.tahun,
     this.helperText,
+    this.enabled = true,
   });
 
   /// Nama aksi pencarian milik modul, mis. `kas_kecil_cari_anggaran`.
@@ -42,6 +43,9 @@ class PemilihAnggaranField extends StatelessWidget {
   final int? tahun;
 
   final String? helperText;
+
+  /// `false` untuk tampilan dokumen yang sudah terkunci/terposting.
+  final bool enabled;
 
   static final NumberFormat _uang = NumberFormat.decimalPattern('id');
 
@@ -71,13 +75,15 @@ class PemilihAnggaranField extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             tooltip: 'Kosongkan',
             icon: const Icon(Icons.clear, size: 18),
-            onPressed: () => onDipilih(null),
+            onPressed: enabled ? () => onDipilih(null) : null,
           ),
         TextButton(
-          onPressed: () async {
-            final pilihan = await _cari(context);
-            if (pilihan != null) onDipilih(pilihan);
-          },
+          onPressed: enabled
+              ? () async {
+                  final pilihan = await _cari(context);
+                  if (pilihan != null) onDipilih(pilihan);
+                }
+              : null,
           child: const Text('Pilih'),
         ),
       ]),
