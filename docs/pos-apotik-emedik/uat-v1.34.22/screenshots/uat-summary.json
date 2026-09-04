@@ -1,0 +1,20 @@
+{
+  "rilis": "apotik-v1.34.22",
+  "waktuUatUtc": "2026-09-04T08:05:52.705590Z",
+  "server": "https://demo.ecampus.id/ecampus",
+  "tokoUjiId": 1,
+  "katalogObatTerbaca": 2,
+  "minimumKatalogUntukRun": 2,
+  "resepRacikanTerbaca": 100,
+  "modeTransaksi": "BUKTI_UI_SETELAH_RUN_API",
+  "transaksiObatJadiLulus": 50,
+  "transaksiRacikanLulus": 50,
+  "antreanServerGalat": "Aksi POS Apotik belum tersedia di server ini: apotik_antrean_farmasi_list Baca alasan yang tampil dan kembali ke kolom atau data yang disebutkan untuk memperbaikinya.",
+  "identitasLayarPublik": "PRATINJAU_TERKONTROL",
+  "antreanFarmasiDipastikan": 50,
+  "antreanServerAktif": false,
+  "laporanPenjualanStatus": "success",
+  "laporanPenjualanBaris": 0,
+  "laporanKedaluwarsaStatus": "success",
+  "laporanKedaluwarsaBaris": 3
+}

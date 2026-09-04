@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('setiap bantuan POS memiliki narasi minimal 3500 kata dan workflow', () {
-    expect(PosHelpCatalog.specs.length, 16);
+    expect(PosHelpCatalog.specs.length, 17);
     for (final entry in PosHelpCatalog.specs.entries) {
       final words = entry.value.narrative
           .trim()

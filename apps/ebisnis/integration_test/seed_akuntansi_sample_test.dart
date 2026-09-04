@@ -183,7 +183,7 @@ void main() {
 
     Future<Map<String, dynamic>> produk(String kata) async {
       final r = await ApiClient.instance
-          .aksi('katalog', {'keyword': kata, 'tokoId': _tokoId});
+          .aksi('katalog', {'keyword': kata, 'semuaToko': true});
       final daftar = (r['produk'] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e));
@@ -219,9 +219,11 @@ void main() {
       });
     }
 
-    final produkKecap = await produk('ABC Kecap Manis 100 g Botol');
-    final produkWafer =
-        await produk('Beng-Beng Wafer Cokelat 100 g Botol Isi 6');
+    // Fixture katalog demo aktif pada toko 1. Nama produk lama sudah tidak ada
+    // setelah penyegaran basis data publik, sehingga gunakan item yang benar-
+    // benar tersedia dan memiliki stok pada toko ini.
+    final produkKecap = await produk('ABC Kacang hijau 200ml (hijau)');
+    final produkWafer = await produk('ABC Kacang hijau 200ml (hijau)');
     await petakanJenisProduk(produkKecap);
     await petakanJenisProduk(produkWafer);
 

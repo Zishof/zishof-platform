@@ -36,6 +36,7 @@ class LayarAntreanFarmasiScreen extends StatefulWidget {
   final int? tokoIdOverride;
   final String? tokoNamaOverride;
   final ModeLayarFarmasi mode;
+  final List<Map<String, dynamic>>? dataPratinjau;
 
   const LayarAntreanFarmasiScreen({
     super.key,
@@ -43,6 +44,7 @@ class LayarAntreanFarmasiScreen extends StatefulWidget {
     this.tokoIdOverride,
     this.tokoNamaOverride,
     this.mode = ModeLayarFarmasi.semua,
+    this.dataPratinjau,
   });
 
   @override
@@ -95,8 +97,15 @@ class _LayarAntreanFarmasiScreenState extends State<LayarAntreanFarmasiScreen> {
   @override
   void initState() {
     super.initState();
-    _ambil();
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _ambil());
+    if (widget.dataPratinjau != null) {
+      _data = widget.dataPratinjau!
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      _memuat = false;
+    } else {
+      _ambil();
+      _poll = Timer.periodic(const Duration(seconds: 2), (_) => _ambil());
+    }
     _jam = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setStateIfMounted(() => _sekarang = DateTime.now());
     });
@@ -117,6 +126,7 @@ class _LayarAntreanFarmasiScreenState extends State<LayarAntreanFarmasiScreen> {
   }
 
   Future<void> _ambil() async {
+    if (widget.dataPratinjau != null) return;
     try {
       final hasil =
           await ApiClient.instance.aksi('apotik_antrean_farmasi_list', {

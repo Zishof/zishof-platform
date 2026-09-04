@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 const _tokoId = 1;
-const _prefix = 'UAT-VOL-PROC-20260904';
+const _prefix = 'UAT-VOL-PROC-APT13422-R4-20260904';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +42,8 @@ void main() {
           }
         }
       }
-      throw StateError('$action gagal: $last');
+      throw StateError('$action gagal: $last'
+          '${last is ApiException ? '\n${last.teknis}' : ''}');
     }
 
     final suppliers = await call(
@@ -59,16 +60,21 @@ void main() {
         supplier['penyediaAssetId']) as num;
 
     final goods = await call('pengadaan_barang_cari', {
-      'keyword': 'ABC Kecap Manis 100 g Botol Isi 4',
+      // Produk ini tersedia pada katalog publik demo. Nama lama "ABC Kecap
+      // Manis 100 g Botol Isi 4" tidak ada lagi setelah penyegaran katalog.
+      'keyword': 'Bimoli minyak Goreng 1L',
       'limit': 50,
     });
     final goodRows = ((goods['data'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
-        .where((e) => e['master_asset_id'] != null)
+        // API baru menerima produk_id dan menyelesaikan MasterAsset di server.
+        // Instalasi demo lama lazim mengembalikan master_asset_id=null pada hasil
+        // pencarian walaupun produknya sah dipakai pada dokumen Pengadaan.
+        .where((e) => e['produk_id'] != null || e['id'] != null)
         .toList();
     expect(goodRows, isNotEmpty,
-        reason: 'Barang Pengadaan bertaut Master Aset tidak ditemukan');
+        reason: 'Produk yang dapat dipakai pada Pengadaan tidak ditemukan');
     final good = goodRows.first;
 
     final paymentMethods = await call('pengadaan_cara_bayar_opsi', const {});

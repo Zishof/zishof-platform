@@ -69,11 +69,10 @@ void main() {
     }
     await _tungguSampai(
       tester,
-      () =>
-          find.byType(KasirScreen).evaluate().isNotEmpty &&
-          find.text('admin').evaluate().isNotEmpty &&
-          find.text('Kantin Demo').evaluate().isNotEmpty,
-      alasan: 'Sesi admin dan Kantin Demo belum selesai dimuat',
+      () => find.byType(KasirScreen).evaluate().isNotEmpty,
+      // Admin lintas-toko pada tenant demo memang tidak memiliki Pedagang
+      // terikat; identitas toko dapat kosong tanpa berarti sesi/login gagal.
+      alasan: 'Sesi POS belum selesai dimuat',
       detik: 180,
     );
     // main() memasang penangkap galat produksi; runner test perlu handler
@@ -88,6 +87,8 @@ void main() {
       }
       penanganGalatTes?.call(detail);
     };
+
+    await _tutupOnboardingJikaAda(tester);
 
     await _ambilGambar(tester, '00-layar-awal-integration');
 
@@ -342,6 +343,7 @@ Future<void> _bukaMenuDanFoto(
     await _tungguTanpaSpinner(tester, detik: 45);
   }
   await _ketukSidebar(tester, label);
+  await _tutupOnboardingJikaAda(tester);
   await _tungguSampai(
     tester,
     () => find.text(label).evaluate().isNotEmpty,
@@ -397,6 +399,18 @@ Future<void> _bukaMenuDanFoto(
   if (tutupDialog) {
     await tester.tapAt(const Offset(8, 8));
     await tester.pump(const Duration(milliseconds: 500));
+  }
+}
+
+Future<void> _tutupOnboardingJikaAda(WidgetTester tester) async {
+  for (var i = 0; i < 16; i++) {
+    await tester.pump(const Duration(milliseconds: 250));
+    final nanti = find.text('Nanti');
+    if (nanti.evaluate().isNotEmpty) {
+      await tester.tap(nanti.last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 750));
+      return;
+    }
   }
 }
 
@@ -470,6 +484,7 @@ Future<void> _jalankanLaporan(WidgetTester tester, String idLaporan,
 
 Future<void> _ambilLaporanInti(WidgetTester tester) async {
   await _ketukSidebar(tester, 'Katalog Laporan');
+  await _tutupOnboardingJikaAda(tester);
   await _tungguTanpaSpinner(tester, detik: 90);
   const laporan = <(String, String, String)>[
     (

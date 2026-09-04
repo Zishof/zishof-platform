@@ -56,6 +56,10 @@ void main() {
       oldError?.call(detail);
     };
     expect(find.byType(LoginScreen), findsNothing);
+    // Instalasi/test runner baru dapat menampilkan dialog sinkronisasi awal.
+    // Tutup secara eksplisit agar bukti dan interaksi berikutnya merekam layar
+    // Pengadaan, bukan modal onboarding yang menutup tombol aksi.
+    await _tutupOnboardingJikaAda(tester);
     await _shot(tester, '00-layar-awal-ebisnis');
 
     await _tapSidebar(tester, 'PENGADAAN');
@@ -132,6 +136,7 @@ Future<void> _openMenu(WidgetTester tester, String label) async {
   await _wait(tester, () => find.text(label).evaluate().isNotEmpty,
       reason: 'Menu $label tidak terbuka', seconds: 60);
   await _waitNoSpinner(tester, seconds: 90);
+  await _tutupOnboardingJikaAda(tester);
   final text = tester
       .widgetList<Text>(find.byType(Text))
       .map((e) => e.data)
@@ -141,6 +146,20 @@ Future<void> _openMenu(WidgetTester tester, String label) async {
       .join(' | ');
   // ignore: avoid_print
   print('UAT_PENGADAAN=$label TEXT=$text');
+}
+
+Future<void> _tutupOnboardingJikaAda(WidgetTester tester) async {
+  // Dialog dijadwalkan sesudah konfigurasi/server selesai dimuat, sehingga
+  // belum tentu sudah ada saat frame pertama halaman utama terbentuk.
+  for (var i = 0; i < 16; i++) {
+    await tester.pump(const Duration(milliseconds: 250));
+    final nanti = find.text('Nanti');
+    if (nanti.evaluate().isNotEmpty) {
+      await tester.tap(nanti.last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 750));
+      return;
+    }
+  }
 }
 
 Future<void> _tapSidebar(WidgetTester tester, String label) async {

@@ -43,8 +43,8 @@ void main() {
     }
 
     final catalog = await call('katalog', {
-      'keyword': 'Beng-Beng Wafer Cokelat 100 g Botol Isi 6',
-      'tokoId': 1,
+      'keyword': 'ABC Kacang hijau 200ml (hijau)',
+      'semuaToko': true,
     });
     final products = ((catalog['produk'] as List?) ?? const [])
         .whereType<Map>()
@@ -52,7 +52,7 @@ void main() {
         .toList();
     expect(products, isNotEmpty);
     final product = products.firstWhere(
-      (e) => '${e['nama']}'.contains('Beng-Beng Wafer'),
+      (e) => '${e['nama']}'.contains('ABC Kacang hijau'),
       orElse: () => products.first,
     );
 

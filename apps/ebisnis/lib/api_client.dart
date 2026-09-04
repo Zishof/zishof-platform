@@ -454,7 +454,8 @@ class ApiClient {
 
     Map<String, dynamic> json;
     try {
-      json = jsonDecode(resp.body) as Map<String, dynamic>;
+      json =
+          jsonDecode(normalisasiJsonRespons(resp.body)) as Map<String, dynamic>;
     } catch (e, stack) {
       final cuplikan = resp.body.length > 1200
           ? '${resp.body.substring(0, 1200)}…'
@@ -519,6 +520,49 @@ class ApiClient {
   /// `success`. Keduanya merupakan kontrak sukses yang sah.
   static bool statusResponsSukses(Object? status) =>
       status == 'success' || status == '00';
+
+  /// Beberapa handler AIS lama masih menulis toast JavaScript melalui helper
+  /// JSP sebelum menulis objek JSON yang sah. Respons seperti itu berstatus
+  /// HTTP 200 dan bagian setelah `</script>` tetap merupakan kontrak API yang
+  /// dapat diproses. Hanya prefix `<script>...</script>` pada awal respons yang
+  /// dibuang; halaman HTML biasa atau JSON rusak tetap ditolak fail-closed.
+  static String normalisasiJsonRespons(String body) {
+    final trimmed = body.trimLeft();
+    if (!trimmed.toLowerCase().startsWith('<script')) return body;
+    final end = trimmed.toLowerCase().indexOf('</script>');
+    if (end < 0) return body;
+    final kandidat = trimmed.substring(end + '</script>'.length).trimLeft();
+    if (!kandidat.startsWith('{')) return body;
+
+    // Legacy renderer juga dapat menambahkan script telemetry SESUDAH JSON.
+    // Cari penutup objek terluar dengan tetap menghormati kurung kurawal di
+    // dalam string/escape, lalu serahkan hanya objek lengkap ke jsonDecode.
+    var dalamString = false;
+    var escape = false;
+    var depth = 0;
+    for (var i = 0; i < kandidat.length; i++) {
+      final char = kandidat[i];
+      if (dalamString) {
+        if (escape) {
+          escape = false;
+        } else if (char == r'\') {
+          escape = true;
+        } else if (char == '"') {
+          dalamString = false;
+        }
+        continue;
+      }
+      if (char == '"') {
+        dalamString = true;
+      } else if (char == '{') {
+        depth++;
+      } else if (char == '}') {
+        depth--;
+        if (depth == 0) return kandidat.substring(0, i + 1);
+      }
+    }
+    return body;
+  }
 
   Future<void> _catatKegagalan(ApiException gagal) async {
     final info = gagal.info;
