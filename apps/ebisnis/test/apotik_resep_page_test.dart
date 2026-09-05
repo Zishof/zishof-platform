@@ -10,6 +10,7 @@ PanggilResep _server({
   List<Map<String, dynamic>>? baris,
   Map<String, dynamic>? statusDispensing,
   Map<String, dynamic>? telaahKlinis,
+  Map<String, dynamic>? informasiResep,
   Map<String, dynamic>? hasilCatat,
   List<Map<String, dynamic>>? terkirim,
 }) {
@@ -23,6 +24,7 @@ PanggilResep _server({
           'status': '00',
           'data': baris ?? const [],
           if (telaahKlinis != null) 'telaahKlinis': telaahKlinis,
+          if (informasiResep != null) 'informasiResep': informasiResep,
         };
       case 'apotik_dispensing_status':
         return statusDispensing ??
@@ -118,6 +120,70 @@ void main() {
   });
 
   group('Daftar periksa pra-serah — dari data nyata', () {
+    testWidgets('menampilkan asal, dokter, pasien, diagnosis, dan aturan pakai',
+        (tester) async {
+      await _pump(
+          tester,
+          _halamanResep(_server(resep: [
+            {
+              ..._resepSatu,
+              'pasienNama': 'Pasien Sample Apotik 001',
+              'nomorRekamMedis': 'APT-UAT-001',
+              'dokterNama': 'Dokter Demo 0001',
+            }
+          ], baris: [
+            {
+              'nama': 'Paracetamol 500 mg',
+              'jumlah': 10,
+              'stok': 100,
+              'keterangan': 'Aturan pakai SAMPLE/UAT: 3 x 1 sesudah makan',
+            }
+          ], informasiResep: {
+            'tanggalResep': '2026-09-05 09:15',
+            'dataSample': true,
+            'pasien': {
+              'nama': 'Pasien Sample Apotik 001',
+              'nomorRekamMedis': 'APT-UAT-001',
+              'jenisKelamin': 'L',
+              'umur': 32,
+              'tanggalLahir': '1994-01-02',
+              'alamat': 'Jl. Contoh UAT No. 1',
+              'telepon': '080000000001',
+            },
+            'dokter': {
+              'nama': 'Dokter Demo 0001',
+              'kode': 'DEMO-DOK-0001',
+              'kategori': 'Umum',
+            },
+            'asalResep': {
+              'ringkasan': 'Klinik Rawat Jalan Demo / Poli Umum Demo',
+              'kodeKunjungan': 'APT-UAT-KUNJ-001',
+              'statusKunjungan': 'Pulang',
+              'penjamin': 'Umum',
+              'dokterPengirim': 'dr. Pengirim Sample 001',
+            },
+            'diagnosis': {
+              'ringkasan': 'Infeksi saluran napas atas akut [DATA SAMPLE/UAT]',
+              'keluhanPasien': 'Demam ringan dan pilek',
+              'hasilAnamnesis': 'Pemeriksaan SAMPLE/UAT',
+              'kesimpulanPemeriksaan': 'ISPA — indikasi contoh',
+              'icdAkhir': [
+                {'kode': 'J06.9', 'nama': 'Infeksi saluran napas atas akut'}
+              ],
+            },
+          })),
+          _desktop);
+      await tester.tap(find.text('RSP-007'));
+      await tester.pumpAndSettle();
+      expect(find.text('Informasi lengkap resep dokter'), findsOneWidget);
+      expect(find.text('DATA SAMPLE/UAT'), findsOneWidget);
+      expect(find.textContaining('RM APT-UAT-001'), findsOneWidget);
+      expect(find.textContaining('Dokter Demo 0001'), findsWidgets);
+      expect(find.textContaining('Klinik Rawat Jalan Demo'), findsOneWidget);
+      expect(find.textContaining('J06.9'), findsOneWidget);
+      expect(find.textContaining('3 x 1 sesudah makan'), findsOneWidget);
+    });
+
     testWidgets('menandai terkendali, high-alert, LASA, cold-chain',
         (tester) async {
       await _pump(

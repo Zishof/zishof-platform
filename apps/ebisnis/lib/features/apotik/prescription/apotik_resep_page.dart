@@ -53,6 +53,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
   String? _galat;
   bool _hanyaMenunggu = true;
   List<Map<String, dynamic>> _daftar = [];
+  int _totalDaftar = 0;
 
   Map<String, dynamic>? _terpilih;
   List<Map<String, dynamic>> _baris = [];
@@ -60,6 +61,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
   String? _galatDetail;
   Map<String, dynamic> _statusDispensing = {};
   Map<String, dynamic> _telaahKlinis = {};
+  Map<String, dynamic> _informasiResep = {};
 
   @override
   void initState() {
@@ -101,6 +103,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
                 .whereType<Map>()
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList();
+            _totalDaftar = ((hasil['total'] as num?) ?? _daftar.length).toInt();
             _idBaru = dariServer
                 ? Set<String>.from(hasil['idBaru'] as Set? ?? const <String>{})
                 : {};
@@ -128,6 +131,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
       _baris = [];
       _statusDispensing = {};
       _telaahKlinis = {};
+      _informasiResep = {};
     });
     try {
       final r =
@@ -152,6 +156,11 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
         _statusDispensing = statusD;
         _telaahKlinis = r['telaahKlinis'] is Map
             ? Map<String, dynamic>.from(r['telaahKlinis'] as Map)
+            : <String, dynamic>{};
+        final informasi =
+            r['informasiResep'] ?? _telaahKlinis['informasiResep'];
+        _informasiResep = informasi is Map
+            ? Map<String, dynamic>.from(informasi)
             : <String, dynamic>{};
         _memuatDetail = false;
       });
@@ -344,7 +353,10 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
             ),
             const Spacer(),
             if (!_memuat)
-              Text('${_daftar.length} resep',
+              Text(
+                  _totalDaftar > _daftar.length
+                      ? '${_daftar.length} dari $_totalDaftar resep'
+                      : '${_daftar.length} resep',
                   style: TextStyle(fontSize: 12, color: t.textSecondary)),
           ]),
         ),
@@ -392,10 +404,14 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
               fontSize: 13, fontWeight: FontWeight.w600, color: t.textPrimary)),
       subtitle: Text(
           [
+            if ('${r['pasienNama'] ?? ''}'.trim().isNotEmpty)
+              '${r['pasienNama']}${'${r['nomorRekamMedis'] ?? ''}'.trim().isEmpty ? '' : ' (${r['nomorRekamMedis']})'}',
+            if ('${r['dokterNama'] ?? ''}'.trim().isNotEmpty)
+              'dr. ${r['dokterNama']}',
             if ('${r['diagnosa'] ?? ''}'.trim().isNotEmpty) '${r['diagnosa']}',
             if (r['jumlahBaris'] != null) '${r['jumlahBaris']} baris',
           ].join(' • '),
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
       trailing: ditebus
@@ -453,6 +469,8 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
           Text('${_terpilih!['diagnosa']}',
               style: TextStyle(fontSize: 12.5, color: t.textSecondary)),
         const SizedBox(height: 14),
+        _kotakInformasiResep(t),
+        const SizedBox(height: 14),
         _kotakKeselamatanKlinis(t),
         const SizedBox(height: 14),
         _kotakDaftarPeriksa(t),
@@ -467,6 +485,147 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
         const SizedBox(height: 6),
         for (final b in _baris) _barisObat(t, b),
       ],
+    );
+  }
+
+  Map<String, dynamic> _peta(dynamic nilai) =>
+      nilai is Map ? Map<String, dynamic>.from(nilai) : <String, dynamic>{};
+
+  String _icd(dynamic nilai) {
+    final daftar = (nilai as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .map((e) => '${e['kode'] ?? ''} ${e['nama'] ?? ''}'.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return daftar.join(', ');
+  }
+
+  Widget _barisInformasi(
+      ApotikDesignTokens t, IconData ikon, String label, String nilai) {
+    if (nilai.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 9),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(ikon, size: 16, color: t.clinicalPurple),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 112,
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: t.textSecondary)),
+        ),
+        Expanded(
+          child:
+              Text(nilai, style: TextStyle(fontSize: 12, color: t.textPrimary)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _kotakInformasiResep(ApotikDesignTokens t) {
+    final pasien = _peta(_informasiResep['pasien']);
+    final dokter = _peta(_informasiResep['dokter']);
+    final asal = _peta(_informasiResep['asalResep']);
+    final diagnosis = _peta(_informasiResep['diagnosis']);
+    final sample = _informasiResep['dataSample'] == true;
+    final rm = '${pasien['nomorRekamMedis'] ?? pasien['kode'] ?? ''}'.trim();
+    final demografi = [
+      if ('${pasien['jenisKelamin'] ?? ''}'.trim().isNotEmpty)
+        '${pasien['jenisKelamin']}',
+      if (pasien['umur'] != null) '${pasien['umur']} tahun',
+      if ('${pasien['tanggalLahir'] ?? ''}'.trim().isNotEmpty)
+        'lahir ${pasien['tanggalLahir']}',
+    ].join(' • ');
+    final dokterDetail = [
+      '${dokter['nama'] ?? ''}'.trim(),
+      if ('${dokter['kode'] ?? ''}'.trim().isNotEmpty) '${dokter['kode']}',
+      if ('${dokter['kategori'] ?? ''}'.trim().isNotEmpty)
+        '${dokter['kategori']}',
+    ].where((e) => e.isNotEmpty).join(' • ');
+    final kunjungan = [
+      '${asal['ringkasan'] ?? ''}'.trim(),
+      if ('${asal['kodeKunjungan'] ?? ''}'.trim().isNotEmpty)
+        'Kunjungan ${asal['kodeKunjungan']}',
+      if ('${asal['statusKunjungan'] ?? ''}'.trim().isNotEmpty)
+        '${asal['statusKunjungan']}',
+      if ('${asal['penjamin'] ?? ''}'.trim().isNotEmpty)
+        'Penjamin: ${asal['penjamin']}',
+    ].where((e) => e.isNotEmpty).join(' • ');
+    final icd = _icd(diagnosis['icdAkhir']);
+    final diagnosisDetail = [
+      if (icd.isNotEmpty) icd,
+      if ('${diagnosis['ringkasan'] ?? ''}'.trim().isNotEmpty)
+        '${diagnosis['ringkasan']}',
+      if ('${diagnosis['kesimpulanPemeriksaan'] ?? ''}'.trim().isNotEmpty)
+        '${diagnosis['kesimpulanPemeriksaan']}',
+    ].join(' • ');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(ApotikDesignTokens.radiusCard),
+        border: Border.all(color: t.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.description_outlined, size: 18, color: t.clinicalPurple),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Informasi lengkap resep dokter',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: t.textPrimary)),
+          ),
+          if (sample)
+            const ApotikStatusPill(
+              teks: 'DATA SAMPLE/UAT',
+              nada: ApotikStatusNada.info,
+              ikon: Icons.science_outlined,
+              penjelasan: 'Data sintetis, bukan resep pasien nyata',
+              rapat: true,
+            ),
+        ]),
+        if (_informasiResep.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              'Asal resep, dokter, pasien, dan diagnosis belum terhubung pada data ini.',
+              style: TextStyle(fontSize: 12, color: t.textSecondary),
+            ),
+          ),
+        _barisInformasi(t, Icons.event_outlined, 'Tanggal resep',
+            '${_informasiResep['tanggalResep'] ?? ''}'),
+        _barisInformasi(
+            t,
+            Icons.person_outline,
+            'Pasien / RM',
+            [
+              '${pasien['nama'] ?? ''}'.trim(),
+              if (rm.isNotEmpty) 'RM $rm',
+              demografi,
+            ].where((e) => e.isNotEmpty).join(' • ')),
+        _barisInformasi(
+            t, Icons.medical_services_outlined, 'Dokter/peresep', dokterDetail),
+        _barisInformasi(
+            t, Icons.local_hospital_outlined, 'Asal pelayanan', kunjungan),
+        _barisInformasi(t, Icons.monitor_heart_outlined, 'Diagnosis/indikasi',
+            diagnosisDetail),
+        _barisInformasi(t, Icons.chat_bubble_outline, 'Keluhan pasien',
+            '${diagnosis['keluhanPasien'] ?? ''}'),
+        _barisInformasi(t, Icons.fact_check_outlined, 'Anamnesis',
+            '${diagnosis['hasilAnamnesis'] ?? ''}'),
+        _barisInformasi(t, Icons.call_received_outlined, 'Dokter pengirim',
+            '${asal['dokterPengirim'] ?? ''}'),
+        _barisInformasi(t, Icons.location_on_outlined, 'Alamat pasien',
+            '${pasien['alamat'] ?? ''}'),
+        _barisInformasi(t, Icons.phone_outlined, 'Kontak pasien',
+            '${pasien['telepon'] ?? ''}'),
+      ]),
     );
   }
 
@@ -736,6 +895,15 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
         if (sediaan.isNotEmpty)
           Text(sediaan,
               style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
+        if ('${b['keterangan'] ?? ''}'.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('${b['keterangan']}',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: t.clinicalPurple)),
+          ),
         const SizedBox(height: 6),
         Wrap(spacing: 6, runSpacing: 4, children: [
           if (racikan) ApotikStatusPill.racikan(),

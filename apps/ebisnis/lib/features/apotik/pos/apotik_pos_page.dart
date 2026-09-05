@@ -1381,12 +1381,24 @@ class _SheetResep extends StatelessWidget {
           return ListTile(
             dense: true,
             leading: Icon(Icons.description_outlined, color: t.clinicalPurple),
-            title: Text('${r['kode'] ?? r['id']}'),
-            subtitle: Text([
-              if ('${r['diagnosa'] ?? ''}'.trim().isNotEmpty)
-                '${r['diagnosa']}',
-              if (r['jumlahBaris'] != null) '${r['jumlahBaris']} baris',
-            ].join(' • ')),
+            title: Text(
+                '${r['kode'] ?? r['id']}${'${r['pasienNama'] ?? ''}'.trim().isEmpty ? '' : ' — ${r['pasienNama']}'}'),
+            subtitle: Text(
+                [
+                  if ('${r['nomorRekamMedis'] ?? ''}'.trim().isNotEmpty)
+                    'RM ${r['nomorRekamMedis']}',
+                  if ('${r['dokterNama'] ?? ''}'.trim().isNotEmpty)
+                    'Dokter ${r['dokterNama']}',
+                  if ('${r['asalPelayanan'] ?? ''}'.trim().isNotEmpty)
+                    '${r['asalPelayanan']}',
+                  if ('${r['diagnosa'] ?? ''}'.trim().isNotEmpty)
+                    '${r['diagnosa']}',
+                  if ('${r['tanggalResep'] ?? ''}'.trim().isNotEmpty)
+                    '${r['tanggalResep']}',
+                  if (r['jumlahBaris'] != null) '${r['jumlahBaris']} baris',
+                ].join(' • '),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis),
             onTap: () => Navigator.pop(context, r),
           );
         },
