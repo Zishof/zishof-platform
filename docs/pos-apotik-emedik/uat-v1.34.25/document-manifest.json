@@ -1,0 +1,11 @@
+{
+  "version": "1.35.1 (build 189)",
+  "apiRelease": "API apotik-v1.34.25+187",
+  "document": "Laporan-UAT-dan-Panduan-Apotik-v1.34.25.docx",
+  "screenshotSections": 23,
+  "diagramCount": 69,
+  "sourceSummary": [
+    "screenshots/uat-summary.json",
+    "cashier-retest/uat-kasir-summary.json"
+  ]
+}

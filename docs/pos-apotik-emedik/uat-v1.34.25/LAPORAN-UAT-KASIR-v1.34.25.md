@@ -2,6 +2,7 @@
 
 - Tanggal pelaksanaan: 5 September 2026 (WIB)
 - Rilis yang diuji: `apotik-v1.34.25+187`
+- Klien yang dicapture: `1.35.1+189`
 - Status akhir: **PASS**
 - Kebutuhan deploy ulang: **Tidak**
 
@@ -44,6 +45,8 @@ UAT dijalankan terhadap deployment server aktif dengan minimal 100 data pada set
 
 Empat suite UI kasir dijalankan kembali: pembayaran, halaman POS, state POS, dan widget POS. Hasilnya **96 test lulus, 0 gagal**. Cakupan mencakup tombol mode tanpa ikon kunci, dialog pembayaran, validasi uang tunai, pemilihan batch FEFO, endpoint racikan/produksi, tebus resep campuran, serta anti-double-submit.
 
+Regresi penuh aplikasi juga dijalankan sebelum build rilis. Hasilnya **1.020 test lulus, 0 gagal**.
+
 ## Observasi non-blocking
 
 Pada pemeriksaan post-flight segera setelah beban transaksi, gateway sempat memberikan 17 respons sementara berupa HTTP 502/503 atau timeout. Sebanyak 20 kode awal (mencakup seluruh kode yang terdampak) diperiksa ulang dengan retry; hasilnya 20/20 lulus, seluruhnya mengembalikan `idempoten=true`, dan tidak ada kegagalan atau data ganda yang tersisa.
@@ -53,6 +56,10 @@ Observasi ini tidak membutuhkan deploy aplikasi, tetapi metrik reverse proxy/Tom
 ## Bukti teknis
 
 - Harness server nyata: `apps/ebisnis/integration_test/uat_apotik_v13425_cashier_e2e_test.dart`
+- Harness screenshot live: `apps/ebisnis/integration_test/uat_apotik_v13424_volume_fullscreen_test.dart`
 - Ringkasan mesin: `docs/pos-apotik-emedik/uat-v1.34.25/cashier-retest/uat-kasir-summary.json`
+- Screenshot utama: dashboard, OTC, mode Resep Dokter, pembayaran OTC, antrean dan detail Tebus Resep, Racikan, Produksi Farmasi beserta konfirmasi batch, serta Manajemen Farmasi pada `docs/pos-apotik-emedik/uat-v1.34.25/screenshots/`.
+- Capture screenshot dijalankan dalam mode baca/capture. Dialog pembayaran dan produksi ditutup tanpa submit agar bukti visual tidak menambah transaksi atau mutasi stok.
+- Manual pengguna yang diperbarui: `docs/pos-apotik-emedik/uat-v1.34.25/Laporan-UAT-dan-Panduan-Apotik-v1.34.25.docx` dan `.pdf` (73 halaman; seluruh halaman telah diperiksa setelah render).
 - Commit implementasi frontend: `af8a54f`
 - Revisi backend terakhir untuk resep campuran atomik: `r84380`

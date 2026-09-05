@@ -3,15 +3,20 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:ebisnis/api_client.dart';
+import 'package:ebisnis/features/apotik/pos/apotik_pembayaran_sheet.dart';
+import 'package:ebisnis/features/apotik/pos/apotik_pos_page.dart';
+import 'package:ebisnis/features/apotik/pos/apotik_pos_state.dart';
 import 'package:ebisnis/product_profile.dart';
 import 'package:ebisnis/screens/apotik/beranda_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/kasir_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/laporan_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/layar_antrean_farmasi_screen.dart';
+import 'package:ebisnis/screens/apotik/manajemen_farmasi_screen.dart';
 import 'package:ebisnis/screens/apotik/menu_apotik_screen.dart';
 import 'package:ebisnis/screens/apotik/persediaan_apotik_screen.dart';
 import 'package:ebisnis/services/server_config.dart';
 import 'package:ebisnis/sesi.dart';
+import 'package:ebisnis/widgets/app_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -150,6 +155,13 @@ void main() {
     final pct = await ApiClient.instance
         .aksi('apotik_item_cari', {'keyword': 'UJI-PCT', 'page_size': 10});
     final itemPct = _data(pct).firstWhere((e) => e['kode'] == 'UJI-PCT');
+    final batch = await ApiClient.instance
+        .aksi('apotik_item_batch', {'item_id': itemPct['id']});
+    final batchPct = _data(batch).firstWhere(
+        (e) => e['kedaluwarsa'] != true && _angka(e['sisa']) >= 100);
+    final katalogProduksi = await ApiClient.instance
+        .aksi('apotik_produksi_katalog', {'page_size': 100});
+    final itemProduksi = _data(katalogProduksi).first;
     var jualJadi = 0;
     var jualRacikan = 0;
     if (_hanyaAmbilBukti) {
@@ -168,10 +180,6 @@ void main() {
       jualRacikan = _angka(sebelumnya['transaksiRacikanLulus']).toInt();
       ringkasan['modeTransaksi'] = 'BUKTI_UI_SETELAH_RUN_API';
     } else {
-      final batch = await ApiClient.instance
-          .aksi('apotik_item_batch', {'item_id': itemPct['id']});
-      final batchPct = _data(batch).firstWhere(
-          (e) => e['kedaluwarsa'] != true && _angka(e['sisa']) >= 100);
       for (var i = 1; i <= _expectedTransactionVolume; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
           'kode': 'UAT-APT-13424-JADI-${i.toString().padLeft(3, '0')}',
@@ -299,8 +307,49 @@ void main() {
         tester, const BerandaApotikScreen(), '00-dashboard-operasional');
     await _pumpHalaman(tester, const KasirApotikScreen(), '01-kasir-obat-jadi');
     await _pumpHalaman(
+      tester,
+      _KasirModeBukti(
+        controller: ApotikPosController()..mode = ApotikModePos.resep,
+        judul: 'Kasir Apotik — Resep Dokter',
+        subjudul: 'Penjualan berdasarkan resep dokter dan pemeriksaan farmasi',
+      ),
+      '01b-kasir-resep-dokter',
+    );
+    final pembayaranController = ApotikPosController()
+      ..mode = ApotikModePos.otc
+      ..tambah(ApotikBarisKeranjang(
+        item: itemPct,
+        qty: 1,
+        harga: _angka(itemPct['hargaJual']),
+        batch: [
+          {
+            'kadaluarsa_id': batchPct['kadaluarsaId'],
+            'qty': 1.0,
+            'tanggal': batchPct['tanggal'],
+          }
+        ],
+      ));
+    await _pumpLembarPembayaran(tester, pembayaranController);
+    await _pumpHalaman(
         tester, const TebusResepApotikScreen(), '02-tebus-resep-dokter');
+    await _pumpDetailResep(tester);
     await _pumpHalaman(tester, const RacikanApotikScreen(), '02-resep-racikan');
+    await _pumpHalaman(
+        tester, const ProduksiFarmasiApotikScreen(), '02b-produksi-farmasi');
+    final produksiController = ApotikPosController()
+      ..mode = ApotikModePos.produksi
+      ..tambah(ApotikBarisKeranjang(
+        item: <String, dynamic>{
+          ...itemProduksi,
+          'produksi': true,
+          'itemId': itemProduksi['id'],
+        },
+        qty: 1,
+        harga: _angka(itemProduksi['hargaJual']),
+      ));
+    await _pumpKonfirmasiProduksi(tester, produksiController);
+    await _pumpHalaman(
+        tester, const ManajemenFarmasiScreen(), '02c-manajemen-farmasi');
     await _pumpHalaman(tester, const PersediaanApotikScreen(tabAwal: 0),
         '03-formularium-obat');
     await _pumpHalaman(tester, const PersediaanApotikScreen(tabAwal: 1),
@@ -437,6 +486,115 @@ Future<void> _pumpHalaman(
   await _tutupOnboardingJikaAda(tester);
   await _tungguTenang(tester, seconds: 90);
   await _shot(tester, namaBukti);
+}
+
+/// Bukti mode Kasir memakai komponen produksi yang sama, dengan controller
+/// diposisikan pada mode yang hendak didokumentasikan sebelum layar dibangun.
+class _KasirModeBukti extends StatelessWidget {
+  final ApotikPosController controller;
+  final String judul;
+  final String subjudul;
+
+  const _KasirModeBukti({
+    required this.controller,
+    required this.judul,
+    required this.subjudul,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      menuAktif: MenuEBisnis.kasirApotik,
+      judul: judul,
+      subjudul: subjudul,
+      scrollable: false,
+      body: ApotikPosPage(controller: controller),
+    );
+  }
+}
+
+Future<void> _pumpLembarPembayaran(
+    WidgetTester tester, ApotikPosController controller) async {
+  await tester.pumpWidget(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF15803D)),
+      useMaterial3: true,
+    ),
+    home: KeyedSubtree(
+      key: const ValueKey<String>('01c-pembayaran-obat-bebas'),
+      child: _KasirModeBukti(
+        controller: controller,
+        judul: 'Kasir Apotik',
+        subjudul: 'Pembayaran Obat Bebas',
+      ),
+    ),
+  ));
+  await _tutupOnboardingJikaAda(tester);
+  await _tungguTenang(tester, seconds: 90);
+  final bayar = find.text('Bayar');
+  expect(bayar, findsOneWidget,
+      reason: 'Tombol Bayar harus aktif untuk bukti pembayaran OTC');
+  await tester.tap(bayar);
+  await tester.pumpAndSettle(const Duration(milliseconds: 250));
+  expect(find.byType(ApotikPembayaranSheet), findsOneWidget,
+      reason: 'Lembar pembayaran OTC harus terbuka');
+  await _shot(tester, '01c-pembayaran-obat-bebas');
+  await tester.tap(find.text('Batal'));
+  await tester.pumpAndSettle(const Duration(milliseconds: 250));
+}
+
+Future<void> _pumpDetailResep(WidgetTester tester) async {
+  await tester.pumpWidget(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF15803D)),
+      useMaterial3: true,
+    ),
+    home: const KeyedSubtree(
+      key: ValueKey<String>('02a-tebus-resep-detail'),
+      child: TebusResepApotikScreen(),
+    ),
+  ));
+  await _tutupOnboardingJikaAda(tester);
+  await _tungguTenang(tester, seconds: 90);
+  final resep = find.textContaining('RSP-DEMO-');
+  expect(resep, findsWidgets,
+      reason: 'Antrean resep live harus menyediakan baris yang dapat dipilih');
+  await tester.tap(resep.first);
+  await _tungguTenang(tester, seconds: 90);
+  expect(find.textContaining('Keselamatan klinis pasien'), findsOneWidget);
+  await _shot(tester, '02a-tebus-resep-detail');
+}
+
+Future<void> _pumpKonfirmasiProduksi(
+    WidgetTester tester, ApotikPosController controller) async {
+  await tester.pumpWidget(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF15803D)),
+      useMaterial3: true,
+    ),
+    home: KeyedSubtree(
+      key: const ValueKey<String>('02b-produksi-farmasi-konfirmasi'),
+      child: _KasirModeBukti(
+        controller: controller,
+        judul: 'Produksi Farmasi',
+        subjudul: 'Konfirmasi batch hasil produksi dan tanggal kedaluwarsa',
+      ),
+    ),
+  ));
+  await _tutupOnboardingJikaAda(tester);
+  await _tungguTenang(tester, seconds: 90);
+  final proses = find.text('Proses Produksi');
+  expect(proses, findsOneWidget,
+      reason: 'Rencana produksi harus dapat dilanjutkan ke konfirmasi');
+  await tester.tap(proses);
+  await tester.pumpAndSettle(const Duration(milliseconds: 250));
+  expect(find.text('Konfirmasi Produksi Farmasi'), findsOneWidget);
+  await _shot(tester, '02b-produksi-farmasi-konfirmasi');
+  await tester.tap(find.text('Batal'));
+  await tester.pumpAndSettle(const Duration(milliseconds: 250));
 }
 
 Future<void> _tutupOnboardingJikaAda(WidgetTester tester) async {

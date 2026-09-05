@@ -1,0 +1,43 @@
+{
+  "periode": "2026-09-01 s.d. 2026-09-30",
+  "batasRiwayatDiminta": 10000,
+  "posting": {
+    "hpp": {
+      "belumDiposting": 202,
+      "telahDiposting": 400,
+      "siapDiposting": 201,
+      "batasRiwayat": 10000
+    },
+    "penjualan": {
+      "belumDiposting": 1100,
+      "telahDiposting": 100,
+      "siapDiposting": 1100,
+      "batasRiwayat": 10000
+    },
+    "kulakan": {
+      "belumDiposting": 200,
+      "telahDiposting": 100,
+      "siapDiposting": 200,
+      "batasRiwayat": 10000
+    },
+    "bayar_hutang": {
+      "belumDiposting": 100,
+      "telahDiposting": 100,
+      "siapDiposting": 100,
+      "batasRiwayat": 10000
+    },
+    "terima_piutang": {
+      "belumDiposting": 100,
+      "telahDiposting": 100,
+      "siapDiposting": 100,
+      "batasRiwayat": 10000
+    },
+    "penyesuaian": {
+      "belumDiposting": 250,
+      "telahDiposting": 100,
+      "siapDiposting": 250,
+      "batasRiwayat": 10000
+    }
+  },
+  "status": "PASS"
+}

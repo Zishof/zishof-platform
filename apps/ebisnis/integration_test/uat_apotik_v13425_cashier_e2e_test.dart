@@ -398,7 +398,11 @@ Future<List<Map<String, dynamic>>> _resepCampuran(int target) async {
   // terpaku pada 250 kode lama yang sebagian sudah selesai pada run terdahulu.
   final kandidat = await _paged(
     'apotik_resep_list',
-    extra: const {'hanya_menunggu': true, 'page_size': 100},
+    extra: const {
+      'keyword': 'RSP-DEMO-',
+      'hanya_menunggu': true,
+      'page_size': 100,
+    },
     minimumRows: target * 3,
   );
   for (final resep in kandidat) {
