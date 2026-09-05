@@ -903,15 +903,39 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         Padding(
           padding: EdgeInsets.fromLTRB(ApotikBreakpoints.paddingHalaman(layout),
               12, ApotikBreakpoints.paddingHalaman(layout), 0),
-          child: ApotikModeSwitcher(
-            aktif: _pos.mode,
-            onPilih: _pilihMode,
-          ),
+          child: layout.isDesktop
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: ApotikModeSwitcher(
+                      aktif: _pos.mode,
+                      onPilih: _pilihMode,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _tombolTebusResep(),
+                ])
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ApotikModeSwitcher(
+                      aktif: _pos.mode,
+                      onPilih: _pilihMode,
+                    ),
+                    const SizedBox(height: 8),
+                    _tombolTebusResep(),
+                  ],
+                ),
         ),
         Expanded(child: _panelKatalog(t)),
       ],
     );
   }
+
+  Widget _tombolTebusResep() => OutlinedButton.icon(
+        onPressed: _tebusResep,
+        icon: const Icon(Icons.description_outlined, size: 17),
+        label: const Text('Tebus Resep'),
+      );
 
   Widget _panelKonteks(ApotikDesignTokens t) {
     return Container(
@@ -933,11 +957,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
             onPilih: _pilihMode,
           ),
           const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _tebusResep,
-            icon: const Icon(Icons.description_outlined, size: 17),
-            label: const Text('Tebus Resep'),
-          ),
+          _tombolTebusResep(),
           const SizedBox(height: 16),
           if (_caraBayar.isNotEmpty && !_modeProduksi) ...[
             Text('Metode pembayaran',

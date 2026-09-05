@@ -100,6 +100,17 @@ void main() {
       expect(find.byType(ApotikCartPanel), findsNothing);
       expect(find.text('Keranjang'), findsOneWidget);
       expect(find.text('0 item'), findsOneWidget);
+      expect(find.text('Tebus Resep'), findsOneWidget);
+    });
+
+    testWidgets('desktop sempit tetap menampilkan aksi Tebus Resep',
+        (tester) async {
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
+          const Size(1100, 760));
+      expect(find.byType(ApotikCartPanel), findsNothing);
+      expect(find.text('Tebus Resep'), findsOneWidget);
     });
   });
 
