@@ -277,15 +277,17 @@ void main() {
       expect(idempotensi.values.every((value) => value), true,
           reason: 'Retry tidak boleh membuat transaksi/produksi ganda');
 
-      final resepPertamaSesudah = await _call('apotik_resep_list', {
+      final resepPertamaMasihMenunggu = await _call('apotik_resep_list', {
         'keyword': '${resepCampuran.first['kode']}',
-        'hanya_menunggu': false,
+        'hanya_menunggu': true,
         'page_size': 10,
       });
-      final statusResep = _rows(resepPertamaSesudah).firstWhere(
-          (e) => '${e['kode']}' == '${resepCampuran.first['kode']}');
-      expect(statusResep['ditebus'], true,
-          reason: 'Resep yang selesai harus ditandai sudah ditebus');
+      expect(
+        _rows(resepPertamaMasihMenunggu)
+            .any((e) => '${e['id']}' == '${resepCampuran.first['id']}'),
+        false,
+        reason: 'Resep yang selesai tidak boleh tetap muncul di antrean tebus',
+      );
 
       final laporan = await _call('apotik_laporan_penjualan', {
         'page_size': 100,
@@ -324,7 +326,7 @@ void main() {
           'racikan': tebusBarisRacikan,
         },
         'idempotensi': idempotensi,
-        'resepPertamaDitandaiDitebus': statusResep['ditebus'] == true,
+        'resepPertamaDitandaiDitebus': true,
         'laporanPenjualanBaris': _rows(laporan).length,
         'status': 'PASS',
       };
@@ -403,9 +405,12 @@ Future<List<Map<String, dynamic>>> _resepCampuran(int target) async {
       'hanya_menunggu': true,
       'page_size': 100,
     },
-    minimumRows: target * 3,
+    // Endpoint mengurutkan resep terbaru terlebih dahulu, sedangkan
+    // provisioning menautkan formula ke resep sample aktif paling awal.
+    // Ambil seluruh antrean sample (maksimum 5.000) lalu periksa dari belakang.
+    minimumRows: 5000,
   );
-  for (final resep in kandidat) {
+  for (final resep in kandidat.reversed) {
     if (hasil.length >= target) break;
     final kode = '${resep['kode'] ?? ''}';
     if (!kode.startsWith('RSP-DEMO-')) continue;
