@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
 import '../../widgets/app_shell.dart';
+import '../anggota_screen.dart';
+import '../pengiriman_screen.dart';
+import '../riwayat_audit_screen.dart';
+import '../riwayat_penjualan_analisis_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'inventory_intelligence_screen.dart';
 import 'laporan_apotik_screen.dart';
@@ -87,21 +91,21 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         Icons.hub_outlined,
         Color(0xFF0369A1),
         'resep',
-        'resep'),
+        'delivery'),
     _ModulFarmasi(
         'Membership & Refill',
         'Pengingat obat rutin dan layanan pelanggan',
         Icons.loyalty_outlined,
         Color(0xFFBE185D),
         'pasien',
-        'pasien'),
+        'membership'),
     _ModulFarmasi(
         'Business Intelligence',
         'Penjualan, stok, kedaluwarsa, dan performa farmasi',
         Icons.insights_outlined,
         Color(0xFF4338CA),
         'penjualan',
-        'laporan'),
+        'analitik'),
   ];
 
   @override
@@ -279,7 +283,15 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       'persediaan' => const PersediaanApotikScreen(),
       'kas' =>
         const LaporanApotikScreen(tabAwal: LaporanApotikScreen.tabRekonsiliasi),
-      'laporan' => const LaporanApotikScreen(),
+      'laporan' => const RiwayatAuditScreen(
+          menuAktif: MenuEBisnis.manajemenFarmasiApotik,
+          labelKembali: 'Manajemen Farmasi',
+        ),
+      'delivery' => const PengirimanScreen(
+          bagian: BagianPengiriman.deliveryOrder,
+        ),
+      'membership' => const AnggotaScreen(),
+      'analitik' => const RiwayatPenjualanAnalisisScreen(),
       _ => const KasirApotikScreen(),
     };
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => tujuan));
