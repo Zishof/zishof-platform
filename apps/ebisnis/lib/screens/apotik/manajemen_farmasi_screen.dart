@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/app_shell.dart';
 import 'kasir_apotik_screen.dart';
+import 'inventory_intelligence_screen.dart';
 import 'laporan_apotik_screen.dart';
 import 'menu_apotik_screen.dart';
 import 'pasien_apotik_screen.dart';
@@ -52,18 +53,18 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         Icons.report_gmailerrorred_outlined,
         Color(0xFFB91C1C),
         'batch',
-        'batch'),
+        'recall'),
     _ModulFarmasi('Cold Chain', 'Pemantauan item suhu khusus dan kedaluwarsa',
-        Icons.thermostat_outlined, Color(0xFF0284C7), 'batch', 'batch'),
+        Icons.thermostat_outlined, Color(0xFF0284C7), 'batch', 'coldchain'),
     _ModulFarmasi(
         'Lokasi & Transfer',
         'Stok toko, gudang, rak, dan perpindahan',
         Icons.multiple_stop_outlined,
         Color(0xFF4F46E5),
         'item',
-        'persediaan'),
+        'transfer'),
     _ModulFarmasi('Perencanaan Stok', 'Stok minimum dan prioritas pemesanan',
-        Icons.auto_graph_outlined, Color(0xFF15803D), 'item', 'persediaan'),
+        Icons.auto_graph_outlined, Color(0xFF15803D), 'item', 'planning'),
     _ModulFarmasi(
         'Supplier & Procurement',
         'PBF, penerimaan, retur, dan rekonsiliasi dokumen',
@@ -270,6 +271,10 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       'racikan' => const RacikanApotikScreen(),
       'produksi' => const ProduksiFarmasiApotikScreen(),
       'batch' => const PersediaanApotikScreen(tabAwal: 1),
+      'recall' => const InventoryIntelligenceApotikScreen(tabAwal: 0),
+      'coldchain' => const InventoryIntelligenceApotikScreen(tabAwal: 1),
+      'transfer' => const InventoryIntelligenceApotikScreen(tabAwal: 2),
+      'planning' => const InventoryIntelligenceApotikScreen(tabAwal: 3),
       'pengadaan' => const PersediaanApotikScreen(tabAwal: 2),
       'persediaan' => const PersediaanApotikScreen(),
       'kas' =>
