@@ -21,6 +21,7 @@ void main() {
       'labelPerangkat': 'UAT-Audit-Volume',
     });
     await ApiClient.instance.simpanToken(login['token'] as String);
+    final failures = <String>[];
 
     Future<void> audit(String action, Map<String, dynamic> body) async {
       try {
@@ -47,6 +48,7 @@ void main() {
         // ignore: avoid_print
         print('AUDIT_$action=${jsonEncode(summary)}');
       } catch (e) {
+        failures.add('$action: $e');
         // ignore: avoid_print
         print('AUDIT_GAGAL_$action=$e'
             '${e is ApiException ? '\n${e.teknis}' : ''}');
@@ -78,7 +80,10 @@ void main() {
       'reimbursement_daftar',
       'proses_transfer_daftar',
     ]) {
-      await audit(action, listBody);
+      await audit(action, {
+        ...listBody,
+        if (action == 'kulakan_faktur_list') 'toko_id': 1,
+      });
     }
     for (final kind in ['kulakan', 'bayar_hutang', 'terima_piutang']) {
       await audit('posting_${kind}_draft', {
@@ -129,5 +134,7 @@ void main() {
         'posting': false,
       });
     }
+    expect(failures, isEmpty,
+        reason: 'Seluruh endpoint workflow UAT harus berhasil: $failures');
   });
 }
