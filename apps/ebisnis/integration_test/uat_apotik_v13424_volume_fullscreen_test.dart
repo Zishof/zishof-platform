@@ -39,6 +39,10 @@ const _expectedTransactionVolume = int.fromEnvironment(
     defaultValue: 50);
 const _hanyaAmbilBukti =
     bool.fromEnvironment('POS_TEST_CAPTURE_ONLY', defaultValue: false);
+const _sumberRingkasan = String.fromEnvironment(
+  'POS_TEST_SUMMARY_SOURCE',
+  defaultValue: '',
+);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -71,9 +75,9 @@ void main() {
       final login = await _login(username, password);
       await ApiClient.instance.simpanToken('${login['token']}');
     }
-    final konfig = await ApiClient.instance.aksi('konfigurasi');
+    final konfig = await _aksiRetry('konfigurasi', const {});
     Sesi.instance.terapkanKonfig(konfig);
-    final daftarToko = await ApiClient.instance.aksi(
+    final daftarToko = await _aksiRetry(
       'toko_kelola_list',
       {'cari': 'Demo'},
     );
@@ -124,8 +128,7 @@ void main() {
     ringkasan['metrikTransaksiHariIni'] = metrik['transaksiHariIni'];
     ringkasan['metrikNilaiHariIni'] = metrik['nilaiHariIni'];
 
-    final katalog =
-        await ApiClient.instance.aksi('apotik_item_cari', {'page_size': 100});
+    final katalog = await _aksiRetry('apotik_item_cari', {'page_size': 100});
     final obat = _data(katalog);
     final totalKatalog = _angka(katalog['total']).toInt();
     expect(totalKatalog, greaterThanOrEqualTo(_minimumKatalog),
@@ -135,7 +138,7 @@ void main() {
     ringkasan['katalogObatTerbacaPadaLayar'] = obat.length;
     ringkasan['minimumKatalogUntukRun'] = _minimumKatalog;
 
-    final bahan = await ApiClient.instance.aksi('apotik_item_cari', {
+    final bahan = await _aksiRetry('apotik_item_cari', {
       'keyword': 'DEMO-BHN-',
       'page_size': 100,
     });
@@ -143,8 +146,8 @@ void main() {
     expect(totalBahan, greaterThanOrEqualTo(1000));
     ringkasan['bahanRacikanTotal'] = totalBahan;
 
-    final resep = await ApiClient.instance
-        .aksi('apotik_resep_list', {'hanya_menunggu': true, 'page_size': 100});
+    final resep = await _aksiRetry(
+        'apotik_resep_list', {'hanya_menunggu': true, 'page_size': 100});
     final daftarResep = _data(resep);
     final totalResep = _angka(resep['total']).toInt();
     expect(totalResep, greaterThanOrEqualTo(500),
@@ -152,20 +155,25 @@ void main() {
     ringkasan['resepSiapJualTotal'] = totalResep;
     ringkasan['resepRacikanTerbacaPadaLayar'] = daftarResep.length;
 
-    final pct = await ApiClient.instance
-        .aksi('apotik_item_cari', {'keyword': 'UJI-PCT', 'page_size': 10});
+    final pct = await _aksiRetry(
+        'apotik_item_cari', {'keyword': 'UJI-PCT', 'page_size': 10});
     final itemPct = _data(pct).firstWhere((e) => e['kode'] == 'UJI-PCT');
-    final batch = await ApiClient.instance
-        .aksi('apotik_item_batch', {'item_id': itemPct['id']});
-    final batchPct = _data(batch).firstWhere(
-        (e) => e['kedaluwarsa'] != true && _angka(e['sisa']) >= 100);
-    final katalogProduksi = await ApiClient.instance
-        .aksi('apotik_produksi_katalog', {'page_size': 100});
+    final batch =
+        await _aksiRetry('apotik_item_batch', {'item_id': itemPct['id']});
+    final minimumSisaBatch = _hanyaAmbilBukti ? 1 : _expectedTransactionVolume;
+    final batchPct = _data(batch).firstWhere((e) =>
+        e['kedaluwarsa'] != true && _angka(e['sisa']) >= minimumSisaBatch);
+    final katalogProduksi =
+        await _aksiRetry('apotik_produksi_katalog', {'page_size': 100});
     final itemProduksi = _data(katalogProduksi).first;
     var jualJadi = 0;
     var jualRacikan = 0;
     if (_hanyaAmbilBukti) {
-      final buktiSebelumnya = File('$_outputDir\\uat-summary.json');
+      final buktiSebelumnya = File(
+        _sumberRingkasan.isNotEmpty
+            ? _sumberRingkasan
+            : '$_outputDir\\uat-summary.json',
+      );
       expect(buktiSebelumnya.existsSync(), isTrue,
           reason: 'Ringkasan transaksi run sebelumnya tidak ditemukan');
       final sebelumnya = jsonDecode(buktiSebelumnya.readAsStringSync())
@@ -176,9 +184,18 @@ void main() {
       ringkasan.addAll(sebelumnya);
       ringkasan['rilis'] = _rilis;
       ringkasan['waktuBuktiUiUtc'] = DateTime.now().toUtc().toIso8601String();
-      jualJadi = _angka(sebelumnya['transaksiObatJadiLulus']).toInt();
-      jualRacikan = _angka(sebelumnya['transaksiRacikanLulus']).toInt();
+      final transaksiLulus = sebelumnya['transaksiLulus'];
+      final transaksiLulusMap = transaksiLulus is Map
+          ? Map<String, dynamic>.from(transaksiLulus)
+          : const <String, dynamic>{};
+      jualJadi = _angka(sebelumnya['transaksiObatJadiLulus'] ??
+              transaksiLulusMap['otcObatBebas'])
+          .toInt();
+      jualRacikan = _angka(sebelumnya['transaksiRacikanLulus'] ??
+              transaksiLulusMap['racikan'])
+          .toInt();
       ringkasan['modeTransaksi'] = 'BUKTI_UI_SETELAH_RUN_API';
+      ringkasan['sumberRingkasanTransaksi'] = buktiSebelumnya.path;
     } else {
       for (var i = 1; i <= _expectedTransactionVolume; i++) {
         final hasil = await ApiClient.instance.aksi('apotik_bayar', {
@@ -227,8 +244,8 @@ void main() {
     List<Map<String, dynamic>> antreanLayar = antreanPratinjau;
     var antreanServerAktif = false;
     try {
-      final antreanAwal = await ApiClient.instance
-          .aksi('apotik_antrean_farmasi_list', {'toko_id': _tokoId});
+      final antreanAwal =
+          await _aksiRetry('apotik_antrean_farmasi_list', {'toko_id': _tokoId});
       final kodeAda =
           _data(antreanAwal).map((e) => '${e['kodeAntrean']}').toSet();
       for (final jenis in const ['JADI', 'RACIKAN']) {
@@ -258,7 +275,7 @@ void main() {
           }
         }
       }
-      final layar = await ApiClient.instance.aksi('apotik_antrean_farmasi_list',
+      final layar = await _aksiRetry('apotik_antrean_farmasi_list',
           {'toko_id': _tokoId, 'untuk_layar': true});
       antreanLayar = _data(layar);
       expect(antreanLayar.length, greaterThanOrEqualTo(100));
