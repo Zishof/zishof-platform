@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
 import '../../widgets/app_shell.dart';
-import '../anggota_screen.dart';
 import '../riwayat_audit_screen.dart';
 import '../riwayat_penjualan_analisis_screen.dart';
 import 'delivery_apotik_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'inventory_intelligence_screen.dart';
 import 'laporan_apotik_screen.dart';
+import 'membership_apotik_screen.dart';
 import 'menu_apotik_screen.dart';
 import 'pasien_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
@@ -288,7 +288,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
           labelKembali: 'Manajemen Farmasi',
         ),
       'delivery' => const DeliveryApotikScreen(),
-      'membership' => const AnggotaScreen(),
+      'membership' => const MembershipApotikScreen(),
       'analitik' => const RiwayatPenjualanAnalisisScreen(),
       _ => const KasirApotikScreen(),
     };

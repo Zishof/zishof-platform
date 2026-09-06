@@ -9,7 +9,7 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains("'delivery' => const DeliveryApotikScreen()"));
-    expect(source, contains("'membership' => const AnggotaScreen()"));
+    expect(source, contains("'membership' => const MembershipApotikScreen()"));
     expect(
       source,
       contains("'analitik' => const RiwayatPenjualanAnalisisScreen()"),
@@ -27,6 +27,18 @@ void main() {
     expect(source, contains("'apotik_delivery_status'"));
     expect(source, contains("'page_size': 100"));
     expect(source, contains("'TERKIRIM'"));
+  });
+
+  test('membership apotik memakai reward ledger dan refill khusus', () {
+    final source = File(
+      'lib/screens/apotik/membership_apotik_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("'apotik_membership_list'"));
+    expect(source, contains("'apotik_membership_simpan'"));
+    expect(source, contains("'apotik_membership_poin'"));
+    expect(source, contains("'apotik_membership_refill'"));
+    expect(source, contains("'page_size': 100"));
   });
 
   test('kartu lanjutan tidak lagi diarahkan ke halaman generik', () {
