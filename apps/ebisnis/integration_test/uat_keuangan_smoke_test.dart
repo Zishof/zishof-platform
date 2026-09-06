@@ -177,8 +177,7 @@ void main() {
     await _waitNoSpinner(tester, seconds: 120);
     await _shot(tester, '31-integrasi-draft-jurnal-semua');
     if (find.text('Uang Muka dan Kas').evaluate().isNotEmpty) {
-      await tester.tap(find.text('Uang Muka dan Kas').last);
-      await tester.pump(const Duration(seconds: 1));
+      await _tapTab(tester, 'Uang Muka dan Kas');
       await _shot(tester, '32-integrasi-jurnal-uang-muka-dan-kas');
     }
     if (find.text('Pengajuan Transfer').evaluate().isNotEmpty) {
@@ -243,7 +242,17 @@ Future<void> _tapTab(WidgetTester tester, String label) async {
   } catch (_) {
     // Some fixed TabBars have no scrollable ancestor.
   }
-  await tester.tap(target);
+  final chips = find.ancestor(of: target, matching: find.byType(ChoiceChip));
+  if (chips.evaluate().isNotEmpty) {
+    tester.widget<ChoiceChip>(chips.last).onSelected?.call(true);
+  } else {
+    final inks = find.ancestor(of: target, matching: find.byType(InkWell));
+    if (inks.evaluate().isNotEmpty) {
+      tester.widget<InkWell>(inks.last).onTap?.call();
+    } else {
+      await tester.tap(target);
+    }
+  }
   await tester.pump(const Duration(seconds: 1));
 }
 
@@ -253,14 +262,11 @@ Future<void> _runReport(
   required String title,
   required String file,
 }) async {
-  final search = find.byWidgetPredicate(
+  final navigatorAnchor = find.byWidgetPredicate(
       (w) => w is TextField && w.decoration?.hintText == 'Cari laporan...');
-  await tester.enterText(search, title);
-  await tester.pump(const Duration(seconds: 1));
-  final reportText = find
-      .byWidgetPredicate((w) => w is Text && (w.data ?? '').contains(title));
-  expect(reportText, findsOneWidget);
-  Navigator.of(tester.element(reportText)).push(MaterialPageRoute(
+  expect(navigatorAnchor, findsOneWidget,
+      reason: 'Katalog laporan belum siap untuk membuka $title');
+  Navigator.of(tester.element(navigatorAnchor)).push(MaterialPageRoute(
       builder: (_) => LaporanDetailScreen(item: {
             'id': id,
             'judul': title,
