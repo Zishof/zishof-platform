@@ -18,6 +18,10 @@ void main() {
       source,
       contains("'laporan' => const AuditPersetujuanApotikScreen()"),
     );
+    expect(
+      source,
+      contains("'pemulihan' => const KeandalanPemulihanApotikScreen()"),
+    );
   });
 
   test('delivery apotik memakai API khusus dan mendukung alur end-to-end', () {
@@ -65,6 +69,18 @@ void main() {
     expect(source, contains("'apotik_delivery_list'"));
     expect(source, contains("'apotik_membership_list'"));
     expect(source, contains("'page_size': 100"));
+  });
+
+  test('keandalan apotik memuat replika dan pemulihan outbox', () {
+    final source = File(
+      'lib/screens/apotik/keandalan_pemulihan_apotik_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("'transaksi_backup_toko_list'"));
+    expect(source, contains("'pageSize': 100"));
+    expect(source, contains('hitungTertahan()'));
+    expect(source, contains('sinkronkan(sertakanGagal: true)'));
+    expect(source, contains('transaksiArsipLokal('));
   });
 
   test('kartu lanjutan tidak lagi diarahkan ke halaman generik', () {

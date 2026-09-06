@@ -7,6 +7,7 @@ import 'business_intelligence_apotik_screen.dart';
 import 'delivery_apotik_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'inventory_intelligence_screen.dart';
+import 'keandalan_pemulihan_apotik_screen.dart';
 import 'laporan_apotik_screen.dart';
 import 'membership_apotik_screen.dart';
 import 'menu_apotik_screen.dart';
@@ -85,6 +86,13 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         Color(0xFF475569),
         'penjualan',
         'laporan'),
+    _ModulFarmasi(
+        'Keandalan & Pemulihan',
+        'Outbox, replika transaksi, pemulihan, dan kontinuitas layanan',
+        Icons.shield_outlined,
+        Color(0xFF334155),
+        'penjualan',
+        'pemulihan'),
     _ModulFarmasi(
         'Integrasi & Delivery',
         'Antrean resep, status penyiapan, dan pengiriman',
@@ -284,6 +292,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       'kas' =>
         const LaporanApotikScreen(tabAwal: LaporanApotikScreen.tabRekonsiliasi),
       'laporan' => const AuditPersetujuanApotikScreen(),
+      'pemulihan' => const KeandalanPemulihanApotikScreen(),
       'delivery' => const DeliveryApotikScreen(),
       'membership' => const MembershipApotikScreen(),
       'analitik' => const BusinessIntelligenceApotikScreen(),
