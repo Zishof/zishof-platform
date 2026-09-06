@@ -76,6 +76,14 @@ void main() {
       final p = ApiClient.susunPayload('kulakan_faktur_simpan', null);
       expect(p['toko_id'], 7);
     });
+
+    test('daftar kulakan memakai toko yang dipilih admin', () {
+      Sesi.instance
+        ..bolehSemuaToko = true
+        ..tokoFilter = 22;
+      final p = ApiClient.susunPayload('kulakan_faktur_list', null);
+      expect(p['toko_id'], 22);
+    });
   });
 
   group('aksi yang SENGAJA tidak disisipi', () {
