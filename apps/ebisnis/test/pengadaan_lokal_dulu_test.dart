@@ -24,7 +24,6 @@ void main() {
     'pengadaan_bayar_screen.dart': [
       'pengadaan_bayar_simpan',
       'pengadaan_bayar_hapus',
-      'pengadaan_bayar_putusan',
     ],
     'pengadaan_pajak_screen.dart': [
       'pengadaan_pajak_setor',
@@ -48,6 +47,16 @@ void main() {
             reason: '$aksi kembali dikirim langsung tanpa antrean');
       }
     }
+  });
+
+  test('putusan pembayaran vendor tetap online-only', () {
+    // Persetujuan/penolakan dapat membuat atau menarik pengajuan transfer dan
+    // tidak boleh menampilkan sukses sebelum server mengonfirmasi hasilnya.
+    final bayar = _sumber('pengadaan_bayar_screen.dart');
+    expect(
+      bayar,
+      contains(_rapat("ApiClient.instance.aksi('pengadaan_bayar_putusan'")),
+    );
   });
 
   test('layar bertahap Pengadaan membaca daftarnya cache-dulu', () {

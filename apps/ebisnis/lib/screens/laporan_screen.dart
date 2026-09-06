@@ -7,6 +7,7 @@ import 'siklus_akuntansi_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
+import '../sesi.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
 import '../theme/app_colors.dart';
@@ -94,13 +95,16 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): katalog yang pernah
       // dibuka tetap bisa dilihat saat OFFLINE -- isinya metadata laporan
       // (judul/keterangan/flag filter), bukan angka yang bisa basi. Kunci cache
-      // dipisah per aksi katalog karena `laporan_keuangan_katalog` hanya subset
-      // keuangan; identitas baris = nama kategori ('kat'), server tidak
-      // mengirim kolom 'id'.
+      // dipisah per aksi katalog, tenant, dan pengguna karena server sekarang
+      // menyaring kategori/laporan berdasarkan grup pengguna. Tanpa scope ini,
+      // katalog milik role sebelumnya dapat sempat terlihat setelah ganti akun.
+      final sesi = Sesi.instance;
+      final scopePengguna = Uri.encodeComponent(
+          '${sesi.tenantId ?? 0}:${sesi.userId.trim().toLowerCase()}');
       await MasterOffline.daftarCacheDulu(
         widget.aksiKatalog,
         const {},
-        'master:laporan_katalog:${widget.aksiKatalog}',
+        'master:laporan_katalog:${widget.aksiKatalog}:$scopePengguna',
         fieldData: 'kategori',
         kolomKunci: 'kat',
         onData: (hasil) {

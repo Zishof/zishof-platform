@@ -38,8 +38,10 @@ void main() {
   });
 
   test('sheet split punya tombol sinkron metode pembayaran', () {
-    final source =
-        rapat(File('lib/screens/keranjang_screen.dart').readAsStringSync());
+    final source = rapat([
+      File('lib/screens/keranjang_screen.dart').readAsStringSync(),
+      File('lib/widgets/pemilih_metode_split.dart').readAsStringSync(),
+    ].join('\n'));
     expect(source, contains(rapat("const Text('Sinkronkan cara pembayaran')")));
     // Muat ulang lewat jalur izin-member yang sama dgn pembukaan sheet.
     expect(source, contains(rapat('muatUlang: () async {')));

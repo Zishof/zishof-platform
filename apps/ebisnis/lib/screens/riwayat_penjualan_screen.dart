@@ -22,6 +22,7 @@ import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
+import '../widgets/pemilih_metode_split.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -129,14 +130,25 @@ class _BarisKoreksiTransaksi {
     required this.produkId,
     required this.nama,
     required this.harga,
+    this.diskonAwal = 0,
     required double qty,
-  }) : qtyController = TextEditingController(text: _formatQtyKoreksi(qty));
+  })  : qtyAwal = pembelianId == null ? 0 : qty,
+        qtyController = TextEditingController(text: _formatQtyKoreksi(qty));
 
   final dynamic pembelianId;
   final dynamic produkId;
   final String nama;
   final double harga;
+  final double qtyAwal;
+  final double diskonAwal;
   final TextEditingController qtyController;
+
+  double get subtotalAwal => qtyAwal <= 0 ? 0 : (harga * qtyAwal) - diskonAwal;
+
+  double subtotalUntuk(double qty) {
+    final diskon = qtyAwal <= 0 ? 0 : diskonAwal * qty / qtyAwal;
+    return (harga * qty) - diskon;
+  }
 
   void dispose() => qtyController.dispose();
 }
@@ -154,6 +166,9 @@ class _DialogEditTransaksi extends StatefulWidget {
     this.modeBaru = false,
     this.caraBayarId,
     this.caraBayarNama = '',
+    this.totalAwal = 0,
+    this.pembayaranAwal = const [],
+    this.bolehSplitPembayaran = false,
   });
 
   final String nomor;
@@ -164,6 +179,9 @@ class _DialogEditTransaksi extends StatefulWidget {
   final bool modeBaru;
   final int? caraBayarId;
   final String caraBayarNama;
+  final double totalAwal;
+  final List<Map<String, dynamic>> pembayaranAwal;
+  final bool bolehSplitPembayaran;
 
   @override
   State<_DialogEditTransaksi> createState() => _DialogEditTransaksiState();
@@ -184,6 +202,7 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
   late DateTime _waktu;
   int? _caraBayarId;
   bool _caraBayarDiubah = false;
+  List<SlotBayar> _splitBayar = [];
 
   @override
   void initState() {
@@ -202,9 +221,16 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
               produkId: i['produkId'],
               nama: '${i['nama'] ?? 'Produk'}',
               harga: (i['harga'] as num?)?.toDouble() ?? 0,
+              diskonAwal: (i['diskon'] as num?)?.toDouble() ?? 0,
               qty: (i['qty'] as num?)?.toDouble() ?? 0,
             ))
         .toList();
+    if (widget.bolehSplitPembayaran) {
+      _splitBayar = _slotPembayaranAwal();
+      if (_splitBayar.isNotEmpty) {
+        _caraBayarId = _splitBayar.first.caraBayar.id;
+      }
+    }
   }
 
   int? _idCaraBayarDariNama(String nama) {
@@ -214,6 +240,104 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       if (cara.nama.trim().toLowerCase() == teks) return cara.id;
     }
     return null;
+  }
+
+  CaraBayar? _caraBayarDari(dynamic id, String nama) {
+    final idAngka = id is num ? id.toInt() : int.tryParse('$id');
+    for (final cara in Sesi.instance.caraBayar) {
+      if (idAngka != null && cara.id == idAngka) return cara;
+    }
+    final namaRapi = nama.trim().toLowerCase();
+    if (namaRapi.isEmpty) return null;
+    for (final cara in Sesi.instance.caraBayar) {
+      if (cara.nama.trim().toLowerCase() == namaRapi) return cara;
+    }
+    return null;
+  }
+
+  List<SlotBayar> _slotPembayaranAwal() {
+    final hasil = <SlotBayar>[];
+    for (final baris in widget.pembayaranAwal) {
+      final cara = _caraBayarDari(
+        baris['caraBayarId'] ?? baris['cara_bayar'] ?? baris['caraBayar'],
+        '${baris['nama'] ?? baris['caraBayarNama'] ?? ''}',
+      );
+      final nominal = (baris['nominal'] as num?)?.toDouble() ??
+          double.tryParse('${baris['nominal'] ?? ''}') ??
+          0;
+      if (cara != null && nominal > 0) hasil.add(SlotBayar(cara, nominal));
+    }
+    if (hasil.isEmpty && _caraBayarId != null) {
+      final cara = _caraBayarDari(_caraBayarId, widget.caraBayarNama);
+      if (cara != null && widget.totalAwal > 0) {
+        hasil.add(SlotBayar(cara, widget.totalAwal));
+      }
+    }
+    return hasil;
+  }
+
+  double get _subtotalItemAwal =>
+      _baris.fold(0, (jumlah, baris) => jumlah + baris.subtotalAwal);
+
+  double get _subtotalItemSaatIni => _baris.fold(0, (jumlah, baris) {
+        final qty = double.tryParse(
+                baris.qtyController.text.trim().replaceAll(',', '.')) ??
+            0;
+        return jumlah + baris.subtotalUntuk(qty);
+      });
+
+  double get _totalSetelahKoreksi =>
+      (widget.totalAwal + _subtotalItemSaatIni - _subtotalItemAwal)
+          .clamp(0, double.infinity)
+          .toDouble();
+
+  String get _ringkasanPembayaran {
+    if (_splitBayar.isNotEmpty) {
+      return _splitBayar
+          .map((slot) =>
+              '${slot.caraBayar.nama} ${_formatRupiah.format(slot.nominal)}')
+          .join(' + ');
+    }
+    for (final cara in Sesi.instance.caraBayar) {
+      if (cara.id == _caraBayarId) return cara.nama;
+    }
+    return 'Pilih metode pembayaran';
+  }
+
+  Future<void> _pilihPembayaranSplit() async {
+    if (Sesi.instance.caraBayar.isEmpty) {
+      setState(() => _pesan =
+          'Daftar metode pembayaran kosong. Sinkronkan data lalu coba lagi.');
+      return;
+    }
+    final total = _totalSetelahKoreksi;
+    var awal = _splitBayar.map((slot) => slot.salin()).toList();
+    if (awal.isEmpty && _caraBayarId != null) {
+      final cara = _caraBayarDari(_caraBayarId, widget.caraBayarNama);
+      if (cara != null) awal = [SlotBayar(cara, total)];
+    } else if (awal.length == 1) {
+      awal.first.nominal = total;
+    } else if (awal.length > 1) {
+      final tambahan =
+          awal.skip(1).fold<double>(0, (jumlah, slot) => jumlah + slot.nominal);
+      if (tambahan <= total) awal.first.nominal = total - tambahan;
+    }
+    final hasil = await showModalBottomSheet<List<SlotBayar>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => PemilihMetodeSplit(
+        daftarMetode: Sesi.instance.caraBayar,
+        terpilihAwal: awal,
+        total: total,
+      ),
+    );
+    if (hasil == null || hasil.isEmpty || !mounted) return;
+    setState(() {
+      _splitBayar = hasil.map((slot) => slot.salin()).toList();
+      _caraBayarId = _splitBayar.first.caraBayar.id;
+      _caraBayarDiubah = true;
+      _pesan = null;
+    });
   }
 
   @override
@@ -350,6 +474,14 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       setState(() => _pesan = 'Metode pembayaran wajib dipilih.');
       return;
     }
+    if (_caraBayarDiubah && _splitBayar.length >= 2) {
+      final galat =
+          validasiAlokasiPembayaran(_splitBayar, _totalSetelahKoreksi);
+      if (galat != null) {
+        setState(() => _pesan = '$galat Buka kembali metode pembayaran.');
+        return;
+      }
+    }
     final item = <Map<String, dynamic>>[];
     for (var i = 0; i < _baris.length; i++) {
       final qty = double.tryParse(
@@ -376,7 +508,15 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
       'alasan': alasan,
       'item': item,
       'waktu': _waktu.toIso8601String(),
-      if (widget.modeBaru || _caraBayarDiubah) 'cara_bayar': _caraBayarId,
+      if (_caraBayarDiubah && _splitBayar.length >= 2)
+        'pembayaran': _splitBayar
+            .map((slot) => {
+                  'cara_bayar': slot.caraBayar.id,
+                  'nominal': slot.nominal,
+                })
+            .toList()
+      else if (widget.modeBaru || _caraBayarDiubah)
+        'cara_bayar': _caraBayarId,
       if (_kasirUserId.isNotEmpty) 'kasir_user_id': _kasirUserId,
     });
   }
@@ -496,20 +636,61 @@ class _DialogEditTransaksiState extends State<_DialogEditTransaksi> {
                 ),
               ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
-              value: _caraBayarId,
-              decoration: const InputDecoration(
-                  labelText: 'Metode pembayaran *',
-                  prefixIcon: Icon(Icons.payments_outlined)),
-              items: Sesi.instance.caraBayar
-                  .map((cara) => DropdownMenuItem<int>(
-                      value: cara.id, child: Text(cara.nama)))
-                  .toList(),
-              onChanged: (value) => setState(() {
-                _caraBayarId = value;
-                _caraBayarDiubah = true;
-              }),
-            ),
+            if (widget.bolehSplitPembayaran)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _pilihPembayaranSplit,
+                  style: OutlinedButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.payments_outlined),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Metode pembayaran *',
+                                style: TextStyle(fontSize: 12)),
+                            Text(
+                              _ringkasanPembayaran,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const Text(
+                              'Klik untuk memilih sampai 5 metode dan membagi nominal.',
+                              style:
+                                  TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down),
+                    ],
+                  ),
+                ),
+              )
+            else
+              DropdownButtonFormField<int>(
+                value: _caraBayarId,
+                decoration: const InputDecoration(
+                    labelText: 'Metode pembayaran *',
+                    prefixIcon: Icon(Icons.payments_outlined)),
+                items: Sesi.instance.caraBayar
+                    .map((cara) => DropdownMenuItem<int>(
+                        value: cara.id, child: Text(cara.nama)))
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  _caraBayarId = value;
+                  _caraBayarDiubah = true;
+                }),
+              ),
             const SizedBox(height: 8),
             Row(children: [
               Expanded(
@@ -1949,6 +2130,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
             _idCaraBayarDariNama(
                 '${detail['caraBayarNama'] ?? row['metode'] ?? ''}'),
         caraBayarNama: '${detail['caraBayarNama'] ?? row['metode'] ?? ''}',
+        totalAwal: (detail['totalBiaya'] as num?)?.toDouble() ?? 0,
+        pembayaranAwal: ((detail['pembayaran'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((baris) => Map<String, dynamic>.from(baris))
+            .toList(),
+        bolehSplitPembayaran: detail['bolehKoreksiSplitPembayaran'] == true,
       ),
     );
     if (hasilEdit == null || !mounted) return;
@@ -1960,6 +2147,8 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         'waktu': hasilEdit['waktu'],
         if (hasilEdit.containsKey('cara_bayar'))
           'cara_bayar': hasilEdit['cara_bayar'],
+        if (hasilEdit.containsKey('pembayaran'))
+          'pembayaran': hasilEdit['pembayaran'],
         if (hasilEdit['kasir_user_id'] != null)
           'kasir_user_id': hasilEdit['kasir_user_id'],
       });

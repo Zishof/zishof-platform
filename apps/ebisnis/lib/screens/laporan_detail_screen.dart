@@ -658,7 +658,7 @@ class _TabelLaporanState extends State<_TabelLaporan> {
           '${widget.payloadFilter['tglMulai'] ?? ''}'.isNotEmpty &&
               '${widget.payloadFilter['tglSampai'] ?? ''}'.isNotEmpty;
       final dimensi = adaRentang
-          ? _dimensiBaris(kolom, baris, widget.idLaporan)
+          ? _dimensiBaris(kolom, baris, widget.idLaporan, kolomKe)
           : const <String, dynamic>{};
       await showDialog<void>(
         context: context,
@@ -920,6 +920,14 @@ class _TabelLaporanState extends State<_TabelLaporan> {
 
     AppTableRowData barisData(List<dynamic> r) {
       return AppTableRowData(
+        // Empat laporan Omzet adalah laporan audit-operasional: pengguna boleh
+        // menekan bagian mana pun pada baris, tidak harus memburu angka kecil.
+        // Kolom angka tetap mempunyai handler sendiri untuk mempertahankan
+        // perilaku generik seluruh laporan.
+        onTap: widget.idLaporan.startsWith('omzet_')
+            ? () => _bukaRincianBaris(
+                context, kolom, r, numIdx.isEmpty ? 0 : numIdx.last)
+            : null,
         cells: List.generate(kolom.length, (i) {
           final tipe = kolom[i]['t'] as String? ?? 'text';
           final label = kolom[i]['l'] as String? ?? '';
@@ -1343,8 +1351,8 @@ class _SelAngkaRincian extends StatelessWidget {
 /// Mengembalikan peta kosong bila baris tidak punya dimensi yang dapat dipakai
 /// menyaring transaksi (mis. laporan stok atau baris total) -- pemanggil lalu
 /// menampilkan asal-usul baris apa adanya spt sebelumnya.
-Map<String, dynamic> _dimensiBaris(
-    List<Map<String, dynamic>> kolom, List<dynamic> baris, String idLaporan) {
+Map<String, dynamic> _dimensiBaris(List<Map<String, dynamic>> kolom,
+    List<dynamic> baris, String idLaporan, int kolomDiklik) {
   final hasil = <String, dynamic>{};
   // Laporan saldo piutang hanya boleh menelusuri transaksi Kasbon. Tanpa
   // penyaring ini, drill-down memunculkan Voucher/QRIS/Tunai milik pelanggan
@@ -1354,6 +1362,24 @@ Map<String, dynamic> _dimensiBaris(
     // bayar_tunai/bayar_non_tunai. Ini juga membuat Voucher dan QRIS tertutup
     // secara fail-closed walau header lama tidak mengisi kolom ringkas tersebut.
     hasil['hanyaPiutang'] = true;
+  }
+  // Sheet TUNAI/SALDO memakai klasifikasi bisnis, bukan sekadar pencocokan
+  // teks nama metode. Ini penting untuk split payment dan nama metode khusus
+  // tenant (Voucher/QRIS/Saldo Santri).
+  if (idLaporan == 'omzet_tunai_produk') {
+    hasil['kelompokPembayaran'] = 'NON_SALDO';
+  } else if (idLaporan == 'omzet_saldo_produk') {
+    hasil['kelompokPembayaran'] = 'SALDO';
+  } else if (idLaporan == 'omzet_rekapan' &&
+      kolomDiklik >= 0 &&
+      kolomDiklik < kolom.length) {
+    final labelDiklik = '${kolom[kolomDiklik]['l'] ?? ''}'.toLowerCase();
+    if (labelDiklik.trim() == 'saldo') {
+      hasil['kelompokPembayaran'] = 'SALDO';
+    } else if (labelDiklik.contains('tunai') ||
+        labelDiklik.contains('non-saldo')) {
+      hasil['kelompokPembayaran'] = 'NON_SALDO';
+    }
   }
   for (var i = 0; i < kolom.length && i < baris.length; i++) {
     final label = '${kolom[i]['l'] ?? ''}'.toLowerCase();
@@ -1365,13 +1391,18 @@ Map<String, dynamic> _dimensiBaris(
     if (nilai.isEmpty || nilai == '-') {
       continue;
     }
-    if (idLaporan == 'ar_saldo' &&
+    if ((label.contains('no. transaksi') || label == 'id transaksi') &&
+        !hasil.containsKey('idTransaksi')) {
+      hasil['idTransaksi'] = nilai;
+    } else if (idLaporan == 'ar_saldo' &&
         label.contains('kode') &&
         !hasil.containsKey('kodePelanggan')) {
       hasil['kodePelanggan'] = nilai;
     } else if (label.contains('kode') && !hasil.containsKey('kodeProduk')) {
       hasil['kodeProduk'] = nilai;
-    } else if ((label.contains('nama produk') || label.contains('barang')) &&
+    } else if ((label == 'produk' ||
+            label.contains('nama produk') ||
+            label.contains('barang')) &&
         !hasil.containsKey('namaProduk')) {
       hasil['namaProduk'] = nilai;
     } else if (label.contains('kasir') && !hasil.containsKey('kasir')) {
@@ -1379,6 +1410,9 @@ Map<String, dynamic> _dimensiBaris(
     } else if ((label.contains('metode') || label.contains('kas/bank')) &&
         !hasil.containsKey('metode')) {
       hasil['metode'] = nilai;
+    } else if ((label == 'toko' || label.contains('toko /')) &&
+        !hasil.containsKey('toko')) {
+      hasil['toko'] = nilai;
     } else if ((label.contains('pelanggan') ||
             label.contains('anggota') ||
             label.contains('member')) &&
@@ -1412,6 +1446,7 @@ class _RincianTransaksi extends StatelessWidget {
     final payload = <String, dynamic>{
       'tglMulai': payloadFilter['tglMulai'],
       'tglSampai': payloadFilter['tglSampai'],
+      'tokoId': payloadFilter['tokoId'],
       ...dimensi,
     };
     return FutureBuilder<Map<String, dynamic>>(

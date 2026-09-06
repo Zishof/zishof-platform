@@ -13,13 +13,12 @@ import 'pos_help.dart';
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-/// <h3>Kasir Apotik -- FASE A varian "POS Apotik".</h3>
+/// <h3>Kasir Apotik -- obat jadi, resep, racikan, dan produksi farmasi.</h3>
 ///
 /// Empat aturan yang MEMBEDAKAN apotek (perintah awal LANGKAH 3), semuanya
 /// ditegakkan server (`apotik_bayar`) dan dicerminkan UI ini:
-/// - TEBUS RESEP: memilih resep (`apotik_resep_list/detail`), bukan mengetik
-///   obat satu per satu; baris racikan ditampilkan TERKUNCI dgn alasan jujur
-///   (penyerahan racikan menyusul -- flag `adaRacikan` dari server).
+/// - TEBUS RESEP: memilih resep (`apotik_resep_list/detail`), termasuk resep
+///   campuran obat jadi + racikan yang dibayar atomik di server.
 /// - BATCH & KEDALUWARSA: item ber-batch wajib pilih batch; urutan FEFO
 ///   (terdekat kedaluwarsa dulu) dgn prefill otomatis; batch kedaluwarsa
 ///   TIDAK BISA dipilih sama sekali (dan server tetap menolaknya).
@@ -35,6 +34,8 @@ class KasirApotikScreen extends StatefulWidget {
   State<KasirApotikScreen> createState() => _KasirApotikScreenState();
 }
 
+enum _ModeKasir { obatBebas, resepDokter, racikan, produksi }
+
 class _BarisKeranjang {
   final Map<String, dynamic> item;
   double qty;
@@ -44,6 +45,7 @@ class _BarisKeranjang {
   _BarisKeranjang(this.item, this.qty, this.harga, this.batch);
 
   bool get terkendali => item['terkendali'] == true;
+  bool get racikan => item['racikan'] == true;
   double get subtotal => qty * harga;
 }
 
@@ -52,6 +54,7 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   final _namaPembeli = TextEditingController();
   final _alamatPembeli = TextEditingController();
   final _namaDokter = TextEditingController();
+  final _uangDiterima = TextEditingController();
   Timer? _debounce;
   int _generasiCari = 0;
   bool _mencari = false;
@@ -60,8 +63,25 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   int? _resepId;
   String _resepKode = '';
   bool _memproses = false;
+  _ModeKasir _mode = _ModeKasir.obatBebas;
+  List<Map<String, dynamic>> _caraBayar = [];
+  int? _caraBayarId;
 
   bool get _adaTerkendali => _keranjang.any((b) => b.terkendali);
+  bool get _adaRacikan => _keranjang.any((b) => b.racikan);
+  Map<String, dynamic>? get _caraBayarAktif {
+    for (final c in _caraBayar) {
+      if ((c['id'] as num?)?.toInt() == _caraBayarId) return c;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _muatCaraBayar();
+    scheduleMicrotask(() => _jalankanCari('', ++_generasiCari));
+  }
 
   @override
   void dispose() {
@@ -70,7 +90,25 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     _namaPembeli.dispose();
     _alamatPembeli.dispose();
     _namaDokter.dispose();
+    _uangDiterima.dispose();
     super.dispose();
+  }
+
+  Future<void> _muatCaraBayar() async {
+    try {
+      final hasil = await ApiClient.instance.aksi('apotik_cara_bayar_list');
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      setStateIfMounted(() {
+        _caraBayar = data;
+        _caraBayarId = data.isEmpty ? null : (data.first['id'] as num).toInt();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal memuat metode pembayaran: $e')));
+      }
+    }
   }
 
   void _cariBerubah(String v) {
@@ -81,19 +119,17 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   }
 
   Future<void> _jalankanCari(String v, int generasi) async {
-    if (v.trim().isEmpty) {
-      if (generasi == _generasiCari) {
-        setStateIfMounted(() {
-          _hasilCari = [];
-          _mencari = false;
-        });
-      }
-      return;
-    }
     setStateIfMounted(() => _mencari = true);
     try {
-      final hasil = await ApiClient.instance
-          .aksi('apotik_item_cari', {'keyword': v.trim(), 'page_size': 20});
+      final action = _mode == _ModeKasir.racikan
+          ? 'apotik_racikan_list'
+          : _mode == _ModeKasir.produksi
+              ? 'apotik_produksi_katalog'
+              : 'apotik_item_cari';
+      final hasil = await ApiClient.instance.aksi(action, {
+        'keyword': v.trim(),
+        'page_size': 40,
+      });
       if (generasi == _generasiCari && _cari.text.trim() == v.trim()) {
         setStateIfMounted(() => _hasilCari =
             ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
@@ -110,9 +146,22 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     }
   }
 
+  void _ubahMode(_ModeKasir mode) {
+    setStateIfMounted(() {
+      _mode = mode;
+      _hasilCari = [];
+    });
+    _jalankanCari(_cari.text, ++_generasiCari);
+  }
+
   /// Tambah item; item ber-batch membuka sheet pilih batch (FEFO prefill).
   Future<void> _tambahItem(Map<String, dynamic> item, {double qty = 1}) async {
     List<Map<String, dynamic>> batchTerpilih = [];
+    if (item['racikan'] == true) {
+      setStateIfMounted(() => _keranjang.add(_BarisKeranjang(
+          item, qty, ((item['hargaJual'] as num?) ?? 0).toDouble(), const [])));
+      return;
+    }
     try {
       final hasil = await ApiClient.instance
           .aksi('apotik_item_batch', {'item_id': item['id']});
@@ -155,19 +204,15 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
           .aksi('apotik_resep_detail', {'resep_id': resep['id']});
       final rows =
           ((detail['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (detail['adaRacikan'] == true && mounted) {
-        // Jujur, bukan diam-diam melewatkan baris (keterbatasan FASE A tercatat server).
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Resep memuat RACIKAN -- baris racikan belum bisa diserahkan lewat kasir ini dan dilewati.')));
-      }
       setStateIfMounted(() {
         _resepId = (resep['id'] as num).toInt();
         _resepKode = '${resep['kode']}';
       });
-      for (final r in rows.where((r) => r['racikan'] != true)) {
+      for (final r in rows) {
         await _tambahItem({
-          'id': r['itemId'],
+          'id': r['racikan'] == true ? r['racikanId'] : r['itemId'],
+          'racikanId': r['racikanId'],
+          'racikan': r['racikan'] == true,
           'kode': r['kode'],
           'nama': r['nama'],
           'satuan': r['satuan'],
@@ -197,11 +242,24 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
         return;
       }
     }
+    if (_caraBayarId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pilih metode pembayaran yang aktif.')));
+      return;
+    }
     setStateIfMounted(() => _memproses = true);
     // Kode idempoten dibuat SEKALI sebelum kirim -- retry memakai kode sama.
     final kode = 'APT${DateTime.now().millisecondsSinceEpoch}';
     try {
-      final hasil = await ApiClient.instance.aksi('apotik_bayar', {
+      final totalKeranjang =
+          _keranjang.fold<double>(0, (a, b) => a + b.subtotal);
+      final diterima = double.tryParse(_uangDiterima.text.trim());
+      final adaKembalian = _caraBayarAktif?['adaKembalian'] == true;
+      if (adaKembalian && diterima != null && diterima < totalKeranjang) {
+        throw Exception('Uang diterima kurang dari total transaksi.');
+      }
+      final hasil = await ApiClient.instance
+          .aksi(_adaRacikan ? 'apotik_bayar_racikan' : 'apotik_bayar', {
         'kode': kode,
         if (_resepId != null) 'resep_id': _resepId,
         if (_namaPembeli.text.trim().isNotEmpty ||
@@ -212,9 +270,20 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
           },
         if (_namaDokter.text.trim().isNotEmpty)
           'nama_dokter': _namaDokter.text.trim(),
+        'cara_bayar_id': _caraBayarId,
+        'pembayaran': [
+          {
+            'cara_bayar_id': _caraBayarId,
+            'nominal': totalKeranjang,
+            if (adaKembalian && diterima != null) 'tunai': diterima,
+            if (adaKembalian && diterima != null)
+              'kembalian': diterima - totalKeranjang,
+          }
+        ],
         'items': _keranjang
             .map((b) => {
-                  'item_id': b.item['id'],
+                  if (b.racikan) 'racikan_id': b.item['id'],
+                  if (!b.racikan) 'item_id': b.item['id'],
                   'qty': b.qty,
                   'harga_satuan': b.harga,
                   if (b.batch.isNotEmpty)
@@ -249,6 +318,7 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
         _namaPembeli.clear();
         _alamatPembeli.clear();
         _namaDokter.clear();
+        _uangDiterima.clear();
       });
     } catch (e) {
       if (mounted) {
@@ -265,6 +335,46 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
             ],
           ),
         );
+      }
+    } finally {
+      setStateIfMounted(() => _memproses = false);
+    }
+  }
+
+  Future<void> _prosesProduksi(Map<String, dynamic> item) async {
+    final hasil = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _DialogProduksi(item: item),
+    );
+    if (hasil == null || !mounted) return;
+    setStateIfMounted(() => _memproses = true);
+    try {
+      final kode = 'APT-PROD-${DateTime.now().millisecondsSinceEpoch}';
+      final response = await ApiClient.instance.aksi('apotik_produksi_proses', {
+        'kode': kode,
+        'nomor_batch': hasil['nomor_batch'],
+        'tanggal_kadaluarsa': hasil['tanggal_kadaluarsa'],
+        'items': [
+          {'item_id': item['id'], 'qty': hasil['qty']}
+        ],
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Produksi ${response['kode'] ?? kode} berhasil.')));
+      _jalankanCari(_cari.text, ++_generasiCari);
+    } catch (e) {
+      if (mounted) {
+        showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                  title: const Text('Produksi Ditahan'),
+                  content: Text('$e'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Tutup'))
+                  ],
+                ));
       }
     } finally {
       setStateIfMounted(() => _memproses = false);
@@ -304,12 +414,42 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                  label: const Text('OTC / Obat Bebas'),
+                  selected: _mode == _ModeKasir.obatBebas,
+                  onSelected: (_) => _ubahMode(_ModeKasir.obatBebas)),
+              ChoiceChip(
+                  label: const Text('Resep Dokter'),
+                  selected: _mode == _ModeKasir.resepDokter,
+                  onSelected: (_) => _ubahMode(_ModeKasir.resepDokter)),
+              ChoiceChip(
+                  label: const Text('Racikan'),
+                  selected: _mode == _ModeKasir.racikan,
+                  onSelected: (_) => _ubahMode(_ModeKasir.racikan)),
+              ChoiceChip(
+                  label: const Text('Produksi Farmasi'),
+                  selected: _mode == _ModeKasir.produksi,
+                  onSelected: (_) => _ubahMode(_ModeKasir.produksi)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(children: [
           Expanded(
             child: AppSearchField(
               controller: _cari,
-              hintText: 'Cari obat: kode / barcode / nama...',
               scanProduk: true,
+              hintText: _mode == _ModeKasir.racikan
+                  ? 'Cari formula racikan...'
+                  : _mode == _ModeKasir.produksi
+                      ? 'Cari formula produksi...'
+                      : 'Cari obat: kode / barcode / nama...',
               debounce: Duration.zero,
               onChanged: _cariBerubah,
             ),
@@ -369,8 +509,16 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
                           '${it['kode']} • stok $stok ${it['satuan'] ?? ''} • ${_rp.format((it['hargaJual'] as num?) ?? 0)}',
                           style: const TextStyle(fontSize: 11.5)),
                       trailing: IconButton(
-                          icon: const Icon(Icons.add_shopping_cart, size: 20),
-                          onPressed: stok <= 0 ? null : () => _tambahItem(it)),
+                          icon: Icon(
+                              _mode == _ModeKasir.produksi
+                                  ? Icons.science_outlined
+                                  : Icons.add_shopping_cart,
+                              size: 20),
+                          onPressed: stok <= 0
+                              ? null
+                              : () => _mode == _ModeKasir.produksi
+                                  ? _prosesProduksi(it)
+                                  : _tambahItem(it)),
                     );
                   },
                 ),
@@ -430,9 +578,14 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
             },
           ),
         ),
-        if (_adaTerkendali) ...[
+        if (_adaTerkendali ||
+            _mode == _ModeKasir.resepDokter ||
+            _resepId != null) ...[
           const Divider(),
-          const Text('Register Obat Terkendali (WAJIB)',
+          Text(
+              _adaTerkendali
+                  ? 'Register Obat Terkendali (WAJIB)'
+                  : 'Identitas Resep Dokter',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
           const SizedBox(height: 6),
           TextField(
@@ -459,6 +612,37 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
                   isDense: true)),
         ],
         const Divider(),
+        DropdownButtonFormField<int>(
+          value: _caraBayarId,
+          decoration: const InputDecoration(
+              labelText: 'Metode pembayaran',
+              border: OutlineInputBorder(),
+              isDense: true),
+          items: _caraBayar
+              .map((c) => DropdownMenuItem<int>(
+                    value: (c['id'] as num).toInt(),
+                    child: Text('${c['nama']}'),
+                  ))
+              .toList(),
+          onChanged: _memproses
+              ? null
+              : (v) => setStateIfMounted(() {
+                    _caraBayarId = v;
+                    _uangDiterima.clear();
+                  }),
+        ),
+        if (_caraBayarAktif?['adaKembalian'] == true) ...[
+          const SizedBox(height: 6),
+          TextField(
+            controller: _uangDiterima,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+                labelText: 'Uang diterima (opsional)',
+                border: OutlineInputBorder(),
+                isDense: true),
+          ),
+        ],
+        const SizedBox(height: 8),
         Row(children: [
           const Expanded(
               child:
@@ -476,13 +660,119 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.payments_outlined),
-          label: const Text('Bayar (Tunai)'),
+          label: Text(_caraBayarAktif == null
+              ? 'Metode pembayaran belum tersedia'
+              : 'Bayar (${_caraBayarAktif!['nama']})'),
           style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14)),
         ),
       ]),
+    );
+  }
+}
+
+class _DialogProduksi extends StatefulWidget {
+  final Map<String, dynamic> item;
+  const _DialogProduksi({required this.item});
+
+  @override
+  State<_DialogProduksi> createState() => _DialogProduksiState();
+}
+
+class _DialogProduksiState extends State<_DialogProduksi> {
+  final _qty = TextEditingController(text: '1');
+  late final TextEditingController _batch;
+  late final TextEditingController _kedaluwarsa;
+
+  @override
+  void initState() {
+    super.initState();
+    final sekarang = DateTime.now();
+    _batch =
+        TextEditingController(text: 'BATCH-${sekarang.millisecondsSinceEpoch}');
+    _kedaluwarsa = TextEditingController(
+        text: DateFormat('yyyy-MM-dd')
+            .format(DateTime(sekarang.year + 1, sekarang.month, sekarang.day)));
+  }
+
+  @override
+  void dispose() {
+    _qty.dispose();
+    _batch.dispose();
+    _kedaluwarsa.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Produksi Farmasi'),
+      content: SizedBox(
+        width: 430,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Align(
+              alignment: Alignment.centerLeft,
+              child: Text('${widget.item['nama']}',
+                  style: const TextStyle(fontWeight: FontWeight.w700))),
+          const SizedBox(height: 12),
+          TextField(
+              controller: _qty,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Jumlah batch hasil',
+                  border: OutlineInputBorder())),
+          const SizedBox(height: 8),
+          TextField(
+              controller: _batch,
+              decoration: const InputDecoration(
+                  labelText: 'Nomor batch', border: OutlineInputBorder())),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _kedaluwarsa,
+            readOnly: true,
+            decoration: const InputDecoration(
+                labelText: 'Tanggal kedaluwarsa',
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.calendar_month_outlined)),
+            onTap: () async {
+              final awal = DateTime.tryParse(_kedaluwarsa.text) ??
+                  DateTime.now().add(const Duration(days: 365));
+              final pilih = await showDatePicker(
+                  context: context,
+                  initialDate: awal,
+                  firstDate: DateTime.now().add(const Duration(days: 1)),
+                  lastDate: DateTime.now().add(const Duration(days: 3650)));
+              if (pilih != null) {
+                _kedaluwarsa.text = DateFormat('yyyy-MM-dd').format(pilih);
+              }
+            },
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal')),
+        ElevatedButton(
+          onPressed: () {
+            final qty = double.tryParse(_qty.text.trim()) ?? 0;
+            if (qty <= 0 || _batch.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Jumlah dan nomor batch wajib valid.')));
+              return;
+            }
+            Navigator.pop(context, {
+              'qty': qty,
+              'nomor_batch': _batch.text.trim(),
+              'tanggal_kadaluarsa': _kedaluwarsa.text,
+            });
+          },
+          child: const Text('Proses Produksi'),
+        ),
+      ],
     );
   }
 }

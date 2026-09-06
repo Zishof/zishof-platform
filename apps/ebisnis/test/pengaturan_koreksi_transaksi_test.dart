@@ -61,4 +61,15 @@ void main() {
     expect(source, contains('if (widget.modeBaru || _caraBayarDiubah)'));
     expect(source, contains("if (hasilEdit.containsKey('cara_bayar'))"));
   });
+
+  test('supervisor dapat mengganti alokasi dengan beberapa metode pembayaran',
+      () {
+    final source =
+        File('lib/screens/riwayat_penjualan_screen.dart').readAsStringSync();
+
+    expect(source, contains('PemilihMetodeSplit'));
+    expect(source, contains('sampai 5 metode'));
+    expect(source, contains("if (hasilEdit.containsKey('pembayaran'))"));
+    expect(source, contains("'nominal': slot.nominal"));
+  });
 }

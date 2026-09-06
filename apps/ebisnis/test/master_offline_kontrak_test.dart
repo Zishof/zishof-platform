@@ -203,6 +203,18 @@ void main() {
     'lib/screens/produk_screen.dart': [
       "aksi('produk_isi_pemasok_dari_kulakan', {'pratinjau': false}"
     ],
+    // Seluruh keputusan pengadaan mengubah kelayakan dokumen tahap berikutnya;
+    // BAST juga dapat menambah stok, pembayaran dapat membuat transfer, dan
+    // back order menerbitkan ID/nomor PO baru. Semuanya wajib fail-closed.
+    'lib/screens/pengadaan_pr_screen.dart': ["aksi('pengadaan_pr_putusan'"],
+    'lib/screens/pengadaan_po_screen.dart': ["aksi('pengadaan_po_putusan'"],
+    'lib/screens/pengadaan_bast_screen.dart': [
+      "aksi('pengadaan_bast_putusan'",
+      "aksi('pengadaan_po_back_order'",
+    ],
+    'lib/screens/pengadaan_bayar_screen.dart': [
+      "aksi('pengadaan_bayar_putusan'"
+    ],
     // reservasi_hotel_screen: data TAMU kini sengaja offline-first (lihat
     // komentar di layarnya: tamu diantre, RESERVASI tetap butuh server
     // real-time) -- entri lamanya dipindah dari daftar online-only ini.
@@ -804,5 +816,17 @@ void main() {
     expect(source, contains('FaseSinkron.adaGagal'));
     expect(source, contains('Curves.elasticOut'),
         reason: 'centang sukses harus beranimasi (permintaan bisnis)');
+  });
+
+  test('cache katalog laporan terisolasi per tenant dan pengguna', () {
+    final source = File('lib/screens/laporan_screen.dart').readAsStringSync();
+    expect(source, contains('Sesi.instance'));
+    expect(source, contains('sesi.tenantId'));
+    expect(source, contains('sesi.userId'));
+    expect(
+        source,
+        contains(
+            "master:laporan_katalog:\${widget.aksiKatalog}:\$scopePengguna"),
+        reason: 'katalog hasil filter role tidak boleh dipakai silang akun');
   });
 }

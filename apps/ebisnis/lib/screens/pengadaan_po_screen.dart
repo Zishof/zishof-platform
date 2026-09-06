@@ -243,23 +243,21 @@ class _PengadaanPoScreenState extends State<PengadaanPoScreen>
       if (ok != true || !mounted) return;
     }
     try {
-      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
-      final r = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_po_putusan',
-        body: {
+      // ONLINE-ONLY: approval PO adalah keputusan finansial dan mengubah dokumen
+      // yang boleh diterima pada BAST. Sukses hanya boleh tampil setelah server
+      // mengonfirmasi agar layar hulu/hilir tidak berbeda status.
+      final r = await ApiClient.instance.aksi(
+        'pengadaan_po_putusan',
+        {
           'id': po['id'],
           'keputusan': keputusan,
           if (alasan.isNotEmpty) 'alasan': alasan,
         },
-        kunci: 'pengadaan_po_putusan:${po['id']}',
-        cacheKey: 'master:pengadaan_po',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(r['offline'] == true
-              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
-              : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}')));
+          content: Text(
+              'Keputusan server tersimpan: ${r['statusDokumen'] ?? keputusan}')));
       await _muat();
     } catch (e) {
       if (!mounted) return;
@@ -785,7 +783,8 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
                   'diminta ${_fmtQty.format(b.data['jumlahDiminta'] ?? 0)}'
                   ' · sudah dipesan ${_fmtQty.format(b.data['jumlahSudahDipesan'] ?? 0)}'
                   '${datang > 0 ? ' · sudah datang ${_fmtQty.format(datang)}' : ''}'
-                  ' · sisa ${_fmtQty.format(b.sisa)}',
+                  ' · sisa ${_fmtQty.format(b.sisa)}'
+                  '${'${b.data['satuanInputNama'] ?? ''}'.isEmpty ? '' : ' ${b.data['satuanInputNama']}'}',
                   style: const TextStyle(fontSize: 10, color: Colors.grey)),
             ],
           ),
@@ -797,8 +796,11 @@ class _AmbilBarangPrDialogState extends State<_AmbilBarangPrDialog> {
             keyboardType: TextInputType.number,
             enabled: b.dipilih,
             onChanged: (_) => setState(() {}),
-            decoration:
-                const InputDecoration(labelText: 'Jumlah', isDense: true),
+            decoration: InputDecoration(
+                labelText: '${b.data['satuanInputNama'] ?? ''}'.isEmpty
+                    ? 'Jumlah'
+                    : 'Jumlah (${b.data['satuanInputNama']})',
+                isDense: true),
           ),
         ),
         const SizedBox(width: 8),
@@ -1055,6 +1057,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
         barangId: (m['produk_id'] as num?)?.toInt(),
         masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
+        satuan: '${m['satuanInputNama'] ?? ''}',
         prDetailId: (m['pr_detail_id'] as num?)?.toInt(),
         jumlahAwal: '${m['jumlah'] ?? 1}',
         hargaAwal: '${m['hargaBeli'] ?? 0}',
@@ -1078,6 +1081,7 @@ class _FormPoDialogState extends State<_FormPoDialog> {
         barangId: (m['produk_id'] as num?)?.toInt(),
         masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
+        satuan: '${m['satuanInputNama'] ?? ''}',
         prDetailId: (m['pr_detail_id'] as num?)?.toInt(),
         jumlahAwal: '${m['jumlah'] ?? 1}',
         hargaAwal: '${m['hargaBeli'] ?? 0}',

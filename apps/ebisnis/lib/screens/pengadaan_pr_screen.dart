@@ -225,24 +225,21 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
       if (ok != true || !mounted) return;
     }
     try {
-      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
-      // Petugas yang menyetujui di gudang tanpa sinyal tidak perlu menunggu.
-      final r = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_pr_putusan',
-        body: {
+      // ONLINE-ONLY: approval mengubah himpunan PR yang boleh ditarik ke PO.
+      // Menampilkan sukses lokal sebelum server mengonfirmasi membuat PR tampak
+      // DISETUJUI di cache tetapi hilang dari dialog "Ambil Barang PR".
+      final r = await ApiClient.instance.aksi(
+        'pengadaan_pr_putusan',
+        {
           'id': pr['id'],
           'keputusan': keputusan,
           if (alasan.isNotEmpty) 'alasan': alasan,
         },
-        kunci: 'pengadaan_pr_putusan:${pr['id']}',
-        cacheKey: 'master:pengadaan_pr',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(r['offline'] == true
-              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
-              : 'Keputusan tersimpan: ${r['statusPr'] ?? keputusan}')));
+          content: Text('Keputusan server tersimpan: '
+              '${r['statusPr'] ?? keputusan}. PR yang disetujui sekarang tersedia saat membuat PO.')));
       await _muat();
     } catch (e) {
       if (!mounted) return;
@@ -344,14 +341,15 @@ class _PengadaanPrScreenState extends State<PengadaanPrScreen>
             tooltip: 'Muat ulang',
             icon: const Icon(Icons.refresh)),
       ],
-      aksiHeader: IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
-      floatingActionButton: !_boleh('create')
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _form(),
-              icon: const Icon(Icons.add),
-              label: const Text('Buat PR'),
-            ),
+      aksiHeader: Wrap(spacing: 8, children: [
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
+        if (_boleh('create'))
+          FilledButton.icon(
+            onPressed: () => _form(),
+            icon: const Icon(Icons.add),
+            label: const Text('Buat PR'),
+          ),
+      ]),
       body: _bungkusTab(Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -569,6 +567,9 @@ class _BarisPr {
   /// qty & harga PR/PO bersemantik satuan pembelian -- label kolom
   /// menampilkannya; kosong utk barang tanpa padanan/satuan.
   String satuan;
+  int? satuanId;
+  double faktorKeDasar;
+  final List<Map<String, dynamic>> pilihanSatuan;
   final TextEditingController jumlah;
   final TextEditingController harga;
   final TextEditingController keterangan;
@@ -577,6 +578,9 @@ class _BarisPr {
     this.masterAssetId,
     required this.namaBarang,
     this.satuan = '',
+    this.satuanId,
+    this.faktorKeDasar = 1,
+    this.pilihanSatuan = const [],
     String jumlahAwal = '1',
     String hargaAwal = '0',
     String keteranganAwal = '',
@@ -634,6 +638,13 @@ class _FormPrDialogState extends State<_FormPrDialog> {
         barangId: (m['produk_id'] as num?)?.toInt(),
         masterAssetId: (m['master_asset_id'] as num?)?.toInt(),
         namaBarang: '${m['barang'] ?? '-'}',
+        satuan: '${m['satuanInputNama'] ?? ''}',
+        satuanId: (m['satuanInputId'] as num?)?.toInt(),
+        faktorKeDasar: (m['faktorKeDasar'] as num?)?.toDouble() ?? 1,
+        pilihanSatuan: ((m['uomOptions'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(),
         jumlahAwal: '${m['jumlah'] ?? 1}',
         hargaAwal: '${m['hargaBeli'] ?? 0}',
         keteranganAwal: '${m['keterangan'] ?? ''}',
@@ -728,10 +739,22 @@ class _FormPrDialogState extends State<_FormPrDialog> {
     );
     q.dispose();
     if (dipilih == null) return;
+    final pilihan = ((dipilih['uomOptions'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final bawaan = pilihan.cast<Map<String, dynamic>?>().firstWhere(
+          (u) => u?['utama'] == true,
+          orElse: () => pilihan.isEmpty ? null : pilihan.first,
+        );
     setState(() => _baris.add(_BarisPr(
           barangId: (dipilih['id'] as num?)?.toInt(),
           namaBarang: '${dipilih['nama'] ?? '-'}',
-          satuan: '${dipilih['satuanPembelianNama'] ?? ''}',
+          satuan: '${bawaan?['nama'] ?? dipilih['satuanPembelianNama'] ?? ''}',
+          satuanId: (bawaan?['id'] as num?)?.toInt() ??
+              (dipilih['satuanPembelianId'] as num?)?.toInt(),
+          faktorKeDasar: (bawaan?['faktorKeDasar'] as num?)?.toDouble() ?? 1,
+          pilihanSatuan: pilihan,
         )));
   }
 
@@ -845,8 +868,53 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                   child: Row(children: [
                     Expanded(
                         flex: 3,
-                        child: Text(b.namaBarang,
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(b.namaBarang,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (b.pilihanSatuan.isNotEmpty)
+                              DropdownButtonFormField<int>(
+                                value: b.pilihanSatuan.any((u) =>
+                                        (u['id'] as num?)?.toInt() ==
+                                        b.satuanId)
+                                    ? b.satuanId
+                                    : null,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                    labelText: 'Satuan pembelian',
+                                    isDense: true),
+                                items: b.pilihanSatuan
+                                    .map((u) => DropdownMenuItem<int>(
+                                          value: (u['id'] as num).toInt(),
+                                          child: Text('${u['nama'] ?? '-'}'),
+                                        ))
+                                    .toList(),
+                                onChanged: _terkunci
+                                    ? null
+                                    : (id) => setState(() {
+                                          final dipilih = b.pilihanSatuan
+                                              .firstWhere(
+                                                  (u) =>
+                                                      (u['id'] as num?)
+                                                          ?.toInt() ==
+                                                      id,
+                                                  orElse: () => const {});
+                                          b.satuanId = id;
+                                          b.satuan = '${dipilih['nama'] ?? ''}';
+                                          b.faktorKeDasar =
+                                              (dipilih['faktorKeDasar'] as num?)
+                                                      ?.toDouble() ??
+                                                  1;
+                                        }),
+                              )
+                            else if (b.satuan.isNotEmpty)
+                              Text('Satuan pembelian: ${b.satuan}',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey)),
+                          ],
+                        )),
                     const SizedBox(width: 6),
                     SizedBox(
                         width: 80,
@@ -926,6 +994,14 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                     content: Text('Tambahkan minimal satu baris barang.')));
                 return false;
               }
+              final indeksJumlahTidakValid =
+                  _baris.indexWhere((b) => _angka(b.jumlah.text) <= 0);
+              if (indeksJumlahTidakValid >= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                        'Jumlah barang pada baris ${indeksJumlahTidakValid + 1} harus lebih dari 0.')));
+                return false;
+              }
               return widget.onSubmit(<String, dynamic>{
                 if (!_baru) 'id': widget.awal!['id'],
                 'keterangan': _keterangan.text.trim(),
@@ -939,6 +1015,9 @@ class _FormPrDialogState extends State<_FormPrDialog> {
                             'produk_id': b.barangId
                           else
                             'master_asset_id': b.masterAssetId,
+                          if (b.satuanId != null) 'satuan_input_id': b.satuanId,
+                          'satuan_input_nama': b.satuan,
+                          'faktor_ke_dasar': b.faktorKeDasar,
                           'jumlah': _angka(b.jumlah.text),
                           'hargaBeli': _angka(b.harga.text),
                           'keterangan': b.keterangan.text.trim(),

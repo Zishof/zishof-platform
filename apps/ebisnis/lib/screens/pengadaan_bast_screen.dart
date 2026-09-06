@@ -106,7 +106,8 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
               _hak = hakBaru.map((k, v) => MapEntry('$k', v == true));
             }
             if (hakSinkronBaru is Map) {
-              _hakSinkron = hakSinkronBaru.map((k, v) => MapEntry('$k', v == true));
+              _hakSinkron =
+                  hakSinkronBaru.map((k, v) => MapEntry('$k', v == true));
             }
             _daftar = data;
             _total = dariServer
@@ -288,13 +289,11 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
 
   Future<void> _putusan(Map<String, dynamic> bast, String keputusan) async {
     try {
-      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
-      final r = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_bast_putusan',
-        body: {'id': bast['id'], 'keputusan': keputusan},
-        kunci: 'pengadaan_bast_putusan:${bast['id']}',
-        cacheKey: 'master:pengadaan_bast',
+      // ONLINE-ONLY: persetujuan BAST dapat langsung menambah stok. Status dan
+      // sinkron Kulakan harus dikonfirmasi server dalam satu alur fail-closed.
+      final r = await ApiClient.instance.aksi(
+        'pengadaan_bast_putusan',
+        {'id': bast['id'], 'keputusan': keputusan},
       );
       if (!mounted) return;
       // Hasil SINKRON STOK disampaikan apa adanya (dok. 59): menyetujui BAST
@@ -303,12 +302,7 @@ class _PengadaanBastScreenState extends State<PengadaanBastScreen>
       // menunggu stok yang tidak akan pernah bertambah.
       final peringatan = '${r['peringatanSinkron'] ?? ''}'.trim();
       final sinkronOk = r['sinkronOtomatis'] == true;
-      if (r['offline'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Keputusan tersimpan di perangkat, akan dikirim otomatis. '
-                'Stok bertambah setelah keputusan terkirim ke server.')));
-      } else if (peringatan.isNotEmpty) {
+      if (peringatan.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Disetujui, TETAPI stok belum bertambah: $peringatan'),
           backgroundColor: AppColors.warning,
@@ -1684,13 +1678,11 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
     }
     setStateIfMounted(() => _mengirim = true);
     try {
-      // Local-first: keputusan back order ditulis ke antrean perangkat dulu.
-      final r = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_po_back_order',
-        kunci: 'pengadaan_po_back_order:${widget.poId}',
-        cacheKey: 'master:pengadaan_po',
-        body: {
+      // ONLINE-ONLY: back order menutup sisa PO dan dapat menerbitkan nomor PO
+      // susulan; keduanya membutuhkan keputusan serta ID server saat itu juga.
+      final r = await ApiClient.instance.aksi(
+        'pengadaan_po_back_order',
+        {
           'po_id': widget.poId,
           if (widget.bastId != null) 'bast_id': widget.bastId,
           'alasan': _alasan.text.trim(),
@@ -1710,12 +1702,7 @@ class _BackOrderDialogState extends State<_BackOrderDialog> {
         },
       );
       if (!mounted) return;
-      final hasil = Map<String, dynamic>.from(r);
-      if (hasil['offline'] == true) {
-        hasil['description'] =
-            'Back order tersimpan di perangkat, akan dikirim otomatis. Nomor pesanan susulan terbit setelah terkirim.';
-      }
-      Navigator.pop(context, hasil);
+      Navigator.pop(context, Map<String, dynamic>.from(r));
     } catch (e) {
       if (!mounted) return;
       setStateIfMounted(() => _mengirim = false);

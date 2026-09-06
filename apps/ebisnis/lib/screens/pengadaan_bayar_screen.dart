@@ -183,17 +183,15 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
       if (pilih != true || !mounted) return;
     }
     try {
-      // Local-first: keputusan ditulis ke antrean perangkat DULU, baru dikirim.
-      final r = await prosesSimpanMaster(
-        context,
-        aksi: 'pengadaan_bayar_putusan',
-        body: {
+      // ONLINE-ONLY: persetujuan pembayaran dapat membuat/menarik pengajuan
+      // transfer. Jangan tampilkan sukses sebelum server mengonfirmasi.
+      final r = await ApiClient.instance.aksi(
+        'pengadaan_bayar_putusan',
+        {
           'id': row['id'],
           'keputusan': keputusan,
           if (keputusan == 'SETUJUI' && ajukanTransfer) 'ajukanTransfer': true,
         },
-        kunci: 'pengadaan_bayar_putusan:${row['id']}',
-        cacheKey: 'master:pengadaan_bayar',
       );
       if (!mounted) return;
       final trfDibuat = (r['transferDibuat'] as num?)?.toInt() ?? 0;
@@ -202,9 +200,8 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
           ? ' · $trfDibuat pengajuan transfer dibuat'
           : (trfDitarik > 0 ? ' · $trfDitarik pengajuan transfer ditarik' : '');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(r['offline'] == true
-              ? 'Keputusan tersimpan di perangkat, akan dikirim otomatis.'
-              : 'Keputusan tersimpan: ${r['statusDokumen'] ?? keputusan}$catatanTrf')));
+          content: Text(
+              'Keputusan server tersimpan: ${r['statusDokumen'] ?? keputusan}$catatanTrf')));
       await _muat();
     } catch (e) {
       if (!mounted) return;
@@ -414,55 +411,54 @@ class _PengadaanBayarScreenState extends State<PengadaanBayarScreen>
   /// Dipakai bersama oleh mode berdiri sendiri dan mode tersemat.
   Widget _isi(int totalHalaman) {
     return Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            SizedBox(
-              width: 280,
-              child: AppSearchField(
-                hintText: 'Cari kode / keterangan',
-                onChanged: (v) {
-                  setStateIfMounted(() {
-                    _cari = v.trim();
-                    _halaman = 1;
-                  });
-                  _muat();
-                },
-              ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Wrap(spacing: 8, runSpacing: 8, children: [
+          SizedBox(
+            width: 280,
+            child: AppSearchField(
+              hintText: 'Cari kode / keterangan',
+              onChanged: (v) {
+                setStateIfMounted(() {
+                  _cari = v.trim();
+                  _halaman = 1;
+                });
+                _muat();
+              },
             ),
-            SizedBox(
-              width: 200,
-              child: DropdownButtonFormField<String>(
-                value: _status,
-                isExpanded: true,
-                decoration:
-                    const InputDecoration(labelText: 'Status', isDense: true),
-                items: const [
-                  DropdownMenuItem(value: '', child: Text('Semua status')),
-                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(
-                      value: 'DISETUJUI', child: Text('Disetujui')),
-                ],
-                onChanged: (v) {
-                  setStateIfMounted(() {
-                    _status = v ?? '';
-                    _halaman = 1;
-                  });
-                  _muat();
-                },
-              ),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: BannerPerubahanServer(
-            key: ValueKey('perubahan:$_versiPerubahan'),
-            baru: _idBaru.length,
-            berubah: _idBerubah.length,
-            dihapus: _jumlahHapus,
           ),
+          SizedBox(
+            width: 200,
+            child: DropdownButtonFormField<String>(
+              value: _status,
+              isExpanded: true,
+              decoration:
+                  const InputDecoration(labelText: 'Status', isDense: true),
+              items: const [
+                DropdownMenuItem(value: '', child: Text('Semua status')),
+                DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                DropdownMenuItem(value: 'DISETUJUI', child: Text('Disetujui')),
+              ],
+              onChanged: (v) {
+                setStateIfMounted(() {
+                  _status = v ?? '';
+                  _halaman = 1;
+                });
+                _muat();
+              },
+            ),
+          ),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: BannerPerubahanServer(
+          key: ValueKey('perubahan:$_versiPerubahan'),
+          baru: _idBaru.length,
+          berubah: _idBerubah.length,
+          dihapus: _jumlahHapus,
         ),
+      ),
       Expanded(child: _isiTabel(totalHalaman)),
     ]);
   }

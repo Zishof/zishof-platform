@@ -423,7 +423,9 @@ class ApiClient {
         '${mulai.millisecondsSinceEpoch.toRadixString(36).toUpperCase()}-${namaAksi.hashCode.abs().toRadixString(36).toUpperCase()}';
     headers['X-Request-ID'] = referensiPermintaan;
     final pemetaanKantinMassal = namaAksi == 'pemetaan_akun_kantin_audit' ||
-        namaAksi == 'pemetaan_akun_kantin_terapkan';
+        namaAksi == 'pemetaan_akun_kantin_terapkan' ||
+        namaAksi.startsWith('apotik_posting_') ||
+        namaAksi.startsWith('apotik_pemetaan_akun_');
     final batasWaktu =
         namaAksi == 'produk_impor_excel_preview' || pemetaanKantinMassal
             ? const Duration(minutes: 5)

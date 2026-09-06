@@ -25,7 +25,8 @@ final _formatRpMutasiHutang =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTglMutasiHutang = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
 
-/// Tab "Mutasi Hutang" (padanan `_mutasi_hutang.jsp`) -- buku besar DEBIT
+/// Tab "Mutasi Piutang" (nama backend legacy: mutasi_hutang) -- buku besar
+/// piutang dari sudut pandang toko: DEBIT
 /// (belanja pakai cara bayar bertanda `masukSebagaiHutang`, dihitung per
 /// slot split-pembayaran) + KREDIT (`koperasi.pembayaran_hutang`, entri
 /// manual lewat tombol "Bayar Hutang" di sini) dgn saldo berjalan, aksi
@@ -183,6 +184,27 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     if (tersimpan == true) await _muat();
   }
 
+  Future<void> _bukaDetailPiutang(Map<String, dynamic> baris) async {
+    final transaksiId = (baris['transaksiId'] as num?)?.toInt();
+    if (transaksiId == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _DialogDetailPelunasan(baris: baris),
+      );
+      return;
+    }
+    final slot = ((baris['slotPiutang'] as num?)?.toInt() ?? 1).clamp(1, 5);
+    final detail = ApiClient.instance.aksi('mutasi_piutang_detail', {
+      'transaksi_id': transaksiId,
+      'slot': slot,
+      if (baris['idAnggota'] != null) 'id_anggota': baris['idAnggota'],
+    });
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _DialogDetailPiutang(detail: detail),
+    );
+  }
+
   /// Hapus satu entri PEMBAYARAN hutang.
   ///
   /// Hanya baris pembayaran yang boleh dihapus. Daftar mutasi mencampur dua sumber,
@@ -199,11 +221,11 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     final ya = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus pembayaran hutang?'),
+        title: const Text('Hapus pelunasan piutang?'),
         content: Text(
-            'Pembayaran ${_formatRpMutasiHutang.format(baris['berkurang'] ?? 0)} '
+            'Pelunasan ${_formatRpMutasiHutang.format(baris['berkurang'] ?? 0)} '
             'atas nama ${baris['namaAnggota'] ?? '-'} akan dihapus. '
-            'Sisa hutang anggota akan naik kembali sebesar itu.'),
+            'Sisa piutang pelanggan akan naik kembali sebesar itu.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -231,7 +253,6 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
     }
   }
 
-
   Future<void> _unduhExcel() async {
     if (_data.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,16 +260,16 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
       return;
     }
     final bytes = buildSimpleXlsx(
-      sheetName: 'Mutasi Hutang',
+      sheetName: 'Mutasi Piutang',
       headers: const [
         'NAMA_ANGGOTA',
         'TANGGAL',
         'JENIS_MUTASI',
         'KETERANGAN',
-        'HUTANG_BERTAMBAH',
-        'PEMBAYARAN',
-        'SALDO_HUTANG_ANGGOTA',
-        'SALDO_HUTANG_TOTAL',
+        'PIUTANG_BERTAMBAH',
+        'PELUNASAN',
+        'SALDO_PIUTANG_ANGGOTA',
+        'SALDO_PIUTANG_TOTAL',
       ],
       rows: _data
           .map((r) => <Object?>[
@@ -264,9 +285,9 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
           .toList(),
     );
     final nama =
-        'Mutasi_Hutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
+        'Mutasi_Piutang_${DateFormat('yyyyMMdd').format(_dari)}_${DateFormat('yyyyMMdd').format(_sampai)}.xlsx';
     final path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Simpan Mutasi Hutang (Excel)',
+      dialogTitle: 'Simpan Mutasi Piutang (Excel)',
       fileName: nama,
       bytes: bytes,
       type: FileType.custom,
@@ -288,7 +309,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
         header: (_) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Mutasi Hutang (Piutang Toko)',
+              pw.Text('Mutasi Piutang Pelanggan',
                   style: pw.TextStyle(
                       fontSize: 16, fontWeight: pw.FontWeight.bold)),
               pw.Text(
@@ -296,7 +317,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
               pw.SizedBox(height: 8),
             ]),
         build: (_) => [
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: const [
               'Nama',
               'Tanggal',
@@ -325,7 +346,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
       ),
     );
     await Printing.layoutPdf(
-        onLayout: (_) async => doc.save(), name: 'Mutasi_Hutang.pdf');
+        onLayout: (_) async => doc.save(), name: 'Mutasi_Piutang.pdf');
   }
 
   Future<void> _unggahCsv() async {
@@ -443,17 +464,17 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
               OutlinedButton.icon(
                 onPressed: _pilihAnggotaFilter,
                 icon: const Icon(Icons.person_search, size: 18),
-                label: Text(_namaAnggotaFilter ?? 'Semua Anggota'),
+                label: Text(_namaAnggotaFilter ?? 'Semua Pelanggan'),
               ),
               if (_idAnggotaFilter != null)
                 IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: _hapusFilterAnggota),
-              if (Sesi.instance.bolehEntryTopup)
+              if (Sesi.instance.bolehEntryPelunasanPiutang)
                 ElevatedButton.icon(
                   onPressed: _bukaFormBayarHutang,
                   icon: const Icon(Icons.money_off_csred_outlined, size: 18),
-                  label: const Text('Bayar Hutang'),
+                  label: const Text('Entri Pelunasan Piutang'),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
                       foregroundColor: Colors.white),
@@ -466,7 +487,7 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white),
               ),
-              if (Sesi.instance.bolehEntryTopup)
+              if (Sesi.instance.bolehEntryPelunasanPiutang)
                 ElevatedButton.icon(
                   onPressed: _mengunggah ? null : _unggahCsv,
                   icon: _mengunggah
@@ -494,13 +515,13 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
           Row(children: [
             Expanded(
                 child: _KartuTotalHutang(
-                    label: 'Hutang Bertambah',
+                    label: 'Piutang Bertambah',
                     nilai: _formatRpMutasiHutang.format(totalBertambah),
                     warna: AppColors.danger)),
             const SizedBox(width: 8),
             Expanded(
                 child: _KartuTotalHutang(
-                    label: 'Total Dibayar',
+                    label: 'Total Pelunasan',
                     nilai: _formatRpMutasiHutang.format(totalBerkurang),
                     warna: AppColors.success)),
           ]),
@@ -508,28 +529,28 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
           Row(children: [
             Expanded(
                 child: _KartuTotalHutang(
-                    label: 'Saldo Hutang Awal',
+                    label: 'Saldo Piutang Awal',
                     nilai: _formatRpMutasiHutang.format(totalSaldoAwal),
                     warna: AppColors.info)),
             const SizedBox(width: 8),
             Expanded(
                 child: _KartuTotalHutang(
-                    label: 'Saldo Hutang Akhir',
+                    label: 'Saldo Piutang Akhir',
                     nilai: _formatRpMutasiHutang.format(totalSaldoAkhir),
                     warna: AppColors.danger)),
           ]),
           const SizedBox(height: 12),
-          const Text('Rekap Hutang per Anggota',
+          const Text('Rekap Piutang per Pelanggan',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           AppDataTable(
             minWidth: 760,
-            emptyText: 'Tidak ada rekap hutang pada rentang ini.',
+            emptyText: 'Tidak ada rekap piutang pada rentang ini.',
             columns: const [
-              AppTableColumn('Anggota', flex: 2),
+              AppTableColumn('Pelanggan', flex: 2),
               AppTableColumn('Saldo Awal', flex: 1, align: TextAlign.right),
               AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
-              AppTableColumn('Dibayar', flex: 1, align: TextAlign.right),
+              AppTableColumn('Pelunasan', flex: 1, align: TextAlign.right),
               AppTableColumn('Saldo Akhir', flex: 1, align: TextAlign.right),
             ],
             rows: _rekapPerAnggota
@@ -555,20 +576,20 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                 .toList(),
           ),
           const SizedBox(height: 16),
-          const Text('Rincian Mutasi & Sisa Hutang',
+          const Text('Rincian Mutasi & Sisa Piutang',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           AppDataTable(
-            minWidth: 980,
-            emptyText: 'Tidak ada mutasi hutang pada rentang ini.',
+            minWidth: 1120,
+            emptyText: 'Tidak ada mutasi piutang pada rentang ini.',
             columns: const [
               AppTableColumn('Nama', flex: 2),
               AppTableColumn('Tanggal', flex: 2),
               AppTableColumn('Jenis', flex: 2),
               AppTableColumn('Bertambah', flex: 1, align: TextAlign.right),
-              AppTableColumn('Bayar', flex: 1, align: TextAlign.right),
-              AppTableColumn('Sisa Hutang', flex: 1, align: TextAlign.right),
-              AppTableColumn('', flex: 1, align: TextAlign.center),
+              AppTableColumn('Pelunasan', flex: 1, align: TextAlign.right),
+              AppTableColumn('Sisa Piutang', flex: 1, align: TextAlign.right),
+              AppTableColumn('Aksi', flex: 2, align: TextAlign.center),
             ],
             rows: _dataHalaman.map((r) {
               final waktu = DateTime.tryParse('${r['waktu']}');
@@ -612,15 +633,26 @@ class _AnggotaTabMutasiHutangState extends State<AnggotaTabMutasiHutang>
                     flex: 1,
                     align: TextAlign.right),
                 AppTableCell(
-                  flex: 1,
-                  child: '${r['barisId'] ?? ''}'.startsWith('C')
-                      ? IconButton(
+                  flex: 2,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _bukaDetailPiutang(r),
+                        icon: const Icon(Icons.visibility_outlined, size: 17),
+                        label: const Text('Lihat Detail'),
+                      ),
+                      if ('${r['barisId'] ?? ''}'.startsWith('C') &&
+                          Sesi.instance.bolehEntryPelunasanPiutang)
+                        IconButton(
                           tooltip: 'Hapus pembayaran',
                           visualDensity: VisualDensity.compact,
                           icon: const Icon(Icons.delete_outline, size: 18),
                           onPressed: () => _hapusPembayaran(r),
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                    ],
+                  ),
                 ),
               ]);
             }).toList(),
@@ -655,9 +687,9 @@ class _KartuTotalHutang extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: warna.withOpacity(0.08),
+        color: warna.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: warna.withOpacity(0.3)),
+        border: Border.all(color: warna.withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
@@ -685,7 +717,7 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
   final _keterangan = TextEditingController();
   int? _idAnggota;
   String? _namaAnggota;
-  DateTime _waktu = DateTime.now();
+  final DateTime _waktu = DateTime.now();
   bool _menyimpan = false;
   String? _pesanError;
 
@@ -756,35 +788,11 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
           key: _formKey,
           child: AppFormSheet(
             scrollController: scrollController,
-            title: 'Entri Pembayaran Hutang',
-            subtitle: 'Catat pelunasan/cicilan hutang anggota.',
+            title: 'Entri Pelunasan Piutang',
+            subtitle: 'Catat cicilan atau pelunasan piutang pelanggan.',
             icon: Icons.money_off_csred_outlined,
             errorText: _pesanError,
             errorDetail: detailUntuk(_pesanError),
-            children: [
-              AppFormSection(judul: 'Anggota', children: [
-                OutlinedButton.icon(
-                  onPressed: _pilihAnggota,
-                  icon: const Icon(Icons.person_search, size: 18),
-                  label: Text(_namaAnggota ?? 'Pilih Anggota...'),
-                ),
-              ]),
-              AppFormSection(judul: 'Pembayaran', children: [
-                AppFormTextField(
-                  label: 'Nominal *',
-                  controller: _nominal,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  validator: (v) => (v == null ||
-                          double.tryParse(v.trim()) == null ||
-                          double.parse(v.trim()) <= 0)
-                      ? 'Nominal wajib diisi'
-                      : null,
-                ),
-                AppFormTextField(
-                    label: 'Keterangan', controller: _keterangan, maxLines: 2),
-              ]),
-            ],
             actions: [
               OutlinedButton.icon(
                 onPressed:
@@ -810,8 +818,212 @@ class _FormBayarHutangState extends State<_FormBayarHutang> with JejakGalat {
                 ),
               ),
             ],
+            children: [
+              AppFormSection(judul: 'Pelanggan', children: [
+                OutlinedButton.icon(
+                  onPressed: _pilihAnggota,
+                  icon: const Icon(Icons.person_search, size: 18),
+                  label: Text(_namaAnggota ?? 'Pilih Pelanggan...'),
+                ),
+              ]),
+              AppFormSection(judul: 'Pembayaran', children: [
+                AppFormTextField(
+                  label: 'Nominal *',
+                  controller: _nominal,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) => (v == null ||
+                          double.tryParse(v.trim()) == null ||
+                          double.parse(v.trim()) <= 0)
+                      ? 'Nominal wajib diisi'
+                      : null,
+                ),
+                AppFormTextField(
+                    label: 'Keterangan', controller: _keterangan, maxLines: 2),
+              ]),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DialogDetailPelunasan extends StatelessWidget {
+  final Map<String, dynamic> baris;
+
+  const _DialogDetailPelunasan({required this.baris});
+
+  @override
+  Widget build(BuildContext context) {
+    final waktu = DateTime.tryParse('${baris['waktu'] ?? ''}');
+    return AlertDialog(
+      title: const Text('Detail Pelunasan Piutang'),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DetailPiutangBaris(
+                label: 'Pelanggan', nilai: '${baris['namaAnggota'] ?? '-'}'),
+            _DetailPiutangBaris(
+              label: 'Tanggal',
+              nilai: waktu == null
+                  ? '${baris['waktu'] ?? '-'}'
+                  : _formatTglMutasiHutang.format(waktu),
+            ),
+            _DetailPiutangBaris(
+              label: 'Nominal pelunasan',
+              nilai: _formatRpMutasiHutang.format(baris['berkurang'] ?? 0),
+            ),
+            _DetailPiutangBaris(
+                label: 'Keterangan', nilai: '${baris['keterangan'] ?? '-'}'),
+            const SizedBox(height: 10),
+            Text(
+              'Pelunasan ini mengurangi saldo piutang pelanggan secara umum dan tidak dialokasikan ke satu nota tertentu.',
+              style: TextStyle(
+                  fontSize: 12, color: AppColors.textSecondaryOf(context)),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tutup')),
+      ],
+    );
+  }
+}
+
+class _DialogDetailPiutang extends StatelessWidget {
+  final Future<Map<String, dynamic>> detail;
+
+  const _DialogDetailPiutang({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Detail Piutang Pembelian'),
+      content: SizedBox(
+        width: 680,
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: detail,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 220,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return SizedBox(
+                height: 220,
+                child: Center(
+                  child: Text('${snapshot.error}', textAlign: TextAlign.center),
+                ),
+              );
+            }
+            final data = snapshot.data ?? const <String, dynamic>{};
+            final item = ((data['item'] as List?) ?? const [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 560),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _DetailPiutangBaris(
+                        label: 'Nomor nota', nilai: '${data['nomor'] ?? '-'}'),
+                    _DetailPiutangBaris(
+                        label: 'Tanggal', nilai: '${data['waktu'] ?? '-'}'),
+                    _DetailPiutangBaris(
+                      label: 'Pelanggan',
+                      nilai:
+                          '${data['kodeAnggota'] ?? ''} - ${data['namaAnggota'] ?? '-'}',
+                    ),
+                    _DetailPiutangBaris(
+                      label: 'Metode piutang',
+                      nilai: '${data['metodePembayaran'] ?? '-'}',
+                    ),
+                    _DetailPiutangBaris(
+                      label: 'Nilai piutang',
+                      nilai: _formatRpMutasiHutang
+                          .format(data['nominalPiutang'] ?? 0),
+                    ),
+                    _DetailPiutangBaris(
+                      label: 'Total transaksi',
+                      nilai: _formatRpMutasiHutang
+                          .format(data['totalTransaksi'] ?? 0),
+                    ),
+                    const Divider(height: 24),
+                    const Text('Barang yang dibeli',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    if (item.isEmpty)
+                      const Text('Tidak ada rincian barang pada transaksi ini.')
+                    else
+                      ...item.map((produk) {
+                        final qty = (produk['qty'] as num?)?.toDouble() ?? 0;
+                        final harga =
+                            (produk['harga'] as num?)?.toDouble() ?? 0;
+                        final diskon =
+                            (produk['diskon'] as num?)?.toDouble() ?? 0;
+                        final subtotal =
+                            (produk['subtotal'] as num?)?.toDouble() ??
+                                ((qty * harga) - diskon);
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text('${produk['nama'] ?? 'Produk'}'),
+                          subtitle: Text(
+                            '${qty.toStringAsFixed(qty == qty.roundToDouble() ? 0 : 2)} × ${_formatRpMutasiHutang.format(harga)}'
+                            '${diskon > 0 ? ' · diskon ${_formatRpMutasiHutang.format(diskon)}' : ''}',
+                          ),
+                          trailing: Text(_formatRpMutasiHutang.format(subtotal),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tutup')),
+      ],
+    );
+  }
+}
+
+class _DetailPiutangBaris extends StatelessWidget {
+  final String label;
+  final String nilai;
+
+  const _DetailPiutangBaris({required this.label, required this.nilai});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(label,
+                style: TextStyle(color: AppColors.textSecondaryOf(context))),
+          ),
+          Expanded(child: Text(nilai)),
+        ],
       ),
     );
   }

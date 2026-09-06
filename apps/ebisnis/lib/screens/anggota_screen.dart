@@ -82,7 +82,7 @@ class _AnggotaScreenState extends State<AnggotaScreen>
               Tab(text: 'Topup'),
               Tab(text: 'Saldo Voucher'),
               Tab(text: 'Mutasi Voucher'),
-              Tab(text: 'Mutasi Hutang'),
+              Tab(text: 'Mutasi Piutang'),
               Tab(text: 'Pembantu Piutang'),
               Tab(text: 'Notifikasi'),
               Tab(text: 'Satuan Kerja'),

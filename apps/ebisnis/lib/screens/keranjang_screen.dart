@@ -25,6 +25,7 @@ import '../widgets/app_components.dart';
 import '../widgets/app_error_info.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../widgets/jejak_galat.dart';
+import '../widgets/pemilih_metode_split.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -151,8 +152,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// sebelum fitur ini ada, `_caraBayarTerpilih` tetap sumber kebenaran).
   /// >=2 elemen = mode split aktif; elemen pertama SELALU sama dgn
   /// `_caraBayarTerpilih` (slot 1 di payload/server), sisanya dikirim sbg
-  /// `caraBayarTambahan`. Lihat `_SheetPilihMetodeSplit`.
-  List<_SlotBayar> _splitBayar = [];
+  /// `caraBayarTambahan`. Lihat [PemilihMetodeSplit].
+  List<SlotBayar> _splitBayar = [];
   bool _memuatCaraBayar = false;
   bool _izinCaraBayarMemberTidakDisetel = false;
   bool _caraBayarDikunciTipe = false;
@@ -284,9 +285,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       final splitTersegar = splitMasihDiizinkan
           ? _splitBayar
               .map((slot) =>
-                  _SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
+                  SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
               .toList()
-          : <_SlotBayar>[];
+          : <SlotBayar>[];
 
       setStateIfMounted(() {
         _caraBayarTersedia = daftar;
@@ -424,8 +425,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final slots = _splitAktif
         ? _splitBayar
         : (_caraBayarTerpilih == null
-            ? const <_SlotBayar>[]
-            : [_SlotBayar(_caraBayarTerpilih!, _total)]);
+            ? const <SlotBayar>[]
+            : [SlotBayar(_caraBayarTerpilih!, _total)]);
     return slots
         .map((slot) => {
               'caraBayar': slot.caraBayar.id,
@@ -491,7 +492,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   // membaginya ke beberapa metode -- validasi "uang kurang dari total" tidak
   // relevan lagi (kasir bisa saja terima Rp0 tunai kalau semua slot non-tunai),
   // jadi gerbang ini dilewati saat split aktif; nominal per slot sudah
-  // divalidasi seimbang dgn total di `_SheetPilihMetodeSplit` sendiri.
+  // divalidasi seimbang dgn total di [PemilihMetodeSplit] sendiri.
   bool get _uangTunaiKurang =>
       !_splitAktif && _metodeTunai && _uangDiterima + 0.0001 < _total;
   bool get _bisaBayar =>
@@ -1829,12 +1830,12 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     final awal = _splitBayar.isNotEmpty
         ? _splitBayar
         : (_caraBayarTerpilih != null
-            ? [_SlotBayar(_caraBayarTerpilih!, _total)]
-            : <_SlotBayar>[]);
-    final hasil = await showModalBottomSheet<List<_SlotBayar>>(
+            ? [SlotBayar(_caraBayarTerpilih!, _total)]
+            : <SlotBayar>[]);
+    final hasil = await showModalBottomSheet<List<SlotBayar>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SheetPilihMetodeSplit(
+      builder: (_) => PemilihMetodeSplit(
         daftarMetode: _caraBayarTersedia,
         terpilihAwal: awal,
         total: _total,
@@ -3227,234 +3228,6 @@ class _DialogInputJumlahKeranjangState
   }
 }
 
-/// Satu slot pembayaran (metode + nominal) dlm split pembayaran s/d 5
-/// metode/transaksi. Lihat JavaDoc `_PanelKeranjangState._splitBayar`.
-class _SlotBayar {
-  final CaraBayar caraBayar;
-  double nominal;
-  _SlotBayar(this.caraBayar, this.nominal);
-}
-
-/// Bottom sheet pilih metode pembayaran -- padanan `_pos.jsp` modal "Pilih
-/// Metode Pembayaran": tap BARIS (di luar checkbox) = pilih SATU metode utk
-/// bayar penuh & langsung tutup (perilaku lama, zero-friction utk kasus
-/// mayoritas satu-metode); centang ikon checkbox = gabungkan s/d 5 metode
-/// (split pembayaran), memunculkan panel bagi nominal di bawah daftar.
-class _SheetPilihMetodeSplit extends StatefulWidget {
-  final List<CaraBayar> daftarMetode;
-  final List<_SlotBayar> terpilihAwal;
-  final double total;
-
-  /// Muat ulang daftar metode dari server (izin member terbaru) tanpa
-  /// menutup sheet; null = tombol sinkron tidak ditampilkan.
-  final Future<List<CaraBayar>?> Function()? muatUlang;
-
-  const _SheetPilihMetodeSplit({
-    required this.daftarMetode,
-    required this.terpilihAwal,
-    required this.total,
-    this.muatUlang,
-  });
-
-  @override
-  State<_SheetPilihMetodeSplit> createState() => _SheetPilihMetodeSplitState();
-}
-
-class _SheetPilihMetodeSplitState extends State<_SheetPilihMetodeSplit> {
-  late List<_SlotBayar> _terpilih;
-  late List<CaraBayar> _metode;
-  bool _menyinkron = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _metode = List<CaraBayar>.of(widget.daftarMetode);
-    _terpilih = widget.terpilihAwal
-        .map((s) => _SlotBayar(s.caraBayar, s.nominal))
-        .toList();
-  }
-
-  Future<void> _sinkronkanMetode() async {
-    if (_menyinkron) return;
-    setState(() => _menyinkron = true);
-    try {
-      final baru = await widget.muatUlang!.call();
-      if (!mounted) return;
-      if (baru == null || baru.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Metode pembayaran tidak dapat dimuat. Periksa koneksi lalu coba lagi.')));
-        return;
-      }
-      setState(() {
-        _metode = List<CaraBayar>.of(baru);
-        // Slot yang metodenya sudah dicabut admin ikut dibuang -- jangan
-        // biarkan kasir membayar dgn metode yang tidak lagi diizinkan.
-        _terpilih
-            .removeWhere((s) => !_metode.any((c) => c.id == s.caraBayar.id));
-      });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Daftar metode pembayaran diperbarui dari server.')));
-    } finally {
-      if (mounted) setState(() => _menyinkron = false);
-    }
-  }
-
-  void _toggle(CaraBayar c) {
-    final idx = _terpilih.indexWhere((s) => s.caraBayar.id == c.id);
-    if (idx >= 0) {
-      setState(() => _terpilih.removeAt(idx));
-      return;
-    }
-    if (_terpilih.length >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Maksimal 5 metode pembayaran per transaksi.')));
-      return;
-    }
-    setState(() {
-      _terpilih.add(_SlotBayar(c, 0));
-      _bagiRataJikaKosong();
-    });
-  }
-
-  /// Default bagi rata SEKALI saat jumlah slot berubah (semua nominal masih
-  /// 0) -- tidak dijalankan ulang tiap render supaya angka yg sudah diedit
-  /// manual kasir tidak direset.
-  void _bagiRataJikaKosong() {
-    if (_terpilih.length < 2 || widget.total <= 0) return;
-    if (!_terpilih.every((s) => s.nominal == 0)) return;
-    final n = _terpilih.length;
-    final rata = (widget.total / n).floorToDouble();
-    for (var i = 0; i < n; i++) {
-      _terpilih[i].nominal =
-          (i == n - 1) ? (widget.total - rata * (n - 1)) : rata;
-    }
-  }
-
-  double get _totalDialokasikan =>
-      _terpilih.fold(0.0, (sum, s) => sum + s.nominal);
-  double get _sisa => widget.total - _totalDialokasikan;
-  bool get _seimbang => _sisa.abs() < 1;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                    'Ketuk baris utk bayar penuh 1 metode, atau centang kotak utk gabungkan s/d 5 metode (split bayar).',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
-              ),
-              if (widget.muatUlang != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _menyinkron ? null : _sinkronkanMetode,
-                      icon: _menyinkron
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.sync, size: 16),
-                      label: const Text('Sinkronkan cara pembayaran'),
-                    ),
-                  ),
-                ),
-              ..._metode.map((c) {
-                final aktif = _terpilih.any((s) => s.caraBayar.id == c.id);
-                return ListTile(
-                  leading: Checkbox(
-                    value: aktif,
-                    onChanged: (_) => _toggle(c),
-                  ),
-                  title: Text(c.nama),
-                  onTap: () =>
-                      Navigator.of(context).pop([_SlotBayar(c, widget.total)]),
-                );
-              }),
-              if (_terpilih.length >= 2) ...[
-                const Divider(height: 1),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('Bagi Nominal per Metode',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                ..._terpilih.map((s) => Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                              child: Text(s.caraBayar.nama,
-                                  overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 140,
-                            child: TextFormField(
-                              key: ValueKey('nominal-split-${s.caraBayar.id}'),
-                              initialValue: s.nominal.toStringAsFixed(0),
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.end,
-                              decoration: const InputDecoration(
-                                prefixText: 'Rp ',
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                              ),
-                              onChanged: (v) => setState(
-                                  () => s.nominal = double.tryParse(v) ?? 0),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Sisa belum dialokasikan',
-                          style: TextStyle(fontSize: 12)),
-                      Text(
-                        NumberFormat.currency(
-                                locale: 'id_ID',
-                                symbol: 'Rp ',
-                                decimalDigits: 0)
-                            .format(_sisa),
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _seimbang ? Colors.green : Colors.red),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                  child: ElevatedButton(
-                    onPressed: _seimbang
-                        ? () => Navigator.of(context).pop(_terpilih)
-                        : null,
-                    child: const Text('Terapkan Split Pembayaran'),
-                  ),
-                ),
-              ] else
-                const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Langkah pertama promo manual: pilih tepat satu baris keranjang. Object
 /// dikembalikan berdasarkan identitas baris, sehingga dua baris produk sama
 /// dengan ekstra berbeda tidak saling tertukar.
@@ -3510,7 +3283,7 @@ class _SheetPilihItemPromoManual extends StatelessWidget {
 /// -- padanan visual `_SheetPilihEkstra` (kasir_screen.dart): daftar
 /// ListTile, tap SATU baris = pilih & tutup (tanpa tombol konfirmasi
 /// terpisah, sama seperti baris metode pembayaran non-split di
-/// [_SheetPilihMetodeSplitState] di atas). Sumber daftar HANYA rule
+/// [PemilihMetodeSplit] di atas). Sumber daftar HANYA rule
 /// `aktivasiManual=true` yg eligible utk minimal satu item keranjang saat
 /// ini (aksi `diskon_manual_list`, sudah difilter server -- lihat JavaDoc
 /// [_PanelKeranjangState._bukaPickerPromoManual]).

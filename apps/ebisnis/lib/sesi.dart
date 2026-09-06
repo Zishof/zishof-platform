@@ -52,6 +52,11 @@ class Sesi {
   /// dari hak kelola CRUD member. Server tetap menegakkan gerbang sungguhan
   /// di `KantinHelper.topupSaldo/depositUbah/depositHapus` -- ini murni UI.
   bool bolehEntryTopup = false;
+
+  /// Hak mencatat cicilan/pelunasan piutang member. Server baru mengirim
+  /// capability ini secara eksplisit; server lama memakai hak finansial manual
+  /// [bolehEntryTopup] yang sama agar pembaruan klien tetap kompatibel.
+  bool bolehEntryPelunasanPiutang = false;
   bool bolehVerifikasiLimitMember = false;
   bool bolehHapusPesanan = false;
 
@@ -183,6 +188,8 @@ class Sesi {
     isAdmin = konfig['isAdmin'] == true;
     supervisorPedagang = konfig['supervisorPedagang'] == true;
     bolehEntryTopup = konfig['bolehEntryTopup'] == true;
+    bolehEntryPelunasanPiutang = konfig['bolehEntryPelunasanPiutang'] == true ||
+        (!konfig.containsKey('bolehEntryPelunasanPiutang') && bolehEntryTopup);
     bolehVerifikasiLimitMember = konfig['bolehVerifikasiLimitMember'] == true;
     bolehHapusPesanan = konfig['bolehHapusPesanan'] == true || bolehKelola;
     caraBayar = ((konfig['caraBayar'] as List?) ?? [])
@@ -257,6 +264,7 @@ class Sesi {
     supervisorPedagang = false;
     bolehHapusPesanan = false;
     bolehEntryTopup = false;
+    bolehEntryPelunasanPiutang = false;
     bolehVerifikasiLimitMember = false;
     aksesMenu = {};
     crudPos = {};
