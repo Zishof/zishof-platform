@@ -24,6 +24,10 @@ class CetakUtilIs {
     required List<List<String>> rows,
     required String namaFile,
     String? barisTotal,
+    /// Lebar RELATIF per kolom (indeks -> bobot). Opsional: tanpa ini
+    /// TableHelper membagi lebar menurut isi terpanjang, dan judul yang panjang
+    /// menyedot ruang dari tetangganya sampai kode barang terbelah dua baris.
+    Map<int, double>? lebarKolom,
   }) async {
     final doc = pw.Document();
     final waktu = DateTime.now().toString().split('.').first;
@@ -43,6 +47,8 @@ class CetakUtilIs {
         pw.TableHelper.fromTextArray(
           headers: headers,
           data: rows,
+          columnWidths:
+              lebarKolom?.map((i, w) => MapEntry(i, pw.FlexColumnWidth(w))),
           headerStyle:
               pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
           cellStyle: const pw.TextStyle(fontSize: 8.5),
@@ -56,7 +62,25 @@ class CetakUtilIs {
         ],
       ],
     ));
-    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: namaFile);
+    final bytes = await doc.save();
+    // JAHITAN UJI, sengaja sesempit ini.
+    //
+    // Printing.layoutPdf membuka dialog cetak milik SISTEM OPERASI. Dialog itu
+    // bukan permukaan Flutter, jadi renderView.layer.toImage() tidak dapat
+    // memotretnya -- dan tanpa jalan lain, jalur cetak menjadi satu-satunya
+    // bagian aplikasi yang tidak pernah bisa diverifikasi otomatis. Sembilan
+    // dari 48 layar legacy adalah hasil cetak, jadi itu lubang yang besar.
+    //
+    // Nilai ini hanya terisi bila build diberi --dart-define=POS_TEST_PDF_DIR.
+    // Build produksi tidak pernah memberinya, sehingga cabang ini mati di sana.
+    const dirUji = String.fromEnvironment('POS_TEST_PDF_DIR');
+    if (dirUji.isNotEmpty) {
+      final f = File('$dirUji${Platform.pathSeparator}$namaFile');
+      await f.parent.create(recursive: true);
+      await f.writeAsBytes(bytes, flush: true);
+      return;
+    }
+    await Printing.layoutPdf(onLayout: (_) => bytes, name: namaFile);
   }
 
   static Future<void> eksporExcel({

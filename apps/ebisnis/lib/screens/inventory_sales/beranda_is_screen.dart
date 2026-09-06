@@ -83,6 +83,22 @@ class _BerandaInventorySalesScreenState
           Sesi.instance.currentTripId = data['currentTripId'] is num
               ? (data['currentTripId'] as num).toInt()
               : null;
+          // Toko diambil dari konteks aktor bila `konfigurasi` tidak
+          // mengetahuinya. Aksi `konfigurasi` meresolusi toko lewat entitas POS
+          // (Pedagang), dan Pemilik varian ini tidak punya Pedagang — ia terikat
+          // lewat toko-aktif-multi-toko. Akibatnya kepala setiap cetakan menulis
+          // "Toko: (global)" untuk pemilik yang jelas terikat satu toko.
+          //
+          // Sengaja hanya MENGISI yang kosong, tidak pernah menimpa: bila
+          // `konfigurasi` sudah tahu tokonya, itulah sumber yang lebih dekat ke
+          // perangkat dan tidak boleh digeser dari sini.
+          final namaToko = '${data['tokoNama'] ?? ''}'.trim();
+          if (Sesi.instance.tokoNama.trim().isEmpty && namaToko.isNotEmpty) {
+            Sesi.instance.tokoNama = namaToko;
+          }
+          if (Sesi.instance.tokoId == null && data['tokoId'] is num) {
+            Sesi.instance.tokoId = (data['tokoId'] as num).toInt();
+          }
         }
       } catch (_) {
         // Server lama / akses ditolak -- biarkan nilai dari konfigurasi.

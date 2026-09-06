@@ -74,6 +74,7 @@ import '../screens/inventory_sales/beranda_is_screen.dart';
 import '../screens/inventory_sales/master_supplier_screen.dart';
 import '../screens/inventory_sales/master_customer_screen.dart';
 import '../screens/inventory_sales/master_sales_screen.dart';
+import '../screens/inventory_sales/laporan_opname_screen.dart';
 import '../screens/inventory_sales/persediaan_screen.dart';
 import '../screens/inventory_sales/harga_screen.dart';
 import '../screens/inventory_sales/hutang_supplier_screen.dart';
@@ -218,6 +219,7 @@ enum MenuEBisnis {
   masterCustomer,
   masterSales,
   persediaan,
+  laporanOpname,
   harga,
   hutangSupplier,
   penjualanSales,
@@ -267,6 +269,7 @@ const _kunciMenuIs = <MenuEBisnis, String>{
   MenuEBisnis.masterCustomer: 'master_customer',
   MenuEBisnis.masterSales: 'master_sales',
   MenuEBisnis.persediaan: 'persediaan',
+  MenuEBisnis.laporanOpname: 'stokopname',
   MenuEBisnis.harga: 'harga',
   MenuEBisnis.hutangSupplier: 'hutang',
   MenuEBisnis.penjualanSales: 'penjualan_sales',
@@ -562,6 +565,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.persediaan, Icons.warehouse_outlined,
       'Persediaan & Kartu Stok',
       builder: _bangunPersediaan),
+  _ItemMenuShell(MenuEBisnis.laporanOpname, Icons.fact_check_outlined,
+      'Laporan Opname',
+      builder: _bangunLaporanOpname),
   _ItemMenuShell(
       MenuEBisnis.harga, Icons.price_change_outlined, 'Master & Analisis Harga',
       builder: _bangunHarga),
@@ -845,6 +851,7 @@ const _grupMenu = <_GrupMenuShell>[
     MenuEBisnis.masterCustomer,
     MenuEBisnis.masterSales,
     MenuEBisnis.persediaan,
+    MenuEBisnis.laporanOpname,
     MenuEBisnis.harga,
     MenuEBisnis.hutangSupplier,
     MenuEBisnis.penjualanSales,
@@ -1181,6 +1188,7 @@ Widget _bangunMasterSupplier(BuildContext c) => const MasterSupplierScreen();
 Widget _bangunMasterCustomer(BuildContext c) => const MasterCustomerScreen();
 Widget _bangunMasterSales(BuildContext c) => const MasterSalesScreen();
 Widget _bangunPersediaan(BuildContext c) => const PersediaanScreen();
+Widget _bangunLaporanOpname(BuildContext c) => const LaporanOpnameScreen();
 Widget _bangunHarga(BuildContext c) => const HargaScreen();
 Widget _bangunHutangSupplier(BuildContext c) => const HutangSupplierScreen();
 Widget _bangunPenjualanSales(BuildContext c) => const PenjualanSalesScreen();
@@ -1643,6 +1651,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       return 'Master Sales';
     case MenuEBisnis.persediaan:
       return 'Persediaan & Kartu Stok';
+    case MenuEBisnis.laporanOpname:
+      return 'Laporan Opname';
     case MenuEBisnis.harga:
       return 'Master & Analisis Harga';
     case MenuEBisnis.hutangSupplier:
