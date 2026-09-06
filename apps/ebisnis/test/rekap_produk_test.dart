@@ -56,6 +56,37 @@ void main() {
     expect(roti['jumlahTransaksi'], 1);
   });
 
+  test('produk yang sama lintas nota digabung memakai id master stabil', () {
+    final rekap = rekapProdukDariRincian([
+      {
+        'idTransaksi': 47,
+        'produkId': 7621,
+        'produkKode': 'EB2608301601259FWI-AN000199',
+        'produkNama': 'AN000199 ADEM SARI KALENG 320ML',
+        'produkKodeRekap': 'AN000199',
+        'produkNamaRekap': 'ADEM SARI KALENG 320ML',
+        'qty': 1,
+        'total': 9500,
+      },
+      {
+        'idTransaksi': 77,
+        'produkId': 7621,
+        'produkKode': 'EB260906163113V9DO-AN000199',
+        'produkNama': 'AN000199 ADEM SARI KALENG 320ML',
+        'produkKodeRekap': 'AN000199',
+        'produkNamaRekap': 'ADEM SARI KALENG 320ML',
+        'qty': 1,
+        'total': 9500,
+      },
+    ]);
+    expect(rekap, hasLength(1));
+    expect(rekap.single['produkKode'], 'AN000199');
+    expect(rekap.single['produkNama'], 'ADEM SARI KALENG 320ML');
+    expect(rekap.single['qty'], 2);
+    expect(rekap.single['jumlahTransaksi'], 2);
+    expect(rekap.single['total'], 19000);
+  });
+
   test('urut menurun berdasarkan nilai penjualan', () {
     final rekap = rekapProdukDariRincian(baris());
     expect(rekap.first['produkKode'], 'A');

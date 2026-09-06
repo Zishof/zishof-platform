@@ -3419,9 +3419,14 @@ List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> bar
   final peta = <String, Map<String, dynamic>>{};
   final nota = <String, Set<String>>{};
   for (final b in baris) {
-    final kode = (b['produkKode'] ?? '').toString().trim();
-    final nama = (b['produkNama'] ?? 'Produk tanpa nama').toString().trim();
-    final kunci = kode.isNotEmpty ? 'k:$kode' : 'n:${nama.toLowerCase()}';
+    final produkId = (b['produkId'] as num?)?.toInt();
+    final kode = (b['produkKodeRekap'] ?? b['produkKode'] ?? '').toString().trim();
+    final nama = (b['produkNamaRekap'] ?? b['produkNama'] ?? 'Produk tanpa nama')
+        .toString()
+        .trim();
+    final kunci = produkId != null
+        ? 'id:$produkId'
+        : (kode.isNotEmpty ? 'k:$kode' : 'n:${nama.toLowerCase()}');
     final row = peta.putIfAbsent(
         kunci,
         () => <String, dynamic>{
@@ -3493,9 +3498,9 @@ Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
   return HasilBarisRincian(hasil, totalHalaman > batasHalaman);
 }
 
-/// Rincian produk terjual per transaksi -- permintaan An Nahl (1 September 2026):
-/// laporan kasir yang diunduh harus memperlihatkan produk apa saja yang terjual,
-/// bukan hanya satu baris per transaksi.
+/// Rekap produk terjual kumulatif -- permintaan An Nahl (6 September 2026):
+/// tampilan awal menjumlahkan produk yang sama dari seluruh transaksi pada filter
+/// aktif. Mode rincian per-nota tetap tersedia untuk penelusuran/audit.
 class _TabRincianProduk extends StatefulWidget {
   final Map<String, dynamic>? statistik;
 
@@ -3520,7 +3525,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
   String _cariKasir = '';
   // Mode rekap merangkum baris rincian yang sama, sehingga angkanya tidak pernah
   // berselisih dengan mode rincian pada filter yang sama.
-  bool _modeRekap = false;
+  bool _modeRekap = true;
   bool _memuatRekap = false;
   bool _terpotong = false;
   List<Map<String, dynamic>> _rekap = [];
@@ -3535,6 +3540,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
     _mulai = DateTime(kini.year, kini.month, kini.day);
     _sampai = _mulai;
     _muat();
+    _muatRekap();
   }
 
   Map<String, dynamic> get _filter => {
