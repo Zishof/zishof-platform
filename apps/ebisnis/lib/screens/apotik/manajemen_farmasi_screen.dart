@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api_client.dart';
 import '../../widgets/app_shell.dart';
 import '../riwayat_audit_screen.dart';
-import '../riwayat_penjualan_analisis_screen.dart';
+import 'business_intelligence_apotik_screen.dart';
 import 'delivery_apotik_screen.dart';
 import 'kasir_apotik_screen.dart';
 import 'inventory_intelligence_screen.dart';
@@ -289,7 +289,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
         ),
       'delivery' => const DeliveryApotikScreen(),
       'membership' => const MembershipApotikScreen(),
-      'analitik' => const RiwayatPenjualanAnalisisScreen(),
+      'analitik' => const BusinessIntelligenceApotikScreen(),
       _ => const KasirApotikScreen(),
     };
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => tujuan));

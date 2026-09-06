@@ -12,7 +12,7 @@ void main() {
     expect(source, contains("'membership' => const MembershipApotikScreen()"));
     expect(
       source,
-      contains("'analitik' => const RiwayatPenjualanAnalisisScreen()"),
+      contains("'analitik' => const BusinessIntelligenceApotikScreen()"),
     );
     expect(source, contains("'laporan' => const RiwayatAuditScreen("));
   });
@@ -39,6 +39,17 @@ void main() {
     expect(source, contains("'apotik_membership_poin'"));
     expect(source, contains("'apotik_membership_refill'"));
     expect(source, contains("'page_size': 100"));
+  });
+
+  test('business intelligence memakai penjualan dan metrik apotik', () {
+    final source = File(
+      'lib/screens/apotik/business_intelligence_apotik_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("'apotik_laporan_penjualan'"));
+    expect(source, contains("'apotik_metrik_operasional'"));
+    expect(source, contains("'page_size': 100"));
+    expect(source, contains('20 Produk dengan Kontribusi Terbesar'));
   });
 
   test('kartu lanjutan tidak lagi diarahkan ke halaman generik', () {
