@@ -14,7 +14,10 @@ void main() {
       source,
       contains("'analitik' => const BusinessIntelligenceApotikScreen()"),
     );
-    expect(source, contains("'laporan' => const RiwayatAuditScreen("));
+    expect(
+      source,
+      contains("'laporan' => const AuditPersetujuanApotikScreen()"),
+    );
   });
 
   test('delivery apotik memakai API khusus dan mendukung alur end-to-end', () {
@@ -50,6 +53,18 @@ void main() {
     expect(source, contains("'apotik_metrik_operasional'"));
     expect(source, contains("'page_size': 100"));
     expect(source, contains('20 Produk dengan Kontribusi Terbesar'));
+  });
+
+  test('audit apotik memuat 100 data dan antrean persetujuan khusus', () {
+    final source = File(
+      'lib/screens/apotik/audit_persetujuan_apotik_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("entitasAwal: 'apotik_item'"));
+    expect(source, contains('cariOtomatis: true'));
+    expect(source, contains("'apotik_delivery_list'"));
+    expect(source, contains("'apotik_membership_list'"));
+    expect(source, contains("'page_size': 100"));
   });
 
   test('kartu lanjutan tidak lagi diarahkan ke halaman generik', () {

@@ -47,6 +47,9 @@ class RiwayatAuditScreen extends StatefulWidget {
   /// membuat AppShell/sidebar kedua.
   final bool embedded;
 
+  /// Langsung memuat halaman pertama saat layar dibuka.
+  final bool cariOtomatis;
+
   const RiwayatAuditScreen({
     super.key,
     this.entitasAwal = 'produk',
@@ -54,6 +57,7 @@ class RiwayatAuditScreen extends StatefulWidget {
     this.menuAktif = MenuEBisnis.pesanan,
     this.labelKembali = 'Kembali',
     this.embedded = false,
+    this.cariOtomatis = false,
   });
 
   @override
@@ -162,6 +166,7 @@ class _RiwayatAuditScreenState extends State<RiwayatAuditScreen>
     super.initState();
     _toko = Sesi.instance.tokoFilter;
     _muatDaftarEntitas();
+    if (widget.cariOtomatis) _cari();
   }
 
   @override

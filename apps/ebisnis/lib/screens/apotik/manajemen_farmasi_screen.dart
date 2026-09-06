@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
 import '../../widgets/app_shell.dart';
-import '../riwayat_audit_screen.dart';
+import 'audit_persetujuan_apotik_screen.dart';
 import 'business_intelligence_apotik_screen.dart';
 import 'delivery_apotik_screen.dart';
 import 'kasir_apotik_screen.dart';
@@ -283,10 +283,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       'persediaan' => const PersediaanApotikScreen(),
       'kas' =>
         const LaporanApotikScreen(tabAwal: LaporanApotikScreen.tabRekonsiliasi),
-      'laporan' => const RiwayatAuditScreen(
-          menuAktif: MenuEBisnis.manajemenFarmasiApotik,
-          labelKembali: 'Manajemen Farmasi',
-        ),
+      'laporan' => const AuditPersetujuanApotikScreen(),
       'delivery' => const DeliveryApotikScreen(),
       'membership' => const MembershipApotikScreen(),
       'analitik' => const BusinessIntelligenceApotikScreen(),
