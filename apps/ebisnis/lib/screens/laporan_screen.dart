@@ -788,6 +788,52 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
         'batasRiwayat': 10000,
       };
       if (!apotik) body['posting'] = posting;
+
+      if (apotik && posting) {
+        final idsSiap = (((_data?['rincian'] as List?) ?? const [])
+            .whereType<Map>()
+            .where((baris) => baris['siap'] == true)
+            .map((baris) => baris['id'])).toList(growable: false);
+        final batch = kelompokkanPostingIds(idsSiap);
+        if (batch.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content:
+                  Text('Tidak ada transaksi berstatus SIAP untuk diposting.')));
+          return;
+        }
+
+        var totalDiposting = 0;
+        final semuaMasalah = <dynamic>[];
+        for (final ids in batch) {
+          final hasilBatch = await ApiClient.instance.aksi(aksi, {
+            ...body,
+            'posting_ids': ids,
+            // Respons antara cukup membawa riwayat ringkas. Daftar lengkap
+            // dimuat sekali lagi setelah semua batch selesai.
+            'batasRiwayat': 100,
+          });
+          totalDiposting += (hasilBatch['diposting'] as num?)?.toInt() ?? 0;
+          semuaMasalah
+              .addAll((hasilBatch['masalah'] as List?) ?? const <dynamic>[]);
+        }
+
+        final hasilAkhir = await ApiClient.instance.aksi(
+          aksiPostingKeuangan(
+            apotik: true,
+            jenis: widget.jenis,
+            terapkan: false,
+          ),
+          body,
+        );
+        if (!mounted) return;
+        setState(() => _data = Map<String, dynamic>.from(hasilAkhir));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('$totalDiposting jurnal terbentuk'
+                '${semuaMasalah.isEmpty ? '.' : ', ${semuaMasalah.length} gagal.'}')));
+        return;
+      }
+
       final hasil = await ApiClient.instance.aksi(
         aksi,
         body,

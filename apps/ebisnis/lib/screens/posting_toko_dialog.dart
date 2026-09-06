@@ -157,23 +157,47 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
       _galat = null;
     });
     try {
+      final apotik = AppProductProfile.aktif.isApotik;
       final aksi = aksiPostingToko(
-        apotik: AppProductProfile.aktif.isApotik,
+        apotik: apotik,
         jenis: widget.jenis,
         terapkan: true,
       );
-      final body = <String, dynamic>{
+      final bodyDasar = <String, dynamic>{
         'mulai': _fmt.format(_mulai),
         'sampai': _fmt.format(_sampai),
         'batasRiwayat': 10000,
       };
-      if (ids.isNotEmpty) body['posting_ids'] = ids;
-      final hasil = await ApiClient.instance.aksi(aksi, body);
+      final idsEfektif = apotik && ids.isEmpty
+          ? _rincianBelum
+              .where((baris) => baris['siap'] == true)
+              .map((baris) => baris['id'])
+              .toList(growable: false)
+          : ids;
+      final batch = apotik
+          ? kelompokkanPostingIds(idsEfektif)
+          : <List<dynamic>>[idsEfektif];
+      if (batch.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Tidak ada dokumen berstatus SIAP untuk diposting.')));
+        return;
+      }
+
+      var totalDiposting = 0;
+      final masalah = <String>[];
+      for (final idsBatch in batch) {
+        final body = <String, dynamic>{...bodyDasar};
+        if (idsBatch.isNotEmpty) body['posting_ids'] = idsBatch;
+        if (apotik) body['batasRiwayat'] = 100;
+        final hasil = await ApiClient.instance.aksi(aksi, body);
+        totalDiposting += (hasil['diposting'] as num?)?.toInt() ?? 0;
+        masalah.addAll(((hasil['masalah'] as List?) ?? []).map((e) => '$e'));
+      }
       if (!mounted) return;
-      final masalah =
-          ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${hasil['diposting'] ?? 0} jurnal terbentuk'
+          content: Text('$totalDiposting jurnal terbentuk'
               '${masalah.isEmpty ? '.' : ', ${masalah.length} gagal: ${masalah.first}'}')));
       await _muatDraf();
     } catch (e) {

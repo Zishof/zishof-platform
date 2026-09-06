@@ -49,4 +49,27 @@ void main() {
       );
     });
   });
+
+  group('batch posting Apotik', () {
+    test('membagi lebih dari 100 ID menjadi request maksimal 10', () {
+      final batch =
+          kelompokkanPostingIds(List<int>.generate(108, (i) => i + 1));
+
+      expect(batch, hasLength(11));
+      expect(batch.take(10).every((ids) => ids.length == 10), isTrue);
+      expect(batch.last, hasLength(8));
+      expect(batch.expand((ids) => ids), List<int>.generate(108, (i) => i + 1));
+    });
+
+    test('membuang ID null dan menolak ukuran batch tidak valid', () {
+      expect(kelompokkanPostingIds([1, null, 2], ukuran: 1), [
+        [1],
+        [2],
+      ]);
+      expect(
+        () => kelompokkanPostingIds([1], ukuran: 0),
+        throwsArgumentError,
+      );
+    });
+  });
 }
