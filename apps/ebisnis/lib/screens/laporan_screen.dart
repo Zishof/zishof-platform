@@ -7,8 +7,10 @@ import 'siklus_akuntansi_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
+import '../product_profile.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../services/posting_action_router.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
 import '../widgets/app_shell.dart';
@@ -773,22 +775,34 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-        'laporan_keuangan_pendukung',
-        {
-          'jenis': widget.jenis,
-          'mulai': _formatTanggalLaporan.format(_mulai),
-          'sampai': _formatTanggalLaporan.format(_sampai),
-          'posting': posting,
-          'batasRiwayat': 10000,
-        },
+      final apotik = AppProductProfile.aktif.isApotik;
+      final aksi = aksiPostingKeuangan(
+        apotik: apotik,
+        jenis: widget.jenis,
+        terapkan: posting,
       );
-      final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
+      final body = <String, dynamic>{
+        'jenis': widget.jenis,
+        'mulai': _formatTanggalLaporan.format(_mulai),
+        'sampai': _formatTanggalLaporan.format(_sampai),
+        'batasRiwayat': 10000,
+      };
+      if (!apotik) body['posting'] = posting;
+      final hasil = await ApiClient.instance.aksi(
+        aksi,
+        body,
+      );
+      final data = Map<String, dynamic>.from(
+          apotik ? hasil : ((hasil['data'] as Map?) ?? hasil));
       if (!mounted) return;
       setState(() => _data = data);
       if (posting) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${widget.judul} berhasil diposting.')));
+        final masalah = ((data['masalah'] as List?) ?? const []).length;
+        final diposting = data['diposting'];
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(diposting == null
+                ? '${widget.judul} berhasil diposting.'
+                : '$diposting jurnal terbentuk${masalah == 0 ? '.' : ', $masalah gagal.'}')));
       }
     } catch (e) {
       if (mounted) setState(() => _error = terapkanGalat(e));
@@ -825,22 +839,34 @@ class _PostingKeuanganDialogState extends State<_PostingKeuanganDialog>
       _error = null;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
-        'laporan_keuangan_pendukung',
-        {
-          'jenis': widget.jenis,
-          'mulai': _formatTanggalLaporan.format(_mulai),
-          'sampai': _formatTanggalLaporan.format(_sampai),
-          'posting_ids': [id],
-          'batasRiwayat': 10000,
-        },
+      final apotik = AppProductProfile.aktif.isApotik;
+      final aksi = aksiPostingKeuangan(
+        apotik: apotik,
+        jenis: widget.jenis,
+        terapkan: true,
       );
-      final data = Map<String, dynamic>.from((hasil['data'] as Map?) ?? hasil);
+      final body = <String, dynamic>{
+        'jenis': widget.jenis,
+        'mulai': _formatTanggalLaporan.format(_mulai),
+        'sampai': _formatTanggalLaporan.format(_sampai),
+        'posting_ids': [id],
+        'batasRiwayat': 10000,
+      };
+      final hasil = await ApiClient.instance.aksi(
+        aksi,
+        body,
+      );
+      final data = Map<String, dynamic>.from(
+          apotik ? hasil : ((hasil['data'] as Map?) ?? hasil));
       if (!mounted) return;
       setState(() => _data = data);
-      final ringkas = (data['hasilPosting'] as Map?) ?? const {};
+      final ringkas = apotik
+          ? data
+          : ((data['hasilPosting'] as Map?) ?? const <String, dynamic>{});
       final diposting = ringkas['diposting'] ?? 0;
-      final gagal = ringkas['gagal'] ?? 0;
+      final gagal = apotik
+          ? ((ringkas['masalah'] as List?) ?? const []).length
+          : (ringkas['gagal'] ?? 0);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(gagal == 0
               ? '$diposting transaksi diposting.'

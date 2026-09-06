@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../product_profile.dart';
+import '../services/posting_action_router.dart';
 import '../widgets/app_components.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
@@ -91,8 +93,13 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
       _galat = null;
     });
     try {
+      final aksi = aksiPostingToko(
+        apotik: AppProductProfile.aktif.isApotik,
+        jenis: widget.jenis,
+        terapkan: false,
+      );
       final hasil = await ApiClient.instance.aksi(
-        'posting_${widget.jenis}_draft',
+        aksi,
         {
           'mulai': _fmt.format(_mulai),
           'sampai': _fmt.format(_sampai),
@@ -150,14 +157,18 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
       _galat = null;
     });
     try {
+      final aksi = aksiPostingToko(
+        apotik: AppProductProfile.aktif.isApotik,
+        jenis: widget.jenis,
+        terapkan: true,
+      );
       final body = <String, dynamic>{
         'mulai': _fmt.format(_mulai),
         'sampai': _fmt.format(_sampai),
         'batasRiwayat': 10000,
       };
       if (ids.isNotEmpty) body['posting_ids'] = ids;
-      final hasil = await ApiClient.instance
-          .aksi('posting_${widget.jenis}_terapkan', body);
+      final hasil = await ApiClient.instance.aksi(aksi, body);
       if (!mounted) return;
       final masalah =
           ((hasil['masalah'] as List?) ?? []).map((e) => '$e').toList();
