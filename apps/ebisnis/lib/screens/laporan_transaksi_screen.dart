@@ -1653,6 +1653,8 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
   double _totalTransaksi = 0;
   double _totalSelisih = 0;
   int _jumlahTransaksi = 0;
+  int _jumlahKasirSudahClosing = 0;
+  int _jumlahKasirBelumClosing = 0;
   int _halaman = 1;
 
   @override
@@ -1677,11 +1679,26 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
           'tglSampai': _formatTanggalServer.format(_sampai),
         },
       );
+      final data =
+          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final sudahClosing =
+          data.where((row) => row['closingDikonfirmasi'] == true).length;
+      final belumClosing = data.length - sudahClosing;
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _data = data;
         _totalTransaksi = (hasil['totalTransaksi'] as num?)?.toDouble() ?? 0;
-        _totalSelisih = (hasil['totalSelisih'] as num?)?.toDouble() ?? 0;
+        // Jangan percaya angka selisih dari kontrak server lama untuk kasir
+        // yang belum closing: kasClosing=0 dahulu dianggap uang fisik nol dan
+        // menimbulkan minus semu. Hanya closing terkonfirmasi yang dijumlahkan.
+        _totalSelisih = data
+            .where((row) => row['closingDikonfirmasi'] == true)
+            .fold<double>(
+                0,
+                (jumlah, row) =>
+                    jumlah + ((row['selisih'] as num?)?.toDouble() ?? 0));
         _jumlahTransaksi = (hasil['jumlahTransaksi'] as num?)?.toInt() ?? 0;
+        _jumlahKasirSudahClosing = sudahClosing;
+        _jumlahKasirBelumClosing = belumClosing;
       });
     } catch (e) {
       setStateIfMounted(() => _error = terapkanGalat(e));
@@ -1700,12 +1717,20 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
 
   Future<DynamicReportData> _reportData() async {
     final rows = _data.map((row) {
+      final closingDikonfirmasi = row['closingDikonfirmasi'] == true;
       final methods = ((row['metodePembayaran'] as List?) ?? const [])
           .cast<Map<String, dynamic>>()
           .map((m) =>
               '${m['nama'] ?? '-'}: ${_formatRupiah.format(m['total'] ?? 0)}')
           .join('; ');
-      return <String, dynamic>{...row, 'metodeRingkas': methods};
+      return <String, dynamic>{
+        ...row,
+        'metodeRingkas': methods,
+        'statusClosing':
+            closingDikonfirmasi ? 'Sudah closing' : 'Belum closing',
+        'kasClosingLaporan': closingDikonfirmasi ? row['kasClosing'] ?? 0 : '',
+        'selisihLaporan': closingDikonfirmasi ? row['selisih'] ?? 0 : '',
+      };
     }).toList();
     return DynamicReportData(
       title: 'Transaksi Per Kasir',
@@ -1721,8 +1746,9 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
         DynamicReportColumn('totalTunai', 'Tunai', numeric: true),
         DynamicReportColumn('totalNonTunai', 'Non Tunai', numeric: true),
         DynamicReportColumn('kasSeharusnya', 'Kas Seharusnya', numeric: true),
-        DynamicReportColumn('kasClosing', 'Kas Closing', numeric: true),
-        DynamicReportColumn('selisih', 'Selisih', numeric: true),
+        DynamicReportColumn('statusClosing', 'Status Closing'),
+        DynamicReportColumn('kasClosingLaporan', 'Kas Closing', numeric: true),
+        DynamicReportColumn('selisihLaporan', 'Selisih', numeric: true),
       ],
       rows: rows,
     );
@@ -1736,6 +1762,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
     try {
       final rows = <List<String>>[];
       for (final kasir in _data) {
+        final closingDikonfirmasi = kasir['closingDikonfirmasi'] == true;
         final metode = ((kasir['metodePembayaran'] as List?) ?? [])
             .cast<Map<String, dynamic>>()
             .map((e) =>
@@ -1747,8 +1774,13 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
           _formatRupiah.format(kasir['modalAwal'] ?? 0),
           metode.isEmpty ? '-' : metode,
           _formatRupiah.format(kasir['kasSeharusnya'] ?? 0),
-          _formatRupiah.format(kasir['kasClosing'] ?? 0),
-          _formatRupiah.format(kasir['selisih'] ?? 0),
+          closingDikonfirmasi ? 'Sudah closing' : 'Belum closing',
+          closingDikonfirmasi
+              ? _formatRupiah.format(kasir['kasClosing'] ?? 0)
+              : 'Belum dicatat',
+          closingDikonfirmasi
+              ? _formatRupiah.format(kasir['selisih'] ?? 0)
+              : 'Belum dapat dihitung',
         ]);
       }
       await CetakUtilIs.cetakPdfTabel(
@@ -1761,14 +1793,16 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
           'Modal',
           'Penerimaan per Metode',
           'Kas Seharusnya',
+          'Status Closing',
           'Kas Closing',
           'Selisih'
         ],
         rows: rows,
         namaFile:
             'transaksi-per-kasir-${_formatTanggalServer.format(_mulai)}-${_formatTanggalServer.format(_sampai)}.pdf',
-        barisTotal:
-            '$_jumlahTransaksi transaksi · ${_formatRupiah.format(_totalTransaksi)} · Total selisih ${_formatRupiah.format(_totalSelisih)}',
+        barisTotal: '$_jumlahTransaksi transaksi · '
+            '${_formatRupiah.format(_totalTransaksi)} · '
+            '${_jumlahKasirSudahClosing == 0 ? 'Selisih belum dapat dihitung karena belum ada closing' : 'Selisih sesi tertutup ${_formatRupiah.format(_totalSelisih)}'}',
       );
     } catch (e) {
       if (mounted) {
@@ -1798,28 +1832,38 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
   ];
 
   List<String> _barisEksporRincian(Map<String, dynamic> row,
-          {bool rupiah = true}) =>
-      [
-        _formatWaktu(row['waktu']),
-        '${row['jenis'] ?? '-'}',
-        '${row['referensi'] ?? '-'}',
-        '${row['kasir'] ?? '-'}',
-        '${row['metode'] ?? '-'}',
-        '${row['jumlahTransaksi'] ?? 0}',
-        '${row['qty'] ?? 0}',
-        for (final key in const [
-          'totalTransaksi',
-          'tunai',
-          'nonTunai',
-          'modalAwal',
-          'kasSeharusnya',
-          'kasClosing',
-          'selisih'
-        ])
-          rupiah
-              ? _formatRupiah.format(row[key] ?? 0)
-              : '${(row[key] as num?)?.toDouble() ?? 0}',
-      ];
+      {bool rupiah = true}) {
+    final jenis = '${row['jenis'] ?? ''}'.toUpperCase();
+    final barisRekonsiliasi = jenis.startsWith('SESI KAS') || jenis == 'TOTAL';
+    final closingDikonfirmasi =
+        row['closingDikonfirmasi'] == true || jenis.contains('TUTUP');
+    return [
+      _formatWaktu(row['waktu']),
+      '${row['jenis'] ?? '-'}',
+      '${row['referensi'] ?? '-'}',
+      '${row['kasir'] ?? '-'}',
+      '${row['metode'] ?? '-'}',
+      '${row['jumlahTransaksi'] ?? 0}',
+      '${row['qty'] ?? 0}',
+      for (final key in const [
+        'totalTransaksi',
+        'tunai',
+        'nonTunai',
+        'modalAwal',
+        'kasSeharusnya',
+        'kasClosing',
+        'selisih'
+      ])
+        if (barisRekonsiliasi &&
+            !closingDikonfirmasi &&
+            (key == 'kasClosing' || key == 'selisih'))
+          ''
+        else if (rupiah)
+          _formatRupiah.format(row[key] ?? 0)
+        else
+          '${(row[key] as num?)?.toDouble() ?? 0}',
+    ];
+  }
 
   Map<String, dynamic> _barisTotalRincian(Map<String, dynamic> total) => {
         'waktu': '',
@@ -1836,10 +1880,12 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
         'kasSeharusnya': total['kasSeharusnya'] ?? 0,
         'kasClosing': total['kasClosing'] ?? 0,
         'selisih': total['selisih'] ?? 0,
+        'closingDikonfirmasi': total['closingDikonfirmasi'] == true,
       };
 
   Future<void> _eksporRincianPdf(String judul, List<Map<String, dynamic>> data,
       Map<String, dynamic> total) async {
+    final closingDikonfirmasi = total['closingDikonfirmasi'] == true;
     final rows = <List<String>>[
       ...data.map(_barisEksporRincian),
       _barisEksporRincian(_barisTotalRincian(total)),
@@ -1852,8 +1898,9 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
       rows: rows,
       namaFile:
           'rincian-rekonsiliasi-${_formatTanggalServer.format(_mulai)}-${_formatTanggalServer.format(_sampai)}.pdf',
-      barisTotal:
-          'Kas seharusnya ${_formatRupiah.format(total['kasSeharusnya'] ?? 0)} · Kas closing ${_formatRupiah.format(total['kasClosing'] ?? 0)} · Selisih ${_formatRupiah.format(total['selisih'] ?? 0)}',
+      barisTotal: closingDikonfirmasi
+          ? 'Kas seharusnya ${_formatRupiah.format(total['kasSeharusnya'] ?? 0)} · Kas closing ${_formatRupiah.format(total['kasClosing'] ?? 0)} · Selisih ${_formatRupiah.format(total['selisih'] ?? 0)}'
+          : 'Kas seharusnya ${_formatRupiah.format(total['kasSeharusnya'] ?? 0)} · Kas closing belum dicatat · Selisih belum dapat dihitung',
     );
   }
 
@@ -1910,6 +1957,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
                   .cast<Map<String, dynamic>>();
               final total = (hasil['total'] as Map?)?.cast<String, dynamic>() ??
                   const <String, dynamic>{};
+              final closingDikonfirmasi = total['closingDikonfirmasi'] == true;
               final semuaBaris = [...data, _barisTotalRincian(total)];
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1930,10 +1978,16 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
                           _formatRupiah.format(total['modalAwal'] ?? 0)),
                       _chipTotalRincian('Kas Seharusnya',
                           _formatRupiah.format(total['kasSeharusnya'] ?? 0)),
-                      _chipTotalRincian('Kas Closing',
-                          _formatRupiah.format(total['kasClosing'] ?? 0)),
-                      _chipTotalRincian('Selisih',
-                          _formatRupiah.format(total['selisih'] ?? 0)),
+                      _chipTotalRincian(
+                          'Kas Closing',
+                          closingDikonfirmasi
+                              ? _formatRupiah.format(total['kasClosing'] ?? 0)
+                              : 'Belum dicatat'),
+                      _chipTotalRincian(
+                          'Selisih',
+                          closingDikonfirmasi
+                              ? _formatRupiah.format(total['selisih'] ?? 0)
+                              : 'Belum dapat dihitung'),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -2091,13 +2145,24 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
                               judul: 'Rincian Nilai Seluruh Transaksi',
                               komponen: 'total_transaksi')),
                       _angkaLaporan(context,
-                          label: 'Total selisih kasir',
-                          nilai: _formatRupiah.format(_totalSelisih),
-                          keterangan:
-                              'Kas closing dikurangi modal awal dan penerimaan tunai.',
-                          onTap: () => _bukaRincian(
-                              judul: 'Rekonsiliasi Seluruh Kasir',
-                              komponen: 'selisih')),
+                          label: 'Total selisih sesi tertutup',
+                          nilai: _jumlahKasirSudahClosing == 0
+                              ? 'Belum ada closing'
+                              : _formatRupiah.format(_totalSelisih),
+                          keterangan: _jumlahKasirSudahClosing == 0
+                              ? 'Selisih belum dapat dihitung karena kas closing belum dicatat.'
+                              : 'Hanya menjumlahkan kasir yang seluruh sesinya sudah ditutup.',
+                          onTap: _jumlahKasirSudahClosing == 0
+                              ? () => _tampilkanRincianAngka(
+                                    context,
+                                    judul: 'Rekonsiliasi Seluruh Kasir',
+                                    nilai: 'Belum ada closing',
+                                    keterangan:
+                                        'Selisih bukan angka penjualan. Selisih baru tersedia setelah uang fisik dicatat melalui Tutup Kas.',
+                                  )
+                              : () => _bukaRincian(
+                                  judul: 'Rekonsiliasi Seluruh Kasir',
+                                  komponen: 'selisih')),
                     ],
                   ),
                 ),
@@ -2114,6 +2179,30 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
               ],
             ),
           ),
+          if (_jumlahKasirBelumClosing > 0)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                border: Border.all(color: const Color(0xFFFFCC80)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: Color(0xFFB26A00)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$_jumlahKasirBelumClosing kasir belum memiliki closing yang terkonfirmasi. '
+                      'Kas closing Rp0 pada kondisi ini bukan berarti uang fisik nol, sehingga '
+                      'selisih tidak ditampilkan sebagai minus sampai Tutup Kas selesai.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (_memuat || _error != null)
             _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
           else if (_data.isEmpty)
@@ -2127,6 +2216,7 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
               final metode = ((kasir['metodePembayaran'] as List?) ?? [])
                   .cast<Map<String, dynamic>>();
               final selisih = (kasir['selisih'] as num?)?.toDouble() ?? 0;
+              final closingDikonfirmasi = kasir['closingDikonfirmasi'] == true;
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ExpansionTile(
@@ -2152,17 +2242,31 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
                   ]),
                   trailing: _angkaLaporan(context,
                       label: 'Selisih kas ${kasir['kasir'] ?? '-'}',
-                      nilai: _formatRupiah.format(selisih),
-                      keterangan: 'Kas closing dikurangi kas yang seharusnya.',
+                      nilai: closingDikonfirmasi
+                          ? _formatRupiah.format(selisih)
+                          : 'Belum closing',
+                      keterangan: closingDikonfirmasi
+                          ? 'Kas closing dikurangi kas yang seharusnya.'
+                          : 'Uang fisik belum dicatat melalui Tutup Kas; belum ada selisih yang sah.',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: selisih == 0
-                              ? const Color(0xFF2E7D32)
-                              : Colors.red),
-                      onTap: () => _bukaRincian(
-                          judul: 'Rekonsiliasi ${kasir['kasir'] ?? '-'}',
-                          kasir: '${kasir['kasir'] ?? ''}',
-                          komponen: 'selisih')),
+                          color: !closingDikonfirmasi
+                              ? const Color(0xFFB26A00)
+                              : selisih == 0
+                                  ? const Color(0xFF2E7D32)
+                                  : Colors.red),
+                      onTap: closingDikonfirmasi
+                          ? () => _bukaRincian(
+                              judul: 'Rekonsiliasi ${kasir['kasir'] ?? '-'}',
+                              kasir: '${kasir['kasir'] ?? ''}',
+                              komponen: 'selisih')
+                          : () => _tampilkanRincianAngka(
+                                context,
+                                judul: 'Rekonsiliasi ${kasir['kasir'] ?? '-'}',
+                                nilai: 'Belum closing',
+                                keterangan:
+                                    'Selisih bukan angka penjualan. Kas closing belum pernah dikonfirmasi. Selesaikan transaksi Pending, hitung uang fisik, lalu gunakan menu Tutup Kas.',
+                              )),
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
@@ -2182,9 +2286,22 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
                               kasir: '${kasir['kasir'] ?? ''}',
                               komponen: 'kas_seharusnya'),
                           _barisNilai('Kas closing', kasir['kasClosing'],
+                              nilaiTampil:
+                                  closingDikonfirmasi ? null : 'Belum dicatat',
+                              keterangan: closingDikonfirmasi
+                                  ? null
+                                  : 'Nominal uang fisik belum dicatat melalui Tutup Kas.',
+                              rincianTersedia: closingDikonfirmasi,
                               kasir: '${kasir['kasir'] ?? ''}',
                               komponen: 'kas_closing'),
                           _barisNilai('Selisih', kasir['selisih'],
+                              nilaiTampil: closingDikonfirmasi
+                                  ? null
+                                  : 'Belum dapat dihitung',
+                              keterangan: closingDikonfirmasi
+                                  ? null
+                                  : 'Selisih baru dihitung setelah kas closing dikonfirmasi.',
+                              rincianTersedia: closingDikonfirmasi,
                               tebal: true,
                               kasir: '${kasir['kasir'] ?? ''}',
                               komponen: 'selisih'),
@@ -2229,6 +2346,9 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
 
   Widget _barisNilai(String label, dynamic nilai,
       {bool tebal = false,
+      String? nilaiTampil,
+      String? keterangan,
+      bool rincianTersedia = true,
       String kasir = '',
       String komponen = 'semua',
       String metode = ''}) {
@@ -2238,15 +2358,23 @@ class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with Jejak
         Expanded(child: Text(label)),
         _angkaLaporan(context,
             label: label,
-            nilai: _formatRupiah.format(nilai ?? 0),
-            keterangan: 'Komponen rekonsiliasi transaksi per kasir.',
+            nilai: nilaiTampil ?? _formatRupiah.format(nilai ?? 0),
+            keterangan:
+                keterangan ?? 'Komponen rekonsiliasi transaksi per kasir.',
             textAlign: TextAlign.right,
             style: TextStyle(fontWeight: tebal ? FontWeight.bold : null),
-            onTap: () => _bukaRincian(
-                judul: '$label${kasir.isEmpty ? '' : ' · $kasir'}',
-                kasir: kasir,
-                komponen: komponen,
-                metode: metode)),
+            onTap: rincianTersedia
+                ? () => _bukaRincian(
+                    judul: '$label${kasir.isEmpty ? '' : ' · $kasir'}',
+                    kasir: kasir,
+                    komponen: komponen,
+                    metode: metode)
+                : () => _tampilkanRincianAngka(
+                      context,
+                      judul: '$label${kasir.isEmpty ? '' : ' · $kasir'}',
+                      nilai: nilaiTampil ?? '-',
+                      keterangan: keterangan,
+                    )),
       ]),
     );
   }
