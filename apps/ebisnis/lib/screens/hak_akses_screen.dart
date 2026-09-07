@@ -131,6 +131,7 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
   bool _memuat = true;
   bool _menyimpan = false;
   bool _supervisor = false;
+  bool _bolehVerifikasiLimitMember = false;
   String? _error;
   List<Map<String, dynamic>> _menu = [];
 
@@ -150,6 +151,7 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
           .aksi('ebisnis_role_menu_ambil', {'role_id': widget.roleId});
       _menu = ((hasil['menu'] as List?) ?? []).cast<Map<String, dynamic>>();
       _supervisor = hasil['supervisor'] == true;
+      _bolehVerifikasiLimitMember = hasil['bolehVerifikasiLimitMember'] == true;
     } catch (e) {
       _error = '$e';
     } finally {
@@ -166,8 +168,11 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
       // Kontrol akses TIDAK boleh diantre: hak yang dicabut harus benar-benar
       // berlaku di server saat itu juga, bukan "menyusul nanti". Sengaja
       // online-only (spec 13.3) dan dikunci uji master_offline_kontrak_test.
-      await ApiClient.instance.aksi('ebisnis_role_menu_simpan',
-          {'role_id': widget.roleId, 'menu': payload});
+      await ApiClient.instance.aksi('ebisnis_role_menu_simpan', {
+        'role_id': widget.roleId,
+        'menu': payload,
+        'bolehVerifikasiLimitMember': _bolehVerifikasiLimitMember,
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Hak akses berhasil disimpan.')));
@@ -203,6 +208,23 @@ class _EditHakAksesScreenState extends State<_EditHakAksesScreen> {
                           style: TextStyle(fontSize: 12),
                         ),
                       ),
+                    Card(
+                      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      child: SwitchListTile(
+                        title: const Text(
+                            'Boleh memverifikasi transaksi melebihi limit'),
+                        subtitle: const Text(
+                          'Petugas dapat menyetujui atau menolak pengajuan pada '
+                          'Pelanggan > Pengajuan Melebihi Limit. Setelah disetujui, '
+                          'transaksi harus dikirim ulang dengan kode yang sama.',
+                        ),
+                        value: _bolehVerifikasiLimitMember,
+                        onChanged: _menyimpan
+                            ? null
+                            : (v) => setStateIfMounted(
+                                () => _bolehVerifikasiLimitMember = v),
+                      ),
+                    ),
                     Expanded(
                       child: ListView.builder(
                         itemCount: _menu.length,

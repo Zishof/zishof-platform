@@ -32,4 +32,23 @@ void main() {
     expect(kasir, contains("pesanLimit.contains('ditolak')"));
     expect(kasir, contains("pesanLimit.contains('berbeda')"));
   });
+
+  test('hak verifikasi limit dapat diatur dari layar Hak Akses', () {
+    final hakAkses =
+        File('lib/screens/hak_akses_screen.dart').readAsStringSync();
+
+    expect(hakAkses, contains("hasil['bolehVerifikasiLimitMember']"));
+    expect(hakAkses, contains("'bolehVerifikasiLimitMember':"));
+    expect(hakAkses, contains('Boleh memverifikasi transaksi melebihi limit'));
+  });
+
+  test('saldo voucher memprioritaskan server dan menandai cache offline', () {
+    final saldo =
+        File('lib/screens/anggota/tab_saldo_voucher.dart').readAsStringSync();
+
+    expect(saldo, contains('MasterOffline.daftarDenganCache'));
+    expect(saldo, contains("res['offline'] == true"));
+    expect(saldo, contains('Data server diperbarui'));
+    expect(saldo, contains('Data offline - menampilkan cache terakhir'));
+  });
 }

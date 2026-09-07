@@ -40,6 +40,8 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
   String? _galat;
   String _cari = '';
   bool _menyiapkanLaporan = false;
+  bool _dataOffline = false;
+  DateTime? _terakhirDiperbarui;
   DynamicReportModel? _modelLaporan;
 
   List<Map<String, dynamic>> _mutasi = [];
@@ -59,29 +61,33 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
       _galat = null;
     });
     try {
-      await MasterOffline.daftarCacheDulu(
+      // Saldo adalah angka finansial yang dipakai untuk keputusan transaksi.
+      // Minta server lebih dahulu agar snapshot cache lama tidak sempat
+      // dianggap sebagai saldo terkini. Bila benar-benar offline, helper tetap
+      // mengembalikan cache terakhir dengan penanda `offline: true`.
+      final res = await MasterOffline.daftarDenganCache(
         'mutasi_tabungan_list',
         {'dari': _fmtTgl.format(_dari), 'sampai': _fmtTgl.format(_sampai)},
-        'master:saldo_voucher:${_fmtTgl.format(_dari)}-${_fmtTgl.format(_sampai)}',
-        responsLengkap: true,
-        onData: (res) {
-          if (!mounted) return;
-          final sukses = res['status'] == '00' || res['status'] == 'success';
-          if (!sukses) {
-            setStateIfMounted(() {
-              _galat = '${res['description'] ?? 'Gagal memuat saldo voucher.'}';
-              _memuat = false;
-            });
-            return;
-          }
-          setStateIfMounted(() {
-            _mutasi = ((res['data'] as List?) ?? [])
-                .map((e) => Map<String, dynamic>.from(e as Map))
-                .toList();
-            _memuat = false;
-          });
-        },
+        'master:saldo_voucher:${Sesi.instance.idTokoTerpilih ?? 'semua'}:'
+            '${_fmtTgl.format(_dari)}-${_fmtTgl.format(_sampai)}',
       );
+      if (!mounted) return;
+      final sukses = res['status'] == '00' || res['status'] == 'success';
+      if (!sukses) {
+        setStateIfMounted(() {
+          _galat = '${res['description'] ?? 'Gagal memuat saldo voucher.'}';
+          _memuat = false;
+        });
+        return;
+      }
+      setStateIfMounted(() {
+        _mutasi = ((res['data'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _dataOffline = res['offline'] == true;
+        if (!_dataOffline) _terakhirDiperbarui = DateTime.now();
+        _memuat = false;
+      });
     } catch (e) {
       setStateIfMounted(() {
         _galat = '$e';
@@ -352,14 +358,29 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
       if (!_memuat && _galat == null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(children: [
-            Text('${daftar.length} anggota',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const Spacer(),
-            Text('Total saldo akhir: ${_fmtRp.format(totalSaldo)}',
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              Text('${daftar.length} anggota',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                _dataOffline
+                    ? 'Data offline - menampilkan cache terakhir'
+                    : 'Data server diperbarui ${DateFormat('HH:mm:ss').format(_terakhirDiperbarui ?? DateTime.now())}',
                 style: TextStyle(
-                    fontWeight: FontWeight.w800, color: AppColors.primary)),
-          ]),
+                    fontSize: 12,
+                    color: _dataOffline
+                        ? Colors.orange.shade800
+                        : Colors.green.shade700,
+                    fontWeight: FontWeight.w600),
+              ),
+              Text('Total saldo akhir: ${_fmtRp.format(totalSaldo)}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ],
+          ),
         ),
       Expanded(
         child: _memuat
