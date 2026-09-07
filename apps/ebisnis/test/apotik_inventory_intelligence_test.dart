@@ -118,4 +118,40 @@ void main() {
     final aman = tester.getTopLeft(find.text('Stok Aman')).dy;
     expect(rendah, lessThan(aman));
   });
+
+  testWidgets('perencanaan 100 item tetap lazy dan memakai identitas obat',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(
+          useMaterial3: true, extensions: const [ApotikDesignTokens.light]),
+      home: Scaffold(
+        body: ApotikInventoryIntelligencePage(
+          tabAwal: 3,
+          muatDaftar: (aksi, body, cacheKey, {required onData}) async {
+            onData({
+              'data': aksi == 'apotik_item_cari'
+                  ? List.generate(
+                      100,
+                      (i) => {
+                            'id': i + 1,
+                            'nama': 'Item Rencana ${i + 1}',
+                            'kode': 'REN-${i + 1}',
+                            'stok': i + 1,
+                            'satuan': 'Tablet',
+                          })
+                  : const [],
+              'dariServer': true,
+            });
+          },
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Item Rencana 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('medication-thumbnail')).evaluate().length,
+        lessThan(100));
+  });
 }

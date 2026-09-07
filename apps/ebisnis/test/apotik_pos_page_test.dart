@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
 import 'package:ebisnis/features/apotik/core/apotik_lokal_dulu.dart';
 import 'package:ebisnis/features/apotik/pos/apotik_batch_sheet.dart';
@@ -7,6 +9,7 @@ import 'package:ebisnis/features/apotik/pos/apotik_pos_page.dart';
 import 'package:ebisnis/features/apotik/pos/apotik_pos_state.dart';
 import 'package:ebisnis/features/apotik/shared/widgets/medication_card.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Server tiruan dengan kontrak NYATA apotik.
@@ -80,7 +83,7 @@ void main() {
       await _pump(
           tester,
           ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
-          const Size(1500, 900));
+          const Size(1600, 900));
       // Area konteks (mode switcher) + katalog + keranjang tampil bersamaan.
       expect(find.byType(ApotikModeSwitcher), findsOneWidget);
       expect(find.byType(MedicationCard), findsOneWidget);
@@ -89,26 +92,51 @@ void main() {
     });
 
     testWidgets(
-        'mobile memakai satu kolom + aksi melekat, tanpa panel keranjang',
+        'mobile kosong memakai satu kolom tanpa bilah keranjang yang mubazir',
         (tester) async {
       await _pump(
           tester,
           ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
           const Size(420, 850));
       expect(find.byType(MedicationCard), findsOneWidget);
-      // Keranjang TIDAK dirakit sebagai panel; hanya tombol ringkasan melekat.
+      // Keranjang TIDAK dirakit dan bilah bawah baru muncul setelah ada isi.
       expect(find.byType(ApotikCartPanel), findsNothing);
-      expect(find.text('Keranjang'), findsOneWidget);
-      expect(find.text('0 item'), findsOneWidget);
+      expect(find.text('Keranjang'), findsNothing);
+      expect(find.text('0 item'), findsNothing);
       expect(find.text('Tebus Resep'), findsOneWidget);
     });
 
-    testWidgets('desktop sempit tetap menampilkan aksi Tebus Resep',
+    testWidgets('mobile berisi menampilkan ringkasan keranjang melekat',
+        (tester) async {
+      final pos = ApotikPosController()
+        ..tambah(ApotikBarisKeranjang(item: _obat, qty: 1, harga: 3000));
+      await _pump(
+          tester,
+          ApotikPosPage(
+              controller: pos, panggil: _server(item: [_obat], dicatat: [])),
+          const Size(420, 850));
+      expect(find.byType(ApotikCartPanel), findsNothing);
+      expect(find.text('Keranjang'), findsOneWidget);
+      expect(find.text('1 item'), findsOneWidget);
+    });
+
+    testWidgets('desktop standard menampilkan katalog dan keranjang tetap',
         (tester) async {
       await _pump(
           tester,
           ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
           const Size(1100, 760));
+      expect(find.byType(ApotikCartPanel), findsOneWidget);
+      expect(find.text('Tebus Resep'), findsOneWidget);
+      expect(find.text('Detail'), findsOneWidget);
+    });
+
+    testWidgets('di bawah 980 keranjang kembali menjadi lembar',
+        (tester) async {
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
+          const Size(979, 760));
       expect(find.byType(ApotikCartPanel), findsNothing);
       expect(find.text('Tebus Resep'), findsOneWidget);
     });
@@ -122,7 +150,7 @@ void main() {
               panggil: _server(item: [
             {..._obat, 'golonganObat': 'KERAS', 'highAlert': true}
           ], dicatat: [])),
-          const Size(1500, 900));
+          const Size(1600, 900));
       expect(find.text('500 mg • tablet'), findsOneWidget);
       expect(find.text('Keras (Rx)'), findsOneWidget);
       expect(find.text('High-alert'), findsOneWidget);
@@ -149,6 +177,116 @@ void main() {
       expect(find.textContaining('Katalog sedang dikunci.'), findsOneWidget);
       expect(find.text('Coba lagi'), findsOneWidget);
     });
+
+    testWidgets('filter cepat menyaring data tanpa request API tambahan',
+        (tester) async {
+      final aksi = <String>[];
+      await _pump(
+          tester,
+          ApotikPosPage(
+              panggil: _server(item: [
+            _obat,
+            {
+              ..._obat,
+              'id': 2,
+              'kode': 'OBT-2',
+              'nama': 'Insulin UAT',
+              'coldChain': true,
+            },
+          ], dicatat: aksi)),
+          const Size(1500, 900));
+      final jumlahCariSebelum =
+          aksi.where((a) => a == 'apotik_item_cari').length;
+
+      await tester.tap(find.text('Perlu perhatian'));
+      await tester.pump();
+
+      expect(find.text('Insulin UAT'), findsOneWidget);
+      expect(find.text('Paracetamol 500 mg'), findsNothing);
+      expect(
+          aksi.where((a) => a == 'apotik_item_cari').length, jumlahCariSebelum);
+    });
+
+    testWidgets('F2 mengembalikan fokus ke pencarian katalog', (tester) async {
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
+          const Size(1100, 760));
+      final kolomCari = tester.widget<TextField>(find.byType(TextField).first);
+      expect(kolomCari.focusNode?.hasFocus, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(kolomCari.focusNode?.hasFocus, isFalse);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+      await tester.pump();
+
+      expect(kolomCari.focusNode?.hasFocus, isTrue);
+    });
+
+    testWidgets('respons pencarian lama tidak menimpa hasil terbaru',
+        (tester) async {
+      final responsLama = Completer<Map<String, dynamic>>();
+      await _pump(tester, ApotikPosPage(panggil: (aksi, body) async {
+        if (aksi == 'apotik_item_cari') {
+          final keyword = '${body['keyword'] ?? ''}';
+          if (keyword == 'para') return responsLama.future;
+          if (keyword == 'ibu') {
+            return {
+              'status': '00',
+              'data': [
+                {..._obat, 'id': 2, 'nama': 'Ibuprofen terbaru'}
+              ],
+            };
+          }
+          return {
+            'status': '00',
+            'data': [_obat]
+          };
+        }
+        return {'status': '00', 'data': const []};
+      }), const Size(1100, 760));
+      final cari = find.widgetWithText(
+          TextField, 'Cari nama obat, kode, atau pindai barcode…');
+
+      await tester.enterText(cari, 'para');
+      await tester.pump(const Duration(milliseconds: 301));
+      await tester.enterText(cari, 'ibu');
+      await tester.pump(const Duration(milliseconds: 301));
+      await tester.pump();
+      expect(find.text('Ibuprofen terbaru'), findsOneWidget);
+
+      responsLama.complete({
+        'status': '00',
+        'data': [
+          {..._obat, 'id': 3, 'nama': 'Paracetamol terlambat'}
+        ],
+      });
+      await tester.pump();
+
+      expect(find.text('Ibuprofen terbaru'), findsOneWidget);
+      expect(find.text('Paracetamol terlambat'), findsNothing);
+    });
+
+    testWidgets('kata kunci dapat dibersihkan dari tombol di kolom pencarian',
+        (tester) async {
+      await _pump(
+          tester,
+          ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
+          const Size(1100, 760));
+      final cari = find.widgetWithText(
+          TextField, 'Cari nama obat, kode, atau pindai barcode…');
+
+      await tester.enterText(cari, 'parasetamol');
+      await tester.pump();
+      expect(find.byTooltip('Bersihkan pencarian'), findsOneWidget);
+      await tester.tap(find.byTooltip('Bersihkan pencarian'));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<TextField>(cari).controller?.text, isEmpty);
+      expect(find.text('F2'), findsOneWidget);
+    });
   });
 
   group('Menambah obat ke keranjang', () {
@@ -156,7 +294,7 @@ void main() {
       await _pump(
           tester,
           ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
-          const Size(1500, 900));
+          const Size(1600, 900));
       await tester.tap(find.byType(MedicationCard));
       await tester.pumpAndSettle();
       expect(find.text('Keranjang kosong'), findsNothing);
@@ -407,6 +545,8 @@ void main() {
             {'id': 2, 'nama': 'QRIS'},
           ], dicatat: [])),
           const Size(1500, 900));
+      await tester.tap(find.text('Detail'));
+      await tester.pumpAndSettle();
       expect(find.text('Metode pembayaran'), findsOneWidget);
       expect(find.text('Tunai'), findsOneWidget);
     });
@@ -417,6 +557,8 @@ void main() {
           tester,
           ApotikPosPage(panggil: _server(item: [_obat], dicatat: [])),
           const Size(1500, 900));
+      await tester.tap(find.text('Detail'));
+      await tester.pumpAndSettle();
       expect(find.text('Metode pembayaran'), findsNothing);
     });
 

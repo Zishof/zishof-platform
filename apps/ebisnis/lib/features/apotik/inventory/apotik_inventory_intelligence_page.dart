@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../services/master_offline.dart';
 import '../../../widgets/safe_state.dart';
 import '../core/apotik_lokal_dulu.dart';
+import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/apotik_status_pill.dart';
+import '../shared/widgets/medication_image.dart';
 
 /// Pusat operasional persediaan lanjutan berbasis data batch dan formularium
 /// SIRS. Semua angka berasal dari API aktual; tidak ada angka contoh buatan UI.
@@ -167,8 +169,8 @@ class _ApotikInventoryIntelligencePageState
   }
 
   Widget _angka(String label, int nilai, IconData ikon, {bool bahaya = false}) {
-    final warna =
-        bahaya ? Theme.of(context).colorScheme.error : const Color(0xFF0F766E);
+    final t = ApotikDesignTokens.of(context);
+    final warna = bahaya ? t.danger : t.primary;
     return Container(
       width: 170,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -238,10 +240,7 @@ class _ApotikInventoryIntelligencePageState
         final status = '${b['statusLot'] ?? 'ELIGIBLE'}';
         return Card(
           child: ListTile(
-            leading: CircleAvatar(
-                child: Icon(tampilkanSuhu
-                    ? Icons.ac_unit
-                    : Icons.warning_amber_rounded)),
+            leading: MedicationImage(item: b, width: 48, height: 54),
             title: Text('${b['nama'] ?? '-'}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(
@@ -310,7 +309,7 @@ class _ApotikInventoryIntelligencePageState
         final stok = (item['stok'] as num?) ?? 0;
         return Card(
             child: ListTile(
-          leading: CircleAvatar(child: Text(i.toString().padLeft(2, '0'))),
+          leading: MedicationImage(item: item, width: 48, height: 54),
           title: Text('${item['nama'] ?? '-'}',
               style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text('${item['kode'] ?? ''} • ${item['satuan'] ?? 'unit'}'),

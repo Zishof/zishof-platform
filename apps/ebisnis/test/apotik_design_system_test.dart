@@ -32,10 +32,15 @@ void main() {
       expect(ApotikBreakpoints.dariLebar(1600), ApotikLayout.desktopWide);
     });
 
-    test('POS tiga area hanya mulai desktop standard (1280 ke atas)', () {
+    test('POS tiga area hanya mulai desktop wide (1600 ke atas)', () {
       expect(ApotikBreakpoints.dariLebar(1279).bolehTigaArea, isFalse);
-      expect(ApotikBreakpoints.dariLebar(1280).bolehTigaArea, isTrue);
+      expect(ApotikBreakpoints.dariLebar(1280).bolehTigaArea, isFalse);
       expect(ApotikBreakpoints.dariLebar(1600).bolehTigaArea, isTrue);
+    });
+
+    test('keranjang tetap tersedia mulai lebar isi 980', () {
+      expect(ApotikBreakpoints.bolehKeranjangTetap(979), isFalse);
+      expect(ApotikBreakpoints.bolehKeranjangTetap(980), isTrue);
     });
 
     test('kolom sekunder disembunyikan sampai desktop compact', () {
@@ -124,6 +129,57 @@ void main() {
       expect(find.text('Rp 2.500'), findsOneWidget);
       expect(find.textContaining('stok 42 tablet'), findsOneWidget);
       expect(find.text('LASA'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('medication-thumbnail')), findsOneWidget);
+    });
+
+    testWidgets('foto opsional dirender tanpa mengubah kontrak respons lama',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(item: <String, dynamic>{
+        ...obat,
+        'gambarUrl': 'https://example.invalid/obat.jpg',
+      })));
+      expect(find.byKey(const ValueKey('medication-thumbnail-image')),
+          findsOneWidget);
+    });
+
+    testWidgets('fotoUrls pertama diprioritaskan dibanding gambarUrl',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(item: <String, dynamic>{
+        ...obat,
+        'fotoUrls': ['https://example.invalid/foto-utama.jpg'],
+        'gambarUrl': 'https://example.invalid/foto-lama.jpg',
+      })));
+      final gambar = tester.widget<Image>(
+          find.byKey(const ValueKey('medication-thumbnail-image')));
+      final provider = (gambar.image as ResizeImage).imageProvider;
+      expect((provider as NetworkImage).url,
+          'https://example.invalid/foto-utama.jpg');
+    });
+
+    testWidgets('barcode lengkap tersedia di tooltip dan tidak dielipsis',
+        (tester) async {
+      await tester.pumpWidget(_bungkus(MedicationCard(item: <String, dynamic>{
+        ...obat,
+        'barcode': '8991002003004',
+      })));
+      expect(find.byTooltip('Barcode 8991002003004'), findsOneWidget);
+      expect(find.textContaining('8991002003004'), findsNothing);
+    });
+
+    testWidgets('aksi tambah eksplisit memanggil callback satu kali',
+        (tester) async {
+      var jumlah = 0;
+      await tester.pumpWidget(_bungkus(MedicationCard(
+        item: obat,
+        onTap: () => jumlah++,
+        labelAksiUtama: 'Tambah ke keranjang',
+        ikonAksiUtama: Icons.add_shopping_cart_outlined,
+      )));
+      await tester.tap(
+          find.widgetWithIcon(FilledButton, Icons.add_shopping_cart_outlined));
+      await tester.pump();
+      expect(jumlah, 1);
     });
 
     testWidgets('LASA ditebalkan sebagai pembeda selain warna', (tester) async {

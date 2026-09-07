@@ -1411,6 +1411,7 @@ class _DropdownGrupMenu extends StatelessWidget {
                 ))
             .toList(),
         child: Container(
+          key: const Key('dropdown-grup-menu'),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.latarLembut(AppColors.primary),
@@ -2039,6 +2040,8 @@ class AppShell extends StatefulWidget {
   final Widget body;
   final Widget? floatingActionButton;
   final bool tampilkanBantuanHeader;
+  final bool tampilkanBantuanMengambang;
+  final bool tampilkanDropdownGrup;
 
   /// Kalau false, [body] mengurus scroll-nya sendiri (dibungkus Expanded,
   /// BUKAN SingleChildScrollView) -- wajib dipakai layar dgn TabBarView
@@ -2067,6 +2070,8 @@ class AppShell extends StatefulWidget {
     required this.body,
     this.floatingActionButton,
     this.tampilkanBantuanHeader = true,
+    this.tampilkanBantuanMengambang = true,
+    this.tampilkanDropdownGrup = true,
     this.scrollable = true,
     this.bottomBar,
     this.tampilkanJudul = true,
@@ -2106,7 +2111,10 @@ class _AppShellState extends State<AppShell> {
   /// Bila layar sudah punya FAB sendiri, keduanya ditumpuk: FAB layar di atas,
   /// tombol bantuan di bawah, sehingga tombol utama layar tetap yang terdekat
   /// dengan ibu jari.
-  Widget _fabDenganBantuan() {
+  Widget? _fabDenganBantuan() {
+    if (!widget.tampilkanBantuanMengambang) {
+      return widget.floatingActionButton;
+    }
     final bantuan =
         BantuanFab(menuId: widget.menuAktif.name, judul: widget.judul);
     final milikLayar = widget.floatingActionButton;
@@ -2167,12 +2175,13 @@ class _AppShellState extends State<AppShell> {
                     icon: const Icon(Icons.storefront_outlined),
                     tooltip: 'Pindah toko',
                   ),
-                IconButton(
-                  key: const Key('tombol-qa-halaman-mobile'),
-                  onPressed: () => _bukaTanyaJawab(context),
-                  icon: const Icon(Icons.question_answer_outlined),
-                  tooltip: 'Tanya jawab halaman ini',
-                ),
+                if (widget.tampilkanBantuanHeader)
+                  IconButton(
+                    key: const Key('tombol-qa-halaman-mobile'),
+                    onPressed: () => _bukaTanyaJawab(context),
+                    icon: const Icon(Icons.question_answer_outlined),
+                    tooltip: 'Tanya jawab halaman ini',
+                  ),
                 const SizedBox(width: 4),
               ]),
           drawer: AppDrawer(
@@ -2188,7 +2197,8 @@ class _AppShellState extends State<AppShell> {
           // Di layar sempit judul halaman pindah ke AppBar, jadi pemilih grup
           // dipasang tepat di atas badan halaman -- tetap satu baris, tidak
           // kembali menjadi deretan tab yang memakan lebar.
-          body: _punyaDropdownGrup(widget.menuAktif)
+          body: widget.tampilkanDropdownGrup &&
+                  _punyaDropdownGrup(widget.menuAktif)
               ? Column(children: [
                   Align(
                     alignment: Alignment.centerLeft,
@@ -2246,7 +2256,9 @@ class _AppShellState extends State<AppShell> {
                                                   context)))),
                                 // Pemilih halaman segrup (mis. Akuntansi):
                                 // menggantikan deretan tab di dalam layar.
-                                _DropdownGrupMenu(menuAktif: widget.menuAktif),
+                                if (widget.tampilkanDropdownGrup)
+                                  _DropdownGrupMenu(
+                                      menuAktif: widget.menuAktif),
                               ],
                             ),
                           ),

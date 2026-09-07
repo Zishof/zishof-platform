@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
 import 'package:ebisnis/features/apotik/procurement/apotik_penerimaan_page.dart';
 import 'package:flutter/material.dart';
@@ -147,6 +149,72 @@ void main() {
       await tester.tap(find.text('Paracetamol').last);
       await tester.pumpAndSettle();
       expect(find.text('Baris penerimaan (1)'), findsOneWidget);
+    });
+
+    testWidgets('hasil pencarian 100 obat tetap dibangun secara lazy',
+        (tester) async {
+      final data = List.generate(
+          100,
+          (i) => {
+                'id': i + 1,
+                'kode': 'OBT-${(i + 1).toString().padLeft(3, '0')}',
+                'nama': 'Obat PBF ${i + 1}',
+                'stok': i + 5,
+              });
+      await _pump(tester, ApotikPenerimaanPage(panggil: _server(item: data)));
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Cari nama obat atau kode…'), 'obat');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Obat PBF 1'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('medication-thumbnail')).evaluate().length,
+          lessThan(100));
+    });
+
+    testWidgets('respons pencarian lama tidak menimpa respons terbaru',
+        (tester) async {
+      final selesai = <String, Completer<void>>{};
+      final balas = <String, void Function(Map<String, dynamic>)>{};
+      await _pump(
+        tester,
+        ApotikPenerimaanPage(
+          panggil: _server(),
+          muatKatalog: (aksi, body, cacheKey, {required onData}) {
+            final kata = '${body['keyword']}';
+            selesai[kata] = Completer<void>();
+            balas[kata] = onData;
+            return selesai[kata]!.future;
+          },
+        ),
+      );
+      final pencarian =
+          find.widgetWithText(TextField, 'Cari nama obat atau kode…');
+      await tester.enterText(pencarian, 'lama');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.enterText(pencarian, 'baru');
+      await tester.pump(const Duration(milliseconds: 350));
+
+      balas['baru']!({
+        'dariServer': true,
+        'data': [
+          {'id': 2, 'nama': 'Obat Respons Baru', 'kode': 'BARU'}
+        ]
+      });
+      selesai['baru']!.complete();
+      await tester.pump();
+      balas['lama']!({
+        'dariServer': true,
+        'data': [
+          {'id': 1, 'nama': 'Obat Respons Lama', 'kode': 'LAMA'}
+        ]
+      });
+      selesai['lama']!.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Obat Respons Baru'), findsOneWidget);
+      expect(find.text('Obat Respons Lama'), findsNothing);
     });
 
     testWidgets('TIDAK menampilkan field yang belum didukung server (IR-09)',

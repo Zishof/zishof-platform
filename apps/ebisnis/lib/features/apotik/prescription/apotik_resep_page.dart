@@ -12,6 +12,7 @@ import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/apotik_status_pill.dart';
+import '../shared/widgets/medication_image.dart';
 
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -397,8 +398,7 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
       dense: true,
       selected: terpilih,
       selectedTileColor: t.primarySoft,
-      leading: Icon(Icons.description_outlined,
-          color: ditebus ? t.textSecondary : t.clinicalPurple),
+      leading: MedicationImage(item: r, width: 46, height: 50),
       title: Text('${r['kode'] ?? r['id']}',
           style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.w600, color: t.textPrimary)),
@@ -878,52 +878,64 @@ class _ApotikResepPageState extends State<ApotikResepPage> {
         border: Border.all(color: racikan ? t.warning : t.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          MedicationImage(item: b, width: 58, height: 66),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text('${b['nama'] ?? '-'}',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight:
-                        b['lasa'] == true ? FontWeight.w800 : FontWeight.w600,
-                    color: t.textPrimary)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Text('${b['nama'] ?? '-'}',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: b['lasa'] == true
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: t.textPrimary)),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                    '${butuh.toStringAsFixed(butuh % 1 == 0 ? 0 : 2)} '
+                    '${b['satuan'] ?? ''}',
+                    style: TextStyle(fontSize: 12.5, color: t.textPrimary)),
+              ]),
+              if (sediaan.isNotEmpty)
+                Text(sediaan,
+                    style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
+              if ('${b['keterangan'] ?? ''}'.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${b['keterangan']}',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: t.clinicalPurple)),
+                ),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                if (racikan) ApotikStatusPill.racikan(),
+                if (b['terkendali'] == true) ApotikStatusPill.terkendali(),
+                if (b['highAlert'] == true) ApotikStatusPill.highAlert(),
+                if (b['lasa'] == true) ApotikStatusPill.lasa(),
+                if (b['coldChain'] == true) ApotikStatusPill.coldChain(),
+                if (stok < butuh)
+                  ApotikStatusPill(
+                      teks: 'Stok kurang ($stok)',
+                      nada: ApotikStatusNada.bahaya,
+                      ikon: Icons.production_quantity_limits_outlined,
+                      penjelasan: 'Tersedia $stok, dibutuhkan $butuh'),
+              ]),
+              if ((b['hargaJual'] as num?) != null &&
+                  (b['hargaJual'] as num) > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(_rp.format((b['hargaJual'] as num).toDouble()),
+                      style: TextStyle(fontSize: 12, color: t.primary)),
+                ),
+            ]),
           ),
-          Text(
-              '${butuh.toStringAsFixed(butuh % 1 == 0 ? 0 : 2)} '
-              '${b['satuan'] ?? ''}',
-              style: TextStyle(fontSize: 12.5, color: t.textPrimary)),
         ]),
-        if (sediaan.isNotEmpty)
-          Text(sediaan,
-              style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
-        if ('${b['keterangan'] ?? ''}'.trim().isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text('${b['keterangan']}',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: t.clinicalPurple)),
-          ),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 4, children: [
-          if (racikan) ApotikStatusPill.racikan(),
-          if (b['terkendali'] == true) ApotikStatusPill.terkendali(),
-          if (b['highAlert'] == true) ApotikStatusPill.highAlert(),
-          if (b['lasa'] == true) ApotikStatusPill.lasa(),
-          if (b['coldChain'] == true) ApotikStatusPill.coldChain(),
-          if (stok < butuh)
-            ApotikStatusPill(
-                teks: 'Stok kurang ($stok)',
-                nada: ApotikStatusNada.bahaya,
-                ikon: Icons.production_quantity_limits_outlined,
-                penjelasan: 'Tersedia $stok, dibutuhkan $butuh'),
-        ]),
-        if ((b['hargaJual'] as num?) != null && (b['hargaJual'] as num) > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(_rp.format((b['hargaJual'] as num).toDouble()),
-                style: TextStyle(fontSize: 12, color: t.primary)),
-          ),
       ]),
     );
   }

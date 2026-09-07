@@ -154,5 +154,34 @@ void main() {
       );
       expect(find.byType(MedicationCard), findsNWidgets(8));
     });
+
+    testWidgets('100 hasil katalog dibangun malas menurut viewport',
+        (tester) async {
+      await _pump(
+        tester,
+        ApotikPosPage(panggil: (aksi, body) async {
+          if (aksi == 'apotik_item_cari') {
+            return {
+              'status': '00',
+              'total': 100,
+              'data': List.generate(
+                  100,
+                  (i) => {
+                        'id': i,
+                        'kode': 'K$i',
+                        'nama': 'Obat katalog $i',
+                        'stok': 20,
+                        'hargaJual': 1000,
+                      }),
+            };
+          }
+          return {'status': '00', 'data': const []};
+        }),
+        ukuran: const Size(1500, 900),
+      );
+      final terbangun = find.byType(MedicationCard).evaluate().length;
+      expect(terbangun, greaterThan(0));
+      expect(terbangun, lessThan(100));
+    });
   });
 }

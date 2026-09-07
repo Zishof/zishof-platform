@@ -11,10 +11,15 @@ class ApotikModeSwitcher extends StatelessWidget {
   final ApotikModePos aktif;
   final ValueChanged<ApotikModePos> onPilih;
 
+  /// Untuk command bar sempit, semua mode tetap satu baris dan dapat digeser;
+  /// tidak ada mode yang hilang atau turun jauh dari area pencarian.
+  final bool gulirHorizontal;
+
   const ApotikModeSwitcher({
     super.key,
     required this.aktif,
     required this.onPilih,
+    this.gulirHorizontal = false,
   });
 
   IconData _ikon(ApotikModePos m) => switch (m) {
@@ -29,12 +34,27 @@ class ApotikModeSwitcher extends StatelessWidget {
     final t = ApotikDesignTokens.of(context);
     return ApotikResponsive(
       builder: (context, layout) {
+        final pilihan = <Widget>[
+          for (final m in ApotikModePos.values) _chip(context, t, m, layout),
+        ];
+        if (gulirHorizontal) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < pilihan.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  pilihan[i],
+                ],
+              ],
+            ),
+          );
+        }
         return Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [
-            for (final m in ApotikModePos.values) _chip(context, t, m, layout),
-          ],
+          children: pilihan,
         );
       },
     );

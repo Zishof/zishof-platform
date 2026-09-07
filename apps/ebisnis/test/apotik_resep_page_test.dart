@@ -117,6 +117,25 @@ void main() {
           tester, _halamanResep(_server(resep: [_resepSatu])), _desktop);
       expect(find.text('Pilih resep'), findsOneWidget);
     });
+
+    testWidgets('antrean 100 resep tetap menggunakan daftar lazy',
+        (tester) async {
+      final resep = List.generate(
+          100,
+          (i) => {
+                'id': i + 1,
+                'kode': 'RSP-${(i + 1).toString().padLeft(3, '0')}',
+                'pasienNama': 'Pasien ${i + 1}',
+                'jumlahBaris': 2,
+                'ditebus': false,
+              });
+      await _pump(tester, _halamanResep(_server(resep: resep)), _desktop);
+
+      expect(find.text('RSP-001'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('medication-thumbnail')).evaluate().length,
+          lessThan(100));
+    });
   });
 
   group('Daftar periksa pra-serah — dari data nyata', () {
@@ -182,6 +201,7 @@ void main() {
       expect(find.textContaining('Klinik Rawat Jalan Demo'), findsOneWidget);
       expect(find.textContaining('J06.9'), findsOneWidget);
       expect(find.textContaining('3 x 1 sesudah makan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('medication-thumbnail')), findsWidgets);
     });
 
     testWidgets('menandai terkendali, high-alert, LASA, cold-chain',

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../api_client.dart';
@@ -16,6 +17,7 @@ import '../core/apotik_breakpoints.dart';
 import '../core/apotik_design_tokens.dart';
 import '../core/apotik_lokal_dulu.dart';
 import '../shared/widgets/apotik_context_bar.dart';
+import '../shared/widgets/apotik_lazy_grid.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/medication_card.dart';
 import 'apotik_batch_sheet.dart';
@@ -29,15 +31,38 @@ import 'apotik_struk_teks.dart';
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+enum _FilterKatalog {
+  semua,
+  tersedia,
+  menipis,
+  tablet,
+  sirup,
+  drops,
+  perhatian,
+}
+
+extension on _FilterKatalog {
+  String get label => switch (this) {
+        _FilterKatalog.semua => 'Semua stok',
+        _FilterKatalog.tersedia => 'Tersedia',
+        _FilterKatalog.menipis => 'Stok menipis',
+        _FilterKatalog.tablet => 'Tablet',
+        _FilterKatalog.sirup => 'Sirup',
+        _FilterKatalog.drops => 'Drops',
+        _FilterKatalog.perhatian => 'Perlu perhatian',
+      };
+}
+
 /// Kontrak pemanggilan server, disuntik pada test agar tanpa jaringan.
 typedef PanggilAksi = Future<Map<String, dynamic>> Function(
     String aksi, Map<String, dynamic> body);
 
 /// <h3>Ruang kerja kasir apotik (Fase 3, mockup 02).</h3>
 ///
-/// Tiga area pada desktop ≥1280: **konteks+mode | katalog | keranjang**.
-/// Di bawah itu keranjang menjadi lembar penuh yang dipanggil dari tombol
-/// ringkasan melekat (sticky) — bukan desktop yang sekadar dipersempit.
+/// Tiga area pada desktop ≥1600: **konteks+mode | katalog | keranjang**.
+/// Mulai lebar isi 980 dipakai dua area **katalog | keranjang**; di bawah itu
+/// keranjang menjadi lembar penuh yang dipanggil dari ringkasan melekat hanya
+/// ketika ada isi — bukan desktop yang sekadar dipersempit.
 ///
 /// Seluruh pagar keselamatan yang sudah terbukti DIPERTAHANKAN dan kini
 /// ditegakkan lewat [ApotikPosController]: obat terkendali wajib identitas
@@ -88,9 +113,13 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   }
 
   final _cari = TextEditingController();
+  final _fokusCari = FocusNode(debugLabel: 'Cari katalog apotik');
   Timer? _debounce;
+  int _urutanCari = 0;
 
   List<Map<String, dynamic>> _hasilCari = [];
+  int _totalKatalog = 0;
+  _FilterKatalog _filterKatalog = _FilterKatalog.semua;
 
   /// true bila katalog yang sedang tampil berasal dari cache dan server belum
   /// menjawab. Ditandai di layar: stok dari cache bisa sudah basi.
@@ -125,6 +154,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   void dispose() {
     _debounce?.cancel();
     _cari.dispose();
+    _fokusCari.dispose();
     super.dispose();
   }
 
@@ -164,6 +194,38 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           'Coba kata kunci lain atau pastikan formula bahan baku sudah dibuat.',
         _ => 'Coba kata kunci lain, atau pindai barcode pada kemasan obat.',
       };
+
+  String get _judulBagianKatalog => switch (_pos.mode) {
+        ApotikModePos.racikan => 'Formula racikan',
+        ApotikModePos.produksi => 'Formula produksi',
+        ApotikModePos.resep => 'Obat resep',
+        ApotikModePos.otc => 'Obat tersedia',
+      };
+
+  List<Map<String, dynamic>> get _hasilTampil {
+    if (_filterKatalog == _FilterKatalog.semua) return _hasilCari;
+    return _hasilCari.where((item) {
+      final bentuk =
+          '${item['bentukSediaan'] ?? ''} ${item['nama'] ?? ''}'.toLowerCase();
+      return switch (_filterKatalog) {
+        _FilterKatalog.semua => true,
+        _FilterKatalog.tersedia =>
+          (((item['stok'] as num?) ?? 0).toDouble() > 0),
+        _FilterKatalog.menipis =>
+          (((item['stok'] as num?) ?? 0).toDouble() > 0) &&
+              (((item['stok'] as num?) ?? 0).toDouble() <= 10),
+        _FilterKatalog.tablet => bentuk.contains('tablet'),
+        _FilterKatalog.sirup => bentuk.contains('sirup'),
+        _FilterKatalog.drops =>
+          bentuk.contains('drops') || bentuk.contains('tetes'),
+        _FilterKatalog.perhatian => item['lasa'] == true ||
+            item['terkendali'] == true ||
+            item['highAlert'] == true ||
+            item['coldChain'] == true ||
+            (((item['stok'] as num?) ?? 0).toDouble() <= 10),
+      };
+    }).toList(growable: false);
+  }
 
   List<Map<String, dynamic>> _data(Map<String, dynamic> r) =>
       ((r['data'] as List?) ?? const [])
@@ -266,6 +328,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       _pos.mode = mode;
       _cari.clear();
       _hasilCari = const [];
+      _totalKatalog = 0;
+      _filterKatalog = _FilterKatalog.semua;
       _katalogDariCache = false;
       _galatCari = null;
     });
@@ -273,6 +337,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   }
 
   Future<void> _jalankanCari(String keyword) async {
+    final urutan = ++_urutanCari;
     setStateIfMounted(() {
       _memuatCari = true;
       _galatCari = null;
@@ -286,7 +351,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         {'keyword': keyword, 'page_size': 100},
         _kunciKatalog,
         onData: (hasil) {
-          if (!mounted) return;
+          if (!mounted || urutan != _urutanCari) return;
           final dariServer = hasil['dariServer'] == true;
           final data = ((hasil['data'] as List?) ?? const [])
               .whereType<Map>()
@@ -295,12 +360,14 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           setStateIfMounted(() {
             // Emisi cache disaring ulang: cache berisi hasil kueri TERAKHIR.
             _hasilCari = dariServer ? data : saringCacheLokal(data, keyword);
+            _totalKatalog = (hasil['total'] as num?)?.toInt() ?? data.length;
             _katalogDariCache = !dariServer;
             _memuatCari = false;
           });
         },
       );
     } catch (e) {
+      if (urutan != _urutanCari) return;
       setStateIfMounted(() {
         // Katalog dari cache TIDAK dibuang saat server gagal; kasir masih
         // butuh melihat obatnya. Galat hanya bila tak ada apa pun.
@@ -316,6 +383,12 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       content: Text(teks),
       backgroundColor: galat ? Theme.of(context).colorScheme.error : null,
     ));
+  }
+
+  void _kembalikanFokusCari() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fokusCari.requestFocus();
+    });
   }
 
   /// Menambah item ke keranjang; bila item ber-batch, kasir memilih batch
@@ -357,6 +430,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         batch: batchTerpilih,
       ));
     });
+    _kembalikanFokusCari();
   }
 
   Future<void> _ubahBatch(int indeks) async {
@@ -442,6 +516,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           'kekuatan': r['kekuatan'],
           'highAlert': r['highAlert'],
           'coldChain': r['coldChain'],
+          'gambarUrl': r['gambarUrl'],
+          'fotoUrls': r['fotoUrls'],
           'komponen': r['komponen'],
           'jumlahKomponen': r['jumlahKomponen'],
         }, qty: ((r['jumlah'] as num?) ?? 1).toDouble());
@@ -525,6 +601,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         );
       }
       setStateIfMounted(() => _pos.kosongkan());
+      _kembalikanFokusCari();
       unawaited(_jalankanCari(_cari.text));
     } on ApiException catch (e) {
       setStateIfMounted(() => _pos.tandaiGagal(e.offline
@@ -586,6 +663,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       setStateIfMounted(() => _strukTerakhir = struk);
       if (mounted) await _dialogBerhasil(struk, bayar);
       setStateIfMounted(() => _pos.kosongkan());
+      _kembalikanFokusCari();
       unawaited(_jalankanCari(_cari.text));
     } on ApiException catch (e) {
       if (e.offline) {
@@ -845,22 +923,41 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   @override
   Widget build(BuildContext context) {
     final t = ApotikDesignTokens.of(context);
-    return ApotikResponsive(
-      builder: (context, layout) {
-        return Scaffold(
-          backgroundColor: t.surfaceMuted,
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _contextBar(),
-              if (_tertunda.isNotEmpty) _bilahTertunda(t),
-              Expanded(
-                child:
-                    layout.bolehTigaArea ? _tigaArea(t) : _satuKolom(t, layout),
-              ),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final lebar = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final layout = ApotikBreakpoints.dariLebar(lebar);
+        final kemampuan = ApotikBreakpoints.kemampuanPos(lebar);
+        final keranjangTetap = kemampuan.bolehKeranjangTetap;
+        final badan = kemampuan.bolehPanelKonteksTetap
+            ? _tigaArea(t)
+            : keranjangTetap
+                ? _duaArea(t, layout)
+                : _satuKolom(t, layout);
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.f2):
+                _fokusCari.requestFocus,
+          },
+          child: Scaffold(
+            backgroundColor: t.surfaceMuted,
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _contextBar(),
+                if (_tertunda.isNotEmpty) _bilahTertunda(t),
+                Expanded(child: badan),
+              ],
+            ),
+            // Layar sentuh hanya membutuhkan ringkasan melekat bila ada isi.
+            // Saat kosong, seluruh tinggi dikembalikan ke katalog.
+            bottomNavigationBar:
+                kemampuan.tampilkanBottomCart && _pos.keranjang.isNotEmpty
+                    ? _aksiMelekat(t)
+                    : null,
           ),
-          bottomNavigationBar: layout.bolehTigaArea ? null : _aksiMelekat(t),
         );
       },
     );
@@ -883,7 +980,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     ]);
   }
 
-  /// Desktop ≥1280: konteks+mode | katalog | keranjang.
+  /// Desktop ≥1600: konteks+mode | katalog | keranjang.
   Widget _tigaArea(ApotikDesignTokens t) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -895,46 +992,94 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     );
   }
 
+  /// Desktop standard/compact lapang: command bar | katalog + keranjang.
+  /// Ini menjaga keranjang selalu terlihat pada resolusi kantor 1366/1440
+  /// setelah sidebar mengambil sebagian lebar layar.
+  Widget _duaArea(ApotikDesignTokens t, ApotikLayout layout) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _barisPerintah(layout),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _panelKatalog(t)),
+              SizedBox(width: 360, child: _panelKeranjang()),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Tablet/desktop sempit/mobile: satu kolom + keranjang lewat lembar penuh.
   Widget _satuKolom(ApotikDesignTokens t, ApotikLayout layout) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(ApotikBreakpoints.paddingHalaman(layout),
-              12, ApotikBreakpoints.paddingHalaman(layout), 0),
-          child: layout.isDesktop
-              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(
-                    child: ApotikModeSwitcher(
-                      aktif: _pos.mode,
-                      onPilih: _pilihMode,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _tombolTebusResep(),
-                ])
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ApotikModeSwitcher(
-                      aktif: _pos.mode,
-                      onPilih: _pilihMode,
-                    ),
-                    const SizedBox(height: 8),
-                    _tombolTebusResep(),
-                  ],
-                ),
-        ),
+        _barisPerintah(layout),
         Expanded(child: _panelKatalog(t)),
       ],
     );
   }
 
-  Widget _tombolTebusResep() => OutlinedButton.icon(
-        onPressed: _tebusResep,
-        icon: const Icon(Icons.description_outlined, size: 17),
-        label: const Text('Tebus Resep'),
+  Widget _barisPerintah(ApotikLayout layout) {
+    final mode = ApotikModeSwitcher(
+      aktif: _pos.mode,
+      onPilih: _pilihMode,
+      gulirHorizontal: true,
+    );
+    final aksi = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Expanded(child: _tombolTebusResep()),
+        const SizedBox(width: 8),
+        Expanded(child: _tombolDetailTransaksi()),
+      ],
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(ApotikBreakpoints.paddingHalaman(layout), 12,
+          ApotikBreakpoints.paddingHalaman(layout), 0),
+      child: layout.isDesktop
+          ? Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(child: mode),
+              const SizedBox(width: 10),
+              SizedBox(width: 280, child: aksi),
+            ])
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                mode,
+                const SizedBox(height: 8),
+                aksi,
+              ],
+            ),
+    );
+  }
+
+  Widget _tombolTebusResep() => SizedBox(
+        height: ApotikBreakpoints.targetSentuhMinimum +
+            ((MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0) - 1) *
+                16),
+        child: OutlinedButton.icon(
+          onPressed: _tebusResep,
+          icon: const Icon(Icons.description_outlined, size: 17),
+          label: const Text('Tebus Resep'),
+        ),
+      );
+
+  Widget _tombolDetailTransaksi() => SizedBox(
+        height: ApotikBreakpoints.targetSentuhMinimum +
+            ((MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0) - 1) *
+                16),
+        child: OutlinedButton.icon(
+          onPressed: _bukaDetailTransaksi,
+          icon: Icon(
+              _pos.adaTerkendali ? Icons.lock_outline : Icons.tune_outlined,
+              size: 17),
+          label: const Text('Detail'),
+        ),
       );
 
   Widget _panelKonteks(ApotikDesignTokens t) {
@@ -945,58 +1090,124 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       ),
       child: ListView(
         padding: const EdgeInsets.all(14),
-        children: [
-          Text('Mode transaksi',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: t.textSecondary)),
-          const SizedBox(height: 8),
-          ApotikModeSwitcher(
-            aktif: _pos.mode,
-            onPilih: _pilihMode,
-          ),
-          const SizedBox(height: 16),
-          _tombolTebusResep(),
-          const SizedBox(height: 16),
-          if (_caraBayar.isNotEmpty && !_modeProduksi) ...[
-            Text('Metode pembayaran',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: t.textSecondary)),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<int>(
-              value: _caraBayarId,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  border: OutlineInputBorder(), isDense: true),
-              items: _caraBayar
-                  .map((c) => DropdownMenuItem<int>(
-                      value: c.id,
-                      child: Text(c.nama.isEmpty ? '-' : c.nama,
-                          overflow: TextOverflow.ellipsis)))
-                  .toList(),
-              onChanged: (v) => setStateIfMounted(() => _caraBayarId = v),
-            ),
-            Text(
-                'Metode dapat diganti lagi saat membayar, lengkap dengan '
-                'uang diterima dan kembalian.',
-                style: TextStyle(fontSize: 11, color: t.textSecondary)),
-            const SizedBox(height: 16),
-          ],
-          if (_strukTerakhir != null) ...[
-            OutlinedButton.icon(
-              onPressed: () => _cetakStruk(_strukTerakhir!, cetakUlang: true),
-              icon: const Icon(Icons.receipt_long_outlined, size: 17),
-              label: Text('Cetak Ulang ${_strukTerakhir!.kodeTransaksi}'),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (!_modeProduksi) _identitasPembeli(t),
-        ],
+        children: _bagianKonteks(t, sertakanMode: true),
       ),
     );
+  }
+
+  Future<void> _bukaDetailTransaksi() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        final t = ApotikDesignTokens.of(context);
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Material(
+              color: t.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(22)),
+              clipBehavior: Clip.antiAlias,
+              child: FractionallySizedBox(
+                heightFactor: 0.82,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 10, 10),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(
+                            'Detail transaksi',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: t.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Tutup',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ]),
+                    ),
+                    Divider(height: 1, color: t.border),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(20),
+                        children: _bagianKonteks(t, sertakanMode: false),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    setStateIfMounted(() {});
+  }
+
+  List<Widget> _bagianKonteks(ApotikDesignTokens t,
+      {required bool sertakanMode}) {
+    return [
+      if (sertakanMode) ...[
+        Text('Mode transaksi',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: t.textSecondary)),
+        const SizedBox(height: 8),
+        ApotikModeSwitcher(
+          aktif: _pos.mode,
+          onPilih: _pilihMode,
+        ),
+        const SizedBox(height: 16),
+        _tombolTebusResep(),
+        const SizedBox(height: 16),
+      ],
+      if (_caraBayar.isNotEmpty && !_modeProduksi) ...[
+        Text('Metode pembayaran',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: t.textSecondary)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<int>(
+          value: _caraBayarId,
+          isExpanded: true,
+          decoration: const InputDecoration(
+              border: OutlineInputBorder(), isDense: true),
+          items: _caraBayar
+              .map((c) => DropdownMenuItem<int>(
+                  value: c.id,
+                  child: Text(c.nama.isEmpty ? '-' : c.nama,
+                      overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (v) => setStateIfMounted(() => _caraBayarId = v),
+        ),
+        Text(
+            'Metode dapat diganti lagi saat membayar, lengkap dengan '
+            'uang diterima dan kembalian.',
+            style: TextStyle(fontSize: 11, color: t.textSecondary)),
+        const SizedBox(height: 16),
+      ],
+      if (_strukTerakhir != null) ...[
+        OutlinedButton.icon(
+          onPressed: () => _cetakStruk(_strukTerakhir!, cetakUlang: true),
+          icon: const Icon(Icons.receipt_long_outlined, size: 17),
+          label: Text('Cetak Ulang ${_strukTerakhir!.kodeTransaksi}'),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (!_modeProduksi) _identitasPembeli(t),
+    ];
   }
 
   /// Identitas pembeli — WAJIB untuk obat terkendali (pagar dipertahankan).
@@ -1027,7 +1238,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                 style: TextStyle(fontSize: 11, color: t.dangerText)),
           ),
         const SizedBox(height: 6),
-        TextField(
+        TextFormField(
+          initialValue: _pos.namaPembeli,
           decoration: const InputDecoration(
               labelText: 'Nama pembeli',
               border: OutlineInputBorder(),
@@ -1035,7 +1247,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           onChanged: (v) => setStateIfMounted(() => _pos.namaPembeli = v),
         ),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
+          initialValue: _pos.namaDokter,
           decoration: const InputDecoration(
               labelText: 'Nama dokter',
               border: OutlineInputBorder(),
@@ -1054,6 +1267,7 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
           child: TextField(
             controller: _cari,
+            focusNode: _fokusCari,
             autofocus: true,
             decoration: InputDecoration(
               hintText: _hintCari,
@@ -1067,12 +1281,43 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2)))
-                  : null,
+                  : _cari.text.isNotEmpty
+                      ? IconButton(
+                          tooltip: 'Bersihkan pencarian',
+                          onPressed: () {
+                            _cari.clear();
+                            setStateIfMounted(() {});
+                            _jalankanCari('');
+                            _fokusCari.requestFocus();
+                          },
+                          icon: const Icon(Icons.close),
+                        )
+                      : Center(
+                          widthFactor: 1,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: t.surfaceMuted,
+                              border: Border.all(color: t.border),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('F2',
+                                style: TextStyle(
+                                    fontSize: 10.5, color: t.textSecondary)),
+                          ),
+                        ),
             ),
-            onChanged: _cariDebounce,
+            onChanged: (nilai) {
+              setStateIfMounted(() {});
+              _cariDebounce(nilai);
+            },
             onSubmitted: _jalankanCari,
           ),
         ),
+        if (!_modeProduksi && _pos.mode != ApotikModePos.racikan)
+          _filterCepat(t),
+        _ringkasanKatalog(t),
         if (_katalogDariCache) _bilahKatalogCache(t),
         Expanded(
           child: _galatCari != null
@@ -1086,14 +1331,86 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                           : _pos.mode == ApotikModePos.racikan
                               ? 'Memuat formula racikan…'
                               : 'Memuat katalog obat…')
-                  : _hasilCari.isEmpty
+                  : _hasilTampil.isEmpty
                       ? ApotikEmptyState(
                           ikon: Icons.medication_outlined,
-                          judul: _judulKatalogKosong,
-                          petunjuk: _petunjukKatalogKosong)
-                      : _gridObat(t),
+                          judul: _hasilCari.isEmpty
+                              ? _judulKatalogKosong
+                              : 'Tidak ada data pada filter ini',
+                          petunjuk: _hasilCari.isEmpty
+                              ? _petunjukKatalogKosong
+                              : 'Pilih “Semua stok” atau gunakan filter lain.')
+                      : _gridObat(),
         ),
       ],
+    );
+  }
+
+  Widget _filterCepat(ApotikDesignTokens t) {
+    final skala = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+    return SizedBox(
+      height: 40 + ((skala - 1) * 24),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        scrollDirection: Axis.horizontal,
+        itemCount: _FilterKatalog.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
+        itemBuilder: (context, i) {
+          final filter = _FilterKatalog.values[i];
+          final aktif = filter == _filterKatalog;
+          return ChoiceChip(
+            label: Text(filter.label),
+            selected: aktif,
+            showCheckmark: false,
+            side: BorderSide(color: aktif ? t.primary : t.border),
+            selectedColor: t.primarySoft,
+            labelStyle: TextStyle(
+              color: aktif ? t.primaryStrong : t.textSecondary,
+              fontWeight: aktif ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 11.5,
+            ),
+            onSelected: (_) => setStateIfMounted(() {
+              _filterKatalog = filter;
+            }),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _ringkasanKatalog(ApotikDesignTokens t) {
+    final tampil = _hasilTampil.length;
+    final total =
+        _totalKatalog < _hasilCari.length ? _hasilCari.length : _totalKatalog;
+    final skala = MediaQuery.textScalerOf(context).scale(1);
+    final judul = Text(
+      _judulBagianKatalog,
+      style: TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w800,
+        color: t.textPrimary,
+      ),
+    );
+    final angka = Text(
+      _memuatCari && _hasilCari.isEmpty
+          ? 'Memuat…'
+          : '$tampil ditampilkan dari $total data',
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 11, color: t.textSecondary),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 5, 14, 6),
+      child: skala > 1.3
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [judul, const SizedBox(height: 2), angka],
+            )
+          : Row(children: [
+              Expanded(child: judul),
+              const SizedBox(width: 8),
+              Flexible(child: angka),
+            ]),
     );
   }
 
@@ -1124,29 +1441,24 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     );
   }
 
-  Widget _gridObat(ApotikDesignTokens t) {
-    return LayoutBuilder(builder: (context, c) {
-      final kolom = (c.maxWidth / 320).floor().clamp(1, 4);
-      const jarak = ApotikDesignTokens.gridSpacing;
-      final lebar = (c.maxWidth - 28 - jarak * (kolom - 1)) / kolom;
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
-        child: Wrap(
-          spacing: jarak,
-          runSpacing: jarak,
-          children: [
-            for (final item in _hasilCari)
-              SizedBox(
-                width: lebar,
-                child: MedicationCard(
-                  item: item,
-                  onTap: () => _tambahItem(item),
-                ),
-              ),
-          ],
-        ),
-      );
-    });
+  Widget _gridObat() {
+    final data = _hasilTampil;
+    return ApotikLazyGrid(
+      itemCount: data.length,
+      itemBuilder: (context, i) {
+        final item = data[i];
+        return MedicationCard(
+          key: ValueKey('apotik-katalog-${item['id'] ?? item['kode'] ?? i}'),
+          item: item,
+          onTap: () => _tambahItem(item),
+          labelAksiUtama:
+              _modeProduksi ? 'Tambah ke rencana' : 'Tambah ke keranjang',
+          ikonAksiUtama: _modeProduksi
+              ? Icons.add_business_outlined
+              : Icons.add_shopping_cart_outlined,
+        );
+      },
+    );
   }
 
   Widget _panelKeranjang() {

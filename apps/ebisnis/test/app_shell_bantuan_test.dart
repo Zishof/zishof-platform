@@ -56,6 +56,31 @@ void main() {
     expect(find.byType(ExpansionTile), findsWidgets);
   });
 
+  testWidgets('halaman fokus dapat memakai bantuan header tanpa FAB ganda',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const MaterialApp(
+      home: AppShell(
+        menuAktif: MenuEBisnis.kasirApotik,
+        judul: 'Kasir Apotik',
+        tampilkanBantuanHeader: false,
+        tampilkanBantuanMengambang: false,
+        tampilkanDropdownGrup: false,
+        aksiHeader: TextButton(onPressed: null, child: Text('Bantuan Kasir')),
+        body: Text('Isi kasir'),
+      ),
+    ));
+    await tester.pump();
+
+    expect(find.text('Bantuan Kasir'), findsOneWidget);
+    expect(find.byKey(const Key('tombol-bantuan-mengambang')), findsNothing);
+    expect(find.byKey(const Key('tombol-qa-halaman-desktop')), findsNothing);
+    expect(find.byKey(const Key('dropdown-grup-menu')), findsNothing);
+  });
+
   testWidgets('sidebar desktop dapat diringkas dan dibuka kembali',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 720);

@@ -12,6 +12,7 @@ import '../core/apotik_design_tokens.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/apotik_status_pill.dart';
+import '../shared/widgets/medication_image.dart';
 
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -182,6 +183,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
   bool _mencari = false;
   bool _memposting = false;
   String? _pesanServer;
+  int _urutanPencarian = 0;
 
   @override
   void dispose() {
@@ -203,6 +205,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
   }
 
   Future<void> _cariItem(String keyword) async {
+    final urutan = ++_urutanPencarian;
     if (keyword.trim().isEmpty) {
       setStateIfMounted(() => _hasilCari = []);
       return;
@@ -214,7 +217,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
         {'keyword': keyword, 'page_size': 15},
         kunciCacheItemApotik,
         onData: (hasil) {
-          if (!mounted) return;
+          if (!mounted || urutan != _urutanPencarian) return;
           final dariServer = hasil['dariServer'] == true;
           final data = ((hasil['data'] as List?) ?? const [])
               .whereType<Map>()
@@ -229,7 +232,9 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
     } catch (_) {
       // Hasil dari cache (bila ada) dipertahankan: petugas masih bisa
       // menyusun baris penerimaan; postingnya yang butuh server.
-      setStateIfMounted(() => _mencari = false);
+      if (urutan == _urutanPencarian) {
+        setStateIfMounted(() => _mencari = false);
+      }
     }
   }
 
@@ -473,25 +478,43 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
           ),
           onChanged: _cariDebounce,
         ),
-        for (final it in _hasilCari)
-          ListTile(
-            dense: true,
-            title: Text('${it['nama'] ?? '-'}',
-                style: TextStyle(fontSize: 13, color: t.textPrimary)),
-            subtitle: Text('${it['kode'] ?? ''} • stok ${it['stok'] ?? 0}',
-                style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
-            trailing: const Icon(Icons.add_circle_outline, size: 18),
-            onTap: () {
-              setStateIfMounted(() {
-                _baris.add(BarisPenerimaan(
-                    item: it,
-                    hargaBeli:
-                        ((it['hargaJual'] as num?) ?? 0).toDouble() * 0));
-                _hasilCari = [];
-                _cari.clear();
-              });
-            },
+        if (_hasilCari.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: (_hasilCari.length * 70.0).clamp(70.0, 350.0).toDouble(),
+            child: ListView.separated(
+              key: const ValueKey('hasil-cari-penerimaan'),
+              itemCount: _hasilCari.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: t.border),
+              itemBuilder: (context, index) {
+                final it = _hasilCari[index];
+                return ListTile(
+                  key: ValueKey('hasil-cari-${it['id'] ?? index}'),
+                  dense: true,
+                  leading: MedicationImage(item: it, width: 44, height: 48),
+                  title: Text('${it['nama'] ?? '-'}',
+                      style: TextStyle(fontSize: 13, color: t.textPrimary)),
+                  subtitle: Text(
+                      '${it['kode'] ?? ''} • stok ${it['stok'] ?? 0}',
+                      style: TextStyle(fontSize: 11.5, color: t.textSecondary)),
+                  trailing: Icon(Icons.add_circle_outline,
+                      size: 20, color: t.primary),
+                  onTap: () {
+                    setStateIfMounted(() {
+                      _baris.add(BarisPenerimaan(
+                          item: it,
+                          hargaBeli:
+                              ((it['hargaJual'] as num?) ?? 0).toDouble() * 0));
+                      _hasilCari = [];
+                      _cari.clear();
+                      _urutanPencarian++;
+                    });
+                  },
+                );
+              },
+            ),
           ),
+        ],
       ]),
     );
   }
@@ -526,7 +549,9 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
             Border.all(color: (sisa != null && sisa < 0) ? t.danger : t.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          MedicationImage(item: b.item, width: 48, height: 52),
+          const SizedBox(width: 9),
           Expanded(
             child: Text(b.nama,
                 maxLines: 1,

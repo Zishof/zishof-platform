@@ -10,6 +10,7 @@ import '../../../widgets/safe_state.dart';
 import '../core/apotik_breakpoints.dart';
 import '../core/apotik_lokal_dulu.dart';
 import '../core/apotik_design_tokens.dart';
+import '../shared/widgets/apotik_lazy_grid.dart';
 import '../shared/widgets/apotik_page_header.dart';
 import '../shared/widgets/apotik_state_views.dart';
 import '../shared/widgets/medication_card.dart';
@@ -249,46 +250,35 @@ class _ApotikFormulariumPageState extends State<ApotikFormulariumPage> {
   }
 
   Widget _grid(double padding) {
-    return LayoutBuilder(builder: (context, c) {
-      final kolom = (c.maxWidth / 330).floor().clamp(1, 4);
-      const jarak = ApotikDesignTokens.gridSpacing;
-      final lebar = (c.maxWidth - padding * 2 - jarak * (kolom - 1)) / kolom;
-      return SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(padding, 0, padding, 16),
-        child: Wrap(
-          spacing: jarak,
-          runSpacing: jarak,
-          children: [
-            for (final item in _item)
-              SizedBox(
-                width: lebar,
-                // Kartu yang SAMA dengan katalog POS -- apoteker melihat
-                // persis apa yang nanti dilihat kasir setelah profil diubah.
-                child: KilauBaris(
-                  kunci: MasterOffline.kunciBaris(item),
-                  idBaru: _idBaru,
-                  idBerubah: _idBerubah,
-                  child: MedicationCard(
-                    item: item,
-                    onTap: () => _editProfil(item),
-                    aksiTambahan: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Riwayat data ini (AuditTrails)',
-                      icon: const Icon(Icons.history, size: 16),
-                      onPressed: () => tampilkanRiwayatData(
-                        context,
-                        entitas: 'apotik_item',
-                        id: item['id'],
-                        judul: '${item['nama'] ?? ''}',
-                      ),
-                    ),
-                  ),
-                ),
+    return ApotikLazyGrid(
+      itemCount: _item.length,
+      paddingHorizontal: padding,
+      itemBuilder: (context, i) {
+        final item = _item[i];
+        // Kartu yang SAMA dengan katalog POS -- apoteker melihat persis apa
+        // yang nanti dilihat kasir setelah profil diubah.
+        return KilauBaris(
+          kunci: MasterOffline.kunciBaris(item),
+          idBaru: _idBaru,
+          idBerubah: _idBerubah,
+          child: MedicationCard(
+            item: item,
+            onTap: () => _editProfil(item),
+            aksiTambahan: IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Riwayat data ini (AuditTrails)',
+              icon: const Icon(Icons.history, size: 16),
+              onPressed: () => tampilkanRiwayatData(
+                context,
+                entitas: 'apotik_item',
+                id: item['id'],
+                judul: '${item['nama'] ?? ''}',
               ),
-          ],
-        ),
-      );
-    });
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

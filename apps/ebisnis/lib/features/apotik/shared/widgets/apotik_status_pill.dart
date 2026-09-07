@@ -207,17 +207,23 @@ class ApotikStatusPill extends StatelessWidget {
         children: [
           Icon(ikon ?? _ikonBawaan(), size: rapat ? 12 : 14, color: warna),
           const SizedBox(width: 4),
-          // Fleksibel, bukan lebar tetap: pada skala teks aksesibilitas (2,0x)
-          // label status melebihi lebar induknya dan dulu meluber. Label
-          // keselamatan tidak boleh dipotong diam-diam, jadi ia dibiarkan
-          // membungkus ke baris kedua.
-          Flexible(
-            child: Text(teks,
+          // Pill rapat berada di dalam Wrap sehingga teks harus mengukur
+          // selebar isinya, bukan menyerap sisa lebar satu baris. Varian biasa
+          // tetap fleksibel agar label panjang aman pada skala teks besar.
+          if (rapat)
+            Text(teks,
                 style: TextStyle(
-                    fontSize: rapat ? 11 : 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: warnaTeks)),
-          ),
+                    color: warnaTeks))
+          else
+            Flexible(
+              child: Text(teks,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: warnaTeks)),
+            ),
         ],
       ),
     );

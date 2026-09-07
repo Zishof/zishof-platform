@@ -3,6 +3,7 @@ library;
 
 import 'package:ebisnis/features/apotik/core/apotik_design_tokens.dart';
 import 'package:ebisnis/features/apotik/dashboard/apotik_priority_card.dart';
+import 'package:ebisnis/features/apotik/pos/apotik_pos_page.dart';
 import 'package:ebisnis/features/apotik/shared/widgets/apotik_state_views.dart';
 import 'package:ebisnis/features/apotik/shared/widgets/apotik_status_pill.dart';
 import 'package:ebisnis/features/apotik/shared/widgets/medication_card.dart';
@@ -81,7 +82,53 @@ Future<void> _cocok(WidgetTester tester, Widget w, String nama,
       find.byType(MaterialApp), matchesGoldenFile('goldens/$nama.png'));
 }
 
+Widget _layarPos() {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      useMaterial3: true,
+      extensions: const [ApotikDesignTokens.light],
+    ),
+    home: ApotikPosPage(panggil: (aksi, body) async {
+      if (aksi == 'apotik_item_cari') {
+        return {
+          'status': '00',
+          'total': 4,
+          'data': [
+            _obat(),
+            _obat(lasa: true)..addAll({'id': 2, 'nama': 'Insulin Glargine'}),
+            _obat(stok: 8)..addAll({'id': 3, 'nama': 'Paracetamol Sirup'}),
+            _obat(highAlert: true, golongan: 'KERAS')
+              ..addAll({'id': 4, 'nama': 'Kalium Klorida Konsentrat'}),
+          ],
+        };
+      }
+      if (aksi == 'apotik_cara_bayar_list') {
+        return {
+          'status': '00',
+          'data': [
+            {'id': 1, 'nama': 'Tunai'}
+          ],
+        };
+      }
+      return {'status': '00', 'data': const []};
+    }),
+  );
+}
+
 void main() {
+  group('Kasir Apotik V2', () {
+    testWidgets('desktop 1440 dua area', (tester) async {
+      await _cocok(tester, _layarPos(), 'apotik_pos_v2_desktop_1440',
+          ukuran: const Size(1440, 900));
+    });
+
+    testWidgets('mobile 390 satu area', (tester) async {
+      await _cocok(tester, _layarPos(), 'apotik_pos_v2_mobile_390',
+          ukuran: const Size(390, 844));
+    });
+  });
+
   group('Kartu obat', () {
     testWidgets('biasa', (tester) async {
       await _cocok(

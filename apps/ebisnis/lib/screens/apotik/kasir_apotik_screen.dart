@@ -287,6 +287,10 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
         subjudul:
             'Penjualan obat, tebus resep, FEFO, LASA, dan obat terkendali',
         scrollable: false,
+        tampilkanBantuanHeader: false,
+        tampilkanBantuanMengambang: false,
+        tampilkanDropdownGrup: false,
+        aksiHeader: PosHelp.button(context, 'apotik_kasir', compact: true),
         actionsAppBar: [PosHelp.button(context, 'apotik_kasir', compact: true)],
         body: const ApotikPosPage(),
       );
