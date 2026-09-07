@@ -53,7 +53,9 @@ void main() {
       await ApiClient.instance.simpanToken(login['token'] as String);
     }
     AppProductProfile.aktif = const AppProductProfile.apotik();
+    final testErrorHandler = FlutterError.onError;
     app.main();
+    FlutterError.onError = testErrorHandler;
     await _wait(tester, () => find.byType(KasirScreen).evaluate().isNotEmpty,
         reason: 'Layar POS belum siap', seconds: 180);
     expect(find.byType(LoginScreen), findsNothing);
@@ -129,6 +131,16 @@ void main() {
     await _shot(tester, '11-draft-jurnal-pengadaan');
     await _openMenu(tester, 'Katalog Laporan');
     await _shot(tester, '12-katalog-laporan-pengadaan');
+
+    // Laporan pembelian operasional berada pada register Hutang Supplier.
+    // Pengambilan ini hanya-baca dan memakai rentang 30 hari bawaan, yang
+    // mencakup seluruh 100 faktur UAT final pada tanggal pelaksanaan.
+    await _tapSidebar(tester, 'INVENTORY & SALES');
+    await _openMenu(tester, 'Hutang Supplier (AP)');
+    await tester.tap(find.text('Laporan Pembelian').last);
+    await _waitNoSpinner(tester, seconds: 90);
+    expect(find.text('Total Pembelian'), findsOneWidget);
+    await _shot(tester, '13-laporan-pembelian-100');
   });
 }
 

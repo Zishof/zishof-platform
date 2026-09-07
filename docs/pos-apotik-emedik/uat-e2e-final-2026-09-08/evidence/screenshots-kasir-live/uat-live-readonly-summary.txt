@@ -1,0 +1,9 @@
+status=PASS
+waktu=2026-09-08T01:20:33.753496
+otc=100
+resepDokter=100
+racikan=100
+produksiFarmasi=100
+tebusResep=100
+provisioningSampleDilakukan=false
+mutasiTransaksi=false

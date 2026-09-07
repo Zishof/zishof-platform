@@ -1,0 +1,56 @@
+{
+  "tanggal": "2026-09-08",
+  "zonaWaktu": "Asia/Jakarta",
+  "server": "https://demo.ecampus.id/ecampus",
+  "rilis": "1.35.1+189",
+  "frontendCommit": "676d5b2edee3f4b1fcec2880bb793610452c1851",
+  "metode": "live read-only regression setelah deployment",
+  "mutasiTransaksi": false,
+  "kasir": {
+    "otc": {"page": 100, "totalServer": 11000, "status": "PASS"},
+    "resepDokter": {"page": 100, "status": "PASS"},
+    "racikan": {"page": 100, "totalServer": 500, "status": "PASS"},
+    "produksiFarmasi": {"page": 100, "totalServer": 500, "status": "PASS"},
+    "tebusResep": {"page": 100, "status": "PASS"},
+    "responsif": {"viewport": [1920, 1366, 768, 390], "tebusResepMobileTerlihat": true, "status": "PASS"}
+  },
+  "pengadaanLive": {
+    "pr": {"total": 264, "disetujui": 260, "menunggu": 1, "ditutup": 3},
+    "tahapan": {"pr": 264, "po": 254, "bast": 254, "tagihan": 254, "dibayar": 251},
+    "po": {"total": 254, "dibayar": 229480000, "sisa": 2250000, "lunas": 125},
+    "bast": {"total": 255, "disetujui": 255, "masukStok": 255},
+    "tagihan": {"total": 255, "diterima": 255},
+    "katalogLaporan": {"total": 63, "halaman": 5},
+    "status": "PASS"
+  },
+  "akuntansiLive": {
+    "draftGlobal": 6058,
+    "terpostingGlobal": 5295,
+    "postingHpp": {"total": 4528, "terposting": 928, "historisTertahan": 3600},
+    "postingPenjualan": {"total": 4528, "terposting": 928, "historisTertahan": 3600},
+    "postingKulakanRunSpecific": {"target": 100, "terposting": 100, "siap": 0, "status": "PASS"},
+    "postingBayarHutangRunSpecific": {"target": 100, "terposting": 100, "siap": 0, "status": "PASS"},
+    "jurnalUmumScreen": {"referensiRunSpecificDitemukan": true, "statusTampil": "Terposting", "cacheFallback": true, "status": "OBSERVASI"},
+    "postingTerimaPiutang": {"status": "N/A", "catatan": "endpoint khusus Apotik belum tersedia; tidak digunakan pada alur tunai/kulakan yang diuji"},
+    "tutupBuku": {"status": "OBSERVASI", "catatan": "akun Laba Ditahan belum diatur pada master Toko"},
+    "closingDijalankan": false,
+    "laporan": {
+      "labaRugi": "PASS",
+      "neraca": "PASS",
+      "arusKas": "PASS",
+      "keseluruhanJurnal": "PASS",
+      "bukuBesar": "PASS",
+      "neracaSaldo": "PASS"
+    }
+  },
+  "baselineMutatif20260907": {
+    "kasirPerMode": 100,
+    "jumlahModeKasir": 5,
+    "pengadaanPerTahap": 100,
+    "jumlahTahapPengadaan": 5,
+    "jurnalRunSpecificTerposting": 1100,
+    "duplikasiSaatRetry": 0,
+    "provenance": "baseline-20260907-*.json"
+  },
+  "putusan": "PASS DENGAN OBSERVASI"
+}

@@ -1,0 +1,74 @@
+{
+  "rilis": "apotik-v1.35.1+189",
+  "runId": "FNL0907B",
+  "waktuUatUtc": "2026-09-07T11:17:01.945499Z",
+  "server": "https://demo.ecampus.id/ecampus",
+  "volumePerMenu": 100,
+  "metodePembayaran": {
+    "id": 1,
+    "nama": "Tunai"
+  },
+  "provisioning": {
+    "targetPenjualanTerkendali": 500,
+    "batchRecall": 100,
+    "itemColdChain": 100,
+    "targetResepCampuranSiapTebus": 100,
+    "targetBahanRacikan": 1000,
+    "targetFormulaRacikanOperasional": 500,
+    "targetPembayaranSample": 500,
+    "lulus": true,
+    "bahanRacikan": 1000,
+    "formulaRacikanOperasional": 500,
+    "antreanHariIni": 700,
+    "resepSiapJual": 3997,
+    "formulaProduksiOperasional": 500,
+    "targetResepKlinisLengkap": 500,
+    "resepCampuranSiapTebus": 400,
+    "targetBatchRecall": 100,
+    "targetAntrean": 500,
+    "targetResepSiapJual": 500,
+    "pembayaranSample": 500,
+    "penjualanTerkendali": 500,
+    "obatJadi": 10000,
+    "targetItemColdChain": 100,
+    "targetFormulaProduksiOperasional": 500,
+    "resepKlinisLengkap": 1000,
+    "targetObatJadi": 10000
+  },
+  "fiturTerbuka": {
+    "apotik_kasir": true,
+    "apotik_resep": true,
+    "apotik_racikan": true
+  },
+  "katalogTerbaca": {
+    "otc": 200,
+    "resepDokter": 100,
+    "racikan": 100,
+    "produksiFarmasi": 100,
+    "tebusResepCampuran": 100
+  },
+  "transaksiLulus": {
+    "otcObatBebas": 100,
+    "resepDokter": 100,
+    "racikan": 100,
+    "produksiFarmasi": 100,
+    "tebusResep": 100
+  },
+  "tebusResepBaris": {
+    "obatJadi": 100,
+    "racikan": 400
+  },
+  "idempotensi": {
+    "otc": true,
+    "racikan": true,
+    "produksi": true,
+    "tebusResep": true
+  },
+  "resepPertamaDitandaiDitebus": true,
+  "laporanPenjualanBaris": 200,
+  "drafJurnalSiap": {
+    "penjualan": 400,
+    "hpp": 400
+  },
+  "status": "PASS"
+}

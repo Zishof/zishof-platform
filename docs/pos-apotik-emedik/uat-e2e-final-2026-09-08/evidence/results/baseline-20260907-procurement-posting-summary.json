@@ -1,0 +1,311 @@
+{
+  "periode": "2026-09-01 s.d. 2026-09-30",
+  "pemetaanAkun": {
+    "sebelum": {
+      "sumberAkun": "cetak_data_260904124814.xlsx",
+      "jenisPenerimaanBastTerkait": 1,
+      "penyediaTerkait": 0,
+      "message": "Audit pemetaan akun Kantin selesai; belum ada data yang diubah.",
+      "jenisPemesananTerminTerkait": 0,
+      "kekuranganSebelum": {
+        "jenisPenerimaanTanpaHutangSementara": 0,
+        "penyediaAsetTerminTanpaUtang": 0,
+        "jenisPenerimaanTanpaHutangVendor": 0,
+        "tokoTanpaPiutang": 0,
+        "tokoTanpaKas": 0,
+        "jenisProdukTanpaHpp": 0,
+        "jenisPemesananTerminTanpaHutangPekerjaan": 0,
+        "penyediaTanpaUtang": 0,
+        "produkTanpaAkunPersediaan": 0,
+        "masterAsetBastTanpaAkunPersediaan": 1,
+        "jenisProdukTanpaPendapatan": 0,
+        "produkTanpaMasterAset": 0
+      },
+      "penyediaAsetTerminTerkait": 1,
+      "akun": [
+        {
+          "peran": "Kas/Tunai",
+          "nama": "KAS YAYASAN",
+          "kode": "111.101",
+          "id": 3800001
+        },
+        {
+          "peran": "Piutang penjualan kredit",
+          "nama": "PIUTANG USAHA TOKO",
+          "kode": "131.300",
+          "id": 34700001
+        },
+        {
+          "peran": "Persediaan barang kantin",
+          "nama": "PERSEDIAAN BARANG LAINNYA",
+          "kode": "151.200",
+          "id": 6400001
+        },
+        {
+          "peran": "Utang supplier",
+          "nama": "UTANG USAHA TOKO",
+          "kode": "310.600",
+          "id": 34800001
+        },
+        {
+          "peran": "Pendapatan penjualan",
+          "nama": "PENDAPATAN PENJUALAN TOKO",
+          "kode": "410.900",
+          "id": 34500001
+        },
+        {
+          "peran": "HPP",
+          "nama": "BEBAN POKOK PENJUALAN TOKO",
+          "kode": "510.900",
+          "id": 34600001
+        },
+        {
+          "peran": "Hutang sementara BAST",
+          "nama": "HUTANG SEMENTARA",
+          "kode": "310.400",
+          "id": 34300001
+        },
+        {
+          "peran": "Hutang vendor pengadaan",
+          "nama": "HUTANG VENDOR",
+          "kode": "310.500",
+          "id": 34400001
+        }
+      ],
+      "mode": "AUDIT",
+      "produkBelumPosting": 0,
+      "hak": {
+        "create": true
+      },
+      "masterAsetBastTerkait": 1,
+      "perubahan": {
+        "masterAsetDipetakan": 0,
+        "relasiToko": 0,
+        "jenisPemesananTerminDipetakan": 0,
+        "penyediaAsetTerminDipetakan": 0,
+        "masterAsetDibuat": 0,
+        "penyediaDipetakan": 0,
+        "jenisProdukDipetakan": 0,
+        "jenisPenerimaanDipetakan": 0,
+        "konfigurasiCadangan": 0
+      },
+      "tokoId": 1,
+      "mulai": "2026-09-01",
+      "jenisProdukTerkait": 0,
+      "sampai": "2026-09-30",
+      "statusAsli": "00",
+      "status": "success"
+    },
+    "diterapkan": {
+      "sumberAkun": "cetak_data_260904124814.xlsx",
+      "jenisPenerimaanBastTerkait": 1,
+      "penyediaTerkait": 0,
+      "message": "Pemetaan akun Kantin diterapkan secara idempoten. Jalankan audit ulang sebelum posting.",
+      "jenisPemesananTerminTerkait": 0,
+      "kekuranganSebelum": {
+        "jenisPenerimaanTanpaHutangSementara": 0,
+        "penyediaAsetTerminTanpaUtang": 0,
+        "jenisPenerimaanTanpaHutangVendor": 0,
+        "tokoTanpaPiutang": 0,
+        "tokoTanpaKas": 0,
+        "jenisProdukTanpaHpp": 0,
+        "jenisPemesananTerminTanpaHutangPekerjaan": 0,
+        "penyediaTanpaUtang": 0,
+        "produkTanpaAkunPersediaan": 0,
+        "masterAsetBastTanpaAkunPersediaan": 1,
+        "jenisProdukTanpaPendapatan": 0,
+        "produkTanpaMasterAset": 0
+      },
+      "penyediaAsetTerminTerkait": 1,
+      "akun": [
+        {
+          "peran": "Kas/Tunai",
+          "nama": "KAS YAYASAN",
+          "kode": "111.101",
+          "id": 3800001
+        },
+        {
+          "peran": "Piutang penjualan kredit",
+          "nama": "PIUTANG USAHA TOKO",
+          "kode": "131.300",
+          "id": 34700001
+        },
+        {
+          "peran": "Persediaan barang kantin",
+          "nama": "PERSEDIAAN BARANG LAINNYA",
+          "kode": "151.200",
+          "id": 6400001
+        },
+        {
+          "peran": "Utang supplier",
+          "nama": "UTANG USAHA TOKO",
+          "kode": "310.600",
+          "id": 34800001
+        },
+        {
+          "peran": "Pendapatan penjualan",
+          "nama": "PENDAPATAN PENJUALAN TOKO",
+          "kode": "410.900",
+          "id": 34500001
+        },
+        {
+          "peran": "HPP",
+          "nama": "BEBAN POKOK PENJUALAN TOKO",
+          "kode": "510.900",
+          "id": 34600001
+        },
+        {
+          "peran": "Hutang sementara BAST",
+          "nama": "HUTANG SEMENTARA",
+          "kode": "310.400",
+          "id": 34300001
+        },
+        {
+          "peran": "Hutang vendor pengadaan",
+          "nama": "HUTANG VENDOR",
+          "kode": "310.500",
+          "id": 34400001
+        }
+      ],
+      "mode": "TERAPKAN",
+      "produkBelumPosting": 0,
+      "masterAsetBastTerkait": 1,
+      "perubahan": {
+        "masterAsetDipetakan": 1,
+        "relasiToko": 0,
+        "jenisPemesananTerminDipetakan": 0,
+        "penyediaAsetTerminDipetakan": 0,
+        "masterAsetDibuat": 0,
+        "penyediaDipetakan": 0,
+        "jenisProdukDipetakan": 0,
+        "jenisPenerimaanDipetakan": 0,
+        "konfigurasiCadangan": 8
+      },
+      "tokoId": 1,
+      "mulai": "2026-09-01",
+      "jenisProdukTerkait": 0,
+      "sampai": "2026-09-30",
+      "statusAsli": "00",
+      "status": "success"
+    },
+    "sesudah": {
+      "sumberAkun": "cetak_data_260904124814.xlsx",
+      "jenisPenerimaanBastTerkait": 1,
+      "penyediaTerkait": 0,
+      "message": "Audit pemetaan akun Kantin selesai; belum ada data yang diubah.",
+      "jenisPemesananTerminTerkait": 0,
+      "kekuranganSebelum": {
+        "jenisPenerimaanTanpaHutangSementara": 0,
+        "penyediaAsetTerminTanpaUtang": 0,
+        "jenisPenerimaanTanpaHutangVendor": 0,
+        "tokoTanpaPiutang": 0,
+        "tokoTanpaKas": 0,
+        "jenisProdukTanpaHpp": 0,
+        "jenisPemesananTerminTanpaHutangPekerjaan": 0,
+        "penyediaTanpaUtang": 0,
+        "produkTanpaAkunPersediaan": 0,
+        "masterAsetBastTanpaAkunPersediaan": 0,
+        "jenisProdukTanpaPendapatan": 0,
+        "produkTanpaMasterAset": 0
+      },
+      "penyediaAsetTerminTerkait": 1,
+      "akun": [
+        {
+          "peran": "Kas/Tunai",
+          "nama": "KAS YAYASAN",
+          "kode": "111.101",
+          "id": 3800001
+        },
+        {
+          "peran": "Piutang penjualan kredit",
+          "nama": "PIUTANG USAHA TOKO",
+          "kode": "131.300",
+          "id": 34700001
+        },
+        {
+          "peran": "Persediaan barang kantin",
+          "nama": "PERSEDIAAN BARANG LAINNYA",
+          "kode": "151.200",
+          "id": 6400001
+        },
+        {
+          "peran": "Utang supplier",
+          "nama": "UTANG USAHA TOKO",
+          "kode": "310.600",
+          "id": 34800001
+        },
+        {
+          "peran": "Pendapatan penjualan",
+          "nama": "PENDAPATAN PENJUALAN TOKO",
+          "kode": "410.900",
+          "id": 34500001
+        },
+        {
+          "peran": "HPP",
+          "nama": "BEBAN POKOK PENJUALAN TOKO",
+          "kode": "510.900",
+          "id": 34600001
+        },
+        {
+          "peran": "Hutang sementara BAST",
+          "nama": "HUTANG SEMENTARA",
+          "kode": "310.400",
+          "id": 34300001
+        },
+        {
+          "peran": "Hutang vendor pengadaan",
+          "nama": "HUTANG VENDOR",
+          "kode": "310.500",
+          "id": 34400001
+        }
+      ],
+      "mode": "AUDIT",
+      "produkBelumPosting": 0,
+      "hak": {
+        "create": true
+      },
+      "masterAsetBastTerkait": 1,
+      "perubahan": {
+        "masterAsetDipetakan": 0,
+        "relasiToko": 0,
+        "jenisPemesananTerminDipetakan": 0,
+        "penyediaAsetTerminDipetakan": 0,
+        "masterAsetDibuat": 0,
+        "penyediaDipetakan": 0,
+        "jenisProdukDipetakan": 0,
+        "jenisPenerimaanDipetakan": 0,
+        "konfigurasiCadangan": 0
+      },
+      "tokoId": 1,
+      "mulai": "2026-09-01",
+      "jenisProdukTerkait": 0,
+      "sampai": "2026-09-30",
+      "statusAsli": "00",
+      "status": "success"
+    }
+  },
+  "sebelum": [
+    {
+      "kunci": "penyusutan",
+      "bisaRincian": true,
+      "keterangan": "Penerimaan (BAST) aset tetap dipantau sampai menjadi jurnal aset.",
+      "closing": 0,
+      "nama": "Fix Aset (Jurnal Saat BAST)",
+      "draft": 100,
+      "bolehPosting": true,
+      "kategori": "fixed_asset",
+      "posting": 154,
+      "kategoriNama": "Fixed Asset & Penyusutan",
+      "bisaPosting": true
+    }
+  ],
+  "sesudah": [
+    {
+      "kunci": "penyusutan",
+      "nama": "Fix Aset (Jurnal Saat BAST)",
+      "draft": 0,
+      "posting": 254
+    }
+  ],
+  "status": "PASS"
+}
