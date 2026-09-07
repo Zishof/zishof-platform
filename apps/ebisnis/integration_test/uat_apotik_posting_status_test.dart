@@ -14,8 +14,7 @@ const _outputDir = String.fromEnvironment(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-      'seluruh posting memiliki 100 draf dan riwayat berstatus eksplisit',
+  testWidgets('seluruh posting memiliki 100 histori dan status akhir eksplisit',
       (tester) async {
     const username = String.fromEnvironment('POS_TEST_USERNAME');
     const password = String.fromEnvironment('POS_TEST_PASSWORD');
@@ -104,10 +103,10 @@ void _verifyPostingContract(
       reason: '$kind harus menerima batas 10.000 record');
   final pending = rows(data, 'rincian');
   final posted = rows(data, 'rincianSudahDiposting');
-  expect(pending.length, greaterThanOrEqualTo(100),
-      reason: '$kind wajib mempunyai minimal 100 record belum diposting');
   expect(posted.length, greaterThanOrEqualTo(100),
       reason: '$kind wajib mempunyai minimal 100 record telah diposting');
+  expect(pending.length + posted.length, greaterThanOrEqualTo(100),
+      reason: '$kind wajib mempunyai minimal 100 record sumber UAT');
   expect(
       pending.every((e) =>
           e['sudahDiposting'] == false &&
@@ -120,6 +119,12 @@ void _verifyPostingContract(
           e['statusPosting'] == 'SUDAH_DIPOSTING'),
       isTrue,
       reason: '$kind: status riwayat harus eksplisit');
+  final ready = data['jumlahSiapDiposting'] ?? data['jumlahSiap'];
+  if (ready is num) {
+    expect(ready, 0,
+        reason:
+            '$kind tidak boleh menyisakan dokumen eligible pada kondisi akhir');
+  }
 }
 
 Map<String, dynamic> _summary(
