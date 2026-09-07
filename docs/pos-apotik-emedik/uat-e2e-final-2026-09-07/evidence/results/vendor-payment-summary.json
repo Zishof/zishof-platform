@@ -1,0 +1,16 @@
+{
+  "prefix": "UAT-APT-E2E-FINAL-20260907-PROC-A",
+  "poTerverifikasi": 100,
+  "kandidatSebelum": 0,
+  "prosesTransferDibuatPadaRun": false,
+  "prosesTransferId": 19,
+  "prosesTransfer": "UAT-APT-E2E-FINAL-20260907-PROC-A-TRANSFER-100",
+  "statusAkhir": "Terealisasi",
+  "itemTransfer": 100,
+  "sisaKandidat": 0,
+  "jurnalDibuatPadaRealisasi": 100,
+  "postingPengajuanTransferSebelum": 700,
+  "postingPengajuanTransferSesudah": 800,
+  "retryJurnalBaru": 0,
+  "status": "PASS"
+}

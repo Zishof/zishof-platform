@@ -1,0 +1,26 @@
+{
+  "runId": "FNL0907B",
+  "prefix": "UAT-APT-13425-FNL0907B-",
+  "periode": "2026-09-05 s.d. 2026-09-09",
+  "posting": {
+    "penjualan": {
+      "drafSiapSebelum": 0,
+      "riwayatSebelum": 400,
+      "dipostingPadaEksekusiIni": 0,
+      "drafRunSesudah": 0,
+      "riwayatRunSesudah": 400,
+      "retryDiposting": 0,
+      "status": "PASS"
+    },
+    "hpp": {
+      "drafSiapSebelum": 400,
+      "riwayatSebelum": 0,
+      "dipostingPadaEksekusiIni": 400,
+      "drafRunSesudah": 0,
+      "riwayatRunSesudah": 400,
+      "retryDiposting": 0,
+      "status": "PASS"
+    }
+  },
+  "status": "PASS"
+}
