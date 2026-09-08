@@ -69,6 +69,7 @@ import '../screens/apotik/kasir_apotik_screen.dart';
 import '../screens/apotik/menu_apotik_screen.dart';
 import '../screens/apotik/manajemen_farmasi_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
+import '../screens/apotik/pengadaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
 import '../screens/mitrainap/beranda_mitrainap_screen.dart';
 import '../screens/mitrainap/properti_hotel_screen.dart';
@@ -272,11 +273,11 @@ class AppDrawer extends StatelessWidget {
                                   .bolehMenuVarianBaru('apotik_formularium')))
                         _ItemMenu(
                           icon: Icons.medication_outlined,
-                          label: 'Formularium & Obat',
-                          aktif: menuAktif == 'Formularium & Obat',
+                          label: 'Setup Produk Obat',
+                          aktif: menuAktif == 'Setup Produk Obat',
                           onTap: () => _pindahMenu(
                             context,
-                            label: 'Formularium & Obat',
+                            label: 'Setup Produk Obat',
                             builder: (_) => const PersediaanApotikScreen(),
                           ),
                         ),
@@ -301,13 +302,12 @@ class AppDrawer extends StatelessWidget {
                                   .bolehMenuVarianBaru('apotik_pengadaan')))
                         _ItemMenu(
                           icon: Icons.local_shipping_outlined,
-                          label: 'Pengadaan / PBF',
-                          aktif: menuAktif == 'Pengadaan / PBF',
+                          label: 'Pengadaan Obat',
+                          aktif: menuAktif == 'Pengadaan Obat',
                           onTap: () => _pindahMenu(
                             context,
-                            label: 'Pengadaan / PBF',
-                            builder: (_) =>
-                                const PersediaanApotikScreen(tabAwal: 2),
+                            label: 'Pengadaan Obat',
+                            builder: (_) => const PengadaanApotikScreen(),
                           ),
                         ),
                       if (AppProductProfile.aktif.isApotik &&
@@ -322,7 +322,7 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Stok Opname Apotik',
                             builder: (_) =>
-                                const PersediaanApotikScreen(tabAwal: 3),
+                                const PersediaanApotikScreen(tabAwal: 2),
                           ),
                         ),
                       if (AppProductProfile.aktif.isApotik &&
@@ -337,7 +337,7 @@ class AppDrawer extends StatelessWidget {
                             context,
                             label: 'Retur Obat',
                             builder: (_) =>
-                                const PersediaanApotikScreen(tabAwal: 4),
+                                const PersediaanApotikScreen(tabAwal: 3),
                           ),
                         ),
                       if (AppProductProfile.aktif.isApotik &&
@@ -1611,6 +1611,10 @@ class _GrupMenuState extends State<_GrupMenu> {
 
   @override
   Widget build(BuildContext context) {
+    if (AppProductProfile.aktif.isApotik &&
+        const {'Produksi', 'Pengadaan'}.contains(widget.label)) {
+      return const SizedBox.shrink();
+    }
     final warnaAktif = Theme.of(context).colorScheme.primary;
     final warnaTeks =
         widget.adaYangAktif ? warnaAktif : AppColors.textPrimaryOf(context);
@@ -1651,6 +1655,19 @@ class _ItemMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppProductProfile.aktif.isApotik &&
+        const {
+          'Kasir',
+          'Ringkasan',
+          'Produk',
+          'Jenis Produk',
+          'Grup Produk',
+          'Stok Opname',
+          'Kedaluwarsa',
+          'Kulakan',
+        }.contains(label)) {
+      return const SizedBox.shrink();
+    }
     final warnaAktif = Theme.of(context).colorScheme.primary;
     final warnaTeks = aktif ? warnaAktif : AppColors.textPrimaryOf(context);
     final iconWidget = Icon(icon, color: warnaTeks);

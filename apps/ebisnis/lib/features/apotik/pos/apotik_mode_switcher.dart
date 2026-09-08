@@ -10,6 +10,7 @@ import 'apotik_pos_state.dart';
 class ApotikModeSwitcher extends StatelessWidget {
   final ApotikModePos aktif;
   final ValueChanged<ApotikModePos> onPilih;
+  final List<ApotikModePos> modes;
 
   /// Untuk command bar sempit, semua mode tetap satu baris dan dapat digeser;
   /// tidak ada mode yang hilang atau turun jauh dari area pencarian.
@@ -19,6 +20,7 @@ class ApotikModeSwitcher extends StatelessWidget {
     super.key,
     required this.aktif,
     required this.onPilih,
+    this.modes = ApotikModePos.values,
     this.gulirHorizontal = false,
   });
 
@@ -35,7 +37,7 @@ class ApotikModeSwitcher extends StatelessWidget {
     return ApotikResponsive(
       builder: (context, layout) {
         final pilihan = <Widget>[
-          for (final m in ApotikModePos.values) _chip(context, t, m, layout),
+          for (final m in modes) _chip(context, t, m, layout),
         ];
         if (gulirHorizontal) {
           return SingleChildScrollView(

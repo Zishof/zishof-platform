@@ -13,6 +13,7 @@ import 'membership_apotik_screen.dart';
 import 'menu_apotik_screen.dart';
 import 'pasien_apotik_screen.dart';
 import 'persediaan_apotik_screen.dart';
+import 'pengadaan_apotik_screen.dart';
 
 /// Pusat kerja tahap awal untuk seluruh pengembangan lanjutan Apotik.
 ///
@@ -287,7 +288,7 @@ class _ManajemenFarmasiScreenState extends State<ManajemenFarmasiScreen> {
       'coldchain' => const InventoryIntelligenceApotikScreen(tabAwal: 1),
       'transfer' => const InventoryIntelligenceApotikScreen(tabAwal: 2),
       'planning' => const InventoryIntelligenceApotikScreen(tabAwal: 3),
-      'pengadaan' => const PersediaanApotikScreen(tabAwal: 2),
+      'pengadaan' => const PengadaanApotikScreen(),
       'persediaan' => const PersediaanApotikScreen(),
       'kas' =>
         const LaporanApotikScreen(tabAwal: LaporanApotikScreen.tabRekonsiliasi),

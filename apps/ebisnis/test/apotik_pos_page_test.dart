@@ -39,6 +39,8 @@ PanggilAksi _server({
         return {'status': '00', 'kode': 'PROD1', 'jumlahProduksi': 1};
       case 'apotik_resep_list':
         return {'status': '00', 'data': const []};
+      case 'apotik_resep_simpan':
+        return {'status': '00', 'id': 901, 'kode': 'RX-KASIR-901'};
       default:
         return {'status': '91', 'description': 'Aksi tidak dikenal'};
     }
@@ -326,6 +328,39 @@ void main() {
   });
 
   group('Mode kasir lengkap', () {
+    testWidgets(
+        'resep baru menyimpan identitas lengkap dan mengaitkan transaksi',
+        (tester) async {
+      final aksi = <String>[];
+      final pos = ApotikPosController()
+        ..mode = ApotikModePos.resep
+        ..tambah(ApotikBarisKeranjang(item: _obat, qty: 2, harga: 3000));
+      await _pump(
+          tester,
+          ApotikPosPage(
+              controller: pos, panggil: _server(item: [_obat], dicatat: aksi)),
+          const Size(1500, 900));
+
+      await tester.tap(find.byKey(const Key('buat-resep-baru')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const Key('resep-pasien')), 'Budi Santoso');
+      await tester.enterText(
+          find.byKey(const Key('resep-dokter')), 'dr. Anisa Putri');
+      await tester.enterText(
+          find.byKey(const Key('resep-fasilitas')), 'Klinik Sehat');
+      await tester.enterText(
+          find.byKey(const Key('resep-diagnosis')), 'Hipertensi esensial');
+      await tester.tap(find.byKey(const Key('simpan-resep-baru')));
+      await tester.pumpAndSettle();
+
+      expect(aksi, contains('apotik_resep_simpan'));
+      expect(pos.resepId, 901);
+      expect(pos.resepKode, 'RX-KASIR-901');
+      expect(pos.namaPembeli, 'Budi Santoso');
+      expect(pos.namaDokter, 'dr. Anisa Putri');
+    });
+
     testWidgets('Racikan terbuka, memakai katalog dan endpoint bayar racikan',
         (tester) async {
       final aksi = <String>[];

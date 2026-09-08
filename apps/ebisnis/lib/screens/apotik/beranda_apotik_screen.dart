@@ -1,23 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../api_client.dart';
+import '../../app_variant.dart';
 import '../../services/master_offline.dart';
 import '../../product_profile.dart';
 import '../../sesi.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
-import '../../widgets/indikator_sinkron_master.dart';
 import '../../widgets/safe_state.dart';
 import 'kasir_apotik_screen.dart';
 import 'antrean_farmasi_screen.dart';
 import 'persediaan_apotik_screen.dart';
-import '../../app_variant.dart';
+import 'pengadaan_apotik_screen.dart';
 import '../../features/apotik/dashboard/apotik_dashboard_page.dart';
 import '../../features/apotik/inventory/apotik_batch_expiry_page.dart';
-import '../../features/apotik/inventory/apotik_formularium_page.dart';
 import '../../features/apotik/prescription/apotik_resep_page.dart';
-import '../../features/apotik/procurement/apotik_penerimaan_page.dart';
 import 'laporan_apotik_screen.dart';
 import 'pos_help.dart';
 import '../../widgets/jejak_galat.dart';
@@ -51,9 +49,9 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
     ('apotik_kasir', 'Kasir Apotik', Icons.point_of_sale),
     ('apotik_resep', 'Tebus Resep Dokter', Icons.description_outlined),
     ('apotik_racikan', 'Racikan', Icons.science_outlined),
-    ('apotik_formularium', 'Formularium & Obat', Icons.medication_outlined),
+    ('apotik_formularium', 'Setup Produk Obat', Icons.medication_outlined),
     ('apotik_batch', 'Batch & Kedaluwarsa', Icons.event_busy_outlined),
-    ('apotik_pengadaan', 'Pengadaan / PBF', Icons.local_shipping_outlined),
+    ('apotik_pengadaan', 'Pengadaan Obat', Icons.local_shipping_outlined),
     ('apotik_stok_opname', 'Stok Opname Apotik', Icons.fact_check_outlined),
     ('apotik_retur', 'Retur Obat', Icons.assignment_return_outlined),
     ('apotik_narkotika', 'Obat Terkendali', Icons.gpp_maybe_outlined),
@@ -401,8 +399,7 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
       ApotikTujuanDashboard.resep => const _HalamanAntreanResep(),
       // FASE 5: ruang kerja batch/expiry sendiri (sebelumnya tab persediaan).
       ApotikTujuanDashboard.batch => const _HalamanBatchExpiry(),
-      // FASE 5: formularium punya layar sendiri (editor profil obat IR-01).
-      ApotikTujuanDashboard.stok => const _HalamanFormularium(),
+      ApotikTujuanDashboard.stok => const PersediaanApotikScreen(),
       ApotikTujuanDashboard.kasir => _layarTujuan('apotik_kasir'),
     };
     if (layar == null) return;
@@ -418,14 +415,11 @@ class _BerandaApotikScreenState extends State<BerandaApotikScreen>
       case 'apotik_batch':
         return const PersediaanApotikScreen(tabAwal: 1);
       case 'apotik_pengadaan':
-        // FASE 5: penerimaan PBF punya layar sendiri untuk varian apotik.
-        return AppVariant.isApotik
-            ? const _HalamanPenerimaan()
-            : const PersediaanApotikScreen(tabAwal: 2);
+        return const PengadaanApotikScreen();
       case 'apotik_stok_opname':
-        return const PersediaanApotikScreen(tabAwal: 3);
+        return const PersediaanApotikScreen(tabAwal: 2);
       case 'apotik_retur':
-        return const PersediaanApotikScreen(tabAwal: 4);
+        return const PersediaanApotikScreen(tabAwal: 3);
       case 'apotik_laporan':
         return const LaporanApotikScreen();
     }
@@ -517,43 +511,6 @@ class _HalamanBatchExpiry extends StatelessWidget {
       subjudul: 'Monitor lot mendekati kedaluwarsa dan status penahanan',
       scrollable: false,
       body: ApotikBatchExpiryPage(),
-    );
-  }
-}
-
-/// Pembungkus AppShell untuk Formularium / Master Obat.
-class _HalamanFormularium extends StatelessWidget {
-  const _HalamanFormularium();
-
-  @override
-  Widget build(BuildContext context) {
-    // Indikator sinkron dipasang di layar INDUK, mengikuti pola layar master
-    // lain (lihat master_offline_kontrak_test.dart): halamannya sendiri tetap
-    // bebas timer sehingga dapat diuji sebagai widget biasa.
-    return const AppShell(
-      menuAktif: MenuEBisnis.persediaanApotik,
-      judul: 'Formularium / Master Obat',
-      subjudul:
-          'Golongan, bentuk sediaan, kekuatan, LASA, high-alert, cold-chain',
-      scrollable: false,
-      actionsAppBar: [IndikatorSinkronMaster()],
-      body: ApotikFormulariumPage(),
-    );
-  }
-}
-
-/// Pembungkus AppShell untuk Penerimaan PBF.
-class _HalamanPenerimaan extends StatelessWidget {
-  const _HalamanPenerimaan();
-
-  @override
-  Widget build(BuildContext context) {
-    return const AppShell(
-      menuAktif: MenuEBisnis.persediaanApotik,
-      judul: 'Penerimaan PBF',
-      subjudul: 'Faktur, batch baru, dan tanggal kedaluwarsa',
-      scrollable: false,
-      body: ApotikPenerimaanPage(),
     );
   }
 }

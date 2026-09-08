@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../app_variant.dart';
 import '../../features/apotik/pos/apotik_pos_page.dart';
+import '../../features/apotik/pos/apotik_pos_state.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/safe_state.dart';
 import 'pos_help.dart';
@@ -292,7 +293,9 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
         tampilkanDropdownGrup: false,
         aksiHeader: PosHelp.button(context, 'apotik_kasir', compact: true),
         actionsAppBar: [PosHelp.button(context, 'apotik_kasir', compact: true)],
-        body: const ApotikPosPage(),
+        body: const ApotikPosPage(
+          modeTersedia: [ApotikModePos.otc, ApotikModePos.resep],
+        ),
       );
     }
     final lebar = MediaQuery.sizeOf(context).width;

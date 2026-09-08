@@ -76,9 +76,16 @@ class ApotikPosPage extends StatefulWidget {
   /// Pemuat katalog "lokal dulu". Hanya KATALOG yang dibaca dari cache;
   /// pembayaran tetap menuntut server (lihat core/apotik_lokal_dulu.dart).
   final MuatDaftarApotik? muatKatalog;
+  final List<ApotikModePos> modeTersedia;
+  final bool modeTerkunci;
 
   const ApotikPosPage(
-      {super.key, this.panggil, this.controller, this.muatKatalog});
+      {super.key,
+      this.panggil,
+      this.controller,
+      this.muatKatalog,
+      this.modeTersedia = ApotikModePos.values,
+      this.modeTerkunci = false});
 
   @override
   State<ApotikPosPage> createState() => _ApotikPosPageState();
@@ -394,6 +401,13 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   /// Menambah item ke keranjang; bila item ber-batch, kasir memilih batch
   /// lebih dulu (prefill FEFO) — sama seperti alur lama.
   Future<void> _tambahItem(Map<String, dynamic> item, {double qty = 1}) async {
+    final id = item['id'];
+    if (id is num && id < 0) {
+      _pesan(
+          'Produk masih menunggu sinkronisasi. Tunggu indikator tersinkron sebelum dijual.',
+          galat: true);
+      return;
+    }
     var batchTerpilih = <Map<String, dynamic>>[];
     final serverPilihFefo = item['racikan'] == true || item['produksi'] == true;
     if (!serverPilihFefo) {
@@ -524,6 +538,51 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
       }
     } catch (e) {
       _pesan('Gagal muat resep: $e', galat: true);
+    }
+  }
+
+  /// Resep baru harus mendapat ID server sebelum pembayaran mengaitkan stok
+  /// dan transaksi secara atomik. Karena itu aksi klinis ini online-only.
+  Future<void> _buatResepBaru() async {
+    if (_pos.keranjang.isEmpty) {
+      _pesan('Tambahkan obat atau racikan ke keranjang resep terlebih dahulu.');
+      return;
+    }
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _DialogResepBaru(),
+    );
+    if (data == null || !mounted) return;
+    try {
+      final hasil = await _panggil('apotik_resep_simpan', {
+        ...data,
+        'client_mutation_id':
+            'RESEP-KASIR-${DateTime.now().microsecondsSinceEpoch}',
+        'items': [
+          for (final b in _pos.keranjang)
+            {
+              if (b.racikan) 'racikan_id': b.racikanId else 'item_id': b.itemId,
+              'jumlah': b.qty,
+              'aturan_pakai': '${b.item['aturanPakai'] ?? ''}',
+            },
+        ],
+      });
+      if (!_sukses(hasil)) {
+        throw Exception('${hasil['description'] ?? 'Resep gagal disimpan.'}');
+      }
+      setStateIfMounted(() {
+        _pos.mode = ApotikModePos.resep;
+        _pos.resepId = hasil['id'];
+        _pos.resepKode = '${hasil['kode'] ?? ''}';
+        final pasien = data['pasien'];
+        final dokter = data['dokter'];
+        if (pasien is Map) _pos.namaPembeli = '${pasien['nama'] ?? ''}';
+        if (dokter is Map) _pos.namaDokter = '${dokter['nama'] ?? ''}';
+      });
+      _pesan('Resep ${_pos.resepKode} tersimpan dan siap dibayar.');
+    } catch (e) {
+      _pesan('Resep harus tersambung ke server sebelum dibayar: $e',
+          galat: true);
     }
   }
 
@@ -1025,14 +1084,14 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   }
 
   Widget _barisPerintah(ApotikLayout layout) {
-    final mode = ApotikModeSwitcher(
-      aktif: _pos.mode,
-      onPilih: _pilihMode,
-      gulirHorizontal: true,
-    );
+    final mode = _pemilihAtauAlur(gulirHorizontal: true);
     final aksi = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_pos.mode == ApotikModePos.resep) ...[
+          Expanded(child: _tombolBuatResep()),
+          const SizedBox(width: 8),
+        ],
         Expanded(child: _tombolTebusResep()),
         const SizedBox(width: 8),
         Expanded(child: _tombolDetailTransaksi()),
@@ -1045,7 +1104,9 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           ? Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
               Expanded(child: mode),
               const SizedBox(width: 10),
-              SizedBox(width: 280, child: aksi),
+              SizedBox(
+                  width: _pos.mode == ApotikModePos.resep ? 430 : 280,
+                  child: aksi),
             ])
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1058,6 +1119,45 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     );
   }
 
+  Widget _pemilihAtauAlur({bool gulirHorizontal = false}) {
+    if (!widget.modeTerkunci) {
+      return ApotikModeSwitcher(
+        aktif: _pos.mode,
+        onPilih: _pilihMode,
+        modes: widget.modeTersedia,
+        gulirHorizontal: gulirHorizontal,
+      );
+    }
+    final produksi = _modeProduksi;
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: .42),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.primary.withValues(alpha: .28)),
+      ),
+      child: Row(children: [
+        Icon(produksi ? Icons.factory_outlined : Icons.science_outlined,
+            color: scheme.primary, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(produksi ? 'Alur Manufaktur Farmasi' : 'Alur Racikan Pasien',
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text(
+              produksi
+                  ? 'Pilih formula → tentukan jumlah → konsumsi bahan → QC → batch hasil.'
+                  : 'Pilih formula racikan → tentukan jumlah → siapkan → jual/serahkan ke pasien.',
+              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
   Widget _tombolTebusResep() => SizedBox(
         height: ApotikBreakpoints.targetSentuhMinimum +
             ((MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0) - 1) *
@@ -1066,6 +1166,18 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           onPressed: _tebusResep,
           icon: const Icon(Icons.description_outlined, size: 17),
           label: const Text('Tebus Resep'),
+        ),
+      );
+
+  Widget _tombolBuatResep() => SizedBox(
+        height: ApotikBreakpoints.targetSentuhMinimum +
+            ((MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0) - 1) *
+                16),
+        child: FilledButton.icon(
+          key: const Key('buat-resep-baru'),
+          onPressed: _pos.keranjang.isEmpty ? null : _buatResepBaru,
+          icon: const Icon(Icons.note_add_outlined, size: 17),
+          label: const Text('Buat Resep Baru'),
         ),
       );
 
@@ -1164,11 +1276,12 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
                 fontWeight: FontWeight.w700,
                 color: t.textSecondary)),
         const SizedBox(height: 8),
-        ApotikModeSwitcher(
-          aktif: _pos.mode,
-          onPilih: _pilihMode,
-        ),
+        _pemilihAtauAlur(),
         const SizedBox(height: 16),
+        if (_pos.mode == ApotikModePos.resep) ...[
+          _tombolBuatResep(),
+          const SizedBox(height: 8),
+        ],
         _tombolTebusResep(),
         const SizedBox(height: 16),
       ],
@@ -1683,6 +1796,168 @@ class _DialogProduksiState extends State<_DialogProduksi> {
 }
 
 /// Lembar pilih resep menunggu tebus.
+class _DialogResepBaru extends StatefulWidget {
+  const _DialogResepBaru();
+
+  @override
+  State<_DialogResepBaru> createState() => _DialogResepBaruState();
+}
+
+class _DialogResepBaruState extends State<_DialogResepBaru> {
+  final _form = GlobalKey<FormState>();
+  late final Map<String, TextEditingController> _c = {
+    'pasien': TextEditingController(),
+    'rm': TextEditingController(),
+    'alamat': TextEditingController(),
+    'telepon': TextEditingController(),
+    'dokter': TextEditingController(),
+    'sip': TextEditingController(),
+    'fasilitas': TextEditingController(),
+    'poli': TextEditingController(),
+    'diagnosis': TextEditingController(),
+    'kodeDiagnosis': TextEditingController(),
+    'catatan': TextEditingController(),
+    'tanggal': TextEditingController(
+        text: DateFormat('yyyy-MM-dd').format(DateTime.now())),
+  };
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _field(String k, String label,
+      {bool wajib = false, int lines = 1, String? hint}) {
+    return SizedBox(
+      width: lines > 1 ? 680 : 215,
+      child: TextFormField(
+        key: Key('resep-$k'),
+        controller: _c[k],
+        maxLines: lines,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        validator: wajib
+            ? (v) => (v ?? '').trim().isEmpty ? '$label wajib diisi' : null
+            : null,
+      ),
+    );
+  }
+
+  void _simpan() {
+    if (!(_form.currentState?.validate() ?? false)) return;
+    Navigator.pop(context, <String, dynamic>{
+      'tanggal_resep': _c['tanggal']!.text.trim(),
+      'catatan_resep': _c['catatan']!.text.trim(),
+      'pasien': {
+        'nama': _c['pasien']!.text.trim(),
+        'nomorRekamMedis': _c['rm']!.text.trim(),
+        'alamat': _c['alamat']!.text.trim(),
+        'telepon': _c['telepon']!.text.trim(),
+      },
+      'dokter': {
+        'nama': _c['dokter']!.text.trim(),
+        'sip': _c['sip']!.text.trim(),
+      },
+      'diagnosis': {
+        'kode': _c['kodeDiagnosis']!.text.trim(),
+        'ringkasan': _c['diagnosis']!.text.trim(),
+        'kesimpulanPemeriksaan': _c['diagnosis']!.text.trim(),
+      },
+      'asal_resep': {
+        'fasilitas': _c['fasilitas']!.text.trim(),
+        'poli': _c['poli']!.text.trim(),
+        'ringkasan': [
+          _c['fasilitas']!.text.trim(),
+          _c['poli']!.text.trim(),
+        ].where((e) => e.isNotEmpty).join(' • '),
+      },
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Buat Resep Baru di Kasir'),
+      content: SizedBox(
+        width: 700,
+        height: MediaQuery.sizeOf(context).height * .68,
+        child: Form(
+          key: _form,
+          child: SingleChildScrollView(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: scheme.secondaryContainer.withValues(alpha: .45),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Resep disimpan online agar nomor resep, stok, FEFO, dan '
+                      'pembayaran terhubung ke satu transaksi yang dapat diaudit.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Pasien',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('pasien', 'Nama pasien', wajib: true),
+                    _field('rm', 'Nomor rekam medis'),
+                    _field('telepon', 'Telepon pasien'),
+                    _field('alamat', 'Alamat pasien'),
+                  ]),
+                  const SizedBox(height: 16),
+                  const Text('Dokter dan asal resep',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('dokter', 'Nama dokter', wajib: true),
+                    _field('sip', 'Nomor SIP dokter'),
+                    _field('fasilitas', 'Rumah sakit / klinik', wajib: true),
+                    _field('poli', 'Poli / unit layanan'),
+                    _field('tanggal', 'Tanggal resep', wajib: true),
+                  ]),
+                  const SizedBox(height: 16),
+                  const Text('Informasi klinis',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('kodeDiagnosis', 'Kode diagnosis / ICD'),
+                    _field('diagnosis', 'Penyakit / indikasi',
+                        wajib: true, hint: 'Contoh: Hipertensi esensial'),
+                    _field('catatan', 'Catatan resep dan aturan khusus',
+                        lines: 3),
+                  ]),
+                ]),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal')),
+        FilledButton.icon(
+          key: const Key('simpan-resep-baru'),
+          onPressed: _simpan,
+          icon: const Icon(Icons.cloud_done_outlined),
+          label: const Text('Simpan & Kaitkan Resep'),
+        ),
+      ],
+    );
+  }
+}
+
 class _SheetResep extends StatelessWidget {
   final List<Map<String, dynamic>> daftar;
   const _SheetResep({required this.daftar});

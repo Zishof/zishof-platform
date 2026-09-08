@@ -4,6 +4,7 @@ import '../../features/apotik/inventory/apotik_inventory_intelligence_page.dart'
 import '../../widgets/app_shell.dart';
 import '../mutasi_antar_outlet_screen.dart';
 import 'persediaan_apotik_screen.dart';
+import 'pengadaan_apotik_screen.dart';
 
 class InventoryIntelligenceApotikScreen extends StatelessWidget {
   final int tabAwal;
@@ -26,8 +27,7 @@ class InventoryIntelligenceApotikScreen extends StatelessWidget {
         bukaMonitorBatch: () =>
             _buka(context, const PersediaanApotikScreen(tabAwal: 1)),
         bukaTransfer: () => _buka(context, const MutasiAntarOutletScreen()),
-        bukaPengadaan: () =>
-            _buka(context, const PersediaanApotikScreen(tabAwal: 2)),
+        bukaPengadaan: () => _buka(context, const PengadaanApotikScreen()),
       ),
     );
   }

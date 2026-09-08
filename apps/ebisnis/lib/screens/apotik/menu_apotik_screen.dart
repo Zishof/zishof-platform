@@ -50,12 +50,16 @@ class _RacikanApotikScreenState extends State<RacikanApotikScreen> {
     return AppShell(
       menuAktif: MenuEBisnis.racikanApotik,
       judul: 'Racikan',
-      subjudul: 'Penyiapan dan penjualan obat racikan',
+      subjudul: 'Peracikan berbasis resep pasien dan penyerahan hasil racikan',
       scrollable: false,
       actionsAppBar: [
         PosHelp.button(context, 'apotik_racikan', compact: true),
       ],
-      body: ApotikPosPage(controller: _controller),
+      body: ApotikPosPage(
+        controller: _controller,
+        modeTersedia: const [ApotikModePos.racikan],
+        modeTerkunci: true,
+      ),
     );
   }
 }
@@ -79,12 +83,17 @@ class _ProduksiFarmasiApotikScreenState
     return AppShell(
       menuAktif: MenuEBisnis.produksiFarmasiApotik,
       judul: 'Produksi Farmasi',
-      subjudul: 'Formula produksi, konsumsi bahan, batch hasil, dan stok',
+      subjudul:
+          'Manufaktur stok: formula/BOM, konsumsi bahan, QC, dan batch hasil',
       scrollable: false,
       actionsAppBar: [
         PosHelp.button(context, 'apotik_racikan', compact: true),
       ],
-      body: ApotikPosPage(controller: _controller),
+      body: ApotikPosPage(
+        controller: _controller,
+        modeTersedia: const [ApotikModePos.produksi],
+        modeTerkunci: true,
+      ),
     );
   }
 }

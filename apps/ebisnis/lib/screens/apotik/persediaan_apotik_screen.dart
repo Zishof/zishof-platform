@@ -19,10 +19,10 @@ import 'pos_help.dart';
 final _rp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-/// <h3>Persediaan Apotik -- FASE B (formularium, batch/ED, PBF, opname, retur).</h3>
+/// <h3>Persediaan Apotik -- setup produk, batch/ED, opname, dan retur.</h3>
 ///
-/// Lima tab di atas aksi server FASE B (`apotik_terima_barang`,
-/// `apotik_opname_simpan`, `apotik_retur_simpan`, `apotik_batch_monitor`) +
+/// Empat tab di atas aksi server FASE B (`apotik_opname_simpan`,
+/// `apotik_retur_simpan`, `apotik_batch_monitor`) +
 /// formularium (`apotik_item_cari`/`apotik_item_profil_simpan`). Semua mutasi
 /// stok terjadi di server lewat ledger SIRS bertanda -- layar ini tidak pernah
 /// menghitung stok sendiri.
@@ -56,20 +56,18 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
   String _statusProvision = '';
 
   int get _indeksMenuAwal =>
-      widget.tabAwal < 0 ? 0 : (widget.tabAwal > 4 ? 4 : widget.tabAwal);
+      widget.tabAwal < 0 ? 0 : (widget.tabAwal > 3 ? 3 : widget.tabAwal);
 
   MenuEBisnis get _menuAktif => const [
         MenuEBisnis.persediaanApotik,
         MenuEBisnis.batchApotik,
-        MenuEBisnis.pengadaanApotik,
         MenuEBisnis.stokOpnameApotik,
         MenuEBisnis.returApotik,
       ][_indeksMenuAwal];
 
   String get _judulMenu => const [
-        'Formularium & Obat',
+        'Setup Produk Obat',
         'Batch & Kedaluwarsa',
-        'Pengadaan / PBF',
         'Stok Opname Apotik',
         'Retur Obat',
       ][_indeksMenuAwal];
@@ -78,7 +76,7 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
   void initState() {
     super.initState();
     _tab = TabController(
-        length: 5, vsync: this, initialIndex: widget.tabAwal.clamp(0, 4));
+        length: 4, vsync: this, initialIndex: widget.tabAwal.clamp(0, 3));
     _tab.addListener(_ubahTab);
     unawaited(_pulihkanPemantauanProvision());
   }
@@ -256,7 +254,6 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     final bantuan = const [
       'apotik_formularium',
       'apotik_batch',
-      'apotik_pengadaan',
       'apotik_stok_opname',
       'apotik_retur'
     ][_tab.index];
@@ -264,7 +261,8 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
     return AppShell(
       menuAktif: _menuAktif,
       judul: _judulMenu,
-      subjudul: 'Formularium, batch, PBF, stok opname, dan retur obat',
+      subjudul:
+          'Setup lengkap produk, lokasi simpan, batch, stok opname, dan retur',
       scrollable: false,
       actionsAppBar: [PosHelp.button(context, bantuan, compact: true)],
       aksiHeader: Wrap(
@@ -299,9 +297,8 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
               controller: _tab,
               isScrollable: true,
               tabs: const [
-                Tab(text: 'Formularium'),
+                Tab(text: 'Setup Produk'),
                 Tab(text: 'Batch & Kedaluwarsa'),
-                Tab(text: 'Penerimaan PBF'),
                 Tab(text: 'Stok Opname'),
                 Tab(text: 'Retur Obat'),
               ],
@@ -314,7 +311,6 @@ class _PersediaanApotikScreenState extends State<PersediaanApotikScreen>
               children: [
                 _TabFormularium(key: _formulariumKey),
                 const _TabBatchMonitor(),
-                const _TabPenerimaanPbf(),
                 const _TabOpname(),
                 const _TabRetur(),
               ],
@@ -505,67 +501,83 @@ class _TabFormulariumState extends State<_TabFormularium> {
     super.dispose();
   }
 
-  Future<void> _ubahProfil(Map<String, dynamic> it) async {
-    var golongan = '${it['golonganObat'] ?? 'BEBAS'}';
-    var lasa = it['lasa'] == true;
-    final simpan = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          title: Text('${it['nama']}'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<String>(
-              value: golongan,
-              decoration: const InputDecoration(
-                  labelText: 'Golongan Obat', border: OutlineInputBorder()),
-              items: const [
-                DropdownMenuItem(value: 'BEBAS', child: Text('Bebas')),
-                DropdownMenuItem(
-                    value: 'BEBAS_TERBATAS', child: Text('Bebas Terbatas')),
-                DropdownMenuItem(value: 'KERAS', child: Text('Keras')),
-                DropdownMenuItem(value: 'NARKOTIKA', child: Text('Narkotika')),
-                DropdownMenuItem(
-                    value: 'PSIKOTROPIKA', child: Text('Psikotropika')),
-              ],
-              onChanged: (v) => setD(() => golongan = v ?? 'BEBAS'),
-            ),
-            const SizedBox(height: 10),
-            SwitchListTile(
-              title: const Text('LASA (Look-Alike Sound-Alike)'),
-              subtitle: const Text('Tampil beda di kasir agar tidak tertukar',
-                  style: TextStyle(fontSize: 11)),
-              value: lasa,
-              onChanged: (v) => setD(() => lasa = v),
-            ),
-          ]),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Batal')),
-            ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Simpan')),
-          ],
-        ),
-      ),
-    );
-    if (simpan != true || !mounted) return;
+  Future<void> _bukaSetup([Map<String, dynamic>? it]) async {
     try {
-      // Alur "lokal dulu" ber-indikator animasi (prosesSimpanMaster):
-      // antre -> coba kirim -> tutup dialog (offline pun langsung lanjut).
-      await prosesSimpanMaster(context,
-          aksi: 'apotik_item_profil_simpan',
-          body: {
-            'item_id': it['id'],
-            'golongan_obat': golongan,
-            'lasa': lasa,
-          },
-          kunci: 'apotik_item:${it['id']}');
+      final referensi = await MasterOffline.objekDenganCache(
+          'apotik_item_referensi', const {}, 'master:apotik_item_referensi');
+      if (!mounted) return;
+      final form = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (_) => _DialogSetupProdukObat(
+          item: it,
+          satuan: ((referensi['satuan'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+          jenis: ((referensi['jenis'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+        ),
+      );
+      if (form == null || !mounted) return;
+      final baru = it == null;
+      final idLokal = baru ? MasterOffline.idSementaraBaru() : null;
+      final idEfektif = it?['id'] ?? idLokal;
+      final body = <String, dynamic>{
+        if (!baru) 'item_id': it['id'],
+        ...form,
+      };
+      final row = <String, dynamic>{
+        ...?it,
+        'id': idEfektif,
+        'kode': form['kode'],
+        'barcode': form['barcode'],
+        'nama': form['nama'],
+        'satuanId': form['satuan_id'],
+        'satuan': form['satuan_nama'],
+        'jenisId': form['jenis_id'],
+        'jenisNama': form['jenis_nama'],
+        'jenisKode': form['jenis_kode'],
+        'kandungan': form['kandungan'],
+        'hargaBeli': form['harga_beli'],
+        'hargaJual': form['harga_jual'],
+        'batasMinimalStok': form['batas_minimal_stok'],
+        'bolehRetur': form['boleh_retur'],
+        'golonganObat': form['golongan_obat'],
+        'lasa': form['lasa'],
+        'bentukSediaan': form['bentuk_sediaan'],
+        'kekuatan': form['kekuatan'],
+        'highAlert': form['high_alert'],
+        'coldChain': form['cold_chain'],
+        'catatan': form['catatan'],
+        'lokasiJenis': form['lokasi_jenis'],
+        'lokasiGudang': form['lokasi_gudang'],
+        'lokasiZona': form['lokasi_zona'],
+        'lokasiLantai': form['lokasi_lantai'],
+        'lokasiRak': form['lokasi_rak'],
+        'lokasiLemari': form['lokasi_lemari'],
+        'lokasiFreezer': form['lokasi_freezer'],
+        'lokasiPosisi': form['lokasi_posisi'],
+        'lokasiSuhuMin': form['lokasi_suhu_min'],
+        'lokasiSuhuMax': form['lokasi_suhu_max'],
+        'stok': it?['stok'] ?? 0,
+      };
+      await prosesSimpanMaster(
+        context,
+        aksi: 'apotik_item_simpan',
+        body: body,
+        kunci: 'apotik_item:$idEfektif',
+        cacheKey: 'master:apotik_item',
+        rowLokal: row,
+        idLokal: idLokal,
+        entitas: 'apotik_item',
+      );
       await _muat();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal simpan: $e')));
+            .showSnackBar(SnackBar(content: Text('Gagal setup produk: $e')));
       }
     }
   }
@@ -575,12 +587,25 @@ class _TabFormulariumState extends State<_TabFormularium> {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(children: [
-        AppSearchField(
-          controller: _cari,
-          hintText: 'Cari obat...',
-          scanProduk: true,
-          onChanged: (_) => _muat(),
-        ),
+        Row(children: [
+          Expanded(
+            child: AppSearchField(
+              controller: _cari,
+              hintText: 'Cari produk obat, kode, atau barcode...',
+              scanProduk: true,
+              onChanged: (_) => _muat(),
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            key: const Key('tambah-produk-obat'),
+            onPressed: _bolehApotik('apotik_formularium', 'create')
+                ? () => _bukaSetup()
+                : null,
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah Produk Obat'),
+          ),
+        ]),
         const SizedBox(height: 8),
         BannerPerubahanServer(
           key: ValueKey('perubahan:$_versiPerubahan'),
@@ -630,13 +655,336 @@ class _TabFormulariumState extends State<_TabFormularium> {
                                       id: it['id'],
                                       judul: '${it['nama'] ?? ''}')),
                             ]),
-                        onTap: () => _ubahProfil(it),
+                        onTap: () => _bukaSetup(it),
                       ),
                     );
                   },
                 ),
         ),
       ]),
+    );
+  }
+}
+
+class _DialogSetupProdukObat extends StatefulWidget {
+  final Map<String, dynamic>? item;
+  final List<Map<String, dynamic>> satuan;
+  final List<Map<String, dynamic>> jenis;
+
+  const _DialogSetupProdukObat({
+    required this.item,
+    required this.satuan,
+    required this.jenis,
+  });
+
+  @override
+  State<_DialogSetupProdukObat> createState() => _DialogSetupProdukObatState();
+}
+
+class _DialogSetupProdukObatState extends State<_DialogSetupProdukObat> {
+  final _form = GlobalKey<FormState>();
+  late final Map<String, TextEditingController> _c;
+  String? _satuanId;
+  String? _jenisId;
+  late String _golongan;
+  late bool _lasa;
+  late bool _highAlert;
+  late bool _coldChain;
+  late bool _bolehRetur;
+
+  Map<String, dynamic> get _item => widget.item ?? const {};
+
+  @override
+  void initState() {
+    super.initState();
+    String teks(String k) => '${_item[k] ?? ''}';
+    _c = {
+      for (final k in const [
+        'kode',
+        'barcode',
+        'nama',
+        'kandungan',
+        'hargaBeli',
+        'hargaJual',
+        'batasMinimalStok',
+        'bentukSediaan',
+        'kekuatan',
+        'catatan',
+        'lokasiGudang',
+        'lokasiZona',
+        'lokasiLantai',
+        'lokasiRak',
+        'lokasiLemari',
+        'lokasiFreezer',
+        'lokasiPosisi',
+        'lokasiSuhuMin',
+        'lokasiSuhuMax',
+      ])
+        k: TextEditingController(text: teks(k)),
+    };
+    _satuanId = _item['satuanId'] == null ? null : '${_item['satuanId']}';
+    _jenisId = _item['jenisId'] == null ? null : '${_item['jenisId']}';
+    _golongan = '${_item['golonganObat'] ?? 'BEBAS'}';
+    _lasa = _item['lasa'] == true;
+    _highAlert = _item['highAlert'] == true;
+    _coldChain = _item['coldChain'] == true;
+    _bolehRetur = _item['bolehRetur'] != false;
+  }
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _field(String k, String label,
+      {String? hint, bool wajib = false, TextInputType? keyboardType}) {
+    return SizedBox(
+      width: 220,
+      child: TextFormField(
+        controller: _c[k],
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        validator: wajib
+            ? (v) => (v ?? '').trim().isEmpty ? '$label wajib diisi' : null
+            : null,
+      ),
+    );
+  }
+
+  Widget _judulBagian(String judul, String uraian) => Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(judul, style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text(uraian,
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+      );
+
+  Map<String, dynamic> _pilihan(List<Map<String, dynamic>> daftar, String id) =>
+      daftar.firstWhere((e) => '${e['id']}' == id, orElse: () => const {});
+
+  void _simpan() {
+    if (!(_form.currentState?.validate() ?? false)) return;
+    if (_satuanId == null || _jenisId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Satuan dan jenis item wajib dipilih.')));
+      return;
+    }
+    double angka(String k) =>
+        double.tryParse(_c[k]!.text.replaceAll(',', '.')) ?? 0;
+    final satuan = _pilihan(widget.satuan, _satuanId!);
+    final jenis = _pilihan(widget.jenis, _jenisId!);
+    Navigator.pop(context, <String, dynamic>{
+      'kode': _c['kode']!.text.trim(),
+      'barcode': _c['barcode']!.text.trim(),
+      'nama': _c['nama']!.text.trim(),
+      'satuan_id': int.tryParse(_satuanId!) ?? _satuanId,
+      'satuan_nama': '${satuan['nama'] ?? ''}',
+      'jenis_id': int.tryParse(_jenisId!) ?? _jenisId,
+      'jenis_nama': '${jenis['nama'] ?? ''}',
+      'jenis_kode': '${jenis['kode'] ?? ''}',
+      'kandungan': _c['kandungan']!.text.trim(),
+      'harga_beli': angka('hargaBeli'),
+      'harga_jual': angka('hargaJual'),
+      'batas_minimal_stok': angka('batasMinimalStok').round(),
+      'boleh_retur': _bolehRetur,
+      'golongan_obat': _golongan,
+      'bentuk_sediaan': _c['bentukSediaan']!.text.trim(),
+      'kekuatan': _c['kekuatan']!.text.trim(),
+      'lasa': _lasa,
+      'high_alert': _highAlert,
+      'cold_chain': _coldChain,
+      'catatan': _c['catatan']!.text.trim(),
+      'lokasi_jenis': _coldChain ? 'COLD_CHAIN' : 'REGULER',
+      'lokasi_gudang': _c['lokasiGudang']!.text.trim(),
+      'lokasi_zona': _c['lokasiZona']!.text.trim(),
+      'lokasi_lantai': _c['lokasiLantai']!.text.trim(),
+      'lokasi_rak': _c['lokasiRak']!.text.trim(),
+      'lokasi_lemari': _c['lokasiLemari']!.text.trim(),
+      'lokasi_freezer': _c['lokasiFreezer']!.text.trim(),
+      'lokasi_posisi': _c['lokasiPosisi']!.text.trim(),
+      'lokasi_suhu_min': angka('lokasiSuhuMin'),
+      'lokasi_suhu_max': angka('lokasiSuhuMax'),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.item == null
+          ? 'Tambah Produk Obat'
+          : 'Ubah Setup Produk Obat'),
+      content: SizedBox(
+        width: 720,
+        height: MediaQuery.sizeOf(context).height * .70,
+        child: Form(
+          key: _form,
+          child: SingleChildScrollView(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _judulBagian('Identitas produk',
+                      'Produk di sini langsung menjadi katalog Kasir Apotik.'),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('kode', 'Kode obat', hint: 'OBT-0001', wajib: true),
+                    _field('barcode', 'Barcode'),
+                    _field('nama', 'Nama produk obat', wajib: true),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        value:
+                            widget.satuan.any((e) => '${e['id']}' == _satuanId)
+                                ? _satuanId
+                                : null,
+                        decoration: const InputDecoration(
+                            labelText: 'Satuan',
+                            border: OutlineInputBorder(),
+                            isDense: true),
+                        items: [
+                          for (final e in widget.satuan)
+                            DropdownMenuItem(
+                                value: '${e['id']}',
+                                child: Text('${e['nama']}'))
+                        ],
+                        onChanged: (v) => setState(() => _satuanId = v),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        value: widget.jenis.any((e) => '${e['id']}' == _jenisId)
+                            ? _jenisId
+                            : null,
+                        decoration: const InputDecoration(
+                            labelText: 'Jenis item medis',
+                            border: OutlineInputBorder(),
+                            isDense: true),
+                        items: [
+                          for (final e in widget.jenis)
+                            DropdownMenuItem(
+                                value: '${e['id']}',
+                                child: Text('${e['nama']}'))
+                        ],
+                        onChanged: (v) => setState(() => _jenisId = v),
+                      ),
+                    ),
+                    _field('kandungan', 'Kandungan / zat aktif'),
+                  ]),
+                  _judulBagian('Harga dan kendali stok',
+                      'Harga jual dipakai kasir; stok awal masuk melalui BAST atau stok opname.'),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('hargaBeli', 'Harga beli',
+                        keyboardType: TextInputType.number),
+                    _field('hargaJual', 'Harga jual',
+                        keyboardType: TextInputType.number),
+                    _field('batasMinimalStok', 'Stok minimum',
+                        keyboardType: TextInputType.number),
+                  ]),
+                  _judulBagian('Profil farmasi dan keselamatan',
+                      'Atribut ini mengendalikan badge serta pemeriksaan di kasir.'),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String>(
+                        value: _golongan,
+                        decoration: const InputDecoration(
+                            labelText: 'Golongan obat',
+                            border: OutlineInputBorder(),
+                            isDense: true),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'BEBAS', child: Text('Bebas')),
+                          DropdownMenuItem(
+                              value: 'BEBAS_TERBATAS',
+                              child: Text('Bebas terbatas')),
+                          DropdownMenuItem(
+                              value: 'KERAS', child: Text('Keras (resep)')),
+                          DropdownMenuItem(
+                              value: 'NARKOTIKA', child: Text('Narkotika')),
+                          DropdownMenuItem(
+                              value: 'PSIKOTROPIKA',
+                              child: Text('Psikotropika')),
+                        ],
+                        onChanged: (v) =>
+                            setState(() => _golongan = v ?? 'BEBAS'),
+                      ),
+                    ),
+                    _field('kekuatan', 'Kekuatan', hint: '500 mg'),
+                    _field('bentukSediaan', 'Bentuk sediaan', hint: 'Tablet'),
+                  ]),
+                  Wrap(children: [
+                    SizedBox(
+                        width: 220,
+                        child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('LASA'),
+                            value: _lasa,
+                            onChanged: (v) => setState(() => _lasa = v))),
+                    SizedBox(
+                        width: 220,
+                        child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('High-alert'),
+                            value: _highAlert,
+                            onChanged: (v) => setState(() => _highAlert = v))),
+                    SizedBox(
+                        width: 220,
+                        child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Cold-chain'),
+                            value: _coldChain,
+                            onChanged: (v) => setState(() => _coldChain = v))),
+                    SizedBox(
+                        width: 220,
+                        child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Boleh diretur'),
+                            value: _bolehRetur,
+                            onChanged: (v) => setState(() => _bolehRetur = v))),
+                  ]),
+                  _judulBagian('Lokasi penyimpanan',
+                      'Isi berjenjang agar petugas menemukan obat sampai posisi fisik terakhir.'),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _field('lokasiGudang', 'Gudang / ruang', wajib: true),
+                    _field('lokasiZona', 'Zona'),
+                    _field('lokasiLantai', 'Lantai'),
+                    _field('lokasiRak', 'Rak'),
+                    _field('lokasiLemari', 'Lemari'),
+                    _field('lokasiFreezer', 'Kulkas / freezer'),
+                    _field('lokasiPosisi', 'Bin / posisi'),
+                    _field('lokasiSuhuMin', 'Suhu minimum (°C)',
+                        keyboardType: TextInputType.number),
+                    _field('lokasiSuhuMax', 'Suhu maksimum (°C)',
+                        keyboardType: TextInputType.number),
+                    _field('catatan', 'Catatan penyimpanan'),
+                  ]),
+                ]),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal')),
+        FilledButton.icon(
+            onPressed: _simpan,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Simpan Produk')),
+      ],
     );
   }
 }

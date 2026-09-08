@@ -86,6 +86,7 @@ import '../screens/inventory_sales/laba_rugi_screen.dart';
 import '../screens/apotik/beranda_apotik_screen.dart';
 import '../screens/apotik/kasir_apotik_screen.dart';
 import '../screens/apotik/menu_apotik_screen.dart';
+import '../screens/apotik/pengadaan_apotik_screen.dart';
 import '../screens/apotik/manajemen_farmasi_screen.dart';
 import '../screens/apotik/persediaan_apotik_screen.dart';
 import '../screens/apotik/laporan_apotik_screen.dart';
@@ -456,7 +457,40 @@ const _menuSalesSaja = <MenuEBisnis>{
   MenuEBisnis.notaSales,
 };
 
+/// Pada varian Apotik, menu generik berikut menyimpan entitas POS umum atau
+/// menduplikasi alur farmasi. Menyembunyikannya mencegah petugas masuk ke
+/// "Produk" yang tidak pernah dibaca Kasir Apotik dan menjaga satu jalur
+/// pengadaan resmi melalui Pengadaan Obat.
+const _menuGenerikDisederhanakanApotik = <MenuEBisnis>{
+  MenuEBisnis.kasir,
+  MenuEBisnis.ringkasan,
+  MenuEBisnis.produk,
+  MenuEBisnis.jenisProduk,
+  MenuEBisnis.uom,
+  MenuEBisnis.grupProduk,
+  MenuEBisnis.stokOpname,
+  MenuEBisnis.kedaluwarsa,
+  MenuEBisnis.kulakan,
+  MenuEBisnis.pengadaanPr,
+  MenuEBisnis.pengadaanPo,
+  MenuEBisnis.pengadaanBast,
+  MenuEBisnis.pengadaanTagihan,
+  MenuEBisnis.produksiBom,
+  MenuEBisnis.produksiWorkOrder,
+  MenuEBisnis.produksiMaterialIssue,
+  MenuEBisnis.produksiMaterialReturn,
+  MenuEBisnis.produksiOutput,
+  MenuEBisnis.produksiWaste,
+  MenuEBisnis.produksiCosting,
+  MenuEBisnis.produksiUnbuild,
+  MenuEBisnis.produksiQualityAlert,
+};
+
 bool bolehTampilMenu(MenuEBisnis kunci) {
+  if (AppProductProfile.aktif.isApotik &&
+      _menuGenerikDisederhanakanApotik.contains(kunci)) {
+    return false;
+  }
   // Admin global harus dapat melihat SELURUH menu lintas varian dan lintas
   // role. Gerbang ini sengaja ditempatkan paling awal karena beberapa menu
   // dahulu sudah gugur pada filter varian sebelum pemeriksaan akses admin.
@@ -562,13 +596,13 @@ const _daftarMenu = <_ItemMenuShell>[
       'Manajemen Farmasi',
       builder: _bangunManajemenFarmasiApotik),
   _ItemMenuShell(MenuEBisnis.persediaanApotik, Icons.medication_outlined,
-      'Formularium & Obat',
+      'Setup Produk Obat',
       builder: _bangunPersediaanApotik),
   _ItemMenuShell(
       MenuEBisnis.batchApotik, Icons.event_busy_outlined, 'Batch & Kedaluwarsa',
       builder: _bangunBatchApotik),
   _ItemMenuShell(MenuEBisnis.pengadaanApotik, Icons.local_shipping_outlined,
-      'Pengadaan / PBF',
+      'Pengadaan Obat',
       builder: _bangunPengadaanApotik),
   _ItemMenuShell(MenuEBisnis.stokOpnameApotik, Icons.inventory_outlined,
       'Stok Opname Apotik',
@@ -1286,12 +1320,11 @@ Widget _bangunPersediaanApotik(BuildContext c) =>
     const PersediaanApotikScreen();
 Widget _bangunBatchApotik(BuildContext c) =>
     const PersediaanApotikScreen(tabAwal: 1);
-Widget _bangunPengadaanApotik(BuildContext c) =>
-    const PersediaanApotikScreen(tabAwal: 2);
+Widget _bangunPengadaanApotik(BuildContext c) => const PengadaanApotikScreen();
 Widget _bangunStokOpnameApotik(BuildContext c) =>
-    const PersediaanApotikScreen(tabAwal: 3);
+    const PersediaanApotikScreen(tabAwal: 2);
 Widget _bangunReturApotik(BuildContext c) =>
-    const PersediaanApotikScreen(tabAwal: 4);
+    const PersediaanApotikScreen(tabAwal: 3);
 Widget _bangunObatTerkendaliApotik(BuildContext c) =>
     const LaporanApotikScreen(tabAwal: 1);
 Widget _bangunLaporanApotik(BuildContext c) => const LaporanApotikScreen();
@@ -1774,11 +1807,11 @@ String _labelDrawer(MenuEBisnis kunci) {
     case MenuEBisnis.manajemenFarmasiApotik:
       return 'Manajemen Farmasi';
     case MenuEBisnis.persediaanApotik:
-      return 'Formularium & Obat';
+      return 'Setup Produk Obat';
     case MenuEBisnis.batchApotik:
       return 'Batch & Kedaluwarsa';
     case MenuEBisnis.pengadaanApotik:
-      return 'Pengadaan / PBF';
+      return 'Pengadaan Obat';
     case MenuEBisnis.stokOpnameApotik:
       return 'Stok Opname Apotik';
     case MenuEBisnis.returApotik:
@@ -1989,11 +2022,13 @@ MenuEBisnis? _menuDariLabel(String label) {
     case 'Manajemen Farmasi':
       return MenuEBisnis.manajemenFarmasiApotik;
     case 'Formularium & Obat':
+    case 'Setup Produk Obat':
     case 'Obat & Persediaan':
       return MenuEBisnis.persediaanApotik;
     case 'Batch & Kedaluwarsa':
       return MenuEBisnis.batchApotik;
     case 'Pengadaan / PBF':
+    case 'Pengadaan Obat':
       return MenuEBisnis.pengadaanApotik;
     case 'Stok Opname Apotik':
       return MenuEBisnis.stokOpnameApotik;

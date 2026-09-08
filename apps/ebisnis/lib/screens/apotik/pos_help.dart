@@ -148,7 +148,7 @@ class PosHelpCatalog {
         'Farmasis menerima resep puyer; formula diverifikasi, kebutuhan tiap bahan dihitung ulang, bahan ditimbang, hasil diperiksa petugas kedua, kemudian etiket dan aturan pakai dikonfirmasi kepada pasien'),
     'apotik_formularium': PosHelpSpec(
         'apotik_formularium',
-        'Formularium & Obat',
+        'Setup Produk Obat',
         'memelihara profil obat, golongan, penanda LASA, harga, dan informasi operasional',
         [
           'Cari item',
@@ -182,7 +182,7 @@ class PosHelpCatalog {
         'Petugas memilih horizon sembilan puluh hari, mencetak daftar, memeriksa rak, memisahkan produk kedaluwarsa, memberi tanda tindak lanjut, dan melaporkan selisih'),
     'apotik_pengadaan': PosHelpSpec(
         'apotik_pengadaan',
-        'Pengadaan / PBF',
+        'Pengadaan Obat',
         'mencatat penerimaan obat dari pemasok resmi lengkap dengan jumlah, harga, dan kedaluwarsa',
         [
           'Terima dokumen',
