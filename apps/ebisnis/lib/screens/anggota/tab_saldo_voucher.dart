@@ -9,6 +9,62 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/safe_state.dart';
 
+double _angkaSaldoVoucher(dynamic nilai) => (nilai as num?)?.toDouble() ?? 0;
+
+/// Mengubah baris mutasi menjadi satu saldo per anggota.
+///
+/// Server baru menyertakan [saldoAwalResmi] dan [saldoAkhirResmi] yang memakai
+/// formula saldo kasir (termasuk voucher kedaluwarsa dan pembayaran split).
+/// Fallback ke field lama dipertahankan agar aplikasi tetap kompatibel ketika
+/// backend belum diperbarui.
+@visibleForTesting
+List<Map<String, dynamic>> rekapSaldoVoucherDariMutasi(
+    List<Map<String, dynamic>> mutasi) {
+  final peta = <String, Map<String, dynamic>>{};
+  for (final m in mutasi) {
+    final kunci = '${m['idAnggota'] ?? m['namaAnggota'] ?? '-'}';
+    final saldoAwalResmi = m['saldoAwalResmi'];
+    final saldoAkhirResmi = m['saldoAkhirResmi'];
+    final entri = peta.putIfAbsent(
+        kunci,
+        () => <String, dynamic>{
+              'idAnggota': m['idAnggota'],
+              'namaAnggota': '${m['namaAnggota'] ?? '-'}',
+              'saldoAwal': saldoAwalResmi is num
+                  ? saldoAwalResmi.toDouble()
+                  : _angkaSaldoVoucher(m['saldoAwal']),
+              'masuk': 0.0,
+              'keluar': 0.0,
+              'saldoAkhir': 0.0,
+              'jumlahTransaksi': 0,
+            });
+    entri['masuk'] =
+        (entri['masuk'] as double) + _angkaSaldoVoucher(m['masuk']);
+    entri['keluar'] =
+        (entri['keluar'] as double) + _angkaSaldoVoucher(m['keluar']);
+    entri['saldoAkhir'] = saldoAkhirResmi is num
+        ? saldoAkhirResmi.toDouble()
+        : _angkaSaldoVoucher(m['saldoPerPenabung']);
+    entri['jumlahTransaksi'] = (entri['jumlahTransaksi'] as int) + 1;
+  }
+
+  // Bila saldo resmi berbeda dari mutasi mentah, selisihnya adalah perubahan
+  // non-transaksi (umumnya voucher/cashback kedaluwarsa). Masukkan sebagai
+  // koreksi masuk/keluar supaya Saldo Awal + Masuk - Keluar = Saldo Akhir.
+  for (final entri in peta.values) {
+    final seharusnya = (entri['saldoAwal'] as double) +
+        (entri['masuk'] as double) -
+        (entri['keluar'] as double);
+    final penyesuaian = (entri['saldoAkhir'] as double) - seharusnya;
+    if (penyesuaian > 0.005) {
+      entri['masuk'] = (entri['masuk'] as double) + penyesuaian;
+    } else if (penyesuaian < -0.005) {
+      entri['keluar'] = (entri['keluar'] as double) - penyesuaian;
+    }
+  }
+  return peta.values.toList();
+}
+
 /// Tab "Saldo Voucher" -- daftar SALDO AKHIR voucher/tabungan tiap anggota
 /// (pegawai) pada rentang tanggal terpilih. Mengklik satu anggota membuka
 /// riwayat transaksi voucher miliknya.
@@ -96,31 +152,12 @@ class _AnggotaTabSaldoVoucherState extends State<AnggotaTabSaldoVoucher> {
     }
   }
 
-  double _angka(dynamic v) => (v as num?)?.toDouble() ?? 0;
+  double _angka(dynamic v) => _angkaSaldoVoucher(v);
 
   /// Rekap per anggota: masuk/keluar dijumlahkan, saldo akhir diambil dari
-  /// saldo berjalan baris terakhir milik anggota tsb.
+  /// snapshot resmi server agar sama dengan saldo yang dipakai kasir.
   List<Map<String, dynamic>> get _saldoPerAnggota {
-    final peta = <String, Map<String, dynamic>>{};
-    for (final m in _mutasi) {
-      final kunci = '${m['idAnggota'] ?? m['namaAnggota'] ?? '-'}';
-      final entri = peta.putIfAbsent(
-          kunci,
-          () => <String, dynamic>{
-                'idAnggota': m['idAnggota'],
-                'namaAnggota': '${m['namaAnggota'] ?? '-'}',
-                'saldoAwal': _angka(m['saldoAwal']),
-                'masuk': 0.0,
-                'keluar': 0.0,
-                'saldoAkhir': 0.0,
-                'jumlahTransaksi': 0,
-              });
-      entri['masuk'] = (entri['masuk'] as double) + _angka(m['masuk']);
-      entri['keluar'] = (entri['keluar'] as double) + _angka(m['keluar']);
-      entri['saldoAkhir'] = _angka(m['saldoPerPenabung']);
-      entri['jumlahTransaksi'] = (entri['jumlahTransaksi'] as int) + 1;
-    }
-    final daftar = peta.values.toList();
+    final daftar = rekapSaldoVoucherDariMutasi(_mutasi);
     final kunciCari = _cari.trim().toLowerCase();
     final hasil = kunciCari.isEmpty
         ? daftar

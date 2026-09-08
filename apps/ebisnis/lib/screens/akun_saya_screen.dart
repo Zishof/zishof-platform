@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../sesi.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 import '../widgets/safe_state.dart';
 
 /// Akun Saya (self-service ganti password) -- memanggil aksi server
@@ -40,6 +41,7 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
       await ApiClient.instance.aksi('akun_ganti_password', {
         'password_lama': _lamaController.text,
         'password_baru': _baruController.text,
+        'konfirmasi_password': _konfirmasiController.text,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -50,8 +52,11 @@ class _AkunSayaScreenState extends State<AkunSayaScreen> {
       _konfirmasiController.clear();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      await tampilkanKesalahan(
+        context,
+        e is ApiException ? e.info : e,
+        aktivitas: 'mengganti kata sandi',
+      );
     } finally {
       if (mounted) setStateIfMounted(() => _menyimpan = false);
     }
