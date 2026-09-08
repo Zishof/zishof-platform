@@ -66,6 +66,7 @@ void main() {
   });
 
   test('profil nahl terisolasi dan hanya merakit POS', () {
+    const albahjah = AppProductProfile.alBahjah();
     const nahl = AppProductProfile.nahl();
     expect(nahl.kode, 'nahl');
     expect(nahl.namaAplikasi, 'TokoQu Al-Bahjah An Nahl');
@@ -73,6 +74,7 @@ void main() {
     expect(nahl.updateAssetKeyword, 'nahl');
     expect(nahl.logoAsset, 'assets/images/nahl/icon.png');
     expect(nahl.fiturGrup, const {FiturGrup.pos});
+    expect(albahjah.tagRilisPrefix, 'albahjah-');
     expect(nahl.tagRilisPrefix, 'nahl-');
     expect(
       nahl.cocokDenganDartDefine(),

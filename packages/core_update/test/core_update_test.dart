@@ -20,6 +20,10 @@ void main() {
       'name': 'Al-Bahjah-POS-1.33.22.apk',
       'browser_download_url': 'https://example.test/albahjah.apk'
     },
+    {
+      'name': 'TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.30.exe',
+      'browser_download_url': 'https://example.test/nahl.exe'
+    },
   ];
 
   test('pemilih aset mempertahankan varian Al-Bahjah', () {
@@ -53,6 +57,40 @@ void main() {
         UpdateChecker.pilihAssetSesuaiVarian(assets,
             ekstensi: const ['.apk'], keyword: 'inventorysales'),
         isNull);
+  });
+
+  test('aset Nahl yang memuat kata Al-Bahjah ditolak kanal Al-Bahjah', () {
+    final hanyaNahl = [assets.last];
+    expect(
+        UpdateChecker.pilihAssetSesuaiVarian(hanyaNahl,
+            ekstensi: const ['.exe'], keyword: 'albahjah'),
+        isNull);
+    expect(
+        UpdateChecker.pilihAssetSesuaiVarian(hanyaNahl,
+            ekstensi: const ['.exe'], keyword: 'nahl'),
+        'https://example.test/nahl.exe');
+  });
+
+  test('rilis terbaru dipilih hanya di dalam kanal variannya', () {
+    final releases = <dynamic>[
+      {
+        'tag_name': 'nahl-v1.34.30-uat',
+        'draft': false,
+      },
+      {
+        'tag_name': 'albahjah-v1.34.29-uat',
+        'draft': false,
+      },
+      {
+        'tag_name': 'albahjah-v1.34.28-uat',
+        'draft': false,
+      },
+    ];
+    expect(
+        UpdateChecker.pilihRilisSesuaiKanal(releases, 'albahjah-')!['tag_name'],
+        'albahjah-v1.34.29-uat');
+    expect(UpdateChecker.pilihRilisSesuaiKanal(releases, 'nahl-')!['tag_name'],
+        'nahl-v1.34.30-uat');
   });
 
   test('cekTerbaru mengembalikan null jika repo tak terjangkau', () async {

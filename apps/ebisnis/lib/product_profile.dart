@@ -177,11 +177,12 @@ class AppProductProfile {
   bool get isMitraInap => fiturGrup.contains(FiturGrup.mitrainap);
 
   /// Prefix tag rilis GitHub utk update-checker VARIAN yg punya rilis bertag
-  /// khusus (emedik/apotik -> `emedik-v*`/`apotik-v*`). null utk varian yg
-  /// asetnya menumpang rilis `v*` utama & dibedakan lewat updateAssetKeyword
-  /// (ebisnis/albahjah/inventory_sales). Dikunci by [kode], BUKAN isApotik --
+  /// khusus. Al-Bahjah dan Nahl WAJIB berbeda kanal karena nama paket Nahl
+  /// juga mengandung kata "Al-Bahjah". null hanya utk varian yg masih
+  /// menumpang rilis `v*` utama. Dikunci by [kode], BUKAN isApotik --
   /// profil emedik memuat fitur apotik (isApotik==true) tapi rilisnya `emedik-`.
   String? get tagRilisPrefix {
+    if (kode == 'albahjah') return 'albahjah-';
     if (kode == 'emedik') return 'emedik-';
     if (kode == 'apotik') return 'apotik-';
     // Belum ada rilis bertag mitrainap-* -- prefix khusus justru PENGAMAN:

@@ -105,13 +105,19 @@ class AppVariant {
                       : (isMitraInap
                           ? 'mitrainap'
                           : (isPetra ? 'petra' : 'ebisnis'))))));
-  static const String? updateTagPrefix = isApotik
-      ? 'apotik-'
-      : (isEmedik
-          ? 'emedik-'
-          : (isMitraInap
-              ? 'mitrainap-'
-              : (isPetra ? 'petra-' : (isNahl ? 'nahl-' : null))));
+
+  /// Kanal rilis harus berbeda untuk Al-Bahjah dan Nahl. Nama installer Nahl
+  /// mengandung teks "Al-Bahjah An-Nahl", sehingga memilih rilis global lalu
+  /// hanya mencocokkan nama aset dapat membuat Al-Bahjah menarik paket Nahl.
+  static const String? updateTagPrefix = isAlBahjah
+      ? 'albahjah-'
+      : (isApotik
+          ? 'apotik-'
+          : (isEmedik
+              ? 'emedik-'
+              : (isMitraInap
+                  ? 'mitrainap-'
+                  : (isPetra ? 'petra-' : (isNahl ? 'nahl-' : null)))));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl

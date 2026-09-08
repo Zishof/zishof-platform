@@ -42,8 +42,8 @@ class UpdateChecker {
   /// TIDAK memakai `releases/latest` (yang cuma satu rilis terbaru lintas semua
   /// varian -- bisa salah varian) melainkan MEMINDAI daftar rilis dan mengambil
   /// rilis ber-tag `<prefix>...` versi tertinggi. Bila null/kosong (varian yang
-  /// asetnya menumpang rilis `v*` utama & dibedakan lewat [assetKeyword], spt
-  /// ebisnis/albahjah/inventory_sales), perilaku lama `releases/latest` dipakai.
+  /// asetnya menumpang rilis `v*` utama & dibedakan lewat [assetKeyword]),
+  /// perilaku lama `releases/latest` dipakai.
   static Future<InfoUpdate?> cekTerbaru({
     required String repoOwner,
     required String repoName,
@@ -121,6 +121,16 @@ class UpdateChecker {
     if (resp.statusCode != 200) return null;
     final list = jsonDecode(resp.body);
     if (list is! List) return null;
+    return pilihRilisSesuaiKanal(list, prefix);
+  }
+
+  /// Memilih rilis dengan versi tertinggi hanya dari kanal [prefix].
+  ///
+  /// Dipisahkan dari akses jaringan agar isolasi kanal dapat dikunci melalui
+  /// uji regresi: rilis Nahl yang lebih baru tidak boleh menjadi update untuk
+  /// Al-Bahjah, dan sebaliknya.
+  static Map<String, dynamic>? pilihRilisSesuaiKanal(
+      List<dynamic> list, String prefix) {
     Map<String, dynamic>? terbaik;
     List<int> versiTerbaik = const [0, 0, 0];
     for (final e in list) {
@@ -175,12 +185,24 @@ class UpdateChecker {
         if (!nama.endsWith(ekst)) continue;
         fallback ??= url;
         if (keywordNormal.isEmpty ||
-            _normalisasiNamaAsset(nama).contains(keywordNormal)) {
+            _namaAssetSesuaiKanal(nama, keywordNormal)) {
           return url;
         }
       }
     }
     return keywordNormal.isEmpty ? fallback : null;
+  }
+
+  static bool _namaAssetSesuaiKanal(String nama, String keywordNormal) {
+    final namaNormal = _normalisasiNamaAsset(nama);
+    if (!namaNormal.contains(keywordNormal)) return false;
+    // "TokoQu-Al-Bahjah-An-Nahl" mengandung "albahjah", tetapi merupakan
+    // paket Nahl. Tolak eksplisit agar konfigurasi tag yang keliru sekalipun
+    // tidak pernah mengganti instalasi Al-Bahjah dengan binary Nahl.
+    if (keywordNormal == 'albahjah' && namaNormal.contains('nahl')) {
+      return false;
+    }
+    return true;
   }
 
   static Map<String, dynamic>? _pilihAssetData(
