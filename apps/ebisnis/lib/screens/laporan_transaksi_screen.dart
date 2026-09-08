@@ -51,6 +51,96 @@ Future<List<Map<String, dynamic>>> _ambilSemuaBarisLaporan(
   return result;
 }
 
+String _kunciRincianPenerimaan(Map<String, dynamic> row) {
+  final id = '${row['idTransaksi'] ?? ''}'.trim();
+  if (id.isNotEmpty) return 'id:$id';
+  final kode = '${row['kodeUnik'] ?? row['clientTrxId'] ?? ''}'.trim();
+  if (kode.isNotEmpty) return 'kode:$kode';
+  return '${row['nomorNota'] ?? ''}|${row['waktu'] ?? ''}|${row['totalBiaya'] ?? ''}';
+}
+
+/// Memuat seluruh nota penyusun satu baris Penerimaan per Kasir.
+///
+/// Deduplikasi juga menjadi pengaman kompatibilitas: server lama selalu
+/// mengembalikan halaman pertama. Klien berhenti saat tidak ada nota baru,
+/// sehingga tidak mengulang data tanpa batas sambil menunggu backend terbaru.
+Future<List<Map<String, dynamic>>> _ambilSemuaRincianPenerimaan(
+    Map<String, dynamic> ringkasan) async {
+  final hasil = <Map<String, dynamic>>[];
+  final sudahAda = <String>{};
+  var page = 1;
+  var total = 0;
+  do {
+    final response = await ApiClient.instance.aksi(
+      'laporan_penerimaan_kasir_detail',
+      {
+        'tanggal': ringkasan['tanggal'],
+        'kasir': ringkasan['kasir'],
+        'metode': ringkasan['metode'],
+        'page': page,
+        'pageSize': 100,
+      },
+    );
+    final batch =
+        ((response['data'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    var tambahan = 0;
+    for (final row in batch) {
+      if (sudahAda.add(_kunciRincianPenerimaan(row))) {
+        hasil.add(row);
+        tambahan++;
+      }
+    }
+    total = (response['total'] as num?)?.toInt() ?? hasil.length;
+    page++;
+    if (batch.isEmpty || tambahan == 0) break;
+  } while (hasil.length < total && page <= 1000);
+  return hasil;
+}
+
+/// Membentuk satu baris Excel rincian penerimaan dari ringkasan dan nota asal.
+/// Untuk filter Tunai, nilai metode memakai bagian tunai pada nota split, bukan
+/// total nota, agar penjumlahan Excel tetap sama dengan ringkasan kas.
+@visibleForTesting
+Map<String, dynamic> barisEksporRincianPenerimaan(
+    Map<String, dynamic> ringkasan, Map<String, dynamic> transaksi) {
+  final metode = '${ringkasan['metode'] ?? ''}'.trim();
+  final metodeLower = metode.toLowerCase();
+  final totalNota = (transaksi['totalBiaya'] as num?) ?? 0;
+  final labelMetode = '${transaksi['metode'] ?? ''}';
+  num? nominalDariLabelSplit;
+  if (metode.isNotEmpty) {
+    final cocok = RegExp(
+      '(?:^|\\+)\\s*${RegExp.escape(metode)}\\s+Rp\\s+([0-9.]+)',
+      caseSensitive: false,
+    ).firstMatch(labelMetode);
+    if (cocok != null) {
+      nominalDariLabelSplit =
+          num.tryParse((cocok.group(1) ?? '').replaceAll('.', ''));
+    }
+  }
+  num penerimaanMetode = totalNota;
+  if (metodeLower == 'tunai') {
+    final tunai = (transaksi['bayarTunai'] as num?) ?? 0;
+    // Transaksi lama dapat belum mempunyai snapshot bayar_tunai. Untuk nota
+    // split, label menyimpan porsi tunainya; nota tunai tunggal memakai total.
+    penerimaanMetode =
+        tunai != 0 ? tunai : (nominalDariLabelSplit ?? totalNota);
+  } else if (nominalDariLabelSplit != null) {
+    penerimaanMetode = nominalDariLabelSplit;
+  }
+  return {
+    'tanggal': ringkasan['tanggal'] ?? '',
+    'waktuTampil': _formatWaktu(transaksi['waktu']),
+    'nomorNota': transaksi['nomorNota'] ?? '-',
+    'kasir': transaksi['kasir'] ?? ringkasan['kasir'] ?? '-',
+    'pembeli': transaksi['pembeli'] ?? 'Umum',
+    'metodeTampil': metode.isEmpty ? transaksi['metode'] ?? '-' : metode,
+    'qty': transaksi['qty'] ?? 0,
+    'totalNota': totalNota,
+    'penerimaanMetode': penerimaanMetode,
+  };
+}
+
 Future<void> _tampilkanRincianAngka(
   BuildContext context, {
   required String judul,
@@ -221,7 +311,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
     }
   }
 
-  Future<DynamicReportData> _reportDataAktif() async {
+  Future<DynamicReportData> _reportDataAktif({String? format}) async {
     switch (_tab.index) {
       case 0:
         return _orderKey.currentState!._reportData();
@@ -234,7 +324,8 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
       case 4:
         return _penjualanKasirKey.currentState!._reportData();
       case 5:
-        return _penerimaanKasirKey.currentState!._reportData();
+        return _penerimaanKasirKey.currentState!
+            ._reportData(rinci: format == 'excel');
       default:
         return _rincianProdukKey.currentState!._reportData();
     }
@@ -265,11 +356,16 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
   Future<void> _eksporDinamis(String format) async {
     setStateIfMounted(() => _menyiapkanLaporan = true);
     try {
-      final data = await _reportDataAktif();
+      final data = await _reportDataAktif(format: format);
       if (!mounted) return;
-      final model =
-          _reportModels[_tab.index] ?? DynamicReportModel.fromData(data);
-      _reportModels[_tab.index] = model;
+      // Excel Penerimaan per Kasir memakai kolom rincian per nota, sedangkan
+      // Preview/PDF/Word tetap memakai kolom ringkasan. Jangan memakai model
+      // ringkasan yang tersimpan karena dapat menyembunyikan kolom rincian.
+      final rincianPenerimaanExcel = _tab.index == 5 && format == 'excel';
+      final model = rincianPenerimaanExcel
+          ? DynamicReportModel.fromData(data)
+          : (_reportModels[_tab.index] ?? DynamicReportModel.fromData(data));
+      if (!rincianPenerimaanExcel) _reportModels[_tab.index] = model;
       final slug = data.title
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
@@ -3345,9 +3441,38 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
   int get _totalHalaman =>
       _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
 
-  Future<DynamicReportData> _reportData() async {
-    final rows = await _ambilSemuaBarisLaporan(
+  Future<DynamicReportData> _reportData({bool rinci = false}) async {
+    final ringkasan = await _ambilSemuaBarisLaporan(
         'laporan_penerimaan_kasir_list', _payload(page: 1, pageSize: 100));
+    if (rinci) {
+      final rows = <Map<String, dynamic>>[];
+      for (final grup in ringkasan) {
+        final transaksi = await _ambilSemuaRincianPenerimaan(grup);
+        rows.addAll(
+            transaksi.map((row) => barisEksporRincianPenerimaan(grup, row)));
+      }
+      final metode = _metode.isEmpty ? 'Semua metode' : _metode;
+      final totalMetode = rows.fold<num>(0,
+          (jumlah, row) => jumlah + ((row['penerimaanMetode'] as num?) ?? 0));
+      return DynamicReportData(
+        title: 'Rincian Penerimaan per Kasir',
+        subtitle:
+            '${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)} · Metode $metode${_kasir.isEmpty ? '' : ' · Kasir $_kasir'} · ${rows.length} transaksi · ${_formatRupiah.format(totalMetode)}',
+        columns: const [
+          DynamicReportColumn('tanggal', 'Tanggal'),
+          DynamicReportColumn('waktuTampil', 'Waktu'),
+          DynamicReportColumn('nomorNota', 'Nota'),
+          DynamicReportColumn('kasir', 'Kasir'),
+          DynamicReportColumn('pembeli', 'Pembeli'),
+          DynamicReportColumn('metodeTampil', 'Metode / Bank'),
+          DynamicReportColumn('qty', 'Qty', numeric: true),
+          DynamicReportColumn('totalNota', 'Total Nota', numeric: true),
+          DynamicReportColumn('penerimaanMetode', 'Penerimaan Metode',
+              numeric: true),
+        ],
+        rows: rows,
+      );
+    }
     return DynamicReportData(
       title: 'Penerimaan per Kasir',
       subtitle:
@@ -3360,7 +3485,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
             numeric: true),
         DynamicReportColumn('total', 'Penerimaan', numeric: true),
       ],
-      rows: rows,
+      rows: ringkasan,
     );
   }
 
@@ -3448,6 +3573,14 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
                     'Akun kasir hanya dapat melihat penerimaan miliknya sendiri.',
                     style: TextStyle(fontSize: 12, color: Colors.orange)),
               ),
+            if (!_memuat)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Text(
+                  'Tombol Excel mengekspor rincian per nota sesuai filter aktif. Pilih metode Tunai untuk breakdown pembelanjaan tunai saja.',
+                  style: TextStyle(fontSize: 12, color: Colors.blueGrey),
+                ),
+              ),
             if (_memuat || _error != null)
               _kartuStatusMuat(memuat: _memuat, error: _error, onCoba: _muat)
             else
@@ -3463,13 +3596,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
 Future<void> _lihatRincianPenerimaan(
     BuildContext context, Map<String, dynamic> ringkasan) async {
   try {
-    final hasil =
-        await ApiClient.instance.aksi('laporan_penerimaan_kasir_detail', {
-      'tanggal': ringkasan['tanggal'],
-      'kasir': ringkasan['kasir'],
-      'metode': ringkasan['metode'],
-    });
-    final data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final data = await _ambilSemuaRincianPenerimaan(ringkasan);
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
