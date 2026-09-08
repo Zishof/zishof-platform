@@ -1,0 +1,22 @@
+{
+  "waktuUat": "2026-09-08T09:20:42.573713",
+  "server": "https://demo.ecampus.id/ecampus",
+  "jenisUat": "LIVE_READONLY_DAN_CAPTURE_UI",
+  "produkObatTerbaca": 100,
+  "produkObatTotal": 11000,
+  "referensiSetupProduk": {
+    "satuan": 2,
+    "jenis": 2
+  },
+  "formulaRacikan": 100,
+  "formulaProduksi": 100,
+  "resepMenunggu": 100,
+  "batchMonitor": 100,
+  "laporanPenjualan": 200,
+  "pengadaanPR": 105,
+  "pengadaanPO": 105,
+  "pengadaanBAST": 105,
+  "tagihanVendor": 105,
+  "pembayaranVendor": 105,
+  "status": "PASS"
+}
