@@ -53,6 +53,7 @@ import '../screens/laporan_screen.dart';
 import '../screens/draft_jurnal_screen.dart';
 import '../screens/jurnal_umum_screen.dart';
 import '../screens/kode_akun_screen.dart';
+import '../screens/setup_laporan_screen.dart';
 import '../screens/siklus_akuntansi_screen.dart';
 import '../screens/kas_besar_screen.dart';
 import '../screens/kas_kecil_screen.dart';
@@ -176,6 +177,7 @@ enum MenuEBisnis {
   jurnalUmum,
   postingHpp,
   postingPenjualan,
+  setupLaporan,
   kodeAkun,
   grupAkun,
   jenisTransaksi,
@@ -377,6 +379,7 @@ const _kunciMenuAkuntansi = <MenuEBisnis, String>{
   MenuEBisnis.jurnalUmum: 'jurnal_umum',
   MenuEBisnis.postingHpp: 'posting_hpp',
   MenuEBisnis.postingPenjualan: 'posting_penjualan',
+  MenuEBisnis.setupLaporan: 'pemetaan_akun',
   MenuEBisnis.kodeAkun: 'kode_akun',
   MenuEBisnis.grupAkun: 'grup_akun',
   MenuEBisnis.jenisTransaksi: 'jenis_transaksi',
@@ -565,8 +568,8 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.persediaan, Icons.warehouse_outlined,
       'Persediaan & Kartu Stok',
       builder: _bangunPersediaan),
-  _ItemMenuShell(MenuEBisnis.laporanOpname, Icons.fact_check_outlined,
-      'Laporan Opname',
+  _ItemMenuShell(
+      MenuEBisnis.laporanOpname, Icons.fact_check_outlined, 'Laporan Opname',
       builder: _bangunLaporanOpname),
   _ItemMenuShell(
       MenuEBisnis.harga, Icons.price_change_outlined, 'Master & Analisis Harga',
@@ -714,6 +717,9 @@ const _daftarMenu = <_ItemMenuShell>[
   _ItemMenuShell(MenuEBisnis.laporanKeuangan, Icons.folder_open_outlined,
       'Katalog Laporan',
       builder: _bangunLaporanKeuangan),
+  _ItemMenuShell(
+      MenuEBisnis.setupLaporan, Icons.schema_outlined, 'Setup Laporan',
+      builder: _bangunSetupLaporan),
   _ItemMenuShell(
       MenuEBisnis.anggaran, Icons.savings_outlined, 'Anggaran (RAB Bulanan)',
       builder: _bangunAnggaran),
@@ -971,6 +977,7 @@ const _grupMenu = <_GrupMenuShell>[
       MenuEBisnis.closing,
       // Di luar deret tab ZK: rujukan dan laporan.
       MenuEBisnis.laporanKeuangan,
+      MenuEBisnis.setupLaporan,
       MenuEBisnis.anggaran,
       MenuEBisnis.kodeAkun,
       MenuEBisnis.grupAkun,
@@ -1056,6 +1063,11 @@ Widget _bangunLaporanKeuangan(BuildContext c) => const LaporanScreen(
       judul: 'Laporan Keuangan',
       subjudul: 'Neraca, Laba Rugi, Arus Kas, Buku Besar, Piutang & lainnya',
     );
+Widget _bangunSetupLaporan(BuildContext c) => _halamanAkuntansi(
+    MenuEBisnis.setupLaporan,
+    'Setup Laporan',
+    'Pemetaan Jenis, Grup, Sub Laporan, dan akun pembentuk laporan keuangan',
+    const SetupLaporanScreen());
 
 /// Layar akuntansi memakai LAYAR YANG SAMA dengan tab-nya, hanya mendarat di
 /// bagian yang tepat -- tidak ada duplikasi logika posting/jurnal.
@@ -1571,6 +1583,8 @@ String _labelDrawer(MenuEBisnis kunci) {
       // Layar "Laporan-Laporan" di dalam grup Akuntansi. Labelnya dibedakan dari
       // "Laporan-Laporan" umum supaya penanda menu aktif tidak saling tertukar.
       return 'Laporan-Laporan Keuangan';
+    case MenuEBisnis.setupLaporan:
+      return 'Setup Laporan';
     case MenuEBisnis.draftJurnal:
       return 'Draft Jurnal';
     case MenuEBisnis.jurnalUmum:
@@ -1771,6 +1785,8 @@ MenuEBisnis? _menuDariLabel(String label) {
     case 'Laporan-Laporan Keuangan':
     case 'Katalog Laporan':
       return MenuEBisnis.laporanKeuangan;
+    case 'Setup Laporan':
+      return MenuEBisnis.setupLaporan;
     case 'Kode Akun':
       return MenuEBisnis.kodeAkun;
     case 'Grup Akun':

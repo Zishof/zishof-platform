@@ -99,7 +99,8 @@ void main() {
       'Posting Bayar Hutang',
       'Posting Terima Piutang',
     ]) {
-      expect(find.text(label), findsNothing, reason: 'submenu $label fail-closed');
+      expect(find.text(label), findsNothing,
+          reason: 'submenu $label fail-closed');
     }
     expect(tester.takeException(), isNull);
   });
@@ -116,6 +117,7 @@ void main() {
       'jurnal_umum': true,
       'posting_hpp': true,
       'posting_penjualan': true,
+      'pemetaan_akun': true,
     };
     await tester.pumpWidget(aplikasi());
     await tester.pumpAndSettle();
@@ -129,6 +131,7 @@ void main() {
       'Jurnal Umum',
       'Posting HPP',
       'Posting Penjualan',
+      'Setup Laporan',
     ]) {
       await tester.scrollUntilVisible(find.text(label), 200,
           scrollable: find.byType(Scrollable).first);
