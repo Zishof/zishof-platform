@@ -31,7 +31,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Ikon tambahan:"
 
 [Files]
-Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis*.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis*.exe,abchicken.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\build\windows\x64\runner\Release\ebisnis_nahl.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 

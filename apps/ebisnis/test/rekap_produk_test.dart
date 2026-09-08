@@ -87,6 +87,58 @@ void main() {
     expect(rekap.single['total'], 19000);
   });
 
+  test('kode snapshot transaksi berbeda digabung memakai kode kanonis', () {
+    final rekap = rekapProdukDariRincian([
+      {
+        'idTransaksi': 81,
+        'produkId': 9001,
+        'produkKode': 'EB2609061335502PVO-AN000820',
+        'produkNama': 'AN000820 Tas Serut Umi',
+        'satuan': 'Pcs',
+        'qty': 1,
+        'total': 20000,
+      },
+      {
+        'idTransaksi': 82,
+        'produkId': 9002,
+        'produkKode': 'EB26090616164846OBLH-AN000820',
+        'produkNama': 'AN000820 Tas Serut Umi',
+        'satuan': 'Pcs',
+        'qty': 1,
+        'total': 20000,
+      },
+      {
+        'idTransaksi': 83,
+        'produkId': 9003,
+        'produkKode': 'EB260906162158A971-AN000820',
+        'produkNama': 'AN000820 Tas Serut Umi',
+        'satuan': 'Pcs',
+        'qty': 1,
+        'total': 20000,
+      },
+    ]);
+
+    expect(rekap, hasLength(1));
+    expect(rekap.single['produkKode'], 'AN000820');
+    expect(rekap.single['qty'], 3);
+    expect(rekap.single['jumlahTransaksi'], 3);
+    expect(rekap.single['total'], 60000);
+  });
+
+  test('kode stabil dapat diambil dari awal nama bila kode snapshot rusak', () {
+    expect(
+      kodeKanonisRekapProduk(
+        'EB260906160000LSML',
+        'AN000244 LARUTAN CAP BADAK BENING 500 ML BOTOL',
+      ),
+      'AN000244',
+    );
+  });
+
+  test('kode produk normal tidak diubah selain kapitalisasi', () {
+    expect(kodeKanonisRekapProduk('sku-abc', 'Produk Umum'), 'SKU-ABC');
+  });
+
   test('urut menurun berdasarkan nilai penjualan', () {
     final rekap = rekapProdukDariRincian(baris());
     expect(rekap.first['produkKode'], 'A');
@@ -96,15 +148,27 @@ void main() {
     final rekap = rekapProdukDariRincian(baris());
     final totalRekap =
         rekap.fold<double>(0, (j, r) => j + (r['total'] as double));
-    final totalBaris = baris()
-        .fold<double>(0, (j, b) => j + ((b['total'] as num).toDouble()));
+    final totalBaris =
+        baris().fold<double>(0, (j, b) => j + ((b['total'] as num).toDouble()));
     expect(totalRekap, totalBaris);
   });
 
   test('produk tanpa kode dikelompokkan memakai namanya', () {
     final rekap = rekapProdukDariRincian([
-      {'idTransaksi': 9, 'produkKode': '', 'produkNama': 'Produk Dihapus', 'qty': 2, 'total': 8000},
-      {'idTransaksi': 10, 'produkKode': '', 'produkNama': 'produk dihapus', 'qty': 1, 'total': 4000},
+      {
+        'idTransaksi': 9,
+        'produkKode': '',
+        'produkNama': 'Produk Dihapus',
+        'qty': 2,
+        'total': 8000
+      },
+      {
+        'idTransaksi': 10,
+        'produkKode': '',
+        'produkNama': 'produk dihapus',
+        'qty': 1,
+        'total': 4000
+      },
     ]);
     expect(rekap.length, 1);
     expect(rekap.first['qty'], 3);

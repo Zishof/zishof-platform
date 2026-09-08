@@ -25,6 +25,17 @@ final _bulkRp =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _bulkTanggal = DateFormat('dd/MM/yyyy');
 
+/// Total HPP satu baris faktur. Diskon dan PPN pada Bulk Entry disimpan sebagai
+/// nominal per baris (bukan persentase), sehingga urutannya mengikuti total
+/// yang diposting: qty x harga beli - diskon + PPN.
+double hitungTotalHppBaris({
+  required double qty,
+  required double hargaBeli,
+  required double diskon,
+  required double ppn,
+}) =>
+    (qty * hargaBeli) - diskon + ppn;
+
 class KulakanBulkEntryScreen extends StatefulWidget {
   const KulakanBulkEntryScreen({super.key});
 
@@ -113,8 +124,14 @@ class _BulkRow {
   double get ppnNilai => parseDesimalAtau(ppn.text);
   double get hargaJualNilai => parseDesimalAtau(hargaJual.text);
   double get subtotal => qtyNilai * hargaBeliNilai;
-  double get totalNetto => subtotal - diskonNilai + ppnNilai;
-  double get hppUnit => qtyNilai <= 0 ? 0 : totalNetto / qtyNilai;
+  double get totalHpp => hitungTotalHppBaris(
+        qty: qtyNilai,
+        hargaBeli: hargaBeliNilai,
+        diskon: diskonNilai,
+        ppn: ppnNilai,
+      );
+  double get totalNetto => totalHpp;
+  double get hppUnit => qtyNilai <= 0 ? 0 : totalHpp / qtyNilai;
   String get kodeBersih => kode.text.trim();
   String get namaBersih => nama.text.trim();
   String get namaEfektif =>
@@ -828,7 +845,6 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
         false;
   }
 
-
   /// Baris produk BARU yang akan ditolak gerbang harga modal server.
   ///
   /// Cerminan persis syarat `KantinHelper.produkSimpan`:
@@ -1351,7 +1367,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.only(bottom: 12),
               child: SizedBox(
-                width: 1710,
+                width: 1830,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -1377,6 +1393,9 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
                             width: 92, align: TextAlign.right),
                         const SizedBox(width: 8),
                         _headerCell('PPN', width: 92, align: TextAlign.right),
+                        const SizedBox(width: 8),
+                        _headerCell('TOTAL HPP',
+                            width: 112, align: TextAlign.right),
                         const SizedBox(width: 8),
                         _headerCell('HPP UNIT',
                             width: 97, align: TextAlign.right),
@@ -1510,6 +1529,23 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
                                     keyboardType:
                                         const TextInputType.numberWithOptions(
                                             decimal: true))),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 112,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 9),
+                                child: Tooltip(
+                                  message: 'Qty x Harga Beli - Diskon + PPN',
+                                  child: Text(
+                                    _bulkRp.format(row.totalHpp),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ),
+                            ),
                             const SizedBox(width: 8),
                             SizedBox(
                               width: 97,

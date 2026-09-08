@@ -384,8 +384,7 @@ class _LaporanTransaksiScreenState extends State<LaporanTransaksiScreen>
                   key: _penjualanKasirKey, statistik: _statistik),
               _TabPenerimaanKasir(
                   key: _penerimaanKasirKey, statistik: _statistik),
-              _TabRincianProduk(
-                  key: _rincianProdukKey, statistik: _statistik),
+              _TabRincianProduk(key: _rincianProdukKey, statistik: _statistik),
             ]),
           ),
         ],
@@ -1151,9 +1150,9 @@ class _TabOrderState extends State<_TabOrder> with JejakGalat {
           'pageSize': _pageSize,
         },
         'master:laporan_order:'
-        '${_mulai == null ? 'awal' : _formatTanggalServer.format(_mulai!)}_'
-        '${_sampai == null ? 'kini' : _formatTanggalServer.format(_sampai!)}:'
-        '${_cariPembeli.isEmpty ? 'semua' : _cariPembeli}',
+            '${_mulai == null ? 'awal' : _formatTanggalServer.format(_mulai!)}_'
+            '${_sampai == null ? 'kini' : _formatTanggalServer.format(_sampai!)}:'
+            '${_cariPembeli.isEmpty ? 'semua' : _cariPembeli}',
         // Baris order tidak selalu ber-kolom 'id' -- identitasnya idTransaksi.
         kolomKunci: 'idTransaksi',
         onData: (hasil) {
@@ -1642,7 +1641,8 @@ class _TabTransaksiPerKasir extends StatefulWidget {
   State<_TabTransaksiPerKasir> createState() => _TabTransaksiPerKasirState();
 }
 
-class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir> with JejakGalat {
+class _TabTransaksiPerKasirState extends State<_TabTransaksiPerKasir>
+    with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -2568,7 +2568,8 @@ class _TabPenjualanKasir extends StatefulWidget {
   State<_TabPenjualanKasir> createState() => _TabPenjualanKasirState();
 }
 
-class _TabPenjualanKasirState extends State<_TabPenjualanKasir> with JejakGalat {
+class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
+    with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -3076,7 +3077,8 @@ class _TabPenerimaanKasir extends StatefulWidget {
   State<_TabPenerimaanKasir> createState() => _TabPenerimaanKasirState();
 }
 
-class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir> with JejakGalat {
+class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
+    with JejakGalat {
   static const _pageSize = 10;
   late DateTime _mulai;
   late DateTime _sampai;
@@ -3543,22 +3545,52 @@ int totalHalamanRincian(int totalTransaksi, int ukuranHalaman) {
 /// Jumlah transaksi dihitung dari identitas nota yang unik, bukan jumlah baris --
 /// satu nota yang memuat produk sama dua kali tetap dihitung satu transaksi.
 @visibleForTesting
-List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> baris) {
+String kodeKanonisRekapProduk(Object? kodeMentah, Object? namaMentah) {
+  final kode = (kodeMentah ?? '').toString().trim();
+  final nama = (namaMentah ?? '').toString().trim();
+
+  // Data lama An Nahl/Al-Bahjah menyimpan snapshot seperti
+  // EB26090616164846OBLH-AN000820. Awalan EB berubah pada tiap transaksi,
+  // sedangkan AN000820 adalah kode barang yang stabil.
+  final kodeDiUjung = RegExp(r'-([A-Za-z]{1,12}\d{3,})$').firstMatch(kode);
+  if (kodeDiUjung != null) return kodeDiUjung.group(1)!.toUpperCase();
+
+  // Sebagian snapshot hanya menyisakan kode stabil pada awal nama produk,
+  // misalnya "AN000820 Tas Serut Umi".
+  final kodeDiNama =
+      RegExp(r'^([A-Za-z]{1,12}\d{3,})(?:\s|$)').firstMatch(nama);
+  if (kodeDiNama != null &&
+      (kode.isEmpty || RegExp(r'^EB\d', caseSensitive: false).hasMatch(kode))) {
+    return kodeDiNama.group(1)!.toUpperCase();
+  }
+
+  return kode.toUpperCase();
+}
+
+@visibleForTesting
+List<Map<String, dynamic>> rekapProdukDariRincian(
+    List<Map<String, dynamic>> baris) {
   final peta = <String, Map<String, dynamic>>{};
   final nota = <String, Set<String>>{};
   for (final b in baris) {
     final produkId = (b['produkId'] as num?)?.toInt();
-    final kode = (b['produkKodeRekap'] ?? b['produkKode'] ?? '').toString().trim();
-    final nama = (b['produkNamaRekap'] ?? b['produkNama'] ?? 'Produk tanpa nama')
-        .toString()
-        .trim();
-    final kunci = produkId != null
-        ? 'id:$produkId'
-        : (kode.isNotEmpty ? 'k:$kode' : 'n:${nama.toLowerCase()}');
+    final kode =
+        (b['produkKodeRekap'] ?? b['produkKode'] ?? '').toString().trim();
+    final nama =
+        (b['produkNamaRekap'] ?? b['produkNama'] ?? 'Produk tanpa nama')
+            .toString()
+            .trim();
+    final kodeKanonis = kodeKanonisRekapProduk(kode, nama);
+    // Kode kanonis didahulukan karena data historis dapat mempunyai beberapa
+    // produkId untuk barang yang sama. ID tetap menjadi cadangan saat kode
+    // benar-benar tidak tersedia.
+    final kunci = kodeKanonis.isNotEmpty
+        ? 'k:$kodeKanonis'
+        : (produkId != null ? 'id:$produkId' : 'n:${nama.toLowerCase()}');
     final row = peta.putIfAbsent(
         kunci,
         () => <String, dynamic>{
-              'produkKode': kode,
+              'produkKode': kodeKanonis,
               'produkNama': nama.isEmpty ? 'Produk tanpa nama' : nama,
               'satuan': (b['satuan'] ?? '').toString(),
               'qty': 0.0,
@@ -3566,7 +3598,8 @@ List<Map<String, dynamic>> rekapProdukDariRincian(List<Map<String, dynamic>> bar
               'jumlahTransaksi': 0,
             });
     row['qty'] = (row['qty'] as double) + ((b['qty'] as num?)?.toDouble() ?? 0);
-    row['total'] = (row['total'] as double) + ((b['total'] as num?)?.toDouble() ?? 0);
+    row['total'] =
+        (row['total'] as double) + ((b['total'] as num?)?.toDouble() ?? 0);
     nota
         .putIfAbsent(kunci, () => <String>{})
         .add('${b['idTransaksi'] ?? b['nomorNota'] ?? ''}');
@@ -3604,7 +3637,8 @@ class HasilBarisRincian {
 Future<HasilBarisRincian> _ambilSemuaBarisRincianProduk(
     Map<String, dynamic> payload) async {
   const ukuranHalaman = 100;
-  const batasHalaman = 1000; // pengaman; disentuh berarti hasilnya TIDAK lengkap
+  const batasHalaman =
+      1000; // pengaman; disentuh berarti hasilnya TIDAK lengkap
   final hasil = <Map<String, dynamic>>[];
   var halaman = 1;
   var totalHalaman = 1;
@@ -3761,7 +3795,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
           DynamicReportColumn('produkNama', 'Produk'),
           DynamicReportColumn('satuan', 'Satuan'),
           DynamicReportColumn('qty', 'Qty Terjual', numeric: true),
-          DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi', numeric: true),
+          DynamicReportColumn('jumlahTransaksi', 'Jml Transaksi',
+              numeric: true),
           DynamicReportColumn('total', 'Total', numeric: true),
         ],
         rows: rekapProdukDariRincian(rows),
@@ -3850,8 +3885,7 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             AppTableCell.text(
               '${row['nomorNota'] ?? '-'}',
               flex: 3,
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             AppTableCell.text(
               '${row['produkNama'] ?? '-'}',
@@ -3860,9 +3894,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             ),
             AppTableCell.text('${row['qtyTampil'] ?? row['qty'] ?? '-'}',
                 flex: 2),
-            AppTableCell.text(
-                _formatRupiah.format(row['hargaSatuan'] ?? 0), flex: 2,
-                align: TextAlign.right),
+            AppTableCell.text(_formatRupiah.format(row['hargaSatuan'] ?? 0),
+                flex: 2, align: TextAlign.right),
             AppTableCell(
               flex: 2,
               align: TextAlign.right,
@@ -3874,7 +3907,8 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
                     'Waktu': _formatWaktu(row['waktu']),
                     'Kasir': '${row['kasir'] ?? '-'}',
                     'Jumlah': '${row['qtyTampil'] ?? row['qty'] ?? '-'}',
-                    'Harga satuan': _formatRupiah.format(row['hargaSatuan'] ?? 0),
+                    'Harga satuan':
+                        _formatRupiah.format(row['hargaSatuan'] ?? 0),
                     'Diskon': _formatRupiah.format(row['diskon'] ?? 0),
                   },
                   textAlign: TextAlign.right,
@@ -4004,14 +4038,12 @@ class _TabRincianProdukState extends State<_TabRincianProduk> with JejakGalat {
             ),
             if (_data.isNotEmpty)
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: Text(
                   '${_data.length} baris produk pada halaman ini '
                   '· total ${_formatRupiah.format(_totalNilai)}',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryOf(context)),
+                      fontSize: 12, color: AppColors.textSecondaryOf(context)),
                 ),
               ),
           ],
