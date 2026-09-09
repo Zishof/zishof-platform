@@ -466,10 +466,22 @@ class ApiClient {
           ? '${resp.body.substring(0, 1200)}…'
           : resp.body;
       final gagal = ApiException(
-        'Jawaban server belum dapat diproses.',
+        gangguanSementaraStatusHttp(resp.statusCode)
+            ? pesanGangguanStatusHttp(resp.statusCode, namaAksi)
+            : 'Jawaban server belum dapat diproses.',
+        // Gateway 5xx/timeout bukan penolakan bisnis. Menandainya sebagai
+        // offline-equivalent membuat baca-cache dan outbox tetap bekerja,
+        // tetapi TIDAK membuat login/posting final dianggap berhasil.
+        offline: gangguanSementaraStatusHttp(resp.statusCode),
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
         kodeReferensi: referensiPermintaan,
+        judul: gangguanSementaraStatusHttp(resp.statusCode)
+            ? 'Layanan server sedang terganggu'
+            : null,
+        solusi: gangguanSementaraStatusHttp(resp.statusCode)
+            ? solusiGangguanStatusHttp(namaAksi)
+            : const [],
         teknis: 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
             'Action: $namaAksi\nHTTP ${resp.statusCode}; ${e.runtimeType}: $e\n'
             'Permintaan: ${_permintaanUntukLog(payload)}\n'
@@ -489,6 +501,9 @@ class ApiClient {
     if (!statusResponsSukses(json['status'])) {
       final gagal = ApiException(
         '${json['message'] ?? json['description'] ?? 'Permintaan belum berhasil.'}',
+        // Respons JSON 5xx tetap gangguan teknis, bukan alasan menghapus data
+        // lokal atau memvonis outbox gagal permanen.
+        offline: gangguanSementaraStatusHttp(resp.statusCode),
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
         kodeReferensi:
@@ -520,6 +535,39 @@ class ApiClient {
     }
     return json;
   }
+
+  /// HTTP yang menyatakan server/gateway belum dapat melayani permintaan,
+  /// bukan keputusan bisnis terhadap payload. Cloudflare 522 masuk kelompok
+  /// ini: koneksi gateway ke origin habis waktu dan badan respons sering berupa
+  /// teks `error code: 522`, bukan JSON kontrak eBisnis.
+  static bool gangguanSementaraStatusHttp(int statusHttp) =>
+      statusHttp == 408 || statusHttp == 425 || statusHttp >= 500;
+
+  /// Pesan aman untuk pengguna. Respons mentah dan stack tetap dicatat pada
+  /// `teknis`, sehingga layar utama tidak memaparkan FormatException.
+  static String pesanGangguanStatusHttp(int statusHttp, String aktivitas) {
+    if (aktivitas == 'login') {
+      return 'Server belum dapat memproses proses masuk (HTTP $statusHttp). '
+          'Akun dan kata sandi belum dinilai; coba kembali setelah layanan '
+          'pusat data pulih.';
+    }
+    return 'Server sementara belum dapat memproses permintaan ini '
+        '(HTTP $statusHttp). Data lokal tetap disimpan dan akan dicoba '
+        'kembali setelah layanan pulih.';
+  }
+
+  static List<String> solusiGangguanStatusHttp(String aktivitas) =>
+      aktivitas == 'login'
+          ? const [
+              'Pastikan perangkat tersambung ke internet, lalu tunggu beberapa saat sebelum menekan Masuk kembali.',
+              'Periksa Alamat Server melalui tombol pengaturan dan pastikan alamat instalasi tidak berubah.',
+              'Jika gangguan berlanjut, kirim Kode Referensi pada Informasi Teknis kepada admin; jangan mengganti kata sandi hanya karena pesan ini.',
+            ]
+          : const [
+              'Lanjutkan pekerjaan yang tersedia secara offline; jangan membuat dokumen pengganti untuk transaksi yang sudah tersimpan lokal.',
+              'Setelah koneksi pulih, tekan Sinkronkan dan periksa Riwayat Sinkronisasi.',
+              'Jika tetap gagal, kirim Kode Referensi pada Informasi Teknis kepada admin.',
+            ];
 
   /// Server eBisnis lama memakai `00`, sedangkan endpoint POS baru memakai
   /// `success`. Keduanya merupakan kontrak sukses yang sah.
@@ -631,6 +679,8 @@ class ApiException implements Exception {
     final judulServerGenerik = judulServer.isEmpty ||
         judulServer == 'Belum dapat diproses' ||
         judulServer == 'Proses belum berhasil';
+    final presentasiOfflineKhusus =
+        offline && judulServer.isNotEmpty && solusi.isNotEmpty;
     return AppErrorInfo(
       judul: rincianPesananBerbeda
           ? 'Pesanan perlu dimuat ulang'
@@ -644,7 +694,9 @@ class ApiException implements Exception {
       // `message` pada kontrak API memang ditujukan kepada pengguna dan
       // sudah disanitasi server. Stack/SQL tetap hanya muncul di [teknis].
       pesan: offline
-          ? dasar.pesan
+          ? presentasiOfflineKhusus
+              ? pesan
+              : dasar.pesan
           : rincianPesananBerbeda
               ? 'Isi pesanan di server berbeda dengan keranjang yang sedang tampil. Pembayaran dihentikan agar barang atau jumlah yang salah tidak tersimpan.'
               : pesan,
