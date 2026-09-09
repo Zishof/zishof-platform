@@ -1,0 +1,9 @@
+133fd7789136bbd4daeaf2c2075e6df805b1f8d1bd2511cb930688ef25aebcbb  diagrams/01-konteks-integrasi.png
+4c530597b769e90e9e308ea31e36ed9bb6e0875519cd12f56fb06f8d0cc2bc73  diagrams/02-flowchart-swimlane.png
+403c64852ba75d49ceeff4a42c034b1d987bfe569507b7c762efdd050547189b  diagrams/03-use-case.png
+b70f8c05856666d0105335b1f46186e9672f202f0e06a47ba58effd4e1bde4b0  diagrams/04-erd-aliran-data.png
+bf584923ec5b842af5e2d7466694277406816eba81db832742188ee2d7637c07  diagrams/05-aliran-akuntansi.png
+9bbcb7a0460dc888d3726513e13884b1e19ed0ebeef97d47ee4f95f97ee13b43  Panduan-Integrasi-Rumah-Pemotongan-Ayam-dengan-AB-Chicken-2026-09-09.docx
+aea98f318db2c3cbd2962ec6dd5f0916a6acea4f090f20ad77aa93e6db838b25  Panduan-Integrasi-Rumah-Pemotongan-Ayam-dengan-AB-Chicken-2026-09-09.md
+78d1150007d31cd17fdbb5e87aa125252276b661f2cc67e98ff62848811bb539  Panduan-Integrasi-Rumah-Pemotongan-Ayam-dengan-AB-Chicken-2026-09-09.pdf
+1805664c4d68729916bed3d4c417f3e68da63acc46fe9809cdc94b8bb28c2993  Presentasi-Sistem-Terpadu-RPA-dan-AB-Chicken-POS-Desktop-dan-Android-v1.34.30.pptx

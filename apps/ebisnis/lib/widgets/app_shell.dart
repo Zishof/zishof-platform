@@ -97,6 +97,7 @@ import '../screens/mitrainap/resepsionis_hotel_screen.dart';
 import '../screens/mitrainap/tiket_dapur_screen.dart';
 import '../screens/mitrainap/kontrak_pemilik_screen.dart';
 import '../screens/mitrainap/laporan_pemilik_screen.dart';
+import '../screens/abchicken/operasi_abchicken_screen.dart';
 import '../product_profile.dart';
 import 'safe_state.dart';
 import 'bantuan_fab.dart';
@@ -111,13 +112,15 @@ import '../screens/riwayat_audit_screen.dart';
 const kAmbangLebarDesktop = 900.0;
 
 final _menuAktifNotifier =
-    ValueNotifier<MenuEBisnis>(AppProductProfile.aktif.isInventorySales
-        ? MenuEBisnis.berandaInventorySales
-        : AppProductProfile.aktif.isApotik
-            ? MenuEBisnis.berandaApotik
-            : AppProductProfile.aktif.isMitraInap
-                ? MenuEBisnis.berandaMitraInap
-                : MenuEBisnis.kasir);
+    ValueNotifier<MenuEBisnis>(AppProductProfile.aktif.isAbChicken
+        ? MenuEBisnis.abChickenOperations
+        : AppProductProfile.aktif.isInventorySales
+            ? MenuEBisnis.berandaInventorySales
+            : AppProductProfile.aktif.isApotik
+                ? MenuEBisnis.berandaApotik
+                : AppProductProfile.aktif.isMitraInap
+                    ? MenuEBisnis.berandaMitraInap
+                    : MenuEBisnis.kasir);
 
 /// Status sidebar desktop disimpan di level aplikasi supaya pilihan pengguna
 /// tetap berlaku ketika berpindah halaman. Pada layar kecil AppDrawer tetap
@@ -128,6 +131,7 @@ final _sidebarRingkasNotifier = ValueNotifier<bool>(false);
 /// AppSidebar (desktop) DAN AppDrawer (mobile, lihat app_drawer.dart) supaya
 /// urutan/daftar menu tetap satu sumber kebenaran.
 enum MenuEBisnis {
+  abChickenOperations,
   kasir,
   ringkasan,
   pesanan,
@@ -427,6 +431,11 @@ const _menuSalesSaja = <MenuEBisnis>{
 };
 
 bool bolehTampilMenu(MenuEBisnis kunci) {
+  // Menu tenant AB Chicken tidak boleh bocor ke binary varian lain, termasuk
+  // ketika pengguna adalah admin global.
+  if (kunci == MenuEBisnis.abChickenOperations) {
+    return AppProductProfile.aktif.isAbChicken;
+  }
   // Admin global harus dapat melihat SELURUH menu lintas varian dan lintas
   // role. Gerbang ini sengaja ditempatkan paling awal karena beberapa menu
   // dahulu sudah gugur pada filter varian sebelum pemeriksaan akses admin.
@@ -519,6 +528,9 @@ bool bolehTampilMenu(MenuEBisnis kunci) {
 }
 
 const _daftarMenu = <_ItemMenuShell>[
+  _ItemMenuShell(MenuEBisnis.abChickenOperations, Icons.hub_outlined,
+      'Pusat Operasi Rantai Pasok',
+      builder: _bangunOperasiRantaiPasok),
   _ItemMenuShell(
       MenuEBisnis.berandaApotik, Icons.dashboard_outlined, 'Dashboard Apotik',
       builder: _bangunBerandaApotik),
@@ -835,6 +847,9 @@ List<({String label, bool dapatDilipat, bool terbukaBawaan, int jumlahItem})>
         .toList();
 
 const _grupMenu = <_GrupMenuShell>[
+  _GrupMenuShell('AB Chicken', [
+    MenuEBisnis.abChickenOperations,
+  ]),
   _GrupMenuShell('Apotik & Farmasi', [
     MenuEBisnis.berandaApotik,
     MenuEBisnis.kasirApotik,
@@ -996,6 +1011,8 @@ const _grupMenu = <_GrupMenuShell>[
 ];
 
 Widget _bangunKasir(BuildContext c) => const KasirScreen();
+Widget _bangunOperasiRantaiPasok(BuildContext c) =>
+    const OperasiRantaiPasokScreen();
 Widget _bangunRingkasan(BuildContext c) => const RingkasanScreen();
 Widget _bangunPesanan(BuildContext c) => const PesananScreen();
 Widget _bangunAnggota(BuildContext c) => const AnggotaScreen();
@@ -1495,6 +1512,8 @@ void _muatUlangHalamanAktif(BuildContext context) {
 
 String _labelDrawer(MenuEBisnis kunci) {
   switch (kunci) {
+    case MenuEBisnis.abChickenOperations:
+      return 'Pusat Operasi AB Chicken';
     case MenuEBisnis.kasir:
       return 'Kasir';
     case MenuEBisnis.ringkasan:

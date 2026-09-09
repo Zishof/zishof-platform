@@ -1,0 +1,14 @@
+kode,judul,total,status_gagal,berkas
+ringkasan,Ringkasan Data Settle,19,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\00-ringkasan-data-settle.png
+outlet_order,Pesanan Outlet,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\01-outlet_order-50-record.png
+bom,Resep dan BOM,50,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\02-bom-50-record.png
+procurement_pr,Permintaan Pembelian,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\03-procurement_pr-50-record.png
+procurement_po,Pesanan Pembelian,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\04-procurement_po-50-record.png
+procurement_bast,BAST Gudang Pusat,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\05-procurement_bast-50-record.png
+procurement_invoice,Terima Tagihan Vendor,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\06-procurement_invoice-50-record.png
+procurement_payment,Pembayaran Vendor,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\07-procurement_payment-50-record.png
+production,Produksi dan Packing,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\08-production-50-record.png
+shipment,Delivery Order dan Pengiriman,170,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\09-shipment-50-record.png
+claim,Backorder Retur dan Klaim,80,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\10-claim-50-record.png
+pos_sale,Penjualan POS,120,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\11-pos_sale-50-record.png
+account,Sumber Akun Posting,3,0,E:\opt\Codex-Worspace\uat-abchicken-release-1.34.30\data\12-sumber-akun-posting.png

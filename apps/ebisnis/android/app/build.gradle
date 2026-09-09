@@ -69,6 +69,11 @@ android {
             applicationId "id.zishof.ebisnis.inventorysales"
             resValue "string", "app_name", "eBisnis Inventory & Sales"
         }
+        abchicken {
+            dimension "product"
+            applicationId "id.zishof.ebisnis.abchicken"
+            resValue "string", "app_name", "AB Chicken"
+        }
         emedik {
             dimension "product"
             applicationId "id.zishof.ebisnis.emedik"

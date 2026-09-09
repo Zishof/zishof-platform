@@ -24,6 +24,10 @@ void main() {
       'name': 'TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.30.exe',
       'browser_download_url': 'https://example.test/nahl.exe'
     },
+    {
+      'name': 'AB-Chicken-Setup-1.34.30.exe',
+      'browser_download_url': 'https://example.test/abchicken.exe'
+    },
   ];
 
   test('pemilih aset mempertahankan varian Al-Bahjah', () {
@@ -60,7 +64,9 @@ void main() {
   });
 
   test('aset Nahl yang memuat kata Al-Bahjah ditolak kanal Al-Bahjah', () {
-    final hanyaNahl = [assets.last];
+    final hanyaNahl = [
+      assets.firstWhere((e) => (e['name'] as String).contains('An-Nahl'))
+    ];
     expect(
         UpdateChecker.pilihAssetSesuaiVarian(hanyaNahl,
             ekstensi: const ['.exe'], keyword: 'albahjah'),
@@ -73,6 +79,10 @@ void main() {
 
   test('rilis terbaru dipilih hanya di dalam kanal variannya', () {
     final releases = <dynamic>[
+      {
+        'tag_name': 'abchicken-v1.34.30-uat',
+        'draft': false,
+      },
       {
         'tag_name': 'nahl-v1.34.30-uat',
         'draft': false,
@@ -91,6 +101,25 @@ void main() {
         'albahjah-v1.34.29-uat');
     expect(UpdateChecker.pilihRilisSesuaiKanal(releases, 'nahl-')!['tag_name'],
         'nahl-v1.34.30-uat');
+    expect(
+        UpdateChecker.pilihRilisSesuaiKanal(
+            releases, 'abchicken-')!['tag_name'],
+        'abchicken-v1.34.30-uat');
+    expect(UpdateChecker.pilihRilisSesuaiKanal(releases, 'ebisnis-'), isNull,
+        reason: 'Rilis AB Chicken tidak boleh bocor ke kanal eBisnis.');
+  });
+
+  test('pemilih aset AB Chicken tidak menerima aset varian lain', () {
+    expect(
+        UpdateChecker.pilihAssetSesuaiVarian(assets,
+            ekstensi: const ['.exe'], keyword: 'abchicken'),
+        'https://example.test/abchicken.exe');
+    expect(
+        UpdateChecker.pilihAssetSesuaiVarian(
+            assets.sublist(0, assets.length - 1),
+            ekstensi: const ['.exe'],
+            keyword: 'abchicken'),
+        isNull);
   });
 
   test('cekTerbaru mengembalikan null jika repo tak terjangkau', () async {

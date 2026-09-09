@@ -1,0 +1,7 @@
+urutan,id,judul,baris,hasil
+1,akn_jurnal,"Keseluruhan Jurnal (Jurnal Umum)",608,LULUS
+2,akn_buku_besar,"Rincian Buku Besar (per Akun)",608,LULUS
+3,akn_neraca_saldo,"Neraca Percobaan (Neraca Saldo)",7,LULUS
+4,akn_laba_rugi,"Laba Rugi (Berbasis Jurnal Akuntansi)",7,LULUS
+5,akn_neraca,"Neraca (Berbasis Jurnal Akuntansi)",11,LULUS
+6,akn_arus_kas,"Arus Kas (Berbasis Jurnal Akuntansi)",5,LULUS

@@ -46,11 +46,13 @@ class AppSetting {
   /// Al-Bahjah tetap memakai server khusus
   /// https://ecampus.staialbahjah.ac.id/albahjah, dan eKantin Petra memakai
   /// https://kantinpcu.ecampus.id/petra.
-  static const String baseUrlHost = AppVariant.isAlBahjah
-      ? 'ecampus.staialbahjah.ac.id'
-      : (AppVariant.isNahl
-          ? 'an-nahl.santri.info'
-          : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id'));
+  static const String baseUrlHost = AppVariant.isAbChicken
+      ? 'abchiken.ebisnis.id'
+      : (AppVariant.isAlBahjah
+          ? 'ecampus.staialbahjah.ac.id'
+          : (AppVariant.isNahl
+              ? 'an-nahl.santri.info'
+              : (AppVariant.isPetra ? 'kantinpcu.ecampus.id' : 'ebisnis.id')));
   static const String baseUrlContextPath = AppVariant.isAlBahjah
       ? 'albahjah'
       : (AppVariant.isNahl
@@ -63,8 +65,9 @@ class AppSetting {
   /// logo -- lihat juga aksen emas tambahan di `AppTheme._base` dan sidebar
   /// hijau di `AppColors`, keduanya HANYA aktif utk varian ini). Varian lain
   /// tetap biru spt sebelumnya.
-  static const AppThemeWarna temaBawaan =
-      AppVariant.isAlBahjah || AppVariant.isNahl
+  static const AppThemeWarna temaBawaan = AppVariant.isAbChicken
+      ? AppThemeWarna.merah
+      : (AppVariant.isAlBahjah || AppVariant.isNahl
           ? AppThemeWarna.hijau
-          : AppThemeWarna.biru;
+          : AppThemeWarna.biru);
 }

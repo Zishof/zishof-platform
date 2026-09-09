@@ -58,6 +58,8 @@ IDI_APP_ICON            ICON                    "resources\\icon_albahjah.ico"
 IDI_APP_ICON            ICON                    "resources\\icon_nahl.ico"
 #elif defined(EBISNIS_VARIANT_INVENTORY_SALES)
 IDI_APP_ICON            ICON                    "resources\\icon_inventory_sales.ico"
+#elif defined(EBISNIS_VARIANT_ABCHICKEN)
+IDI_APP_ICON            ICON                    "resources\\icon_abchicken.ico"
 #elif defined(EBISNIS_VARIANT_APOTIK)
 IDI_APP_ICON            ICON                    "resources\\icon_apotik.ico"
 #elif defined(EBISNIS_VARIANT_EMEDIK)
@@ -119,6 +121,11 @@ BEGIN
             VALUE "InternalName", "ebisnis_inventory_sales" "\0"
             VALUE "OriginalFilename", "ebisnis_inventory_sales.exe" "\0"
             VALUE "ProductName", "eBisnis Inventory & Sales" "\0"
+#elif defined(EBISNIS_VARIANT_ABCHICKEN)
+            VALUE "FileDescription", "AB Chicken Operations" "\0"
+            VALUE "InternalName", "abchicken" "\0"
+            VALUE "OriginalFilename", "abchicken.exe" "\0"
+            VALUE "ProductName", "AB Chicken" "\0"
 #elif defined(EBISNIS_VARIANT_APOTIK)
             VALUE "FileDescription", "eBisnis POS Apotik" "\0"
             VALUE "InternalName", "ebisnis_apotik" "\0"

@@ -1,0 +1,11 @@
+urutan,proses,nomor,status_awal,status_akhir,posting,jurnal_id,hasil
+01,outlet_order,UAT-AB-REQ-0007,DRAFT,ALLOCATED,false,,LULUS
+02,procurement_pr,UAT-AB-PR-0009,DRAFT,APPROVED,false,,LULUS
+03,procurement_po,UAT-AB-PO-0009,DRAFT,APPROVED,false,,LULUS
+04,procurement_bast,UAT-AB-BAST-0009,DRAFT,POSTED,true,301,LULUS
+05,procurement_invoice,UAT-AB-INV-0010,DRAFT,POSTED,true,302,LULUS
+06,procurement_payment,UAT-AB-PAY-0010,DRAFT,POSTED,true,303,LULUS
+07,production,UAT-AB-PROD-0010,DRAFT,POSTED,true,304,LULUS
+08,shipment,UAT-AB-SHP-0010,DRAFT,COMPLETED,true,305,LULUS
+09,claim,UAT-AB-CLM-0010,DRAFT,RESOLVED,false,,LULUS
+10,pos_sale,UAT-AB-POS-00044,DRAF,TERPOSTING,true,306,LULUS

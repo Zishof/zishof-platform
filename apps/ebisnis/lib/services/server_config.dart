@@ -31,6 +31,18 @@ class ServerConfig {
 
   Future<void> muat() async {
     final sp = await SharedPreferences.getInstance();
+
+    // Build AB Chicken adalah aplikasi tenant khusus, bukan client generik. Alamat
+    // server dikunci agar konfigurasi lama/perangkat lain tidak dapat mengarahkannya
+    // ke host tenant berbeda. Otorisasi dan binding host tetap divalidasi server.
+    if (AppVariant.isAbChicken) {
+      await simpan(
+        host: AppSetting.baseUrlHost,
+        contextPath: AppSetting.baseUrlContextPath,
+        https: AppSetting.baseUrlHttps,
+      );
+      return;
+    }
     host = sp.getString(_kHost) ?? '';
     contextPath = sp.getString(_kContextPath) ?? '';
     https = sp.getBool(_kHttps) ?? true;
@@ -53,11 +65,16 @@ class ServerConfig {
       final legacyNahl =
           sanitizeHost(legacyHost).toLowerCase() == 'an-nahl.santri.info' &&
               sanitizeContextPath(legacyContext).toLowerCase() == 'nahl';
+      final legacyAbChicken =
+          sanitizeHost(legacyHost).toLowerCase() == 'abchiken.ebisnis.id' &&
+              sanitizeContextPath(legacyContext).toLowerCase() == 'ebisnis';
       if (legacyHost.trim().isNotEmpty &&
-          (AppVariant.isAlBahjah ||
-              (AppVariant.isNahl
-                  ? legacyNahl
-                  : (!legacyAlBahjah && !legacyPilot)))) {
+          (AppVariant.isAbChicken
+              ? legacyAbChicken
+              : (AppVariant.isAlBahjah ||
+                  (AppVariant.isNahl
+                      ? legacyNahl
+                      : (!legacyAlBahjah && !legacyPilot))))) {
         await simpan(
           host: legacyHost,
           contextPath: legacyContext,
@@ -112,12 +129,17 @@ class ServerConfig {
     required bool https,
   }) async {
     final sp = await SharedPreferences.getInstance();
-    await sp.setString(_kHost, host);
-    await sp.setString(_kContextPath, contextPath);
-    await sp.setBool(_kHttps, https);
-    this.host = host;
-    this.contextPath = contextPath;
-    this.https = https;
+    final hostEfektif = AppVariant.isAbChicken ? AppSetting.baseUrlHost : host;
+    final contextEfektif =
+        AppVariant.isAbChicken ? AppSetting.baseUrlContextPath : contextPath;
+    final httpsEfektif =
+        AppVariant.isAbChicken ? AppSetting.baseUrlHttps : https;
+    await sp.setString(_kHost, hostEfektif);
+    await sp.setString(_kContextPath, contextEfektif);
+    await sp.setBool(_kHttps, httpsEfektif);
+    this.host = hostEfektif;
+    this.contextPath = contextEfektif;
+    this.https = httpsEfektif;
   }
 
   static String sanitizeHost(String raw) => raw

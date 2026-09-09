@@ -20,6 +20,13 @@ class AppVariant {
   /// Windows; entrypoint menggerakkan AppProductProfile runtime).
   static const isInventorySales = kode == 'inventory_sales';
 
+  /// Varian demo/produksi AB Chicken. Fitur operasionalnya diturunkan dari
+  /// Inventory & Sales, tetapi namespace lokal, branding, server bawaan, dan
+  /// artefak rilis dipisahkan total. Ejaan domain/schema produksi memang
+  /// `abchiken`, sedangkan kode varian/brand tetap `abchicken`.
+  /// Build: `-t lib/main_abchicken.dart --dart-define=EBISNIS_VARIANT=abchicken`.
+  static const isAbChicken = kode == 'abchicken';
+
   /// Varian "POS Apotik" (eFarmasi) -- penjualan obat resep/bebas dgn batch-
   /// kedaluwarsa & obat terkendali; backend Java AIS + modul SIRS (JALAN 1).
   /// Build: `-t lib/main_apotik.dart --dart-define=EBISNIS_VARIANT=apotik`.
@@ -52,143 +59,167 @@ class AppVariant {
   /// nama tampilan sehingga perubahan branding tidak pernah mencampur DB,
   /// backup transaksi, atau konfigurasi antar aplikasi yang dipasang pada
   /// komputer/perangkat yang sama.
-  static const storageNamespace = isAlBahjah
-      ? 'albahjah'
-      : (isNahl
-          ? 'nahl'
-          : (isInventorySales
-              ? 'inventory_sales'
-              : (isApotik
-                  ? 'apotik'
-                  : (isEmedik
-                      ? 'emedik'
-                      : (isMitraInap
-                          ? 'mitrainap'
-                          : (isPetra ? 'petra' : 'ebisnis'))))));
+  static const storageNamespace = isAbChicken
+      ? 'abchicken'
+      : (isAlBahjah
+          ? 'albahjah'
+          : (isNahl
+              ? 'nahl'
+              : (isInventorySales
+                  ? 'inventory_sales'
+                  : (isApotik
+                      ? 'apotik'
+                      : (isEmedik
+                          ? 'emedik'
+                          : (isMitraInap
+                              ? 'mitrainap'
+                              : (isPetra ? 'petra' : 'ebisnis')))))));
 
-  static const namaAplikasi = isAlBahjah
-      ? 'Al-Bahjah POS'
-      : (isNahl
-          ? 'TokoQu Al-Bahjah An Nahl'
-          : (isInventorySales
-              ? 'eBisnis Inventory & Sales'
-              : (isApotik
-                  ? 'eBisnis POS Apotik'
-                  : (isEmedik
-                      ? 'eBisnis POS eMedik'
-                      : (isMitraInap
-                          ? 'MitraInap'
-                          : (isPetra ? 'eKantin Petra' : 'eBisnis'))))));
-  static const namaSidebar = isAlBahjah
-      ? 'Al-Bahjah POS'
-      : (isNahl
-          ? 'TokoQu An Nahl'
-          : (isInventorySales
-              ? 'Inventory & Sales'
-              : (isApotik
-                  ? 'POS Apotik'
-                  : (isEmedik
-                      ? 'POS eMedik'
-                      : (isMitraInap
-                          ? 'MitraInap'
-                          : (isPetra ? 'eKantin Petra' : 'eBisnis POS'))))));
-  static const updateAssetKeyword = isAlBahjah
-      ? 'albahjah'
-      : (isNahl
-          ? 'nahl'
-          : (isInventorySales
-              ? 'inventorysales'
-              : (isApotik
-                  ? 'apotik'
-                  : (isEmedik
-                      ? 'emedik'
-                      : (isMitraInap
-                          ? 'mitrainap'
-                          : (isPetra ? 'petra' : 'ebisnis'))))));
+  static const namaAplikasi = isAbChicken
+      ? 'AB Chicken'
+      : (isAlBahjah
+          ? 'Al-Bahjah POS'
+          : (isNahl
+              ? 'TokoQu Al-Bahjah An Nahl'
+              : (isInventorySales
+                  ? 'eBisnis Inventory & Sales'
+                  : (isApotik
+                      ? 'eBisnis POS Apotik'
+                      : (isEmedik
+                          ? 'eBisnis POS eMedik'
+                          : (isMitraInap
+                              ? 'MitraInap'
+                              : (isPetra ? 'eKantin Petra' : 'eBisnis')))))));
+  static const namaSidebar = isAbChicken
+      ? 'AB Chicken Operations'
+      : (isAlBahjah
+          ? 'Al-Bahjah POS'
+          : (isNahl
+              ? 'TokoQu An Nahl'
+              : (isInventorySales
+                  ? 'Inventory & Sales'
+                  : (isApotik
+                      ? 'POS Apotik'
+                      : (isEmedik
+                          ? 'POS eMedik'
+                          : (isMitraInap
+                              ? 'MitraInap'
+                              : (isPetra
+                                  ? 'eKantin Petra'
+                                  : 'eBisnis POS')))))));
+  static const updateAssetKeyword = isAbChicken
+      ? 'abchicken'
+      : (isAlBahjah
+          ? 'albahjah'
+          : (isNahl
+              ? 'nahl'
+              : (isInventorySales
+                  ? 'inventorysales'
+                  : (isApotik
+                      ? 'apotik'
+                      : (isEmedik
+                          ? 'emedik'
+                          : (isMitraInap
+                              ? 'mitrainap'
+                              : (isPetra ? 'petra' : 'ebisnis')))))));
 
-  /// Kanal rilis harus berbeda untuk Al-Bahjah dan Nahl. Nama installer Nahl
-  /// mengandung teks "Al-Bahjah An-Nahl", sehingga memilih rilis global lalu
-  /// hanya mencocokkan nama aset dapat membuat Al-Bahjah menarik paket Nahl.
-  static const String? updateTagPrefix = isAlBahjah
-      ? 'albahjah-'
-      : (isApotik
-          ? 'apotik-'
-          : (isEmedik
-              ? 'emedik-'
-              : (isMitraInap
-                  ? 'mitrainap-'
-                  : (isPetra ? 'petra-' : (isNahl ? 'nahl-' : null)))));
-  static const labelPerangkat = isAlBahjah
-      ? 'Al-Bahjah POS Flutter Pilot'
-      : (isNahl
-          ? 'TokoQu Al-Bahjah An Nahl Flutter'
-          : (isInventorySales
-              ? 'eBisnis Inventory & Sales Flutter'
+  /// Setiap produk menggunakan tag rilis sendiri. Pemisahan ini mencegah
+  /// paket AB Chicken, Al-Bahjah, Nahl, atau produk lain ditawarkan silang
+  /// oleh pemeriksa pembaruan otomatis.
+  static const String? updateTagPrefix = isAbChicken
+      ? 'abchicken-'
+      : (isAlBahjah
+          ? 'albahjah-'
+          : (isNahl
+              ? 'nahl-'
               : (isApotik
-                  ? 'eBisnis POS Apotik Flutter'
+                  ? 'apotik-'
                   : (isEmedik
-                      ? 'eBisnis POS eMedik Flutter'
+                      ? 'emedik-'
                       : (isMitraInap
-                          ? 'MitraInap Flutter'
+                          ? 'mitrainap-'
+                          : (isPetra ? 'petra-' : null))))));
+  static const labelPerangkat = isAbChicken
+      ? 'AB Chicken POS & Operations'
+      : (isAlBahjah
+          ? 'Al-Bahjah POS Flutter Pilot'
+          : (isNahl
+              ? 'TokoQu Al-Bahjah An Nahl Flutter'
+              : (isInventorySales
+                  ? 'eBisnis Inventory & Sales Flutter'
+                  : (isApotik
+                      ? 'eBisnis POS Apotik Flutter'
+                      : (isEmedik
+                          ? 'eBisnis POS eMedik Flutter'
+                          : (isMitraInap
+                              ? 'MitraInap Flutter'
+                              : (isPetra
+                                  ? 'eKantin Petra Flutter'
+                                  : 'eBisnis Flutter Pilot')))))));
+  static const logoAsset = isAbChicken
+      ? 'assets/images/abchicken/icon.png'
+      : (isAlBahjah
+          ? 'assets/images/albahjah/icon.png'
+          : (isNahl
+              ? 'assets/images/nahl/icon.png'
+              : (isInventorySales
+                  ? 'assets/images/inventory_sales/icon.png'
+                  : (isApotik
+                      ? 'assets/images/apotik/icon.png'
+                      : (isEmedik
+                          ? 'assets/images/emedik/icon.png'
                           : (isPetra
-                              ? 'eKantin Petra Flutter'
-                              : 'eBisnis Flutter Pilot'))))));
-  static const logoAsset = isAlBahjah
-      ? 'assets/images/albahjah/icon.png'
-      : (isNahl
-          ? 'assets/images/nahl/icon.png'
-          : (isInventorySales
-              ? 'assets/images/inventory_sales/icon.png'
-              : (isApotik
-                  ? 'assets/images/apotik/icon.png'
-                  : (isEmedik
-                      ? 'assets/images/emedik/icon.png'
-                      : (isPetra
-                          ? 'assets/images/petra/icon.png'
-                          : 'assets/images/ebisnis/icon.png')))));
+                              ? 'assets/images/petra/icon.png'
+                              : 'assets/images/ebisnis/icon.png'))))));
 
   /// Latar layar masuk mengikuti unit usaha. Aset sengaja dipisah per varian
   /// agar identitas eBisnis umum, Inventory, Apotik, eMedik, dan Al-Bahjah
   /// tetap konsisten pada build Desktop maupun Android.
-  static const loginBackgroundAsset = isAlBahjah
-      ? 'assets/images/albahjah/login-background.png'
-      : (isNahl
-          ? 'assets/images/nahl/login-background.jpg'
-          : (isInventorySales
-              ? 'assets/images/inventory_sales/login-background.png'
-              : (isApotik
-                  ? 'assets/images/apotik/login-background.png'
-                  : (isEmedik
-                      ? 'assets/images/emedik/login-background.png'
-                      : (isPetra
-                          ? 'assets/images/petra/login-background.png'
-                          : 'assets/images/ebisnis/login-background.png')))));
+  static const loginBackgroundAsset = isAbChicken
+      ? 'assets/images/abchicken/login-background.png'
+      : (isAlBahjah
+          ? 'assets/images/albahjah/login-background.png'
+          : (isNahl
+              ? 'assets/images/nahl/login-background.jpg'
+              : (isInventorySales
+                  ? 'assets/images/inventory_sales/login-background.png'
+                  : (isApotik
+                      ? 'assets/images/apotik/login-background.png'
+                      : (isEmedik
+                          ? 'assets/images/emedik/login-background.png'
+                          : (isPetra
+                              ? 'assets/images/petra/login-background.png'
+                              : 'assets/images/ebisnis/login-background.png'))))));
 
   /// Judul kartu di layar Masuk -- BEDA dari [namaAplikasi] (yang tetap dipakai
   /// di window title/sidebar/label perangkat/update asset keyword). Al-Bahjah
   /// minta identitas unit usaha ("Unit Usaha Al Bahjah"), bukan nama produk
   /// "Al-Bahjah POS", HANYA di kartu login.
-  static const judulLogin = isAlBahjah
-      ? 'Unit Usaha Al Bahjah'
-      : (isNahl
-          ? 'TokoQu Al-Bahjah An Nahl'
-          : (isPetra ? 'Masuk eKantin' : namaAplikasi));
+  static const judulLogin = isAbChicken
+      ? 'AB Chicken Operations'
+      : (isAlBahjah
+          ? 'Unit Usaha Al Bahjah'
+          : (isNahl
+              ? 'TokoQu Al-Bahjah An Nahl'
+              : (isPetra ? 'Masuk eKantin' : namaAplikasi)));
 
   /// Sub-judul (tagline) di bawah judul kartu Masuk. Al-Bahjah minta kalimat
   /// visi-misi pesantren menggantikan "Masuk sebagai Kasir" generik.
-  static const subJudulLogin = isAlBahjah
-      ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
-      : (isNahl
-          ? 'Menyiapkan generasi Qur’ani yang berakhlakul karimah dan berwawasan global'
-          : (isInventorySales
-              ? 'Kelola persediaan, penjualan, dan operasional usaha'
-              : (isApotik
-                  ? 'Masuk sesuai peran Anda di layanan Apotik'
-                  : (isEmedik
-                      ? 'Masuk sesuai peran Anda di layanan eMedik'
-                      : (isPetra
-                          ? 'Selamat datang kembali, silakan masuk ke akun Anda.'
-                          : 'Masuk ke sistem operasional eBisnis')))));
+  static const subJudulLogin = isAbChicken
+      ? 'Satu alur untuk outlet, gudang pusat, produksi, pengiriman, dan keuangan'
+      : (isAlBahjah
+          ? 'Membangun Masyarakat Berahlaq Mulia, Bersendikan Al-Qur’an dan Sunnah Rasulullah SAW'
+          : (isNahl
+              ? 'Menyiapkan generasi Qur’ani yang berakhlakul karimah dan berwawasan global'
+              : (isInventorySales
+                  ? 'Kelola persediaan, penjualan, dan operasional usaha'
+                  : (isApotik
+                      ? 'Masuk sesuai peran Anda di layanan Apotik'
+                      : (isEmedik
+                          ? 'Masuk sesuai peran Anda di layanan eMedik'
+                          : (isPetra
+                              ? 'Selamat datang kembali, silakan masuk ke akun Anda.'
+                              : 'Masuk ke sistem operasional eBisnis'))))));
 
   /// ── Identitas panel kiri layar Masuk (khusus Petra) ────────────────────
   /// Versi web eKantin Petra memakai kartu dua kolom: panel biru berisi
