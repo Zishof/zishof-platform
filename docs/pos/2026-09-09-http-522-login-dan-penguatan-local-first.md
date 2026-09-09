@@ -79,9 +79,11 @@ mengganti kata sandi hanya karena insiden ini.
   dan tidak menyentuh kode perbaikan 522, login, outbox, atau kedua varian rilis.
 - Analisis statis: tidak ada error atau warning; informasi lint lama yang tidak
   terkait tetap dicatat sebagai baseline.
-- Endpoint produksi Nahl saat reproduksi masih mengembalikan HTTP 522. Karena
-  itu UAT terhadap **perilaku klien ketika 522** lulus, sedangkan login produksi
-  dengan akun nyata menunggu pemulihan origin dan tidak diklaim lulus.
+- Reproduksi awal pada endpoint produksi Nahl menghasilkan HTTP 522. Pemeriksaan
+  ulang pra-rilis pada 9 September 2026 pukul 15.16 WIB memakai identitas UAT
+  dummy sudah menerima HTTP 401 dengan JSON terstruktur. Hal ini membuktikan
+  jalur Cloudflare–origin kembali merespons dan klasifikasi penolakan bisnis
+  tetap benar. Login dengan akun nyata tidak dilakukan dan tidak diklaim lulus.
 
 ## Kebutuhan deploy
 

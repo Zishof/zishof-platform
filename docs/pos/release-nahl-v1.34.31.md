@@ -23,8 +23,10 @@ langkah pemulihan yang aman.
 - Sapuan penuh mencatat 827 lulus dan 8 test kontrak eksternal tidak dapat
   dijalankan karena file runner/source AIS di luar repo tidak tersedia.
 - Analisis statis tidak menemukan error atau warning.
-- Saat reproduksi UAT, endpoint Nahl masih mengembalikan HTTP 522; UAT login
-  nyata menunggu pemulihan origin dan tidak diklaim lulus.
+- Reproduksi awal memperoleh HTTP 522. Probe pra-rilis pada 9 September 2026
+  pukul 15.16 WIB sudah memperoleh HTTP 401 berbentuk JSON untuk identitas dummy,
+  sehingga jalur Cloudflare–origin dinilai kembali merespons. Login akun nyata
+  tidak dilakukan dan tidak diklaim lulus.
 - Paket hanya untuk Windows Desktop dan belum ditandatangani Authenticode;
   gunakan untuk UAT/internal sesuai kebijakan organisasi.
 - Perbaikan aplikasi tidak membutuhkan deploy WAR/server. HTTP 522 tetap harus
