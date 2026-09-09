@@ -19,6 +19,7 @@ import '../services/pengaturan_nomor_struk.dart';
 import '../services/pengaturan_pembayaran.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/uom_konversi.dart';
+import '../services/validasi_saldo_pembayaran.dart';
 import '../services/biometric_capture_bridge.dart';
 import '../theme/app_colors.dart';
 import 'struk_screen.dart';
@@ -560,6 +561,112 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     if (nominalDeposit <= 0 || saldoAwal == null) return null;
     final saldoAkhir = saldoAwal - nominalDeposit;
     return saldoAkhir < 0 ? 0 : saldoAkhir;
+  }
+
+  /// Memeriksa saldo OTORITATIF sebelum membuat transaksi atau outbox.
+  ///
+  /// Saldo yang tampil ketika member dipilih hanya snapshot untuk membantu
+  /// kasir. Ia bisa berubah karena transaksi dari perangkat/toko lain. Karena
+  /// itu pembayaran saldo selalu online-only dan membaca ulang `saldo_member`
+  /// tepat saat Bayar ditekan. Server tetap memvalidasi secara atomik di aksi
+  /// `bayar`; pemeriksaan awal ini memberi penolakan lebih cepat dan mencegah
+  /// saldo lama menghasilkan transaksi lokal berstatus pending.
+  Future<bool> _validasiSaldoPusatSebelumBayar() async {
+    final nominal = _nominalDepositTerpakai();
+    if (nominal <= 0.0001) return true;
+    final member = _memberTerpilih;
+    if (member == null) return false;
+
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('saldo_member', {'id_member': member.id});
+      final data = hasil['data'];
+      final saldo =
+          data is num ? data.toDouble() : _saldoDepositDariResponse(hasil);
+      if (saldo == null) {
+        throw const FormatException(
+            'Respons saldo_member tidak memuat saldo yang dapat dibaca.');
+      }
+      if (mounted) setStateIfMounted(() => _saldoMember = saldo);
+
+      final keputusan = ValidasiSaldoPembayaran.evaluasi(
+        saldo: saldo,
+        nominal: nominal,
+      );
+      if (keputusan.mencukupi) return true;
+
+      await CoreDb.instance.catatErrorLog(
+        sumber: 'checkout-saldo-preflight',
+        tingkat: 'WARN',
+        pesan: 'Pembayaran saldo dihentikan sebelum transaksi dibuat.',
+        detail: 'member_id=${member.id}; saldo=$saldo; nominal=$nominal; '
+            'kekurangan=${keputusan.kekurangan}',
+      );
+      if (!mounted) return false;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Saldo tidak mencukupi — transaksi belum dibuat'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Saldo terbaru: ${_formatRupiah.format(saldo)}'),
+                Text('Akan dipotong: ${_formatRupiah.format(nominal)}'),
+                Text(
+                  'Kekurangan: ${_formatRupiah.format(keputusan.kekurangan)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Pembayaran dihentikan sebelum nomor transaksi, data lokal, '
+                  'atau antrean sinkron dibuat. Lakukan topup sesuai bukti '
+                  'pembayaran atau tekan F4 untuk memilih metode lain.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    } catch (error, stackTrace) {
+      await CoreDb.instance.catatErrorLog(
+        sumber: 'checkout-saldo-preflight',
+        tingkat: 'ERROR',
+        pesan: 'Saldo pusat belum dapat diverifikasi; transaksi tidak dibuat.',
+        detail: '$error\n$stackTrace',
+      );
+      if (!mounted) return false;
+      final sumber = error is ApiException
+          ? error.info
+          : AppErrorInfo.dari(error,
+              aktivitas: 'memverifikasi saldo sebelum pembayaran');
+      await tampilkanKesalahan(
+        context,
+        AppErrorInfo(
+          judul: 'Saldo belum dapat diverifikasi',
+          pesan: 'Pembayaran saldo memerlukan konfirmasi server dan dihentikan '
+              'sebelum transaksi dibuat. Keranjang tetap utuh.',
+          solusi: const [
+            'Pastikan koneksi server sudah pulih, lalu tekan Bayar satu kali.',
+            'Jika perlu tetap melayani, tekan F4 dan pilih metode manual yang '
+                'memang sudah diterima secara fisik.',
+            'Jangan membuat nota pengganti untuk pembayaran yang belum diterima.',
+          ],
+          teknis: sumber.teknis,
+          kodeReferensi: sumber.kodeReferensi,
+        ),
+      );
+      return false;
+    }
   }
 
   // Saat split aktif, "Uang Diterima" mengacu ke TOTAL transaksi tapi kasir
@@ -1678,6 +1785,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         return s.caraBayar.nama;
       }
     }
+    for (final s in _splitBayar) {
+      if (_metodeMemotongDeposit(s.caraBayar) && s.nominal > 0) {
+        return s.caraBayar.nama;
+      }
+    }
     return _caraBayarTerpilih?.nama ?? '';
   }
 
@@ -1688,6 +1800,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     // Memakai wajibPilihMember, BUKAN hanya masukSebagaiHutang: selain seluruh
     // Kasbon, metode potong saldo juga tidak bermakna tanpa pemilik/PIC.
     if (_caraBayarTerpilih?.wajibPilihMember == true) return true;
+    if (_saldoAkanDipotong) return true;
     for (final s in _splitBayar) {
       if (s.caraBayar.wajibPilihMember && s.nominal > 0) return true;
     }
@@ -1745,6 +1858,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     String? kodePercobaan;
     setStateIfMounted(() => _memproses = true);
     try {
+      // Gerbang ini WAJIB berada sebelum pembuatan kode transaksi, verifikasi
+      // biometrik/PIN, simpanTransaksiPending, dan aksi bayar. Jika saldo tidak
+      // cukup atau server tidak dapat dihubungi, keranjang tetap utuh dan tidak
+      // ada baris PENDING baru yang harus dibersihkan saat tutup kasir.
+      if (!await _validasiSaldoPusatSebelumBayar()) return;
       kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
       final kodeUnik = kodePercobaan;
       final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
@@ -2221,6 +2339,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                           if (_memberTerpilih!.kodeIdentitas.isNotEmpty)
                             _memberTerpilih!.kodeIdentitas,
                           'Saldo: ${_saldoMember == null ? "..." : _formatRupiah.format(_saldoMember)}',
+                          if (_saldoAkanDipotong)
+                            'Diperiksa ulang sebelum transaksi dibuat',
                           if (_memberTerpilih!.wajibPin) 'Wajib PIN',
                           if (_memberTerpilih!.wajibBiometricWajah)
                             'Wajib Wajah',

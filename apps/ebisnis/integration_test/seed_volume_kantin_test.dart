@@ -16,6 +16,10 @@ void main() {
     const volume = int.fromEnvironment('POS_UAT_VOLUME', defaultValue: 1);
     const post = bool.fromEnvironment('POS_UAT_POST');
     const distinctProducts = bool.fromEnvironment('POS_UAT_DISTINCT_PRODUCTS');
+    const paymentName =
+        String.fromEnvironment('POS_UAT_PAYMENT_NAME', defaultValue: 'Tunai');
+    const memberId = int.fromEnvironment('POS_UAT_MEMBER_ID', defaultValue: 0);
+    const memberName = String.fromEnvironment('POS_UAT_MEMBER_NAME');
     const prefix = String.fromEnvironment('POS_UAT_PREFIX',
         defaultValue: 'UAT-VOL-POS-20260904');
     await ServerConfig.instance
@@ -86,14 +90,15 @@ void main() {
       orElse: () => products.first,
     );
     final payments = await call('cara_bayar_list_admin', {
-      'keyword': 'Tunai',
+      'keyword': paymentName,
       'page': 1,
       'page_size': 20,
     });
     final payment = ((payments['data'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
-        .firstWhere((e) => '${e['nama']}'.toLowerCase() == 'tunai');
+        .firstWhere(
+            (e) => '${e['nama']}'.toLowerCase() == paymentName.toLowerCase());
 
     final existingReport = await call('laporan_order_list', {
       'tglMulai': '2026-09-01',
@@ -138,6 +143,8 @@ void main() {
             '04-09-2026 ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00',
         'caraBayar': payment['id'],
         'caraBayarNama': payment['nama'],
+        if (memberId > 0) 'id_member': memberId,
+        if (memberId > 0 && memberName.isNotEmpty) 'nama_member': memberName,
         'total': total,
         'pajak': 0,
         'diskon_faktur_tipe': 'NOMINAL',
