@@ -405,9 +405,112 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     return null;
   }
 
+  Future<void> _gantiMetodePending(Map<String, dynamic> row) async {
+    final kode = '${row['kode_unik'] ?? ''}'.trim();
+    final payload = _payloadPending(row);
+    final metodeAman = Sesi.instance.caraBayar
+        .where(TransaksiOutboxService.metodeAmanUntukKoreksiOffline)
+        .toList();
+    if (metodeAman.isEmpty) {
+      await tampilkanKesalahan(
+        context,
+        StateError(
+            'Belum ada metode manual lokal yang aman. Aktifkan metode Tunai/manual yang tidak memotong saldo, piutang, atau PIN.'),
+        aktivitas: 'mengganti metode pembayaran',
+      );
+      return;
+    }
+
+    CaraBayar? pilihan = metodeAman.first;
+    var pembayaranDiterima = false;
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Koreksi metode pembayaran'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Transaksi $kode ditolak server dan belum menjadi '
+                      'penjualan final.'),
+                  const SizedBox(height: 8),
+                  Text('Metode sebelumnya: ${payload['caraBayarNama'] ?? '-'}'),
+                  Text(
+                      'Total: ${_formatRupiah.format((payload['total'] as num?)?.toDouble() ?? 0)}'),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Pilih metode manual yang pembayarannya benar-benar sudah diterima. Kode transaksi, waktu, barang, kasir, dan toko tidak berubah.',
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<CaraBayar>(
+                    value: pilihan,
+                    decoration: const InputDecoration(
+                      labelText: 'Metode pembayaran pengganti',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: metodeAman
+                        .map((cara) => DropdownMenuItem(
+                              value: cara,
+                              child: Text(cara.nama),
+                            ))
+                        .toList(),
+                    onChanged: (nilai) => setDialogState(() => pilihan = nilai),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: pembayaranDiterima,
+                    onChanged: (nilai) => setDialogState(
+                        () => pembayaranDiterima = nilai == true),
+                    title: const Text(
+                        'Saya memastikan uang/bukti pembayaran pengganti sudah diterima.'),
+                    subtitle: const Text(
+                        'Jangan centang bila pelanggan belum membayar dengan metode pengganti.'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal')),
+            FilledButton(
+              onPressed: pilihan != null && pembayaranDiterima
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              child: const Text('Simpan Koreksi & Kirim'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (setuju != true || pilihan == null || !mounted) return;
+    try {
+      await TransaksiOutboxService.instance
+          .koreksiMetodePembayaran(kode, pilihan!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Metode transaksi $kode diubah ke ${pilihan!.nama}. Pengiriman memakai kode dan waktu asli.')));
+      await _muatTransaksiPending();
+    } catch (e) {
+      if (mounted) {
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'mengganti metode pembayaran');
+      }
+    }
+  }
+
   Future<void> _lihatDetailPending(Map<String, dynamic> row) async {
     final payload = _payloadPending(row);
     final items = (payload['transaksi'] as List?) ?? const [];
+    final pesanError = '${row['pesan_error'] ?? ''}'.trim();
+    final dapatDikoreksi = row['status'] != 'SYNCED' && pesanError.isNotEmpty;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -440,17 +543,26 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                 Text(
                     'Total: ${_formatRupiah.format((payload['total'] as num?)?.toDouble() ?? 0)}',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
-                if ('${row['pesan_error'] ?? ''}'.trim().isNotEmpty) ...[
+                if (pesanError.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text('Kendala terakhir',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  SelectableText('${row['pesan_error']}'),
+                  AppErrorPanel(
+                    info: AppErrorInfo.dari(pesanError, aktivitas: 'bayar'),
+                  ),
                 ],
               ],
             ),
           ),
         ),
         actions: [
+          if (dapatDikoreksi)
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _gantiMetodePending(row);
+              },
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Ganti ke Pembayaran Lokal'),
+            ),
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Tutup')),
@@ -591,7 +703,9 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
                           : IconButton(
                               tooltip: status == 'SYNCED'
                                   ? 'Kirim ulang (bila datanya terhapus di server)'
-                                  : 'Coba kirim transaksi ini sekarang',
+                                  : status == 'GAGAL'
+                                      ? 'Coba lagi hanya setelah kendala diperbaiki'
+                                      : 'Coba kirim transaksi ini sekarang',
                               onPressed: () => _kirimSatuPending(row,
                                   paksa: status == 'SYNCED'),
                               icon: Icon(status == 'SYNCED'
@@ -1458,8 +1572,8 @@ class _PesananScreenState extends State<PesananScreen> with JejakGalat {
     if (caraBayar == null) return;
 
     try {
-      final hasil =
-          await ApiClient.instance.aksi('bayar', _payloadVerifikasi(p, caraBayar));
+      final hasil = await ApiClient.instance
+          .aksi('bayar', _payloadVerifikasi(p, caraBayar));
       if (mounted) {
         // Peringatan stok (bila ada) menggantikan pesan sukses biasa: yang perlu
         // ditindaklanjuti tidak boleh kalah mencolok dari kabar baiknya.

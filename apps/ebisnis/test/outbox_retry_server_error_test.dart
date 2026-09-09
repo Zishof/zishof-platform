@@ -47,6 +47,19 @@ void main() {
       expect(
           svc.dapatDicobaUlang(galat('stok_tidak_cukup', http: 200)), isFalse);
     });
+
+    test('backend lama tanpa kode: saldo dan limit ditolak permanen', () {
+      expect(
+          svc.dapatDicobaUlang(ApiException(
+              'Saldo EVA tidak mencukupi untuk transaksi ini.',
+              statusHttp: 200)),
+          isFalse);
+      expect(
+          svc.dapatDicobaUlang(ApiException(
+              'Transaksi melebihi limit harian member.',
+              statusHttp: 200)),
+          isFalse);
+    });
   });
 
   test('SERVER_ERROR bukan bagian daftar permanen', () {

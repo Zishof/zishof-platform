@@ -10,6 +10,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/penanda_data_tersimpan.dart';
 import '../../widgets/safe_state.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/jejak_galat.dart';
 import 'pos_help.dart';
 
 final _rp =
@@ -152,6 +153,41 @@ class _FilterPeriode extends StatelessWidget {
   }
 }
 
+/// Pesan dua lapis untuk laporan yang belum tersedia saat offline. Kalimat
+/// utama ditulis untuk operator; tombol Detail tetap membawa jejak teknis bagi
+/// admin tanpa memenuhi layar dengan endpoint dan stack trace.
+class _BannerGalatLaporan extends StatelessWidget {
+  final String pesan;
+  final String? detail;
+  const _BannerGalatLaporan({required this.pesan, this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.latarLembut(AppColors.warning),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.warning.withValues(alpha: .45)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Laporan belum tersedia saat offline',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(pesan),
+            AppDetailGalatOpsional(detail: detail),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // =============================================================================
 // Tab 1 -- Penjualan
 // =============================================================================
@@ -163,7 +199,7 @@ class _TabPenjualan extends StatefulWidget {
   State<_TabPenjualan> createState() => _TabPenjualanState();
 }
 
-class _TabPenjualanState extends State<_TabPenjualan> {
+class _TabPenjualanState extends State<_TabPenjualan> with JejakGalat {
   DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
   DateTime _sampai = DateTime.now();
   bool _memuat = false;
@@ -173,9 +209,13 @@ class _TabPenjualanState extends State<_TabPenjualan> {
   /// gagal karena offline) -- menyalakan PenandaDataTersimpan.
   bool _dariCache = false;
   DateTime? _cacheDisimpanPada;
+  String? _error;
 
   Future<void> _muat() async {
-    setStateIfMounted(() => _memuat = true);
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
     // BACA LOKAL DULU (pola MasterOffline.daftarCacheDulu, dihitung MANUAL di
     // sini): `apotik_laporan_penjualan` mengembalikan satu AMPLOP
     // (totalNilai/totalQty + perGolongan + perItem) yang hanya bermakna
@@ -225,10 +265,17 @@ class _TabPenjualanState extends State<_TabPenjualan> {
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya).
       if (e is ApiException && e.offline && adaCacheLokal) return;
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal: $e')));
-      }
+      setStateIfMounted(() {
+        _error = e is ApiException && e.offline
+            ? terapkanGalatDenganPesan(
+                e,
+                'Laporan penjualan apotek belum mempunyai salinan lokal untuk '
+                'periode ini. Sambungkan ke server lalu tekan Muat sekali. '
+                'Transaksi yang masih menunggu sinkronisasi belum termasuk '
+                'dalam angka laporan resmi.',
+              )
+            : terapkanGalat(e);
+      });
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -261,6 +308,8 @@ class _TabPenjualanState extends State<_TabPenjualan> {
         child: PenandaDataTersimpan(
             tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
       ),
+      if (_error != null)
+        _BannerGalatLaporan(pesan: _error!, detail: detailUntuk(_error)),
       Expanded(
         child: _memuat
             ? const Center(child: CircularProgressIndicator())
@@ -351,24 +400,64 @@ class _TabTerkendali extends StatefulWidget {
   State<_TabTerkendali> createState() => _TabTerkendaliState();
 }
 
-class _TabTerkendaliState extends State<_TabTerkendali> {
+class _TabTerkendaliState extends State<_TabTerkendali> with JejakGalat {
   DateTime _dari = DateTime.now().subtract(const Duration(days: 30));
   DateTime _sampai = DateTime.now();
   bool _memuat = false;
   List<Map<String, dynamic>> _data = [];
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
+  String? _error;
 
   Future<void> _muat() async {
-    setStateIfMounted(() => _memuat = true);
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    final kunci = 'laporan:apotik_terkendali:'
+        '${_fmtTgl.format(_dari)}_${_fmtTgl.format(_sampai)}';
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        setStateIfMounted(() {
+          _data = ((lokal['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _dariCache = true;
+          _cacheDisimpanPada =
+              DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        });
+      } catch (_) {
+        adaCacheLokal = false;
+      }
+    }
     try {
       final r = await ApiClient.instance.aksi('apotik_laporan_terkendali',
           {'dari': _fmtTgl.format(_dari), 'sampai': _fmtTgl.format(_sampai)});
-      setStateIfMounted(() =>
-          _data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+      setStateIfMounted(() {
+        _data = ((r['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+      });
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...r,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal: $e')));
-      }
+      if (e is ApiException && e.offline && adaCacheLokal) return;
+      setStateIfMounted(() {
+        _error = e is ApiException && e.offline
+            ? terapkanGalatDenganPesan(
+                e,
+                'Register obat terkendali belum tersimpan pada perangkat untuk '
+                'periode ini. Data ini memerlukan validasi server dan tidak '
+                'boleh direka secara lokal. Sambungkan lalu tekan Muat.',
+              )
+            : terapkanGalat(e);
+      });
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -389,6 +478,13 @@ class _TabTerkendaliState extends State<_TabTerkendali> {
           onDari: (v) => setStateIfMounted(() => _dari = v),
           onSampai: (v) => setStateIfMounted(() => _sampai = v),
           onMuat: _muat),
+      if (_error != null)
+        _BannerGalatLaporan(pesan: _error!, detail: detailUntuk(_error)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
+      ),
       Expanded(
         child: _memuat
             ? const Center(child: CircularProgressIndicator())
@@ -436,22 +532,62 @@ class _TabKedaluwarsa extends StatefulWidget {
   State<_TabKedaluwarsa> createState() => _TabKedaluwarsaState();
 }
 
-class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
+class _TabKedaluwarsaState extends State<_TabKedaluwarsa> with JejakGalat {
   int _hari = 90;
   bool _memuat = false;
   Map<String, dynamic>? _data;
+  bool _dariCache = false;
+  DateTime? _cacheDisimpanPada;
+  String? _error;
 
   Future<void> _muat() async {
-    setStateIfMounted(() => _memuat = true);
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    final kunci = 'laporan:apotik_kedaluwarsa:$_hari';
+    var adaCacheLokal = false;
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(kunci);
+    if (tersimpan != null) {
+      try {
+        final lokal = jsonDecode(tersimpan) as Map<String, dynamic>;
+        adaCacheLokal = true;
+        setStateIfMounted(() {
+          _data = lokal;
+          _dariCache = true;
+          _cacheDisimpanPada =
+              DateTime.tryParse('${lokal['_disimpanPada'] ?? ''}');
+        });
+      } catch (_) {
+        adaCacheLokal = false;
+      }
+    }
     try {
       final r = await ApiClient.instance
           .aksi('apotik_laporan_kedaluwarsa', {'hari_ke_depan': _hari});
-      setStateIfMounted(() => _data = r);
+      setStateIfMounted(() {
+        _data = r;
+        _dariCache = false;
+        _cacheDisimpanPada = null;
+      });
+      await CoreDb.instance.simpanCacheReferensi(
+          kunci,
+          jsonEncode({
+            ...r,
+            '_disimpanPada': DateTime.now().toIso8601String(),
+          }));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal: $e')));
-      }
+      if (e is ApiException && e.offline && adaCacheLokal) return;
+      setStateIfMounted(() {
+        _error = e is ApiException && e.offline
+            ? terapkanGalatDenganPesan(
+                e,
+                'Daftar risiko kedaluwarsa belum mempunyai salinan lokal untuk '
+                'rentang ini. Sambungkan aplikasi lalu tekan Muat Ulang agar '
+                'batch dan stok terbaru dapat divalidasi server.',
+              )
+            : terapkanGalat(e);
+      });
     } finally {
       setStateIfMounted(() => _memuat = false);
     }
@@ -489,6 +625,13 @@ class _TabKedaluwarsaState extends State<_TabKedaluwarsa> {
           const Spacer(),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _muat),
         ]),
+      ),
+      if (_error != null)
+        _BannerGalatLaporan(pesan: _error!, detail: detailUntuk(_error)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: PenandaDataTersimpan(
+            tampil: _dariCache, diperbaruiPada: _cacheDisimpanPada),
       ),
       if (d != null)
         Padding(

@@ -29,5 +29,21 @@ void main() {
               statusHttp: 200, kode: 'STOK_TIDAK_CUKUP')),
           isFalse);
     });
+
+    test('saldo tidak cukup tanpa kode tidak dikirim berulang', () {
+      expect(
+          service.dapatDicobaUlang(ApiException(
+              'Saldo SAHRUL ARIFIN tidak mencukupi. Saldo saat ini Rp3.160, transaksi ini memotong Rp149.500.',
+              statusHttp: 200)),
+          isFalse);
+    });
+
+    test('kalimat saldo pada HTTP 522 tetap dianggap gangguan teknis', () {
+      expect(
+          service.dapatDicobaUlang(ApiException(
+              'Gateway gagal ketika memeriksa saldo.',
+              statusHttp: 522)),
+          isTrue);
+    });
   });
 }

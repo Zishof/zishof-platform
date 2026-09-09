@@ -172,7 +172,18 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
       // Offline dgn snapshot sudah tampil -> cukup diam (indikator offline
       // global sudah menceritakan kondisinya).
       if (!e.offline || !adaCacheLokal) {
-        setStateIfMounted(() => _pesanError = terapkanGalat(e));
+        setStateIfMounted(() {
+          _pesanError = e.offline && !adaCacheLokal
+              ? terapkanGalatDenganPesan(
+                  e,
+                  'Laporan ini belum mempunyai salinan pada perangkat. '
+                  'Sambungkan aplikasi ke server lalu tekan Tampilkan sekali '
+                  'agar hasil terposting dapat disimpan untuk dibaca saat '
+                  'offline. Transaksi yang masih menunggu sinkronisasi belum '
+                  'dimasukkan ke laporan resmi.',
+                )
+              : terapkanGalat(e);
+        });
       }
     } catch (e) {
       setStateIfMounted(() => _pesanError = terapkanGalat(e));

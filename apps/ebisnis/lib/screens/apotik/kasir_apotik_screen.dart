@@ -9,7 +9,9 @@ import '../../sesi.dart';
 import '../../services/master_offline.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/app_error_info.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/jejak_galat.dart';
 import '../../widgets/safe_state.dart';
 import 'pos_help.dart';
 
@@ -70,6 +72,12 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
   List<Map<String, dynamic>> _caraBayar = [];
   int? _caraBayarId;
 
+  String _kunciCache(String aksi, String rincian) =>
+      'apotik:$aksi:${AppVariant.storageNamespace}:'
+      'tenant-${Sesi.instance.tenantId ?? 0}:'
+      'pengguna-${Uri.encodeComponent(Sesi.instance.userId)}:'
+      'toko-${Sesi.instance.idTokoTerpilih ?? 0}:$rincian';
+
   bool get _adaTerkendali => _keranjang.any((b) => b.terkendali);
   bool get _adaRacikan => _keranjang.any((b) => b.racikan);
   Map<String, dynamic>? get _caraBayarAktif {
@@ -127,8 +135,7 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal memuat metode pembayaran: $e')));
+        snackbarGalat(context, e, aktivitas: 'memuat metode pembayaran apotek');
       }
     }
   }
@@ -148,18 +155,21 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
           : _mode == _ModeKasir.produksi
               ? 'apotik_produksi_katalog'
               : 'apotik_item_cari';
-      final hasil = await ApiClient.instance.aksi(action, {
-        'keyword': v.trim(),
-        'page_size': 40,
-      });
-      if (generasi == _generasiCari && _cari.text.trim() == v.trim()) {
-        setStateIfMounted(() => _hasilCari =
-            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
-      }
+      await MasterOffline.daftarCacheDulu(
+        action,
+        {'keyword': v.trim(), 'page_size': 40},
+        _kunciCache(action, Uri.encodeComponent(v.trim().toLowerCase())),
+        kolomKunci: 'id',
+        onData: (hasil) {
+          if (generasi == _generasiCari && _cari.text.trim() == v.trim()) {
+            setStateIfMounted(() => _hasilCari =
+                ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
+          }
+        },
+      );
     } catch (e) {
       if (mounted && generasi == _generasiCari) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal cari: $e')));
+        snackbarGalat(context, e, aktivitas: 'mencari obat');
       }
     } finally {
       if (generasi == _generasiCari) {
@@ -185,10 +195,15 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       return;
     }
     try {
-      final hasil = await ApiClient.instance
-          .aksi('apotik_item_batch', {'item_id': item['id']});
-      final batches =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      var batches = <Map<String, dynamic>>[];
+      await MasterOffline.daftarCacheDulu(
+        'apotik_item_batch',
+        {'item_id': item['id']},
+        _kunciCache('apotik_item_batch', '${item['id']}'),
+        kolomKunci: 'kadaluarsa_id',
+        onData: (hasil) => batches =
+            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>(),
+      );
       if (batches.isNotEmpty) {
         if (!mounted) return;
         final pilihan = await showModalBottomSheet<List<Map<String, dynamic>>>(
@@ -203,8 +218,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Gagal muat batch: $e')));
+        await tampilkanKesalahan(context, e,
+            aktivitas: 'memuat batch dan kedaluwarsa obat');
       }
       return;
     }
@@ -344,19 +359,10 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       });
     } catch (e) {
       if (mounted) {
-        // Pesan penahan server (kedaluwarsa/terkendali/stok) ditampilkan APA ADANYA.
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Transaksi Ditahan'),
-            content: Text('$e'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Tutup')),
-            ],
-          ),
-        );
+        // Keranjang sengaja tidak dibersihkan. Pesan dua lapis menjelaskan
+        // tindakan kepada kasir dan menyimpan endpoint/kode HTTP di Detail.
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'pembayaran apotek');
       }
     } finally {
       setStateIfMounted(() => _memproses = false);
@@ -386,17 +392,8 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
       _jalankanCari(_cari.text, ++_generasiCari);
     } catch (e) {
       if (mounted) {
-        showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-                  title: const Text('Produksi Ditahan'),
-                  content: Text('$e'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Tutup'))
-                  ],
-                ));
+        await tampilkanKesalahan(context, e is ApiException ? e.info : e,
+            aktivitas: 'produksi farmasi');
       }
     } finally {
       setStateIfMounted(() => _memproses = false);
@@ -673,6 +670,16 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
               style:
                   const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
         ]),
+        const SizedBox(height: 8),
+        const AppInfoBanner(
+          icon: Icons.cloud_done_outlined,
+          color: AppColors.info,
+          text: 'Pencarian, metode pembayaran, dan batch yang pernah dimuat '
+              'tetap dapat dibaca saat offline. Pembayaran apotek baru final '
+              'setelah server memvalidasi stok, kedaluwarsa, resep, dan obat '
+              'terkendali. Jika koneksi terputus, keranjang tetap tersimpan di '
+              'layar dan dapat dilanjutkan setelah tersambung.',
+        ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
           onPressed: _keranjang.isEmpty || _memproses ? null : _bayar,

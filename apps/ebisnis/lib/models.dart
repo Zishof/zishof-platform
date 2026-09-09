@@ -317,6 +317,17 @@ class CaraBayar {
   /// Lebih luas daripada [masukSebagaiHutang]: metode potong saldo juga wajib
   /// mempunyai pemilik. Semua Kasbon sendiri dinormalisasi menjadi piutang.
   final bool wajibPilihMember;
+
+  /// Aturan efektif yang sama dengan backend: metode non-manual memerlukan
+  /// otorisasi saldo pusat, kecuali metode tersebut memang dicatat sebagai
+  /// piutang. Flag [memotongDeposit] tetap dihormati untuk konfigurasi manual
+  /// yang secara eksplisit memotong saldo.
+  ///
+  /// Getter ini sengaja menjadi sumber tunggal untuk POS Desktop dan Android.
+  /// Menebak hanya dari nama "saldo/deposit" pernah membuat metode seperti
+  /// Voucher Pejuang lolos ke antrean offline lalu ditolak berulang oleh server.
+  bool get memotongDepositEfektif =>
+      !masukSebagaiHutang && (!manual || memotongDeposit);
   CaraBayar({
     required this.id,
     required this.nama,
@@ -325,8 +336,9 @@ class CaraBayar {
     this.wajibPin = false,
     this.masukSebagaiHutang = false,
     bool? wajibPilihMember,
-  }) : wajibPilihMember =
-            wajibPilihMember ?? (masukSebagaiHutang || memotongDeposit);
+  }) : wajibPilihMember = wajibPilihMember ??
+            (masukSebagaiHutang ||
+                (!masukSebagaiHutang && (!manual || memotongDeposit)));
   factory CaraBayar.fromJson(Map<String, dynamic> j) {
     final nama = (j['nama'] ?? '') as String;
     final namaLower = nama.toLowerCase();

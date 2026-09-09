@@ -29,6 +29,17 @@ mixin JejakGalat<T extends StatefulWidget> on State<T> {
     return galat.pesan;
   }
 
+  /// Menyimpan detail teknis dari [e], tetapi mengganti kalimat utama dengan
+  /// pesan operasional yang lebih sesuai konteks layar. Ini dipakai terutama
+  /// pada laporan: pengguna perlu tahu bahwa salinan lokal belum tersedia,
+  /// sementara admin tetap perlu melihat endpoint/kode HTTP asli lewat Detail.
+  String terapkanGalatDenganPesan(Object e, String pesan) {
+    final galat = GalatTampil.dari(e);
+    _pesanGalatTerakhir = pesan;
+    _detailGalatTerakhir = galat.detail;
+    return pesan;
+  }
+
   /// Jejak teknis milik [pesan]; null bila yang sedang tampil bukan pesan
   /// kegagalan terakhir, atau galatnya memang tidak punya lapis teknis.
   String? detailUntuk(String? pesan) =>

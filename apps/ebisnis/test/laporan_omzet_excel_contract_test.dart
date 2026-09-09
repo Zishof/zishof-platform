@@ -2,8 +2,20 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+String _akarBackend() {
+  const relatif = '../../../AIS/ais/src/main';
+  if (Directory(relatif).existsSync()) return relatif;
+  const standarWindows = r'C:\opt\AIS\ais\src\main';
+  if (Directory(standarWindows).existsSync()) return standarWindows;
+  throw StateError('Source server AIS tidak ditemukan untuk uji kontrak.');
+}
+
 String _bacaBackend(String nama) => File(
-      '../../../AIS/ais/src/main/src/ais/action/master/koperasi/helper/$nama',
+      '${_akarBackend()}/src/ais/action/master/koperasi/helper/$nama',
+    ).readAsStringSync();
+
+String _bacaPosApi({bool mirror = false}) => File(
+      '${_akarBackend()}/${mirror ? 'java' : 'src'}/ais/action/servlet/PosApi.java',
     ).readAsStringSync();
 
 String _rapat(String nilai) => nilai.replaceAll(RegExp(r'\s+'), '');
@@ -62,9 +74,7 @@ void main() {
     final layar =
         File('lib/screens/laporan_detail_screen.dart').readAsStringSync();
     final padat = _rapat(layar);
-    final api = File(
-      '../../../AIS/ais/src/main/src/ais/action/servlet/PosApi.java',
-    ).readAsStringSync();
+    final api = _bacaPosApi();
     final rincian = _bacaBackend('LaporanRincianTransaksiUtil.java');
 
     expect(padat, contains(_rapat("widget.idLaporan.startsWith('omzet_')")));
@@ -75,16 +85,17 @@ void main() {
     expect(api, contains('payload.optString("idTransaksi", "")'));
     expect(api, contains('payload.optString("kelompokPembayaran", "")'));
     expect(rincian, contains('CAST(pak.id AS text)=?'));
-    expect(rincian,
-        contains("COALESCE(pr.nama,'') ILIKE ? OR COALESCE(NULLIF(TRIM(a.nama),''),'') ILIKE ?"),
-        reason: 'popup produk harus cocok dengan nama master maupun label transaksi');
+    expect(
+        rincian,
+        contains(
+            "COALESCE(pr.nama,'') ILIKE ? OR COALESCE(NULLIF(TRIM(a.nama),''),'') ILIKE ?"),
+        reason:
+            'popup produk harus cocok dengan nama master maupun label transaksi');
   });
 
   test('popup lintas toko supervisor tetap dibatasi tenant dan tidak ditolak',
       () {
-    final api = File(
-      '../../../AIS/ais/src/main/src/ais/action/servlet/PosApi.java',
-    ).readAsStringSync();
+    final api = _bacaPosApi();
     final mulai = api.indexOf('private void prosesLaporanRincianTransaksi');
     final selesai = api.indexOf('\n\tprivate ', mulai + 1);
     final blok = api.substring(mulai, selesai);
@@ -112,19 +123,15 @@ void main() {
       'LaporanRincianTransaksiUtil.java',
     ]) {
       final utama = File(
-        '../../../AIS/ais/src/main/src/ais/action/master/koperasi/helper/$nama',
+        '${_akarBackend()}/src/ais/action/master/koperasi/helper/$nama',
       ).readAsStringSync();
       final mirror = File(
-        '../../../AIS/ais/src/main/java/ais/action/master/koperasi/helper/$nama',
+        '${_akarBackend()}/java/ais/action/master/koperasi/helper/$nama',
       ).readAsStringSync();
       expect(mirror, utama, reason: '$nama harus identik pada dua source tree');
     }
-    final posUtama = File(
-      '../../../AIS/ais/src/main/src/ais/action/servlet/PosApi.java',
-    ).readAsStringSync();
-    final posMirror = File(
-      '../../../AIS/ais/src/main/java/ais/action/servlet/PosApi.java',
-    ).readAsStringSync();
+    final posUtama = _bacaPosApi();
+    final posMirror = _bacaPosApi(mirror: true);
     expect(posMirror, posUtama,
         reason: 'PosApi.java harus identik pada dua source tree');
   });

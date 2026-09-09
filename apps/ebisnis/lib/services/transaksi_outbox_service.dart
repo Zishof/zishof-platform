@@ -6,6 +6,7 @@ import 'package:core_device/core_device.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api_client.dart';
+import '../models.dart';
 import '../sesi.dart';
 import 'pelayanan_transaksi.dart';
 import 'peringatan_transaksi.dart';
@@ -70,6 +71,68 @@ class TransaksiOutboxService {
   TransaksiOutboxService._();
 
   static final TransaksiOutboxService instance = TransaksiOutboxService._();
+
+  /// Metode pengganti untuk transaksi yang sudah terlanjur dilayani hanya boleh
+  /// berupa penerimaan manual yang tidak menyentuh saldo/piutang pusat. Kasir
+  /// tetap harus mengonfirmasi bahwa uang/bukti pembayaran benar-benar diterima.
+  static bool metodeAmanUntukKoreksiOffline(CaraBayar caraBayar) =>
+      caraBayar.manual &&
+      !caraBayar.memotongDepositEfektif &&
+      !caraBayar.masukSebagaiHutang &&
+      !caraBayar.wajibPin;
+
+  /// Membuat payload non-split yang setara dengan checkout normal. Kode, waktu,
+  /// item, nominal, kasir, toko, dan perangkat tidak diubah agar audit serta
+  /// idempotensi transaksi tetap utuh.
+  static Map<String, dynamic> payloadDenganMetodePengganti(
+      Map<String, dynamic> sumber, CaraBayar caraBayar) {
+    if (!metodeAmanUntukKoreksiOffline(caraBayar)) {
+      throw ArgumentError(
+          'Metode pengganti harus manual dan tidak memotong saldo/piutang.');
+    }
+    final hasil = Map<String, dynamic>.from(sumber)
+      ..['caraBayar'] = caraBayar.id
+      ..['caraBayarNama'] = caraBayar.nama
+      ..['pengiriman_pending'] = true;
+    for (final kunci in const [
+      'caraBayarNominal',
+      'nominalCaraBayar',
+      'caraBayarUtamaNominal',
+      'caraBayarTambahan',
+      'cara_bayar_tambahan',
+      'pembayaran',
+      'rincianPembayaran',
+      'metodePembayaranList',
+      'splitPembayaran',
+      'multiPembayaran',
+    ]) {
+      hasil.remove(kunci);
+    }
+    return hasil;
+  }
+
+  Future<void> koreksiMetodePembayaran(
+      String kodeUnik, CaraBayar caraBayar) async {
+    final row = await CoreDb.instance.transaksiLokalDenganKode(kodeUnik);
+    if (row == null) {
+      throw StateError('Transaksi $kodeUnik tidak ditemukan di perangkat ini.');
+    }
+    if ('${row['status']}' == 'SYNCED') {
+      throw StateError(
+          'Transaksi sudah diterima server dan tidak boleh diubah dari perangkat.');
+    }
+    final payload = Map<String, dynamic>.from(
+        jsonDecode('${row['payload_json'] ?? '{}'}') as Map);
+    final koreksi = payloadDenganMetodePengganti(payload, caraBayar);
+    final berubah = await CoreDb.instance
+        .koreksiPayloadTransaksi(kodeUnik, jsonEncode(koreksi));
+    if (!berubah) {
+      throw StateError(
+          'Transaksi tidak dapat dikoreksi karena statusnya sudah berubah.');
+    }
+    kirimDiBackground();
+  }
+
   static const int intervalRetryMenitDefault = 10;
   static const String _kunciIntervalRetry =
       'transaksi_pending_interval_retry_menit';
@@ -370,9 +433,9 @@ class TransaksiOutboxService {
     if (!pemulihanSupervisor &&
         kasirPayload.isNotEmpty &&
         kasirPayload != Sesi.instance.userId) {
-      alasanDilewati.add(
-          'transaksi milik kasir "$kasirPayload", sedang login sebagai'
-          ' "${Sesi.instance.userId}"');
+      alasanDilewati
+          .add('transaksi milik kasir "$kasirPayload", sedang login sebagai'
+              ' "${Sesi.instance.userId}"');
     }
     if (tokoPayloadInt != null && tokoPayloadInt != Sesi.instance.tokoId) {
       alasanDilewati.add('transaksi milik toko $tokoPayloadInt,'
@@ -429,7 +492,10 @@ class TransaksiOutboxService {
       await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
       return _VonisKirim.berhasil;
     } catch (e) {
-      final pesan = e.toString();
+      // Simpan pesan asli server, bukan hasil toString() yang sudah ditambah
+      // langkah bantuan. Dengan begitu kolom kendala tetap ringkas dan detail
+      // bantuan dapat dirender konsisten oleh AppErrorPanel.
+      final pesan = e is ApiException ? e.pesan : e.toString();
       if (_transaksiSudahAdaDiServer(e)) {
         await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
         return _VonisKirim.berhasil;
@@ -727,7 +793,63 @@ class TransaksiOutboxService {
     'PESANAN_PERLU_DIMUAT_ULANG',
     'STOK_TIDAK_CUKUP',
     'PRODUK_KADALUARSA',
+    'SALDO_TIDAK_CUKUP',
+    'LIMIT_TIDAK_CUKUP',
+    'METODE_PEMBAYARAN_TIDAK_VALID',
   };
+
+  /// Beberapa backend lama membalas penolakan bisnis hanya lewat kalimat tanpa
+  /// `code`. Pencocokan ini sengaja konservatif dan hanya memakai pasangan kata
+  /// yang tidak mungkin pulih karena retry payload identik. Gangguan jaringan
+  /// dan HTTP 5xx sudah dikembalikan sebagai retryable sebelum fungsi ini
+  /// dipanggil.
+  static bool pesanAdalahPenolakanPermanen(String pesan) {
+    final nilai = pesan.toLowerCase();
+    bool memuatSalahSatu(Iterable<String> pilihan) =>
+        pilihan.any(nilai.contains);
+
+    if (nilai.contains('saldo') &&
+        memuatSalahSatu(const [
+          'tidak mencukupi',
+          'tidak cukup',
+          'saldo kurang',
+          'melebihi saldo',
+          'minimal saldo',
+        ])) {
+      return true;
+    }
+    if (nilai.contains('limit') &&
+        memuatSalahSatu(const [
+          'tidak mencukupi',
+          'tidak cukup',
+          'melebihi',
+          'ditolak',
+        ])) {
+      return true;
+    }
+    if (nilai.contains('metode pembayaran') &&
+        memuatSalahSatu(const [
+          'tidak aktif',
+          'tidak diizinkan',
+          'tidak tersedia',
+          'tidak berlaku',
+          'tidak sesuai',
+        ])) {
+      return true;
+    }
+    if (nilai.contains('pin') &&
+        memuatSalahSatu(const ['salah', 'tidak valid', 'tidak cocok'])) {
+      return true;
+    }
+    return nilai.contains('stok tidak cukup') ||
+        nilai.contains('produk kadaluarsa') ||
+        nilai.contains('produk kedaluwarsa') ||
+        (nilai.contains('total master') && nilai.contains('total rincian')) ||
+        nilai.contains('tidak memiliki hak akses') ||
+        nilai.contains('tidak diizinkan') ||
+        nilai.contains('hanya supervisor') ||
+        nilai.contains('hanya admin');
+  }
 
   /// Batas percobaan otomatis sebelum transaksi diparkir sbg GAGAL. Mencegah
   /// kode tak dikenal berputar tanpa akhir, sambil tetap menyediakan jalur
@@ -737,6 +859,7 @@ class TransaksiOutboxService {
   bool dapatDicobaUlang(Object error) {
     if (error is! ApiException) return true;
     if (error.offline || (error.statusHttp ?? 0) >= 500) return true;
+    if (pesanAdalahPenolakanPermanen(error.pesan)) return false;
     final kode = (error.kode ?? '').trim().toUpperCase();
     if (kode.isEmpty) return true;
     // Selain daftar permanen -- termasuk SERVER_ERROR dan kode baru yang belum

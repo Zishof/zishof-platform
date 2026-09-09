@@ -11,6 +11,7 @@ import '../services/sinkronisasi_tabel_service.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_components.dart';
+import '../widgets/app_error_info.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/safe_state.dart';
 
@@ -25,7 +26,7 @@ String _formatWaktu(String iso) {
   }
 }
 
-const _statusOpsi = ['PENDING', 'SYNCED'];
+const _statusOpsi = ['PENDING', 'SYNCED', 'GAGAL'];
 
 /// Layar Riwayat Sinkronisasi (padanan riwayat-sinkronisasi.html/-renderer.js
 /// Electron) -- MURNI LOKAL, tidak ada aksi server sama sekali (persis JSDoc
@@ -57,6 +58,43 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
   int _total = 0;
   int _totalPending = 0;
   String? _statusFilter;
+
+  Future<void> _lihatDetailTransaksi(Map<String, dynamic> row,
+      Map<String, dynamic> payload, String namaCaraBayar) async {
+    final pesan = '${row['pesan_error'] ?? ''}'.trim();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Detail ${payload['kodeUnik'] ?? row['kode_unik'] ?? '-'}'),
+        content: SizedBox(
+          width: 600,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Status sinkronisasi: ${row['status'] ?? 'PENDING'}'),
+                Text('Metode pembayaran: $namaCaraBayar'),
+                Text('Percobaan kirim: ${row['percobaan'] ?? 0}'),
+                Text('Waktu transaksi: ${payload['waktu'] ?? '-'}'),
+                const SizedBox(height: 12),
+                if (pesan.isEmpty)
+                  const Text(
+                      'Tidak ada kendala. Transaksi tersimpan di perangkat dan akan dikirim saat koneksi tersedia.')
+                else
+                  AppErrorPanel(
+                      info: AppErrorInfo.dari(pesan, aktivitas: 'bayar')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -668,6 +706,7 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                                 final namaCaraBayar =
                                     cocok.isEmpty ? '-' : cocok.first.nama;
                                 final synced = t['status'] == 'SYNCED';
+                                final gagal = t['status'] == 'GAGAL';
                                 final pesanError =
                                     (t['pesan_error'] as String?) ?? '';
                                 final kodeTransaksi =
@@ -684,77 +723,85 @@ class _RiwayatSinkronisasiScreenState extends State<RiwayatSinkronisasiScreen> {
                                         0;
                                 final penerima =
                                     '${cadangan?['penerima'] ?? ''}'.trim();
-                                return AppTableRowData(cells: [
-                                  AppTableCell.text(
-                                      '${payload['kodeUnik'] ?? t['kode_unik']}',
-                                      flex: 3),
-                                  AppTableCell.text(
-                                      _formatWaktu('${t['dibuat_pada']}'),
-                                      flex: 2),
-                                  AppTableCell.text(
-                                      '${payload['kasir'] ?? '-'}',
-                                      flex: 2),
-                                  AppTableCell(
-                                    flex: 4,
-                                    child: Tooltip(
-                                      message: penerima.isEmpty
-                                          ? 'Belum ada acknowledgement dari kasir/perangkat lain.'
-                                          : penerima,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            '$jumlahKasir kasir · $jumlahMesin mesin',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 12.5,
-                                              color: jumlahMesin > 0
-                                                  ? AppColors.success
-                                                  : AppColors.textSecondary,
-                                            ),
+                                return AppTableRowData(
+                                    onTap: () => _lihatDetailTransaksi(
+                                        t, payload, namaCaraBayar),
+                                    cells: [
+                                      AppTableCell.text(
+                                          '${payload['kodeUnik'] ?? t['kode_unik']}',
+                                          flex: 3),
+                                      AppTableCell.text(
+                                          _formatWaktu('${t['dibuat_pada']}'),
+                                          flex: 2),
+                                      AppTableCell.text(
+                                          '${payload['kasir'] ?? '-'}',
+                                          flex: 2),
+                                      AppTableCell(
+                                        flex: 4,
+                                        child: Tooltip(
+                                          message: penerima.isEmpty
+                                              ? 'Belum ada acknowledgement dari kasir/perangkat lain.'
+                                              : penerima,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                '$jumlahKasir kasir · $jumlahMesin mesin',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12.5,
+                                                  color: jumlahMesin > 0
+                                                      ? AppColors.success
+                                                      : AppColors.textSecondary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                penerima.isEmpty
+                                                    ? 'Belum tersalin ke POS lain'
+                                                    : penerima,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 11.5),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            penerima.isEmpty
-                                                ? 'Belum tersalin ke POS lain'
-                                                : penerima,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style:
-                                                const TextStyle(fontSize: 11.5),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  AppTableCell.text(
-                                      pesanError.isEmpty
-                                          ? namaCaraBayar
-                                          : '$namaCaraBayar - $pesanError',
-                                      flex: 2,
-                                      maxLines: 2),
-                                  AppTableCell.text(
-                                      _formatRupiah
-                                          .format(payload['total'] ?? 0),
-                                      flex: 2,
-                                      align: TextAlign.right,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12.5)),
-                                  AppTableCell(
-                                    flex: 2,
-                                    align: TextAlign.center,
-                                    child: StatusPill(
-                                        label:
-                                            synced ? 'Tersinkron' : 'Tertunda',
-                                        warna: synced
-                                            ? AppColors.success
-                                            : AppColors.warning),
-                                  ),
-                                ]);
+                                      AppTableCell.text(
+                                          pesanError.isEmpty
+                                              ? namaCaraBayar
+                                              : '$namaCaraBayar - $pesanError',
+                                          flex: 2,
+                                          maxLines: 2),
+                                      AppTableCell.text(
+                                          _formatRupiah
+                                              .format(payload['total'] ?? 0),
+                                          flex: 2,
+                                          align: TextAlign.right,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12.5)),
+                                      AppTableCell(
+                                        flex: 2,
+                                        align: TextAlign.center,
+                                        child: StatusPill(
+                                            label: synced
+                                                ? 'Tersinkron'
+                                                : gagal
+                                                    ? 'Perlu koreksi'
+                                                    : 'Menunggu',
+                                            warna: synced
+                                                ? AppColors.success
+                                                : gagal
+                                                    ? Colors.red
+                                                    : AppColors.warning),
+                                      ),
+                                    ]);
                               }).toList(),
                               pagination: AppTablePagination(
                                 halaman: _halaman,

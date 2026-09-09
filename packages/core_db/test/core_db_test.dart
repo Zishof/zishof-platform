@@ -215,6 +215,44 @@ void main() {
         isTrue,
         reason: 'baris tetap pending dan layak dikirim setelah jeda berakhir');
 
+    await CoreDb.instance.simpanTransaksiPending(
+      'UAT-KOREKSI-METODE-006',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-KOREKSI-METODE-006',
+        'waktu': '09-09-2026 06:38:30',
+        'caraBayar': 99,
+        'caraBayarNama': 'Voucher Pejuang',
+        'total': 149500,
+      }),
+      akunKunci: 'uat-kasir',
+      tokoId: 1,
+      idPerangkat: 'uat-device',
+    );
+    await CoreDb.instance.tandaiTransaksiDitolak(
+        'UAT-KOREKSI-METODE-006', 'Saldo member tidak mencukupi');
+    final sebelumKoreksi = await CoreDb.instance
+        .transaksiLokalDenganKode('UAT-KOREKSI-METODE-006');
+    final dibuatSemula = sebelumKoreksi?['dibuat_pada'];
+    final berhasilKoreksi = await CoreDb.instance.koreksiPayloadTransaksi(
+      'UAT-KOREKSI-METODE-006',
+      jsonEncode(<String, Object?>{
+        'kodeUnik': 'UAT-KOREKSI-METODE-006',
+        'waktu': '09-09-2026 06:38:30',
+        'caraBayar': 1,
+        'caraBayarNama': 'Tunai',
+        'total': 149500,
+      }),
+    );
+    expect(berhasilKoreksi, isTrue);
+    final setelahKoreksi = await CoreDb.instance
+        .transaksiLokalDenganKode('UAT-KOREKSI-METODE-006');
+    expect(setelahKoreksi?['status'], 'PENDING');
+    expect(setelahKoreksi?['percobaan'], 0);
+    expect(setelahKoreksi?['pesan_error'], isNull);
+    expect(setelahKoreksi?['dibuat_pada'], dibuatSemula,
+        reason: 'waktu audit lokal tidak boleh direset oleh koreksi');
+    expect('${setelahKoreksi?['payload_json']}', contains('Tunai'));
+
     // UAT katalog besar: layar Kasir tidak boleh membaca semua cache saat
     // dibuka. Query awal dan hasil pencarian harus menghormati batas baris.
     final produkUat = <Map<String, Object?>>[];

@@ -1630,6 +1630,32 @@ class CoreDb {
     await _cadangkanBarisTransaksi(kodeUnik);
   }
 
+  /// Mengganti payload transaksi yang ditolak setelah operator melakukan
+  /// koreksi eksplisit. Identitas, waktu pembuatan, pemilik, toko, dan perangkat
+  /// tetap berasal dari baris lama; hanya payload bisnis yang berubah. Status
+  /// dikembalikan ke PENDING agar dikirim lagi memakai `kode_unik` yang sama.
+  Future<bool> koreksiPayloadTransaksi(
+      String kodeUnik, String payloadJson) async {
+    final database = await db;
+    final sekarang = DateTime.now().toIso8601String();
+    final berubah = await database.update(
+      'transaksi_pending',
+      {
+        'payload_json': payloadJson,
+        'status': 'PENDING',
+        'pesan_error': null,
+        'percobaan': 0,
+        'terakhir_dicoba': null,
+        'disinkronkan_pada': null,
+        'diperbarui_pada': sekarang,
+      },
+      where: "kode_unik = ? AND status != 'SYNCED'",
+      whereArgs: [kodeUnik],
+    );
+    if (berubah > 0) await _cadangkanBarisTransaksi(kodeUnik);
+    return berubah > 0;
+  }
+
   /// Transaksi yang pernah divonis GAGAL dan MASIH belum ada di server.
   ///
   /// Dipakai layar Riwayat Sinkronisasi dan tombol Sinkronkan manual: nota yang

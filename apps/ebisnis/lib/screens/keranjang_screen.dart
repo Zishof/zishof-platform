@@ -463,7 +463,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
 
   bool _metodeMemotongDeposit(CaraBayar caraBayar) {
     final nama = caraBayar.nama.toLowerCase();
-    return caraBayar.memotongDeposit ||
+    return caraBayar.memotongDepositEfektif ||
         nama.contains('deposit') ||
         nama.contains('saldo');
   }
@@ -1049,10 +1049,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool get _verifikasiMemberWajibServer {
     final member = _memberTerpilih;
     return member != null &&
-        (_pinWajibUntukMetodeTerpilih ||
-            (_saldoAkanDipotong &&
-                (member.wajibBiometricWajah ||
-                    member.wajibBiometricFingerprint)));
+        (_saldoAkanDipotong || _pinWajibUntukMetodeTerpilih);
   }
 
   Future<int?> _verifikasiBiometrik(PosBiometricCaptureBridge bridge,
@@ -1765,12 +1762,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       payloadPending['pengiriman_pending'] = true;
       Map<String, dynamic>? hasilServer;
       if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
-        // Bukti biometrik berumur pendek dan diikat ke kode transaksi. Karena
-        // itu pembayaran saldo wajib menunggu ACK server dan tidak boleh masuk
-        // outbox berulang yang baru terkirim setelah bukti kedaluwarsa. Hal
-        // yang sama berlaku bila tipe member mempunyai limit: server harus
-        // menghitung periode dan, bila perlu, membuat pengajuan supervisor
-        // sebelum kasir menganggap transaksi selesai.
+        // Semua pembayaran yang memotong saldo pusat wajib menunggu ACK server.
+        // Saldo dapat berubah di perangkat/toko lain sehingga cache lokal tidak
+        // boleh dipakai sebagai izin membelanjakan uang. Bukti biometrik juga
+        // berumur pendek dan diikat ke kode transaksi. Hal yang sama berlaku
+        // bila tipe member mempunyai limit: server harus menghitung periode dan,
+        // bila perlu, membuat pengajuan supervisor sebelum kasir menganggap
+        // transaksi selesai. Saat offline keranjang tetap utuh; kasir dapat
+        // memilih Tunai/metode manual aman atau menunggu koneksi pulih.
         hasilServer = await ApiClient.instance.aksi('bayar', payload);
         await CoreDb.instance.simpanTransaksiPending(
             kodeUnik, jsonEncode(payloadPending),
@@ -1782,7 +1781,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(_verifikasiMemberWajibServer
-                ? 'Identitas member terverifikasi. Pembayaran sudah diterima server.'
+                ? 'Saldo/identitas member sudah diverifikasi. Pembayaran sudah diterima server.'
                 : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
       } else {
         // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba

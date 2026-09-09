@@ -133,7 +133,16 @@ class _LaporanScreenState extends State<LaporanScreen> with JejakGalat {
         },
       );
     } catch (e) {
-      setStateIfMounted(() => _pesanError = terapkanGalat(e));
+      setStateIfMounted(() {
+        _pesanError = e is ApiException && e.offline && _kategori.isEmpty
+            ? terapkanGalatDenganPesan(
+                e,
+                'Daftar laporan belum pernah disimpan pada perangkat ini. '
+                'Sambungkan aplikasi ke server lalu tekan Muat Ulang sekali. '
+                'Setelah itu katalog dapat dibuka kembali saat offline.',
+              )
+            : terapkanGalat(e);
+      });
     } finally {
       if (mounted) setStateIfMounted(() => _memuat = false);
     }
