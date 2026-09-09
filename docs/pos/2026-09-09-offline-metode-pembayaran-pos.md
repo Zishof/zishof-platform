@@ -1,7 +1,9 @@
 # Perbaikan Checkout Offline — Metode Pembayaran POS
 
-Tanggal: 9 September 2026  
-Versi aplikasi: `1.34.30+193`  
+Tanggal: 9 September 2026
+
+Versi aplikasi: `1.34.30+193`
+
 Cakupan rilis: Desktop Al-Bahjah dan Desktop Nahl
 
 ## Ringkasan kejadian
@@ -87,4 +89,3 @@ atau dideploy ulang untuk rilis ini.
 > melakukan pemeriksaan dan pemulihan layanan. Transaksi POS biasa tetap dapat
 > dilayani secara offline dan akan disinkronkan setelah layanan kembali normal.
 > Terima kasih atas pengertiannya. 🙏
-

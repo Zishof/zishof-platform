@@ -27,4 +27,3 @@ pulih.
 
 Dokumentasi teknis dan matriks UAT tersedia pada
 `docs/pos/2026-09-09-offline-metode-pembayaran-pos.md`.
-
