@@ -190,6 +190,10 @@ class AppProductProfile {
     if (kode == 'mitrainap') return 'mitrainap-';
     if (kode == 'petra') return 'petra-';
     if (kode == 'nahl') return 'nahl-';
+    // eBisnis memakai kanal rilis utama `v*`. Prefix eksplisit diperlukan
+    // supaya checker tidak membaca `releases/latest` yang dapat menunjuk rilis
+    // Al-Bahjah/Nahl/Apotik terbaru dan menutupi pembaruan eBisnis.
+    if (kode == 'ebisnis') return 'v';
     return null;
   }
 

@@ -117,7 +117,9 @@ class AppVariant {
               ? 'emedik-'
               : (isMitraInap
                   ? 'mitrainap-'
-                  : (isPetra ? 'petra-' : (isNahl ? 'nahl-' : null)))));
+                  : (isPetra
+                      ? 'petra-'
+                      : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null))))));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl

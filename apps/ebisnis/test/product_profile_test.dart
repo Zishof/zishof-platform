@@ -81,4 +81,10 @@ void main() {
       AppProductProfile.dariDartDefine().kode == 'nahl',
     );
   });
+
+  test('profil eBisnis memakai kanal rilis utama yang terisolasi', () {
+    const ebisnis = AppProductProfile.ebisnis();
+    expect(ebisnis.updateAssetKeyword, 'ebisnis');
+    expect(ebisnis.tagRilisPrefix, 'v');
+  });
 }

@@ -85,12 +85,18 @@ void main() {
         'tag_name': 'albahjah-v1.34.28-uat',
         'draft': false,
       },
+      {
+        'tag_name': 'v1.34.29',
+        'draft': false,
+      },
     ];
     expect(
         UpdateChecker.pilihRilisSesuaiKanal(releases, 'albahjah-')!['tag_name'],
         'albahjah-v1.34.29-uat');
     expect(UpdateChecker.pilihRilisSesuaiKanal(releases, 'nahl-')!['tag_name'],
         'nahl-v1.34.30-uat');
+    expect(UpdateChecker.pilihRilisSesuaiKanal(releases, 'v')!['tag_name'],
+        'v1.34.29');
   });
 
   test('cekTerbaru mengembalikan null jika repo tak terjangkau', () async {

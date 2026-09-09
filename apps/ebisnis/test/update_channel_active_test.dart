@@ -9,8 +9,11 @@ void main() {
     } else if (AppVariant.kode == 'nahl') {
       expect(AppVariant.updateAssetKeyword, 'nahl');
       expect(AppVariant.updateTagPrefix, 'nahl-');
+    } else if (AppVariant.isEBisnis) {
+      expect(AppVariant.updateAssetKeyword, 'ebisnis');
+      expect(AppVariant.updateTagPrefix, 'v');
     } else {
-      fail('Tes ini harus dijalankan dengan varian albahjah atau nahl.');
+      fail('Varian aktif belum memiliki kontrak kanal di tes ini.');
     }
   });
 }
