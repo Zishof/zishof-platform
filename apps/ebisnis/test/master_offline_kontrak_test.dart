@@ -458,7 +458,7 @@ void main() {
     expect(source, contains('outboxMasterTandaiGagal'));
     // Penolakan bisnis TIDAK diantre -- kontrak inti supaya pesan server
     // selalu sampai ke user, bukan lenyap di antrean.
-    expect(source, contains('if (!e.offline) rethrow'));
+    expect(source, contains('if (!dapatDicobaUlang(e)) rethrow'));
     // Pagar baca lokal-dulu (insiden "41 dihapus" 2026-08-19): penghapusan
     // hanya dari respons yang benar-benar lengkap, dan baris lokal yang masih
     // antre/gagal tidak boleh ditimpa/dihapus salinan server.

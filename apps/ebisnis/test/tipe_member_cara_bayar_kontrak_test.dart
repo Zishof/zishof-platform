@@ -10,8 +10,8 @@ void main() {
     expect(source, contains("hasil['caraBayarTerkunci']"));
     expect(source, contains('_caraBayarDikunciTipe'));
     expect(source, contains('Icons.lock_outline'));
-    expect(
-        source, contains('onTap: _memuatCaraBayar || _caraBayarDikunciTipe'));
+    expect(source,
+        contains('onTap: _pemilihCaraBayarBisaDibuka ? _pilihMetode : null'));
   });
 
   test('Tipe Member dapat mewajibkan PIN wajah dan fingerprint', () {

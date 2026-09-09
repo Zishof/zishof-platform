@@ -11,6 +11,8 @@ import '../api_client.dart';
 import '../models.dart';
 import '../product_profile.dart';
 import '../sesi.dart';
+import '../app_variant.dart';
+import '../services/kebijakan_offline_pembayaran.dart';
 import '../services/layar_pelanggan_broadcaster.dart';
 import '../services/master_offline.dart';
 import '../services/pengaturan_nomor_struk.dart';
@@ -157,6 +159,9 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   bool _memuatCaraBayar = false;
   bool _izinCaraBayarMemberTidakDisetel = false;
   bool _caraBayarDikunciTipe = false;
+  bool _caraBayarDariCache = false;
+  bool _konteksCaraBayarSiap = false;
+  int? _konteksCaraBayarMemberId;
   int _versiPermintaanCaraBayar = 0;
   late bool _semuaCaraBayarUntukMemberAwal;
   bool _memproses = false;
@@ -205,7 +210,16 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
     _waktuTransaksi = widget.waktuTransaksiAwal ?? DateTime.now();
     _semuaCaraBayarUntukMemberAwal =
         widget.semuaCaraBayarUntukMemberAwal && widget.memberAwal != null;
-    _caraBayarTersedia = List<CaraBayar>.of(Sesi.instance.caraBayar);
+    final memberEfektif =
+        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id;
+    _konteksCaraBayarMemberId = memberEfektif;
+    // Daftar dari konfigurasi login adalah daftar umum. Jangan pernah
+    // menggunakannya untuk member tertentu sebelum izin member itu tersedia.
+    _konteksCaraBayarSiap = memberEfektif == null;
+    _caraBayarTersedia = memberEfektif == null
+        ? List<CaraBayar>.of(Sesi.instance.caraBayar)
+        : <CaraBayar>[];
+    _caraBayarDariCache = _caraBayarTersedia.isNotEmpty;
     if (_caraBayarTersedia.isNotEmpty) {
       _caraBayarTerpilih =
           PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
@@ -235,86 +249,146 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   ///
   /// Nomor versi mencegah respons lama menimpa pilihan member yang lebih baru
   /// bila kasir mengganti member ketika permintaan sebelumnya masih berjalan.
-  /// Saat offline daftar terakhir dipertahankan, mengikuti perilaku POS desktop
-  /// agar checkout offline tidak kehilangan metode yang sudah tersedia.
+  /// Snapshot permanen dibaca lebih dahulu supaya server down tidak mengunci
+  /// checkout. Snapshot dipisahkan sampai tenant/pengguna/toko/member; ketika
+  /// member berubah, daftar konteks lama langsung dibuang (fail-closed).
   Future<bool> _muatCaraBayarUntukMember(int? memberId) async {
     final versi = ++_versiPermintaanCaraBayar;
-    if (mounted) setStateIfMounted(() => _memuatCaraBayar = true);
-    try {
-      final hasil = await ApiClient.instance.aksi('cara_bayar_list', {
-        'id_member': memberId,
-        'id_toko': Sesi.instance.idTokoTerpilih,
-      });
-      final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
-      final caraBayarTerkunci = hasil['caraBayarTerkunci'] == true;
-      final caraBayarDefaultId = (hasil['caraBayarDefaultId'] as num?)?.toInt();
-      final daftar = ((hasil['caraBayar'] as List?) ?? const [])
-          .map((e) => CaraBayar.fromJson(e as Map<String, dynamic>))
-          .toList();
-      if (!mounted || versi != _versiPermintaanCaraBayar) return false;
-
-      final idTerpilih = _caraBayarTerpilih?.id;
-      CaraBayar? pilihan;
-      if (caraBayarDefaultId != null) {
-        for (final cara in daftar) {
-          if (cara.id == caraBayarDefaultId) {
-            pilihan = cara;
-            break;
-          }
-        }
-      }
-      if (pilihan == null && idTerpilih != null) {
-        for (final cara in daftar) {
-          if (cara.id == idTerpilih) {
-            pilihan = cara;
-            break;
-          }
-        }
-      }
-      // _pos.jsp otomatis memilih bila hasil filter hanya satu. Untuk daftar
-      // lebih dari satu, pertahankan pilihan lama hanya jika masih diizinkan.
-      if (pilihan == null && daftar.length == 1) pilihan = daftar.first;
-
-      final metodeMenurutId = <int, CaraBayar>{
-        for (final cara in daftar) cara.id: cara,
-      };
-      final splitMasihDiizinkan = !caraBayarTerkunci &&
-          _splitBayar.isNotEmpty &&
-          _splitBayar
-              .every((slot) => metodeMenurutId.containsKey(slot.caraBayar.id));
-      final splitTersegar = splitMasihDiizinkan
-          ? _splitBayar
-              .map((slot) =>
-                  SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
-              .toList()
-          : <SlotBayar>[];
-
+    final konteksBerubah =
+        !_konteksCaraBayarSiap || _konteksCaraBayarMemberId != memberId;
+    if (mounted) {
       setStateIfMounted(() {
-        _caraBayarTersedia = daftar;
-        _caraBayarTerpilih = pilihan;
-        _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
-        _caraBayarDikunciTipe = memberId != null && caraBayarTerkunci;
-        // Refresh ketika picker dibuka tidak boleh menghapus split yang masih
-        // sah. Bila member/config berubah dan salah satu metode tak lagi
-        // diizinkan, barulah seluruh split dibatalkan agar payload tidak
-        // membawa metode lama.
-        _splitBayar = splitTersegar;
-        if (_splitBayar.isNotEmpty) {
-          _caraBayarTerpilih = _splitBayar.first.caraBayar;
+        _memuatCaraBayar = true;
+        _konteksCaraBayarMemberId = memberId;
+        if (konteksBerubah) {
+          _caraBayarTersedia = memberId == null
+              ? List<CaraBayar>.of(Sesi.instance.caraBayar)
+              : <CaraBayar>[];
+          _caraBayarTerpilih = _caraBayarTersedia.isEmpty
+              ? null
+              : PengaturanPembayaran.instance.pilihDefault(_caraBayarTersedia);
+          _splitBayar = [];
+          _izinCaraBayarMemberTidakDisetel = false;
+          _caraBayarDikunciTipe = false;
+          _konteksCaraBayarSiap = memberId == null;
+          _caraBayarDariCache = _caraBayarTersedia.isNotEmpty;
         }
-        _memuatCaraBayar = false;
-        _sinkronkanUangDiterima();
       });
-      return true;
+    }
+    final cacheKey = KebijakanOfflinePembayaran.kunciCache(
+      varian: AppVariant.storageNamespace,
+      tenantId: Sesi.instance.tenantId,
+      userId: Sesi.instance.userId,
+      tokoId: Sesi.instance.idTokoTerpilih,
+      memberId: memberId,
+    );
+    try {
+      final lokal = await MasterOffline.ambilObjekTersimpan(cacheKey);
+      if (lokal != null) {
+        _terapkanSnapshotCaraBayar(lokal, versi, memberId,
+            masihMemuat: true, dariCache: true);
+      }
+      final hasil = await MasterOffline.objekDenganCache(
+          'cara_bayar_list',
+          {
+            'id_member': memberId,
+            'id_toko': Sesi.instance.idTokoTerpilih,
+          },
+          cacheKey);
+      final dariCache = hasil['offline'] == true;
+      _terapkanSnapshotCaraBayar(hasil, versi, memberId,
+          masihMemuat: false, dariCache: dariCache);
+      return !dariCache;
     } catch (_) {
       if (!mounted || versi != _versiPermintaanCaraBayar) return false;
-      // Gagal jaringan: pertahankan snapshot terakhir untuk mode offline.
+      // Gagal tanpa cache: daftar konfigurasi umum tetap dapat dipakai hanya
+      // untuk konteks umum. Konteks member tanpa snapshot tetap fail-closed.
       setStateIfMounted(() {
         _memuatCaraBayar = false;
-        _izinCaraBayarMemberTidakDisetel = false;
+        _caraBayarDariCache = _caraBayarTersedia.isNotEmpty;
+        if (_caraBayarTersedia.isEmpty) {
+          _izinCaraBayarMemberTidakDisetel = false;
+          _konteksCaraBayarSiap = false;
+        }
       });
       return false;
     }
+  }
+
+  void _terapkanSnapshotCaraBayar(
+    Map<String, dynamic> hasil,
+    int versi,
+    int? memberId, {
+    required bool masihMemuat,
+    required bool dariCache,
+  }) {
+    if (!mounted ||
+        versi != _versiPermintaanCaraBayar ||
+        _konteksCaraBayarMemberId != memberId) {
+      return;
+    }
+    final izinTidakDisetel = hasil['izinTidakDisetel'] == true;
+    final caraBayarTerkunci = hasil['caraBayarTerkunci'] == true;
+    final caraBayarDefaultId = (hasil['caraBayarDefaultId'] as num?)?.toInt();
+    final daftar = ((hasil['caraBayar'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => CaraBayar.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+
+    final idTerpilih = _caraBayarTerpilih?.id;
+    CaraBayar? pilihan;
+    if (caraBayarDefaultId != null) {
+      for (final cara in daftar) {
+        if (cara.id == caraBayarDefaultId) {
+          pilihan = cara;
+          break;
+        }
+      }
+    }
+    if (pilihan == null && idTerpilih != null) {
+      for (final cara in daftar) {
+        if (cara.id == idTerpilih) {
+          pilihan = cara;
+          break;
+        }
+      }
+    }
+    // _pos.jsp otomatis memilih bila hasil filter hanya satu. Untuk daftar
+    // lebih dari satu, pertahankan pilihan lama hanya jika masih diizinkan.
+    if (pilihan == null && daftar.length == 1) pilihan = daftar.first;
+    pilihan ??= PengaturanPembayaran.instance.pilihDefault(daftar);
+
+    final metodeMenurutId = <int, CaraBayar>{
+      for (final cara in daftar) cara.id: cara,
+    };
+    final splitMasihDiizinkan = !caraBayarTerkunci &&
+        _splitBayar.isNotEmpty &&
+        _splitBayar
+            .every((slot) => metodeMenurutId.containsKey(slot.caraBayar.id));
+    final splitTersegar = splitMasihDiizinkan
+        ? _splitBayar
+            .map((slot) =>
+                SlotBayar(metodeMenurutId[slot.caraBayar.id]!, slot.nominal))
+            .toList()
+        : <SlotBayar>[];
+
+    setStateIfMounted(() {
+      _caraBayarTersedia = daftar;
+      _caraBayarTerpilih = pilihan;
+      _izinCaraBayarMemberTidakDisetel = memberId != null && izinTidakDisetel;
+      _caraBayarDikunciTipe = memberId != null && caraBayarTerkunci;
+      _splitBayar = splitTersegar;
+      if (_splitBayar.isNotEmpty) {
+        _caraBayarTerpilih = _splitBayar.first.caraBayar;
+      }
+      _memuatCaraBayar = masihMemuat;
+      _caraBayarDariCache = dariCache;
+      _konteksCaraBayarSiap = true;
+      if (!dariCache && memberId == null) {
+        Sesi.instance.caraBayar = List<CaraBayar>.of(daftar);
+      }
+      _sinkronkanUangDiterima();
+    });
   }
 
   @override
@@ -495,12 +569,28 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   // divalidasi seimbang dgn total di [PemilihMetodeSplit] sendiri.
   bool get _uangTunaiKurang =>
       !_splitAktif && _metodeTunai && _uangDiterima + 0.0001 < _total;
-  bool get _bisaBayar =>
-      !_memproses &&
-      !_memuatCaraBayar &&
-      _caraBayarTerpilih != null &&
-      widget.keranjang.isNotEmpty &&
-      !_uangTunaiKurang;
+  int? get _memberCaraBayarAktif =>
+      _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id;
+  bool get _snapshotCaraBayarSesuai =>
+      KebijakanOfflinePembayaran.snapshotSesuai(
+        konteksSiap: _konteksCaraBayarSiap,
+        konteksSnapshotMemberId: _konteksCaraBayarMemberId,
+        memberAktifId: _memberCaraBayarAktif,
+      );
+  bool get _pemilihCaraBayarBisaDibuka =>
+      KebijakanOfflinePembayaran.bolehBukaPemilih(
+        terkunci: _caraBayarDikunciTipe,
+        sedangMemuat: _memuatCaraBayar,
+        punyaSnapshot: _caraBayarTersedia.isNotEmpty,
+        konteksSesuai: _snapshotCaraBayarSesuai,
+      );
+  bool get _bisaBayar => KebijakanOfflinePembayaran.bolehBayar(
+        sedangMemproses: _memproses,
+        punyaPilihan: _caraBayarTerpilih != null,
+        adaKeranjang: widget.keranjang.isNotEmpty,
+        uangTunaiKurang: _uangTunaiKurang,
+        konteksSesuai: _snapshotCaraBayarSesuai,
+      );
 
   void _aturUangDiterima(double nilai) {
     setStateIfMounted(() {
@@ -1818,14 +1908,15 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   /// yang sudah ada, cukup ditampilkan sbg bottom sheet supaya tetap ada
   /// TARGET nyata utk pintasan F4 (bukan sekadar fokus ke dropdown).
   Future<void> _pilihMetode() async {
-    if (_memuatCaraBayar) return;
-
-    // Jangan mengandalkan snapshot konfigurasi saat login. Metode pembayaran
-    // dapat diubah admin ketika aplikasi Kasir 2/3 tetap terbuka; muat ulang
-    // persis sebelum dialog ditampilkan supaya seluruh perangkat pada toko
-    // yang sama melihat izin member/metode terbaru tanpa harus logout.
-    await _muatCaraBayarUntukMember(
-        _semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id);
+    if (!_pemilihCaraBayarBisaDibuka) return;
+    final memberId = _memberCaraBayarAktif;
+    // Snapshot aman dibuka seketika. Penyegaran tetap berjalan di latar agar
+    // perubahan admin masuk tanpa membuat kasir menunggu timeout data centre.
+    if (_caraBayarTersedia.isEmpty || !_snapshotCaraBayarSesuai) {
+      await _muatCaraBayarUntukMember(memberId);
+    } else if (!_memuatCaraBayar) {
+      unawaited(_muatCaraBayarUntukMember(memberId));
+    }
     if (!mounted || _caraBayarTersedia.isEmpty) return;
     final awal = _splitBayar.isNotEmpty
         ? _splitBayar
@@ -1850,6 +1941,17 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       ),
     );
     if (hasil == null || hasil.isEmpty) return;
+    final idSaatIni = _caraBayarTersedia.map((e) => e.id).toSet();
+    if (!_snapshotCaraBayarSesuai ||
+        hasil.any((slot) => !idSaatIni.contains(slot.caraBayar.id))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Daftar metode pembayaran berubah. Buka kembali F4 '
+              'dan pilih metode yang masih diizinkan.'),
+        ));
+      }
+      return;
+    }
     setStateIfMounted(() {
       _caraBayarTerpilih = hasil.first.caraBayar;
       _splitBayar = hasil.length >= 2 ? hasil : [];
@@ -2564,12 +2666,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             _labelBagian('Pilih metode pembayaran'),
             const SizedBox(height: 8),
             InkWell(
-              // Tetap dapat diketuk ketika snapshot kosong: _pilihMetode akan
-              // meminta daftar terbaru ke server. Hanya permintaan yang sedang
-              // berjalan yang mencegah ketukan ganda.
-              onTap: _memuatCaraBayar || _caraBayarDikunciTipe
-                  ? null
-                  : _pilihMetode,
+              // Refresh server tidak mengunci snapshot lokal yang aman.
+              onTap: _pemilihCaraBayarBisaDibuka ? _pilihMetode : null,
               borderRadius: BorderRadius.circular(10),
               child: InputDecorator(
                 decoration: const InputDecoration(
@@ -2581,7 +2679,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                   children: [
                     Flexible(
                       child: Text(
-                          _memuatCaraBayar
+                          _memuatCaraBayar && _caraBayarTersedia.isEmpty
                               ? 'Memuat metode...'
                               : _caraBayarTersedia.isEmpty
                                   ? (_memberTerpilih == null
@@ -2606,6 +2704,19 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 ),
               ),
             ),
+            if (_caraBayarTersedia.isNotEmpty &&
+                (_memuatCaraBayar || _caraBayarDariCache)) ...[
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Metode tersimpan siap dipakai. Penyegaran server berjalan '
+                  'di latar; saldo, PIN, dan otorisasi khusus tetap diverifikasi '
+                  'sesuai aturannya.',
+                  style: TextStyle(fontSize: 11, color: AppColors.info),
+                ),
+              ),
+            ],
             if (_izinCaraBayarMemberTidakDisetel) ...[
               const SizedBox(height: 6),
               const Align(
@@ -2982,14 +3093,14 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                 item.produk.satuanPackId ==
                     (terpilih!['id'] as num?)?.toInt() &&
                 (item.produk.hargaPack ?? 0) > 0;
-            nominalPerSatuan =
-                packCocok ? item.produk.hargaPack! : faktor * item.produk.hargaJual;
+            nominalPerSatuan = packCocok
+                ? item.produk.hargaPack!
+                : faktor * item.produk.hargaJual;
             if (q != null && q > 0) totalPratinjau = q * nominalPerSatuan;
           } catch (_) {}
           final namaSatuanJual = '${terpilih?['nama'] ?? ''}';
-          final satuanDasar = item.produk.satuanNama.isEmpty
-              ? 'unit'
-              : item.produk.satuanNama;
+          final satuanDasar =
+              item.produk.satuanNama.isEmpty ? 'unit' : item.produk.satuanNama;
           final dasarTeks = hasilDasar == null
               ? ''
               : (hasilDasar == hasilDasar.roundToDouble()
@@ -3045,8 +3156,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
                         ? 'Harga tetap per pack dari master produk; server menetapkan ulang saat bayar.'
                         : 'Dari harga katalog. Bila ada aturan harga grosir untuk kuantitas ini, server memakai harga grosir saat keranjang dihitung ulang.',
                     style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondaryOf(c)),
+                        fontSize: 11, color: AppColors.textSecondaryOf(c)),
                   ),
                 ),
               ],
@@ -3086,7 +3196,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         // pack tetap sebagai pratinjau (server menimpa yang sama saat bayar).
         ..hargaPackPerDasar = (item.produk.packAktif &&
                 item.produk.satuanPackId != null &&
-                item.produk.satuanPackId == (terpilih!['id'] as num?)?.toInt() &&
+                item.produk.satuanPackId ==
+                    (terpilih!['id'] as num?)?.toInt() &&
                 (item.produk.hargaPack ?? 0) > 0 &&
                 faktor > 0)
             ? item.produk.hargaPack! / faktor

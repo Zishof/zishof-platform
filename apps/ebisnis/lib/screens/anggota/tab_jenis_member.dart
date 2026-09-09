@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../api_client.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/indikator_baris_sinkron.dart';
 import '../../widgets/kilau_perubahan.dart';
@@ -104,12 +103,21 @@ class _AnggotaTabJenisMemberState extends State<AnggotaTabJenisMember>
 
   Future<void> _muatCaraBayar() async {
     try {
-      final hasil = await ApiClient.instance.aksi('cara_bayar_list_semua');
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      if (mounted) setStateIfMounted(() => _caraBayar = data);
+      await MasterOffline.daftarCacheDulu(
+        'cara_bayar_list_semua',
+        const {},
+        'master:cara_bayar:pilihan_tipe',
+        responsLengkap: true,
+        kolomKunci: 'id',
+        onData: (hasil) {
+          final data =
+              ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          if (mounted) setStateIfMounted(() => _caraBayar = data);
+        },
+      );
     } catch (_) {
-      // Daftar cara bayar gagal muat -- form tetap bisa dipakai tanpa checklist ini.
+      // Belum pernah online dan belum ada snapshot. Form tetap dapat dibuka,
+      // tetapi tidak mengarang izin pembayaran yang tidak diketahui.
     }
   }
 

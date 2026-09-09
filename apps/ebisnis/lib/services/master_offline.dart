@@ -656,8 +656,8 @@ class MasterOffline {
   /// boleh dianggap benar-benar terhapus di server (di-drop + dihitung di
   /// 'jumlahHapus'). Default false = merge murni tanpa penghapusan.
   ///
-  /// Saat offline hanya emisi (1) yang terjadi (tanpa error); bila belum ada
-  /// cache sama sekali dan server tak terjangkau, ApiException diteruskan.
+  /// Saat offline/gangguan teknis server hanya emisi (1) yang terjadi (tanpa
+  /// error); bila belum ada cache sama sekali, ApiException diteruskan.
   static Future<void> daftarCacheDulu(
     String aksi,
     Map<String, dynamic> body,
@@ -832,16 +832,16 @@ class MasterOffline {
         onData({...hasil, 'dariServer': true});
       }
     } on ApiException catch (e) {
-      if (!e.offline) rethrow;
+      if (!dapatDicobaUlang(e)) rethrow;
       if (lokal == null) rethrow; // belum pernah online -> biarkan layar tahu.
-      // Offline dgn cache sudah tampil: cukup diam (indikator offline global
-      // sudah menceritakan kondisinya).
+      // Cache sudah tampil: cukup diam. Ini mencakup jaringan putus, timeout,
+      // HTTP 5xx, dan respons gateway non-JSON; penolakan bisnis tetap dilempar.
     }
   }
 
-  /// Muat daftar master: server dulu (snapshot disimpan ke cache), offline ->
-  /// snapshot terakhir + `{offline: true}`. [petaData] mengambil List dari
-  /// respons (default field 'data').
+  /// Muat daftar master: server dulu (snapshot disimpan ke cache), gangguan
+  /// teknis -> snapshot terakhir + `{offline: true}`. [petaData] mengambil
+  /// List dari respons (default field 'data').
   static Future<Map<String, dynamic>> daftarDenganCache(
     String aksi,
     Map<String, dynamic> body,
@@ -857,7 +857,7 @@ class MasterOffline {
       }
       return hasil;
     } on ApiException catch (e) {
-      if (!e.offline) rethrow;
+      if (!dapatDicobaUlang(e)) rethrow;
       final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
       if (tersimpan == null) rethrow; // belum pernah online -> apa adanya.
       return {
@@ -868,9 +868,27 @@ class MasterOffline {
     }
   }
 
+  /// Ambil snapshot objek TANPA menyentuh jaringan. Dipakai layar yang harus
+  /// merender referensi penting seketika sebelum penyegaran server berjalan.
+  /// Kunci wajib sudah dipisahkan menurut seluruh konteks akses oleh caller.
+  static Future<Map<String, dynamic>?> ambilObjekTersimpan(
+      String cacheKey) async {
+    final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
+    if (tersimpan == null) return null;
+    try {
+      final decoded = jsonDecode(tersimpan);
+      if (decoded is! Map) return null;
+      return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      // Cache rusak tidak boleh membuat layar macet; caller dapat melanjutkan
+      // ke server dan snapshot valid berikutnya akan menggantikannya.
+      return null;
+    }
+  }
+
   /// Padanan [daftarDenganCache] utk aksi yang responsnya OBJEK, bukan daftar
   /// (konfigurasi, profil toko): server dulu (seluruh respons disimpan ke
-  /// cache), offline -> snapshot terakhir + `{offline: true}`. Aksi yang
+  /// cache), gangguan teknis -> snapshot terakhir + `{offline: true}`. Aksi yang
   /// hasilnya bergantung konteks (mis. toko) wajib menyertakan konteks itu di
   /// [cacheKey] -- satu kunci utk dua konteks membuat fallback offline
   /// menyajikan konteks yang salah tanpa ada tanda apa pun.
@@ -885,11 +903,11 @@ class MasterOffline {
       await CoreDb.instance.simpanCacheReferensi(cacheKey, jsonEncode(hasil));
       return hasil;
     } on ApiException catch (e) {
-      if (!e.offline) rethrow;
-      final tersimpan = await CoreDb.instance.ambilCacheReferensi(cacheKey);
-      if (tersimpan == null) rethrow; // belum pernah online -> apa adanya.
+      if (!dapatDicobaUlang(e)) rethrow;
+      final snapshot = await ambilObjekTersimpan(cacheKey);
+      if (snapshot == null) rethrow; // belum pernah online -> apa adanya.
       return {
-        ...Map<String, dynamic>.from(jsonDecode(tersimpan) as Map),
+        ...snapshot,
         'offline': true,
       };
     }

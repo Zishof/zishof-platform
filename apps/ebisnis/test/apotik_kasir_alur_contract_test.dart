@@ -53,7 +53,8 @@ void main() {
   });
 
   test('pembayaran berasal dari master server dan mendukung kembalian', () {
-    expect(source, contains("aksi('apotik_cara_bayar_list')"));
+    expect(source, contains("'apotik_cara_bayar_list'"));
+    expect(source, contains('MasterOffline.daftarCacheDulu('));
     expect(source, contains("'cara_bayar_id': _caraBayarId"));
     expect(source, contains("'pembayaran': ["));
     expect(source, contains("'tunai': diterima"));

@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../app_variant.dart';
+import '../../sesi.dart';
+import '../../services/master_offline.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/app_shell.dart';
@@ -96,13 +99,32 @@ class _KasirApotikScreenState extends State<KasirApotikScreen> {
 
   Future<void> _muatCaraBayar() async {
     try {
-      final hasil = await ApiClient.instance.aksi('apotik_cara_bayar_list');
-      final data =
-          ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      setStateIfMounted(() {
-        _caraBayar = data;
-        _caraBayarId = data.isEmpty ? null : (data.first['id'] as num).toInt();
-      });
+      final cacheKey = 'apotik:cara_bayar:${AppVariant.storageNamespace}:'
+          'tenant-${Sesi.instance.tenantId ?? 0}:'
+          'pengguna-${Uri.encodeComponent(Sesi.instance.userId)}:'
+          'toko-${Sesi.instance.idTokoTerpilih ?? 0}';
+      await MasterOffline.daftarCacheDulu(
+        'apotik_cara_bayar_list',
+        const {},
+        cacheKey,
+        responsLengkap: true,
+        kolomKunci: 'id',
+        onData: (hasil) {
+          final data =
+              ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+          final idLama = _caraBayarId;
+          final idTersedia =
+              data.map((e) => (e['id'] as num?)?.toInt()).toSet();
+          setStateIfMounted(() {
+            _caraBayar = data;
+            _caraBayarId = idLama != null && idTersedia.contains(idLama)
+                ? idLama
+                : data.isEmpty
+                    ? null
+                    : (data.first['id'] as num).toInt();
+          });
+        },
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

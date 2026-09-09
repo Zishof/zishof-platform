@@ -19,25 +19,39 @@ void main() {
     sourcePesanan = File('lib/screens/pesanan_screen.dart').readAsStringSync();
   });
 
-  test('picker memuat ulang metode sesuai member sebelum ditampilkan', () {
+  test('picker membuka snapshot aman sebelum menunggu refresh server', () {
     final awal = source.indexOf('Future<void> _pilihMetode() async');
     final akhir = source.indexOf('Future<void> _aturDiskonFaktur()', awal);
     expect(awal, greaterThanOrEqualTo(0));
     expect(akhir, greaterThan(awal));
 
     final method = source.substring(awal, akhir);
-    expect(method, contains('await _muatCaraBayarUntukMember('));
-    expect(method,
-        contains('_semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id'));
-    expect(method.indexOf('await _muatCaraBayarUntukMember'),
-        lessThan(method.indexOf('showModalBottomSheet')));
+    expect(method, contains('if (_caraBayarTersedia.isEmpty ||'));
+    expect(method, contains('await _muatCaraBayarUntukMember(memberId)'));
+    expect(method, contains('unawaited(_muatCaraBayarUntukMember(memberId))'));
+    expect(
+        method,
+        contains(
+            '_semuaCaraBayarUntukMemberAwal ? null : _memberTerpilih?.id'));
+    expect(method.indexOf('showModalBottomSheet'), greaterThanOrEqualTo(0));
   });
 
-  test('snapshot kosong tetap dapat meminta daftar terbaru bila tidak dikunci',
+  test('refresh tidak mengunci picker dan bayar saat snapshot aman tersedia',
       () {
     expect(source,
-        contains('onTap: _memuatCaraBayar || _caraBayarDikunciTipe'));
-    expect(source, contains(': _pilihMetode'));
+        contains('onTap: _pemilihCaraBayarBisaDibuka ? _pilihMetode : null'));
+    expect(source, contains('KebijakanOfflinePembayaran.bolehBayar('));
+    expect(source, isNot(contains('!_memuatCaraBayar &&')));
+    expect(source, contains('Metode tersimpan siap dipakai'));
+  });
+
+  test('snapshot dipersistenkan dan dipisahkan menurut konteks akses', () {
+    expect(source, contains('MasterOffline.ambilObjekTersimpan(cacheKey)'));
+    expect(source.replaceAll(RegExp(r'\s+'), ''),
+        contains("MasterOffline.objekDenganCache('cara_bayar_list',"));
+    expect(source, contains('KebijakanOfflinePembayaran.kunciCache('));
+    expect(source, contains('_konteksCaraBayarMemberId != memberId'));
+    expect(source, contains('_caraBayarTersedia = memberId == null'));
   });
 
   test('refresh mempertahankan split yang seluruh metodenya masih sah', () {
@@ -64,7 +78,8 @@ void main() {
     expect(method, contains('_muatCaraBayarUntukMember(terpilih.id)'));
   });
 
-  test('penolakan izin metode memberi langkah setting dan membedakan limit', () {
+  test('penolakan izin metode memberi langkah setting dan membedakan limit',
+      () {
     final errorSource =
         File('lib/widgets/app_error_info.dart').readAsStringSync();
     expect(errorSource, contains("lower.contains('metode pembayaran')"));
