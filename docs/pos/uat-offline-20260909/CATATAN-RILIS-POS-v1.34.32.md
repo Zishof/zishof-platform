@@ -17,6 +17,7 @@ Kasus acuan adalah transaksi `AB20909202600019` senilai Rp149.500 yang memakai V
 - Transaksi berstatus **Perlu koreksi** dapat diganti ke metode pembayaran lokal yang aman hanya setelah operator mengonfirmasi bahwa pembayaran benar-benar telah diterima.
 - Koreksi mempertahankan kode transaksi, waktu pembuatan, toko, kasir, item, harga, dan total; transaksi yang telah tersinkron tidak dapat diubah melalui jalur lokal.
 - Riwayat sinkronisasi membedakan **Menunggu**, **Perlu koreksi**, dan **Tersinkron**.
+- Kanal auto-update Inventory/Sales dipisahkan ke prefix `inventory-sales-`; eBisnis, Al-Bahjah, Nahl, Inventory/Sales, dan Apotek tidak saling membaca rilis varian lain.
 - Pencarian katalog, racikan, produksi, batch, metode pembayaran, dan laporan Apotek memakai cache terpisah per varian, tenant, pengguna, toko, dan kata kunci.
 - Laporan generik dan laporan Apotek menampilkan snapshot lokal beserta waktu pembaruan. Jika belum ada cache, pengguna mendapat penjelasan dan tombol **Detail**.
 - Draf jurnal dapat dipertahankan lokal. Posting jurnal dan closing final tetap menunggu ACK server.

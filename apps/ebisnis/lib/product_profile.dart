@@ -185,6 +185,7 @@ class AppProductProfile {
     if (kode == 'albahjah') return 'albahjah-';
     if (kode == 'emedik') return 'emedik-';
     if (kode == 'apotik') return 'apotik-';
+    if (kode == 'inventory_sales') return 'inventory-sales-';
     // Belum ada rilis bertag mitrainap-* -- prefix khusus justru PENGAMAN:
     // updater tidak akan menarik rilis `v*` ebisnis ke instalasi MitraInap.
     if (kode == 'mitrainap') return 'mitrainap-';

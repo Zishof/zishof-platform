@@ -111,15 +111,17 @@ class AppVariant {
   /// hanya mencocokkan nama aset dapat membuat Al-Bahjah menarik paket Nahl.
   static const String? updateTagPrefix = isAlBahjah
       ? 'albahjah-'
-      : (isApotik
-          ? 'apotik-'
-          : (isEmedik
-              ? 'emedik-'
-              : (isMitraInap
-                  ? 'mitrainap-'
-                  : (isPetra
-                      ? 'petra-'
-                      : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null))))));
+      : (isInventorySales
+          ? 'inventory-sales-'
+          : (isApotik
+              ? 'apotik-'
+              : (isEmedik
+                  ? 'emedik-'
+                  : (isMitraInap
+                      ? 'mitrainap-'
+                      : (isPetra
+                          ? 'petra-'
+                          : (isNahl ? 'nahl-' : (isEBisnis ? 'v' : null)))))));
   static const labelPerangkat = isAlBahjah
       ? 'Al-Bahjah POS Flutter Pilot'
       : (isNahl

@@ -32,6 +32,7 @@ void main() {
     expect(apotik.kode, 'apotik');
     expect(apotik.namaAplikasi, 'eBisnis POS Apotik');
     expect(apotik.updateAssetKeyword, 'apotik');
+    expect(apotik.tagRilisPrefix, 'apotik-');
     expect(apotik.logoAsset, 'assets/images/apotik/icon.png');
     expect(apotik.isApotik, isTrue);
     expect(apotik.isInventorySales, isFalse,
@@ -84,7 +85,10 @@ void main() {
 
   test('profil eBisnis memakai kanal rilis utama yang terisolasi', () {
     const ebisnis = AppProductProfile.ebisnis();
+    const inventory = AppProductProfile.inventorySales();
     expect(ebisnis.updateAssetKeyword, 'ebisnis');
     expect(ebisnis.tagRilisPrefix, 'v');
+    expect(inventory.updateAssetKeyword, 'inventorysales');
+    expect(inventory.tagRilisPrefix, 'inventory-sales-');
   });
 }
