@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api_client.dart';
+import '../services/master_offline.dart';
+import '../sesi.dart';
 import '../widgets/app_components.dart';
 import '../widgets/filter_status_posting.dart';
+import '../widgets/penanda_data_tersimpan.dart';
 import '../widgets/safe_state.dart';
 import '../widgets/jejak_galat.dart';
 import 'posting_akun_perbaikan.dart';
@@ -45,6 +48,7 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
   bool _sibuk = false;
   String? _galat;
   Map<String, dynamic>? _data;
+  bool _dariCache = false;
   FilterStatusPosting _filterStatus = FilterStatusPosting.semua;
 
   @override
@@ -85,27 +89,38 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
     setStateIfMounted(() {
       _sibuk = true;
       _galat = null;
+      // Hak menerapkan tidak pernah dipulihkan dari cache. Posting final baru
+      // aktif lagi setelah server menjawab draf pada pemuatan ini.
+      _bolehTerapkan = false;
     });
     try {
-      final hasil = await ApiClient.instance.aksi(
+      final payload = <String, dynamic>{
+        'mulai': _fmt.format(_mulai),
+        'sampai': _fmt.format(_sampai),
+        'batasRiwayat': 1000,
+      };
+      final toko = Sesi.instance.idTokoTerpilih ?? Sesi.instance.tokoId ?? 0;
+      final cacheKey = 'posting:${widget.jenis}:toko$toko:'
+          '${payload['mulai']}_${payload['sampai']}';
+      await MasterOffline.objekCacheDulu(
         'posting_${widget.jenis}_draft',
-        {
-          'mulai': _fmt.format(_mulai),
-          'sampai': _fmt.format(_sampai),
-          'batasRiwayat': 1000,
+        payload,
+        cacheKey,
+        onData: (hasil) {
+          if (!mounted) return;
+          final dariServer = hasil['dariServer'] == true;
+          final hakBaru = hasil['hak'];
+          setStateIfMounted(() {
+            // Balasan DRAF server membawa hak menerapkannya. Salinan lokal hanya
+            // untuk membaca/review dan tidak pernah menaikkan wewenang.
+            if (dariServer && hakBaru is Map) {
+              _bolehTerapkan = hakBaru['create'] != false;
+            }
+            _dariCache = !dariServer;
+            _data = Map<String, dynamic>.from(hasil);
+          });
         },
       );
-      if (!mounted) return;
-      final hakBaru = hasil['hak'];
-      setStateIfMounted(() {
-        // Balasan DRAF membawa hak menerapkannya; tombol Posting baru muncul
-        // sesudah draf tampil, jadi haknya selalu sudah diketahui saat
-        // tombolnya dirender.
-        if (hakBaru is Map) {
-          _bolehTerapkan = hakBaru['create'] != false;
-        }
-        _data = Map<String, dynamic>.from(hasil);
-      });
     } catch (e) {
       if (mounted) setStateIfMounted(() => _galat = terapkanGalat(e));
     } finally {
@@ -236,6 +251,17 @@ class _PostingTokoDialogState extends State<PostingTokoDialog> with JejakGalat {
               '${_data?['message'] ?? 'Menyiapkan draf jurnal...'}'
               '  •  Draf hanya menghitung; jurnal baru ditulis saat tombol Posting ditekan.',
               style: Theme.of(context).textTheme.bodySmall),
+          PenandaDataTersimpan(tampil: _dariCache),
+          if (_dariCache)
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 4),
+              child: Text(
+                'Pratinjau terakhir tetap dapat diperiksa secara offline. '
+                'Posting final dinonaktifkan sampai server memvalidasi ulang '
+                'akun, periode, hak akses, dan keseimbangan jurnal.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
           PenjelasanSumberAkunPosting(jenis: widget.jenis),
           Wrap(spacing: 8, runSpacing: 8, children: [
             OutlinedButton.icon(

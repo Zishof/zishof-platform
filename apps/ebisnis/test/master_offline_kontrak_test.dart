@@ -669,8 +669,11 @@ void main() {
     expect(source,
         isNot(contains(rapat("ApiClient.instance.aksi('produk_simpan'"))),
         reason: 'produk_simpan bulk entry tidak boleh lagi online-only');
-    expect(source, contains(rapat('if (!e.offline) rethrow')),
-        reason: 'penolakan bisnis harus tetap menghentikan posting');
+    expect(source, contains(rapat('if (!MasterOffline.dapatDicobaUlang(e))')),
+        reason: 'penolakan bisnis harus tetap menghentikan posting, sedangkan '
+            'gateway 5xx tetap diperlakukan sebagai gangguan teknis');
+    expect(source, contains('rethrow;'),
+        reason: 'penolakan bisnis tidak boleh berubah menjadi sukses offline');
   });
 
   // P3 gelombang 1 (2026-08-29): statistik/dashboard ber-body kosong/tetap

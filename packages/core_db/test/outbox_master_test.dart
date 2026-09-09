@@ -52,6 +52,13 @@ void main() {
     expect(barisProduk1.length, 1);
     expect(barisProduk1.first['payload_json'], '{"nama":"B"}',
         reason: 'edit TERAKHIR yang menang saat replay');
+
+    final idProduk1 = (barisProduk1.first['id'] as num).toInt();
+    final persis = await db.outboxMasterDenganId(idProduk1);
+    expect(persis, isNotNull);
+    expect(persis!['payload_json'], '{"nama":"B"}',
+        reason: 'percobaan pertama harus membaca payload yang sudah dijurnal');
+    expect(await db.outboxMasterDenganId(-999999), isNull);
   });
 
   test('transisi status: sukses & gagal keluar dari antrean pending', () async {

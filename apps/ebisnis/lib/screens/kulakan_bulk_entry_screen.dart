@@ -960,7 +960,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
           );
           try {
             final hasil = await MasterOffline.kirimSatuAntrean(
-                    idAntrean, 'produk_simpan', bodyProduk,
+                    idAntrean, 'produk_simpan',
                     kunci: kunci)
                 .timeout(const Duration(seconds: 6));
             produkId = (hasil['id'] as num?)?.toInt();
@@ -973,7 +973,9 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
           } on TimeoutException {
             produkId = idLokal; // tetap antre -- flush latar melanjutkan.
           } on ApiException catch (e) {
-            if (!e.offline) rethrow; // penolakan bisnis: posting berhenti.
+            if (!MasterOffline.dapatDicobaUlang(e)) {
+              rethrow; // penolakan bisnis: posting berhenti.
+            }
             produkId = idLokal;
           }
         }

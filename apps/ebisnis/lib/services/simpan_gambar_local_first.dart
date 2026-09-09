@@ -107,7 +107,6 @@ Future<HasilSimpanGambar> simpanGambarLocalFirst({
     final respons = await MasterOffline.kirimSatuAntrean(
       idAntrean,
       aksi,
-      body,
       kunci: kunci,
     ).timeout(batasTunggu);
     return HasilSimpanGambar(respons, tertunda: false, idAntrean: idAntrean);

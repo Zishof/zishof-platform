@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:core_db/core_db.dart';
 
 import '../api_client.dart';
+import 'master_offline.dart';
 
 /// <h3>Outbox typed varian Inventory &amp; Sales (P7).</h3>
 ///
-/// Untuk perintah IDEMPOTEN (wajib ber-`kode_unik`): kirim langsung; bila
-/// kegagalan MURNI jaringan ([ApiException.offline]), antre di tabel
+/// Untuk perintah IDEMPOTEN (wajib ber-`kode_unik`): catat di perangkat lebih
+/// dahulu, baru coba kirim ke server. Gangguan jaringan, timeout, HTTP 5xx,
+/// atau jawaban gateway yang rusak mempertahankan baris PENDING di tabel
 /// `outbox_is` (core_db v4, TERPISAH dari `transaksi_pending` POS -- flush POS
 /// mengirim semua barisnya ke aksi 'bayar') dan dikirim ulang oleh [flush]
 /// saat online. Penolakan bisnis server TIDAK diantre -- dilempar lagi ke
@@ -32,19 +34,27 @@ class OutboxIs {
     'si_trip_purchase_link',
   };
 
-  /// Kirim [aksi]; kalau jaringan mati, antre & kembalikan {offline: true}.
+  /// Catat [aksi] lebih dahulu; bila server belum siap, pertahankan antrean dan
+  /// kembalikan `{offline: true}`. Urutan ini mencegah data hilang bila aplikasi
+  /// berhenti tepat ketika permintaan jaringan sedang berlangsung.
   static Future<Map<String, dynamic>> kirimAtauAntre(
       String aksi, Map<String, dynamic> body) async {
     assert(aksiDidukung.contains(aksi),
         'Aksi $aksi tidak terdaftar sbg idempoten -- jangan diantre offline.');
     assert('${body['kode_unik'] ?? ''}'.isNotEmpty,
         'kode_unik wajib ada utk outbox idempoten.');
+    final id = await CoreDb.instance
+        .outboxIsTambah(aksi, '${body['kode_unik']}', jsonEncode(body));
     try {
-      return await ApiClient.instance.aksi(aksi, body);
+      final hasil = await ApiClient.instance.aksi(aksi, body);
+      await CoreDb.instance.outboxIsTandaiSukses(id);
+      return hasil;
     } on ApiException catch (e) {
-      if (!e.offline) rethrow; // penolakan bisnis -> tampilkan ke user.
-      await CoreDb.instance
-          .outboxIsTambah(aksi, '${body['kode_unik']}', jsonEncode(body));
+      if (!MasterOffline.dapatDicobaUlang(e)) {
+        await CoreDb.instance.outboxIsTandaiGagal(id, e.pesan);
+        rethrow; // penolakan bisnis -> tampilkan ke user, payload tetap ada.
+      }
+      await CoreDb.instance.outboxIsCatatPercobaan(id, e.pesan);
       return {'status': 'success', 'offline': true};
     }
   }
@@ -71,9 +81,17 @@ class OutboxIs {
         await CoreDb.instance.outboxIsTandaiSukses(id);
         terkirim++;
       } on ApiException catch (e) {
-        if (e.offline) {
+        if (MasterOffline.dapatDicobaUlang(e)) {
           await CoreDb.instance.outboxIsCatatPercobaan(id, e.pesan);
-          break; // masih offline -- sisanya pasti gagal juga, coba lain kali.
+          // Server/gateway belum dapat dipercaya. Baris tetap PENDING dan
+          // sapuan berikutnya melanjutkan dengan kode unik yang sama.
+          if (e.offline ||
+              e.statusHttp == 408 ||
+              e.statusHttp == 429 ||
+              (e.statusHttp ?? 0) >= 500) {
+            break;
+          }
+          continue;
         }
         // Server menolak scr bisnis -> permanen (terlihat, tidak diretry).
         await CoreDb.instance.outboxIsTandaiGagal(id, e.pesan);

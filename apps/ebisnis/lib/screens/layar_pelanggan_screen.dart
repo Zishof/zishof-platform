@@ -89,8 +89,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     _daftarkanLiveChannel();
     _ambil();
     _muatKontenScreensaver();
-    _timer =
-        Timer.periodic(const Duration(milliseconds: 500), (_) => _ambil());
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _ambil());
   }
 
   @override
@@ -105,7 +104,8 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
 
   Future<void> _daftarkanLiveChannel() async {
     try {
-      await LayarPelangganBroadcaster.channel.setMethodCallHandler((call) async {
+      await LayarPelangganBroadcaster.channel
+          .setMethodCallHandler((call) async {
         if (call.method != 'update') return null;
         final data = Map<String, dynamic>.from(call.arguments as Map);
         _terapkanData(data, dariLive: true);
@@ -122,7 +122,8 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   /// sebelum tampil) -- lihat catatan di deklarasi field di atas.
   Future<void> _muatKontenScreensaver() async {
     try {
-      final hasil = await ApiClient.instance.aksi('layar_pelanggan_slide_untuk_tampil', {
+      final hasil =
+          await ApiClient.instance.aksi('layar_pelanggan_slide_untuk_tampil', {
         'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
         'id_mesin': IdentitasMesin.instance.idMesin,
       });
@@ -168,8 +169,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   void _mulaiSlideAdvance() {
     _timerSlideAdvance?.cancel();
     final durasi = (_configScreensaver?['durasiDetik'] as num?)?.toInt() ?? 6;
-    _timerSlideAdvance =
-        Timer.periodic(Duration(seconds: durasi), (_) {
+    _timerSlideAdvance = Timer.periodic(Duration(seconds: durasi), (_) {
       if (!mounted || _slideScreensaver.isEmpty) return;
       setStateIfMounted(
           () => _indexSlide = (_indexSlide + 1) % _slideScreensaver.length);
@@ -200,7 +200,8 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
     if (versi != null && versi < _versiTerakhir) return;
     if (versi != null) _versiTerakhir = versi;
     final aktif = hasil['aktif'] == true;
-    final tipe = aktif ? ((hasil['tipe'] as String?) ?? 'keranjang') : 'keranjang';
+    final tipe =
+        aktif ? ((hasil['tipe'] as String?) ?? 'keranjang') : 'keranjang';
     final suksesBaru = tipe == 'sukses' && _tipeSebelumnya != 'sukses';
     _tipeSebelumnya = tipe;
     setStateIfMounted(() {
@@ -219,8 +220,7 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
         _subtotal = (hasil['subtotal'] as num?)?.toDouble() ?? 0;
         _diskon = (hasil['diskon'] as num?)?.toDouble() ?? 0;
         _total = (hasil['total'] as num?)?.toDouble() ?? 0;
-        final nama =
-            (hasil['memberNama'] ?? hasil['member_nama']) as String?;
+        final nama = (hasil['memberNama'] ?? hasil['member_nama']) as String?;
         _memberNama = (nama == null || nama.isEmpty) ? null : nama;
       } else if (!aktif) {
         _items = [];
@@ -231,7 +231,9 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       // membatalkan screensaver seketika, kasir tak boleh tertutupi gambar.
       if (aktif || suksesBaru || tipe == 'sukses') {
         _batalkanScreensaver();
-      } else if (!aktif && !_tampilkanScreensaver && _timerIdleScreensaver == null) {
+      } else if (!aktif &&
+          !_tampilkanScreensaver &&
+          _timerIdleScreensaver == null) {
         _mulaiTimerIdleScreensaver();
       }
     });
@@ -276,10 +278,6 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
       await MasterOffline.kirimSatuAntrean(
         idAntrean,
         'survey_kepuasan_simpan',
-        {
-          'rating': rating,
-          'toko_id': widget.tokoIdOverride ?? Sesi.instance.tokoId,
-        },
       );
     } catch (_) {
       // Gagal kirim (mis. offline sesaat) -- bukan blocker, layar tetap
@@ -365,7 +363,8 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
   /// atas tetap branding toko (spt Idle biasa), separuh bawah gambar berputar
   /// -- mode `FULLSCREEN` (default) gambar mengisi seluruh layar.
   Widget _bodyScreensaver({required Key key}) {
-    final mode = (_configScreensaver?['modeTampilan'] as String?) ?? 'FULLSCREEN';
+    final mode =
+        (_configScreensaver?['modeTampilan'] as String?) ?? 'FULLSCREEN';
     final slideshow = _ScreensaverSlideshow(
       slides: _slideScreensaver,
       index: _indexSlide,
@@ -409,7 +408,9 @@ class _LayarPelangganScreenState extends State<LayarPelangganScreen> {
           const Text('Terima Kasih Atas Kunjungan Anda!',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Text(
             sudahDinilai
@@ -597,7 +598,9 @@ class _ScreensaverSlideshow extends StatelessWidget {
     final url = slide['urlGambar'] as String?;
     final gambar = url == null
         ? const SizedBox.shrink()
-        : Image.network(url, key: ValueKey(slide['id']), fit: BoxFit.cover,
+        : Image.network(url,
+            key: ValueKey(slide['id']),
+            fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink());
 
     switch (animasi) {
@@ -606,14 +609,18 @@ class _ScreensaverSlideshow extends StatelessWidget {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 700),
             transitionBuilder: (child, anim) {
-              final masuk = Tween<Offset>(
-                      begin: const Offset(1, 0), end: Offset.zero)
-                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic));
+              final masuk =
+                  Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: anim, curve: Curves.easeOutCubic));
               return SlideTransition(position: masuk, child: child);
             },
             layoutBuilder: (currentChild, previousChildren) => Stack(
               fit: StackFit.expand,
-              children: [...previousChildren, if (currentChild != null) currentChild],
+              children: [
+                ...previousChildren,
+                if (currentChild != null) currentChild
+              ],
             ),
             child: SizedBox.expand(key: ValueKey(slide['id']), child: gambar),
           ),

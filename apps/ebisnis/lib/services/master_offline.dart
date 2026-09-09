@@ -228,9 +228,10 @@ class MasterOffline {
     }
   }
 
-  /// Jalur kompatibilitas programatik: server dulu; semua gangguan teknis
-  /// server -> antre + `{offline: true}`. Form interaktif wajib memakai
-  /// `prosesSimpanMaster`, yang benar-benar menulis lokal lebih dahulu.
+  /// Jalur kompatibilitas programatik yang tetap LOCAL-FIRST: tulis outbox
+  /// lebih dahulu, lalu coba kirim baris yang sama. Form interaktif sebaiknya
+  /// memakai `prosesSimpanMaster` agar tahapannya terlihat oleh pengguna;
+  /// pemanggil programatik mendapat jaminan urutan penyimpanan yang sama.
   ///
   /// [kunci] identitas baris utk coalesce, mis. `'produk:123'` (edit) atau
   /// `'produk:baru:<stempel>'` (create -- unik per draf). [cacheKey] +
@@ -246,35 +247,22 @@ class MasterOffline {
     Map<String, dynamic>? rowLokal,
     bool hapusLokal = false,
   }) async {
-    pastikanTimer();
+    final idAntrean = await antreLokal(
+      aksi,
+      body,
+      kunci: kunci,
+      cacheKey: cacheKey,
+      rowLokal: rowLokal,
+      hapusLokal: hapusLokal,
+    );
     try {
-      final hasil = await ApiClient.instance.aksi(aksi, body);
-      await _terapkanEfekRespons(aksi, body, hasil);
-      // Baris ini TERBUKTI sampai server -> centang animasi per-baris.
-      _tandaiBarisSukses(kunci);
-      // Kesempatan bagus utk mengosongkan antrean lama begitu server terbukti
-      // terjangkau -- tanpa menunggu tick timer berikutnya.
-      unawaited(flush());
-      return hasil;
+      return await kirimSatuAntrean(idAntrean, aksi, kunci: kunci);
     } on ApiException catch (e) {
       if (!dapatDicobaUlang(e)) {
-        rethrow; // validasi bisnis eksplisit -> user harus memperbaiki data.
+        // Baris sudah ditandai GAGAL oleh kirimSatuAntrean dan snapshot lokal
+        // tetap ada agar pengguna dapat memperbaikinya tanpa kehilangan isian.
+        rethrow;
       }
-      // Bekal dedup replay: server yang sudah mendukung boleh mengabaikan
-      // kiriman ulang ber-id sama (field asing aman utk server lama).
-      final antreBody = <String, dynamic>{
-        ...body,
-        'client_mutation_id':
-            '${kunci ?? aksi}:${DateTime.now().microsecondsSinceEpoch}',
-      };
-      await CoreDb.instance
-          .outboxMasterTambah(aksi, kunci, jsonEncode(antreBody));
-      if (cacheKey != null && rowLokal != null) {
-        await terapkanLokal(cacheKey, rowLokal,
-            hapus: hapusLokal, kunci: kunci);
-      }
-      _tandaiBarisMenunggu(kunci);
-      await _muatUlangHitungan();
       return {'status': 'success', 'offline': true};
     }
   }
@@ -321,13 +309,38 @@ class MasterOffline {
   /// ditandai GAGAL tetapi TIDAK dihapus, sehingga perubahan lokal tetap
   /// terlindungi dan user dapat memperbaiki/mengirim ulang dengan jejak jelas.
   static Future<Map<String, dynamic>> kirimSatuAntrean(
-      int idAntrean, String aksi, Map<String, dynamic> body,
+      int idAntrean, String aksi,
       {String? kunci}) async {
     try {
+      final row = await CoreDb.instance.outboxMasterDenganId(idAntrean);
+      if (row == null || '${row['status'] ?? ''}' != 'PENDING') {
+        // Coalesce dapat mengganti edit lama dengan edit lebih baru sebelum
+        // percobaan jaringan dimulai. Jangan pernah mengirim payload lama yang
+        // sudah tidak menjadi sumber kebenaran lokal.
+        throw ApiException(
+          'Perubahan lokal sudah digantikan versi yang lebih baru dan akan '
+          'dikirim dari antrean terbaru.',
+          offline: true,
+          aktivitas: aksi,
+        );
+      }
+      Map<String, dynamic> payload;
+      try {
+        payload = Map<String, dynamic>.from(
+            jsonDecode('${row['payload_json']}') as Map);
+      } catch (e) {
+        await CoreDb.instance
+            .outboxMasterTandaiGagal(idAntrean, 'Payload lokal rusak: $e');
+        throw ApiException(
+          'Perubahan lokal tidak dapat dibaca. Periksa Riwayat Sinkronisasi.',
+          aktivitas: aksi,
+          kode: 'DATA_TIDAK_LENGKAP',
+        );
+      }
       // Rujukan ke baris yang dibuat offline ditukar dgn id server yang sudah ada;
       // bila pembuatnya belum terkirim, kiriman ini ditahan (tetap antre).
       final peta = await CoreDb.instance.idSementaraTerpetakan();
-      final siap = await tukarIdSementara(body, peta);
+      final siap = await tukarIdSementara(payload, peta);
       if (siap == null) {
         throw ApiException(
             'Menunggu data induk yang dibuat offline selesai terkirim.',
@@ -910,6 +923,48 @@ class MasterOffline {
         ...snapshot,
         'offline': true,
       };
+    }
+  }
+
+  /// Baca satu amplop/objek dari SQLite TERLEBIH DAHULU, lalu segarkan dari
+  /// server. Cocok untuk draf posting, dashboard, dan laporan yang beberapa
+  /// bagiannya harus disimpan sebagai satu kesatuan, bukan satu daftar saja.
+  ///
+  /// `onData` dapat dipanggil dua kali: salinan lokal membawa
+  /// `dariServer=false, offline=true`; balasan baru membawa `dariServer=true`.
+  /// Hak/otorisasi dari salinan lokal tidak boleh dipakai untuk mengaktifkan
+  /// aksi final — pemanggil wajib menunggu emisi server untuk itu.
+  static Future<void> objekCacheDulu(
+    String aksi,
+    Map<String, dynamic> body,
+    String cacheKey, {
+    required void Function(Map<String, dynamic> hasil) onData,
+  }) async {
+    pastikanTimer();
+    final lokal = await ambilObjekTersimpan(cacheKey);
+    if (lokal != null) {
+      onData({
+        ...lokal,
+        'dariServer': false,
+        'offline': true,
+      });
+    }
+    try {
+      final hasil = await ApiClient.instance.aksi(aksi, body);
+      final tersimpan = <String, dynamic>{
+        ...hasil,
+        '_disimpanPada': DateTime.now().toIso8601String(),
+      };
+      await CoreDb.instance
+          .simpanCacheReferensi(cacheKey, jsonEncode(tersimpan));
+      onData({
+        ...hasil,
+        'dariServer': true,
+        'offline': false,
+      });
+    } on ApiException catch (e) {
+      if (!dapatDicobaUlang(e) || lokal == null) rethrow;
+      // Salinan sudah diberikan. Gangguan teknis tidak boleh menutupinya.
     }
   }
 

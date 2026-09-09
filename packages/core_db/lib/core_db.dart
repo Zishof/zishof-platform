@@ -856,13 +856,20 @@ class CoreDb {
   Future<int> outboxIsTambah(
       String aksi, String kodeUnik, String payloadJson) async {
     final database = await db;
-    return database.insert('outbox_is', {
-      'aksi': aksi,
-      'kode_unik': kodeUnik,
-      'payload_json': payloadJson,
-      'status': 'PENDING',
-      'dibuat_pada': DateTime.now().toIso8601String(),
-    });
+    return database.insert(
+      'outbox_is',
+      {
+        'aksi': aksi,
+        'kode_unik': kodeUnik,
+        'payload_json': payloadJson,
+        'status': 'PENDING',
+        'dibuat_pada': DateTime.now().toIso8601String(),
+      },
+      // Pemanggilan ulang kejadian yang sama memakai kode unik yang sama.
+      // Ganti jurnal lokalnya secara atomik lalu kirim ulang; server melakukan
+      // dedup berdasarkan kode ini sehingga tidak membentuk transaksi kedua.
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<List<Map<String, Object?>>> outboxIsPending() async {
@@ -954,6 +961,24 @@ class CoreDb {
     final database = await db;
     return database.query('outbox_master',
         where: "status = 'PENDING'", orderBy: 'id ASC');
+  }
+
+  /// Ambil tepat satu mutasi berdasarkan id jurnal lokalnya.
+  ///
+  /// Percobaan kirim PERTAMA wajib membaca payload yang sudah tersimpan di
+  /// outbox, bukan memakai ulang argumen form. Payload outbox membawa
+  /// `client_mutation_id` yang sama untuk percobaan pertama maupun seluruh
+  /// retry setelah restart; tanpa ini respons server yang hilang dapat membuat
+  /// create terkirim dua kali dengan identitas mutasi berbeda.
+  Future<Map<String, Object?>?> outboxMasterDenganId(int id) async {
+    final database = await db;
+    final hasil = await database.query(
+      'outbox_master',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return hasil.isEmpty ? null : hasil.first;
   }
 
   /// Antrean aktif untuk satu jenis data/kunci tertentu.

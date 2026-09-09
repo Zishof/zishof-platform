@@ -169,7 +169,6 @@ class _DialogProsesSimpanState extends State<_DialogProsesSimpan> {
         respons = await MasterOffline.kirimSatuAntrean(
           idAntrean,
           widget.aksi,
-          widget.body,
           kunci: widget.kunci,
         ).timeout(widget.batasTungguKirim);
       } on TimeoutException {

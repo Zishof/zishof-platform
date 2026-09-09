@@ -24,7 +24,19 @@ void main() {
 
   test('haknya dibaca dari balasan draf', () {
     expect(dialog, contains(_rapat("hasil['hak']")));
-    expect(dialog, contains(_rapat("_bolehTerapkan = hakBaru['create'] != false")));
+    expect(dialog,
+        contains(_rapat("_bolehTerapkan = hakBaru['create'] != false")));
+  });
+
+  test('pratinjau cache boleh dibaca tetapi tidak menghidupkan posting final',
+      () {
+    expect(dialog, contains(_rapat('MasterOffline.objekCacheDulu(')));
+    expect(dialog, contains(_rapat('_bolehTerapkan = false')),
+        reason: 'setiap pratinjau harus memulai dari hak tertutup');
+    expect(dialog, contains(_rapat('if (dariServer && hakBaru is Map)')),
+        reason: 'hak create hanya boleh berasal dari respons server saat ini');
+    expect(
+        dialog, contains(_rapat('Posting final dinonaktifkan sampai server')));
   });
 
   test('peladen menempelkan hak pada draf, bukan pada aksi terapkan', () {
@@ -34,6 +46,9 @@ void main() {
     final isi = _rapat(f.readAsStringSync());
     expect(isi, contains(_rapat('if (!terapkan && !hasil.has("hak"))')),
         reason: 'hak harus ikut pada draf; pada aksi terapkan sudah terlambat');
-    expect(isi, contains(_rapat('bolehAksiMenu(tbmuser, "posting_" + jenis, "create")')));
+    expect(
+        isi,
+        contains(
+            _rapat('bolehAksiMenu(tbmuser, "posting_" + jenis, "create")')));
   });
 }
