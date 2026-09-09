@@ -50,3 +50,7 @@ Thumbs.db
 
 # FVM Version Cache
 .fvm/
+
+# Render QA dan bytecode lokal; artefak final PDF/PNG tetap dilacak.
+docs/pos/uat-offline-*/rendered/
+**/__pycache__/
