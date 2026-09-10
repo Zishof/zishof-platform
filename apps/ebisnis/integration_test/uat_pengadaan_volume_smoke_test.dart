@@ -56,6 +56,7 @@ void main() {
       oldError?.call(detail);
     };
     expect(find.byType(LoginScreen), findsNothing);
+    await _tutupDialogSinkronisasiJikaAda(tester);
     await _shot(tester, '00-layar-awal-ebisnis');
 
     await _tapSidebar(tester, 'PENGADAAN');
@@ -125,6 +126,18 @@ void main() {
     await _openMenu(tester, 'Katalog Laporan');
     await _shot(tester, '12-katalog-laporan-pengadaan');
   });
+}
+
+Future<void> _tutupDialogSinkronisasiJikaAda(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    final nanti = find.text('Nanti');
+    if (nanti.evaluate().isNotEmpty) {
+      await tester.tap(nanti.last);
+      await tester.pump(const Duration(seconds: 1));
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 250));
+  }
 }
 
 Future<void> _openMenu(WidgetTester tester, String label) async {

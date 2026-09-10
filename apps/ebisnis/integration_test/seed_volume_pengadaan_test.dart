@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 const _tokoId = 1;
-const _prefix = 'UAT-VOL-PROC-20260904';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +17,10 @@ void main() {
     const host = String.fromEnvironment('POS_TEST_HOST');
     const context = String.fromEnvironment('POS_TEST_CONTEXT');
     const volume = int.fromEnvironment('PROC_UAT_VOLUME', defaultValue: 2);
+    const prefix = String.fromEnvironment('PROC_UAT_PREFIX',
+        defaultValue: 'UAT-VOL-PROC-20260904');
+    const tanggal =
+        String.fromEnvironment('PROC_UAT_DATE', defaultValue: '04-09-2026');
 
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
@@ -58,15 +61,26 @@ void main() {
         supplier['penyedia_id'] ??
         supplier['penyediaAssetId']) as num;
 
-    final goods = await call('pengadaan_barang_cari', {
+    var goods = await call('pengadaan_barang_cari', {
       'keyword': 'ABC Kecap Manis 100 g Botol Isi 4',
       'limit': 50,
     });
-    final goodRows = ((goods['data'] as List?) ?? const [])
+    var goodRows = ((goods['data'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .where((e) => e['master_asset_id'] != null)
         .toList();
+    if (goodRows.isEmpty) {
+      goods = await call('pengadaan_barang_cari', {
+        'keyword': '',
+        'limit': 500,
+      });
+      goodRows = ((goods['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => e['master_asset_id'] != null)
+          .toList();
+    }
     expect(goodRows, isNotEmpty,
         reason: 'Barang Pengadaan bertaut Master Aset tidak ditemukan');
     final good = goodRows.first;
@@ -90,7 +104,7 @@ void main() {
 
     var completed = 0;
     for (var i = 1; i <= volume; i++) {
-      final marker = '$_prefix-${i.toString().padLeft(3, '0')}';
+      final marker = '$prefix-${i.toString().padLeft(3, '0')}';
       final existing = await call('pengadaan_pr_daftar', {
         'cari': marker,
         'page': 1,
@@ -115,7 +129,7 @@ void main() {
 
       final pr = await call('pengadaan_pr_simpan', {
         'toko_id': _tokoId,
-        'tanggal': '04-09-2026',
+        'tanggal': tanggal,
         'keterangan': '$marker — PR bahan baku kantin',
         'tanpaAnggaran': true,
         'detail': [
@@ -143,7 +157,7 @@ void main() {
 
       final po = await call('pengadaan_po_simpan', {
         'toko_id': _tokoId,
-        'tanggal': '04-09-2026',
+        'tanggal': tanggal,
         'penyedia_id': supplierId.toInt(),
         'keterangan': '$marker — PO ${termin ? 'termin' : 'non-termin'}',
         'kodeInvoice': 'QTN-${i.toString().padLeft(3, '0')}',
@@ -237,7 +251,7 @@ void main() {
         'id': bastId,
         'toko_id': _tokoId,
         'kodeTagihan': 'INV-$marker',
-        'tanggalTagihan': '04-09-2026',
+        'tanggalTagihan': tanggal,
       });
 
       final open = await call('pengadaan_bayar_tagihan_terbuka', {
@@ -264,8 +278,8 @@ void main() {
             : 'Pembayaran vendor non-termin berdasarkan BAST dan invoice.',
         if (paymentMethod != null)
           'cara_bayar_id': paymentMethod['id'] ?? paymentMethod['caraBayarId'],
-        'tanggal': '04-09-2026',
-        'tanggalRealisasi': '04-09-2026',
+        'tanggal': tanggal,
+        'tanggalRealisasi': tanggal,
         'detail': [
           {
             'po_id': poId,
@@ -308,7 +322,7 @@ void main() {
       'pengadaan_bayar_daftar',
     ]) {
       final r = await call(action, {
-        'cari': _prefix,
+        'cari': prefix,
         'page': 1,
         'pageSize': 100,
       });

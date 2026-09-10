@@ -7,6 +7,14 @@ Set-Location (Join-Path $PSScriptRoot '..')
 # berkasnya ada + hash cocok SEBELUM build supaya APK tidak diam-diam
 # terbit tanpa fitur wajah.
 & (Join-Path $PSScriptRoot 'unduh_model_wajah.ps1')
-flutter build apk --release --flavor ebisnis -t lib/main.dart
+$flutterCommand = Get-Command flutter -ErrorAction SilentlyContinue
+$flutter = if ($flutterCommand) {
+    $flutterCommand.Source
+} elseif (Test-Path 'C:\opt\flutter\bin\flutter.bat') {
+    'C:\opt\flutter\bin\flutter.bat'
+} else {
+    throw 'Flutter CLI tidak ditemukan di PATH maupun C:\opt\flutter\bin\flutter.bat.'
+}
+& $flutter build apk --release --flavor ebisnis -t lib/main.dart
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "APK: build\app\outputs\flutter-apk\app-ebisnis-release.apk"

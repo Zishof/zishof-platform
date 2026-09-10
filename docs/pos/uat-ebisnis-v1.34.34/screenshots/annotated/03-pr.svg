@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1057" viewBox="0 0 1920 1057">
+  <image href="../raw/pengadaan/02-pr-daftar-50.png" x="0" y="0" width="1920" height="1057"/>
+  <rect x="260" y="75" width="650" height="115" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="290" cy="105" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="290" y="114" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">1</text>
+  <rect x="275" y="335" width="1605" height="190" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="305" cy="365" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="305" y="374" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">2</text>
+  <rect x="275" y="525" width="1605" height="435" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="305" cy="555" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="305" y="564" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">3</text>
+</svg>

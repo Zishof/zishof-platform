@@ -18,6 +18,8 @@ void main() {
     const distinctProducts = bool.fromEnvironment('POS_UAT_DISTINCT_PRODUCTS');
     const prefix = String.fromEnvironment('POS_UAT_PREFIX',
         defaultValue: 'UAT-VOL-POS-20260904');
+    const transactionDate =
+        String.fromEnvironment('POS_UAT_DATE', defaultValue: '04-09-2026');
     await ServerConfig.instance
         .simpan(host: host, contextPath: context, https: true);
     final login = await ApiClient.instance.aksi('login', {
@@ -135,7 +137,7 @@ void main() {
         'tokoId': 1,
         'kasir': 'admin',
         'waktu':
-            '04-09-2026 ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00',
+            '$transactionDate ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00',
         'caraBayar': payment['id'],
         'caraBayarNama': payment['nama'],
         'total': total,

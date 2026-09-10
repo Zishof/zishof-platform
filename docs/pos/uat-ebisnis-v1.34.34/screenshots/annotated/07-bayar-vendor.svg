@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1057" viewBox="0 0 1920 1057">
+  <image href="../raw/pengadaan/10-pembayaran-vendor-50.png" x="0" y="0" width="1920" height="1057"/>
+  <rect x="520" y="205" width="440" height="80" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="550" cy="235" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="550" y="244" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">1</text>
+  <rect x="260" y="320" width="1630" height="675" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="290" cy="350" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="290" y="359" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">2</text>
+  <rect x="1430" y="380" width="220" height="170" rx="14" fill="none" stroke="#ff3b30" stroke-width="8"/>
+  <circle cx="1460" cy="410" r="25" fill="#ff3b30" stroke="#ffffff" stroke-width="4"/>
+  <text x="1460" y="419" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">3</text>
+</svg>

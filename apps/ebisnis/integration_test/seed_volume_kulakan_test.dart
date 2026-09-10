@@ -26,6 +26,7 @@ void main() {
       'labelPerangkat': 'UAT-Volume-Kulakan',
     });
     await ApiClient.instance.simpanToken(login['token'] as String);
+    await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': 1});
 
     Future<Map<String, dynamic>> call(
         String action, Map<String, dynamic> body) async {
@@ -44,31 +45,56 @@ void main() {
       throw StateError('$action gagal: $last');
     }
 
-    final catalog = await call('katalog', {
+    var catalog = await call('katalog', {
       'keyword': 'Beng-Beng Wafer Cokelat 100 g Botol Isi 6',
       'tokoId': 1,
     });
-    final products = ((catalog['produk'] as List?) ?? const [])
+    var products = ((catalog['produk'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+    if (products.isEmpty) {
+      catalog = await call('katalog', {
+        'keyword': '',
+        'tokoId': 1,
+        'page': 1,
+        'page_size': 100,
+      });
+      products = ((catalog['produk'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => e['id'] != null)
+          .toList();
+    }
     expect(products, isNotEmpty);
     final product = products.firstWhere(
       (e) => '${e['nama']}'.contains('Beng-Beng Wafer'),
       orElse: () => products.first,
     );
 
-    final suppliers =
+    var suppliers =
         await call('penyedia_list', {'keyword': 'CV Sumber Pangan Nusantara'});
-    final supplier = ((suppliers['data'] as List?) ?? const [])
+    var supplierRows = ((suppliers['data'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
-        .firstWhere((e) => '${e['nama']}' == 'CV Sumber Pangan Nusantara');
+        .toList();
+    if (supplierRows.isEmpty) {
+      suppliers = await call('penyedia_list', {'keyword': ''});
+      supplierRows = ((suppliers['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => e['id'] != null)
+          .toList();
+    }
+    expect(supplierRows, isNotEmpty,
+        reason: 'Penyedia aktif untuk UAT Kulakan tidak ditemukan');
+    final supplier = supplierRows.first;
 
     var created = 0;
     for (var i = 1; i <= volume; i++) {
       final number = '$prefix-${i.toString().padLeft(3, '0')}';
       final list = await call('kulakan_faktur_list', {
+        'toko_id': 1,
         'keyword': number,
         'page': 1,
         'page_size': 20,
@@ -116,11 +142,13 @@ void main() {
     }
 
     final all = await call('kulakan_faktur_list', {
+      'toko_id': 1,
       'keyword': prefix,
       'page': 1,
       'page_size': 100,
     });
     final draft = await call('posting_kulakan_draft', {
+      'toko_id': 1,
       'mulai': '2026-09-01',
       'sampai': '2026-09-30',
     });

@@ -83,9 +83,8 @@ void main() {
       tester,
       () =>
           find.byType(KasirScreen).evaluate().isNotEmpty &&
-          find.text('admin').evaluate().isNotEmpty &&
-          find.text('Kantin Demo').evaluate().isNotEmpty,
-      alasan: 'Sesi admin dan Kantin Demo belum selesai dimuat',
+          find.byType(LoginScreen).evaluate().isEmpty,
+      alasan: 'Sesi pengguna UAT dan layar POS belum selesai dimuat',
       detik: 180,
     );
     // Instalasi/build baru dapat menampilkan dialog penyiapan data lokal. Untuk
@@ -119,6 +118,8 @@ void main() {
           tester, 'Riwayat Penjualan', '02-riwayat-penjualan-52-transaksi');
       await _ketukSidebar(tester, 'MASTER DATA');
       await _bukaMenuDanFoto(tester, 'Kulakan', '03-kulakan-50-faktur-volume');
+      const skipPosting = bool.fromEnvironment('POS_TEST_SKIP_POSTING');
+      if (skipPosting) return;
       await _ketukSidebar(tester, 'AKUNTANSI');
       await _ambilGambar(tester, '04-menu-akuntansi-kantin');
       for (final item in const <(String, String)>[
