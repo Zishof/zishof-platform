@@ -1,4 +1,4 @@
-# Hasil UAT End-to-End Operasional eBisnis v1.34.34
+# Hasil UAT End-to-End Operasional eBisnis v1.34.35
 
 - Waktu audit: `2026-09-10T12:54:25.0424338+07:00`
 - Lingkungan: `eBisnis live - Kantin Demo`
@@ -38,7 +38,7 @@ Setiap nilai atau baris yang ditandai dapat diklik untuk melihat nota dan rincia
 
 1. Pastikan transaksi lokal sudah disinkronkan.
 2. Tutup aplikasi POS.
-3. Pasang build eBisnis 1.34.34 (build 197).
+3. Pasang build eBisnis 1.34.35 (build 198).
 4. Login, pilih Kantin Demo, dan tekan Sinkronkan.
 5. Buka menu Laporan-Laporan dan pilih kategori Omzet.
 6. Jalankan keempat laporan pada periode yang sama.
@@ -50,10 +50,10 @@ Backend Laporan Omzet yang diperlukan sudah tersedia dan lulus audit live; tidak
 
 ## Artefak
 
-- `Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.34.docx`
-- `Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.34.pdf`
-- `evidence/uat-e2e-ebisnis-v1.34.34.json`
-- `evidence/uat-laporan-omzet-ebisnis-v1.34.34.json`
-- `evidence/uat-xlsx-ebisnis-v1.34.34.json`
+- `Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.35.docx`
+- `Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.35.pdf`
+- `evidence/uat-e2e-ebisnis-v1.34.35.json`
+- `evidence/uat-laporan-omzet-ebisnis-v1.34.35.json`
+- `evidence/uat-xlsx-ebisnis-v1.34.35.json`
 - `screenshots/` dan `annotated/`
 - `diagrams/`

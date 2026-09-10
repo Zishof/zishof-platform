@@ -1,4 +1,4 @@
-# Rilis eBisnis POS v1.34.34 (build 197)
+# Rilis eBisnis POS v1.34.35 (build 198)
 
 Tanggal rilis: 10 September 2026
 
@@ -55,7 +55,7 @@ Dataset live UAT mencakup 504 transaksi penjualan, 100 transaksi saldo tambahan 
 
 1. Pastikan transaksi lokal yang akan dibandingkan sudah tersinkronkan.
 2. Tutup aplikasi POS yang sedang berjalan.
-3. Pasang paket eBisnis v1.34.34 (build 197).
+3. Pasang paket eBisnis v1.34.35 (build 198).
 4. Login, pilih Kantin Demo, lalu tekan **Sinkronkan**.
 5. Buka menu **Laporan-Laporan** dan pilih kategori Omzet.
 6. Jalankan Transaksi Omzet, Omzet Produk Non-Saldo/Tunai, Omzet Produk Saldo, dan Rekap Omzet pada periode yang sama.

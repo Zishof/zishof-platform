@@ -19,12 +19,12 @@ ROOT = Path(__file__).resolve().parent
 SCREEN = ROOT / "screenshots"
 ANNOTATED = ROOT / "annotated"
 DIAGRAMS = ROOT / "diagrams"
-EVIDENCE = ROOT / "evidence" / "uat-e2e-ebisnis-v1.34.34.json"
-OMZET_EVIDENCE = ROOT / "evidence" / "uat-laporan-omzet-ebisnis-v1.34.34.json"
-XLSX_EVIDENCE = ROOT / "evidence" / "uat-xlsx-ebisnis-v1.34.34.json"
-DOCX = ROOT / "Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.34.docx"
-PDF = ROOT / "Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.34.pdf"
-MD = ROOT / "HASIL-UAT-E2E-eBisnis-v1.34.34.md"
+EVIDENCE = ROOT / "evidence" / "uat-e2e-ebisnis-v1.34.35.json"
+OMZET_EVIDENCE = ROOT / "evidence" / "uat-laporan-omzet-ebisnis-v1.34.35.json"
+XLSX_EVIDENCE = ROOT / "evidence" / "uat-xlsx-ebisnis-v1.34.35.json"
+DOCX = ROOT / "Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.35.docx"
+PDF = ROOT / "Manual-UAT-E2E-POS-Pengadaan-Laporan-eBisnis-v1.34.35.pdf"
+MD = ROOT / "HASIL-UAT-E2E-eBisnis-v1.34.35.md"
 
 NAVY = (15, 34, 57)
 BLUE = (37, 99, 235)
@@ -834,7 +834,7 @@ def build_doc():
     add_run(header, "eBisnis • Manual UAT End-to-End • Operasional tanpa Akuntansi", bold=True, size=8.2, color="2563EB")
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    add_run(footer, "v1.34.34 • 10 September 2026   |   ", size=8, color="64748B")
+    add_run(footer, "v1.34.35 • 10 September 2026   |   ", size=8, color="64748B")
     fld = OxmlElement("w:fldSimple")
     fld.set(qn("w:instr"), "PAGE")
     footer._p.append(fld)
@@ -859,7 +859,7 @@ def build_doc():
             bold=True, size=16, color="16A34A")
     doc.add_paragraph()
     cover_table = add_table(doc, ["Build", "Lingkungan UAT", "Periode", "Sasaran"], [[
-        "eBisnis 1.34.34 (build 197)", "Kantin Demo • server live", "1–10 September 2026",
+        "eBisnis 1.34.35 (build 198)", "Kantin Demo • server live", "1–10 September 2026",
         "UAT & bahan training operasional"
     ]], [4.2, 5.0, 4.2, 5.0])
     doc.add_paragraph()
@@ -947,7 +947,7 @@ def build_doc():
     add_numbered(doc, [
         "Pastikan transaksi lokal yang akan dibandingkan sudah tersinkronkan.",
         "Tutup aplikasi POS yang sedang berjalan.",
-        "Pasang build eBisnis 1.34.34 (build 197) pada komputer pengujian.",
+        "Pasang build eBisnis 1.34.35 (build 198) pada komputer pengujian.",
         "Login, pilih Kantin Demo, lalu tekan Sinkronkan.",
         "Buka menu Laporan-Laporan dan pilih kategori Omzet.",
         "Buka Transaksi Omzet, Omzet Produk Non-Saldo/Tunai, Omzet Produk Saldo, dan Rekap Omzet.",
@@ -1113,7 +1113,7 @@ def build_doc():
     doc.save(DOCX)
 
     md_lines = [
-        "# Hasil UAT End-to-End Operasional eBisnis v1.34.34",
+        "# Hasil UAT End-to-End Operasional eBisnis v1.34.35",
         "",
         f"- Waktu audit: `{evidence['generatedAt']}`",
         f"- Lingkungan: `{evidence['environment']}`",
@@ -1153,7 +1153,7 @@ def build_doc():
         "",
         "1. Pastikan transaksi lokal sudah disinkronkan.",
         "2. Tutup aplikasi POS.",
-        "3. Pasang build eBisnis 1.34.34 (build 197).",
+        "3. Pasang build eBisnis 1.34.35 (build 198).",
         "4. Login, pilih Kantin Demo, dan tekan Sinkronkan.",
         "5. Buka menu Laporan-Laporan dan pilih kategori Omzet.",
         "6. Jalankan keempat laporan pada periode yang sama.",
@@ -1167,9 +1167,9 @@ def build_doc():
         "",
         f"- `{DOCX.name}`",
         f"- `{PDF.name}`",
-        "- `evidence/uat-e2e-ebisnis-v1.34.34.json`",
-        "- `evidence/uat-laporan-omzet-ebisnis-v1.34.34.json`",
-        "- `evidence/uat-xlsx-ebisnis-v1.34.34.json`",
+        "- `evidence/uat-e2e-ebisnis-v1.34.35.json`",
+        "- `evidence/uat-laporan-omzet-ebisnis-v1.34.35.json`",
+        "- `evidence/uat-xlsx-ebisnis-v1.34.35.json`",
         "- `screenshots/` dan `annotated/`",
         "- `diagrams/`",
     ]

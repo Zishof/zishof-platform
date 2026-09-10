@@ -8,7 +8,7 @@
       "rows": 504,
       "columns": 19,
       "bytes": 51305,
-      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_transaksi.xlsx",
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.35\\xlsx\\omzet_transaksi.xlsx",
       "passed": true
     },
     {
@@ -16,7 +16,7 @@
       "rows": 102,
       "columns": 8,
       "bytes": 8275,
-      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_tunai_produk.xlsx",
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.35\\xlsx\\omzet_tunai_produk.xlsx",
       "passed": true
     },
     {
@@ -24,7 +24,7 @@
       "rows": 101,
       "columns": 8,
       "bytes": 8010,
-      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_saldo_produk.xlsx",
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.35\\xlsx\\omzet_saldo_produk.xlsx",
       "passed": true
     },
     {
@@ -32,7 +32,7 @@
       "rows": 1,
       "columns": 4,
       "bytes": 2145,
-      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_rekapan.xlsx",
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.35\\xlsx\\omzet_rekapan.xlsx",
       "passed": true
     }
   ]

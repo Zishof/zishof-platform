@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = Join-Path (Split-Path $PSScriptRoot -Parent) '..\..\docs\pos\uat-e2e-ebisnis-v1.34.34-20260910\evidence'
+    $OutputDir = Join-Path (Split-Path $PSScriptRoot -Parent) '..\..\docs\pos\uat-e2e-ebisnis-v1.34.35-20260910\evidence'
 }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
@@ -228,7 +228,7 @@ $result.allPassed = ($catalogPassed -and
     @($detailChecks | Where-Object { -not $_.passed }).Count -eq 0 -and
     $result.reconciliation.passed)
 
-$jsonPath = Join-Path $OutputDir 'uat-laporan-omzet-ebisnis-v1.34.34.json'
+$jsonPath = Join-Path $OutputDir 'uat-laporan-omzet-ebisnis-v1.34.35.json'
 [IO.File]::WriteAllText($jsonPath, ($result | ConvertTo-Json -Depth 25), [Text.UTF8Encoding]::new($false))
 
 [pscustomobject]@{
