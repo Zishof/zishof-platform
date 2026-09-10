@@ -111,7 +111,8 @@ void main() {
     final layar =
         File('lib/screens/laporan_detail_screen.dart').readAsStringSync();
 
-    expect(layar, contains('final bytes = _bangunXlsx(kolom, baris)'));
+    expect(
+        layar, contains('final bytes = buildLaporanDetailXlsx(kolom, baris)'));
     expect(layar, contains(".aksi('laporan_pdf'"));
     expect(layar, contains('FilePicker.platform.saveFile'));
   });

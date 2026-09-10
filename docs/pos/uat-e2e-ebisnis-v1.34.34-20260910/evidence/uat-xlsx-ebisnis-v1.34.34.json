@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "passedCount": 4,
+  "totalCount": 4,
+  "reports": [
+    {
+      "id": "omzet_transaksi",
+      "rows": 504,
+      "columns": 19,
+      "bytes": 51305,
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_transaksi.xlsx",
+      "passed": true
+    },
+    {
+      "id": "omzet_tunai_produk",
+      "rows": 102,
+      "columns": 8,
+      "bytes": 8275,
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_tunai_produk.xlsx",
+      "passed": true
+    },
+    {
+      "id": "omzet_saldo_produk",
+      "rows": 101,
+      "columns": 8,
+      "bytes": 8010,
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_saldo_produk.xlsx",
+      "passed": true
+    },
+    {
+      "id": "omzet_rekapan",
+      "rows": 1,
+      "columns": 4,
+      "bytes": 2145,
+      "path": "E:\\opt\\Codex-Worspace\\zishof-platform-setup-laporan-20260909\\tmp\\uat-ebisnis-v1.34.34\\xlsx\\omzet_rekapan.xlsx",
+      "passed": true
+    }
+  ]
+}

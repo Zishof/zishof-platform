@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:ebisnis/api_client.dart';
 import 'package:ebisnis/main.dart' as app;
+import 'package:ebisnis/models.dart';
 import 'package:ebisnis/screens/kasir_screen.dart';
 import 'package:ebisnis/screens/login_screen.dart';
 import 'package:ebisnis/screens/pengadaan_bast_screen.dart';
@@ -57,6 +58,17 @@ void main() {
     if (login == null) throw StateError('Login UAT gagal: $loginError');
     await ApiClient.instance.simpanToken(login['token'] as String);
     await ApiClient.instance.aksi('pilih_toko_aktif', {'id_toko': 1});
+    final katalog = await ApiClient.instance.aksi('katalog', {
+      'keyword': 'ABC Kecap Manis 100 g Botol',
+      'tokoId': 1,
+      'page': 1,
+      'page_size': 20,
+    });
+    final produkJson = ((katalog['produk'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .first;
+    final produkContoh = Produk.fromJson(produkJson);
 
     app.main();
     await _wait(
@@ -75,12 +87,24 @@ void main() {
       oldError?.call(detail);
     };
     expect(find.byType(LoginScreen), findsNothing);
+    await _pumpPage(
+      tester,
+      KasirScreen(
+        keranjangAwal: [ItemKeranjang(produk: produkContoh, jumlah: 2)],
+      ),
+    );
     final normalView = find.text('Tampilan Normal');
     if (normalView.evaluate().isNotEmpty) {
       await tester.tap(normalView.first);
-      await tester.pump(const Duration(seconds: 2));
-      await _waitNoSpinner(tester, seconds: 90);
+      await tester.pump(const Duration(milliseconds: 500));
     }
+    await _waitNoSpinner(tester, seconds: 90);
+    await _wait(
+      tester,
+      () => find.text(produkContoh.nama).evaluate().length >= 2,
+      reason: 'Produk contoh belum tampil pada katalog dan keranjang',
+      seconds: 90,
+    );
     await _shot(tester, '01-kasir-pos-layar-penuh');
 
     await _pumpPage(tester, const RiwayatPenjualanScreen());
@@ -156,7 +180,13 @@ void main() {
 }
 
 Future<void> _pumpPage(WidgetTester tester, Widget page) async {
+  // Lepaskan Navigator dari aplikasi penuh terlebih dahulu. Tanpa jeda ini,
+  // penggantian root saat UAT Windows dapat membangun Navigator lama sesudah
+  // route terakhirnya dibuang dan memicu assertion `_history.isNotEmpty`.
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 100));
   await tester.pumpWidget(MaterialApp(
+    key: UniqueKey(),
     debugShowCheckedModeBanner: false,
     theme: AppTheme.light(),
     home: page,

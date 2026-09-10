@@ -260,7 +260,7 @@ class _LaporanDetailScreenState extends State<LaporanDetailScreen>
     if (kolom.isEmpty) return;
 
     try {
-      final bytes = _bangunXlsx(kolom, baris);
+      final bytes = buildLaporanDetailXlsx(kolom, baris);
       final namaFile =
           '${(widget.item['judul'] as String? ?? widget.item['id']).toString().replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '')}.xlsx';
       final path = await FilePicker.platform.saveFile(
@@ -1218,7 +1218,10 @@ String _escapeXml(String s) => s
 /// inline (`t="inlineStr"`) dipakai drpd `sharedStrings.xml` -- lebih
 /// sederhana utk laporan sekali-pakai spt ini (tak perlu tabel string
 /// terpisah), tetap valid OOXML.
-Uint8List _bangunXlsx(
+/// Pembangun XLSX yang dipakai layar laporan dan dapat diaudit dengan data UAT
+/// live. Fungsi sengaja publik agar berkas hasil ekspor bisa dibuka ulang dalam
+/// pengujian tanpa melewati dialog pemilih berkas.
+Uint8List buildLaporanDetailXlsx(
   List<Map<String, dynamic>> kolom,
   List<List<dynamic>> baris,
 ) {

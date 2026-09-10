@@ -1,0 +1,216 @@
+{
+  "generatedAt": "2026-09-10T12:54:25.0424338+07:00",
+  "environment": "eBisnis live - Kantin Demo",
+  "endpoint": "https://ebisnis.id/ebisnis/Api_eBisnis",
+  "period": {
+    "start": "2026-09-01",
+    "end": "2026-09-10"
+  },
+  "scope": "POS, PR, PO, BAST, tagihan, pembayaran vendor, penjualan, pembelian, omzet, margin",
+  "accountingExcluded": true,
+  "procurement": {
+    "pengadaan_pr_daftar": {
+      "count": 100,
+      "minimum": 100,
+      "durationMs": 329,
+      "passed": true
+    },
+    "pengadaan_po_daftar": {
+      "count": 100,
+      "minimum": 100,
+      "durationMs": 357,
+      "passed": true
+    },
+    "pengadaan_bast_daftar": {
+      "count": 100,
+      "minimum": 100,
+      "durationMs": 528,
+      "passed": true
+    },
+    "pengadaan_tagihan_daftar": {
+      "count": 100,
+      "minimum": 100,
+      "durationMs": 998,
+      "passed": true
+    },
+    "pengadaan_bayar_daftar": {
+      "count": 100,
+      "minimum": 100,
+      "durationMs": 445,
+      "passed": true
+    }
+  },
+  "reports": [
+    {
+      "id": "pnj_faktur",
+      "status": "success",
+      "rows": 504,
+      "columns": 7,
+      "durationMs": 487,
+      "pdfBytes": 67096,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 5946,
+      "passed": true
+    },
+    {
+      "id": "pnj_per_barang",
+      "status": "success",
+      "rows": 201,
+      "columns": 4,
+      "durationMs": 739,
+      "pdfBytes": 16137,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 691,
+      "passed": true
+    },
+    {
+      "id": "pnj_rincian_barang",
+      "status": "success",
+      "rows": 504,
+      "columns": 9,
+      "durationMs": 600,
+      "pdfBytes": 152847,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 1254,
+      "passed": true
+    },
+    {
+      "id": "omzet_transaksi",
+      "status": "success",
+      "rows": 504,
+      "columns": 19,
+      "durationMs": 885,
+      "pdfBytes": 297863,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 2575,
+      "passed": true
+    },
+    {
+      "id": "omzet_tunai_produk",
+      "status": "success",
+      "rows": 102,
+      "columns": 8,
+      "durationMs": 413,
+      "pdfBytes": 19726,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 811,
+      "passed": true
+    },
+    {
+      "id": "omzet_saldo_produk",
+      "status": "success",
+      "rows": 101,
+      "columns": 8,
+      "durationMs": 356,
+      "pdfBytes": 19284,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 450,
+      "passed": true
+    },
+    {
+      "id": "omzet_rekapan",
+      "status": "success",
+      "rows": 1,
+      "columns": 4,
+      "durationMs": 585,
+      "pdfBytes": 2233,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 345,
+      "passed": true
+    },
+    {
+      "id": "beli_penerimaan",
+      "status": "success",
+      "rows": 452,
+      "columns": 5,
+      "durationMs": 315,
+      "pdfBytes": 39503,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 409,
+      "passed": true
+    },
+    {
+      "id": "beli_faktur",
+      "status": "success",
+      "rows": 452,
+      "columns": 5,
+      "durationMs": 913,
+      "pdfBytes": 39439,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 737,
+      "passed": true
+    },
+    {
+      "id": "margin_produk",
+      "status": "success",
+      "rows": 201,
+      "columns": 6,
+      "durationMs": 453,
+      "pdfBytes": 25125,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 1098,
+      "passed": true
+    },
+    {
+      "id": "margin_kategori",
+      "status": "success",
+      "rows": 13,
+      "columns": 4,
+      "durationMs": 299,
+      "pdfBytes": 2849,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 699,
+      "passed": true
+    },
+    {
+      "id": "laba_kotor_harian",
+      "status": "success",
+      "rows": 3,
+      "columns": 4,
+      "durationMs": 521,
+      "pdfBytes": 2278,
+      "pdfSignature": "%PDF",
+      "pdfDurationMs": 400,
+      "passed": true
+    }
+  ],
+  "clickableDetails": [
+    {
+      "name": "Transaksi Omzet",
+      "rows": 1,
+      "expectedTotal": 250500.0,
+      "actualTotal": 250500.0,
+      "difference": 0.0,
+      "durationMs": 173,
+      "passed": true
+    },
+    {
+      "name": "Produk Non-Saldo/Tunai",
+      "rows": 1,
+      "expectedTotal": 115400.0,
+      "actualTotal": 115400.0,
+      "difference": 0.0,
+      "durationMs": 185,
+      "passed": true
+    },
+    {
+      "name": "Produk Saldo",
+      "rows": 1,
+      "expectedTotal": 891000.0,
+      "actualTotal": 891000.0,
+      "difference": 0.0,
+      "durationMs": 421,
+      "passed": true
+    },
+    {
+      "name": "Rekap Omzet - Tunai / Non-Saldo",
+      "rows": 403,
+      "expectedTotal": 180567900.0,
+      "actualTotal": 180567900.0,
+      "difference": 0.0,
+      "durationMs": 990,
+      "passed": true
+    }
+  ],
+  "allPassed": true
+}
