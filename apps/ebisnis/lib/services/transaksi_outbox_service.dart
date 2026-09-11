@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../sesi.dart';
+import 'master_offline.dart';
 import 'pelayanan_transaksi.dart';
 import 'peringatan_transaksi.dart';
 
@@ -348,6 +349,11 @@ class TransaksiOutboxService {
       return const HasilSinkronisasiTransaksi(total: 0, berhasil: 0);
     }
 
+    // Urutan bisnis wajib: mutasi stok masuk/opname harus mencapai server
+    // sebelum transaksi yang mengeluarkan stok tersebut. Kedua jenis data
+    // memakai outbox berbeda, jadi urutannya ditegakkan eksplisit di sini.
+    await MasterOffline.flush();
+
     if (sertakanGagal) {
       final gagal = await CoreDb.instance.transaksiGagalBelumSinkron(
         akunKunci: Sesi.instance.userId,
@@ -410,6 +416,33 @@ class TransaksiOutboxService {
       await CoreDb.instance.tandaiTransaksiDitolak(
           kodeUnik, 'Payload lokal rusak dan tidak dapat dikirim: $e');
       return _VonisKirim.dilewati;
+    }
+
+    final stokMasterBelumTerkirim =
+        await CoreDb.instance.produkDenganMutasiStokMasterAktif();
+    if (stokMasterBelumTerkirim.isNotEmpty) {
+      final produkTransaksi = <int>{};
+      final transaksi = payload['transaksi'];
+      if (transaksi is List) {
+        for (final item in transaksi.whereType<Map>()) {
+          final id = item['id'];
+          if (id is num && id.toInt() > 0) produkTransaksi.add(id.toInt());
+          final ekstra = item['ekstra'];
+          if (ekstra is List) {
+            for (final baris in ekstra.whereType<Map>()) {
+              final ekstraId = baris['id'];
+              if (ekstraId is num && ekstraId.toInt() > 0) {
+                produkTransaksi.add(ekstraId.toInt());
+              }
+            }
+          }
+        }
+      }
+      if (produkTransaksi.any(stokMasterBelumTerkirim.contains)) {
+        await CoreDb.instance.tandaiTransaksiGagal(kodeUnik,
+            'Menunggu stok masuk/opname produk terkait diterima server lebih dahulu.');
+        return _VonisKirim.berhentiSementara;
+      }
     }
 
     // Proteksi migrasi utk baris lama yang belum memiliki akun_kunci.

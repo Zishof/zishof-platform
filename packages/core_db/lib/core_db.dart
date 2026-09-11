@@ -119,7 +119,7 @@ class CoreDb {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 19,
+        version: 20,
         onConfigure: _konfigurasiDb,
         onCreate: _buatSkema,
         onUpgrade: _upgradeSkema,
@@ -352,6 +352,13 @@ class CoreDb {
     if (versiLama < 19) {
       await _buatIndeksBarisCacheReferensi(db);
     }
+    if (versiLama < 20) {
+      try {
+        await db.execute(_ddlTransaksiStokLokal);
+      } catch (_) {
+        // Tabel mungkin sudah dibuat oleh upgrade parsial.
+      }
+    }
     if (versiLama < 18) {
       try {
         await db.execute('ALTER TABLE produk_cache ADD COLUMN kemasan TEXT');
@@ -576,6 +583,17 @@ class CoreDb {
       )
     ''';
 
+  /// Pengurangan stok yang sudah diterapkan ke snapshot lokal untuk checkout
+  /// yang belum mendapat ACK server. Kunci gabungan menjamin retry idempoten.
+  static const _ddlTransaksiStokLokal = '''
+      CREATE TABLE transaksi_stok_lokal (
+        kode_unik TEXT NOT NULL,
+        produk_id INTEGER NOT NULL,
+        jumlah REAL NOT NULL,
+        PRIMARY KEY (kode_unik, produk_id)
+      )
+    ''';
+
   Future<void> _buatSkema(Database db, int versi) async {
     await db.execute('''
       CREATE TABLE produk_cache (
@@ -686,6 +704,7 @@ class CoreDb {
     await db.execute(_ddlOutboxMaster);
     await db.execute(_ddlIdSementara);
     await db.execute(_ddlPengikatanTenant);
+    await db.execute(_ddlTransaksiStokLokal);
   }
 
   /// Pilihan toko terakhir per kombinasi server+akun. Penyimpanan ini sengaja
@@ -1153,9 +1172,117 @@ class CoreDb {
 
   // ============================== PRODUK CACHE ==============================
 
+  /// Hitung stok dasar yang keluar dari payload POS. `jumlah` item utama
+  /// sudah dalam UOM dasar; ekstra berlaku per unit item induk.
+  static Map<int, double> _stokKeluarDariPayload(String payloadJson) {
+    final hasil = <int, double>{};
+    try {
+      final payload = Map<String, dynamic>.from(jsonDecode(payloadJson) as Map);
+      final transaksi = payload['transaksi'];
+      if (transaksi is! List) return hasil;
+
+      void tambah(Object? idMentah, Object? jumlahMentah) {
+        final id = (idMentah as num?)?.toInt();
+        final jumlah = (jumlahMentah as num?)?.toDouble() ?? 0;
+        if (id == null || id <= 0 || jumlah <= 0) return;
+        hasil[id] = (hasil[id] ?? 0) + jumlah;
+      }
+
+      for (final itemMentah in transaksi) {
+        if (itemMentah is! Map) continue;
+        final item = Map<String, dynamic>.from(itemMentah);
+        final jumlahInduk = (item['jumlah'] as num?)?.toDouble() ?? 0;
+        tambah(item['id'], jumlahInduk);
+        final ekstra = item['ekstra'];
+        if (ekstra is! List || jumlahInduk <= 0) continue;
+        for (final ekstraMentah in ekstra) {
+          if (ekstraMentah is! Map) continue;
+          final baris = Map<String, dynamic>.from(ekstraMentah);
+          final perInduk = (baris['jumlah'] as num?)?.toDouble() ?? 1;
+          tambah(baris['id'], jumlahInduk * perInduk);
+        }
+      }
+    } catch (_) {
+      // Payload rusak divonis oleh jalur outbox; stok tidak diubah berdasarkan
+      // data yang tidak dapat dibaca dengan pasti.
+    }
+    return hasil;
+  }
+
+  static Future<void> _sesuaikanStokTransaksi(
+    DatabaseExecutor txn,
+    String kodeUnik,
+    Map<int, double> jumlahBaru,
+  ) async {
+    final lama = await txn.query('transaksi_stok_lokal',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    final jumlahLama = <int, double>{
+      for (final row in lama)
+        (row['produk_id'] as num).toInt():
+            (row['jumlah'] as num?)?.toDouble() ?? 0,
+    };
+    final semuaProduk = <int>{...jumlahLama.keys, ...jumlahBaru.keys};
+    for (final produkId in semuaProduk) {
+      // Mengembalikan efek payload lama lalu menerapkan payload terbaru.
+      // Retry identik menghasilkan delta 0, jadi stok tidak terpotong dua kali.
+      final delta = (jumlahLama[produkId] ?? 0) - (jumlahBaru[produkId] ?? 0);
+      if (delta.abs() > 1e-9) {
+        await txn.rawUpdate(
+          'UPDATE produk_cache SET stok = COALESCE(stok, 0) + ? WHERE id = ?',
+          [delta, produkId],
+        );
+      }
+    }
+    await txn.delete('transaksi_stok_lokal',
+        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    for (final entry in jumlahBaru.entries) {
+      await txn.insert('transaksi_stok_lokal', {
+        'kode_unik': kodeUnik,
+        'produk_id': entry.key,
+        'jumlah': entry.value,
+      });
+    }
+  }
+
   Future<void> replaceProdukCache(List<Map<String, Object?>> baris) async {
     final database = await db;
     await database.transaction((txn) async {
+      // Checkout yang belum mendapat ACK server sudah mengurangi stok lokal.
+      // Pertahankan angka itu saat katalog server di-refresh agar snapshot
+      // jaringan tidak memundurkan keadaan lokal yang lebih baru.
+      final stokTransaksiLokal = await txn.rawQuery('''
+        SELECT p.id, p.stok
+        FROM produk_cache p
+        WHERE EXISTS (
+          SELECT 1 FROM transaksi_stok_lokal l WHERE l.produk_id = p.id
+        )
+      ''');
+      final stokTerjaga = <int, Object?>{
+        for (final row in stokTransaksiLokal)
+          (row['id'] as num).toInt(): row['stok'],
+      };
+      final opnameLokal = await txn.query('outbox_master',
+          columns: ['payload_json'],
+          where: "aksi = 'so_simpan' AND status IN ('PENDING','GAGAL')");
+      for (final row in opnameLokal) {
+        try {
+          final payload = Map<String, dynamic>.from(
+              jsonDecode('${row['payload_json']}') as Map);
+          final produkId = (payload['produk_id'] as num?)?.toInt();
+          if (produkId == null || produkId <= 0) continue;
+          final sekarang = await txn.query('produk_cache',
+              columns: ['stok'],
+              where: 'id = ?',
+              whereArgs: [produkId],
+              limit: 1);
+          if (sekarang.isNotEmpty) {
+            stokTerjaga.putIfAbsent(produkId, () => sekarang.first['stok']);
+          }
+        } catch (_) {
+          // Payload rusak dipertahankan untuk audit; tidak menebak produk.
+        }
+      }
+
       await txn.delete('produk_cache');
       final batch = txn.batch();
       for (final b in baris) {
@@ -1226,7 +1353,75 @@ class CoreDb {
           // baris tidak boleh menggagalkan refresh katalog lainnya.
         }
       }
+
+      // Diterapkan terakhir supaya transaksi lokal menang atas snapshot
+      // server maupun stok fisik master yang masih sama-sama mengantre.
+      for (final entry in stokTerjaga.entries) {
+        await txn.update('produk_cache', {'stok': entry.value},
+            where: 'id = ?', whereArgs: [entry.key]);
+      }
     });
+  }
+
+  /// Varian atomik untuk mutasi yang menetapkan stok fisik. Outbox dan
+  /// `produk_cache` harus committed bersama; bila salah satunya gagal, keduanya
+  /// rollback sehingga tampilan lokal tidak pernah mendahului/tertinggal dari
+  /// jurnal yang kelak dikirim ke server.
+  Future<int> outboxMasterTambahDenganStokLokal(
+    String aksi,
+    String? kunci,
+    String payloadJson, {
+    required int produkId,
+    required num stokFisik,
+  }) async {
+    final database = await db;
+    return database.transaction<int>((txn) async {
+      if (kunci != null && kunci.isNotEmpty) {
+        await txn.delete('outbox_master',
+            where: "status IN ('PENDING','GAGAL') AND kunci = ?",
+            whereArgs: [kunci]);
+      }
+      final id = await txn.insert('outbox_master', {
+        'aksi': aksi,
+        'kunci': kunci,
+        'payload_json': payloadJson,
+        'status': 'PENDING',
+        'dibuat_pada': DateTime.now().toIso8601String(),
+      });
+      if (produkId > 0) {
+        await txn.update('produk_cache', {'stok': stokFisik},
+            where: 'id = ?', whereArgs: [produkId]);
+      }
+      return id;
+    });
+  }
+
+  /// Produk yang mutasi stok fisiknya belum diterima server. Transaksi POS
+  /// atas produk ini harus ditahan agar urutan `masuk -> keluar` tidak terbalik.
+  Future<Set<int>> produkDenganMutasiStokMasterAktif() async {
+    final database = await db;
+    final rows = await database.query('outbox_master',
+        columns: ['aksi', 'payload_json'],
+        where:
+            "status IN ('PENDING','GAGAL') AND aksi IN ('produk_simpan','so_simpan')",
+        orderBy: 'id ASC');
+    final hasil = <int>{};
+    for (final row in rows) {
+      try {
+        final payload = Map<String, dynamic>.from(
+            jsonDecode('${row['payload_json']}') as Map);
+        if ('${row['aksi']}' == 'produk_simpan' &&
+            !payload.containsKey('stok')) {
+          continue;
+        }
+        final id = (payload['produk_id'] ?? payload['id']) as Object?;
+        if (id is num && id.toInt() > 0) hasil.add(id.toInt());
+      } catch (_) {
+        // Payload rusak akan tampil di audit GAGAL; tanpa produk yang pasti,
+        // jangan menahan transaksi lain secara global.
+      }
+    }
+    return hasil;
   }
 
   /// Menambahkan/memperbarui sebagian katalog tanpa menghapus halaman lain.
@@ -1259,8 +1454,10 @@ class CoreDb {
   }) async {
     final database = await db;
     final kata = keyword.trim().toLowerCase();
+    // ID negatif adalah draf master yang aman di SQLite tetapi belum diakui
+    // server; tetap tampil di Master, namun tidak boleh masuk transaksi POS.
     var where =
-        "aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))";
+        "id > 0 AND aktif = 1 AND (jenis_item IS NULL OR jenis_item NOT IN ('BAHAN','EKSTRA'))";
     final whereArgs = <Object?>[];
     if (kata.isNotEmpty) {
       where +=
@@ -1489,24 +1686,37 @@ class CoreDb {
     // request sempat dikirim. REPLACE aman di sini karena satu kode hanya boleh
     // mempunyai satu payload/status outbox terbaru.
     final sekarang = DateTime.now().toIso8601String();
-    final id = await database.insert(
-      'transaksi_pending',
-      {
-        'kode_unik': kodeUnik,
-        'payload_json': payloadJson,
-        'status': 'PENDING',
-        'pesan_error': null,
-        'dibuat_pada': sekarang,
-        'akun_kunci': akunKunci,
-        'toko_id': tokoId,
-        'id_perangkat': idPerangkat,
-        'percobaan': 0,
-        'terakhir_dicoba': null,
-        'disinkronkan_pada': null,
-        'diperbarui_pada': sekarang,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final id = await database.transaction<int>((txn) async {
+      final lama = await txn.query('transaksi_pending',
+          where: 'kode_unik = ?', whereArgs: [kodeUnik], limit: 1);
+      if (lama.isNotEmpty && '${lama.first['status']}' == 'SYNCED') {
+        // Callback/klik ulang untuk kode yang sudah diterima server adalah
+        // no-op lokal; jangan pernah membuka kembali dan memotong stok kedua.
+        return (lama.first['id'] as num).toInt();
+      }
+
+      await _sesuaikanStokTransaksi(
+          txn, kodeUnik, _stokKeluarDariPayload(payloadJson));
+      return txn.insert(
+        'transaksi_pending',
+        {
+          'kode_unik': kodeUnik,
+          'payload_json': payloadJson,
+          'status': 'PENDING',
+          'pesan_error': null,
+          'dibuat_pada':
+              lama.isEmpty ? sekarang : lama.first['dibuat_pada'] ?? sekarang,
+          'akun_kunci': akunKunci,
+          'toko_id': tokoId,
+          'id_perangkat': idPerangkat,
+          'percobaan': 0,
+          'terakhir_dicoba': null,
+          'disinkronkan_pada': null,
+          'diperbarui_pada': sekarang,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
     // DB utama sudah committed. Buat salinan kedua sebelum request server.
     await _cadangkanBarisTransaksi(kodeUnik);
     return id;
@@ -1537,16 +1747,22 @@ class CoreDb {
   Future<void> tandaiTransaksiSinkron(String kodeUnik) async {
     final database = await db;
     final sekarang = DateTime.now().toIso8601String();
-    await database.update(
-        'transaksi_pending',
-        {
-          'status': 'SYNCED',
-          'pesan_error': null,
-          'disinkronkan_pada': sekarang,
-          'diperbarui_pada': sekarang,
-        },
-        where: 'kode_unik = ?',
-        whereArgs: [kodeUnik]);
+    await database.transaction((txn) async {
+      await txn.update(
+          'transaksi_pending',
+          {
+            'status': 'SYNCED',
+            'pesan_error': null,
+            'disinkronkan_pada': sekarang,
+            'diperbarui_pada': sekarang,
+          },
+          where: 'kode_unik = ?',
+          whereArgs: [kodeUnik]);
+      // Jangan kembalikan stok: server sudah mencatat transaksi yang sama.
+      // Ledger hanya tak lagi diperlukan untuk melindungi refresh katalog.
+      await txn.delete('transaksi_stok_lokal',
+          where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    });
     await _cadangkanBarisTransaksi(kodeUnik);
   }
 
@@ -1638,20 +1854,30 @@ class CoreDb {
       String kodeUnik, String payloadJson) async {
     final database = await db;
     final sekarang = DateTime.now().toIso8601String();
-    final berubah = await database.update(
-      'transaksi_pending',
-      {
-        'payload_json': payloadJson,
-        'status': 'PENDING',
-        'pesan_error': null,
-        'percobaan': 0,
-        'terakhir_dicoba': null,
-        'disinkronkan_pada': null,
-        'diperbarui_pada': sekarang,
-      },
-      where: "kode_unik = ? AND status != 'SYNCED'",
-      whereArgs: [kodeUnik],
-    );
+    final berubah = await database.transaction<int>((txn) async {
+      final ada = await txn.query('transaksi_pending',
+          columns: ['id'],
+          where: "kode_unik = ? AND status != 'SYNCED'",
+          whereArgs: [kodeUnik],
+          limit: 1);
+      if (ada.isEmpty) return 0;
+      await _sesuaikanStokTransaksi(
+          txn, kodeUnik, _stokKeluarDariPayload(payloadJson));
+      return txn.update(
+        'transaksi_pending',
+        {
+          'payload_json': payloadJson,
+          'status': 'PENDING',
+          'pesan_error': null,
+          'percobaan': 0,
+          'terakhir_dicoba': null,
+          'disinkronkan_pada': null,
+          'diperbarui_pada': sekarang,
+        },
+        where: "kode_unik = ? AND status != 'SYNCED'",
+        whereArgs: [kodeUnik],
+      );
+    });
     if (berubah > 0) await _cadangkanBarisTransaksi(kodeUnik);
     return berubah > 0;
   }
@@ -1764,8 +1990,11 @@ class CoreDb {
   /// tidak pernah akan diterima server.
   Future<void> hapusTransaksiPending(String kodeUnik) async {
     final database = await db;
-    await database.delete('transaksi_pending',
-        where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    await database.transaction((txn) async {
+      await _sesuaikanStokTransaksi(txn, kodeUnik, const <int, double>{});
+      await txn.delete('transaksi_pending',
+          where: 'kode_unik = ?', whereArgs: [kodeUnik]);
+    });
   }
 
   /// Menghapus transaksi yang telah dipastikan tidak ada pada arsip server.
@@ -1797,6 +2026,9 @@ class CoreDb {
           .where((nilai) => nilai.isNotEmpty)
           .toList();
       final tandaAsli = List.filled(kodeAsli.length, '?').join(',');
+      for (final nilai in kodeAsli) {
+        await _sesuaikanStokTransaksi(txn, nilai, const <int, double>{});
+      }
       await txn.delete(
         'transaksi_pending',
         where: 'kode_unik IN ($tandaAsli)',

@@ -141,4 +141,37 @@ void main() {
     expect(hasil.single['nama'], 'Edit lokal');
     expect(hasil.single['harga_jual'], 2500);
   });
+
+  test('draf produk id negatif terlihat di master tetapi tidak di POS',
+      () async {
+    final db = CoreDb.instance;
+    await db.replaceProdukCache([
+      {
+        'id': -11,
+        'kode': 'DRAF-11',
+        'barcode': '8990000000011',
+        'nama': 'Draf belum diterima server',
+        'harga_jual': 8500,
+        'stok': 0,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      },
+      {
+        'id': 12,
+        'kode': 'AKTIF-12',
+        'barcode': '8990000000012',
+        'nama': 'Produk server',
+        'harga_jual': 8500,
+        'stok': 1,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      },
+    ]);
+
+    final pos = await db.produkCache();
+    final master = await db.produkCacheMaster(limit: 50);
+    expect(pos.map((e) => e['id']), contains(12));
+    expect(pos.map((e) => e['id']), isNot(contains(-11)));
+    expect(master.map((e) => e['id']), containsAll(<int>[-11, 12]));
+  });
 }
