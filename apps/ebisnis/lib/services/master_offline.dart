@@ -292,8 +292,26 @@ class MasterOffline {
     if (idLokal != null) {
       await CoreDb.instance.idSementaraCatat(idLokal, entitas);
     }
-    final id = await CoreDb.instance
-        .outboxMasterTambah(aksi, kunci, jsonEncode(antreBody));
+    final produkStokId = aksi == 'so_simpan'
+        ? (antreBody['produk_id'] as num?)?.toInt()
+        : aksi == 'produk_simpan' && antreBody.containsKey('stok')
+            ? (antreBody['id'] as num?)?.toInt()
+            : null;
+    final stokFisik = aksi == 'so_simpan'
+        ? antreBody['stok_fisik'] as num?
+        : aksi == 'produk_simpan'
+            ? antreBody['stok'] as num?
+            : null;
+    final id = produkStokId != null && produkStokId > 0 && stokFisik != null
+        ? await CoreDb.instance.outboxMasterTambahDenganStokLokal(
+            aksi,
+            kunci,
+            jsonEncode(antreBody),
+            produkId: produkStokId,
+            stokFisik: stokFisik,
+          )
+        : await CoreDb.instance
+            .outboxMasterTambah(aksi, kunci, jsonEncode(antreBody));
     if (cacheKey != null && rowLokal != null) {
       await terapkanLokal(cacheKey, rowLokal, hapus: hapusLokal, kunci: kunci);
     }

@@ -1,0 +1,82 @@
+{
+  "checkedAt": "2026-09-11T22:00:00+07:00",
+  "variant": "nahl",
+  "endpoint": "https://an-nahl.santri.info/nahl/Api_eBisnis",
+  "readOnly": true,
+  "stock": {
+    "productId": 8137,
+    "code": "AN000710",
+    "barcode": "8997004302440",
+    "name": "SUKY SUKY SEAWEED FLAVOR 60GR",
+    "systemStock": -3,
+    "uomId": 1,
+    "uomName": "Pcs",
+    "lastProcurement": "",
+    "stockOpnameFoundInLast200": false,
+    "negativeStockProductCount": 214
+  },
+  "baygonStock": {
+    "productId": 8331,
+    "code": "AN001000",
+    "barcode": "8998899000039",
+    "name": "Baygon kecil 200ml",
+    "systemStock": -5,
+    "uomName": "Pc",
+    "lastProcurement": null,
+    "stockOpnameFoundInLast50": false,
+    "productionConclusion": "SALE_RECORDED_STOCK_IN_NOT_RECORDED"
+  },
+  "duplicateInvoiceAudit": {
+    "dateFrom": "2026-09-08",
+    "dateTo": "2026-09-11",
+    "storeId": 1,
+    "reportRows": 366,
+    "uniqueInvoiceNumbers": 324,
+    "duplicateGroups": 42,
+    "copiesPerDuplicateGroup": 2,
+    "sample": {
+      "invoice": "EB260910110558QDUD",
+      "transactionIds": [407, 521],
+      "timestamp": "10-09-2026 11:05:58",
+      "cashier": "mutia",
+      "productId": 8111,
+      "product": "BON CABE MAKARONI KRISPI LV 2 135GR",
+      "quantityEach": 1,
+      "totalEach": 11500
+    }
+  },
+  "softwareFix": {
+    "clientVersion": "1.34.36+199",
+    "serverSvnRevision": 88715,
+    "serverCompile": "PASS",
+    "clientTargetedTests": {
+      "changedScope": "64/64 PASS",
+      "fullAppSuite": "851/851 PASS",
+      "baygonLocalFirstRegression": "PASS"
+    },
+    "baygonRegressionSteps": [
+      "initial stock 0",
+      "local stock-in 5 -> cache 5",
+      "local sale 5 -> cache 0",
+      "retry same transaction code -> cache remains 0",
+      "stale server refresh while pending -> cache remains 0",
+      "server ACK and refresh stock 0 -> cache remains 0"
+    ],
+    "artifacts": {
+      "apk": {
+        "publishedName": "TokoQu-Al-Bahjah-An-Nahl-1.34.36-build-199-UAT.apk",
+        "bytes": 191531089,
+        "sha256": "1A513E80531ED0E37F16C6F6CDE83CD1CF4245A29B466F0462A063E88155C0B9",
+        "signing": "DEBUG_UAT"
+      },
+      "windows": {
+        "publishedName": "TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.36-UAT.exe",
+        "bytes": 86178218,
+        "sha256": "460CE670FB54D3B1D430BECA109223E45332C011174112E70A4BB917A6E99A1F",
+        "signing": "UNSIGNED_UAT"
+      },
+      "buildCompletedAt": "2026-09-12T00:54:00+07:00"
+    }
+  },
+  "productionSignoff": "PENDING_SERVER_DEPLOY_STOCK_COUNT_AND_HISTORICAL_RECONCILIATION"
+}

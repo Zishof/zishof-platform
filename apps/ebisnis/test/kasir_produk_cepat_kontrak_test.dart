@@ -35,6 +35,14 @@ void main() {
     expect(source, contains(rapat("hasil['offline'] == true")));
     expect(source, contains(rapat('upsertProdukCache')));
     expect(source, contains(rapat('_pilihHasilPencarian(Produk.fromJson')));
+    expect(source, contains(rapat("'kode': kodeProduk")),
+        reason: 'kode produk cepat tidak boleh kosong');
+    expect(source, contains(rapat("'satuan_id': satuanId")),
+        reason: 'satuan stok wajib ikut ke server');
+    expect(source, contains(rapat("'satuan_pembelian_id': satuanId")),
+        reason: 'satuan pembelian wajib ikut ke server');
+    expect(source, contains(rapat("'master:uom:aktif'")),
+        reason: 'pilihan UOM harus dapat dibaca dari cache saat offline');
   });
 
   test('sheet split punya tombol sinkron metode pembayaran', () {

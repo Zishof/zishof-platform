@@ -253,6 +253,92 @@ void main() {
         reason: 'waktu audit lokal tidak boleh direset oleh koreksi');
     expect('${setelahKoreksi?['payload_json']}', contains('Tunai'));
 
+    // UAT regresi kasus lapangan Baygon: stok masuk 5 disimpan lokal lebih
+    // dahulu, penjualan 5 langsung membuat snapshot lokal 0 (bukan -5), retry
+    // kode yang sama tidak memotong ulang, dan refresh server yang terlambat
+    // tidak boleh memundurkan stok lokal sebelum ACK transaksi.
+    await CoreDb.instance.upsertProdukCache(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 10000,
+        'kode': 'AN001000',
+        'barcode': '8998899000039',
+        'nama': 'Baygon kecil 200ml',
+        'harga_jual': 18000,
+        'stok': 0,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      }
+    ]);
+    final antreStok = await CoreDb.instance.outboxMasterTambahDenganStokLokal(
+      'so_simpan',
+      'so:10000',
+      jsonEncode(<String, Object?>{
+        'produk_id': 10000,
+        'stok_fisik': 5,
+      }),
+      produkId: 10000,
+      stokFisik: 5,
+    );
+    expect(
+        (await CoreDb.instance.produkCacheResolveByIds([10000])).single['stok'],
+        5,
+        reason: 'stok masuk harus committed lokal bersama outbox');
+    expect(await CoreDb.instance.produkDenganMutasiStokMasterAktif(),
+        contains(10000),
+        reason: 'penjualan produk wajib menunggu stok masuk sampai server');
+    await CoreDb.instance.outboxMasterTandaiSukses(antreStok);
+
+    final payloadBaygon = jsonEncode(<String, Object?>{
+      'kodeUnik': 'UAT-BAYGON-5-IN-5-OUT',
+      'transaksi': <Map<String, Object?>>[
+        <String, Object?>{'id': 10000, 'jumlah': 5, 'ekstra': const []}
+      ],
+    });
+    await CoreDb.instance.simpanTransaksiPending(
+        'UAT-BAYGON-5-IN-5-OUT', payloadBaygon,
+        akunKunci: 'uat-kasir', tokoId: 1, idPerangkat: 'uat-device');
+    expect(
+        (await CoreDb.instance.produkCacheResolveByIds([10000])).single['stok'],
+        0);
+    await CoreDb.instance.simpanTransaksiPending(
+        'UAT-BAYGON-5-IN-5-OUT', payloadBaygon,
+        akunKunci: 'uat-kasir', tokoId: 1, idPerangkat: 'uat-device');
+    expect(
+        (await CoreDb.instance.produkCacheResolveByIds([10000])).single['stok'],
+        0,
+        reason: 'retry kode transaksi identik tidak boleh menjadi -5');
+    await CoreDb.instance.replaceProdukCache(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 10000,
+        'kode': 'AN001000',
+        'nama': 'Baygon kecil 200ml',
+        'harga_jual': 18000,
+        'stok': 5,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      }
+    ]);
+    expect(
+        (await CoreDb.instance.produkCacheResolveByIds([10000])).single['stok'],
+        0,
+        reason: 'refresh server lama tidak boleh menimpa patokan lokal');
+    await CoreDb.instance.tandaiTransaksiSinkron('UAT-BAYGON-5-IN-5-OUT');
+    await CoreDb.instance.replaceProdukCache(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 10000,
+        'kode': 'AN001000',
+        'nama': 'Baygon kecil 200ml',
+        'harga_jual': 18000,
+        'stok': 0,
+        'aktif': 1,
+        'jenis_item': 'JUAL',
+      }
+    ]);
+    expect(
+        (await CoreDb.instance.produkCacheResolveByIds([10000])).single['stok'],
+        0,
+        reason: 'sesudah ACK, snapshot server 0 menjadi sumber berikutnya');
+
     // UAT katalog besar: layar Kasir tidak boleh membaca semua cache saat
     // dibuka. Query awal dan hasil pencarian harus menghormati batas baris.
     final produkUat = <Map<String, Object?>>[];

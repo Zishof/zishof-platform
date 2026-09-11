@@ -2550,6 +2550,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   late final TextEditingController _hargaBeli;
   late final TextEditingController _hargaJual;
   late final TextEditingController _stok;
+  late final double _stokAwal;
   late final TextEditingController _keterangan;
 
   /// Pemasok utama tetap berupa nama. Satuan wajib menunjuk master UOM lewat
@@ -2576,6 +2577,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
   int? _satuanPackId;
   late final TextEditingController _hargaPack;
   bool _menyimpan = false;
+
   /// Persetujuan sekali-pakai untuk gerbang harga modal >10x harga jual.
   ///
   /// Server menolak simpan dengan kode HARGA_MODAL_TINGGI dan menyuruh
@@ -2616,6 +2618,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
         text: p == null ? '0' : p.hargaBeli.toStringAsFixed(0));
     _hargaJual = TextEditingController(
         text: p == null ? '0' : p.hargaJual.toStringAsFixed(0));
+    _stokAwal = p?.stok.toDouble() ?? 0;
     _stok = TextEditingController(text: p == null ? '0' : p.stok.toString());
     _keterangan = TextEditingController(text: p?.keterangan ?? '');
     _pemasok = TextEditingController(text: p?.pemasokNama ?? '');
@@ -2684,6 +2687,12 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
 
   double _angka(String s) =>
       double.tryParse(s.replaceAll(RegExp('[^0-9.]'), '')) ?? 0;
+
+  double _angkaBertanda(String s) =>
+      double.tryParse(s.replaceAll(RegExp('[^0-9.-]'), '')) ?? 0;
+
+  double get _stokNilai => _angkaBertanda(_stok.text);
+  bool get _stokDiubah => (_stokNilai - _stokAwal).abs() > 1e-9;
 
   double get _totalHpp => _bahanBaku.fold(
       0, (s, b) => s + _angka(b.qty.text) * _angka(b.harga.text));
@@ -3245,7 +3254,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'harga_beli':
               _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'harga_jual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          // Pada edit, stok hanya dikirim bila benar-benar diubah. Mengirim
+          // ulang angka lama saat sekadar mengubah nama/harga dapat membuat
+          // opname tertunda menimpa penjualan yang terjadi setelah form dibuka.
+          if (!ubah || _stokDiubah) 'stok': _stokNilai,
           'keterangan': _keterangan.text.trim(),
           'pemasok_nama': _pemasok.text.trim(),
           'satuan_id': _satuanId,
@@ -3300,7 +3312,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'hargaBeli':
               _bahanBaku.isNotEmpty ? _totalHpp : _angka(_hargaBeli.text),
           'hargaJual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          if (!ubah || _stokDiubah) 'stok': _stokNilai,
           'keterangan': _keterangan.text.trim(),
           'satuanId': _satuanId,
           'satuanNama': _namaUom(_satuanId),
@@ -3314,10 +3326,10 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'rute': _rute,
           'perluQc': _perluQc,
           'hargaBeliManual': _hargaBeliManual,
-                'packAktif': _packAktif,
-                'satuanPackId': _satuanPackId,
-                'satuanPackNama': _namaUom(_satuanPackId),
-                'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
+          'packAktif': _packAktif,
+          'satuanPackId': _satuanPackId,
+          'satuanPackNama': _namaUom(_satuanPackId),
+          'hargaPack': _packAktif ? _angka(_hargaPack.text) : null,
           'kemasan': _kemasan
               .map((k) => {
                     'nama': k.nama.text.trim(),
@@ -3334,6 +3346,17 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
       // PENDING), perbarui cache ini juga agar barcode/nama baru langsung bisa
       // dipakai tanpa menunggu server pulih. Create tetap menunggu id server
       // karena produk_cache memakai id sebagai primary key.
+      var stokUntukCache = _stokNilai;
+      final stokServer = hasil['stok'];
+      if (stokServer is num) {
+        stokUntukCache = stokServer.toDouble();
+      } else if (ubah && !_stokDiubah) {
+        final cacheSaatIni =
+            await CoreDb.instance.produkCacheResolveByIds([idProduk]);
+        if (cacheSaatIni.isNotEmpty && cacheSaatIni.first['stok'] is num) {
+          stokUntukCache = (cacheSaatIni.first['stok'] as num).toDouble();
+        }
+      }
       await CoreDb.instance.upsertProdukCache([
         Produk.baseKeCacheRow({
           'id': idProduk,
@@ -3341,7 +3364,7 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
           'barcode': _barcode.text.trim(),
           'nama': _nama.text.trim(),
           'hargaJual': _angka(_hargaJual.text),
-          'stok': _angka(_stok.text),
+          'stok': stokUntukCache,
           'kategoriId': _kategoriId,
           'kategoriNama': widget.produk?.kategoriNama ?? '',
           'gambarUrl': widget.produk?.gambarUrl ?? '',
@@ -3607,7 +3630,8 @@ class _FormProdukState extends State<_FormProduk> with JejakGalat {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    title: const Text('Dapat dijual berupa Pack (Combo) di POS'),
+                    title:
+                        const Text('Dapat dijual berupa Pack (Combo) di POS'),
                     subtitle: const Text(
                         'Kasir mendapat pilihan satuan vs pack; harga pack tetap (mis. Rp 65.000/Dus, bukan isi x harga satuan). Stok tetap turun per satuan dasar.'),
                     value: _packAktif,

@@ -1186,7 +1186,8 @@ class _KasirScreenState extends State<KasirScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
-            title: Text('${p.satuanPackNama} — ${_formatRupiah.format(p.hargaPack!)}'),
+            title: Text(
+                '${p.satuanPackNama} — ${_formatRupiah.format(p.hargaPack!)}'),
             subtitle: Text('isi $faktor '
                 '${p.satuanNama.isEmpty ? 'unit' : p.satuanNama} (harga pack tetap)'),
             onTap: () {
@@ -2327,7 +2328,50 @@ class _KasirScreenState extends State<KasirScreen> {
     final namaC = TextEditingController();
     final hargaC = TextEditingController();
     int? kategoriId;
+    final pilihanUom = <Map<String, dynamic>>[];
+    int? satuanId;
+    String satuanNama = '';
     try {
+      // Produk yang dibuat dari kasir tunduk pada kontrak bisnis yang sama
+      // dengan form master: kode, satuan stok, dan satuan pembelian wajib
+      // tersedia. Gunakan cache UOM agar dialog tetap dapat dipakai saat
+      // offline; bila master UOM belum pernah disinkronkan, jangan membuat
+      // draf yang pasti ditolak server.
+      final hasilUom = await MasterOffline.daftarDenganCache(
+        'uom_list',
+        {
+          'keyword': '',
+          'page': 1,
+          'page_size': 500,
+          'termasuk_nonaktif': false,
+        },
+        'master:uom:aktif',
+      );
+      for (final raw in (hasilUom['data'] as List?) ?? const []) {
+        if (raw is! Map || raw['aktif'] == false) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final id = (row['id'] as num?)?.toInt();
+        if (id == null || id <= 0) continue;
+        pilihanUom.add(row);
+      }
+      if (pilihanUom.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Satuan produk belum tersedia. Sinkronkan master '
+              'Satuan/UOM terlebih dahulu, lalu ulangi Tambah Produk Cepat.'),
+        ));
+        return;
+      }
+      Map<String, dynamic> bawaan = pilihanUom.first;
+      for (final row in pilihanUom) {
+        if ('${row['nama'] ?? ''}'.trim().toLowerCase() == 'pcs') {
+          bawaan = row;
+          break;
+        }
+      }
+      satuanId = (bawaan['id'] as num).toInt();
+      satuanNama = '${bawaan['nama'] ?? ''}'.trim();
+      if (!mounted) return;
       final jadi = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
@@ -2338,8 +2382,8 @@ class _KasirScreenState extends State<KasirScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: TextEditingController(text: barcode),
+                  TextFormField(
+                    initialValue: barcode,
                     readOnly: true,
                     decoration: const InputDecoration(
                         labelText: 'Barcode (hasil scan)', isDense: true),
@@ -2374,6 +2418,27 @@ class _KasirScreenState extends State<KasirScreen> {
                     ],
                     onChanged: (v) => setDialogState(() => kategoriId = v),
                   ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: satuanId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Satuan stok & pembelian *', isDense: true),
+                    items: pilihanUom
+                        .map((u) => DropdownMenuItem<int>(
+                              value: (u['id'] as num).toInt(),
+                              child: Text('${u['nama'] ?? '-'}'),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() {
+                      satuanId = v;
+                      satuanNama = pilihanUom
+                              .where((u) => (u['id'] as num).toInt() == v)
+                              .map((u) => '${u['nama'] ?? ''}'.trim())
+                              .firstOrNull ??
+                          '';
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -2393,14 +2458,19 @@ class _KasirScreenState extends State<KasirScreen> {
       final harga = double.tryParse(
               hargaC.text.replaceAll('.', '').replaceAll(',', '.')) ??
           0;
-      if (nama.isEmpty || harga <= 0) {
+      if (nama.isEmpty || harga <= 0 || satuanId == null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Nama dan harga jual (> 0) wajib diisi.')));
+            content: Text(
+                'Nama, harga jual (> 0), dan satuan produk wajib diisi.')));
         return;
       }
       final idLokal = MasterOffline.idSementaraBaru();
+      // Barcode hasil scan unik per toko dan stabil pada retry, sehingga aman
+      // dijadikan kode produk cepat. Admin tetap dapat menggantinya kemudian
+      // dari menu Produk.
+      final kodeProduk = barcode;
       final body = <String, dynamic>{
-        'kode': '',
+        'kode': kodeProduk,
         'nama': nama,
         'barcode': barcode,
         'harga_beli': 0,
@@ -2409,6 +2479,8 @@ class _KasirScreenState extends State<KasirScreen> {
         'keterangan': 'Ditambahkan cepat dari Kasir',
         'kategori_id': kategoriId,
         'jenis_produk_id': kategoriId,
+        'satuan_id': satuanId,
+        'satuan_pembelian_id': satuanId,
         'kebijakan_retur_id': null,
         'izinkan_jual_minus_stok': false,
         'aktif': true,
@@ -2425,13 +2497,17 @@ class _KasirScreenState extends State<KasirScreen> {
       }
       final rowLokal = <String, dynamic>{
         'id': idLokal,
-        'kode': '',
+        'kode': kodeProduk,
         'barcode': barcode,
         'nama': nama,
         'hargaJual': harga,
         'stok': 0,
         'kategoriId': kategoriId,
         'kategoriNama': kategoriNama,
+        'satuanId': satuanId,
+        'satuanNama': satuanNama,
+        'satuanPembelianId': satuanId,
+        'satuanPembelianNama': satuanNama,
         'aktif': true,
         'jenisItem': 'JUAL',
       };
