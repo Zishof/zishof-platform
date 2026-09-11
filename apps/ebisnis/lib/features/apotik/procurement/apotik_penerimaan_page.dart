@@ -182,6 +182,9 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
   final List<BarisPenerimaan> _baris = [];
   bool _mencari = false;
   bool _memposting = false;
+
+  /// Kunci idempotensi penerimaan yang sedang disusun (lihat [_posting]).
+  String? _kodeDokumen;
   String? _pesanServer;
   int _urutanPencarian = 0;
 
@@ -250,8 +253,14 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
       _memposting = true;
       _pesanServer = null;
     });
+    // Kode dokumen dibuat SEKALI per penerimaan dan dipakai ulang bila
+    // kiriman ini gagal/timeout lalu diulang, sehingga server mengenalinya
+    // sebagai kiriman yang sama (`idempoten: true`) alih-alih mencatat
+    // penerimaan kedua. Direset HANYA setelah server mengonfirmasi.
+    _kodeDokumen ??= kodeDokumenPenerimaanBaru();
     try {
       final r = await _panggil('apotik_terima_barang', {
+        'kode_dokumen': _kodeDokumen,
         'no_faktur': _noFaktur.text.trim(),
         'penyedia': _penyedia.text.trim(),
         'keterangan': _keterangan.text.trim(),
@@ -279,8 +288,13 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Penerimaan Tercatat'),
-          content: Text('${r['jumlahBaris'] ?? _baris.length} baris, '
-              '${r['jumlahBatch'] ?? _baris.length} batch baru masuk stok.'),
+          // Replay: server mengenali kiriman ulang dan TIDAK menambah stok.
+          // Menyebut "N batch baru masuk stok" di sini akan keliru.
+          content: Text(r['idempoten'] == true
+              ? '${r['description'] ?? 'Penerimaan ini sudah tercatat '
+                  'sebelumnya; tidak ada stok yang ditambahkan lagi.'}'
+              : '${r['jumlahBaris'] ?? _baris.length} baris, '
+                  '${r['jumlahBatch'] ?? _baris.length} batch baru masuk stok.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(c), child: const Text('Tutup'))
@@ -292,6 +306,7 @@ class _ApotikPenerimaanPageState extends State<ApotikPenerimaanPage> {
         _noFaktur.clear();
         _keterangan.clear();
         _suhu.clear();
+        _kodeDokumen = null;
         _memposting = false;
       });
     } catch (e) {

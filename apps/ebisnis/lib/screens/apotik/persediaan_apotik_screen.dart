@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../api_client.dart';
+import '../../features/apotik/core/apotik_lokal_dulu.dart';
 import '../../services/master_offline.dart';
 import '../../widgets/riwayat_data_dialog.dart';
 import '../../widgets/kilau_perubahan.dart';
@@ -1149,14 +1150,21 @@ class _TabPenerimaanPbfState extends State<_TabPenerimaanPbf> {
     setStateIfMounted(() => _proses = true);
     try {
       // LOKAL DULU: penerimaan ditulis ke antrean sebelum menyentuh jaringan.
-      // Aman diantre karena penerimaan hanya MENAMBAH stok -- tidak ada yang
-      // diperebutkan dgn perangkat lain. Jumlah baris/batch dihitung server,
-      // jadi saat offline angkanya baru muncul setelah antrean terkirim.
+      //
+      // Yang membuatnya AMAN diantre adalah `kode_dokumen`, bukan sifat
+      // "hanya menambah stok" -- justru menambah stok dua kali itulah
+      // kerusakannya. Kode dibuat SEKALI di sini dan ikut tersimpan di body
+      // antrean, sehingga setiap kiriman ulang membawa kode yang sama dan
+      // server menjawabnya sebagai replay alih-alih mencatat penerimaan
+      // kedua. Jumlah baris/batch dihitung server, jadi saat offline
+      // angkanya baru muncul setelah antrean terkirim.
+      final kodeDokumen = kodeDokumenPenerimaanBaru();
       final hasil = await prosesSimpanMaster(
         context,
         aksi: 'apotik_terima_barang',
-        kunci: 'apotik_terima:baru:${DateTime.now().microsecondsSinceEpoch}',
+        kunci: 'apotik_terima:$kodeDokumen',
         body: {
+          'kode_dokumen': kodeDokumen,
           'penyedia': _penyedia.text.trim(),
           'no_faktur': _noFaktur.text.trim(),
           'items': _baris

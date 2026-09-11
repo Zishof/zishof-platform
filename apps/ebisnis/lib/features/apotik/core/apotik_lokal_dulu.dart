@@ -20,10 +20,13 @@
 /// * `apotik_produksi_proses` — persetujuan produksi, pemakaian bahan baku,
 ///   stok barang jadi, dan batch kedaluwarsa hasil harus atomik di server.
 ///   Katalog formulanya (`apotik_produksi_katalog`) boleh dibaca lokal-dulu.
-/// * `apotik_terima_barang` — penerimaan menambah stok dan membuat lot baru,
-///   tetapi aksinya belum punya kunci idempoten. Kiriman ulang akan
-///   menggandakan stok, dan stok hantu di apotek berujung pada obat yang
-///   dikira ada padahal tidak.
+/// * `apotik_terima_barang` — penerimaan menambah stok dan membuat lot baru.
+///   Kiriman ulang TANPA kunci menggandakan stok, dan stok hantu di apotek
+///   berujung pada obat yang dikira ada padahal tidak. Kuncinya kini
+///   `kode_dokumen` (lihat [kodeDokumenPenerimaanBaru]), sehingga layar
+///   persediaan lama boleh mengantrenya; layar penerimaan modern tetap
+///   online-only agar petugas langsung melihat jumlah batch yang
+///   benar-benar terbentuk.
 /// * `apotik_sesi_kas_tutup` — angka tutup kas dihitung server dari catatan
 ///   pembayaran; menutup sesi secara offline hanya akan membekukan angka yang
 ///   belum lengkap.
@@ -40,6 +43,8 @@
 ///   obat dari lot yang mungkin sudah ditahan. Selagi pembayaran memang
 ///   menuntut server, daftar lot pun dibaca langsung.
 library;
+
+import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 
@@ -109,4 +114,24 @@ List<Map<String, dynamic>> saringCacheLokal(
     }
     return false;
   }).toList();
+}
+
+/// Kode dokumen penerimaan PBF — kunci idempotensi `apotik_terima_barang`.
+///
+/// Dibuat SEKALI per penerimaan lalu dipakai ulang pada setiap kiriman ulang
+/// (retry manual maupun antrean offline). Server menjawab kiriman berkode sama
+/// sebagai replay (`idempoten: true`) alih-alih mencatat penerimaan kedua; pada
+/// server lama yang belum mengenal replay, `UNIQUE(kode)` di
+/// `apotik_pbf_dokumen` tetap menolak kiriman kedua — gagal, tetapi tidak
+/// menggandakan stok. Panjangnya jauh di bawah batas 80 karakter kolom `kode`.
+String kodeDokumenPenerimaanBaru({DateTime? sekarang, Random? acak}) {
+  final t = sekarang ?? DateTime.now();
+  final r = acak ?? Random.secure();
+  String dua(int v) => v.toString().padLeft(2, '0');
+  final cap = '${t.year}${dua(t.month)}${dua(t.day)}'
+      '${dua(t.hour)}${dua(t.minute)}${dua(t.second)}';
+  final ekor = List.generate(8, (_) => r.nextInt(16).toRadixString(16))
+      .join()
+      .toUpperCase();
+  return 'PBF-APT-$cap-$ekor';
 }
