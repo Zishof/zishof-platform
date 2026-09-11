@@ -114,6 +114,10 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
   String? _error;
   List<Map<String, dynamic>> _data = [];
   double _totalOutstanding = 0;
+  // Jumlah SELURUH baris menurut saringan, bukan yang muat pada halaman. Dipakai
+  // menyatakan pemotongan daftar; totalnya sendiri dihitung server atas seluruh
+  // saringan, sehingga KPI tetap benar walau daftarnya terpotong.
+  int _jumlahBaris = 0;
   String _kataKunci = '';
   bool _tampilkanLunas = false;
   // Diff emisi lokal-dulu: menggerakkan kilau baris + banner perubahan server.
@@ -150,6 +154,7 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
           if (_diff.dariServer) {
             _totalOutstanding =
                 (hasil['totalOutstanding'] as num?)?.toDouble() ?? 0;
+            _jumlahBaris = (hasil['jumlahBaris'] as num?)?.toInt() ?? 0;
           }
           _memuat = false;
         });
@@ -203,6 +208,19 @@ class _TabPiutangState extends State<_TabPiutang> with JejakGalat {
                 nilai: _fmtRp.format(_totalOutstanding),
                 label: 'Total Piutang Berjalan'),
           ),
+          // Pemotongan daftar DINYATAKAN. KPI di atas dihitung server atas seluruh
+          // saringan, jadi ia benar; yang bisa menyesatkan justru tabelnya, karena
+          // daftar yang terpotong terbaca sebagai daftar lengkap yang tidak cocok
+          // dengan totalnya.
+          if (_jumlahBaris > _data.length)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                  'Menampilkan ${_data.length} dari $_jumlahBaris piutang. '
+                  'Total di atas tetap dihitung atas seluruhnya.',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondaryOf(context))),
+            ),
           const SizedBox(height: 10),
           BannerPerubahanServer(
             key: ValueKey('perubahan:${_diff.versi}'),

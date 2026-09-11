@@ -309,22 +309,35 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
           ]),
           const SizedBox(height: 12),
           AppDataTable(
-            minWidth: 980,
+            minWidth: 1180,
             emptyText: 'Tidak ada data.',
+            // Judul kolom memakai istilah layar lama ("Kredit", "Tunai", "RL %"):
+            // penguji yang sedang mengadu kedua layar mencari kata itu, dan
+            // menggantinya dengan istilah baru membuat perbandingan jadi menebak.
             columns: const [
               AppTableColumn('Kode', flex: 1),
               AppTableColumn('Nama Barang', flex: 3),
               AppTableColumn('Sat', flex: 1),
               AppTableColumn('Stok', flex: 1, align: TextAlign.right),
               AppTableColumn('Hrg Beli', flex: 2, align: TextAlign.right),
-              AppTableColumn('Hrg Jual', flex: 2, align: TextAlign.right),
+              AppTableColumn('Hrg Jual (Kredit)', flex: 2, align: TextAlign.right),
+              AppTableColumn('Hrg Jual (Tunai)', flex: 2, align: TextAlign.right),
               AppTableColumn('Jual Umum Efektif',
                   flex: 2, align: TextAlign.right),
-              AppTableColumn('Margin', flex: 1, align: TextAlign.right),
+              AppTableColumn('RL % Kredit', flex: 1, align: TextAlign.right),
+              AppTableColumn('RL % Tunai', flex: 1, align: TextAlign.right),
             ],
             rows: _data.map((p) {
               final margin = p['marginPersen'] as num?;
               final negatif = margin != null && margin < 0;
+              // Harga tunai null berarti "tidak ada harga tunai terpisah" -- 459
+              // dari 626 produk legacy memang begitu. Ditampilkan sebagai tanda
+              // hubung, BUKAN diisi harga kredit: menyalin harga kredit ke kolom
+              // tunai adalah pernyataan yang tidak pernah dibuat siapa pun, dan
+              // pembacanya tidak punya cara membedakannya dari harga sungguhan.
+              final tunai = p['hargaJualTunai'] as num?;
+              final marginTunai = p['marginTunaiPersen'] as num?;
+              final negatifTunai = marginTunai != null && marginTunai < 0;
               return AppTableRowData(cells: [
                 AppTableCell.text('${p['kode']}',
                     flex: 1,
@@ -337,6 +350,8 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
                 AppTableCell.text(_fmtRp.format((p['hargaBeli'] as num?) ?? 0),
                     flex: 2, align: TextAlign.right),
                 AppTableCell.text(_fmtRp.format((p['hargaJual'] as num?) ?? 0),
+                    flex: 2, align: TextAlign.right),
+                AppTableCell.text(tunai == null ? '-' : _fmtRp.format(tunai),
                     flex: 2, align: TextAlign.right),
                 AppTableCell.text(
                     p['hargaJualUmumEfektif'] == null
@@ -354,6 +369,24 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
                         color: negatif ? AppColors.danger : AppColors.success),
+                  ),
+                ),
+                AppTableCell(
+                  flex: 1,
+                  align: TextAlign.right,
+                  child: Text(
+                    marginTunai == null
+                        ? '-'
+                        : '${marginTunai.toStringAsFixed(1)}%',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: marginTunai == null
+                            ? AppColors.textSecondaryOf(context)
+                            : (negatifTunai
+                                ? AppColors.danger
+                                : AppColors.success)),
                   ),
                 ),
               ]);

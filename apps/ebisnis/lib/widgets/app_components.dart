@@ -995,14 +995,27 @@ class AppKpiCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nilai,
-                    style: TextStyle(
-                        fontSize: 16,
-                        height: 1.12,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimaryOf(context)),
-                    maxLines: 2,
-                    overflow: TextOverflow.visible),
+                // NILAINYA MENGECIL, TIDAK TERPOTONG.
+                //
+                // Sebelumnya maxLines:2 + TextOverflow.visible: nilai yang tidak muat
+                // dipotong TANPA tanda apa pun. Pada layar Laba Rugi, HPP
+                // "Rp 14.184.840.620" tercetak "Rp 14.184.840.62" — angka lain yang
+                // terlihat sah. Elipsis pun tidak cukup untuk uang: pembacanya tahu ada
+                // yang hilang tetapi tidak tahu berapa. FittedBox menyusutkan hurufnya
+                // sehingga seluruh digit tetap terbaca; nilai yang memang muat tidak
+                // berubah sedikit pun, sebab scaleDown hanya mengecilkan.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(nilai,
+                      style: TextStyle(
+                          fontSize: 16,
+                          height: 1.12,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimaryOf(context)),
+                      maxLines: 1,
+                      softWrap: false),
+                ),
                 Text(label,
                     style: TextStyle(
                         fontSize: 13,

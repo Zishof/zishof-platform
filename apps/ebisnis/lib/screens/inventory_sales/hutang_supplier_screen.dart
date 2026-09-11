@@ -1638,6 +1638,28 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian>
               label: Text('Sampai: ${_fmtTgl.format(_sampai)}',
                   style: const TextStyle(fontSize: 12)),
             ),
+            // Pintasan periode. Bukan hiasan: bawaannya 30 hari terakhir, dan pada
+            // basis data hasil migrasi pembelian terakhir bisa berumur bertahun-
+            // tahun — layarnya lalu tampak KOSONG padahal datanya lengkap, dan
+            // rinciannya (tempat Disc %/Disc Rp terlihat) tak terjangkau sama
+            // sekali. Dua ketukan pemilih tanggal untuk mengetahui itu terlalu
+            // mahal untuk kesimpulan yang salah.
+            ...[
+              ['30 hari', 30],
+              ['1 tahun', 365],
+              ['Semua data', -1],
+            ].map((p) => OutlinedButton(
+                  onPressed: () {
+                    final hari = p[1] as int;
+                    _sampai = DateTime.now();
+                    _dari = hari < 0
+                        ? DateTime(2000, 1, 1)
+                        : _sampai.subtract(Duration(days: hari));
+                    _muat();
+                  },
+                  child: Text(p[0] as String,
+                      style: const TextStyle(fontSize: 12)),
+                )),
           ]),
           const SizedBox(height: 12),
           SizedBox(
@@ -1699,7 +1721,9 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian>
               AppTableColumn('Sisa', flex: 2, align: TextAlign.right),
             ],
             rows: _data
-                .map((r) => AppTableRowData(cells: [
+                .map((r) => AppTableRowData(
+                    onTap: () => _bukaRincian(r),
+                    cells: [
                       AppTableCell.text(
                           '${r['tanggalFaktur']}'.split(' ').first,
                           flex: 2),
@@ -1725,6 +1749,273 @@ class _TabLaporanPembelianState extends State<_TabLaporanPembelian>
                               fontWeight: FontWeight.w700, fontSize: 12.5)),
                     ]))
                 .toList(),
+          ),
+          // Pemotongan daftar dinyatakan, tidak disembunyikan. Server memotong
+          // 3.000 baris sementara KPI di atas dihitung atas SELURUH rentang —
+          // tanpa baris ini, tabel yang terpotong terbaca sebagai tabel lengkap
+          // yang totalnya tidak cocok dengan isinya.
+          if (((_ringkasan['jumlahFaktur'] as num?) ?? 0) >
+              ((_ringkasan['ditampilkan'] as num?) ?? 0))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  'Menampilkan ${_ringkasan['ditampilkan']} dari '
+                  '${_ringkasan['jumlahFaktur']} faktur. Ringkasan di atas '
+                  'tetap dihitung atas seluruh periode; persempit rentangnya '
+                  'untuk melihat sisanya.',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondaryOf(context))),
+            ),
+          const SizedBox(height: 8),
+          Text('Ketuk satu baris untuk melihat rinciannya per barang '
+              '(No. Batch, Tgl. Exp, Disc %, Disc Rp — grid layar legacy 20).',
+              style: TextStyle(
+                  fontSize: 12, color: AppColors.textSecondaryOf(context))),
+        ],
+      ),
+    );
+  }
+
+  /// Membuka rincian baris satu faktur — padanan grid formulir entri pembelian
+  /// lama (layar 20), tempat Disc % dan Disc Rp per baris terlihat.
+  Future<void> _bukaRincian(Map<String, dynamic> r) async {
+    final id = (r['fakturId'] as num?)?.toInt();
+    if (id == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      // Sheet Material dibatasi 640 px sedangkan AppDataTable jatuh ke kartu
+      // bertumpuk di bawah 720 px. Grid legacy 20 dibaca dengan mengadu Harga
+      // Asli, Disc %, Disc Rp, dan Harga Beli berdampingan — bertumpuk, adu
+      // itu hilang. Di layar sempit tata letak kartu tetap dipakai.
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width < 760
+            ? MediaQuery.of(context).size.width
+            : (MediaQuery.of(context).size.width * 0.85).clamp(760.0, 1280.0),
+      ),
+      builder: (_) => _RincianPembelianSheet(fakturId: id),
+    );
+  }
+}
+
+/// Rincian baris satu faktur pembelian — padanan grid layar legacy 20.
+///
+/// Kolomnya sengaja mengikuti urutan formulir lama (Harga Asli, Disc %, Disc Rp,
+/// lalu Harga Beli) supaya keduanya dapat diadu berdampingan saat UAT.
+///
+/// HARGA ASLI KOSONG DITAMPILKAN SEBAGAI TANDA HUBUNG, bukan Rp 0. Pada 2.829
+/// baris legacy brutonya memang tidak pernah dicatat sementara harga belinya
+/// diketahui; menuliskannya Rp 0 akan menyatakan barangnya gratis. Perbedaan
+/// yang sama dijaga kolom "Hrg Jual (Tunai)" pada layar Harga.
+class _RincianPembelianSheet extends StatefulWidget {
+  final int fakturId;
+  const _RincianPembelianSheet({required this.fakturId});
+
+  @override
+  State<_RincianPembelianSheet> createState() => _RincianPembelianSheetState();
+}
+
+class _RincianPembelianSheetState extends State<_RincianPembelianSheet>
+    with JejakGalat {
+  bool _memuat = true;
+  String? _error;
+  List<Map<String, dynamic>> _data = [];
+  Map<String, dynamic> _ringkasan = {};
+  String _nomor = '', _tanggal = '', _supplier = '';
+
+  static final _fmtQty = NumberFormat.decimalPattern('id_ID');
+  static final _fmtPersen = NumberFormat('#,##0.##', 'id_ID');
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    setStateIfMounted(() {
+      _memuat = true;
+      _error = null;
+    });
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('si_purchase_detail', {'faktur_id': widget.fakturId});
+      setStateIfMounted(() {
+        _data = ((hasil['data'] as List?) ?? const [])
+            .cast<Map<String, dynamic>>()
+            .toList();
+        _ringkasan =
+            (hasil['ringkasan'] as Map?)?.cast<String, dynamic>() ?? {};
+        _nomor = '${hasil['nomorFaktur'] ?? ''}';
+        _tanggal = '${hasil['tanggalFaktur'] ?? ''}'.split(' ').first;
+        _supplier =
+            '${hasil['supplierKode'] ?? ''} ${hasil['supplierNama'] ?? ''}'
+                .trim();
+        _memuat = false;
+      });
+    } catch (e) {
+      setStateIfMounted(() {
+        _memuat = false;
+        _error = terapkanGalat(e);
+      });
+    }
+  }
+
+  String _rpAtauStrip(Object? v) =>
+      v == null ? '—' : _fmtRp.format((v as num).toDouble());
+
+  @override
+  Widget build(BuildContext context) {
+    final berdiskon = (_ringkasan['barisBerdiskon'] as num?)?.toInt() ?? 0;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      builder: (_, scroll) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Rincian Pembelian $_nomor',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text(
+                        '$_tanggal · $_supplier · '
+                        '${(_ringkasan['jumlahBaris'] as num?)?.toInt() ?? 0} baris'
+                        '${berdiskon == 0 ? '' : ' · $berdiskon berdiskon'}',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondaryOf(context))),
+                  ],
+                ),
+              ),
+              IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).maybePop()),
+            ]),
+          ),
+          Expanded(
+            child: _memuat
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _PanelError(
+                        pesan: _error!,
+                        detail: detailUntuk(_error),
+                        onCoba: _muat)
+                    : ListView(
+                        controller: scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        children: [
+                          AppDataTable(
+                            minWidth: 1120,
+                            emptyText: 'Faktur ini tidak punya baris rincian.',
+                            columns: const [
+                              AppTableColumn('#Kode', flex: 2),
+                              AppTableColumn('Nama Barang', flex: 4),
+                              AppTableColumn('Sat.', flex: 1),
+                              AppTableColumn('No. Batch', flex: 2),
+                              AppTableColumn('Tgl. Exp', flex: 2),
+                              AppTableColumn('Qty',
+                                  flex: 2, align: TextAlign.right),
+                              AppTableColumn('Harga Asli',
+                                  flex: 3, align: TextAlign.right),
+                              AppTableColumn('Disc %',
+                                  flex: 2, align: TextAlign.right),
+                              AppTableColumn('Disc Rp',
+                                  flex: 2, align: TextAlign.right),
+                              AppTableColumn('Harga Beli',
+                                  flex: 3, align: TextAlign.right),
+                              AppTableColumn('Jumlah',
+                                  flex: 3, align: TextAlign.right),
+                            ],
+                            rows: _data.map((b) {
+                              final dp = (b['diskonPersen'] as num?) ?? 0;
+                              final dn = (b['diskonNilai'] as num?) ?? 0;
+                              final ada = dp != 0 || dn != 0;
+                              final tebal = ada
+                                  ? const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5)
+                                  : null;
+                              return AppTableRowData(cells: [
+                                AppTableCell.text('${b['kode']}', flex: 2),
+                                AppTableCell.text('${b['nama']}',
+                                    flex: 4, maxLines: 2),
+                                AppTableCell.text('${b['satuan']}', flex: 1),
+                                AppTableCell.text('${b['batch']}', flex: 2),
+                                AppTableCell.text('${b['expired']}', flex: 2),
+                                AppTableCell.text(
+                                    _fmtQty.format(
+                                        ((b['kuantitas'] as num?) ?? 0)
+                                            .toDouble()),
+                                    flex: 2,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    _rpAtauStrip(b['hargaBruto']),
+                                    flex: 3,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    dp == 0
+                                        ? '—'
+                                        : _fmtPersen.format(dp.toDouble()),
+                                    flex: 2,
+                                    align: TextAlign.right,
+                                    style: tebal),
+                                AppTableCell.text(
+                                    dn == 0
+                                        ? '—'
+                                        : _fmtRp.format(dn.toDouble()),
+                                    flex: 2,
+                                    align: TextAlign.right,
+                                    style: tebal),
+                                AppTableCell.text(
+                                    _fmtRp.format(
+                                        ((b['hargaSatuan'] as num?) ?? 0)
+                                            .toDouble()),
+                                    flex: 3,
+                                    align: TextAlign.right),
+                                AppTableCell.text(
+                                    _fmtRp.format(
+                                        ((b['total'] as num?) ?? 0).toDouble()),
+                                    flex: 3,
+                                    align: TextAlign.right),
+                              ]);
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if ((_ringkasan['totalPotongan'] as num?) != null &&
+                                  ((_ringkasan['totalPotongan'] as num)
+                                          .toDouble() >
+                                      0))
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 20),
+                                  child: Text(
+                                      'Total Potongan: '
+                                      '${_fmtRp.format((_ringkasan['totalPotongan'] as num).toDouble())}',
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: AppColors.textSecondaryOf(
+                                              context))),
+                                ),
+                              Text(
+                                  'TOTAL: '
+                                  '${_fmtRp.format(((_ringkasan['total'] as num?) ?? 0).toDouble())}',
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),

@@ -296,6 +296,30 @@ class _LabaRugiScreenState extends State<LabaRugiScreen> with JejakGalat {
                           label: Text('s/d ${_fmtTgl.format(_sampai)}',
                               style: const TextStyle(fontSize: 12)),
                         ),
+                        // Pintasan periode, sama seperti pada layar Pembelian & Hutang.
+                        // Bawaannya "bulan berjalan"; pada basis data hasil migrasi faktur
+                        // terakhir bisa berumur berbulan-bulan, sehingga layar laba rugi
+                        // tampak NOL padahal datanya lengkap. Nol pada layar laba rugi
+                        // adalah kesimpulan bisnis, bukan keadaan kosong -- terlalu mahal
+                        // untuk disampaikan oleh bawaan yang kebetulan.
+                        ...[
+                          ['Bulan ini', 0],
+                          ['1 tahun', 365],
+                          ['Semua data', -1],
+                        ].map((p) => OutlinedButton(
+                              onPressed: () {
+                                final hari = p[1] as int;
+                                _sampai = DateTime.now();
+                                _dari = hari < 0
+                                    ? DateTime(2000, 1, 1)
+                                    : hari == 0
+                                        ? DateTime(_sampai.year, _sampai.month, 1)
+                                        : _sampai.subtract(Duration(days: hari));
+                                _muat();
+                              },
+                              child: Text(p[0] as String,
+                                  style: const TextStyle(fontSize: 12)),
+                            )),
                         DropdownButton<int?>(
                           value: _salesId,
                           hint: const Text('Semua sales',

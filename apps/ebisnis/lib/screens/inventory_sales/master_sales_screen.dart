@@ -344,9 +344,16 @@ class _MasterSalesScreenState extends State<MasterSalesScreen> with JejakGalat {
                               AppTableCell.text('${s['nomorPerkiraan'] ?? ''}',
                                   flex: 2),
                               AppTableCell.text('${s['area'] ?? ''}', flex: 2),
+                              // "Belum diatur" ditulis "—", BUKAN Rp 0. Sejak migrasi v25
+                              // kolomnya NULLABLE dan server menerbitkan null apa adanya,
+                              // justru supaya kedua keadaan itu dapat dibedakan: Rp 0
+                              // berarti "sales ini memang tidak ditargetkan", dan laporan
+                              // pencapaian yang membaginya akan melaporkan 100% terhadap
+                              // target yang tidak pernah ditetapkan siapa pun.
                               AppTableCell.text(
-                                  _fmtRp.format(
-                                      (s['targetBulanan'] as num?) ?? 0),
+                                  s['targetBulanan'] == null
+                                      ? '—'
+                                      : _fmtRp.format(s['targetBulanan'] as num),
                                   flex: 2,
                                   align: TextAlign.right),
                               AppTableCell.text('${s['jumlahCustomer'] ?? 0}',
@@ -444,10 +451,12 @@ class _FormSalesState extends State<_FormSales> with JejakGalat {
     _area = TextEditingController(text: d?['area'] ?? '');
     _telepon = TextEditingController(text: d?['telepon'] ?? '');
     _alamat = TextEditingController(text: d?['alamat'] ?? '');
+    // Kosong berarti "belum diatur" dan dikirim sebagai null; mengisinya '0' di muka
+    // membuat setiap penyimpanan menetapkan target nol tanpa pengguna memintanya.
     _target = TextEditingController(
-        text: (d?['targetBulanan'] as num?)?.toStringAsFixed(0) ?? '0');
+        text: (d?['targetBulanan'] as num?)?.toStringAsFixed(0) ?? '');
     _limit = TextEditingController(
-        text: (d?['limitPenagihan'] as num?)?.toStringAsFixed(0) ?? '0');
+        text: (d?['limitPenagihan'] as num?)?.toStringAsFixed(0) ?? '');
     _akun = TextEditingController(text: d?['userId'] ?? '');
     for (final c in [
       _kode,
@@ -499,10 +508,15 @@ class _FormSalesState extends State<_FormSales> with JejakGalat {
         'area': _area.text.trim(),
         'telepon': _telepon.text.trim(),
         'alamat': _alamat.text.trim(),
-        'target_bulanan':
-            double.tryParse(_target.text.replaceAll(',', '.')) ?? 0,
-        'limit_penagihan':
-            double.tryParse(_limit.text.replaceAll(',', '.')) ?? 0,
+        // Teks kosong dikirim APA ADANYA (''), bukan 0: server membacanya sebagai
+        // "belum diatur" dan menyimpan NULL. Mengirim 0 akan menetapkan target nol
+        // atas nama pengguna yang justru mengosongkannya.
+        'target_bulanan': _target.text.trim().isEmpty
+            ? ''
+            : (double.tryParse(_target.text.replaceAll(',', '.')) ?? 0),
+        'limit_penagihan': _limit.text.trim().isEmpty
+            ? ''
+            : (double.tryParse(_limit.text.replaceAll(',', '.')) ?? 0),
         'tbmuser_id': _akun.text.trim(),
       },
           kunci: _ubah
