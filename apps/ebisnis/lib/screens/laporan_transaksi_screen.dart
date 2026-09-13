@@ -20,7 +20,7 @@ final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
-const String _metodeTransferQris = '__TRANSFER_QRIS__';
+const String metodeTransferQrisGabungan = '__TRANSFER_QRIS__';
 
 /// Menyatukan variasi nama kanal non-tunai yang dipakai data lama dan baru.
 /// Sebagian tenant menyimpan QRIS sebagai "QRS - BSI", sementara transaksi
@@ -31,6 +31,22 @@ bool metodeAdalahTransferAtauQris(Object? nilai) {
   final metode = (nilai ?? '').toString().trim().toLowerCase();
   if (metode.isEmpty) return false;
   return RegExp(r'(^|[^a-z])(transfer|qris|qrs)([^a-z]|$)').hasMatch(metode);
+}
+
+/// Menjaga maksud filter saat rentang tanggal berubah. Contoh: tanggal lama
+/// mempunyai "Transfer", sedangkan tanggal baru hanya "QRS - BSI". Pilihan
+/// otomatis dialihkan ke grup gabungan agar satu kali menekan Terapkan langsung
+/// menampilkan data yang dimaksud.
+@visibleForTesting
+String normalisasiFilterMetode(
+    String pilihanSaatIni, List<String> opsiRentangBaru) {
+  if (pilihanSaatIni.isEmpty) return '';
+  if (opsiRentangBaru.contains(pilihanSaatIni)) return pilihanSaatIni;
+  if (metodeAdalahTransferAtauQris(pilihanSaatIni) &&
+      opsiRentangBaru.any(metodeAdalahTransferAtauQris)) {
+    return metodeTransferQrisGabungan;
+  }
+  return '';
 }
 
 @visibleForTesting
@@ -2735,19 +2751,19 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
   String _metode = '';
   List<String> _daftarMetode = [];
 
-  bool get _filterTransferQris => _metode == _metodeTransferQris;
+  bool get _filterTransferQris => _metode == metodeTransferQrisGabungan;
 
   List<String> get _opsiMetode {
     final hasil = <String>[];
     if (_daftarMetode.any(metodeAdalahTransferAtauQris)) {
-      hasil.add(_metodeTransferQris);
+      hasil.add(metodeTransferQrisGabungan);
     }
     hasil.addAll(_daftarMetode);
     return hasil;
   }
 
   String _labelMetode(String metode) =>
-      metode == _metodeTransferQris ? 'Transfer + QRIS' : metode;
+      metode == metodeTransferQrisGabungan ? 'Transfer + QRIS' : metode;
 
   Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
         'tglMulai': _formatTanggalServer.format(_mulai),
@@ -2773,12 +2789,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
           .toList();
       setStateIfMounted(() {
         _daftarMetode = opsi;
-        final grupMasihAda = opsi.any(metodeAdalahTransferAtauQris);
-        if (_metode.isNotEmpty &&
-            !opsi.contains(_metode) &&
-            !(_filterTransferQris && grupMasihAda)) {
-          _metode = '';
-        }
+        _metode = normalisasiFilterMetode(_metode, opsi);
       });
     } catch (_) {
       // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.
@@ -3270,19 +3281,19 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
   String _metode = '';
   List<String> _daftarMetode = [];
 
-  bool get _filterTransferQris => _metode == _metodeTransferQris;
+  bool get _filterTransferQris => _metode == metodeTransferQrisGabungan;
 
   List<String> get _opsiMetode {
     final hasil = <String>[];
     if (_daftarMetode.any(metodeAdalahTransferAtauQris)) {
-      hasil.add(_metodeTransferQris);
+      hasil.add(metodeTransferQrisGabungan);
     }
     hasil.addAll(_daftarMetode);
     return hasil;
   }
 
   String _labelMetode(String metode) =>
-      metode == _metodeTransferQris ? 'Transfer + QRIS' : metode;
+      metode == metodeTransferQrisGabungan ? 'Transfer + QRIS' : metode;
 
   /// Isi dropdown metode diambil dari metode yang benar-benar dipakai pada rentang
   /// tanggal terpilih (aksi laporan_metode_bayar_opsi), bukan daftar master penuh.
@@ -3299,12 +3310,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
           .toList();
       setStateIfMounted(() {
         _daftarMetode = opsi;
-        final grupMasihAda = opsi.any(metodeAdalahTransferAtauQris);
-        if (_metode.isNotEmpty &&
-            !opsi.contains(_metode) &&
-            !(_filterTransferQris && grupMasihAda)) {
-          _metode = '';
-        }
+        _metode = normalisasiFilterMetode(_metode, opsi);
       });
     } catch (_) {
       // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.

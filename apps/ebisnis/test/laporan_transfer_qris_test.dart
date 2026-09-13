@@ -25,6 +25,14 @@ void main() {
     expect(hasil.map((row) => row['total']), [10000, 35000]);
   });
 
+  test('pilihan Transfer mengikuti QRS saat rentang tanggal berubah', () {
+    expect(normalisasiFilterMetode('Transfer', ['QRS - BSI', 'Tunai']),
+        metodeTransferQrisGabungan);
+    expect(normalisasiFilterMetode('QRS - BSI', ['Transfer', 'Tunai']),
+        metodeTransferQrisGabungan);
+    expect(normalisasiFilterMetode('Tunai', ['QRS - BSI']), isEmpty);
+  });
+
   test('ringkasan gabungan tetap menghitung nota dan nominal per kasir', () {
     final hasil = ringkasPenjualanPerKasir([
       {'kasir': 'Mutia', 'totalBiaya': 10000},
