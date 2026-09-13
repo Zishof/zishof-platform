@@ -1,7 +1,7 @@
 # Al-Bahjah POS v1.34.37 build 200 — UAT WA 12–13 September 2026
 
 Tanggal verifikasi: 14 September 2026
-Commit kandidat: `b9da9ca`
+Commit kandidat: `ea758c2`
 
 ## Perbaikan yang diverifikasi
 
@@ -40,7 +40,7 @@ Commit kandidat: `b9da9ca`
 
 | Berkas | SHA-256 |
 |---|---|
-| `app-albahjah-release.apk` | `1c4ad00bd32d16e2534b2b2edb1dae83d2ee9248c23d83e2ec8691d51640b64c` |
-| `Al-Bahjah-POS-Setup-1.34.37.exe` | `9fc6f7b2eca0ed9fee59c2d7e3c59b21b1c54cc646d8f4441d744e6b446ceee7` |
+| `app-albahjah-release.apk` | `84adc7408a3de43c9ee57ca6a20b9ef7ac14466b119da527120dca9d41276bf1` |
+| `Al-Bahjah-POS-Setup-1.34.37.exe` | `bf7290afce871c2b4e78c6c013d734d5f1453f949c00159f90ac430027789452` |
 
 Kandidat ini adalah prerelease/UAT: APK memakai sertifikat Android Debug dan installer Windows belum memiliki Authenticode produksi.

@@ -1,7 +1,7 @@
 # TokoQu Al-Bahjah An Nahl v1.34.37 build 200 — UAT WA 12–13 September 2026
 
 Tanggal verifikasi: 14 September 2026
-Commit kandidat: `b9da9ca`
+Commit kandidat: `ea758c2`
 
 ## Perbaikan yang diverifikasi
 
@@ -27,7 +27,7 @@ Commit kandidat: `b9da9ca`
 
 | Berkas | SHA-256 |
 |---|---|
-| `app-nahl-release.apk` | `45efee62068d310c0445edc87e77bc3d66b8532e9cc164ec712545a48478e213` |
-| `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.37.exe` | `fd40ebeb5341e2a3214636d2e7aaa4fd5618cd4173af878ef9f001afec41b342` |
+| `app-nahl-release.apk` | `6f212d9afa14abbcb2258082579a648f07d5cb88d818f0be9f09e2098f707331` |
+| `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.37.exe` | `9b24067b5d786bf1be9335960a6322d8b5b0ec21264b246adf9dd688efb973a7` |
 
 Kandidat ini adalah prerelease/UAT: APK memakai sertifikat Android Debug dan installer Windows belum memiliki Authenticode produksi.
