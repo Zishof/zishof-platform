@@ -165,6 +165,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   int? _konteksCaraBayarMemberId;
   int _versiPermintaanCaraBayar = 0;
   late bool _semuaCaraBayarUntukMemberAwal;
+  bool _ketukanBayarTerkunci = false;
   bool _memproses = false;
   Anggota? _memberTerpilih;
   double? _saldoMember;
@@ -1808,215 +1809,226 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
   }
 
   Future<void> _bayar() async {
-    // Pertahanan terhadap pintasan F2/race: member baru memicu pemuatan ulang
-    // aturan pembayaran. Jangan pernah mengirim transaksi memakai snapshot
-    // metode member sebelumnya sebelum aturan server selesai diterapkan.
-    if (!_bisaBayar) return;
-    if (widget.keranjang.isEmpty) return;
-    if (_caraBayarTerpilih == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Pilih metode pembayaran terlebih dahulu.')));
-      return;
-    }
-    if (_uangTunaiKurang) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.')));
-      return;
-    }
-    // PIUTANG WAJIB BERPEMILIK: metode ber-flag masukSebagaiHutang membentuk
-    // tagihan toko ke pelanggan. Tanpa nama pelanggan, tim keuangan tidak dapat
-    // menagih -- server pun menolaknya. Kasir langsung diarahkan memilih
-    // pelanggan di sini, bukan dibiarkan gagal setelah menekan Bayar.
-    if (_perluMemberAtauPic) {
-      final lanjut = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text('Pilih Member / PIC'),
-          content: Text(
-              'Metode "${_namaMetodeWajibMember()}" wajib mempunyai penanggung jawab. '
-              'Pilih member/PIC terlebih dahulu agar transaksi dapat ditelusuri tim '
-              'keuangan. Semua metode Kasbon langsung dicatat sebagai piutang customer; '
-              'untuk Kasbon Divisi/Operasional, member menjadi customer sekaligus PJ/PIC '
-              'yang mewakili divisi.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(c, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(c, true),
-                child: const Text('Pilih Member / PIC')),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      if (lanjut == true) await _pilihMember();
-      if (!mounted) return;
-      if (_memberTerpilih == null) return; // tetap belum dipilih -> batalkan
-    }
-
-    String? kodePercobaan;
-    setStateIfMounted(() => _memproses = true);
+    // Kunci harus aktif sebelum dialog pemilihan member/PIC atau await pertama.
+    // Tanpa gerbang sinkron ini, dua ketukan cepat dapat membuka dua alur bayar
+    // sebelum `_memproses` sempat berubah dan menghasilkan nota ganda.
+    if (_ketukanBayarTerkunci) return;
+    _ketukanBayarTerkunci = true;
     try {
-      // Gerbang ini WAJIB berada sebelum pembuatan kode transaksi, verifikasi
-      // biometrik/PIN, simpanTransaksiPending, dan aksi bayar. Jika saldo tidak
-      // cukup atau server tidak dapat dihubungi, keranjang tetap utuh dan tidak
-      // ada baris PENDING baru yang harus dibersihkan saat tutup kasir.
-      if (!await _validasiSaldoPusatSebelumBayar()) return;
-      kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
-      final kodeUnik = kodePercobaan;
-      final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
-      if (buktiBiometrik == null) return;
-      final waktu =
-          widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
-      final payload =
-          _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
-      payload.addAll(buktiBiometrik);
-      final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
-      final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
-      if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
-
-      final payloadPending = Map<String, dynamic>.from(payload);
-      payloadPending['pengiriman_pending'] = true;
-      Map<String, dynamic>? hasilServer;
-      if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
-        // Semua pembayaran yang memotong saldo pusat wajib menunggu ACK server.
-        // Saldo dapat berubah di perangkat/toko lain sehingga cache lokal tidak
-        // boleh dipakai sebagai izin membelanjakan uang. Bukti biometrik juga
-        // berumur pendek dan diikat ke kode transaksi. Hal yang sama berlaku
-        // bila tipe member mempunyai limit: server harus menghitung periode dan,
-        // bila perlu, membuat pengajuan supervisor sebelum kasir menganggap
-        // transaksi selesai. Saat offline keranjang tetap utuh; kasir dapat
-        // memilih Tunai/metode manual aman atau menunggu koneksi pulih.
-        hasilServer = await ApiClient.instance.aksi('bayar', payload);
-        await CoreDb.instance.simpanTransaksiPending(
-            kodeUnik, jsonEncode(payloadPending),
-            akunKunci: Sesi.instance.userId,
-            tokoId: Sesi.instance.tokoId,
-            idPerangkat: IdentitasMesin.instance.idMesin);
-        await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, hasilServer);
-        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_verifikasiMemberWajibServer
-                ? 'Saldo/identitas member sudah diverifikasi. Pembayaran sudah diterima server.'
-                : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
-      } else {
-        // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
-        // server, lalu kirim/retry idempoten di background.
-        await CoreDb.instance.simpanTransaksiPending(
-            kodeUnik, jsonEncode(payloadPending),
-            akunKunci: Sesi.instance.userId,
-            tokoId: Sesi.instance.tokoId,
-            idPerangkat: IdentitasMesin.instance.idMesin);
-        TransaksiOutboxService.instance.kirimDiBackground();
-        if (!mounted) return;
+      // Pertahanan terhadap pintasan F2/race: member baru memicu pemuatan ulang
+      // aturan pembayaran. Jangan pernah mengirim transaksi memakai snapshot
+      // metode member sebelumnya sebelum aturan server selesai diterapkan.
+      if (!_bisaBayar) return;
+      if (widget.keranjang.isEmpty) return;
+      if (_caraBayarTerpilih == null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pilih metode pembayaran terlebih dahulu.')));
+        return;
+      }
+      if (_uangTunaiKurang) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                'Transaksi aman tersimpan di lokal. Pengiriman ke server berjalan di background; jika gagal akan dicoba lagi dalam 10 menit.')));
+                'Uang diterima kurang ${_formatRupiah.format((_total - _uangDiterima).abs())}.')));
+        return;
+      }
+      // PIUTANG WAJIB BERPEMILIK: metode ber-flag masukSebagaiHutang membentuk
+      // tagihan toko ke pelanggan. Tanpa nama pelanggan, tim keuangan tidak dapat
+      // menagih -- server pun menolaknya. Kasir langsung diarahkan memilih
+      // pelanggan di sini, bukan dibiarkan gagal setelah menekan Bayar.
+      if (_perluMemberAtauPic) {
+        final lanjut = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Pilih Member / PIC'),
+            content: Text(
+                'Metode "${_namaMetodeWajibMember()}" wajib mempunyai penanggung jawab. '
+                'Pilih member/PIC terlebih dahulu agar transaksi dapat ditelusuri tim '
+                'keuangan. Semua metode Kasbon langsung dicatat sebagai piutang customer; '
+                'untuk Kasbon Divisi/Operasional, member menjadi customer sekaligus PJ/PIC '
+                'yang mewakili divisi.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(c, true),
+                  child: const Text('Pilih Member / PIC')),
+            ],
+          ),
+        );
+        if (!mounted) return;
+        if (lanjut == true) await _pilihMember();
+        if (!mounted) return;
+        if (_memberTerpilih == null) return; // tetap belum dipilih -> batalkan
       }
 
-      // Ekstra diratakan (flatten) jadi baris tersendiri TEPAT setelah induknya
-      // -- StrukScreen tak kenal struktur bersarang, cuma daftar {nama,qty,
-      // harga} datar (lihat JavaDoc StrukScreen._itemPdf). Prefiks "   + "
-      // sbg indentasi visual, qty ekstra ikut qty induk (kontrak server: 1
-      // ekstra berlaku per 1 unit induk, lihat JavaDoc [ItemEkstra]).
-      final itemStruk = <Map<String, dynamic>>[];
-      for (final i in widget.keranjang) {
-        itemStruk.add({
-          // Label kemasan ikut ke struk: "Beras (2 x Karung 50kg)" --
-          // pembeli grosir memeriksa struknya dalam hitungan kemasan.
-          'nama': i.labelSatuanJual != null
-              ? '${i.produk.nama} (${i.labelSatuanJual})'
-              : i.labelKemasan == null
-                  ? i.produk.nama
-                  : '${i.produk.nama} (${i.labelKemasan})',
-          'qty': i.jumlah,
-          'harga': i.hargaSatuanEfektif,
-          'diskon': i.diskon,
-          'cashback': i.cashback,
-        });
-        for (final e in i.ekstra) {
-          itemStruk.add({
-            'nama': '   + ${e.nama}',
-            'qty': i.jumlah,
-            'harga': e.harga,
-          });
+      String? kodePercobaan;
+      setStateIfMounted(() => _memproses = true);
+      try {
+        // Gerbang ini WAJIB berada sebelum pembuatan kode transaksi, verifikasi
+        // biometrik/PIN, simpanTransaksiPending, dan aksi bayar. Jika saldo tidak
+        // cukup atau server tidak dapat dihubungi, keranjang tetap utuh dan tidak
+        // ada baris PENDING baru yang harus dibersihkan saat tutup kasir.
+        if (!await _validasiSaldoPusatSebelumBayar()) return;
+        kodePercobaan = _kodePengajuanLimitTertunda ?? await _buatKodeUnik();
+        final kodeUnik = kodePercobaan;
+        final buktiBiometrik = await _verifikasiMemberJikaPerlu(kodeUnik);
+        if (buktiBiometrik == null) return;
+        final waktu =
+            widget.draftIdSumber == null ? DateTime.now() : _waktuTransaksi;
+        final payload =
+            _buatPayload(kodeUnik, waktu, sertakanStatusPelayanan: true);
+        payload.addAll(buktiBiometrik);
+        final sesiKasLokal = await CoreDb.instance.sesiKasAktif();
+        final kodeSesiKas = '${sesiKasLokal?['kode'] ?? ''}'.trim();
+        if (kodeSesiKas.isNotEmpty) payload['kode_sesi_kas'] = kodeSesiKas;
+
+        final payloadPending = Map<String, dynamic>.from(payload);
+        payloadPending['pengiriman_pending'] = true;
+        Map<String, dynamic>? hasilServer;
+        if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
+          // Semua pembayaran yang memotong saldo pusat wajib menunggu ACK server.
+          // Saldo dapat berubah di perangkat/toko lain sehingga cache lokal tidak
+          // boleh dipakai sebagai izin membelanjakan uang. Bukti biometrik juga
+          // berumur pendek dan diikat ke kode transaksi. Hal yang sama berlaku
+          // bila tipe member mempunyai limit: server harus menghitung periode dan,
+          // bila perlu, membuat pengajuan supervisor sebelum kasir menganggap
+          // transaksi selesai. Saat offline keranjang tetap utuh; kasir dapat
+          // memilih Tunai/metode manual aman atau menunggu koneksi pulih.
+          hasilServer = await ApiClient.instance.aksi('bayar', payload);
+          await CoreDb.instance.simpanTransaksiPending(
+              kodeUnik, jsonEncode(payloadPending),
+              akunKunci: Sesi.instance.userId,
+              tokoId: Sesi.instance.tokoId,
+              idPerangkat: IdentitasMesin.instance.idMesin);
+          await CoreDb.instance
+              .simpanHasilServerTransaksi(kodeUnik, hasilServer);
+          await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(_verifikasiMemberWajibServer
+                  ? 'Saldo/identitas member sudah diverifikasi. Pembayaran sudah diterima server.'
+                  : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
+        } else {
+          // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
+          // server, lalu kirim/retry idempoten di background.
+          await CoreDb.instance.simpanTransaksiPending(
+              kodeUnik, jsonEncode(payloadPending),
+              akunKunci: Sesi.instance.userId,
+              tokoId: Sesi.instance.tokoId,
+              idPerangkat: IdentitasMesin.instance.idMesin);
+          TransaksiOutboxService.instance.kirimDiBackground();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Transaksi aman tersimpan di lokal. Pengiriman ke server berjalan di background; jika gagal akan dicoba lagi dalam 10 menit.')));
         }
-      }
-      final metodeNama = _caraBayarTerpilih!.nama;
-      final pelangganStruk = _memberTerpilih?.nama;
-      final totalStruk = _total;
-      final diskonFakturStruk = _diskonFaktur;
-      final pajakStruk = _pajak;
-      final pembayaranStruk = _pembayaranStruk();
-      final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
-      final double? kembalianStruk =
-          _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
-      final saldoStruk = _saldoDepositSetelahBayar(null);
-      _kodePengajuanLimitTertunda = null;
-      widget.keranjang.clear();
-      // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
-      // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
-      // sinyal pindah ke layar ucapan terima kasih + rating (gap-closure
-      // "Survey Kepuasan Pelanggan", lihat JavaDoc kirimSukses).
-      LayarPelangganBroadcaster.instance.kirimSukses();
-      setStateIfMounted(() {
-        _langsungTerlayani = true;
-        _splitBayar = [];
-        _nilaiDiskonFaktur = 0;
-        _tipeDiskonFaktur = 'NOMINAL';
-        _roomChargeStay = null;
-      });
-      widget.onSelesai?.call();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => StrukScreen(
-          kode: kodeUnik,
-          waktu: _formatWaktuServer(waktu),
-          item: itemStruk,
-          total: totalStruk,
-          metode: metodeNama,
-          pembayaran: pembayaranStruk,
-          pajak: pajakStruk,
-          diskonFaktur: diskonFakturStruk,
-          tersinkron: false,
-          pelanggan: pelangganStruk,
-          uangDiterima: uangDiterimaStruk,
-          kembalian: kembalianStruk,
-          saldo: saldoStruk,
-        ),
-      ));
-    } catch (e, stackTrace) {
-      if (e is ApiException &&
-          e.kode == 'PENGAJUAN_LIMIT_MENUNGGU' &&
-          kodePercobaan != null) {
-        final pesanLimit = e.pesan.toLowerCase();
-        // Keputusan ditolak atau isi checkout sudah berubah berarti persetujuan
-        // lama tidak boleh digunakan. Selain dua keadaan itu, jangan mengganti
-        // kode pada retry karena persetujuan supervisor di backend hanya sah
-        // untuk transaksi, member, dan nominal yang sama.
-        _kodePengajuanLimitTertunda =
-            pesanLimit.contains('ditolak') || pesanLimit.contains('berbeda')
-                ? null
-                : kodePercobaan;
-      }
-      // Kegagalan sebelum pemanggilan API (mis. tulis outbox SQLite, pembuatan
-      // nomor struk, atau serialisasi payload) dahulu hanya sampai ke zone
-      // handler global. Akibatnya tombol kembali normal tanpa penjelasan dan
-      // kasir mengira tombol Bayar tidak bekerja. Semua kegagalan checkout
-      // sekarang selalu dicatat dan ditampilkan dengan detail yang bisa disalin.
-      await CoreDb.instance.catatErrorLog(
-        sumber: 'checkout-pos',
-        tingkat: 'ERROR',
-        pesan: e.toString(),
-        detail: stackTrace.toString(),
-      );
-      if (mounted) {
-        await tampilkanKesalahan(context, e, aktivitas: 'menyimpan pembayaran');
+
+        // Ekstra diratakan (flatten) jadi baris tersendiri TEPAT setelah induknya
+        // -- StrukScreen tak kenal struktur bersarang, cuma daftar {nama,qty,
+        // harga} datar (lihat JavaDoc StrukScreen._itemPdf). Prefiks "   + "
+        // sbg indentasi visual, qty ekstra ikut qty induk (kontrak server: 1
+        // ekstra berlaku per 1 unit induk, lihat JavaDoc [ItemEkstra]).
+        final itemStruk = <Map<String, dynamic>>[];
+        for (final i in widget.keranjang) {
+          itemStruk.add({
+            // Label kemasan ikut ke struk: "Beras (2 x Karung 50kg)" --
+            // pembeli grosir memeriksa struknya dalam hitungan kemasan.
+            'nama': i.labelSatuanJual != null
+                ? '${i.produk.nama} (${i.labelSatuanJual})'
+                : i.labelKemasan == null
+                    ? i.produk.nama
+                    : '${i.produk.nama} (${i.labelKemasan})',
+            'qty': i.jumlah,
+            'harga': i.hargaSatuanEfektif,
+            'diskon': i.diskon,
+            'cashback': i.cashback,
+          });
+          for (final e in i.ekstra) {
+            itemStruk.add({
+              'nama': '   + ${e.nama}',
+              'qty': i.jumlah,
+              'harga': e.harga,
+            });
+          }
+        }
+        final metodeNama = _caraBayarTerpilih!.nama;
+        final pelangganStruk = _memberTerpilih?.nama;
+        final totalStruk = _total;
+        final diskonFakturStruk = _diskonFaktur;
+        final pajakStruk = _pajak;
+        final pembayaranStruk = _pembayaranStruk();
+        final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
+        final double? kembalianStruk =
+            _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
+        final saldoStruk = _saldoDepositSetelahBayar(null);
+        _kodePengajuanLimitTertunda = null;
+        widget.keranjang.clear();
+        // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
+        // mengosongkan tampilan keranjang di Layar Pelanggan SEKALIGUS memberi
+        // sinyal pindah ke layar ucapan terima kasih + rating (gap-closure
+        // "Survey Kepuasan Pelanggan", lihat JavaDoc kirimSukses).
+        LayarPelangganBroadcaster.instance.kirimSukses();
+        setStateIfMounted(() {
+          _langsungTerlayani = true;
+          _splitBayar = [];
+          _nilaiDiskonFaktur = 0;
+          _tipeDiskonFaktur = 'NOMINAL';
+          _roomChargeStay = null;
+        });
+        widget.onSelesai?.call();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => StrukScreen(
+            kode: kodeUnik,
+            waktu: _formatWaktuServer(waktu),
+            item: itemStruk,
+            total: totalStruk,
+            metode: metodeNama,
+            pembayaran: pembayaranStruk,
+            pajak: pajakStruk,
+            diskonFaktur: diskonFakturStruk,
+            tersinkron: false,
+            pelanggan: pelangganStruk,
+            uangDiterima: uangDiterimaStruk,
+            kembalian: kembalianStruk,
+            saldo: saldoStruk,
+          ),
+        ));
+      } catch (e, stackTrace) {
+        if (e is ApiException &&
+            e.kode == 'PENGAJUAN_LIMIT_MENUNGGU' &&
+            kodePercobaan != null) {
+          final pesanLimit = e.pesan.toLowerCase();
+          // Keputusan ditolak atau isi checkout sudah berubah berarti persetujuan
+          // lama tidak boleh digunakan. Selain dua keadaan itu, jangan mengganti
+          // kode pada retry karena persetujuan supervisor di backend hanya sah
+          // untuk transaksi, member, dan nominal yang sama.
+          _kodePengajuanLimitTertunda =
+              pesanLimit.contains('ditolak') || pesanLimit.contains('berbeda')
+                  ? null
+                  : kodePercobaan;
+        }
+        // Kegagalan sebelum pemanggilan API (mis. tulis outbox SQLite, pembuatan
+        // nomor struk, atau serialisasi payload) dahulu hanya sampai ke zone
+        // handler global. Akibatnya tombol kembali normal tanpa penjelasan dan
+        // kasir mengira tombol Bayar tidak bekerja. Semua kegagalan checkout
+        // sekarang selalu dicatat dan ditampilkan dengan detail yang bisa disalin.
+        await CoreDb.instance.catatErrorLog(
+          sumber: 'checkout-pos',
+          tingkat: 'ERROR',
+          pesan: e.toString(),
+          detail: stackTrace.toString(),
+        );
+        if (mounted) {
+          await tampilkanKesalahan(context, e,
+              aktivitas: 'menyimpan pembayaran');
+        }
+      } finally {
+        if (mounted) setStateIfMounted(() => _memproses = false);
       }
     } finally {
-      if (mounted) setStateIfMounted(() => _memproses = false);
+      _ketukanBayarTerkunci = false;
     }
   }
 

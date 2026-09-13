@@ -20,6 +20,47 @@ final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggalServer = DateFormat('yyyy-MM-dd');
 
+const String _metodeTransferQris = '__TRANSFER_QRIS__';
+
+/// Menyatukan variasi nama kanal non-tunai yang dipakai data lama dan baru.
+/// Sebagian tenant menyimpan QRIS sebagai "QRS - BSI", sementara transaksi
+/// lama memakai "Transfer". Keduanya harus dapat direkonsiliasi dalam satu
+/// filter tanpa mengubah nama metode asli pada nota.
+@visibleForTesting
+bool metodeAdalahTransferAtauQris(Object? nilai) {
+  final metode = (nilai ?? '').toString().trim().toLowerCase();
+  if (metode.isEmpty) return false;
+  return RegExp(r'(^|[^a-z])(transfer|qris|qrs)([^a-z]|$)').hasMatch(metode);
+}
+
+@visibleForTesting
+List<Map<String, dynamic>> saringTransferDanQris(
+  List<Map<String, dynamic>> rows, {
+  required String Function(Map<String, dynamic>) bacaMetode,
+}) =>
+    rows.where((row) => metodeAdalahTransferAtauQris(bacaMetode(row))).toList();
+
+@visibleForTesting
+List<Map<String, dynamic>> ringkasPenjualanPerKasir(
+    List<Map<String, dynamic>> rows) {
+  final hasil = <String, Map<String, dynamic>>{};
+  for (final row in rows) {
+    final kasir = '${row['kasir'] ?? '-'}';
+    final ringkasan = hasil.putIfAbsent(
+        kasir,
+        () => <String, dynamic>{
+              'kasir': kasir,
+              'jumlahTransaksi': 0,
+              'total': 0.0,
+            });
+    ringkasan['jumlahTransaksi'] =
+        ((ringkasan['jumlahTransaksi'] as num?)?.toInt() ?? 0) + 1;
+    ringkasan['total'] = ((ringkasan['total'] as num?)?.toDouble() ?? 0) +
+        ((row['totalBiaya'] as num?)?.toDouble() ?? 0);
+  }
+  return hasil.values.toList();
+}
+
 String _formatWaktu(dynamic raw) {
   final s = raw?.toString() ?? '';
   if (s.isEmpty) return '-';
@@ -2694,11 +2735,25 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
   String _metode = '';
   List<String> _daftarMetode = [];
 
+  bool get _filterTransferQris => _metode == _metodeTransferQris;
+
+  List<String> get _opsiMetode {
+    final hasil = <String>[];
+    if (_daftarMetode.any(metodeAdalahTransferAtauQris)) {
+      hasil.add(_metodeTransferQris);
+    }
+    hasil.addAll(_daftarMetode);
+    return hasil;
+  }
+
+  String _labelMetode(String metode) =>
+      metode == _metodeTransferQris ? 'Transfer + QRIS' : metode;
+
   Map<String, dynamic> _payload({int? page, int pageSize = _pageSize}) => {
         'tglMulai': _formatTanggalServer.format(_mulai),
         'tglSampai': _formatTanggalServer.format(_sampai),
         if (_kasir.isNotEmpty) 'kasir': _kasir,
-        if (_metode.isNotEmpty) 'metode': _metode,
+        if (_metode.isNotEmpty && !_filterTransferQris) 'metode': _metode,
         'page': page ?? _halaman,
         'pageSize': pageSize,
       };
@@ -2718,7 +2773,12 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
           .toList();
       setStateIfMounted(() {
         _daftarMetode = opsi;
-        if (_metode.isNotEmpty && !opsi.contains(_metode)) _metode = '';
+        final grupMasihAda = opsi.any(metodeAdalahTransferAtauQris);
+        if (_metode.isNotEmpty &&
+            !opsi.contains(_metode) &&
+            !(_filterTransferQris && grupMasihAda)) {
+          _metode = '';
+        }
       });
     } catch (_) {
       // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.
@@ -2739,11 +2799,22 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
           .toSet()
           .toList();
       final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
+      var data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      var ringkasan = ((hasil['ringkasanKasir'] as List?) ?? [])
+          .cast<Map<String, dynamic>>();
+      var total = (hasil['total'] as num?)?.toInt() ?? 0;
+      if (_filterTransferQris) {
+        final semua = await _semuaData();
+        total = semua.length;
+        final awal = (_halaman - 1) * _pageSize;
+        final akhir = math.min(awal + _pageSize, total);
+        data = awal < total ? semua.sublist(awal, akhir) : [];
+        ringkasan = ringkasPenjualanPerKasir(semua);
+      }
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _ringkasan = ((hasil['ringkasanKasir'] as List?) ?? [])
-            .cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _data = data;
+        _ringkasan = ringkasan;
+        _total = total;
         _bolehFilterKasir = hasil['bolehFilterKasir'] == true;
         _daftarKasir = daftar;
         if (!_bolehFilterKasir || (_kasir.isEmpty && aktif.isNotEmpty)) {
@@ -2767,6 +2838,7 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
       return;
     }
     setStateIfMounted(() => _halaman = 1);
+    await _muatOpsiMetode();
     await _muat();
   }
 
@@ -2778,24 +2850,13 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
   Future<void> _cetakPdf() async {
     setStateIfMounted(() => _mencetak = true);
     try {
-      final semua = <Map<String, dynamic>>[];
-      var page = 1;
-      var total = 0;
-      do {
-        final hasil = await ApiClient.instance.aksi(
-            'laporan_penjualan_kasir_list',
-            _payload(page: page, pageSize: 100));
-        semua.addAll(
-            ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>());
-        total = (hasil['total'] as num?)?.toInt() ?? semua.length;
-        page++;
-      } while (semua.length < total);
+      final semua = await _semuaData();
       final totalNilai = semua.fold<double>(
           0, (jumlah, row) => jumlah + ((row['totalBiaya'] as num?) ?? 0));
       await CetakUtilIs.cetakPdfTabel(
         judul: 'Penerimaan Penjualan per Kasir',
         parameter:
-            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}; Metode: ${_metode.isEmpty ? "Semua metode" : _metode}',
+            'Periode ${_formatTanggalServer.format(_mulai)} s.d. ${_formatTanggalServer.format(_sampai)}; Kasir: ${_kasir.isEmpty ? "Semua kasir" : _kasir}; Metode: ${_metode.isEmpty ? "Semua metode" : _labelMetode(_metode)}',
         headers: const [
           'Waktu',
           'Kasir',
@@ -2832,9 +2893,16 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
   int get _totalHalaman =>
       _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
 
-  Future<DynamicReportData> _reportData() async {
+  Future<List<Map<String, dynamic>>> _semuaData() async {
     final rows = await _ambilSemuaBarisLaporan(
         'laporan_penjualan_kasir_list', _payload(page: 1, pageSize: 100));
+    if (!_filterTransferQris) return rows;
+    return saringTransferDanQris(rows,
+        bacaMetode: (row) => StrukScreen.labelPembayaran(row));
+  }
+
+  Future<DynamicReportData> _reportData() async {
+    final rows = await _semuaData();
     return DynamicReportData(
       title: 'Penjualan per Kasir',
       subtitle:
@@ -2931,8 +2999,8 @@ class _TabPenjualanKasirState extends State<_TabPenjualanKasir>
                   isDense: true),
               items: [
                 const DropdownMenuItem(value: '', child: Text('Semua metode')),
-                ..._daftarMetode
-                    .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+                ..._opsiMetode.map((m) =>
+                    DropdownMenuItem(value: m, child: Text(_labelMetode(m)))),
               ],
               onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
             ),
@@ -3202,6 +3270,20 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
   String _metode = '';
   List<String> _daftarMetode = [];
 
+  bool get _filterTransferQris => _metode == _metodeTransferQris;
+
+  List<String> get _opsiMetode {
+    final hasil = <String>[];
+    if (_daftarMetode.any(metodeAdalahTransferAtauQris)) {
+      hasil.add(_metodeTransferQris);
+    }
+    hasil.addAll(_daftarMetode);
+    return hasil;
+  }
+
+  String _labelMetode(String metode) =>
+      metode == _metodeTransferQris ? 'Transfer + QRIS' : metode;
+
   /// Isi dropdown metode diambil dari metode yang benar-benar dipakai pada rentang
   /// tanggal terpilih (aksi laporan_metode_bayar_opsi), bukan daftar master penuh.
   Future<void> _muatOpsiMetode() async {
@@ -3217,7 +3299,12 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
           .toList();
       setStateIfMounted(() {
         _daftarMetode = opsi;
-        if (_metode.isNotEmpty && !opsi.contains(_metode)) _metode = '';
+        final grupMasihAda = opsi.any(metodeAdalahTransferAtauQris);
+        if (_metode.isNotEmpty &&
+            !opsi.contains(_metode) &&
+            !(_filterTransferQris && grupMasihAda)) {
+          _metode = '';
+        }
       });
     } catch (_) {
       // Gagal memuat opsi tidak boleh menggagalkan laporan; dropdown cukup kosong.
@@ -3228,7 +3315,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
         'tglMulai': _formatTanggalServer.format(_mulai),
         'tglSampai': _formatTanggalServer.format(_sampai),
         if (_kasir.isNotEmpty) 'kasir': _kasir,
-        if (_metode.isNotEmpty) 'metode': _metode,
+        if (_metode.isNotEmpty && !_filterTransferQris) 'metode': _metode,
         'page': page ?? _halaman,
         'pageSize': pageSize,
       };
@@ -3247,9 +3334,18 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
           .toSet()
           .toList();
       final aktif = '${hasil['kasirAktif'] ?? ''}'.trim();
+      var data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      var total = (hasil['total'] as num?)?.toInt() ?? 0;
+      if (_filterTransferQris) {
+        final semua = await _semuaData();
+        total = semua.length;
+        final awal = (_halaman - 1) * _pageSize;
+        final akhir = math.min(awal + _pageSize, total);
+        data = awal < total ? semua.sublist(awal, akhir) : [];
+      }
       setStateIfMounted(() {
-        _data = ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-        _total = (hasil['total'] as num?)?.toInt() ?? 0;
+        _data = data;
+        _total = total;
         _bolehFilterKasir = hasil['bolehFilterKasir'] == true;
         _daftarKasir = daftar;
         if (!_bolehFilterKasir || (_kasir.isEmpty && aktif.isNotEmpty)) {
@@ -3273,6 +3369,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
       return;
     }
     setStateIfMounted(() => _halaman = 1);
+    await _muatOpsiMetode();
     await _muat();
   }
 
@@ -3293,7 +3390,9 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
       total = (hasil['total'] as num?)?.toInt() ?? semua.length;
       page++;
     } while (semua.length < total);
-    return semua;
+    if (!_filterTransferQris) return semua;
+    return saringTransferDanQris(semua,
+        bacaMetode: (row) => '${row['metode'] ?? ''}');
   }
 
   Future<void> _cetakPdf() async {
@@ -3415,8 +3514,8 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
                 items: [
                   const DropdownMenuItem(
                       value: '', child: Text('Semua metode')),
-                  ..._daftarMetode
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m))),
+                  ..._opsiMetode.map((m) =>
+                      DropdownMenuItem(value: m, child: Text(_labelMetode(m)))),
                 ],
                 onChanged: (v) => setStateIfMounted(() => _metode = v ?? ''),
               ),
@@ -3442,8 +3541,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
       _total <= 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
 
   Future<DynamicReportData> _reportData({bool rinci = false}) async {
-    final ringkasan = await _ambilSemuaBarisLaporan(
-        'laporan_penerimaan_kasir_list', _payload(page: 1, pageSize: 100));
+    final ringkasan = await _semuaData();
     if (rinci) {
       final rows = <Map<String, dynamic>>[];
       for (final grup in ringkasan) {
@@ -3451,7 +3549,7 @@ class _TabPenerimaanKasirState extends State<_TabPenerimaanKasir>
         rows.addAll(
             transaksi.map((row) => barisEksporRincianPenerimaan(grup, row)));
       }
-      final metode = _metode.isEmpty ? 'Semua metode' : _metode;
+      final metode = _metode.isEmpty ? 'Semua metode' : _labelMetode(_metode);
       final totalMetode = rows.fold<num>(0,
           (jumlah, row) => jumlah + ((row['penerimaanMetode'] as num?) ?? 0));
       return DynamicReportData(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
@@ -20,9 +21,11 @@ import 'riwayat_audit_screen.dart';
 import '../widgets/safe_state.dart';
 import '../services/transaksi_outbox_service.dart';
 import '../services/transaksi_rekonsiliasi_service.dart';
+import '../services/faktur_penjualan_pdf.dart';
 import '../widgets/jejak_galat.dart';
 import '../widgets/aksi_baris_menu.dart';
 import '../widgets/pemilih_metode_split.dart';
+import 'pengadaan_cetak_util.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -1295,6 +1298,13 @@ class RiwayatPenjualanScreen extends StatefulWidget {
   State<RiwayatPenjualanScreen> createState() => _RiwayatPenjualanScreenState();
 }
 
+class _DetailRiwayatTransaksi {
+  const _DetailRiwayatTransaksi(this.hasil, this.items);
+
+  final Map<String, dynamic> hasil;
+  final List<Map<String, dynamic>> items;
+}
+
 class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     with JejakGalat {
   final Map<String, String> _kunciPembatalan = {};
@@ -1775,64 +1785,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
 
   Future<void> _lihatDetail(Map<String, dynamic> row) async {
     try {
-      final payloadLokal = row['payloadLokal'];
-      late Map<String, dynamic> hasil;
-      late List<Map<String, dynamic>> items;
-
-      void pakaiSnapshotLokal(Map payloadSumber) {
-        final payload = Map<String, dynamic>.from(payloadSumber);
-        hasil = <String, dynamic>{
-          'kode': row['nomorNota'],
-          'waktu': row['waktu'],
-          'totalBiaya': row['totalBiaya'],
-          'kasirNama': row['kasir'],
-          'bolehEditTransaksi': false,
-        };
-        items = ((payload['transaksi'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((raw) {
-          final i = Map<String, dynamic>.from(raw);
-          return <String, dynamic>{
-            ...i,
-            'qty': i['qty'] ?? i['jumlah'] ?? 0,
-            'harga': i['harga'] ?? 0,
-            'diskon': i['diskon'] ?? 0,
-          };
-        }).toList();
-      }
-
-      // Baris hasil sinkron tetap membawa payload lokal sebagai cadangan. Dahulu
-      // keberadaan payload itu selalu menang dan memaksa bolehEditTransaksi=false,
-      // sehingga tombol Edit hilang meskipun server mengizinkan. Transaksi yang
-      // sudah SYNCED wajib meminta detail + otorisasi terkini dari server; snapshot
-      // lokal hanya dipakai bila koneksi benar-benar gagal.
-      final sudahTersinkron = row['statusSinkronLokal'] == 'SYNCED';
-      if (payloadLokal is Map && !sudahTersinkron) {
-        pakaiSnapshotLokal(payloadLokal);
-      } else {
-        final idTransaksi = row['idTransaksi'];
-        if (idTransaksi == null) {
-          // Jangan pernah mengirim `id:null`. Snapshot lokal masih merupakan
-          // detail yang benar untuk dibaca; sesudah refresh dari server, merge
-          // berdasarkan kode stabil di atas akan melengkapinya dengan ID.
-          if (payloadLokal is Map) {
-            pakaiSnapshotLokal(payloadLokal);
-          } else {
-            throw const FormatException(
-                'Detail transaksi belum memiliki ID server. Muat ulang data lalu coba kembali.');
-          }
-        } else {
-          try {
-            hasil = await ApiClient.instance
-                .aksi('detail_transaksi', {'id': idTransaksi});
-            items =
-                ((hasil['item'] as List?) ?? []).cast<Map<String, dynamic>>();
-          } on ApiException catch (error) {
-            if (!error.offline || payloadLokal is! Map) rethrow;
-            pakaiSnapshotLokal(payloadLokal);
-          }
-        }
-      }
+      final detailTransaksi = await _ambilDetailTransaksi(row);
+      final hasil = detailTransaksi.hasil;
+      final items = detailTransaksi.items;
       final pajakHeader = (row['pajak'] as num?)?.toDouble() ?? 0;
       final diskonHeader = (row['totalDiskon'] as num?)?.toDouble() ?? 0;
       final subtotalPerBaris = items
@@ -1985,6 +1940,22 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                 _cetakUlang(row, hasil, items);
               },
             ),
+            TextButton.icon(
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text('Unduh Faktur PDF'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _unduhFakturPenjualan(row, hasil, items);
+              },
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.preview_outlined, size: 18),
+              label: const Text('Pratinjau & Cetak Faktur'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pratinjauFakturPenjualan(row, hasil, items);
+              },
+            ),
             TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Tutup')),
@@ -1995,6 +1966,109 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       if (mounted) {
         snackbarGalat(context, e);
       }
+    }
+  }
+
+  Future<_DetailRiwayatTransaksi> _ambilDetailTransaksi(
+      Map<String, dynamic> row) async {
+    final payloadLokal = row['payloadLokal'];
+
+    _DetailRiwayatTransaksi pakaiSnapshotLokal(Map payloadSumber) {
+      final payload = Map<String, dynamic>.from(payloadSumber);
+      final hasil = <String, dynamic>{
+        ...payload,
+        'kode': row['nomorNota'],
+        'waktu': row['waktu'],
+        'totalBiaya': row['totalBiaya'],
+        'totalDiskon': row['totalDiskon'],
+        'pajak': row['pajak'],
+        'pembeli': row['pembeli'],
+        'kasirNama': row['kasir'],
+        'bolehEditTransaksi': false,
+      };
+      final items = ((payload['transaksi'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((raw) {
+        final item = Map<String, dynamic>.from(raw);
+        return <String, dynamic>{
+          ...item,
+          'qty': item['qty'] ?? item['jumlah'] ?? 0,
+          'harga': item['harga'] ?? 0,
+          'diskon': item['diskon'] ?? 0,
+        };
+      }).toList();
+      return _DetailRiwayatTransaksi(hasil, items);
+    }
+
+    // Transaksi pending selalu memakai SQLite. Yang sudah tersinkron meminta
+    // detail terkini, tetapi tetap jatuh kembali ke snapshot lokal saat offline.
+    final sudahTersinkron = row['statusSinkronLokal'] == 'SYNCED';
+    if (payloadLokal is Map && !sudahTersinkron) {
+      return pakaiSnapshotLokal(payloadLokal);
+    }
+    final idTransaksi = row['idTransaksi'];
+    if (idTransaksi == null) {
+      if (payloadLokal is Map) return pakaiSnapshotLokal(payloadLokal);
+      throw const FormatException(
+          'Detail transaksi belum memiliki ID server. Muat ulang data lalu coba kembali.');
+    }
+    try {
+      final hasil = await ApiClient.instance
+          .aksi('detail_transaksi', {'id': idTransaksi});
+      final items = ((hasil['item'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      return _DetailRiwayatTransaksi(hasil, items);
+    } on ApiException catch (error) {
+      if (!error.offline || payloadLokal is! Map) rethrow;
+      return pakaiSnapshotLokal(payloadLokal);
+    }
+  }
+
+  FakturPenjualanData _dataFakturPenjualan(Map<String, dynamic> row,
+      Map<String, dynamic> detail, List<Map<String, dynamic>> items) {
+    return FakturPenjualanData.dariSumber(
+      detail: detail,
+      ringkasan: row,
+      items: items,
+      toko: Sesi.instance.tokoNama,
+      alamat: Sesi.instance.tokoAlamat,
+      telepon: Sesi.instance.tokoTelp,
+      metodePembayaran: StrukScreen.labelPembayaran(detail, row),
+    );
+  }
+
+  Future<void> _unduhFakturPenjualan(Map<String, dynamic> row,
+      Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
+    try {
+      final data = _dataFakturPenjualan(row, detail, items);
+      final path = await simpanFakturPenjualanPdf(data);
+      if (!mounted || path == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Faktur PDF berhasil disimpan: $path')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan faktur PDF: $e')));
+    }
+  }
+
+  Future<void> _pratinjauFakturPenjualan(Map<String, dynamic> row,
+      Map<String, dynamic> detail, List<Map<String, dynamic>> items) async {
+    try {
+      final data = _dataFakturPenjualan(row, detail, items);
+      final isi = await buatDokumenFakturPenjualan(data).save();
+      if (!mounted) return;
+      await tampilkanPratinjauPdf(
+        context,
+        judul: namaFileFakturPenjualan(data.nomor).replaceFirst('.pdf', ''),
+        isi: Uint8List.fromList(isi),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuka pratinjau faktur: $e')));
     }
   }
 
@@ -2914,6 +2988,34 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                               ikon: Icons.visibility_outlined,
                               label: 'Detail transaksi',
                               onTap: () => _lihatDetail(row)),
+                          AksiBaris(
+                              ikon: Icons.picture_as_pdf_outlined,
+                              label: 'Unduh faktur PDF',
+                              onTap: () async {
+                                try {
+                                  final detail =
+                                      await _ambilDetailTransaksi(row);
+                                  await _unduhFakturPenjualan(
+                                      row, detail.hasil, detail.items);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  snackbarGalat(context, e);
+                                }
+                              }),
+                          AksiBaris(
+                              ikon: Icons.preview_outlined,
+                              label: 'Pratinjau & cetak faktur',
+                              onTap: () async {
+                                try {
+                                  final detail =
+                                      await _ambilDetailTransaksi(row);
+                                  await _pratinjauFakturPenjualan(
+                                      row, detail.hasil, detail.items);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  snackbarGalat(context, e);
+                                }
+                              }),
                           // Riwayat revisi header nota (AuditTrails/Envers)
                           // -- hanya baris server yg punya id transaksi.
                           AksiBaris(

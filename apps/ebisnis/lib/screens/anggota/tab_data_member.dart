@@ -765,6 +765,30 @@ class _AnggotaTabDataMemberState extends State<AnggotaTabDataMember>
             ],
           ),
           const SizedBox(height: 12),
+          if (!Sesi.instance.bolehKelola)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade700),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Akun ini hanya dapat melihat data member. Input siswa/member '
+                      'dan sinkronisasi lokal memerlukan hak Kelola Pelanggan dari admin atau supervisor.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           BannerPerubahanServer(
             key: ValueKey('perubahan:$_versiPerubahan'),
             baru: _idBaru.length,
