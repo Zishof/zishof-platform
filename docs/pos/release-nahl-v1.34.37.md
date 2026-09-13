@@ -1,6 +1,6 @@
 # TokoQu Al-Bahjah An Nahl v1.34.37 build 200 — UAT WA 12–13 September 2026
 
-Tanggal verifikasi: 14 September 2026  
+Tanggal verifikasi: 14 September 2026
 Commit kandidat: `b9da9ca`
 
 ## Perbaikan yang diverifikasi
@@ -31,4 +31,3 @@ Commit kandidat: `b9da9ca`
 | `TokoQu-Al-Bahjah-An-Nahl-Setup-1.34.37.exe` | `fd40ebeb5341e2a3214636d2e7aaa4fd5618cd4173af878ef9f001afec41b342` |
 
 Kandidat ini adalah prerelease/UAT: APK memakai sertifikat Android Debug dan installer Windows belum memiliki Authenticode produksi.
-
