@@ -153,6 +153,23 @@ void main() {
 
     await buka(const MasterCustomerScreen());
     await potret('03-master-customer', 'Data Pelanggan / Pedagang');
+    // Rinci pelanggan 00489: satu dari sebelas pelanggan yang medan "Alamat" pada blok
+    // rekening formulir lamanya (CUSTOMER.DBF ALMBANK, v27) terisi. Layar rinci ini juga
+    // tempat Atas Nama dan Wilayah yang sampai v27 ditampilkan KOSONG walau datanya ada.
+    //
+    // .last, bukan .first: find.text juga cocok dengan isi kotak pencarian (EditableText),
+    // dan kotak itu berada lebih dulu di pohon widget daripada baris daftarnya.
+    final kotakCari = find.byType(TextField);
+    if (kotakCari.evaluate().isNotEmpty) {
+      await tester.enterText(kotakCari.first, '00489');
+      await _tenang(tester, detik: 20);
+    }
+    if (await ketuk(
+        find.ancestor(of: find.text('00489').last, matching: find.byType(InkWell)),
+        'Buka rinci pelanggan 00489')) {
+      await potret('03b-rinci-customer',
+          'Rinci Pelanggan — Atas Nama, Wilayah, dan Alamat Bank (v27)');
+    }
     await tutup();
 
     await buka(const MasterSalesScreen());

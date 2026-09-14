@@ -309,7 +309,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
           ]),
           const SizedBox(height: 12),
           AppDataTable(
-            minWidth: 1180,
+            minWidth: 1280,
             emptyText: 'Tidak ada data.',
             // Judul kolom memakai istilah layar lama ("Kredit", "Tunai", "RL %"):
             // penguji yang sedang mengadu kedua layar mencari kata itu, dan
@@ -320,6 +320,9 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
               AppTableColumn('Sat', flex: 1),
               AppTableColumn('Stok', flex: 1, align: TextAlign.right),
               AppTableColumn('Hrg Beli', flex: 2, align: TextAlign.right),
+              // Tanggal harga legacy (STOK.DBF TGLHARGA, v27) -- panduan layar 11
+              // menuntutnya dibandingkan "pada satu konteks produk" dengan harganya.
+              AppTableColumn('Tgl Harga', flex: 1),
               AppTableColumn('Hrg Jual (Kredit)', flex: 2, align: TextAlign.right),
               AppTableColumn('Hrg Jual (Tunai)', flex: 2, align: TextAlign.right),
               AppTableColumn('Jual Umum Efektif',
@@ -338,6 +341,12 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
               final tunai = p['hargaJualTunai'] as num?;
               final marginTunai = p['marginTunaiPersen'] as num?;
               final negatifTunai = marginTunai != null && marginTunai < 0;
+              // yyyy-MM-dd dari server, ditampilkan dd-MM-yyyy seperti layar lama. Kosong
+              // (2 dari 626 produk legacy) ditulis tanda hubung, bukan tanggal karangan.
+              final th = p['tanggalHarga'] as String?;
+              final tglHarga = (th == null || th.length < 10)
+                  ? '-'
+                  : '${th.substring(8, 10)}-${th.substring(5, 7)}-${th.substring(0, 4)}';
               return AppTableRowData(cells: [
                 AppTableCell.text('${p['kode']}',
                     flex: 1,
@@ -349,6 +358,7 @@ class _TabAnalisisHargaState extends State<_TabAnalisisHarga> with JejakGalat {
                     flex: 1, align: TextAlign.right),
                 AppTableCell.text(_fmtRp.format((p['hargaBeli'] as num?) ?? 0),
                     flex: 2, align: TextAlign.right),
+                AppTableCell.text(tglHarga, flex: 1),
                 AppTableCell.text(_fmtRp.format((p['hargaJual'] as num?) ?? 0),
                     flex: 2, align: TextAlign.right),
                 AppTableCell.text(tunai == null ? '-' : _fmtRp.format(tunai),

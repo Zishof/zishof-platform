@@ -491,6 +491,9 @@ class _DetailCustomerSheet extends StatelessWidget {
             baris('No. Rekening', '${data['noRekening'] ?? ''}'),
             baris('Atas Nama', '${data['atasNama'] ?? ''}'),
             baris('Bank', '${data['bank'] ?? ''}'),
+            // Medan "Alamat" pada blok rekening formulir pelanggan lama (CUSTOMER.DBF
+            // ALMBANK, migrasi v27). Formulir lama menampilkannya di bawah Bank.
+            baris('Alamat Bank', '${data['alamatBank'] ?? ''}'),
             baris(
                 'Saldo Piutang',
                 data['saldoPiutang'] == null
@@ -576,6 +579,7 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
   late final TextEditingController _noRekening;
   late final TextEditingController _atasNama;
   late final TextEditingController _bank;
+  late final TextEditingController _alamatBank;
   List<Map<String, dynamic>> _daftarSales = [];
   int? _salesOwnerId;
   bool _menyimpan = false;
@@ -602,6 +606,7 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
     _noRekening = TextEditingController(text: d?['noRekening'] ?? '');
     _atasNama = TextEditingController(text: d?['atasNama'] ?? '');
     _bank = TextEditingController(text: d?['bank'] ?? '');
+    _alamatBank = TextEditingController(text: d?['alamatBank'] ?? '');
     _salesOwnerId = (d?['salesOwnerId'] as num?)?.toInt();
     for (final c in [
       _kode,
@@ -616,7 +621,8 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
       _wilayah,
       _noRekening,
       _atasNama,
-      _bank
+      _bank,
+      _alamatBank
     ]) {
       c.addListener(() => _adaPerubahan = true);
     }
@@ -649,7 +655,8 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
       _wilayah,
       _noRekening,
       _atasNama,
-      _bank
+      _bank,
+      _alamatBank
     ]) {
       c.dispose();
     }
@@ -682,6 +689,7 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
         'no_rekening': _noRekening.text.trim(),
         'atas_nama': _atasNama.text.trim(),
         'bank': _bank.text.trim(),
+        'alamat_bank': _alamatBank.text.trim(),
         'sales_owner_id': _salesOwnerId,
       },
           kunci: _ubah
@@ -824,6 +832,8 @@ class _FormCustomerState extends State<_FormCustomer> with JejakGalat {
                             label: 'Atas Nama', controller: _atasNama)),
                   ]),
                   AppFormTextField(label: 'Bank', controller: _bank),
+                  AppFormTextField(
+                      label: 'Alamat Bank', controller: _alamatBank),
                 ]),
               ],
               actions: [
