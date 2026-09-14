@@ -56,6 +56,55 @@ void main() {
     expect(data.lunas, isTrue);
   });
 
+  test('metode piutang tidak pernah mendapat stempel LUNAS tanpa bukti', () {
+    for (final metode in const [
+      'Kasbon Divisi',
+      'E-Money',
+      'Reward',
+      'Voucher BMT',
+    ]) {
+      expect(
+        statusLunasFakturPenjualan(
+          detail: const {'status': '00'},
+          ringkasan: const {},
+          metodePembayaran: metode,
+        ),
+        isFalse,
+        reason: metode,
+      );
+    }
+  });
+
+  test('status pelunasan eksplisit mengalahkan klasifikasi metode', () {
+    expect(
+      statusLunasFakturPenjualan(
+        detail: const {'statusPembayaran': 'LUNAS'},
+        ringkasan: const {},
+        metodePembayaran: 'Kasbon Divisi',
+      ),
+      isTrue,
+    );
+    expect(
+      statusLunasFakturPenjualan(
+        detail: const {'statusPembayaran': 'BELUM LUNAS'},
+        ringkasan: const {},
+        metodePembayaran: 'Tunai',
+      ),
+      isFalse,
+    );
+  });
+
+  test('metode tidak dikenal ditahan dari klaim LUNAS', () {
+    expect(
+      statusLunasFakturPenjualan(
+        detail: const {'status': '00'},
+        ringkasan: const {},
+        metodePembayaran: 'Metode Baru',
+      ),
+      isFalse,
+    );
+  });
+
   test('snapshot lokal jumlah dan diskon baris tetap dapat menjadi faktur', () {
     final data = FakturPenjualanData.dariSumber(
       detail: const {'kode': 'LOKAL-1', 'totalBiaya': 9000},

@@ -15,7 +15,7 @@ void main() {
     // diam-diam kembali menjadi kirim-langsung.
     'lib/screens/kulakan_screen.dart': [
       "daftarCacheDulu('kulakan_faktur_list'",
-      "'master:kulakan_faktur'",
+      'kunciCacheKulakanAktif()',
       "aksi: 'kulakan_faktur_simpan'",
       "aksi: 'kulakan_faktur_batal'",
       // Supplier baru dibuat offline memakai id sementara supaya faktur yang
@@ -26,7 +26,7 @@ void main() {
       "daftarCacheDulu('retur_pembelian_list'",
       "daftarCacheDulu('kulakan_faktur_list'",
       "objekDenganCache(",
-      "'master:kulakan_faktur:detail:",
+      r"'${kunciCacheKulakanAktif()}:detail:",
       "aksi: 'retur_pembelian_simpan'",
       "aksi: 'retur_pembelian_hapus'",
       "'faktur_pengadaan_id'",

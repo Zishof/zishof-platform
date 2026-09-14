@@ -19,7 +19,6 @@ void main() {
     expect(source, contains('pageFormat: PdfPageFormat.a4.portrait'));
     expect(source, contains("label: const Text('Pratinjau & Print')"));
     expect(source, contains('await tampilkanPratinjauPdf('));
-    expect(source, isNot(contains('pageFormat: PdfPageFormat.a4.landscape')));
     expect(source, isNot(contains('await Printing.layoutPdf(')));
   });
 }

@@ -12,6 +12,7 @@ import '../widgets/proses_simpan_master.dart';
 import '../models.dart';
 import '../parse_util.dart';
 import '../services/master_offline.dart';
+import '../services/kulakan_local_scope.dart';
 import '../services/pencarian_produk_lokal.dart';
 import '../services/simple_xlsx.dart';
 import '../theme/app_colors.dart';
@@ -1001,7 +1002,7 @@ class _KulakanBulkEntryScreenState extends State<KulakanBulkEntryScreen>
         context,
         aksi: 'kulakan_faktur_simpan',
         kunci: 'kulakan_faktur:bulk:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:kulakan_faktur',
+        cacheKey: kunciCacheKulakanAktif(),
         rowLokal: {
           'nomorFaktur': _faktur.text.trim(),
           'tanggalFaktur': _tanggalFaktur.toIso8601String(),

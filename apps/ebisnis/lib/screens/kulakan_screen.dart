@@ -19,6 +19,7 @@ import '../widgets/safe_state.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
 import '../services/pencarian_produk_lokal.dart';
+import '../services/kulakan_local_scope.dart';
 import '../widgets/proses_simpan_master.dart';
 import '../services/simple_xlsx.dart';
 import 'retur_pembelian_screen.dart';
@@ -158,6 +159,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
   int _halaman = 1;
   int _total = 0;
   String _kataKunciRiwayat = '';
+  bool _mengunduhRekap = false;
   // Diff emisi baca lokal-dulu (daftarCacheDulu) -- menggerakkan kilau baris
   // + banner "pembaruan dari server" (faktur yang dicatat petugas lain).
   final DiffDaftarLokal _diff = DiffDaftarLokal();
@@ -202,7 +204,8 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
     try {
       // BACA LOKAL DULU (MasterOffline.daftarCacheDulu): snapshot cache tampil
       // seketika, hasil server menyusul + diff utk kilau baris. Jalur SIMPAN
-      // FAKTUR tetap online-only lewat ApiClient (transaksional).
+      // Baca cache lebih dulu; perubahan faktur sendiri tetap ditulis ke cache
+      // dan outbox lokal oleh proses simpan/batal sebelum dikirim ke server.
       await MasterOffline.daftarCacheDulu(
           'kulakan_faktur_list',
           {
@@ -210,7 +213,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
             'page_size': _pageSize,
             if (_kataKunciRiwayat.isNotEmpty) 'keyword': _kataKunciRiwayat,
           },
-          'master:kulakan_faktur',
+          kunciCacheKulakanAktif(),
           kolomKunci: 'fakturId', onData: (hasil) {
         if (!mounted) return;
         _setStateEntri(() {
@@ -420,7 +423,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         context,
         aksi: 'kulakan_faktur_simpan',
         kunci: 'kulakan_faktur:baru:${DateTime.now().microsecondsSinceEpoch}',
-        cacheKey: 'master:kulakan_faktur',
+        cacheKey: kunciCacheKulakanAktif(),
         rowLokal: {
           'nomorFaktur': nomorFaktur,
           'tanggalFaktur': _tanggalFaktur.toIso8601String(),
@@ -839,7 +842,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         aksi: 'kulakan_faktur_batal',
         body: {'faktur_id': f['fakturId']},
         kunci: 'kulakan_faktur:${f['fakturId']}',
-        cacheKey: 'master:kulakan_faktur',
+        cacheKey: kunciCacheKulakanAktif(),
         rowLokal: {'id': f['fakturId'], 'fakturId': f['fakturId']},
         hapusLokal: true,
       );
@@ -914,7 +917,7 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         aksi: 'kulakan_faktur_batal',
         body: {'faktur_id': f['fakturId']},
         kunci: 'kulakan_faktur:${f['fakturId']}',
-        cacheKey: 'master:kulakan_faktur',
+        cacheKey: kunciCacheKulakanAktif(),
         rowLokal: {'id': f['fakturId'], 'fakturId': f['fakturId']},
         hapusLokal: true,
       );
@@ -1180,6 +1183,180 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
         ],
       ),
     );
+  }
+
+  double _nilaiFinalRiwayat(Map<String, dynamic> faktur) {
+    final hitung = (faktur['totalHitung'] as num?)?.toDouble() ?? 0;
+    final diskon = (faktur['diskon'] as num?)?.toDouble() ?? 0;
+    return (hitung - diskon).clamp(0, double.infinity).toDouble();
+  }
+
+  /// Mengambil seluruh halaman pada toko aktif untuk rekap global. Ekspor tidak
+  /// memakai `_riwayat` karena daftar itu hanya halaman yang sedang terlihat.
+  Future<List<Map<String, dynamic>>> _ambilSemuaRiwayatEkspor() async {
+    final semua = <Map<String, dynamic>>[];
+    var page = 1;
+    var total = 0;
+    do {
+      final hasil = await ApiClient.instance.aksi('kulakan_faktur_list', {
+        'page': page,
+        'page_size': 100,
+        if (_kataKunciRiwayat.trim().isNotEmpty)
+          'keyword': _kataKunciRiwayat.trim(),
+      });
+      final data = ((hasil['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      total = (hasil['total'] as num?)?.toInt() ?? data.length;
+      semua.addAll(data);
+      if (data.isEmpty || page >= 1000) break;
+      page++;
+    } while (semua.length < total);
+    if (semua.length < total) {
+      throw StateError(
+          'Rekap belum lengkap (${semua.length} dari $total faktur). Coba ulang setelah sinkronisasi selesai.');
+    }
+    return semua;
+  }
+
+  Future<void> _unduhRekapKulakanExcel() async {
+    if (_mengunduhRekap) return;
+    setStateIfMounted(() => _mengunduhRekap = true);
+    try {
+      final data = await _ambilSemuaRiwayatEkspor();
+      final total = data.fold<double>(
+          0, (jumlah, row) => jumlah + _nilaiFinalRiwayat(row));
+      final rows = <List<Object?>>[
+        ['Rekap Seluruh Kulakan', Sesi.instance.tokoNama],
+        [
+          'Dicetak',
+          DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now()),
+        ],
+        if (_kataKunciRiwayat.trim().isNotEmpty)
+          ['Filter', _kataKunciRiwayat.trim()],
+        const [],
+        const ['No.', 'Faktur', 'Tanggal', 'Supplier', 'Item', 'Total'],
+        ...data.asMap().entries.map((entry) {
+          final row = entry.value;
+          return <Object?>[
+            entry.key + 1,
+            '${row['nomorFaktur'] ?? ''}',
+            '${row['tanggalFaktur'] ?? ''}',
+            '${row['namaSupplier'] ?? ''}',
+            row['jumlahItem'] ?? 0,
+            _nilaiFinalRiwayat(row),
+          ];
+        }),
+        ['', '', '', '', 'TOTAL', total],
+      ];
+      final headerRow = _kataKunciRiwayat.trim().isEmpty ? 4 : 5;
+      final totalRow = rows.length - 1;
+      final bytes = buildSimpleXlsxReport(
+        sheetName: 'Rekap Kulakan',
+        rows: rows,
+        boldRows: {0, headerRow, totalRow},
+        darkRows: {headerRow, totalRow},
+        columnWidths: const [7, 22, 20, 30, 10, 18],
+      );
+      await _simpanUnduhanLaporan(
+        namaFile:
+            'Rekap-Kulakan-${DateFormat('yyyyMMdd-HHmm').format(DateTime.now())}.xlsx',
+        bytes: bytes,
+        ekstensi: 'xlsx',
+        judulDialog: 'Simpan Rekap Seluruh Kulakan Excel',
+        pesanSukses: 'Rekap Excel berhasil dibuat (${data.length} faktur).',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal membuat rekap Kulakan: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _mengunduhRekap = false);
+    }
+  }
+
+  Future<void> _unduhRekapKulakanPdf() async {
+    if (_mengunduhRekap) return;
+    setStateIfMounted(() => _mengunduhRekap = true);
+    try {
+      final data = await _ambilSemuaRiwayatEkspor();
+      final total = data.fold<double>(
+          0, (jumlah, row) => jumlah + _nilaiFinalRiwayat(row));
+      final doc = pw.Document();
+      doc.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        footer: (ctx) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text('Halaman ${ctx.pageNumber} dari ${ctx.pagesCount}',
+              style: const pw.TextStyle(fontSize: 8)),
+        ),
+        build: (_) => [
+          pw.Text('Rekap Seluruh Kulakan',
+              style:
+                  pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.Text(Sesi.instance.tokoNama),
+          if (_kataKunciRiwayat.trim().isNotEmpty)
+            pw.Text('Filter: ${_kataKunciRiwayat.trim()}'),
+          pw.Text(
+              'Dicetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}'),
+          pw.SizedBox(height: 12),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'No.',
+              'Faktur',
+              'Tanggal',
+              'Supplier',
+              'Item',
+              'Total'
+            ],
+            data: data.asMap().entries.map((entry) {
+              final row = entry.value;
+              return [
+                '${entry.key + 1}',
+                '${row['nomorFaktur'] ?? ''}',
+                '${row['tanggalFaktur'] ?? ''}',
+                '${row['namaSupplier'] ?? ''}',
+                '${row['jumlahItem'] ?? 0}',
+                _formatRupiah.format(_nilaiFinalRiwayat(row)),
+              ];
+            }).toList(),
+            headerStyle:
+                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+            cellStyle: const pw.TextStyle(fontSize: 7),
+            cellAlignments: {
+              0: pw.Alignment.centerRight,
+              4: pw.Alignment.centerRight,
+              5: pw.Alignment.centerRight,
+            },
+          ),
+          pw.SizedBox(height: 10),
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text('TOTAL: ${_formatRupiah.format(total)}',
+                style:
+                    pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+          ),
+        ],
+      ));
+      await _simpanUnduhanLaporan(
+        namaFile:
+            'Rekap-Kulakan-${DateFormat('yyyyMMdd-HHmm').format(DateTime.now())}.pdf',
+        bytes: await doc.save(),
+        ekstensi: 'pdf',
+        judulDialog: 'Simpan Rekap Seluruh Kulakan PDF',
+        pesanSukses: 'Rekap PDF berhasil dibuat (${data.length} faktur).',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal membuat rekap Kulakan: $e')));
+      }
+    } finally {
+      if (mounted) setStateIfMounted(() => _mengunduhRekap = false);
+    }
   }
 
   _LaporanFakturKulakan _buatLaporanFaktur(
@@ -1693,6 +1870,26 @@ class _TabKulakanFakturState extends State<_TabKulakanFaktur> with JejakGalat {
                       color: Colors.black54,
                       fontStyle: FontStyle.italic)),
             ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _mengunduhRekap ? null : _unduhRekapKulakanExcel,
+                  icon: const Icon(Icons.table_view_outlined, size: 18),
+                  label: const Text('Unduh Rekap Excel'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _mengunduhRekap ? null : _unduhRekapKulakanPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Unduh Rekap PDF'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           const Text('Riwayat Faktur',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 8),

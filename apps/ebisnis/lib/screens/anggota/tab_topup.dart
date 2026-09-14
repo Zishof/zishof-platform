@@ -10,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../api_client.dart';
+import '../../models.dart';
 import '../../services/diff_daftar_lokal.dart';
 import '../../services/master_offline.dart';
 import '../../services/simple_xlsx.dart';
@@ -25,6 +26,29 @@ import '../../widgets/aksi_baris_menu.dart';
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 final _formatTanggal = DateFormat('dd-MM-yyyy');
+
+/// Parameter dan kunci cache sengaja dibentuk dari filter yang sama. Dengan
+/// begitu hasil Santri tidak pernah dipakai sebagai snapshot lokal Pegawai
+/// (atau sebaliknya) ketika perangkat sedang offline.
+@visibleForTesting
+Map<String, dynamic> parameterDaftarTopup({
+  required int page,
+  required int pageSize,
+  String keyword = '',
+  int? tipeAnggotaId,
+}) =>
+    <String, dynamic>{
+      if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+      if (tipeAnggotaId != null) 'tipe_anggota_id': tipeAnggotaId,
+      'page': page,
+      'page_size': pageSize,
+    };
+
+@visibleForTesting
+String kunciCacheDaftarTopup({String keyword = '', int? tipeAnggotaId}) {
+  final kata = Uri.encodeComponent(keyword.trim().toLowerCase());
+  return 'master:deposit_topup:tipe:${tipeAnggotaId ?? 'semua'}:kata:$kata';
+}
 
 /// Tab "Topup" (padanan `_manajemen_topup.jsp`) -- riwayat pengisian saldo
 /// member + entry baru. Gerbang tulis (tambah/ubah/hapus) memakai
@@ -46,13 +70,30 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
   int _halaman = 1;
   int _total = 0;
   String _kataKunci = '';
+  List<Kategori> _tipeMember = [];
+  int? _tipeMemberId;
   bool _memprosesBerkas = false;
   static const _pageSize = 15;
 
   @override
   void initState() {
     super.initState();
+    _muatTipeMember();
     _muatDaftar();
+  }
+
+  Future<void> _muatTipeMember() async {
+    try {
+      final hasil = await MasterOffline.daftarDenganCache(
+          'tipe_anggota_list', {}, 'master:tipe_anggota_pilihan');
+      final data = ((hasil['data'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(Kategori.fromJson)
+          .toList();
+      if (mounted) setStateIfMounted(() => _tipeMember = data);
+    } catch (_) {
+      // Riwayat topup tetap dapat dibuka ketika referensi tipe belum tersedia.
+    }
   }
 
   /// Diff emisi "lokal dulu" -- menggerakkan animasi kilau baris (termasuk
@@ -70,12 +111,16 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
       // sudah ber-kolom 'id' sehingga kolomKunci tidak perlu disetel.
       await MasterOffline.daftarCacheDulu(
           'deposit_list',
-          {
-            'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-            'page': _halaman,
-            'page_size': _pageSize,
-          },
-          'master:deposit_topup', onData: (hasil) {
+          parameterDaftarTopup(
+            keyword: _kataKunci,
+            tipeAnggotaId: _tipeMemberId,
+            page: _halaman,
+            pageSize: _pageSize,
+          ),
+          kunciCacheDaftarTopup(
+            keyword: _kataKunci,
+            tipeAnggotaId: _tipeMemberId,
+          ), onData: (hasil) {
         if (!mounted) return;
         setStateIfMounted(() {
           _daftar = _diff.terapkan(hasil);
@@ -97,9 +142,24 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     await _muatDaftar();
   }
 
+  Future<void> _ubahTipeMember(int? id) async {
+    setStateIfMounted(() {
+      _tipeMemberId = id;
+      _halaman = 1;
+    });
+    await _muatDaftar();
+  }
+
   Future<void> _pindahHalaman(int h) async {
     setStateIfMounted(() => _halaman = h);
     await _muatDaftar();
+  }
+
+  String get _namaTipeMemberTerpilih {
+    for (final tipe in _tipeMember) {
+      if (tipe.id == _tipeMemberId) return tipe.nama;
+    }
+    return '-';
   }
 
   Future<List<Map<String, dynamic>>> _ambilSemuaData() async {
@@ -107,9 +167,12 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
     var page = 1;
     while (true) {
       final hasil = await ApiClient.instance.aksi('deposit_list', {
-        'keyword': _kataKunci.isEmpty ? null : _kataKunci,
-        'page': page,
-        'page_size': 100,
+        ...parameterDaftarTopup(
+          keyword: _kataKunci,
+          tipeAnggotaId: _tipeMemberId,
+          page: page,
+          pageSize: 100,
+        ),
       });
       final data =
           ((hasil['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -331,6 +394,8 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                 style:
                     pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
             if (_kataKunci.isNotEmpty) pw.Text('Filter: $_kataKunci'),
+            if (_tipeMemberId != null)
+              pw.Text('Tipe member: $_namaTipeMemberTerpilih'),
             pw.Text(
                 'Dicetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}'),
             pw.SizedBox(height: 8),
@@ -480,11 +545,27 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
               ),
             ),
           LayoutBuilder(builder: (context, constraints) {
-            final sempit = constraints.maxWidth < 850;
+            final sempit = constraints.maxWidth < 1050;
             final pencarian = AppSearchField(
               hintText: 'Cari nama member...',
               debounce: const Duration(milliseconds: 450),
               onChanged: _cariUlang,
+            );
+            final filterTipe = DropdownButtonFormField<int?>(
+              key: const Key('filter-tipe-member-topup'),
+              value: _tipeMemberId,
+              isExpanded: true,
+              decoration: AppFormStyle.fieldDecoration(context,
+                  labelText: 'Tipe Member'),
+              items: [
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Semua tipe member')),
+                ..._tipeMember.map((t) => DropdownMenuItem<int?>(
+                      value: t.id,
+                      child: Text(t.nama),
+                    )),
+              ],
+              onChanged: _ubahTipeMember,
             );
             final aksi = Wrap(
               spacing: 8,
@@ -534,6 +615,8 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
                 children: [
                   pencarian,
                   const SizedBox(height: 8),
+                  filterTipe,
+                  const SizedBox(height: 8),
                   aksi,
                 ],
               );
@@ -541,6 +624,8 @@ class _AnggotaTabTopupState extends State<AnggotaTabTopup> with JejakGalat {
             return Row(
               children: [
                 Expanded(child: pencarian),
+                const SizedBox(width: 8),
+                SizedBox(width: 240, child: filterTipe),
                 const SizedBox(width: 8),
                 Flexible(child: aksi),
               ],

@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -141,14 +141,11 @@ class FakturPenjualanData {
     final pajakPersen = persenEksplisit != null && persenEksplisit > 0
         ? persenEksplisit
         : (ppn > 0 && dasarPajak > 0 ? (ppn / dasarPajak) * 100 : 0.0);
-    final status = _teksDari(
-            sumber, const ['statusPembayaran', 'statusBayar', 'status'],
-            fallback: '')
-        .toLowerCase();
-    final belumLunas = status.contains('belum') ||
-        status.contains('hutang') ||
-        status.contains('piutang') ||
-        status.contains('unpaid');
+    final lunas = statusLunasFakturPenjualan(
+      detail: detail,
+      ringkasan: ringkasan,
+      metodePembayaran: metodePembayaran,
+    );
 
     return FakturPenjualanData(
       toko: toko.trim().isEmpty ? 'Nama Toko' : toko.trim(),
@@ -198,10 +195,103 @@ class FakturPenjualanData {
       pajakPersen: pajakPersen,
       biayaLain: selisih.abs() < 0.5 ? 0 : selisih,
       total: total,
-      lunas: !belumLunas,
+      lunas: lunas,
       items: baris,
     );
   }
+}
+
+/// Menentukan stempel faktur secara konservatif. Respons API memiliki field
+/// `status` teknis (mis. `00`) yang bukan status pembayaran; karena itu hanya
+/// field pembayaran eksplisit yang boleh menjadi bukti LUNAS. Bila bukti itu
+/// tidak ada, metode yang bersifat piutang ditahan dari stempel LUNAS.
+@visibleForTesting
+bool statusLunasFakturPenjualan({
+  required Map<String, dynamic> detail,
+  required Map<String, dynamic> ringkasan,
+  required String metodePembayaran,
+}) {
+  final sumber = [detail, ringkasan];
+  final nilaiLunas = _nilaiDari(sumber, const [
+    'lunas',
+    'isLunas',
+    'sudahLunas',
+    'paid',
+    'isPaid',
+  ]);
+  if (nilaiLunas is bool) return nilaiLunas;
+  if (nilaiLunas is num) return nilaiLunas != 0;
+  if (nilaiLunas is String) {
+    final nilai = nilaiLunas.trim().toLowerCase();
+    if (const {'true', '1', 'ya', 'yes', 'lunas', 'paid'}.contains(nilai)) {
+      return true;
+    }
+    if (const {'false', '0', 'tidak', 'no', 'belum', 'unpaid'}
+        .contains(nilai)) {
+      return false;
+    }
+  }
+
+  final status = _teksDari(
+    sumber,
+    const [
+      'statusPembayaran',
+      'statusBayar',
+      'paymentStatus',
+      'statusPelunasan',
+    ],
+    fallback: '',
+  ).toLowerCase();
+  if (status.contains('belum') ||
+      status.contains('hutang') ||
+      status.contains('piutang') ||
+      status.contains('unpaid') ||
+      status.contains('pending')) {
+    return false;
+  }
+  if (status.contains('lunas') ||
+      status.contains('paid') ||
+      status.contains('settled')) {
+    return true;
+  }
+
+  final sisa = _angkaOpsionalDari(sumber, const [
+    'sisaPiutang',
+    'saldoPiutang',
+    'outstanding',
+    'sisaTagihan',
+  ]);
+  if (sisa != null && sisa > 0) return false;
+
+  final metode = metodePembayaran
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+  final metodePiutang = const [
+    'kasbon',
+    'piutang',
+    'e money',
+    'emoney',
+    'reward',
+    'voucher bmt',
+  ].any(metode.contains);
+  if (metodePiutang) return false;
+
+  // Metode yang secara operasional langsung melunasi transaksi. Metode tidak
+  // dikenal tetap dianggap belum lunas agar faktur tidak memberi klaim palsu.
+  return const [
+    'tunai',
+    'cash',
+    'transfer',
+    'qris',
+    'qrs',
+    'debit',
+    'kartu',
+    'saldo',
+    'voucher santri',
+    'voucher pejuang',
+  ].any(metode.contains);
 }
 
 dynamic _nilaiDari(List<Map<String, dynamic>> sumber, List<String> kunci) {

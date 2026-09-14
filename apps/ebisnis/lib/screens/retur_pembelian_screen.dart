@@ -9,6 +9,7 @@ import '../api_client.dart';
 import '../parse_util.dart';
 import '../services/diff_daftar_lokal.dart';
 import '../services/master_offline.dart';
+import '../services/kulakan_local_scope.dart';
 import '../sesi.dart';
 import '../widgets/app_components.dart';
 import '../widgets/kilau_perubahan.dart';
@@ -166,7 +167,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       await MasterOffline.daftarCacheDulu(
         'kulakan_faktur_list',
         const {'page': 1, 'page_size': 100},
-        'master:kulakan_faktur',
+        kunciCacheKulakanAktif(),
         kolomKunci: 'fakturId',
         onData: (hasil) {
           faktur = ((hasil['data'] as List?) ?? const [])
@@ -216,7 +217,7 @@ class _ReturPembelianTabState extends State<ReturPembelianTab> with JejakGalat {
       final detail = await MasterOffline.objekDenganCache(
         'kulakan_faktur_detail',
         {'faktur_id': dipilih['fakturId']},
-        'master:kulakan_faktur:detail:${dipilih['fakturId']}',
+        '${kunciCacheKulakanAktif()}:detail:${dipilih['fakturId']}',
       );
       final header =
           (detail['header'] as Map?)?.cast<String, dynamic>() ?? dipilih;
