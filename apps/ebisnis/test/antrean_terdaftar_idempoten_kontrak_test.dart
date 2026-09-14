@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Kontrak lintas repo: setiap aksi yang DIANTRE klien wajib terdaftar
 /// idempoten di server.
 ///
-/// Latar belakangnya cacat nyata (AIS r89377/r89397, `docs/pos/130`): 53 aksi
+/// Latar belakangnya cacat nyata (AIS r89377/r89397, `docs/pos/130`): 55 aksi
 /// tulis dikirim lewat antrean `MasterOffline` tanpa pernah terdaftar di
 /// `MutasiIdempotenEBisnisUtil.AKSI_MASTER_ANTREAN`, sehingga server tidak
 /// pernah me-replay-nya. Setelah lost-ack — server sudah commit, responsnya
@@ -25,9 +25,13 @@ void main() {
   // WAJIB ada di AKSI_MASTER_ANTREAN pada sisi AIS.
   const inventaris = <String>{
     'akun_tambah',
+    'anggota_foto_upload',
     'anggota_hapus',
     'anggota_simpan',
     'anggota_simpan_cepat',
+    'apotik_batch_status_ubah',
+    'apotik_cetak_catat',
+    'apotik_item_profil_simpan',
     'apotik_item_simpan',
     'apotik_opname_simpan',
     'apotik_retur_simpan',
@@ -60,6 +64,7 @@ void main() {
     'kulakan_faktur_batal',
     'kulakan_faktur_simpan',
     'layani_transaksi',
+    'layar_pelanggan_slide_upload',
     'mutasi_stok_simpan',
     'otomatis_pesanan_global_simpan',
     'pencairan_diskon_hapus',
@@ -85,6 +90,7 @@ void main() {
     'penyedia_hapus',
     'penyedia_simpan',
     'penyesuaian_saldo_simpan',
+    'produk_foto_upload',
     'produk_simpan',
     'produksi_qc_disposisi',
     'produksi_simpan',
@@ -135,25 +141,34 @@ void main() {
     );
   });
 
-  test('pemindai benar-benar menemukan aksi (bukan hasil kosong palsu)', () {
-    // Penjaga bagi pemindainya sendiri: bila regex atau tata letak berkas
-    // berubah sehingga tidak ada yang terdeteksi, kedua expect di atas akan
-    // lulus secara palsu.
-    expect(_pindaiAksiAntrean().length, greaterThan(50));
+  test('pemindai menemukan ketiga bentuk panggilan antrean', () {
+    // Penjaga bagi pemindainya sendiri. Bila regex atau tata letak berkas
+    // berubah sehingga salah satu bentuk tidak lagi terdeteksi, kedua expect di
+    // atas akan lulus secara palsu. Ketiga nama ini mewakili satu bentuk
+    // masing-masing, dan dua di antaranya PERNAH lolos dari pemindaian pertama.
+    final ditemukan = _pindaiAksiAntrean();
+    expect(ditemukan.length, greaterThan(60));
+    expect(ditemukan, contains('produk_simpan'), // argumen bernama biasa
+        reason: 'bentuk prosesSimpanMaster(aksi: ...) tidak terdeteksi');
+    expect(ditemukan, contains('apotik_batch_status_ubah'), // closure disuntik
+        reason: 'bentuk closure _simpan(aksi: ...) tidak terdeteksi');
+    expect(ditemukan, contains('produk_foto_upload'), // pembantu unggah gambar
+        reason: 'bentuk simpanGambarLocalFirst(aksi: ...) tidak terdeteksi');
   });
 }
 
-/// Mencari aksi yang masuk antrean dengan DUA metode, karena masing-masing
-/// melewatkan bentuk panggilan yang berbeda.
+/// Mencari aksi yang masuk antrean. Ada TIGA bentuk panggilan, dan masing-masing
+/// pernah menjadi titik buta:
+///
+/// 1. `MasterOffline.antreLokal('aksi', ...)` — argumen posisi, kerap di baris
+///    berikutnya;
+/// 2. `prosesSimpanMaster(aksi: 'aksi', ...)` — argumen bernama;
+/// 3. closure yang disuntikkan ke layar (`_simpan(aksi: ...)`) dan pembantu
+///    unggah gambar (`simpanGambarLocalFirst(aksi: ...)`) yang meneruskan nama
+///    aksi sebagai VARIABEL ke `antreLokal`.
 Set<String> _pindaiAksiAntrean() {
-  // Metode A: argumen posisi pertama; sering berada di baris berikutnya.
   final posisi = RegExp(
       r"MasterOffline\.(?:antreLokal|simpanAtauAntre)\s*\(\s*'([a-z0-9_]+)'");
-  // Metode B: argumen bernama milik prosesSimpanMaster. Panggilannya kerap
-  // lebih panjang daripada jendela regex mana pun yang wajar, jadi pemanggil
-  // dicari dengan menelusuri MUNDUR dari baris `aksi:`. Penelusuran itu pula
-  // yang menyingkirkan positif palsu: `aksi:` juga dipakai dasbor ringkasan dan
-  // pengunggah gambar.
   final barisAksi = RegExp(r"aksi:\s*'([a-z0-9_]+)'");
   final pemanggil = RegExp(r'([A-Za-z_][A-Za-z0-9_.]*)\s*\(\s*$');
 
@@ -170,16 +185,24 @@ Set<String> _pindaiAksiAntrean() {
     for (var i = 0; i < baris.length; i++) {
       final m = barisAksi.firstMatch(baris[i]);
       if (m == null) continue;
+      // Telusuri MUNDUR ke nama fungsi pemanggil. Penelusuran ini pula yang
+      // menyingkirkan positif palsu: `aksi:` juga dipakai dasbor ringkasan dan
+      // pemuat gambar tertunda, yang sama sekali bukan jalur antrean.
       for (var j = i; j >= 0 && j > i - 30; j--) {
         final p = pemanggil.firstMatch(baris[j].trimRight());
         if (p == null) continue;
-        final nama = p.group(1)!;
-        if (nama.contains('prosesSimpan') || nama.toLowerCase().contains('antre')) {
-          hasil.add(m.group(1)!);
-        }
+        if (_pemanggilAntrean(p.group(1)!)) hasil.add(m.group(1)!);
         break;
       }
     }
   }
   return hasil;
+}
+
+bool _pemanggilAntrean(String nama) {
+  final n = nama.toLowerCase();
+  return n.contains('prosessimpan') ||
+      n.contains('antre') ||
+      n.endsWith('_simpan') ||
+      n.contains('simpangambar');
 }

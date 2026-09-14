@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_device/core_device.dart';
 import 'package:core_hw/core_hw.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -142,7 +143,10 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
   bool _memeriksaTertunda = false;
 
   /// Struk transaksi terakhir di mesin ini — untuk cetak dan cetak ulang.
-  /// Server belum menyimpan riwayat cetak (IR-08), jadi ini murni lokal.
+  ///
+  /// Server kini menyimpan RIWAYAT cetak (IR-08), tetapi belum menyimpan ISI
+  /// struk. Karena itu sumber cetak ulang tetap salinan lokal ini, dan cetak
+  /// ulang dari mesin LAIN masih belum mungkin.
   DataStruk? _strukTerakhir;
 
   /// Laci kasir memakai jalur RAW Windows (`core_hw`); di platform lain
@@ -905,9 +909,21 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
     }
   }
 
-  /// Cetak LOKAL lewat jalur RAW ESC/POS. Server tidak menyimpan riwayat
-  /// cetak (IR-08), jadi tidak ada klaim apa pun soal itu di layar.
+  /// Cetak LOKAL lewat jalur RAW ESC/POS.
+  ///
+  /// Tiap cetakan DICATAT ke register cetak server (`apotik_cetak_catat`,
+  /// IR-08) lewat antrean — setelah struk benar-benar keluar, tanpa menahan
+  /// printer. Yang masih belum mungkin adalah cetak ulang dari mesin LAIN,
+  /// karena isi struk belum dilayani server.
   Future<void> _cetakStruk(DataStruk struk, {bool cetakUlang = false}) async {
+    // Cetak ulang wajib beralasan — server menolak tanpa alasan, dan dialog
+    // ini sekaligus pintu terakhir sebelum struk kedua keluar.
+    var alasan = '';
+    if (cetakUlang) {
+      final jawab = await _tanyaAlasanCetakUlang();
+      if (jawab == null || !mounted) return;
+      alasan = jawab;
+    }
     try {
       // Pakai lebar bawaan bila preferensi belum tersedia.
       var lebarMm = 58.0;
@@ -923,6 +939,8 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
           namaDokumen: 'Struk Apotik ${data.kodeTransaksi}');
       if (!mounted) return;
       _pesan('Struk ${data.kodeTransaksi} dikirim ke printer.');
+      // Jejak audit dicatat SETELAH struk keluar, dan tidak ditunggu.
+      unawaited(_catatCetak(data, cetakUlang: cetakUlang, alasan: alasan));
     } catch (e) {
       if (!mounted) return;
       _pesan('Gagal mencetak struk: $e', galat: true);
@@ -946,6 +964,75 @@ class _ApotikPosPageState extends State<ApotikPosPage> {
         catatanKaki: s.catatanKaki,
         cetakUlang: true,
       );
+
+  /// Menanyakan alasan cetak ulang. Mengembalikan `null` bila dibatalkan
+  /// — dan pembatalan berarti TIDAK mencetak, bukan mencetak tanpa alasan.
+  Future<String?> _tanyaAlasanCetakUlang() async {
+    final kendali = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (d) => StatefulBuilder(
+          builder: (d2, setLokal) {
+            final isi = kendali.text.trim();
+            return AlertDialog(
+              title: const Text('Alasan Cetak Ulang'),
+              content: TextField(
+                controller: kendali,
+                autofocus: true,
+                maxLength: 120,
+                onChanged: (_) => setLokal(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Alasan',
+                  hintText: 'mis. struk pertama sobek, diminta pasien',
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(d2),
+                    child: const Text('Batal')),
+                FilledButton(
+                  onPressed: isi.isEmpty ? null : () => Navigator.pop(d2, isi),
+                  child: const Text('Cetak Ulang'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      kendali.dispose();
+    }
+  }
+
+  /// Mencatat satu kejadian cetak ke register server lewat ANTREAN.
+  ///
+  /// Sengaja tanpa dialog dan tanpa ditunggu: printer tidak boleh menunggu
+  /// jaringan, dan kegagalan mencatat tidak boleh terlihat oleh kasir sebagai
+  /// kegagalan mencetak — itu justru memancing cetak ulang yang tidak perlu.
+  /// Aksinya terdaftar idempoten di server, jadi kiriman ulang antrean tidak
+  /// melahirkan dua baris riwayat untuk satu cetakan.
+  Future<void> _catatCetak(DataStruk struk,
+      {required bool cetakUlang, required String alasan}) async {
+    try {
+      await MasterOffline.antreLokal(
+        'apotik_cetak_catat',
+        {
+          'jenis': cetakUlang ? 'STRUK_ULANG' : 'STRUK',
+          'referensi': struk.kodeTransaksi,
+          'perangkat': IdentitasMesin.instance.namaMesin,
+          if (alasan.isNotEmpty) 'alasan': alasan,
+        },
+        kunci: 'apotik_cetak:${struk.kodeTransaksi}:'
+            '${DateTime.now().microsecondsSinceEpoch}',
+      );
+    } catch (_) {
+      // Register cetak adalah jejak audit, bukan bagian dari mencetak.
+      // Bila antreannya sendiri gagal ditulis, struknya tetap sah; barisnya
+      // hilang, dan itu lebih baik daripada layar galat yang membuat kasir
+      // mencetak sekali lagi.
+    }
+  }
 
   /// Bilah peringatan pembayaran yang nasibnya belum diketahui. Sengaja
   /// MELEKAT di atas layar: selama ini belum jelas, kasir tidak boleh
