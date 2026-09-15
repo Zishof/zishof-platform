@@ -4,6 +4,12 @@ import 'package:ebisnis/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('halaman HTML HTTP 200 dikenali sebagai bukan jawaban API', () {
+    expect(ApiClient.responsAdalahHtml('\n\n<!DOCTYPE html><html lang="id">'),
+        isTrue);
+    expect(ApiClient.responsAdalahHtml('\uFEFF  <HTML><head>'), isTrue);
+    expect(ApiClient.responsAdalahHtml('{"status":"00","data":[]}'), isFalse);
+  });
   group('penanganan gangguan gateway', () {
     test('HTTP 522 dan 5xx diklasifikasikan sebagai gangguan sementara', () {
       for (final status in [500, 502, 503, 504, 522, 599]) {

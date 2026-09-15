@@ -1,3 +1,5 @@
+// Frozen updater from nahl-v1.34.37-wa-uat-20260914. Do not modernize:
+// this fixture verifies already-installed clients, not only new code.
 import 'dart:convert';
 import 'dart:io';
 
@@ -50,17 +52,14 @@ class UpdateChecker {
     required String versiSaatIni,
     String? assetKeyword,
     String? tagPrefix,
-    http.Client? client,
   }) async {
-    final transport = client ?? http.Client();
     try {
       final Map<String, dynamic>? rilis;
       final prefix = tagPrefix?.trim();
       if (prefix != null && prefix.isNotEmpty) {
-        rilis =
-            await _rilisVarianTerbaru(repoOwner, repoName, prefix, transport);
+        rilis = await _rilisVarianTerbaru(repoOwner, repoName, prefix);
       } else {
-        final resp = await transport.get(
+        final resp = await http.get(
           Uri.parse(
               'https://api.github.com/repos/$repoOwner/$repoName/releases/latest'),
           headers: {'Accept': 'application/vnd.github+json'},
@@ -71,7 +70,6 @@ class UpdateChecker {
       }
       if (rilis == null) return null;
       final json = rilis;
-      if (json['draft'] == true || json['prerelease'] == true) return null;
       final tag = (json['tag_name'] as String? ?? '').trim();
       final versiTerbaru = _versiDariTag(tag);
       if (versiTerbaru.isEmpty || !_lebihBaru(versiTerbaru, versiSaatIni)) {
@@ -96,9 +94,6 @@ class UpdateChecker {
         keyword: keyword,
         kataWajib: 'update',
       );
-      // Kanal tanpa paket yang cocok tidak boleh menawarkan tautan rilis
-      // varian lain sebagai jalan pintas instalasi manual.
-      if (urlApk == null && urlExe == null && paketWindows == null) return null;
 
       return InfoUpdate(
         versi: versiTerbaru,
@@ -113,16 +108,14 @@ class UpdateChecker {
       );
     } catch (_) {
       return null;
-    } finally {
-      if (client == null) transport.close();
     }
   }
 
   /// Pindai daftar rilis, kembalikan rilis (non-draft) ber-tag `<prefix>...`
   /// dengan versi (x.y.z dari tag) TERTINGGI. `null` bila tak ada / gagal.
-  static Future<Map<String, dynamic>?> _rilisVarianTerbaru(String repoOwner,
-      String repoName, String prefix, http.Client client) async {
-    final resp = await client.get(
+  static Future<Map<String, dynamic>?> _rilisVarianTerbaru(
+      String repoOwner, String repoName, String prefix) async {
+    final resp = await http.get(
       Uri.parse(
           'https://api.github.com/repos/$repoOwner/$repoName/releases?per_page=50'),
       headers: {'Accept': 'application/vnd.github+json'},
@@ -144,7 +137,7 @@ class UpdateChecker {
     List<int> versiTerbaik = const [0, 0, 0];
     for (final e in list) {
       if (e is! Map<String, dynamic>) continue;
-      if (e['draft'] == true || e['prerelease'] == true) continue;
+      if (e['draft'] == true) continue;
       final tag = (e['tag_name'] as String? ?? '').trim();
       if (!tag.startsWith(prefix)) continue;
       final v = _versiDariTag(tag);
@@ -227,8 +220,7 @@ class UpdateChecker {
       final nama = (a['name'] as String? ?? '').toLowerCase();
       final namaNormal = _normalisasiNamaAsset(nama);
       if (!ekstensi.any(nama.endsWith)) continue;
-      if (keywordNormal.isNotEmpty &&
-          !_namaAssetSesuaiKanal(nama, keywordNormal)) {
+      if (keywordNormal.isNotEmpty && !namaNormal.contains(keywordNormal)) {
         continue;
       }
       if (wajibNormal.isNotEmpty && !namaNormal.contains(wajibNormal)) continue;
@@ -267,10 +259,8 @@ class WindowsUpdatePackage {
     required String sha256Diharapkan,
     required String versi,
   }) async {
-    // Dua varian dapat menerima nomor versi yang sama pada waktu bersamaan.
-    // Jangan berbagi pos-update-<versi>.zip dengan instalasi varian lain.
-    final staging = await Directory.systemTemp.createTemp('pos-update-');
-    final tujuan = File('${staging.path}${Platform.pathSeparator}package.zip');
+    final tujuan = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}pos-update-$versi.zip');
     final client = http.Client();
     try {
       final request = http.Request('GET', Uri.parse(url));

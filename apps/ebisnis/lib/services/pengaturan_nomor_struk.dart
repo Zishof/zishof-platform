@@ -26,9 +26,9 @@ extension FormatNomorStrukLabel on FormatNomorStruk {
       };
 
   String get contoh => switch (this) {
-        FormatNomorStruk.defaultPos => 'EB260806153045A1B2',
-        FormatNomorStruk.tanggalUrut => '0608202600001',
-        FormatNomorStruk.deviceTanggalUrut => 'A1B20608202600001',
+        FormatNomorStruk.defaultPos => 'EB260806153045A1B2C3',
+        FormatNomorStruk.tanggalUrut => '0608202600001-A1B2C3',
+        FormatNomorStruk.deviceTanggalUrut => 'A1B20608202600001-A1B2C3',
       };
 }
 
@@ -45,6 +45,8 @@ class PengaturanNomorStruk {
   static const _kKodeDevice = 'nomor_struk_kode_device';
   static const _kTanggalUrutTerakhir = 'nomor_struk_tanggal_urut_terakhir';
   static const _kUrutanTerakhir = 'nomor_struk_urutan_terakhir';
+  static final Random _acakAman = Random.secure();
+  static const _karakterNonce = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
   FormatNomorStruk format = FormatNomorStruk.defaultPos;
   String? kodeDeviceKustom;
@@ -105,15 +107,12 @@ class PengaturanNomorStruk {
   }
 
   String _buatDefault() {
-    final rand = Random();
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final now = DateTime.now();
     String pad(int x) => x.toString().padLeft(2, '0');
     final tanggal =
         '${(now.year % 100).toString().padLeft(2, '0')}${pad(now.month)}${pad(now.day)}';
     final jam = '${pad(now.hour)}${pad(now.minute)}${pad(now.second)}';
-    final acak =
-        List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
+    final acak = _buatNonce(6);
     final prefix = AppVariant.isAlBahjah ? 'AB' : 'EB';
     return '$prefix$tanggal$jam$acak';
   }
@@ -129,7 +128,10 @@ class PengaturanNomorStruk {
     final urutan = urutanSebelumnya + 1;
     await sp.setString(_kTanggalUrutTerakhir, tanggal);
     await sp.setInt(_kUrutanTerakhir, urutan);
-    return '$tanggal${urutan.toString().padLeft(5, '0')}';
+    // Counter lokal bisa kembali ke nol setelah reinstall/bersihkan data dan
+    // format tanpa kode device dapat dipakai banyak kasir. Nonce tetap menjaga
+    // identitas idempoten global tanpa menghilangkan nomor urut yang mudah dibaca.
+    return '$tanggal${urutan.toString().padLeft(5, '0')}-${_buatNonce(6)}';
   }
 
   Future<String> _buatDeviceTanggalUrut() async {
@@ -138,6 +140,11 @@ class PengaturanNomorStruk {
         kodeDeviceKustom ?? kodeDeviceDariId(IdentitasMesin.instance.idMesin);
     return '$kodeDevice${await _buatTanggalUrut()}';
   }
+
+  static String _buatNonce(int panjang) => List.generate(
+        panjang,
+        (_) => _karakterNonce[_acakAman.nextInt(_karakterNonce.length)],
+      ).join();
 
   FormatNomorStruk _dariKode(String? kode) {
     for (final item in FormatNomorStruk.values) {

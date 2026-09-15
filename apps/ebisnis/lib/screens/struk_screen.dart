@@ -25,6 +25,28 @@ import 'kasir_screen.dart';
 
 final _formatAngka = NumberFormat.decimalPattern('id_ID');
 
+/// Menolak menggabungkan daftar barang dari satu snapshot dengan grand total
+/// snapshot lain. Toleransi Rp1 hanya untuk pembulatan pecahan harga/diskon.
+@visibleForTesting
+bool totalServerKonsistenDenganSnapshot({
+  required List<Map<String, dynamic>> item,
+  required double totalServer,
+  required double pajak,
+  required double totalDiskonServer,
+}) {
+  var subtotal = 0.0;
+  for (final baris in item) {
+    final harga = (baris['harga'] as num?)?.toDouble();
+    final qty = (baris['qty'] as num?)?.toDouble();
+    if (harga == null || qty == null || harga < 0 || qty <= 0) return false;
+    subtotal += harga * qty;
+  }
+  final seharusnya = (subtotal + pajak - totalDiskonServer)
+      .clamp(0, double.infinity)
+      .toDouble();
+  return (seharusnya - totalServer).abs() < 1;
+}
+
 /// Struk transaksi -- preview layar dan PDF cetak memakai struktur yang sama:
 /// logo/toko di atas, informasi transaksi, daftar item, grand total, metode
 /// pembayaran, lalu footer ucapan.
@@ -65,6 +87,10 @@ class StrukScreen extends StatelessWidget {
   /// True selama menunggu angka otoritatif server (tombol cetak ditahan).
   final bool menungguAngkaServer;
 
+  /// Diisi bila server mengakui nomor nota yang ternyata mempunyai snapshot
+  /// berbeda. Cetak ditahan agar tidak lahir struk campuran.
+  final String? alasanCetakDiblokir;
+
   /// Judul dokumen yang dicetak tepat di bawah identitas toko, mis.
   /// "FAKTUR RETUR PENJUALAN". Kosong = struk penjualan biasa (perilaku lama),
   /// sehingga struk kasir tidak berubah sama sekali.
@@ -91,6 +117,7 @@ class StrukScreen extends StatelessWidget {
     this.catatanKoreksi,
     this.koreksiSudahDiterapkan = false,
     this.menungguAngkaServer = false,
+    this.alasanCetakDiblokir,
     this.jenisDokumen,
   });
 
@@ -369,6 +396,21 @@ class StrukScreen extends StatelessWidget {
   /// Diskon yang DICETAK: angka server bila sudah diterima, selain itu
   /// jumlah diskon per baris hasil evaluasi keranjang (perilaku lama).
   double get _totalDiskonCetak => totalDiskonOverride ?? _totalDiskonItem;
+
+  String? get _kendalaAngkaCetak {
+    if (alasanCetakDiblokir != null) return alasanCetakDiblokir;
+    if (jenisDokumen != null) return null;
+    return totalServerKonsistenDenganSnapshot(
+      item: item,
+      totalServer: total,
+      pajak: pajak,
+      totalDiskonServer:
+          totalDiskonOverride ?? (_totalDiskonItem + diskonFaktur),
+    )
+        ? null
+        : 'Grand total tidak sesuai rincian barang, pajak, dan diskon. '
+            'Cetak ditahan; periksa transaksi $kode di Riwayat Sinkronisasi.';
+  }
 
   double get _totalCashbackItem =>
       item.fold<double>(0, (sum, i) => sum + _cashbackBaris(i));
@@ -751,6 +793,14 @@ class StrukScreen extends StatelessWidget {
   /// [konteks] hanya dipakai untuk memberi tahu kasir bila LACI gagal dibuka;
   /// pencetakan strukmnya sendiri tidak bergantung padanya.
   Future<void> _cetakStruk([BuildContext? konteks]) async {
+    if (_kendalaAngkaCetak != null || menungguAngkaServer) {
+      if (konteks != null) {
+        ScaffoldMessenger.of(konteks).showSnackBar(SnackBar(
+            content: Text(
+                _kendalaAngkaCetak ?? 'Menunggu verifikasi angka transaksi.')));
+      }
+      return;
+    }
     await _pastikanProfilToko();
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await PengaturanLaci.instance.muat();
@@ -1113,6 +1163,7 @@ class StrukScreen extends StatelessWidget {
     bool? koreksiSudahDiterapkan,
     bool? menungguAngkaServer,
     bool? tersinkron,
+    String? alasanCetakDiblokir,
   }) {
     return StrukScreen(
       key: key,
@@ -1137,6 +1188,7 @@ class StrukScreen extends StatelessWidget {
       koreksiSudahDiterapkan:
           koreksiSudahDiterapkan ?? this.koreksiSudahDiterapkan,
       menungguAngkaServer: menungguAngkaServer ?? this.menungguAngkaServer,
+      alasanCetakDiblokir: alasanCetakDiblokir ?? this.alasanCetakDiblokir,
     );
   }
 
@@ -1147,6 +1199,12 @@ class StrukScreen extends StatelessWidget {
     if (!koreksiSudahDiterapkan && !modeCetakUlang) {
       return _KoreksiAngkaServer(asli: this);
     }
+    if (alasanCetakDiblokir == null && _kendalaAngkaCetak != null) {
+      return salin(
+              alasanCetakDiblokir: _kendalaAngkaCetak,
+              koreksiSudahDiterapkan: true)
+          .build(context);
+    }
     return _StatusSinkronisasiLive(
       kode: kode,
       tersinkronAwal: tersinkron,
@@ -1154,11 +1212,13 @@ class StrukScreen extends StatelessWidget {
         appBar: AppBar(
           title: Text(modeCetakUlang
               ? 'Preview Cetak Struk'
-              : statusSinkron == 'SYNCED'
-                  ? 'Transaksi Berhasil'
-                  : statusSinkron == 'GAGAL'
-                      ? 'Transaksi Perlu Ditinjau'
-                      : 'Transaksi Tersimpan Pending'),
+              : alasanCetakDiblokir != null
+                  ? 'Transaksi Perlu Ditinjau'
+                  : statusSinkron == 'SYNCED'
+                      ? 'Transaksi Berhasil'
+                      : statusSinkron == 'GAGAL'
+                          ? 'Transaksi Perlu Ditinjau'
+                          : 'Transaksi Tersimpan Pending'),
           automaticallyImplyLeading: modeCetakUlang,
         ),
         body: Center(
@@ -1173,13 +1233,16 @@ class StrukScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _StatusTransaksi(
-                        status: statusSinkron,
-                        pesanError: pesanError,
+                        status: alasanCetakDiblokir != null
+                            ? 'GAGAL'
+                            : statusSinkron,
+                        pesanError: alasanCetakDiblokir ?? pesanError,
                       ),
                       const SizedBox(height: 14),
                       _TombolStruk(
                         onCetak: () => _cetakStruk(context),
                         menungguAngkaServer: menungguAngkaServer,
+                        alasanCetakDiblokir: alasanCetakDiblokir,
                         tampilkanTransaksiBaru: !modeCetakUlang,
                         tampilkanBukaLaci: !modeCetakUlang,
                         onTransaksiBaru: () =>
@@ -1199,22 +1262,36 @@ class StrukScreen extends StatelessWidget {
                         onKembali: () => _kembaliDariStruk(context),
                       ),
                       const SizedBox(height: 16),
-                      if (catatanKoreksi != null) ...[
+                      if (alasanCetakDiblokir != null ||
+                          catatanKoreksi != null) ...[
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.12),
+                            color: alasanCetakDiblokir == null
+                                ? Colors.orange.withValues(alpha: 0.12)
+                                : Colors.red.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange),
+                            border: Border.all(
+                                color: alasanCetakDiblokir == null
+                                    ? Colors.orange
+                                    : Colors.red),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.info_outline,
-                                  color: Colors.orange, size: 20),
+                              Icon(
+                                  alasanCetakDiblokir == null
+                                      ? Icons.info_outline
+                                      : Icons.error_outline,
+                                  color: alasanCetakDiblokir == null
+                                      ? Colors.orange
+                                      : Colors.red,
+                                  size: 20),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(catatanKoreksi!)),
+                              Expanded(
+                                  child: Text(
+                                      alasanCetakDiblokir ?? catatanKoreksi!)),
                             ],
                           ),
                         ),
@@ -1291,6 +1368,8 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
   DateTime? _mulai;
   double? _totalServer;
   double? _totalDiskonServer;
+  bool _snapshotServerBentrok = false;
+  String? _kendalaIntegritas;
 
   @override
   void initState() {
@@ -1303,20 +1382,31 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
     }
     _mulai = DateTime.now();
     _periksa();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _periksa());
+    _timer =
+        Timer.periodic(const Duration(milliseconds: 500), (_) => _periksa());
   }
 
   Future<void> _periksa() async {
     if (_memeriksa || !mounted || _selesai) return;
     _memeriksa = true;
     try {
-      final row = await CoreDb.instance.transaksiLokalDenganKode(widget.asli.kode);
+      final row =
+          await CoreDb.instance.transaksiLokalDenganKode(widget.asli.kode);
       final mentah = '${row?['hasil_server_json'] ?? ''}'.trim();
       if (mentah.isNotEmpty) {
         final peta = jsonDecode(mentah);
         if (peta is Map) {
           final t = (peta['total'] as num?)?.toDouble();
           final d = (peta['totalDiskon'] as num?)?.toDouble();
+          final kendala = '${peta['kendalaIntegritas'] ?? ''}'.trim();
+          final snapshotBentrok = kendala.isNotEmpty ||
+              (t != null &&
+                  !totalServerKonsistenDenganSnapshot(
+                    item: widget.asli.item,
+                    totalServer: t,
+                    pajak: widget.asli.pajak,
+                    totalDiskonServer: d ?? 0,
+                  ));
           // Saat pengakuan server tiba, sekalian sampaikan peringatannya. Kasir
           // masih berdiri di depan layar struk -- ini kesempatan terakhir
           // menyampaikannya kepada orang yang benar-benar bisa menindaklanjuti.
@@ -1326,12 +1416,17 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
           // yang tersimpan sebelum pembaruan ini.
           final peringatan = peta['peringatanTransaksi'];
           final catatan = peringatan is List
-              ? peringatan.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' ')
+              ? peringatan
+                  .map((e) => '$e'.trim())
+                  .where((e) => e.isNotEmpty)
+                  .join(' ')
               : '${peta['peringatanStok'] ?? ''}'.trim();
           if (mounted) {
             setState(() {
               _totalServer = t;
               _totalDiskonServer = d;
+              _snapshotServerBentrok = snapshotBentrok;
+              _kendalaIntegritas = kendala.isEmpty ? null : kendala;
               _selesai = true;
             });
             if (catatan.isNotEmpty) {
@@ -1377,6 +1472,18 @@ class _KoreksiAngkaServerState extends State<_KoreksiAngkaServer> {
   Widget build(BuildContext context) {
     final asli = widget.asli;
     final totalServer = _totalServer;
+    if (_snapshotServerBentrok) {
+      return asli.salin(
+        koreksiSudahDiterapkan: true,
+        tersinkron: false,
+        menungguAngkaServer: false,
+        alasanCetakDiblokir: _kendalaIntegritas ??
+            'Cetak ditahan karena rincian barang lokal tidak cocok dengan '
+                'grand total server untuk nomor ${asli.kode}. Jangan membuat '
+                'transaksi pengganti. Buka Riwayat Sinkronisasi dan minta '
+                'supervisor merekonsiliasi nomor ini.',
+      );
+    }
     if (totalServer == null) {
       return asli.salin(
         koreksiSudahDiterapkan: true,
@@ -2062,10 +2169,12 @@ class _TombolStruk extends StatelessWidget {
   /// sebentar supaya kasir tidak mencetak angka yang sedetik kemudian direvisi
   /// server -- itulah yang membuat struk kertas dan laporan pernah berselisih.
   final bool menungguAngkaServer;
+  final String? alasanCetakDiblokir;
 
   const _TombolStruk({
     required this.onCetak,
     this.menungguAngkaServer = false,
+    this.alasanCetakDiblokir,
     required this.onTransaksiBaru,
     this.onKembali,
     this.tampilkanTransaksiBaru = true,
@@ -2081,7 +2190,9 @@ class _TombolStruk extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: menungguAngkaServer ? null : onCetak,
+                onPressed: menungguAngkaServer || alasanCetakDiblokir != null
+                    ? null
+                    : onCetak,
                 icon: menungguAngkaServer
                     ? const SizedBox(
                         width: 18,
@@ -2090,7 +2201,9 @@ class _TombolStruk extends StatelessWidget {
                     : const Icon(Icons.print_outlined, size: 18),
                 label: Text(menungguAngkaServer
                     ? 'Menyamakan dengan server...'
-                    : 'Cetak Struk'),
+                    : alasanCetakDiblokir != null
+                        ? 'Cetak Ditahan'
+                        : 'Cetak Struk'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),

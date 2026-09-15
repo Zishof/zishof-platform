@@ -30,6 +30,15 @@ void main() {
           isFalse);
     });
 
+    test('nomor transaksi bentrok diparkir untuk rekonsiliasi supervisor', () {
+      expect(
+          service.dapatDicobaUlang(ApiException(
+              'Nomor struk sudah dipakai transaksi lain dengan rincian berbeda.',
+              statusHttp: 200,
+              kode: 'KODE_TRANSAKSI_BENTROK')),
+          isFalse);
+    });
+
     test('saldo tidak cukup tanpa kode tidak dikirim berulang', () {
       expect(
           service.dapatDicobaUlang(ApiException(

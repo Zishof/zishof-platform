@@ -1777,6 +1777,22 @@ class CoreDb {
     if (lama.isNotEmpty && '${lama.first['status']}' != 'SYNCED') {
       return false;
     }
+    if (lama.isNotEmpty) {
+      // Jurnal checkout merupakan bukti asli, termasuk jika versi lama pernah
+      // keliru mengakui nomor bentrok sebagai SYNCED. Replikasi hanya boleh
+      // menyegarkan arsip yang memang berasal dari server.
+      try {
+        final payloadLama = jsonDecode('${lama.first['payload_json']}');
+        final asal =
+            payloadLama is Map ? '${payloadLama['asal_backup'] ?? ''}' : '';
+        if (asal != 'SERVER_TOKO_SAMA' &&
+            asal != 'REPLIKASI_OTOMATIS_TOKO_SAMA') {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+    }
     final sekarang = DateTime.now().toIso8601String();
     await database.insert(
       'transaksi_pending',

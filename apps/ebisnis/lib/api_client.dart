@@ -396,7 +396,9 @@ class ApiClient {
       }
       final asal = Uri.parse(tujuan);
       final baru = asal.resolve(lokasi.trim());
-      if (baru.host.toLowerCase() != asal.host.toLowerCase()) {
+      if (baru.host.toLowerCase() != asal.host.toLowerCase() ||
+          (asal.scheme == 'https' && baru.scheme != 'https') ||
+          baru.path != asal.path) {
         // Host berbeda -- jangan pernah kirim ulang kredensial ke sana.
         return resp;
       }
@@ -468,10 +470,13 @@ class ApiClient {
       final cuplikan = resp.body.length > 1200
           ? '${resp.body.substring(0, 1200)}…'
           : resp.body;
+      final halamanHtml = responsAdalahHtml(resp.body);
       final gagal = ApiException(
-        gangguanSementaraStatusHttp(resp.statusCode)
-            ? pesanGangguanStatusHttp(resp.statusCode, namaAksi)
-            : 'Jawaban server belum dapat diproses.',
+        halamanHtml
+            ? 'Alamat API mengembalikan halaman web, sehingga ${namaAksi == 'login' ? 'proses masuk belum dapat diverifikasi' : 'permintaan belum dapat dikonfirmasi'}. Periksa Alamat Server dan hubungi admin bila tetap terjadi.'
+            : gangguanSementaraStatusHttp(resp.statusCode)
+                ? pesanGangguanStatusHttp(resp.statusCode, namaAksi)
+                : 'Jawaban server belum dapat diproses.',
         // Gateway 5xx/timeout bukan penolakan bisnis. Menandainya sebagai
         // offline-equivalent membuat baca-cache dan outbox tetap bekerja,
         // tetapi TIDAK membuat login/posting final dianggap berhasil.
@@ -479,10 +484,11 @@ class ApiClient {
         aktivitas: namaAksi,
         statusHttp: resp.statusCode,
         kodeReferensi: referensiPermintaan,
+        kode: halamanHtml ? 'RESPONS_HTML_BUKAN_API' : null,
         judul: gangguanSementaraStatusHttp(resp.statusCode)
             ? 'Layanan server sedang terganggu'
             : null,
-        solusi: gangguanSementaraStatusHttp(resp.statusCode)
+        solusi: halamanHtml || gangguanSementaraStatusHttp(resp.statusCode)
             ? solusiGangguanStatusHttp(namaAksi)
             : const [],
         teknis: 'Request ID: $referensiPermintaan\nEndpoint: $baseUrl\n'
@@ -511,7 +517,7 @@ class ApiClient {
         statusHttp: resp.statusCode,
         kodeReferensi:
             '${json['referensi'] ?? json['traceId'] ?? referensiPermintaan}',
-        kode: '${json['kode'] ?? ''}',
+        kode: '${json['kode'] ?? json['code'] ?? ''}',
         judul: '${json['judul'] ?? ''}',
         solusi: json['solusi'] is List
             ? (json['solusi'] as List)
@@ -545,6 +551,11 @@ class ApiClient {
   /// teks `error code: 522`, bukan JSON kontrak eBisnis.
   static bool gangguanSementaraStatusHttp(int statusHttp) =>
       statusHttp == 408 || statusHttp == 425 || statusHttp >= 500;
+
+  static bool responsAdalahHtml(String body) => RegExp(
+        r'^\s*(?:\uFEFF)?\s*(?:<!doctype\s+html|<html\b)',
+        caseSensitive: false,
+      ).hasMatch(body);
 
   /// Pesan aman untuk pengguna. Respons mentah dan stack tetap dicatat pada
   /// `teknis`, sehingga layar utama tidak memaparkan FormatException.

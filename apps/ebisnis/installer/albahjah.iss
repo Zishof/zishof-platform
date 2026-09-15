@@ -30,9 +30,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Buat ikon di Desktop"; GroupDescription: "Ikon tambahan:"
 
 [Files]
-; Exclude exe varian LAIN juga (ebisnis_inventory_sales.exe bisa tersisa dari build varian
-; Inventory & Sales di folder Release yang sama -- copy_if_different tidak menghapus).
-Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis.exe,ebisnis_inventory_sales.exe,ebisnis_apotik.exe,ebisnis_emedik.exe,ebisnis_nahl.exe,ebisnis_petra.exe,abchicken.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Abaikan seluruh EXE varian yang mungkin tersisa di folder build bersama;
+; hanya executable Al-Bahjah yang dimasukkan secara eksplisit.
+Source: "..\build\windows\x64\runner\Release\*"; Excludes: "ebisnis*.exe,abchicken.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\ebisnis_albahjah.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]

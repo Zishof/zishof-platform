@@ -68,6 +68,40 @@ void main() {
   });
 
   group('penggabungan transaksi server dan lokal', () {
+    test('nomor bentrok tidak mengganti rincian lokal dengan id server lain',
+        () {
+      final hasil = gabungkanTransaksiServerDanLokal([
+        {'kodeUnik': 'UAT-BENTROK', 'idTransaksi': 9, 'totalBiaya': 341575},
+      ], [
+        {
+          'nomorNota': 'UAT-BENTROK',
+          'totalBiaya': 79000,
+          'statusSinkronLokal': 'SYNCED',
+          'itemLokal': [
+            {'nama': 'Barang lokal'}
+          ]
+        },
+      ], batas: 15);
+      expect(hasil, hasLength(2));
+      expect(hasil.first['totalBiaya'], 79000);
+      expect(hasil.first['idTransaksi'], isNull);
+      expect(hasil.first['statusSinkronLokal'], 'GAGAL');
+      expect(hasil.last['idTransaksi'], 9);
+    });
+
+    test('jurnal gagal tetap terpisah meskipun nominal sama', () {
+      final hasil = gabungkanTransaksiServerDanLokal([
+        {'kodeUnik': 'UAT-GAGAL', 'idTransaksi': 9, 'totalBiaya': 1000},
+      ], [
+        {
+          'nomorNota': 'UAT-GAGAL',
+          'totalBiaya': 1000,
+          'statusSinkronLokal': 'GAGAL'
+        },
+      ], batas: 15);
+      expect(hasil, hasLength(2));
+      expect(hasil.first['idTransaksi'], isNull);
+    });
     test('menggabungkan kode stabil yang sama dan mempertahankan id server',
         () {
       final hasil = gabungkanTransaksiServerDanLokal(

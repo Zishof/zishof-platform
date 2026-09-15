@@ -145,14 +145,32 @@ void main() {
       tokoId: 1,
       idPerangkat: 'uat-device',
     );
-    expect(diperbarui, isTrue);
+    expect(diperbarui, isFalse,
+        reason: 'jurnal checkout asli tetap dipertahankan setelah ACK server');
     final satuKode = (await CoreDb.instance.transaksiArsipLokal(tokoId: 1))
         .where((row) => row['kode_unik'] == 'UAT-DEDUPE-003')
         .toList();
     expect(satuKode, hasLength(1),
         reason: 'kode_unik harus mencegah transaksi ganda');
     expect(
-        '${satuKode.single['payload_json']}', contains('server-terverifikasi'));
+        '${satuKode.single['payload_json']}', contains('lokal-belum-terkirim'));
+
+    final arsipServer = jsonEncode({
+      'kodeUnik': 'UAT-ARSIP-SERVER',
+      'total': 1000,
+      'asal_backup': 'REPLIKASI_OTOMATIS_TOKO_SAMA',
+    });
+    expect(
+        await CoreDb.instance.simpanTransaksiDariServer(
+            'UAT-ARSIP-SERVER', arsipServer,
+            tokoId: 1),
+        isTrue);
+    expect(
+        await CoreDb.instance.simpanTransaksiDariServer(
+            'UAT-ARSIP-SERVER', arsipServer,
+            tokoId: 1),
+        isTrue,
+        reason: 'cache hasil replikasi server tetap dapat disegarkan');
 
     await CoreDb.instance.simpanTransaksiPending(
       'UAT-HAPUS-LOKAL-005',

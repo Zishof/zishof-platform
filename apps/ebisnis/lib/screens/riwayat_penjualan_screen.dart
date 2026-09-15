@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import '../services/integritas_ack_transaksi.dart';
 import 'dart:typed_data';
 
 import 'package:core_db/core_db.dart';
@@ -1012,6 +1013,21 @@ List<Map<String, dynamic>> gabungkanTransaksiServerDanLokal(
     final kode = _kodeTransaksiStabil(rowLokal);
     final rowServer = kode.isEmpty ? null : serverMenurutKode[kode];
     if (rowServer == null) return rowLokal;
+    final totalLokal = rowLokal['totalBiaya'];
+    final totalServer = rowServer['totalBiaya'];
+    final totalBerbeda = totalLokal is num &&
+        totalServer is num &&
+        (totalLokal - totalServer).abs() >= 1;
+    if (rowLokal['statusSinkronLokal'] == 'GAGAL' || totalBerbeda) {
+      // Kedua bukti tetap terlihat; jangan memasang id server transaksi lain
+      // pada baris lokal karena tombol Detail akan membuka barang yang salah.
+      return <String, dynamic>{
+        ...rowLokal,
+        'statusSinkronLokal': 'GAGAL',
+        'kendalaIntegritas':
+            'Nomor yang sama memiliki data lokal yang perlu direkonsiliasi.',
+      };
+    }
     kodeServerTerpakai.add(kode);
     // Field otoritatif server (terutama idTransaksi dan label nota) menang;
     // metadata/cadangan lokal tetap dibawa untuk fallback ketika offline.
@@ -1029,17 +1045,6 @@ List<Map<String, dynamic>> gabungkanTransaksiServerDanLokal(
 
 String _formatWaktuBayar(DateTime waktu) =>
     DateFormat('dd-MM-yyyy HH:mm:ss').format(waktu);
-
-bool _transaksiSudahAdaDiServer(Object error) {
-  if (error is ApiException &&
-      (error.kode ?? '').trim() == 'DUPLIKAT_KODE_TRANSAKSI') {
-    return true;
-  }
-  final pesan = error.toString().toLowerCase();
-  return pesan.contains('sudah tercatat') ||
-      pesan.contains('kode transaksi yang sama sudah ada') ||
-      pesan.contains('duplicate key');
-}
 
 class _DialogPerbandinganTransaksi extends StatefulWidget {
   const _DialogPerbandinganTransaksi({
@@ -1440,7 +1445,6 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
     );
     final hasil = <Map<String, dynamic>>[];
     for (final source in rows) {
-      if ('${source['status']}' == 'GAGAL') continue;
       Map<String, dynamic> payload;
       try {
         payload = Map<String, dynamic>.from(
@@ -1814,7 +1818,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                           'Sinkron',
                           row['statusSinkronLokal'] == 'SYNCED'
                               ? 'Tersinkron'
-                              : 'Menunggu',
+                              : row['statusSinkronLokal'] == 'GAGAL'
+                                  ? 'Perlu ditinjau'
+                                  : 'Menunggu',
                           row['statusSinkronLokal'] == 'SYNCED'
                               ? AppColors.success
                               : AppColors.warning),
@@ -2385,11 +2391,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       for (final entry in serverByKode.entries) {
         final lokalAda = lokalByKode[entry.key];
         if (lokalAda != null) {
-          if ('${lokalAda['status']}' != 'SYNCED') {
-            await CoreDb.instance
-                .tandaiTransaksiSinkron('${lokalAda['kode_unik']}');
-          }
-          sudahSama++;
+          // Adanya nomor di laporan bukan ACK atas payload lokal. Baris yang
+          // tertahan tetap lewat pengiriman idempoten dan verifikasi di bawah.
+          if ('${lokalAda['status']}' == 'SYNCED') sudahSama++;
           continue;
         }
         final row = entry.value;
@@ -2416,7 +2420,10 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
       }
 
       for (final entry in lokalByKode.entries) {
-        if (serverByKode.containsKey(entry.key)) continue;
+        if (serverByKode.containsKey(entry.key) &&
+            '${entry.value['status']}' == 'SYNCED') {
+          continue;
+        }
         Map<String, dynamic> payload;
         try {
           payload = Map<String, dynamic>.from(
@@ -2438,18 +2445,18 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         payload['alasan_supervisor'] = 'Rekonsiliasi backup lokal ke server';
         payload['kasir_user_id'] = payload['kasir'];
         try {
-          await ApiClient.instance.aksi('bayar', payload);
+          final ack = await ApiClient.instance.aksi('bayar', payload);
+          final kendala = kendalaAckTransaksi(payload, ack);
+          if (kendala != null) {
+            throw ApiException(kendala, kode: 'ACK_TRANSAKSI_TIDAK_COCOK');
+          }
           await CoreDb.instance
               .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
           keServer++;
         } catch (e) {
-          if (_transaksiSudahAdaDiServer(e)) {
-            await CoreDb.instance
-                .tandaiTransaksiSinkron('${entry.value['kode_unik']}');
-            sudahSama++;
-          } else {
-            rethrow;
-          }
+          // Pesan duplikat tidak membuktikan kesamaan barang/pembayaran.
+          // Hanya ACK tervalidasi boleh mengubah status jurnal menjadi SYNCED.
+          rethrow;
         }
       }
       await _muat();
@@ -2528,6 +2535,12 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
         pembayaran: StrukScreen.pembayaranDariSumber(detail, row),
         pajak: (row['pajak'] as num?)?.toDouble() ?? 0,
         pelanggan: '${detail['pembeli'] ?? row['pembeli'] ?? ''}',
+        modeCetakUlang: true,
+        tersinkron: row['statusSinkronLokal'] == null ||
+            row['statusSinkronLokal'] == 'SYNCED',
+        alasanCetakDiblokir: row['statusSinkronLokal'] == 'GAGAL'
+            ? '${row['kendalaIntegritas'] ?? 'Transaksi perlu diperiksa di Riwayat Sinkronisasi sebelum dicetak.'}'
+            : null,
       ),
     ));
   }
@@ -2938,7 +2951,9 @@ class _RiwayatPenjualanScreenState extends State<RiwayatPenjualanScreen>
                               Text(
                                 row['statusSinkronLokal'] == 'SYNCED'
                                     ? 'Cadangan lokal · tersinkron'
-                                    : 'Cadangan lokal · menunggu sinkron',
+                                    : row['statusSinkronLokal'] == 'GAGAL'
+                                        ? 'Lokal · perlu ditinjau'
+                                        : 'Cadangan lokal · menunggu sinkron',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,

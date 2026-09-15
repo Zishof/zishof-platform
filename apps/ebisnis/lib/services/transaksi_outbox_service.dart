@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'integritas_ack_transaksi.dart';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
@@ -489,6 +490,14 @@ class TransaksiOutboxService {
     try {
       payload['pengiriman_pending'] = true;
       final hasilBayar = await ApiClient.instance.aksi('bayar', payload);
+      final kendalaAck = kendalaAckTransaksi(payload, hasilBayar);
+      if (kendalaAck != null) {
+        await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+          ...hasilBayar,
+          'kendalaIntegritas': kendalaAck,
+        });
+        throw ApiException(kendalaAck, kode: 'ACK_TRANSAKSI_TIDAK_COCOK');
+      }
       await PelayananTransaksi.tandaiJikaPerlu(
         payload: payload,
         hasilBayar: hasilBayar,
@@ -505,6 +514,9 @@ class TransaksiOutboxService {
           'diskonFaktur': hasilBayar['diskonFaktur'],
           'totalKlien': payload['total'],
           'data': hasilBayar['data'],
+          'idTransaksi': hasilBayar['idTransaksi'] ??
+              hasilBayar['pembelianAnggotaKoperasi'],
+          'idempotentReplay': hasilBayar['idempotentReplay'] == true,
           // Peringatan pasca-transaksi ikut disimpan, bukan dibuang. Checkout POS
           // bersifat lokal-dulu: responsnya tiba di sini, jauh setelah kasir
           // menutup layar. Kalau tidak ditulis ke baris outbox, satu-satunya tanda
@@ -529,10 +541,6 @@ class TransaksiOutboxService {
       // langkah bantuan. Dengan begitu kolom kendala tetap ringkas dan detail
       // bantuan dapat dirender konsisten oleh AppErrorPanel.
       final pesan = e is ApiException ? e.pesan : e.toString();
-      if (_transaksiSudahAdaDiServer(e)) {
-        await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
-        return _VonisKirim.berhasil;
-      }
       await CoreDb.instance.tandaiTransaksiGagal(kodeUnik, pesan);
       final percobaan = (row['percobaan'] as num?)?.toInt() ?? 0;
       if (dapatDicobaUlang(e) && percobaan < batasPercobaanOtomatis) {
@@ -829,6 +837,9 @@ class TransaksiOutboxService {
     'SALDO_TIDAK_CUKUP',
     'LIMIT_TIDAK_CUKUP',
     'METODE_PEMBAYARAN_TIDAK_VALID',
+    'KODE_TRANSAKSI_BENTROK',
+    'ACK_TRANSAKSI_TIDAK_COCOK',
+    'DUPLIKAT_KODE_TRANSAKSI',
   };
 
   /// Beberapa backend lama membalas penolakan bisnis hanya lewat kalimat tanpa
@@ -899,17 +910,6 @@ class TransaksiOutboxService {
     // dikenal versi ini -- diperlakukan sbg gangguan teknis dan dicoba lagi.
     // Aman thd transaksi ganda karena retry memakai kode_unik asli.
     return !kodePenolakanPermanen.contains(kode);
-  }
-
-  bool _transaksiSudahAdaDiServer(Object error) {
-    if (error is ApiException &&
-        (error.kode ?? '').trim() == 'DUPLIKAT_KODE_TRANSAKSI') {
-      return true;
-    }
-    final pesan = error.toString().toLowerCase();
-    return pesan.contains('sudah tercatat') ||
-        pesan.contains('kode transaksi yang sama sudah ada') ||
-        pesan.contains('duplicate key');
   }
 }
 

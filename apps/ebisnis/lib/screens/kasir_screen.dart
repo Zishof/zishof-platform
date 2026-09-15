@@ -36,10 +36,17 @@ import 'keranjang_screen.dart';
 import 'bantuan_screen.dart';
 import 'akun_saya_screen.dart';
 import 'laporan_tutup_kas_dialog.dart';
+import 'riwayat_sinkronisasi_screen.dart';
 import '../widgets/safe_state.dart';
 
 final _formatRupiah =
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+@visibleForTesting
+String judulKonflikKas(String pesan) =>
+    pesan.contains('Perangkat ini sedang memiliki sesi kas aktif milik')
+        ? 'Kas Masih Milik Kasir Sebelumnya'
+        : 'Kas Aktif di Perangkat Lain';
 
 @visibleForTesting
 bool konteksFokusAdalahInputTeks(BuildContext? konteks) {
@@ -797,6 +804,14 @@ class _KasirScreenState extends State<KasirScreen> {
             'tersebut tetap masuk ke kasir dan shift yang benar.',
           ),
           actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const RiwayatSinkronisasiScreen()));
+              },
+              child: const Text('Periksa Transaksi Tertahan'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Mengerti'),
@@ -983,8 +998,11 @@ class _KasirScreenState extends State<KasirScreen> {
 
   Future<void> _perbaruiJumlahPending() async {
     try {
-      final n = await CoreDb.instance.jumlahTransaksiPending();
-      if (mounted) setStateIfMounted(() => _jumlahPending = n);
+      final tertahan = await TransaksiOutboxService.instance.hitungTertahan();
+      if (mounted) {
+        setStateIfMounted(
+            () => _jumlahPending = tertahan.pending + tertahan.gagal);
+      }
     } catch (e) {
       // Gangguan penghitung antrean lokal tidak boleh memblokir seluruh layar
       // Kasir. Sinkron tetap dapat dicoba lagi dari tombol header.
@@ -1014,7 +1032,8 @@ class _KasirScreenState extends State<KasirScreen> {
     if (_sinkronBerjalan) return;
     setStateIfMounted(() => _sinkronBerjalan = true);
     try {
-      final hasil = await TransaksiOutboxService.instance.sinkronkan();
+      final hasil =
+          await TransaksiOutboxService.instance.sinkronkan(sertakanGagal: true);
       await _perbaruiJumlahPending();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2913,7 +2932,7 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                     const SizedBox(height: 8),
                     Text(
                         widget.sesiDiPerangkatLain
-                            ? 'Kas Aktif di Perangkat Lain'
+                            ? judulKonflikKas(widget.pesan)
                             : 'Buka Kas Terlebih Dahulu',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
@@ -2942,6 +2961,22 @@ class _OverlayBukaKasState extends State<_OverlayBukaKas> {
                           color: AppColors.textSecondaryOf(context)),
                     ),
                     const SizedBox(height: 14),
+                    if (widget.sesiDiPerangkatLain) ...[
+                      const Text(
+                        'Masuk kembali sebagai pemilik sesi untuk menyelesaikan '
+                        'transaksi tertahan dan Tutup Kas. Jika perangkat asal '
+                        'tidak tersedia, minta supervisor memeriksa Sesi Kasir.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const RiwayatSinkronisasiScreen())),
+                        child: const Text('Periksa Transaksi Tertahan'),
+                      ),
+                    ],
                     if (!widget.sesiDiPerangkatLain)
                       TextField(
                         controller: _controller,

@@ -59,7 +59,10 @@ class PengaturanUpdate {
   Future<void> _jalankanHelper(File paket, String versi) async {
     final exe = File(Platform.resolvedExecutable);
     final direktoriInstalasi = exe.parent.path;
-    final temp = Directory.systemTemp.path;
+    // Helper juga harus unik: Nahl lama masih memakai nama skrip global.
+    // Menimpa skrip itu dapat mengganti parameter paket/tujuan lintas varian.
+    final temp =
+        (await Directory.systemTemp.createTemp('pos-update-helper-')).path;
     final worker = File('$temp${Platform.pathSeparator}pos-update-worker.ps1');
     final launcher =
         File('$temp${Platform.pathSeparator}pos-update-launch.ps1');

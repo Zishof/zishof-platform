@@ -16,14 +16,24 @@ class IdentitasMesin {
 
   String? _idMesin;
   String? _namaMesin;
+  Future<void>? _pemuatan;
 
-  Future<void> muat() async {
+  Future<void> muat() => _pemuatan ??= _muatTersimpan().whenComplete(() {
+        _pemuatan = null;
+      });
+
+  Future<void> _muatTersimpan() async {
     final sp = await SharedPreferences.getInstance();
-    _idMesin = sp.getString(_kunciId);
-    if (_idMesin == null) {
-      _idMesin = const Uuid().v4();
-      await sp.setString(_kunciId, _idMesin!);
+    final tersimpan = sp.getString(_kunciId)?.trim();
+    final identitas = tersimpan == null || tersimpan.isEmpty
+        ? (_idMesin ?? const Uuid().v4())
+        : tersimpan;
+    if (tersimpan != identitas) {
+      if (!await sp.setString(_kunciId, identitas)) {
+        throw StateError('Identitas perangkat belum dapat disimpan.');
+      }
     }
+    _idMesin = identitas;
     _namaMesin = sp.getString(_kunciNama);
   }
 

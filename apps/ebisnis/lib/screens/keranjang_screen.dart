@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import '../services/integritas_ack_transaksi.dart';
 
 import 'package:core_db/core_db.dart';
 import 'package:core_device/core_device.dart';
@@ -552,16 +553,6 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
       return _angkaDariMap(Map<String, dynamic>.from(data), keys);
     }
     return null;
-  }
-
-  double? _saldoDepositSetelahBayar(Map<String, dynamic>? hasilBayar) {
-    final saldoResponse = _saldoDepositDariResponse(hasilBayar);
-    if (saldoResponse != null) return saldoResponse;
-    final nominalDeposit = _nominalDepositTerpakai();
-    final saldoAwal = _saldoMember;
-    if (nominalDeposit <= 0 || saldoAwal == null) return null;
-    final saldoAkhir = saldoAwal - nominalDeposit;
-    return saldoAkhir < 0 ? 0 : saldoAkhir;
   }
 
   /// Memeriksa saldo OTORITATIF sebelum membuat transaksi atau outbox.
@@ -1559,7 +1550,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         // di bawah tetap dikirim untuk kompatibilitas server/klien lama.
         // Tanpa field kanonis ini, menahan ulang keranjang hasil resume
         // dianggap sebagai draft baru dan menimbulkan transaksi ganda.
-        'id': widget.draftIdSumber,
+        if (!sertakanStatusPelayanan) 'id': widget.draftIdSumber,
         'draftPembelianAnggotaKoperasi': widget.draftIdSumber,
         'draftPembelianAnggotaKoperasiId': widget.draftIdSumber,
         'idDraftPembelianAnggotaKoperasi': widget.draftIdSumber,
@@ -1886,6 +1877,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         final payloadPending = Map<String, dynamic>.from(payload);
         payloadPending['pengiriman_pending'] = true;
         Map<String, dynamic>? hasilServer;
+        String? kendalaIntegritas;
         if (_verifikasiMemberWajibServer || _memberMemilikiLimitTransaksi) {
           // Semua pembayaran yang memotong saldo pusat wajib menunggu ACK server.
           // Saldo dapat berubah di perangkat/toko lain sehingga cache lokal tidak
@@ -1901,14 +1893,38 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
               akunKunci: Sesi.instance.userId,
               tokoId: Sesi.instance.tokoId,
               idPerangkat: IdentitasMesin.instance.idMesin);
-          await CoreDb.instance
-              .simpanHasilServerTransaksi(kodeUnik, hasilServer);
-          await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+          kendalaIntegritas = kendalaAckTransaksi(payload, hasilServer);
+          if (kendalaIntegritas == null && _nominalDepositTerpakai() > 0) {
+            try {
+              final saldoResmi = await ApiClient.instance
+                  .aksi('saldo_member', {'id_member': _memberTerpilih!.id});
+              final data = saldoResmi['data'];
+              final saldo = data is num
+                  ? data.toDouble()
+                  : _saldoDepositDariResponse(saldoResmi);
+              if (saldo != null) hasilServer['saldo'] = saldo;
+            } catch (_) {
+              // Pembayaran sudah diterima. Kegagalan baca saldo setelahnya
+              // tidak boleh mengulang debit; saldo yang belum pasti dihilangkan.
+            }
+          }
+          await CoreDb.instance.simpanHasilServerTransaksi(kodeUnik, {
+            ...hasilServer,
+            if (kendalaIntegritas != null)
+              'kendalaIntegritas': kendalaIntegritas,
+          });
+          if (kendalaIntegritas == null) {
+            await CoreDb.instance.tandaiTransaksiSinkron(kodeUnik);
+          } else {
+            await CoreDb.instance
+                .tandaiTransaksiDitolak(kodeUnik, kendalaIntegritas);
+          }
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(_verifikasiMemberWajibServer
-                  ? 'Saldo/identitas member sudah diverifikasi. Pembayaran sudah diterima server.'
-                  : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.')));
+              content: Text(kendalaIntegritas ??
+                  (_verifikasiMemberWajibServer
+                      ? 'Saldo/identitas member sudah diverifikasi. Pembayaran sudah diterima server.'
+                      : 'Batas transaksi member sudah diverifikasi. Pembayaran diterima server.'))));
         } else {
           // Transaksi biasa tetap local-first: tulis PENDING sebelum mencoba
           // server, lalu kirim/retry idempoten di background.
@@ -1961,7 +1977,11 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         final double? uangDiterimaStruk = _splitAktif ? null : _uangDiterima;
         final double? kembalianStruk =
             _splitAktif ? null : (_kembalian < 0 ? 0.0 : _kembalian);
-        final saldoStruk = _saldoDepositSetelahBayar(null);
+        // Tampilkan hanya saldo yang sudah dikonfirmasi server, bukan perkiraan
+        // pengurangan dari snapshot sebelum pembayaran.
+        final saldoStruk = kendalaIntegritas == null
+            ? _saldoDepositDariResponse(hasilServer)
+            : null;
         _kodePengajuanLimitTertunda = null;
         widget.keranjang.clear();
         // Broadcast "sukses" (bukan sekadar keranjang-kosong biasa) --
@@ -1970,6 +1990,8 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
         // "Survey Kepuasan Pelanggan", lihat JavaDoc kirimSukses).
         LayarPelangganBroadcaster.instance.kirimSukses();
         setStateIfMounted(() {
+          _memberTerpilih = null;
+          _saldoMember = null;
           _langsungTerlayani = true;
           _splitBayar = [];
           _nilaiDiskonFaktur = 0;
@@ -1993,6 +2015,7 @@ class _PanelKeranjangState extends State<PanelKeranjang> {
             uangDiterima: uangDiterimaStruk,
             kembalian: kembalianStruk,
             saldo: saldoStruk,
+            alasanCetakDiblokir: kendalaIntegritas,
           ),
         ));
       } catch (e, stackTrace) {
