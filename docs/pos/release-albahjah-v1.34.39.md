@@ -1,8 +1,10 @@
-# Al-Bahjah POS 1.34.39 build 202 — prerelease/UAT lokal
+# Al-Bahjah POS 1.34.39 build 202 — Release
 
-Kanal distribusi: prerelease/UAT, hanya untuk varian Al-Bahjah.
-Pengguna menyetujui UAT lokal, APK debug signing, installer unsigned,
-tanpa ZIP auto-update, dan backend tetap lokal.
+Status GitHub: Release biasa (bukan Pre-release), hanya untuk varian Al-Bahjah.
+Pada 16 September 2026 status publikasi diubah atas permintaan pengguna;
+berkas APK/installer tidak berubah. Pengujian tetap lokal, APK memakai debug
+signing, installer unsigned, tanpa ZIP auto-update, dan backend tetap lokal.
+Perubahan label publikasi bukan pengesahan UAT produksi atau pemulihan data toko.
 
 ## Cakupan aplikasi
 
@@ -28,9 +30,10 @@ tanpa ZIP auto-update, dan backend tetap lokal.
   versi bernomor sama tidak saling menimpa paket/helper.
 - Installer hanya memasukkan executable Al-Bahjah; AppId dan direktori
   instalasi berbeda dari Nahl.
-- Updater baru tidak menawarkan draft/prerelease secara otomatis. Updater
-  lama dapat memiliki perilaku berbeda; karena itu kandidat ini tidak
-  menyertakan ZIP auto-update dan tidak dijadikan GitHub latest.
+- Updater baru tidak menawarkan draft/prerelease secara otomatis. Karena
+  rilis ini sekarang berstatus Release biasa, updater kanal Al-Bahjah dapat
+  menawarkannya sesuai versi terpasang. Rilis tetap tanpa ZIP auto-update
+  dan tidak dijadikan GitHub latest; kanal Nahl tetap memakai tag `nahl-*`.
 - Rilis dan aset Nahl tidak boleh diedit atau diganti saat publikasi ini.
 
 ## Batasan wajib disampaikan
@@ -42,7 +45,8 @@ saldo riil, dan sesi kas tidak diubah melalui pekerjaan ini. Pemetaan toko
 akun finance/admin serta master tipe member Yayasan perlu verifikasi PIC.
 
 APK memakai sertifikat debug seperti kandidat sebelumnya; installer Windows
-unsigned. Distribusi adalah prerelease/UAT, bukan rilis produksi bertanda tangan.
+unsigned. Label GitHub adalah Release biasa, tetapi paket belum memakai
+sertifikat produksi dan pengujian tetap terbatas pada lingkungan lokal.
 
 Jika pengujian menemukan data lokal hilang, perpindahan varian, atau struk
 tidak konsisten tetap bisa dicetak, hentikan penggunaan kandidat dan simpan
@@ -96,7 +100,7 @@ Ringkasan cakupan laporan pengguna:
 
 ## Unduhan dan checksum
 
-[Halaman prerelease Al-Bahjah](https://github.com/Zishof/zishof-platform/releases/tag/albahjah-v1.34.39-local-uat-20260916)
+[Halaman rilis Al-Bahjah](https://github.com/Zishof/zishof-platform/releases/tag/albahjah-v1.34.39-local-uat-20260916)
 
 - [APK Al-Bahjah — debug signing](https://github.com/Zishof/zishof-platform/releases/download/albahjah-v1.34.39-local-uat-20260916/app-albahjah-release.apk)
   (191.194.047 byte). SHA-256:
